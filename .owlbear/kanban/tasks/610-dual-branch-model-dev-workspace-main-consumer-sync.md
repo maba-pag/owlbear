@@ -1,10 +1,10 @@
 ---
 id: 610
 title: 'Dual-branch model: dev (workspace) + main (consumer sync)'
-status: review
-priority: nice-to-have
+status: done
+priority: critical
 created: 2026-04-04T21:54:46.295562+02:00
-updated: 2026-04-06T07:26:29.8805746+02:00
+updated: 2026-04-06T22:00:21.5592922+02:00
 tags:
     - scope:infra
     - type:restructure
@@ -12,8 +12,8 @@ tags:
     - type:config
 depends_on:
     - 598
-blocked: true
-block_reason: 'Subtasks #611, #613, #615 must be reviewed and archived before umbrella AC1, AC3, AC5 can pass. All three are currently in review (unclaimed). Orchestrator: dispatch individual reviewers for #611, #613, #615 first, then unblock and re-dispatch this task. All underlying deliverables verified sound.'
+claimed_by: dale-port
+claimed_at: 2026-04-06T22:00:21.5592922+02:00
 class: standard
 ---
 
@@ -188,3 +188,70 @@ BLOCK | confidence .38
 
 ### Action Required
 Dispatch separate reviewers for unclaimed #611, #613, #615. Once all three are archived, unblock and re-dispatch review of #610. Deliverables are sound — this is a process ordering issue, not a quality defect.
+
+[[2026-04-06]] Mon 21:31
+## Review Evidence
+
+### Task Type
+Umbrella/tracker task — TDD Exemption (explicit). `type:config`, `scope:infra`. No test suite, no lint targets, no Python code changed. Quality-Runner not applicable.
+
+### Test / Lint / Coverage
+N/A — non-implementation umbrella task.
+
+### Changed Files
+No source files changed by this task. Verification-only role.
+
+### Previous Cycle
+Prior review (cycle 1) blocked at .38 confidence: AC1/AC3/AC5 conditions required `archived` subtask status; #611, #613, #615 were in `review` at time of review. Correctly identified as a process ordering issue, not a quality defect.
+
+### Subtask Archive Verification
+
+| Subtask | Title | Status | Verified |
+|---------|-------|--------|----------|
+| #611 | Create dev branch, push to remote | **archived** | ✅ show_task confirmed |
+| #612 | Write consumer-focused README | **archived** | ✅ show_task confirmed |
+| #613 | Create GitHub Actions sync workflow | **archived** | ✅ show_task confirmed |
+| #614 | Move skills-ref to optional dependency group | **archived** | ✅ show_task confirmed |
+| #615 | First sync: validate clean main branch | **archived** | ✅ show_task confirmed |
+
+### AC Compliance Table
+
+| AC | Condition | Evidence | Status |
+|----|-----------|----------|--------|
+| AC1 | #611 archived — dev branch on origin, default branch = main | #611 status = archived; #611 auditor confirmed `origin/dev` via `git branch -r`; `origin/HEAD → origin/main` confirmed | ✅ PASS |
+| AC2 | #612 archived — README-consumer.md exists at repo root | #612 status = archived; `README-consumer.md` independently confirmed at `c:\...\owlbear\README-consumer.md` | ✅ PASS |
+| AC3 | #613 archived — sync-to-main.yml on dev, workflow_dispatch only | #613 status = archived; `.github/workflows/sync-to-main.yml` confirmed present; `on: workflow_dispatch:` is sole trigger (L1-L4 of file read) | ✅ PASS |
+| AC4 | #614 archived — skills-ref in optional group, not dev group | #614 status = archived; `pyproject.toml` L16-17: `validation = ["skills-ref==0.1.1"]`, absent from `dev` group (L8-15) — independently verified | ✅ PASS |
+| AC5 | #615 archived — first sync validated: clean main, consumer clone/uv sync/setup/init.py all exit 0 | #615 status = archived; #615 auditor independently verified `git ls-tree --name-only origin/main` = exact AC2 allow-list; code-verified AC5/AC6; reviewer .92 PASS, auditor .98 | ✅ PASS |
+
+### Security Review
+No code changes on this task. Workflow-level security reviewed in depth by #613 reviewer (pass-through: pinned SHA, GITHUB_TOKEN via secrets, static include-list, mktemp -d, no user-controlled inputs). No additional surface.
+
+### Deductions
+None. All 5 subtasks archived. All 5 AC conditions independently verified. Prior block was process ordering (now resolved). No quality defects.
+
+### Verdict
+PASS | confidence 1.00
+
+[[2026-04-06]] Mon 21:39
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | Updated | Dual-branch model is a repository convention change. `copilot-instructions.md` had no branch documentation (5 lines total). Added `## 2. Repository Branches` table with dev/main roles and the "never commit to main" rule. Updated `README.md` Quick Start to clone `dev` branch with an explanatory callout. |
+| 2 | Module docstrings | No | N/A | Umbrella task (TDD Exemption, type:config). No Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external repos, articles, or docs used. Task is pure infra/config. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | No | N/A | No `.owlbear/research/610-*` or `*dual-branch*` file found — not produced. |
+
+### Files Updated
+- `.github/copilot-instructions.md` — added `## 2. Repository Branches` section (12 lines)
+- `README.md` — updated Quick Start `git clone` to `-b dev`, added branch callout
+
+### Commit
+`a800de4` — docs: document dual-branch model in copilot-instructions and README (#610, doc-writer)
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/610-*` files found)

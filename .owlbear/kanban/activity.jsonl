@@ -1,61 +1,3 @@
-{"timestamp":"2026-03-30T22:46:21.5508351+02:00","action":"release","task_id":221,"detail":"reviewer"}
-{"timestamp":"2026-03-30T22:46:31.48795+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
-{"timestamp":"2026-03-30T22:46:37.0218531+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
-{"timestamp":"2026-03-30T22:46:37.022943+02:00","action":"release","task_id":437,"detail":"architect"}
-{"timestamp":"2026-03-30T22:47:36.3742139+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-30T22:47:40.7501429+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-30T22:47:40.7553226+02:00","action":"release","task_id":308,"detail":"test-writer"}
-{"timestamp":"2026-03-30T22:49:01.9183694+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T22:49:17.3504353+02:00","action":"edit","task_id":22,"detail":"Build CLI trigger commands"}
-{"timestamp":"2026-03-30T22:49:17.3535532+02:00","action":"release","task_id":22,"detail":"builder"}
-{"timestamp":"2026-03-30T22:51:01.558655+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T22:51:01.5631013+02:00","action":"claim","task_id":224,"detail":"writer"}
-{"timestamp":"2026-03-30T22:51:03.8651064+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T22:51:03.868731+02:00","action":"claim","task_id":221,"detail":"writer"}
-{"timestamp":"2026-03-30T22:51:05.6985219+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-30T22:51:05.7022572+02:00","action":"claim","task_id":23,"detail":"builder"}
-{"timestamp":"2026-03-30T22:51:08.4085507+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T22:51:08.4135517+02:00","action":"claim","task_id":146,"detail":"architect"}
-{"timestamp":"2026-03-30T22:51:25.2494215+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T22:51:25.2525653+02:00","action":"claim","task_id":54,"detail":"auditor"}
-{"timestamp":"2026-03-30T22:52:23.4394592+02:00","action":"create","task_id":438,"detail":"E2E-Test-1b5789e2-9f25-4b1f-8a0e-ebac4b7dceff"}
-{"timestamp":"2026-03-30T22:52:24.2469343+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T22:52:25.8733367+02:00","action":"delete","task_id":438,"detail":"E2E-Test-1b5789e2-9f25-4b1f-8a0e-ebac4b7dceff"}
-{"timestamp":"2026-03-30T22:52:26.2633604+02:00","action":"create","task_id":439,"detail":"E2E-Test-eefcde83-e89b-4565-97e2-6c67e1967c80"}
-{"timestamp":"2026-03-30T22:52:28.2382503+02:00","action":"delete","task_id":439,"detail":"E2E-Test-eefcde83-e89b-4565-97e2-6c67e1967c80"}
-{"timestamp":"2026-03-30T22:52:28.7941902+02:00","action":"create","task_id":440,"detail":"E2E-Test-d46e9348-fd89-42f8-bd88-071063c5bae5"}
-{"timestamp":"2026-03-30T22:52:30.8416729+02:00","action":"delete","task_id":440,"detail":"E2E-Test-d46e9348-fd89-42f8-bd88-071063c5bae5"}
-{"timestamp":"2026-03-30T22:52:31.2361553+02:00","action":"create","task_id":441,"detail":"E2E-Test-0bea36ec-03fe-42ba-ac24-c7d8535ef448"}
-{"timestamp":"2026-03-30T22:52:33.5718225+02:00","action":"delete","task_id":441,"detail":"E2E-Test-0bea36ec-03fe-42ba-ac24-c7d8535ef448"}
-{"timestamp":"2026-03-30T22:52:33.9963403+02:00","action":"create","task_id":442,"detail":"E2E-Test-df075263-4a29-469b-b3e2-a723aca4200a"}
-{"timestamp":"2026-03-30T22:52:36.0891274+02:00","action":"delete","task_id":442,"detail":"E2E-Test-df075263-4a29-469b-b3e2-a723aca4200a"}
-{"timestamp":"2026-03-30T22:52:36.5661113+02:00","action":"create","task_id":443,"detail":"E2E-Test-3146a447-84a0-4a3a-8536-bdcdf83266c4"}
-{"timestamp":"2026-03-30T22:52:38.7443152+02:00","action":"delete","task_id":443,"detail":"E2E-Test-3146a447-84a0-4a3a-8536-bdcdf83266c4"}
-{"timestamp":"2026-03-30T22:52:39.1784682+02:00","action":"create","task_id":444,"detail":"E2E-Test-f58656be-ccae-4aaf-b285-7e92c0261662"}
-{"timestamp":"2026-03-30T22:52:40.2054521+02:00","action":"create","task_id":445,"detail":"E2E-Test-1b45cd46-ea37-4308-bb82-5ede01b2a4b6"}
-{"timestamp":"2026-03-30T22:52:43.4826832+02:00","action":"delete","task_id":444,"detail":"E2E-Test-f58656be-ccae-4aaf-b285-7e92c0261662"}
-{"timestamp":"2026-03-30T22:52:44.085502+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T22:52:44.1144847+02:00","action":"delete","task_id":445,"detail":"E2E-Test-1b45cd46-ea37-4308-bb82-5ede01b2a4b6"}
-{"timestamp":"2026-03-30T22:52:52.7503175+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T22:52:52.7550178+02:00","action":"release","task_id":224,"detail":"writer"}
-{"timestamp":"2026-03-30T22:52:54.3475908+02:00","action":"create","task_id":446,"detail":"E2E-Test-ad4722be-fae8-49bf-b3b5-44d8f9498abb"}
-{"timestamp":"2026-03-30T22:52:56.3274719+02:00","action":"delete","task_id":446,"detail":"E2E-Test-ad4722be-fae8-49bf-b3b5-44d8f9498abb"}
-{"timestamp":"2026-03-30T22:52:56.5277161+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T22:52:56.7700376+02:00","action":"create","task_id":447,"detail":"E2E-Test-e5290f4f-03ef-448d-a123-6911c162327a"}
-{"timestamp":"2026-03-30T22:52:58.7232924+02:00","action":"delete","task_id":447,"detail":"E2E-Test-e5290f4f-03ef-448d-a123-6911c162327a"}
-{"timestamp":"2026-03-30T22:52:59.1624064+02:00","action":"create","task_id":448,"detail":"E2E-Test-f1a1e74b-4e1f-48de-bfec-7d280470efb0"}
-{"timestamp":"2026-03-30T22:53:01.0734334+02:00","action":"delete","task_id":448,"detail":"E2E-Test-f1a1e74b-4e1f-48de-bfec-7d280470efb0"}
-{"timestamp":"2026-03-30T22:53:01.6039454+02:00","action":"create","task_id":449,"detail":"E2E-Test-e5255e64-9b04-4089-bfd0-52ccc455aa04"}
-{"timestamp":"2026-03-30T22:53:03.6211877+02:00","action":"delete","task_id":449,"detail":"E2E-Test-e5255e64-9b04-4089-bfd0-52ccc455aa04"}
-{"timestamp":"2026-03-30T22:53:04.0198351+02:00","action":"create","task_id":450,"detail":"E2E-Test-1736a4b7-3ba7-424c-bb4d-d60d23c33232"}
-{"timestamp":"2026-03-30T22:53:06.0131464+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T22:53:06.0173832+02:00","action":"release","task_id":221,"detail":"writer"}
-{"timestamp":"2026-03-30T22:53:06.1588195+02:00","action":"delete","task_id":450,"detail":"E2E-Test-1736a4b7-3ba7-424c-bb4d-d60d23c33232"}
-{"timestamp":"2026-03-30T22:53:06.6097008+02:00","action":"create","task_id":451,"detail":"E2E-Test-68bd46fe-5dee-4755-9707-777ab0ea4e03"}
-{"timestamp":"2026-03-30T22:53:08.7190257+02:00","action":"delete","task_id":451,"detail":"E2E-Test-68bd46fe-5dee-4755-9707-777ab0ea4e03"}
-{"timestamp":"2026-03-30T22:53:09.1127921+02:00","action":"create","task_id":452,"detail":"E2E-Test-1cab1264-822e-4c6c-956a-015f28e40220"}
-{"timestamp":"2026-03-30T22:53:10.0815311+02:00","action":"create","task_id":453,"detail":"E2E-Test-6786fcf5-9df6-4e60-a4aa-ac7eaf382f38"}
-{"timestamp":"2026-03-30T22:53:12.9145826+02:00","action":"delete","task_id":452,"detail":"E2E-Test-1cab1264-822e-4c6c-956a-015f28e40220"}
 {"timestamp":"2026-03-30T22:53:13.4994094+02:00","action":"delete","task_id":453,"detail":"E2E-Test-6786fcf5-9df6-4e60-a4aa-ac7eaf382f38"}
 {"timestamp":"2026-03-30T22:55:17.8867246+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
 {"timestamp":"2026-03-30T22:55:23.382369+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
@@ -9998,3 +9940,61 @@
 {"timestamp":"2026-04-06T21:22:01.9305522+02:00","action":"claim","task_id":658,"detail":"tide-thyme"}
 {"timestamp":"2026-04-06T21:22:36.3945258+02:00","action":"edit","task_id":659,"detail":"Update h-agent-structure user-invocable example to not list deprecated skill"}
 {"timestamp":"2026-04-06T21:22:36.4068964+02:00","action":"release","task_id":659,"detail":"glade-quick"}
+{"timestamp":"2026-04-06T21:29:23.3907991+02:00","action":"edit","task_id":658,"detail":"Deprecate w-project-scoping SKILL.md frontmatter and body"}
+{"timestamp":"2026-04-06T21:29:23.4008062+02:00","action":"release","task_id":658,"detail":"tide-thyme"}
+{"timestamp":"2026-04-06T21:29:23.87231+02:00","action":"move","task_id":658,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T21:29:44.540596+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T21:29:44.5537443+02:00","action":"claim","task_id":661,"detail":"cove-crisp"}
+{"timestamp":"2026-04-06T21:30:42.474849+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-06T21:30:42.4864627+02:00","action":"claim","task_id":610,"detail":"forge-quill"}
+{"timestamp":"2026-04-06T21:30:47.8957298+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
+{"timestamp":"2026-04-06T21:30:47.907522+02:00","action":"claim","task_id":645,"detail":"vapor-snow"}
+{"timestamp":"2026-04-06T21:31:24.4804488+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T21:31:24.4963495+02:00","action":"release","task_id":661,"detail":"cove-crisp"}
+{"timestamp":"2026-04-06T21:31:30.7839999+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-06T21:31:30.7963458+02:00","action":"release","task_id":610,"detail":"forge-quill"}
+{"timestamp":"2026-04-06T21:33:53.5481115+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
+{"timestamp":"2026-04-06T21:33:53.5588207+02:00","action":"release","task_id":645,"detail":"vapor-snow"}
+{"timestamp":"2026-04-06T21:35:45.2827576+02:00","action":"edit","task_id":659,"detail":"Update h-agent-structure user-invocable example to not list deprecated skill"}
+{"timestamp":"2026-04-06T21:35:45.2971616+02:00","action":"claim","task_id":659,"detail":"spark-pine"}
+{"timestamp":"2026-04-06T21:36:27.1925573+02:00","action":"priority","task_id":610,"detail":"nice-to-have -\u003e important"}
+{"timestamp":"2026-04-06T21:36:27.6961732+02:00","action":"priority","task_id":610,"detail":"important -\u003e needed"}
+{"timestamp":"2026-04-06T21:36:35.6456603+02:00","action":"priority","task_id":610,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-06T21:36:43.5264153+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-06T21:36:43.5414704+02:00","action":"claim","task_id":610,"detail":"cedar-heath"}
+{"timestamp":"2026-04-06T21:36:44.6072163+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
+{"timestamp":"2026-04-06T21:36:44.6213479+02:00","action":"claim","task_id":645,"detail":"vine-leaf"}
+{"timestamp":"2026-04-06T21:36:49.6274404+02:00","action":"priority","task_id":661,"detail":"nice-to-have -\u003e important"}
+{"timestamp":"2026-04-06T21:36:50.3314911+02:00","action":"priority","task_id":661,"detail":"important -\u003e needed"}
+{"timestamp":"2026-04-06T21:36:52.4911181+02:00","action":"priority","task_id":661,"detail":"needed -\u003e critical"}
+{"timestamp":"2026-04-06T21:37:11.3538548+02:00","action":"priority","task_id":662,"detail":"nice-to-have -\u003e important"}
+{"timestamp":"2026-04-06T21:37:13.2513533+02:00","action":"priority","task_id":662,"detail":"important -\u003e needed"}
+{"timestamp":"2026-04-06T21:37:41.8809273+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
+{"timestamp":"2026-04-06T21:37:41.8950639+02:00","action":"release","task_id":645,"detail":"vine-leaf"}
+{"timestamp":"2026-04-06T21:39:44.3155017+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-06T21:39:44.3286375+02:00","action":"release","task_id":610,"detail":"cedar-heath"}
+{"timestamp":"2026-04-06T21:48:18.7539555+02:00","action":"edit","task_id":659,"detail":"Update h-agent-structure user-invocable example to not list deprecated skill"}
+{"timestamp":"2026-04-06T21:48:18.7664578+02:00","action":"release","task_id":659,"detail":"spark-pine"}
+{"timestamp":"2026-04-06T21:48:19.2551961+02:00","action":"move","task_id":659,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T21:48:35.6385239+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T21:48:35.6501581+02:00","action":"claim","task_id":663,"detail":"south-larch"}
+{"timestamp":"2026-04-06T21:48:51.6181695+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T21:48:51.6285876+02:00","action":"claim","task_id":661,"detail":"brave-helm"}
+{"timestamp":"2026-04-06T21:50:17.9825273+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T21:50:17.996493+02:00","action":"release","task_id":663,"detail":"south-larch"}
+{"timestamp":"2026-04-06T21:58:05.0421345+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T21:58:05.0578193+02:00","action":"release","task_id":661,"detail":"brave-helm"}
+{"timestamp":"2026-04-06T22:00:09.3477463+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T22:00:09.3597827+02:00","action":"claim","task_id":646,"detail":"otter-trail"}
+{"timestamp":"2026-04-06T22:00:21.5618788+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-06T22:00:21.5736749+02:00","action":"claim","task_id":610,"detail":"dale-port"}
+{"timestamp":"2026-04-06T22:00:23.3501315+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T22:00:23.3643282+02:00","action":"claim","task_id":647,"detail":"wren-arch"}
+{"timestamp":"2026-04-06T22:01:17.5873015+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T22:01:17.6009301+02:00","action":"claim","task_id":661,"detail":"elder-willow"}
+{"timestamp":"2026-04-06T22:02:58.5844725+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T22:02:58.5988767+02:00","action":"release","task_id":661,"detail":"elder-willow"}
+{"timestamp":"2026-04-06T22:05:25.0419776+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T22:05:25.0543762+02:00","action":"release","task_id":647,"detail":"wren-arch"}
+{"timestamp":"2026-04-06T22:06:29.9554567+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T22:06:29.9706269+02:00","action":"release","task_id":646,"detail":"otter-trail"}
