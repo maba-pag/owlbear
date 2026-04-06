@@ -61,7 +61,7 @@ class BookmarkPipeline:
         bookmark_store: BookmarkStore | object,
         evaluator: SourceEvaluator | object,
         ingest_pipeline: IngestPipeline | object | None = None,
-        web_read_fn: Callable[[str], Awaitable[str | None]] | None = None,
+        web_read_fn: Callable[[str], Awaitable[str | None]],
         ingest_threshold: float = 0.7,
     ) -> None:
         self._store = bookmark_store

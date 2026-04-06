@@ -13,9 +13,12 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
+from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
+from owlbear_knowledge.evaluator import SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
@@ -79,6 +82,8 @@ class AppContext:
     graph_store: GraphStore | None
     ingest_pipeline: IngestPipeline | None
     source_store: KnowledgeSourceStore | None
+    bookmark_pipeline: BookmarkPipeline | None
+    bookmark_store: BookmarkStore | None
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -119,11 +124,33 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         chunker = TextChunker()
         pipeline = IngestPipeline(doc_store, extractor, chunker)
         source_store = KnowledgeSourceStore(conn)
+        bookmark_store = BookmarkStore(conn)
+        evaluator = SourceEvaluator(model)
+
+        async def _web_read(url: str) -> str | None:
+            try:
+                import httpx  # noqa: PLC0415
+
+                async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+                    resp = await client.get(url)
+                    resp.raise_for_status()
+                    return resp.text
+            except Exception:  # noqa: BLE001
+                return None
+
+        bookmark_pipeline = BookmarkPipeline(
+            bookmark_store=bookmark_store,
+            evaluator=evaluator,
+            ingest_pipeline=pipeline,
+            web_read_fn=_web_read,
+        )
         ctx = AppContext(
             query_service=qs,
             graph_store=gs,
             ingest_pipeline=pipeline,
             source_store=source_store,
+            bookmark_pipeline=bookmark_pipeline,
+            bookmark_store=bookmark_store,
         )
         _app_context = ctx
         _apply_tool_exclusions(_server)
@@ -139,9 +166,11 @@ __all__ = [
     "AppContext",
     "_apply_tool_exclusions",
     "app_lifespan",
+    "bookmark_source",
     "get_stats",
     "ingest_document",
     "init_db",
+    "list_bookmarks",
     "list_entities",
     "list_sources",
     "mcp",
@@ -277,3 +306,44 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
         f"Knowledge base: {doc_count} documents, {entity_count} entities, "
         f"{edge_count} edges"
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def bookmark_source(ctx: Context, url: str, reason: str | None = None) -> str:
+    """Bookmark a URL: evaluate and optionally ingest into the knowledge base."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    pipeline = app_ctx.bookmark_pipeline
+    if pipeline is None:
+        return f"error: bookmark pipeline not available for {url}"
+    result = await pipeline.process(url, reason=reason)
+    if result.skipped_reason is not None:
+        return f"Skipped {url}: {result.skipped_reason}"
+    score = result.evaluation.relevance_score if result.evaluation else "n/a"
+    return f"Bookmarked {url} (score: {score}, ingested: {result.ingested})"
+
+
+class BookmarkInfo(TypedDict):
+    """A single bookmark entry."""
+
+    url: str
+    title: str | None
+    relevance_score: float | None
+    tags: list[str]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def list_bookmarks(
+    ctx: Context,
+    tag: str | None = None,
+    min_score: float | None = None,
+) -> list[BookmarkInfo]:
+    """List bookmarks, optionally filtered by tag or minimum relevance score."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.bookmark_store
+    if store is None:
+        return []
+    bookmarks = await asyncio.to_thread(store.list, tag=tag, min_score=min_score)
+    return [
+        {"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags}
+        for b in bookmarks
+    ]
