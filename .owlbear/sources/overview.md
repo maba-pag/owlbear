@@ -2,6 +2,19 @@
 
 External repos and resources studied during OwlBear development.
 
+## Voice Panel Handbook (Task #652)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Six Thinking Hats (de Bono 1985) | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Deliberate perspective-shifting with distinct roles — theoretical basis for multi-voice panel | .owlbear/research/voice-panel-handbook.md | 2026-04-07 |
+| Blackboard design pattern (Lalanda 1997) | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Shared workspace + specialized knowledge sources — architectural precedent for Working Directory comms | .owlbear/research/voice-panel-handbook.md | 2026-04-07 |
+
+## Briefs Directory Structure (Task #642)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Blackboard design pattern | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Blackboard pattern: structured global memory + knowledge sources + control component (Lalanda 1997) | .owlbear/research/briefs-directory-structure.md | 2026-04-06 |
+
 ## editFiles Schema Verification (Task #638)
 
 | Source | URL | What | Where Used | Date |
@@ -14,6 +27,12 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | VS Code Agent Hooks docs (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse input schema: `editFiles` tool_name with `files[]` array, `permissionDecision` output | .owlbear/research/deny-code-writes-ac-validation-637.md | 2026-04-06 |
+
+## Pragmatist Voice Agent (Task #646)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Six Thinking Hats — Blue Hat synthesis role | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Blue Hat: "The Big Picture & Managing" — facilitator aggregating all thinking directions into cohesive summary (de Bono 1985) | .owlbear/research/pragmatist-voice-agent.md | 2026-04-06 |
 
 ## Blocked-Task Scan for Decision-Request Notifications (Task #348)
 
