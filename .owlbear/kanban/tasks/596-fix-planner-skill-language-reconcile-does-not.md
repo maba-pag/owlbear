@@ -1,10 +1,12 @@
 ---
 id: 596
 title: 'Fix planner skill language: reconcile "does NOT claim" with end_work usage'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-04T20:09:51.968555+02:00
-updated: 2026-04-06T04:02:34.9001391+02:00
+updated: 2026-04-06T06:00:09.9482011+02:00
+started: 2026-04-06T06:00:09.9482011+02:00
+completed: 2026-04-06T06:00:09.9482011+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -143,3 +145,30 @@ CLEAN — 1 builder notes section, no retries.
 
 ### Scratch Files Cleaned
 - None found for task 596
+
+[[2026-04-06]] Mon 06:00
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Step 0 (~L15): remove "does NOT claim", add conditional claiming | grep "does NOT claim" → 0 matches; SKILL.md:17 has dispatcher/user-invoked conditional | PASS |
+| Step 0: start_work replaces show_task for dispatch path | SKILL.md:17: "making a separate show_task call redundant" | PASS |
+| Step 8 (~L92): verify end_work consistent with revised Step 0 | SKILL.md:90: "advance via end_work to release the claim" — consistent, no change needed | PASS |
+| No functional changes — documentation-only fix | Only share/skills/w-task-decomposition/SKILL.md in commit 80b05fc; zero Python files modified | PASS |
+
+### Test Results
+- pytest: 2983 passed, 567 failed (pre-existing, unrelated — doc-only task changed no Python), 8 skipped
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+AC lines referenced specific line numbers and exact replacement logic. Minor imprecision: ~L15 vs actual L17. Research doc properly referenced. Clean scope.
+
+### Deduction Breakdown
+- 4/4 AC lines with specific evidence: 0
+- Lint clean: 0
+- AC quality 4/5 (above threshold): 0
+- Reviewer evidence present and detailed (.97 PASS): 0
+- Full-suite failures outside task scope: 0
+
+### Confidence: 1.00
+### Action: archive
