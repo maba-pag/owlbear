@@ -1,28 +1,3 @@
-{"timestamp":"2026-03-30T22:53:13.4994094+02:00","action":"delete","task_id":453,"detail":"E2E-Test-6786fcf5-9df6-4e60-a4aa-ac7eaf382f38"}
-{"timestamp":"2026-03-30T22:55:17.8867246+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-30T22:55:23.382369+02:00","action":"edit","task_id":23,"detail":"End-to-end dispatch test"}
-{"timestamp":"2026-03-30T22:55:23.3860104+02:00","action":"release","task_id":23,"detail":"builder"}
-{"timestamp":"2026-03-30T22:55:54.4644157+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T22:56:09.1583115+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T22:56:15.820125+02:00","action":"edit","task_id":145,"detail":"Implement planner gate checker and task selector"}
-{"timestamp":"2026-03-30T22:56:15.8238207+02:00","action":"claim","task_id":145,"detail":"builder"}
-{"timestamp":"2026-03-30T22:56:17.0875116+02:00","action":"move","task_id":54,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T22:56:24.7207171+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T22:56:24.7243997+02:00","action":"release","task_id":54,"detail":"auditor"}
-{"timestamp":"2026-03-30T22:56:49.236545+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T22:57:32.0463205+02:00","action":"edit","task_id":145,"detail":"Implement planner gate checker and task selector"}
-{"timestamp":"2026-03-30T22:57:36.2442077+02:00","action":"edit","task_id":145,"detail":"Implement planner gate checker and task selector"}
-{"timestamp":"2026-03-30T22:57:36.2483477+02:00","action":"release","task_id":145,"detail":"builder"}
-{"timestamp":"2026-03-30T22:58:00.2202807+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T22:58:00.2229513+02:00","action":"release","task_id":146,"detail":"architect"}
-{"timestamp":"2026-03-30T22:58:41.051085+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
-{"timestamp":"2026-03-30T22:58:41.0574706+02:00","action":"claim","task_id":156,"detail":"architect"}
-{"timestamp":"2026-03-30T22:58:42.5926612+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T22:58:42.5963102+02:00","action":"claim","task_id":16,"detail":"reviewer"}
-{"timestamp":"2026-03-30T22:58:45.2383078+02:00","action":"edit","task_id":162,"detail":"Integration test: full ingest-to-search cycle"}
-{"timestamp":"2026-03-30T22:58:45.2419965+02:00","action":"claim","task_id":162,"detail":"architect"}
-{"timestamp":"2026-03-30T22:58:48.5265759+02:00","action":"edit","task_id":20,"detail":"Build dispatch planner"}
-{"timestamp":"2026-03-30T22:58:48.5308532+02:00","action":"claim","task_id":20,"detail":"reviewer"}
 {"timestamp":"2026-03-30T23:00:17.2448572+02:00","action":"edit","task_id":204,"detail":"Test: Wire audit log into dispatch loop"}
 {"timestamp":"2026-03-30T23:00:17.2490328+02:00","action":"claim","task_id":204,"detail":"builder"}
 {"timestamp":"2026-03-30T23:03:07.9995815+02:00","action":"edit","task_id":156,"detail":"Implement E2E dispatch integration test"}
@@ -9998,3 +9973,28 @@
 {"timestamp":"2026-04-06T22:05:25.0543762+02:00","action":"release","task_id":647,"detail":"wren-arch"}
 {"timestamp":"2026-04-06T22:06:29.9554567+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
 {"timestamp":"2026-04-06T22:06:29.9706269+02:00","action":"release","task_id":646,"detail":"otter-trail"}
+{"timestamp":"2026-04-06T22:14:22.9843716+02:00","action":"edit","task_id":610,"detail":"Dual-branch model: dev (workspace) + main (consumer sync)"}
+{"timestamp":"2026-04-06T22:14:22.9985739+02:00","action":"release","task_id":610,"detail":"dale-port"}
+{"timestamp":"2026-04-06T22:14:23.6008069+02:00","action":"move","task_id":610,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T22:14:50.2697041+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
+{"timestamp":"2026-04-06T22:14:50.284703+02:00","action":"claim","task_id":645,"detail":"zinc-path"}
+{"timestamp":"2026-04-06T22:14:51.4780987+02:00","action":"edit","task_id":648,"detail":"P4-08: Create data-voice.agent.md"}
+{"timestamp":"2026-04-06T22:14:51.492814+02:00","action":"claim","task_id":648,"detail":"tide-fern"}
+{"timestamp":"2026-04-06T22:14:53.6231195+02:00","action":"edit","task_id":649,"detail":"P4-09: Create enduser-voice.agent.md"}
+{"timestamp":"2026-04-06T22:14:53.6356766+02:00","action":"claim","task_id":649,"detail":"crow-glen"}
+{"timestamp":"2026-04-06T22:15:09.8125011+02:00","action":"edit","task_id":650,"detail":"P4-10: Create security-voice.agent.md"}
+{"timestamp":"2026-04-06T22:15:09.8261914+02:00","action":"claim","task_id":650,"detail":"glen-wild"}
+{"timestamp":"2026-04-06T22:17:45.0100215+02:00","action":"edit","task_id":648,"detail":"P4-08: Create data-voice.agent.md"}
+{"timestamp":"2026-04-06T22:17:45.0235203+02:00","action":"release","task_id":648,"detail":"tide-fern"}
+{"timestamp":"2026-04-06T22:18:30.6946198+02:00","action":"edit","task_id":649,"detail":"P4-09: Create enduser-voice.agent.md"}
+{"timestamp":"2026-04-06T22:18:30.7105962+02:00","action":"release","task_id":649,"detail":"crow-glen"}
+{"timestamp":"2026-04-06T22:19:35.6903676+02:00","action":"edit","task_id":650,"detail":"P4-10: Create security-voice.agent.md"}
+{"timestamp":"2026-04-06T22:19:35.7032468+02:00","action":"release","task_id":650,"detail":"glen-wild"}
+{"timestamp":"2026-04-06T22:22:21.0503362+02:00","action":"create","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-06T22:22:31.9580769+02:00","action":"create","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-06T22:22:41.121787+02:00","action":"create","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-06T22:22:52.1864042+02:00","action":"create","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-06T22:23:06.3153141+02:00","action":"create","task_id":671,"detail":"Bootstrap CI workflows to main branch"}
+{"timestamp":"2026-04-06T22:29:41.5443752+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
+{"timestamp":"2026-04-06T22:29:41.5550683+02:00","action":"release","task_id":645,"detail":"zinc-path"}
+{"timestamp":"2026-04-06T22:29:42.0742161+02:00","action":"move","task_id":645,"detail":"done -\u003e archived"}
