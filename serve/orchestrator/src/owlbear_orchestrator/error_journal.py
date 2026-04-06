@@ -93,3 +93,26 @@ class ErrorJournal:
             return
         kept = lines[-self._max_entries :]
         self._path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+
+
+class ErrorLoggerAdapter:
+    """Adapts ErrorJournal to the _ErrorLogger Protocol.
+
+    Delegates log_error() calls to ErrorJournal.log() using the fixed
+    'pre-session' sentinel as session_id — concurrency-safe because it
+    is a class-level constant, not an instance attribute.
+    """
+
+    _SESSION_ID = "pre-session"
+
+    def __init__(self, journal: ErrorJournal) -> None:
+        self._journal = journal
+
+    def log_error(self, *, category: object, method: str, message: str) -> None:
+        """Delegate to ErrorJournal.log() with pre-session sentinel session_id."""
+        self._journal.log(
+            category=str(category),
+            method=method,
+            message=message,
+            session_id=self._SESSION_ID,
+        )
