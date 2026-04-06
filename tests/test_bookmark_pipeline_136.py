@@ -147,7 +147,7 @@ class TestFromAC_BookmarkResultModel:  # noqa: N801
 
 
 # ===========================================================================
-# AC: BookmarkPipeline constructor — web_read_fn is REQUIRED
+# AC: BookmarkPipeline constructor â€” web_read_fn is REQUIRED
 # ===========================================================================
 
 
@@ -277,7 +277,7 @@ class TestFromAC_BookmarkPipelineProcess:  # noqa: N801
 
     @pytest.mark.asyncio
     async def test_process_cancel_before_evaluate_returns_no_evaluation(self) -> None:
-        """Cancel set after extract but before evaluate — evaluation is None."""
+        """Cancel set after extract but before evaluate â€” evaluation is None."""
         from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline  # noqa: PLC0415
 
         call_count = 0
@@ -428,7 +428,7 @@ class TestFromAC_RefreshOrchestratorConstructor:  # noqa: N801
 
 
 # ===========================================================================
-# AC: RefreshOrchestrator.refresh() — dispatch by SourceType
+# AC: RefreshOrchestrator.refresh() â€” dispatch by SourceType
 # ===========================================================================
 
 
@@ -485,13 +485,13 @@ class TestFromAC_RefreshOrchestratorRefresh:  # noqa: N801
         pipeline_mock = MagicMock()
 
         orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock)
-        # Cancel signal is immediately set — loop must not dispatch any source
+        # Cancel signal is immediately set â€” loop must not dispatch any source
         results = await orch.refresh_all(cancel=_SetSignal())
         assert results == []
 
 
 # ===========================================================================
-# AC: file_glob handler — sandbox_path for path-traversal prevention
+# AC: file_glob handler â€” sandbox_path for path-traversal prevention
 # ===========================================================================
 
 
@@ -559,7 +559,7 @@ class TestFromAC_RefreshOrchestratorFileGlob:  # noqa: N801
             config={"base_dir": "docs", "pattern": "*.md"},
         )
         result = await orch.refresh(source)
-        # At least one file was processed (refreshed or skipped — not all failed)
+        # At least one file was processed (refreshed or skipped â€” not all failed)
         assert result.failed == 0 or result.refreshed + result.skipped > 0
 
 
@@ -695,7 +695,7 @@ class TestFromAC_ListEnabled:  # noqa: N801
 
 
 # ===========================================================================
-# AC: MCP tools — AppContext, bookmark_source, list_bookmarks
+# AC: MCP tools â€” AppContext, bookmark_source, list_bookmarks
 # ===========================================================================
 
 
@@ -760,7 +760,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
             bookmark_pipeline=pipeline_mock,
             bookmark_store=MagicMock(),
         )
-        # Should not raise — reason=None is the default per AC
+        # Should not raise â€” reason=None is the default per AC
         await bookmark_source(ctx, "https://x.com")
         pipeline_mock.process.assert_called_once()
 
@@ -789,7 +789,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
             bookmark_pipeline=MagicMock(),
             bookmark_store=store_mock,
         )
-        # Should not raise — both parameters are optional
+        # Should not raise â€” both parameters are optional
         await list_bookmarks(ctx)
         store_mock.list.assert_called_once()
 
@@ -844,7 +844,7 @@ class TestFromAC_InitExports:  # noqa: N801
 
 
 # ===========================================================================
-# Builder-discovered tests — coverage gaps in refresh.py
+# Builder-discovered tests â€” coverage gaps in refresh.py
 # ===========================================================================
 
 
@@ -988,6 +988,7 @@ class TestBuilderDiscovered:  # noqa: N801
             mock_cls.return_value.__aexit__ = AsyncMock(return_value=None)
             result = await _web_read("https://example.com")
 
+        mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)
         assert result == "page content"
 
     @pytest.mark.asyncio
