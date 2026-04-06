@@ -1,18 +1,18 @@
 ---
 id: 654
 title: 'P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep'
-status: done
+status: archived
 priority: needed
 created: 2026-04-06T07:17:22.2149049+02:00
-updated: 2026-04-06T19:24:45.6558202+02:00
+updated: 2026-04-06T19:34:44.1534209+02:00
+started: 2026-04-06T19:34:44.1534209+02:00
+completed: 2026-04-06T19:34:44.1534209+02:00
 tags:
     - phase-4
     - ' scope:ideator'
     - ' type:build'
 depends_on:
     - 642
-claimed_by: fable-dusk
-claimed_at: 2026-04-06T19:24:45.6527838+02:00
 class: standard
 ---
 
@@ -192,3 +192,40 @@ All 7 AC lines verified against actual file content and spec §12. No Pass 1 cri
 
 ### Scratch Files Cleaned
 - None — no `.owlbear/scratch/654-*` files found.
+
+[[2026-04-06]] Mon 19:34
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `.owlbear/briefs/` directory + `.gitkeep` | list_dir confirms `.gitkeep` + `README.md` present | PASS |
+| README: directory structure | README lines 8-27: complete tree with all 7 elements (`draft-{name}/input/`, `context.md`, `decisions.md`, `research-notes.md`, `voices/`, `synthesis.md`, `brief.md`) | PASS |
+| README: agent read/write matrix | README lines 54-65: 8-row table (Mediator, Research, Domain Voice, Critic standalone, Critic voice-embedded, Pragmatist, Final Critic, Planner) | PASS |
+| README: brief lifecycle | README lines 69-88: 6-step lifecycle covering invocation, rename, ideation, approval, handoff, cleanup | PASS |
+| README: `input/` subfolder convention | README lines 30-37: dedicated section, user materials, "never modified" rule | PASS |
+| README: `voices/` subdirectory convention | README lines 40-50: table documenting `{name}.md` + `{name}-debate.md` per voice | PASS |
+| `context.md`/`decisions.md` scaffold described | README lines 92-116: both scaffolds printed verbatim; Mediator creates at invocation stated | PASS |
+
+### Test Results
+- pytest: Non-code deliverable (no Python files). Pre-existing collection error in test_planner_gates.py (unrelated, from planner/gates.py changes). Suite failures all from other in-progress tasks.
+- ruff: N/A (no Python files changed)
+
+### Architect Quality: 5/5
+All 7 AC lines specific and directly verifiable by content inspection. Traced to framework spec sections with line references. No vague or ambiguous criteria. Clean implementation path.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (7/7 verified)
+- Lint violations: 0 (N/A)
+- AC quality score: 5/5 (no deduction)
+- Reviewer evidence: present, detailed, .97 PASS (no deduction)
+- Full-suite failures in task scope: 0
+- Note: builder did not commit deliverables; committed as auditor leftover per Step 4
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2c8b5ea | docs | .owlbear/briefs/.gitkeep, .owlbear/briefs/README.md | #654 |
+| c3364e3 | chore | kanban task + activity | #654 |
