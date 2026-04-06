@@ -275,7 +275,7 @@ class TestFromAC_RichMethods:  # noqa: N801
         mgr.send.assert_called_once()
         sent_msg = mgr.send.call_args[0][0]
         assert isinstance(sent_msg, SpeakMsg)
-        assert "audio.mp3" in sent_msg.text or "My file" in sent_msg.text
+        assert sent_msg.text == "[My file] audio.mp3"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_send_blocks_delegates_to_send_with_fallback(self) -> None:
@@ -306,3 +306,24 @@ class TestFromAC_RichMethods:  # noqa: N801
         sent_msg = mgr.send.call_args[0][0]
         assert isinstance(sent_msg, SpeakMsg)
         assert sent_msg.text == "[image]"
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered tests
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered_SendFileNoCap:  # noqa: N801
+    """send_file without caption sends str(path), not a bracketed format."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_send_file_no_caption_sends_str_path(self) -> None:
+        from pathlib import Path
+
+        mgr = _make_manager()
+        channel = VoiceChannel(manager=mgr)
+        await channel.send_file(Path("audio.mp3"))
+        mgr.send.assert_called_once()
+        sent_msg = mgr.send.call_args[0][0]
+        assert isinstance(sent_msg, SpeakMsg)
+        assert sent_msg.text == "audio.mp3"
