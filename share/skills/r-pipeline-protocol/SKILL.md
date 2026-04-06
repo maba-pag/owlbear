@@ -116,6 +116,8 @@ Rich context appended to the task body before returning. Downstream agents read 
 
 Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended with a timestamp automatically. See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+To append a mid-task note outside the `end_work` lifecycle, use `edit_task(append_body="...", timestamp=True)` (see `h-mcp-kanban`).
+
 ### Per-Agent Signal Mapping
 
 See `agent-common.instructions.md` for the authoritative section-header-to-agent mapping table.
@@ -201,3 +203,5 @@ All DR/AR creation goes through the **scribe** agent. Never write to `.owlbear/d
 ### Handoff
 
 When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments). Include the handoff note in your `end_work(note="## Handoff\n...", outcome="fail")` call.
+
+For programmatic handoff notes, use `edit_task(append_body="## Handoff\n...")` (see `h-mcp-kanban`).
