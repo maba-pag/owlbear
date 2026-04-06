@@ -553,17 +553,18 @@ share/skills/
 2. **After M1:** Renamed to `.owlbear/briefs/draft-{project-name}/`
 3. **During ideation:** `context.md` populated incrementally, voices write to `voices/`, Pragmatist writes `synthesis.md`
 4. **At approval:** Mediator writes `brief.md` from context + decisions + synthesis
-5. **At handoff:** Mediator creates a **parent task** on the kanban board containing the Brief's key info (problem, outcomes, approach, scope). Planner creates subtasks under it. Tasks do not reference the Brief file directly — needed context lives in the parent task.
-6. **After handoff:** Draft files preserved for audit trail. Cleaned up when the parent task is completed or archived.
-7. **For feature changes:** New draft directory created
+5. **At handoff (new project):** Brief content transferred into a **parent kanban task** (problem, outcomes, approach, scope as the task body). Planner decomposes into subtasks. Downstream agents work from kanban tasks, not from the Brief file. The Brief file is preserved as audit trail.
+6. **At handoff (feature change):** For trivial changes: new task added directly to existing board, no Brief needed. For complex changes: voice deliberation produces a change brief → new parent task + subtasks.
+7. **After handoff:** Working Directory preserved for audit trail. Cleaned up when the parent task is completed or archived.
+8. **For feature changes:** New draft directory created (if voice deliberation was triggered)
 
 ### Re-entry (Mid-Execution Modification)
 
 When the user wants to modify direction mid-execution:
-1. Mediator loads existing Working Directory + reads current board state (parent task + subtasks)
+1. Mediator loads existing Working Directory + reads current board state (tasks on `.owlbear/kanban/`)
 2. Shows the user what's built, what's in progress, what's planned
 3. Enters at the relevant Moment (usually M1 or M4) based on the scope of change
-4. After re-deliberation: updates the parent task, archives obsolete subtasks, creates new subtasks for the changed direction
+4. After re-deliberation: updates the parent task, archives obsolete tasks, creates new tasks for the changed direction
 
 ## 13. Prerequisites for Implementation
 
@@ -577,7 +578,7 @@ When the user wants to modify direction mid-execution:
 8. **Create `.owlbear/briefs/` directory structure** for Working Directories and Brief artifacts
 9. **Update `w-project-scoping`** — deprecate or refactor to delegate to ideator
 10. **Configure multi-model** — set `model:` key in each voice agent's YAML frontmatter (Opus for domain voices + Pragmatist, GPT for Critic)
-11. **Update pipeline agents** to read Brief artifacts for context/intent propagation
+11. **Update pipeline agents** to optionally read Brief artifacts from `.owlbear/briefs/` for deeper context/intent (primary context comes from kanban tasks)
 
 ## 14. Resolved Design Decisions
 
@@ -587,7 +588,7 @@ Questions raised during design, now resolved:
 2. **Panel extensibility:** Fixed panel (4 domain voices + Critic + Pragmatist). If new voices are needed, they are added through development, not user configuration.
 3. **Voice agent model configuration:** Specified via `model:` key in agent YAML frontmatter. Example: `model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]`
 4. **Duplicate-voice pattern:** Removed. Voices run on Opus, Critic on GPT. This provides sufficient model diversity without the cost of dual-model runs.
-5. **Brief versioning:** Tasks don't reference Brief files. A parent task contains all needed context; subtasks are created under it. On re-entry, obsolete subtasks are archived and new ones created.
+5. **Brief versioning:** Brief content is transferred into a parent kanban task at handoff. Downstream agents work from kanban tasks, not Brief files. The Brief file is preserved in the Working Directory as audit trail. On re-entry, the Mediator reads the current board state + Working Directory to understand what's changed.
 6. **Working Directory cleanup:** Draft artifacts preserved after handoff for audit trail. Cleaned up when parent task is completed/archived.
 7. **Parallelism:** Confirmed — VS Code Copilot supports concurrent `runSubagent` calls (tested up to 6). Domain voices can run in parallel during the deliberation phase.
 
@@ -635,6 +636,6 @@ Number 1 is the real pain — the other two are causes. Does that feel right?"
 
 **User:** "Go."
 
-**Mediator:** "Task created: 'Add Slack webhook on pipeline failure.' Linked to existing project brief."
+**Mediator:** "Task created: 'Add Slack webhook on pipeline failure.' Added to the project board."
 
 *(Total: under 2 minutes. Same process, compressed.)*
