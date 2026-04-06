@@ -1,10 +1,12 @@
 ---
 id: 660
 title: Implement resolve-summary.json typed contract for scribe↔orchestrator boundary
-status: review
+status: archived
 priority: important
 created: 2026-04-06T08:01:24.034837+02:00
-updated: 2026-04-06T18:55:22.1296624+02:00
+updated: 2026-04-06T20:13:42.3712061+02:00
+started: 2026-04-06T20:13:42.3712061+02:00
+completed: 2026-04-06T20:13:42.3712061+02:00
 tags:
     - scope:pipeline
     - ' type:refactor'
@@ -167,3 +169,125 @@ No Python files changed — ruff N/A. Markdown files verified via read-back.
 - [x] `scribe.agent.md` output contract updated to include file write — verified
 - [x] NEEDS-INFO dispatch still works E2E — same `needs_info_dispatches` injection in Step 2, source is now the JSON file
 - [x] No regression in DR processing — all 5 response types still documented and handled
+
+[[2026-04-06]] Mon 19:17
+## Review Evidence
+
+### Test Results
+- pytest: N/A — non-implementation task (markdown-only, 4 prompt-layer files, 0 Python changes)
+
+### Lint: N/A — no Python files changed
+
+### Coverage: N/A
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+No `TestFromAC_*` classes exist. Conditional skip applies. Test-writer correctly identified this as markdown-only and passed through. CLEAN.
+
+#### Security Review
+No new code — all changes are markdown instructions. No user-controlled input, shell commands, file paths exposed externally, or deserialization concerns. Only internal trusted agents write/read the JSON file within `.owlbear/decisions/` (scribe's established domain). CLEAN.
+
+#### Test Integrity
+No `TestFromAC_*` classes exist. Conditional skip applies. CLEAN.
+
+#### Test Quality
+No tests applicable (markdown-only task). CLEAN.
+
+#### Data Safety
+`resolve-summary.json` is written by scribe (trusted internal agent) and read/deleted by orchestrator. No external input enters this flow. The `resolve-summary.json` schema is minimal and self-contained. "Write even when all arrays are empty" ensures graceful degradation. CLEAN.
+
+#### Builder Process Quality
+Single `## Builder Notes` section — first attempt, no loop. CLEAN.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Scribe writes `resolve-summary.json` with `{resolved, needs_info, pending}` arrays | scribe.agent.md resolve Output Contract: JSON schema with all 3 arrays shown; "Write even when all arrays are empty" | PASS |
+| Orchestrator reads via `readFile` after scribe returns | w-orchestration Step 1: "read `.owlbear/decisions/resolve-summary.json` via `readFile`" | PASS |
+| Orchestrator deletes after reading | w-orchestration Step 1: "Delete the file after reading (stale-file mitigation)" | PASS |
+| Missing file = empty dispatches (graceful degradation) | w-orchestration Step 1: "If the file is missing, treat as empty (graceful degradation)" | PASS |
+| Carve-out exception removed from `orchestrator.agent.md` critical_rules | orchestrator.agent.md critical_rules: "After the scribe returns in resolve mode, read `.owlbear/decisions/resolve-summary.json` via `readFile`" — no exception carve-out present | PASS |
+| `w-orchestration` Step 1 updated: file read replaces text parsing | Step 1 now sources `needs_info_dispatches` from JSON file exclusively | PASS |
+| `w-decision-routing` resolve output contract updated | w-decision-routing Mode 2 needs-info step 4: "Record in resolve-summary.json — add `{task_id, agent}` to the `needs_info` array" | PASS |
+| `scribe.agent.md` output contract updated to include file write | scribe.agent.md resolve Output Contract: full JSON schema and write instruction | PASS |
+| NEEDS-INFO dispatch injection still works E2E | w-orchestration Step 2: "NEEDS-INFO injection: Append `needs_info_dispatches` (from Step 1) to the dispatch list" unchanged in Step 2 | PASS |
+| No regression in DR processing | scribe.agent.md resolve mode: all 5 response types (pending, approved, completed, needs-info, rejected) + auto-resolve still documented in both files | PASS |
+
+### All 11 Change Points Verified
+1. orchestrator.agent.md L44 — carve-out removed, `resolve-summary.json` reference added ✓
+2. scribe.agent.md L71 — `needs_info` array collection added ✓
+3. scribe.agent.md L100-106 — resolve-summary.json write + schema in output contract ✓
+4. w-orchestration context budget — exception note replaced with file-read note ✓
+5. w-orchestration state variable — `needs_info_dispatches` sourced from file ✓
+6. w-orchestration signal contracts — exception note replaced ✓
+7. w-orchestration Step 1 — readFile + delete-after-read instructions present ✓
+8. w-orchestration Step 2 — `needs_info_dispatches` injection logic unchanged ✓
+9. w-orchestration checklist — two new items: `resolve-summary.json` read/delete + `needs_info_dispatches` injection ✓
+10. w-orchestration pitfall — "File-based dispatch injection" replaces text-parsing pitfall ✓
+11. w-decision-routing needs-info flow — step 4 added to record in resolve-summary.json ✓
+
+### Deductions
+None.
+
+### Verdict
+Confidence: .97 → PASS
+
+[[2026-04-06]] Mon 19:21
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | scribe↔orchestrator boundary changed (text-parsing → file contract). `.github/copilot-instructions.md` is 3 lines (project identity only) — no pipeline protocol tables to update. Primary docs (agent/skill files) already updated by builder and verified by reviewer at confidence .97. |
+| 2 | Module docstrings | No | N/A | Zero Python files changed — all changes are prompt-layer markdown (4 files). |
+| 3 | External attribution | No | N/A | Task body: "7 studied (all internal codebase)". No external repos, articles, or docs used. Research doc §2 confirms all sources are internal workspace files. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/scribe-orchestrator-typed-contract.md` exists and is linked in task body. Follow-up tasks: none required — this task IS the implementation follow-up from #657. |
+
+### Files Updated
+- None — no doc updates required. Agent/skill files updated by builder are the primary documentation for this change.
+
+### Scratch Files Cleaned
+- None — no `.owlbear/scratch/660-*` files found.
+
+[[2026-04-06]] Mon 20:13
+## Audit
+
+### AC Verification
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Scribe writes resolve-summary.json with {resolved, needs_info, pending} arrays | scribe.agent.md resolve Output Contract: JSON schema with all 3 arrays; "Write even when all arrays are empty" | PASS |
+| Orchestrator reads via readFile after scribe returns | w-orchestration Step 1: "read .owlbear/decisions/resolve-summary.json via readFile" | PASS |
+| Orchestrator deletes after reading | w-orchestration Step 1: "Delete the file after reading (stale-file mitigation)" | PASS |
+| Missing file = empty dispatches | w-orchestration Step 1: "If the file is missing, treat as empty (graceful degradation)" | PASS |
+| Carve-out exception removed from orchestrator.agent.md | orchestrator.agent.md critical_rules: no carve-out exception; replaced with file-read reference to resolve-summary.json | PASS |
+| w-orchestration Step 1 updated: file read replaces text parsing | Step 1 fully rewritten: readFile + delete-after-read + graceful degradation | PASS |
+| w-decision-routing resolve output contract updated | Mode 2 needs-info step 4: "Record in resolve-summary.json" with JSON schema | PASS |
+| scribe.agent.md output contract updated to include file write | resolve Output Contract: full JSON schema and write instruction present | PASS |
+| NEEDS-INFO dispatch injection still works E2E | w-orchestration Step 2: needs_info_dispatches injection logic unchanged, source is now JSON file | PASS |
+| No regression in DR processing | All 5 response types (pending, approved, completed, needs-info, rejected) + auto-resolve documented in both files | PASS |
+
+### Test Results
+- pytest: 3135 passed, 443 failed (all pre-existing/unrelated TDD-RED tests), 8 skipped. 1 collection error (test_planner_gates.py from #207, pre-existing).
+- ruff: Pre-existing violations in mcp-kanban server/tests only. No Python files changed by #660.
+
+### Scope Check
+- Commit 3d37b56 touches all 4 target files + minor tangential edit to architect.agent.md (adding "after" to decomposition detection rule). Harmless.
+- Commit message missing #660 task ID (process note, not a rubric deduction).
+
+### Architect Quality: 5/5
+All 10 AC lines are specific, verifiable, and complete. Edge cases (missing file, stale file, empty arrays) explicitly covered. Change impact map (11 points, 4 files) was precise and matched implementation exactly. Research grounding via #657 was thorough.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines with no evidence: 0 (10/10 PASS) = 0
+- Lint violations: N/A (markdown-only) = 0
+- AC quality score <=3: No (5/5) = 0
+- Missing reviewer evidence: No (detailed, 11 change points verified) = 0
+- Full-suite failures in task scope: 0 = 0
+
+### Confidence: .98
+### Action: archive
