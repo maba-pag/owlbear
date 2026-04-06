@@ -20,3 +20,17 @@ Append your agent section to the task body via the `note` parameter of `end_work
 | auditor | ARCHIVED / REJECTED | ## Audit |
 | planner | DONE | ## Planning |
 | curator | DONE | ## Curation |
+
+## User-Action Detection Responsibilities
+
+All agents should recognise — but only some must act on — `type:user-action` tasks:
+
+| Agent | Responsibility | Action |
+|-------|---------------|--------|
+| researcher | Provisional detection | Tag `type:user-action` if AC meets any detection heuristic |
+| architect | **Mandatory gate** | Confirm/remove tag; create AR via scribe; block task |
+| orchestrator | Mechanical enforcement | `pick_tasks --not-blocked` already excludes blocked tasks |
+| test-writer / builder / reviewer | Pass-through | `NON_IMPL_TAGS` exempts from TDD gate; process normally after unblock |
+| auditor | Convention verification | Confirm AR was created, block was issued, `## Action Completed` appears in task body |
+
+See r-pipeline-protocol §5 — User-Action Tasks for the full blocking flow, fast-path, and dry-run scenario.
