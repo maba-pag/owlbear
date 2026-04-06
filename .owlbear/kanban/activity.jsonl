@@ -1,24 +1,3 @@
-{"timestamp":"2026-03-30T19:34:03.437972+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T19:34:03.4426308+02:00","action":"claim","task_id":147,"detail":"reviewer"}
-{"timestamp":"2026-03-30T19:34:05.0068122+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T19:34:05.0105619+02:00","action":"claim","task_id":222,"detail":"reviewer"}
-{"timestamp":"2026-03-30T19:34:09.5424985+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T19:34:09.5457334+02:00","action":"claim","task_id":16,"detail":"builder"}
-{"timestamp":"2026-03-30T19:34:11.2191227+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T19:34:11.2238877+02:00","action":"claim","task_id":213,"detail":"writer"}
-{"timestamp":"2026-03-30T19:35:05.4181292+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T19:35:11.1930736+02:00","action":"edit","task_id":213,"detail":"Fix #210 and #211 AC to use command-execution hook model"}
-{"timestamp":"2026-03-30T19:35:11.1967426+02:00","action":"release","task_id":213,"detail":"writer"}
-{"timestamp":"2026-03-30T19:38:29.1170102+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T19:38:34.0622461+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T19:38:40.6810099+02:00","action":"edit","task_id":222,"detail":"Test: analysis module pattern detectors"}
-{"timestamp":"2026-03-30T19:38:40.6867655+02:00","action":"release","task_id":222,"detail":"reviewer"}
-{"timestamp":"2026-03-30T19:38:59.3155929+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T19:38:59.3197435+02:00","action":"release","task_id":147,"detail":"reviewer"}
-{"timestamp":"2026-03-30T19:40:09.3294572+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T19:40:13.6701821+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T19:40:13.6738302+02:00","action":"release","task_id":16,"detail":"builder"}
-{"timestamp":"2026-03-30T19:40:35.7441987+02:00","action":"edit","task_id":191,"detail":"Implement mcp-project resources + tree helper (server.py part 2)"}
 {"timestamp":"2026-03-30T19:40:35.7477965+02:00","action":"claim","task_id":191,"detail":"reviewer"}
 {"timestamp":"2026-03-30T19:40:39.1036954+02:00","action":"edit","task_id":219,"detail":"Implement gate_warnings in dispatch-planning SKILL.md"}
 {"timestamp":"2026-03-30T19:40:39.1087216+02:00","action":"claim","task_id":219,"detail":"reviewer"}
@@ -9998,3 +9977,24 @@
 {"timestamp":"2026-04-06T04:33:26.4969528+02:00","action":"release","task_id":638,"detail":"cove-quick"}
 {"timestamp":"2026-04-06T04:34:22.9002775+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
 {"timestamp":"2026-04-06T04:34:22.9140623+02:00","action":"release","task_id":136,"detail":"lotus-lily"}
+{"timestamp":"2026-04-06T05:27:13.5506609+02:00","action":"edit","task_id":616,"detail":"Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge"}
+{"timestamp":"2026-04-06T05:27:23.6295246+02:00","action":"priority","task_id":618,"detail":"nice-to-have -\u003e important"}
+{"timestamp":"2026-04-06T05:27:46.0873804+02:00","action":"priority","task_id":618,"detail":"important -\u003e nice-to-have"}
+{"timestamp":"2026-04-06T05:30:26.7402082+02:00","action":"edit","task_id":575,"detail":"P2-04: Update pipeline agent files with MCP tool references alongside CLI"}
+{"timestamp":"2026-04-06T05:30:26.7603316+02:00","action":"claim","task_id":575,"detail":"shore-hull"}
+{"timestamp":"2026-04-06T05:30:31.2168744+02:00","action":"edit","task_id":457,"detail":"Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-06T05:30:31.2320763+02:00","action":"claim","task_id":457,"detail":"leaf-gorge"}
+{"timestamp":"2026-04-06T05:30:32.0354958+02:00","action":"edit","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-06T05:30:32.0477261+02:00","action":"claim","task_id":592,"detail":"oxide-port"}
+{"timestamp":"2026-04-06T05:30:38.8020879+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
+{"timestamp":"2026-04-06T05:30:38.8183966+02:00","action":"claim","task_id":63,"detail":"coal-yarn"}
+{"timestamp":"2026-04-06T05:31:27.9025298+02:00","action":"edit","task_id":457,"detail":"Remove execute/* tools from reviewer agent"}
+{"timestamp":"2026-04-06T05:31:27.919002+02:00","action":"release","task_id":457,"detail":"leaf-gorge"}
+{"timestamp":"2026-04-06T05:31:46.4729444+02:00","action":"edit","task_id":63,"detail":"Implement VoiceChannel adapter"}
+{"timestamp":"2026-04-06T05:31:46.4868669+02:00","action":"release","task_id":63,"detail":"coal-yarn"}
+{"timestamp":"2026-04-06T05:34:43.3520053+02:00","action":"edit","task_id":575,"detail":"P2-04: Update pipeline agent files with MCP tool references alongside CLI"}
+{"timestamp":"2026-04-06T05:34:43.3728878+02:00","action":"release","task_id":575,"detail":"shore-hull"}
+{"timestamp":"2026-04-06T05:46:56.5294468+02:00","action":"edit","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-06T05:47:22.7014493+02:00","action":"edit","task_id":592,"detail":"Evaluate Power Automate Workflows availability for Teams notifications"}
+{"timestamp":"2026-04-06T05:47:22.7142178+02:00","action":"release","task_id":592,"detail":"oxide-port"}
+{"timestamp":"2026-04-06T05:47:23.3428387+02:00","action":"move","task_id":592,"detail":"done -\u003e archived"}
