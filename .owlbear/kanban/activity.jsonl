@@ -1,82 +1,3 @@
-{"timestamp":"2026-03-30T23:08:59.4870689+02:00","action":"release","task_id":24,"detail":"architect"}
-{"timestamp":"2026-03-30T23:08:59.9848751+02:00","action":"delete","task_id":24,"detail":"General KB initial data load"}
-{"timestamp":"2026-03-30T23:10:16.2018779+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T23:10:16.2067303+02:00","action":"release","task_id":179,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:10:36.8684492+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T23:10:36.871023+02:00","action":"release","task_id":203,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:10:42.7884667+02:00","action":"edit","task_id":204,"detail":"Test: Wire audit log into dispatch loop"}
-{"timestamp":"2026-03-30T23:10:50.6604762+02:00","action":"edit","task_id":204,"detail":"Test: Wire audit log into dispatch loop"}
-{"timestamp":"2026-03-30T23:10:50.6641764+02:00","action":"release","task_id":204,"detail":"builder"}
-{"timestamp":"2026-03-30T23:10:56.723078+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T23:10:56.7278039+02:00","action":"claim","task_id":198,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:11:03.5096302+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T23:11:03.515098+02:00","action":"claim","task_id":208,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:11:10.8748233+02:00","action":"edit","task_id":207,"detail":"Test: planner gate checker and task selector"}
-{"timestamp":"2026-03-30T23:11:10.8774211+02:00","action":"claim","task_id":207,"detail":"builder"}
-{"timestamp":"2026-03-30T23:11:15.0451766+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T23:11:15.0462342+02:00","action":"claim","task_id":184,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:11:20.6272647+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
-{"timestamp":"2026-03-30T23:11:20.6315523+02:00","action":"claim","task_id":50,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:13:31.5347+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T23:13:31.5357401+02:00","action":"release","task_id":184,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:17:21.2208795+02:00","action":"edit","task_id":207,"detail":"Test: planner gate checker and task selector"}
-{"timestamp":"2026-03-30T23:17:21.2250149+02:00","action":"release","task_id":207,"detail":"builder"}
-{"timestamp":"2026-03-30T23:17:21.6509113+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T23:17:21.6545535+02:00","action":"release","task_id":208,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:17:56.7191213+02:00","action":"edit","task_id":50,"detail":"Implement voice addon STT with Moonshine"}
-{"timestamp":"2026-03-30T23:17:56.7232307+02:00","action":"release","task_id":50,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:19:28.9659917+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-30T23:19:28.9697041+02:00","action":"claim","task_id":228,"detail":"builder"}
-{"timestamp":"2026-03-30T23:19:37.7531527+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-30T23:19:37.7579455+02:00","action":"release","task_id":228,"detail":"builder"}
-{"timestamp":"2026-03-30T23:21:31.1396411+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T23:21:33.9068255+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-30T23:21:33.9105953+02:00","action":"release","task_id":198,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:22:12.5062318+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T23:22:12.510391+02:00","action":"claim","task_id":143,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:22:18.1268126+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T23:22:18.1308573+02:00","action":"claim","task_id":212,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:22:44.2419789+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T23:22:44.2456259+02:00","action":"claim","task_id":224,"detail":"auditor"}
-{"timestamp":"2026-03-30T23:23:46.7142829+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-30T23:23:46.7185507+02:00","action":"release","task_id":212,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:24:00.0869276+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T23:24:00.0900619+02:00","action":"release","task_id":143,"detail":"reviewer"}
-{"timestamp":"2026-03-30T23:24:17.7874753+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T23:24:17.7922828+02:00","action":"claim","task_id":33,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:25:02.3572821+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T23:25:05.7868746+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-30T23:25:05.7905692+02:00","action":"release","task_id":33,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:27:12.250543+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-30T23:27:12.2530876+02:00","action":"claim","task_id":34,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:28:10.6688223+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T23:28:17.0241045+02:00","action":"move","task_id":224,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T23:28:23.1938914+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T23:28:23.2016373+02:00","action":"release","task_id":224,"detail":"auditor"}
-{"timestamp":"2026-03-30T23:29:00.4574066+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T23:29:00.458455+02:00","action":"claim","task_id":221,"detail":"auditor"}
-{"timestamp":"2026-03-30T23:31:09.0227338+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-30T23:31:09.0279592+02:00","action":"release","task_id":34,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:33:02.4122676+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T23:33:02.4175665+02:00","action":"claim","task_id":179,"detail":"writer"}
-{"timestamp":"2026-03-30T23:33:05.9189328+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T23:33:05.9242458+02:00","action":"claim","task_id":203,"detail":"writer"}
-{"timestamp":"2026-03-30T23:33:08.6771393+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T23:33:08.6813209+02:00","action":"claim","task_id":208,"detail":"writer"}
-{"timestamp":"2026-03-30T23:33:13.4971481+02:00","action":"edit","task_id":158,"detail":"Create intake + ingest pipeline modules in knowledge package"}
-{"timestamp":"2026-03-30T23:33:13.5013358+02:00","action":"claim","task_id":158,"detail":"auditor"}
-{"timestamp":"2026-03-30T23:34:14.02306+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T23:34:22.7833832+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T23:34:22.788199+02:00","action":"release","task_id":179,"detail":"writer"}
-{"timestamp":"2026-03-30T23:34:29.4039047+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T23:34:50.1614633+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T23:34:57.7236333+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T23:34:57.7290453+02:00","action":"release","task_id":203,"detail":"writer"}
-{"timestamp":"2026-03-30T23:36:24.7828204+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T23:36:47.600093+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
-{"timestamp":"2026-03-30T23:37:09.2385083+02:00","action":"move","task_id":221,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-30T23:37:11.0732034+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T23:37:14.7369439+02:00","action":"edit","task_id":221,"detail":"Research: Extend decision-request process to handle user action requests"}
 {"timestamp":"2026-03-30T23:37:14.7400042+02:00","action":"release","task_id":221,"detail":"auditor"}
 {"timestamp":"2026-03-30T23:37:16.1460588+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
 {"timestamp":"2026-03-30T23:37:21.0497342+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
@@ -9998,3 +9919,82 @@
 {"timestamp":"2026-04-06T23:01:23.5636145+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
 {"timestamp":"2026-04-06T23:01:23.5774035+02:00","action":"release","task_id":661,"detail":"vapor-cliff"}
 {"timestamp":"2026-04-06T23:01:24.1310961+02:00","action":"move","task_id":661,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T23:01:59.6791943+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-06T23:01:59.6929405+02:00","action":"claim","task_id":590,"detail":"char-vault"}
+{"timestamp":"2026-04-06T23:02:04.5134178+02:00","action":"edit","task_id":649,"detail":"P4-09: Create enduser-voice.agent.md"}
+{"timestamp":"2026-04-06T23:02:04.52806+02:00","action":"claim","task_id":649,"detail":"brisk-vivid"}
+{"timestamp":"2026-04-06T23:02:08.9897902+02:00","action":"edit","task_id":650,"detail":"P4-10: Create security-voice.agent.md"}
+{"timestamp":"2026-04-06T23:02:09.0048754+02:00","action":"claim","task_id":650,"detail":"trail-veil"}
+{"timestamp":"2026-04-06T23:02:23.5904128+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T23:02:23.604668+02:00","action":"claim","task_id":663,"detail":"root-reef"}
+{"timestamp":"2026-04-06T23:03:13.4280071+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T23:03:13.4430248+02:00","action":"release","task_id":663,"detail":"root-reef"}
+{"timestamp":"2026-04-06T23:04:28.8308282+02:00","action":"edit","task_id":650,"detail":"P4-10: Create security-voice.agent.md"}
+{"timestamp":"2026-04-06T23:04:28.8459803+02:00","action":"release","task_id":650,"detail":"trail-veil"}
+{"timestamp":"2026-04-06T23:04:46.127871+02:00","action":"edit","task_id":649,"detail":"P4-09: Create enduser-voice.agent.md"}
+{"timestamp":"2026-04-06T23:04:46.1415409+02:00","action":"release","task_id":649,"detail":"brisk-vivid"}
+{"timestamp":"2026-04-06T23:05:20.7401106+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-06T23:05:20.752978+02:00","action":"release","task_id":590,"detail":"char-vault"}
+{"timestamp":"2026-04-06T23:06:57.0640302+02:00","action":"edit","task_id":664,"detail":"Add architect user-action gate rule and post-AR fast-path to w-arch-review"}
+{"timestamp":"2026-04-06T23:06:57.0772866+02:00","action":"claim","task_id":664,"detail":"trail-aspen"}
+{"timestamp":"2026-04-06T23:07:11.4856706+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T23:07:11.5028314+02:00","action":"claim","task_id":663,"detail":"echo-heath"}
+{"timestamp":"2026-04-06T23:09:30.7300189+02:00","action":"edit","task_id":664,"detail":"Add architect user-action gate rule and post-AR fast-path to w-arch-review"}
+{"timestamp":"2026-04-06T23:09:30.7432955+02:00","action":"release","task_id":664,"detail":"trail-aspen"}
+{"timestamp":"2026-04-06T23:18:30.7065298+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T23:18:30.7231859+02:00","action":"release","task_id":663,"detail":"echo-heath"}
+{"timestamp":"2026-04-06T23:18:31.3365424+02:00","action":"move","task_id":663,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T23:18:59.1356107+02:00","action":"edit","task_id":648,"detail":"P4-08: Create data-voice.agent.md"}
+{"timestamp":"2026-04-06T23:18:59.1471867+02:00","action":"claim","task_id":648,"detail":"maple-mace"}
+{"timestamp":"2026-04-06T23:18:59.5205599+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T23:18:59.5345727+02:00","action":"claim","task_id":646,"detail":"opal-snow"}
+{"timestamp":"2026-04-06T23:19:13.7613677+02:00","action":"edit","task_id":649,"detail":"P4-09: Create enduser-voice.agent.md"}
+{"timestamp":"2026-04-06T23:19:13.7736322+02:00","action":"claim","task_id":649,"detail":"cove-arch"}
+{"timestamp":"2026-04-06T23:19:22.3426332+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T23:19:22.3567419+02:00","action":"claim","task_id":647,"detail":"nova-dale"}
+{"timestamp":"2026-04-06T23:19:39.9605021+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T23:19:39.9749874+02:00","action":"release","task_id":647,"detail":"nova-dale"}
+{"timestamp":"2026-04-06T23:26:17.5079865+02:00","action":"edit","task_id":649,"detail":"P4-09: Create enduser-voice.agent.md"}
+{"timestamp":"2026-04-06T23:26:17.5222839+02:00","action":"release","task_id":649,"detail":"cove-arch"}
+{"timestamp":"2026-04-06T23:27:04.6833176+02:00","action":"edit","task_id":648,"detail":"P4-08: Create data-voice.agent.md"}
+{"timestamp":"2026-04-06T23:27:04.6944855+02:00","action":"release","task_id":648,"detail":"maple-mace"}
+{"timestamp":"2026-04-06T23:28:17.3637839+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T23:28:17.3778095+02:00","action":"release","task_id":646,"detail":"opal-snow"}
+{"timestamp":"2026-04-06T23:28:43.3823879+02:00","action":"edit","task_id":650,"detail":"P4-10: Create security-voice.agent.md"}
+{"timestamp":"2026-04-06T23:28:43.398564+02:00","action":"claim","task_id":650,"detail":"pearl-reef"}
+{"timestamp":"2026-04-06T23:28:59.1452622+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T23:28:59.1562656+02:00","action":"claim","task_id":665,"detail":"field-otter"}
+{"timestamp":"2026-04-06T23:29:12.357806+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-06T23:29:12.3728924+02:00","action":"claim","task_id":590,"detail":"vine-mold"}
+{"timestamp":"2026-04-06T23:31:12.2259295+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T23:31:12.2383782+02:00","action":"release","task_id":665,"detail":"field-otter"}
+{"timestamp":"2026-04-06T23:33:23.5317213+02:00","action":"edit","task_id":650,"detail":"P4-10: Create security-voice.agent.md"}
+{"timestamp":"2026-04-06T23:33:23.5445335+02:00","action":"release","task_id":650,"detail":"pearl-reef"}
+{"timestamp":"2026-04-06T23:37:24.3535251+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-06T23:37:24.3695765+02:00","action":"release","task_id":590,"detail":"vine-mold"}
+{"timestamp":"2026-04-06T23:38:50.2992228+02:00","action":"edit","task_id":664,"detail":"Add architect user-action gate rule and post-AR fast-path to w-arch-review"}
+{"timestamp":"2026-04-06T23:38:50.3146567+02:00","action":"claim","task_id":664,"detail":"dune-root"}
+{"timestamp":"2026-04-06T23:38:54.8317178+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T23:38:54.8450428+02:00","action":"claim","task_id":646,"detail":"warp-valve"}
+{"timestamp":"2026-04-06T23:39:05.3338861+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T23:39:05.3477914+02:00","action":"claim","task_id":665,"detail":"dawn-twig"}
+{"timestamp":"2026-04-06T23:39:05.7516817+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-06T23:39:05.7695161+02:00","action":"claim","task_id":590,"detail":"curl-pulse"}
+{"timestamp":"2026-04-06T23:40:03.4349216+02:00","action":"edit","task_id":664,"detail":"Add architect user-action gate rule and post-AR fast-path to w-arch-review"}
+{"timestamp":"2026-04-06T23:40:03.4531858+02:00","action":"release","task_id":664,"detail":"dune-root"}
+{"timestamp":"2026-04-06T23:40:34.7855123+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
+{"timestamp":"2026-04-06T23:40:34.8005839+02:00","action":"release","task_id":590,"detail":"curl-pulse"}
+{"timestamp":"2026-04-06T23:40:41.0991797+02:00","action":"edit","task_id":646,"detail":"P4-06: Create pragmatist-voice.agent.md"}
+{"timestamp":"2026-04-06T23:40:41.1130367+02:00","action":"release","task_id":646,"detail":"warp-valve"}
+{"timestamp":"2026-04-06T23:40:59.6350008+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T23:40:59.6505202+02:00","action":"release","task_id":665,"detail":"dawn-twig"}
+{"timestamp":"2026-04-06T23:41:19.4337951+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T23:41:19.447703+02:00","action":"claim","task_id":647,"detail":"wind-ridge"}
+{"timestamp":"2026-04-06T23:43:54.4882064+02:00","action":"edit","task_id":647,"detail":"P4-07: Create architect-voice.agent.md"}
+{"timestamp":"2026-04-06T23:43:54.5007998+02:00","action":"release","task_id":647,"detail":"wind-ridge"}
+{"timestamp":"2026-04-06T23:47:33.232829+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T23:47:33.2468539+02:00","action":"claim","task_id":665,"detail":"cape-storm"}
+{"timestamp":"2026-04-06T23:47:36.3537389+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-06T23:47:36.3677224+02:00","action":"claim","task_id":662,"detail":"stem-hazel"}
+{"timestamp":"2026-04-06T23:49:45.5739164+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-06T23:49:45.5865973+02:00","action":"release","task_id":662,"detail":"stem-hazel"}

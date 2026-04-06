@@ -1,15 +1,17 @@
 ---
 id: 665
 title: 'Test: type:user-action in NON_IMPL_TAGS gate sets'
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-04-06T16:46:57.2190253+02:00
-updated: 2026-04-06T18:51:34.3279321+02:00
+updated: 2026-04-06T23:47:33.2318042+02:00
 tags:
     - phase-3
     - ' scope:orchestrator'
     - ' type:test'
 parent: 661
+claimed_by: cape-storm
+claimed_at: 2026-04-06T23:47:33.2299885+02:00
 class: standard
 ---
 
@@ -90,3 +92,85 @@ Not applicable (test task).
 | check_tdd() returns True for in-progress + type:user-action (no TW notes) | test_user_action_tag_in_progress_no_tdd_notes_passes, test_user_action_combined_with_scope_tag_passes, test_user_action_only_tag_empty_body_in_progress_passes |
 | _check_pick_gates() returns True via pick_tasks for in-progress + type:user-action (no TW notes) | test_user_action_in_progress_no_tdd_notes_included_in_dispatch, test_user_action_combined_with_scope_tag_included_in_dispatch |
 | All tests FAIL before implementation | CONFIRMED — 7/7 FAIL |
+
+[[2026-04-06]] Mon 22:32
+## Builder Notes
+- Files changed: `tests/test_user_action_non_impl_661.py` (1 file, committed ab700c4)
+- Implementation already present: `type:user-action` in `_NON_IMPL_TAGS` (gates.py) and `_PICK_NON_IMPL_TAGS` (server.py) was committed in 6ee05d3
+- Test results: **7 passed** (all TestFromAC_* tests green)
+  - TestFromAC_UserActionNonImplFrozensets: 2 tests
+  - TestFromAC_CheckTDD_UserActionExemption: 3 tests
+  - TestFromAC_PickTasksUserActionExemption: 2 tests
+- Lint: ruff clean on gates.py and test file; pre-existing PLR0915/RUF059 in server.py (unrelated, not in task scope)
+- Coverage: 7/7 tests pass targeting frozenset membership and gate function behavior
+- No TestFromAC_* classes modified
+- Retry context: tests were already failing (RED confirmed); implementation was committed in prior session; this builder pass confirmed GREEN and committed test file
+
+[[2026-04-06]] Mon 23:31
+## Review Evidence
+
+### Tests
+pytest: **7 passed, 0 failed** (quality-runner, independent run)
+- `TestFromAC_UserActionNonImplFrozensets`: 2 ✓
+- `TestFromAC_CheckTDD_UserActionExemption`: 3 ✓
+- `TestFromAC_PickTasksUserActionExemption`: 2 ✓
+
+### Lint
+ruff exit 1 — violations in `server.py` only:
+- L337 PLR0915 "Too many statements" — pre-existing, not in task scope
+- L398 RUF059 "Unpacked variable never used" — pre-existing, not in task scope
+Test file `test_user_action_non_impl_661.py`: **clean** ✓
+
+### Coverage
+- `owlbear.planner.gates`: 67% (below 90% threshold)
+- `owlbear_mcp_kanban.server`: 28% (below 90% threshold)
+
+Note: Both modules are large production files. The task's implementation contribution was two frozenset string additions. All AC-targeted code paths (frozenset membership + gate function behavior) are directly exercised by the 7 tests. Below-threshold numbers reflect large untested surfaces in pre-existing code, not gaps in new code. Deduction: −0.03.
+
+### AC Compliance
+
+| AC Line | Test(s) | Assertion | Status |
+|---------|---------|-----------|--------|
+| "type:user-action" in `_NON_IMPL_TAGS` (gates.py) | `test_type_user_action_in_non_impl_tags_gates` | `assert "type:user-action" in _NON_IMPL_TAGS` | PASS — confirmed at gates.py L27 |
+| "type:user-action" in `_PICK_NON_IMPL_TAGS` (server.py) | `test_type_user_action_in_pick_non_impl_tags_server` | `assert "type:user-action" in _PICK_NON_IMPL_TAGS` | PASS — confirmed at server.py L534 |
+| `check_tdd()` returns True for in-progress + `type:user-action`, no TW notes | 3 tests (basic, combined tags, minimal body) | `assert check_tdd(task) is True` | PASS |
+| `_check_pick_gates()` returns True via `pick_tasks` for in-progress + `type:user-action`, no TW notes | 2 tests (basic, combined tags) | `assert {id} in ids` (dispatch list) | PASS |
+| All tests FAIL before implementation (TDD RED) | Confirmed in test-writer notes; GREEN now | — | PASS |
+
+### TestFromAC_* Integrity
+- No TestFromAC_* classes modified or removed. All 3 classes retained, 7 tests intact. ✓
+
+### Implementation Verification
+- `gates.py` L24–28: `_NON_IMPL_TAGS` frozenset contains `"type:user-action"` ✓
+- `server.py` L531–535: `_PICK_NON_IMPL_TAGS` frozenset contains `"type:user-action"` ✓
+
+### Assertion Quality
+All assertions are strong and would fail on a broken implementation:
+- Frozenset membership: direct `in` check on imported frozenset — fails if string absent
+- `check_tdd(task) is True`: strict identity check — fails if gate returns False or truthy non-bool
+- `assert {id} in ids`: fails if task excluded from dispatch (gate incorrectly blocks)
+
+### Deductions
+| Item | Deduction |
+|------|-----------|
+| Module coverage below 90% threshold (pre-existing code, not new code gap) | −0.03 |
+
+### Verdict
+Confidence: **0.95** → **PASS**
+
+[[2026-04-06]] Mon 23:40
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A (no update needed) | `type:user-action` added to `_NON_IMPL_TAGS` (gates.py L27) and `_PICK_NON_IMPL_TAGS` (server.py L534). `copilot-instructions.md` has no tag/gate tables. `agent-common.instructions.md` L33 already documents NON_IMPL_TAGS pass-through. `r-project-standards` L83–84 and `r-pipeline-protocol` L226–241 already cover `type:user-action` fully. All docs accurate. |
+| 2 | Module docstrings | Yes | N/A (no update needed) | `gates.py` — `check_tdd()`, `check_clarity()`, `check_gates()` docstrings accurate; module docstring describes gate 4 correctly without enumerating specific tags. `server.py` — `_check_pick_gates()` docstring accurate. No changes required. |
+| 3 | External attribution | No | N/A | Pattern follows internal `test_tdd_gate_non_impl_630.py`. No external repos or articles used. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/user-action-non-impl-tags-tests.md` exists and is linked from task body. Follow-up tasks: none needed (impl task #662 already existed). |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/665-*` files found)
