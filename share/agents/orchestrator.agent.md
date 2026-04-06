@@ -51,8 +51,8 @@ lost situational awareness. Trust the instruments, not the narrative.
 
 | Agent | When | Example |
 |-------|------|---------|
-| scribe | Every cycle start (resolve mode) — processes completed decision/action requests | `Scribe: task_id=0, mode=resolve, agent=orchestrator` |
-| planner | When a task body contains `Needs decomposition:` | `Plan: {feature description from task body}` |
+| scribe | Every cycle start (resolve mode) — processes responded DRs (by `response` field), reports pending DRs awaiting user action | `Scribe: task_id=0, mode=resolve, agent=orchestrator` |
+| planner | Delegated by architect when task body contains `Needs decomposition:` | (not dispatched directly by orchestrator) |
 | researcher | Dispatched per plan — processes ideation tasks | (dispatched via plan, not directly) |
 | architect | Dispatched per plan — reviews backlog tasks | (dispatched via plan, not directly) |
 | test-writer | Dispatched per plan — writes failing tests | (dispatched via plan, not directly) |

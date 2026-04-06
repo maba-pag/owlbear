@@ -25,19 +25,27 @@ See `r-pipeline-protocol` → Communication for Channel A/B spec.
 
 **Subagent output:** Channel A diagnostic line. Do NOT parse for routing. Only check: normal return vs crash.
 
-## Step 0 — Resolve Pending Decision Requests
+## Step 1 — Resolve Pending Decision Requests
 
-Before planning, call the **scribe** agent to process any resolved decision/action requests:
+At the **start of every cycle**, call the **scribe** agent to process any responded decision/action requests:
 
 ```
 runSubagent("scribe", "Scribe: task_id=all, mode=resolve, agent=orchestrator", "Resolve pending DRs")
 ```
 
-The scribe scans `.owlbear/decisions/pending/`, processes files where `approved: true` or `completed: true`, writes summaries to task bodies, unblocks tasks, moves files to resolved, and handles 5-day auto-resolution.
+The scribe scans `.owlbear/decisions/pending/`, classifies each file by its `response` field (`pending`, `approved`, `completed`, `needs-info`, `rejected`). It writes summaries to task bodies, unblocks approved/rejected/completed tasks, keeps `needs-info` tasks blocked and signals for re-dispatch, moves resolved files, and handles 5-day auto-resolution.
+
+If the scribe reports `NEEDS-INFO` signals, note the task IDs and originating agents — include them in the dispatch plan so the agent can address the user's questions.
+
+If the scribe reports `PENDING` DRs awaiting user action, surface them in the cycle output (once per session, cycle 1 only):
+
+```
+Cycle 1 (DRs): Pending user response: #616 (616-scope-params-approval.md), ...
+```
 
 If the scribe reports errors, note them but proceed. If zero resolved, proceed.
 
-## Step 1 — Plan
+## Step 2 — Plan
 
 Call `pick_tasks` with the user's scope tag and a limit of 25:
 
@@ -67,10 +75,8 @@ If `pick_tasks` returns an empty array, report to user and stop.
 
 | Agent   | Trigger condition |
 | ------- | ----------------- |
-| planner | DECOMP post-filter (see below) |
-| curator | Every 5th cycle (handled in Step 2) |
+| curator | Every 5th cycle (handled in Step 3) |
 
-**DECOMP post-filter:** For each task at `backlog` status in the pick_tasks result (0–3 per cycle), call `show_task(task_id)`. If the body contains `"Needs decomposition:"`, remap the agent to `planner` instead of `architect`.
 
 **Stale detection:** Compare each pick_tasks result task against `last_dispatched`. If a task appears at the same status as its last_dispatched entry and is NOT in `stale_retried`:
 
@@ -91,7 +97,7 @@ If the processed dispatch list is empty, report to user and stop.
 |---------|-------|-------|
 | **Wave size** | 4 | Max parallel dispatches per wave |
 
-## Step 2 — Dispatch
+## Step 3 — Dispatch
 
 Dispatch the `dispatch` array in parallel waves. Take tasks in priority order.
 
@@ -124,7 +130,7 @@ Dispatch the `dispatch` array in parallel waves. Take tasks in priority order.
 
 ### Dispatch Mechanics
 
-**Dispatch prompt contains ONLY the task ID.** Subagents claim and read their own AC via `start_work` in their Step 0.
+**Dispatch prompt contains ONLY the task ID.** Subagents claim and read their own AC via `start_work` in their own Step 0.
 
 **Exception — retry_hint:** Append to dispatch prompt:
 
@@ -153,12 +159,12 @@ When a rate-limit crash occurs:
 3. Continue dispatching sequentially until 3 sequential dispatches complete.
 4. Resume parallel dispatch.
 
-## Step 3 — Loop
+## Step 4 — Loop
 
 After all dispatches:
 
 1. **Failures exist?** Note as failure context for next cycle.
-2. **Re-plan:** Go to Step 1. `pick_tasks` reads fresh board state.
+2. **Re-plan:** Go to **Step 1**. The scribe processes any DRs that were responded during this cycle, then `pick_tasks` reads fresh board state.
 
 Loop continues until `pick_tasks` returns an empty list. **Do not stop for any other reason.**
 
@@ -183,6 +189,8 @@ Session complete:
 
 ## Verification Checklist
 
+- [ ] Scribe called at start of **every** cycle (Step 4 loops to Step 1)
+- [ ] Pending DRs reported to user in cycle 1 output
 - [ ] `pick_tasks` called with the user's scope tag (not hardcoded)
 - [ ] Every task in the dispatch list was dispatched (none silently dropped)
 - [ ] Waves respect wave-size limit (unless in sequential mode)

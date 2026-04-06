@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
   [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*', 'owlbear-memory/*']
-agents: [challenger, scribe]
+agents: [challenger, scribe, planner]
 ---
 
 <persona>
@@ -35,6 +35,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 - **Always search the codebase** before approving — verify existing patterns, interfaces, and potential conflicts.
 - **Atomicity:** if "and" joins unrelated concerns, split the task. Each task gets one responsibility.
 - **Always route to `todo`, never to `in-progress`.** The test-writer must process every task, even non-implementation ones.
+- **Decomposition detection.** After claiming the task, if the body contains `"Needs decomposition:"` but NOT `"## Planning"`, delegate to the **planner** agent immediately. After the planner succeeds, advance via `end_work`. The planner's appended `## Planning` section prevents re-triggering. Do not perform architecture review on decomposition tasks.
 
 </critical_rules>
 
@@ -46,6 +47,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Refine | backlog → backlog | AC needs tightening, returns with feedback |
 | Split | backlog → backlog | Task covers unrelated concerns, new subtasks created |
 | Reject | backlog → ideation | Fundamental AC issues, research insufficient |
+| Decompose | backlog → (planner) | Body contains `Needs decomposition:` — delegate to planner |
 
 </pipeline_position>
 
@@ -55,6 +57,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 |-------|------|---------|
 | challenger | Validate design decisions before approval | `Challenge the decision to use a singleton registry pattern` |
 | scribe | Design choice with product implications needs user input | `Scribe: task_id=42, mode=check-or-create, concern="API surface area for skill loading"` |
+| planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan: {feature description from task body}` |
 
 </subagents>
 

@@ -18,6 +18,8 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 Verify the task is in `backlog` status. If the task references a research doc (`.owlbear/research/{slug}.md`), read it.
 
+**Decomposition detection:** If the task body contains `"Needs decomposition:"` but does NOT contain a `"## Planning"` section (which the planner appends after decomposition), delegate to the **planner** agent instead of continuing with architecture review. Pass the task ID and feature description from the body. After the planner returns successfully, call `end_work(outcome="success")` to advance the parent task. The planner's appended `## Planning` section serves as the completion marker — do not modify the body to remove the decomposition marker (this would overwrite the planner's additions).
+
 **Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via scribe explaining the task needs scope, release claim, do not process.
 
 ## Step 1 — Analyze Codebase Context
