@@ -20,7 +20,7 @@ The dispatcher assigns agents based on task status:
 
 | Task status   | Dispatch agent | Pipeline action                                          | Non-impl pass-through? |
 | ------------- | -------------- | -------------------------------------------------------- | ---------------------- |
-| `ideation`    | researcher     | Research investigation, move to `backlog`                | No                     |
+| `research`    | researcher     | Research investigation, move to `backlog`                | No                     |
 | `backlog`     | architect      | Architecture review, move to `todo`                      | No                     |
 | `todo`        | test-writer    | Write failing tests (RED phase), move to `in-progress`   | Yes — tags `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality` |
 | `in-progress` | builder        | GREEN phase, move to `review`                            | Yes — if test-writer passed through |
@@ -37,7 +37,7 @@ The dispatcher assigns agents based on task status:
 | planner | Task body contains "Needs decomposition" (set by architect or any agent), OR user explicitly requests it | Dispatcher includes in dispatch list |
 | curator | Every 5th orchestration cycle (periodic, see `w-orchestration` Step 2)         | Orchestrator directly (not via dispatcher) |
 
-**Planner dispatch:** When the board scan finds a task whose body contains `Needs decomposition:`, include it in the dispatch list with `"agent": "planner"`. The planner reads the task, decomposes it, and creates child tasks at `ideation` via `create_task`. The parent task is not moved — the planner creates children and the parent may be closed or split.
+**Planner dispatch:** When the board scan finds a task whose body contains `Needs decomposition:`, include it in the dispatch list with `"agent": "planner"`. The planner reads the task, decomposes it, and creates child tasks at `research` via `create_task`. The parent task is not moved — the planner creates children and the parent may be closed or split.
 
 ## Recipe 0 — Decision and Action Request Resolution
 
@@ -55,11 +55,11 @@ For each pending file, read frontmatter to classify: T2 (`impact_tier` 2 or abse
 
 **One MCP call.** Produces a classified, sorted, gate-checked candidate list.
 
-Call `list_tasks(status=["ideation","backlog","todo","in-progress","review","docs","done"], unblocked=true, unclaimed=true)`. The `unblocked=true` parameter excludes tasks where any `depends_on` dependency is not at terminal status (= Gate 2). The `unclaimed=true` parameter excludes currently claimed tasks (= Gate 6). Explicitly blocked tasks are excluded by the server automatically.
+Call `list_tasks(status=["research","backlog","todo","in-progress","review","docs","done"], unblocked=true, unclaimed=true)`. The `unblocked=true` parameter excludes tasks where any `depends_on` dependency is not at terminal status (= Gate 2). The `unclaimed=true` parameter excludes currently claimed tasks (= Gate 6). Explicitly blocked tasks are excluded by the server automatically.
 
 If the response is empty, output `{"dispatch":[]}` and stop.
 
-**Sort** the returned array by dual-key: priority rank (critical=0, needed=1, important=2, nice-to-have=3, someday=4) first, then pipeline proximity (done=0, docs=1, review=2, in-progress=3, todo=4, backlog=5, ideation=6).
+**Sort** the returned array by dual-key: priority rank (critical=0, needed=1, important=2, nice-to-have=3, someday=4) first, then pipeline proximity (done=0, docs=1, review=2, in-progress=3, todo=4, backlog=5, research=6).
 
 **Gate flags** — for each task, compute warning flags:
 
@@ -115,7 +115,7 @@ Parse board scan output. Gates 2 and 6 are already applied by server-side filter
 
 **Gate 4 — TDD gate:** `[!TW:MISSING]` marker present = exclude. **Exemption:** tasks with non-impl pass-through tags.
 
-**Gate 5 — Clarity gate:** `[!AC:MISSING]` marker = exclude. Does not apply to `ideation` or `backlog`.
+**Gate 5 — Clarity gate:** `[!AC:MISSING]` marker = exclude. Does not apply to `research` or `backlog`.
 
 **Gate 6 — Claim gate:** Handled by `unclaimed=true` parameter.
 
@@ -158,4 +158,4 @@ Single-line JSON object:
 
 - **`unblocked` vs `unclaimed` parameters:** `unblocked=true` filters to tasks where all `depends_on` dependencies are at terminal status (Gate 2). `unclaimed=true` excludes currently claimed tasks (Gate 6). Both are required — omitting either passes tasks that should be gate-blocked.
 - **Non-impl tag Gate 4 exemption:** Tasks with pass-through tags legitimately skip the test-writer. Missing `## Test-Writer Notes` on these tasks is expected, not a gate violation.
-- **`AC:MISSING` on ideation/backlog:** These statuses don't need AC yet — the researcher/architect adds it. Don't flag them.
+- **`AC:MISSING` on research/backlog:** These statuses don't need AC yet — the researcher/architect adds it. Don't flag them.

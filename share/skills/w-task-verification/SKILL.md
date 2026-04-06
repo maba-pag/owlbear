@@ -54,7 +54,7 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 For tasks tagged `research`:
 
 1. Research doc exists at `.owlbear/research/{slug}.md`
-2. Follow-up tasks created at `ideation` or higher, OR doc states "no action needed" with justification, OR a decision request exists
+2. Follow-up tasks created at `research` or higher, OR doc states "no action needed" with justification, OR a decision request exists
 3. Follow-up tasks reference the research doc
 4. If none of the above, reject to backlog — follow-up creation was missed
 

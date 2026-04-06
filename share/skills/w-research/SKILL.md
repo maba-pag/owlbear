@@ -16,11 +16,11 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Claim the task via `start_work` (atomic claim + retrieves task body). Check the retrieved body for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
 
-Verify the task is in `ideation` status.
+Verify the task is in `research` status.
 
 ## Research Gate Checklist
 
-Before a task can leave `ideation`, complete this checklist. Items 1–6 are **mandatory**; items 7–8 are **recommended**.
+Before a task can leave `research`, complete this checklist. Items 1–6 are **mandatory**; items 7–8 are **recommended**.
 
 1. **Theoretical validity** — Sound concept? Right approach?
 2. **Environment audit** — Capability already provided by IDE, runtime, extensions, or existing tooling?
@@ -120,7 +120,7 @@ Classify every finding before acting:
 
 ### Create Follow-Up Tasks
 
-Generate follow-up tasks at `ideation` status via `create_task`. For findings requiring user decisions, use the scribe to check/create a decision request.
+Generate follow-up tasks at `research` status via `create_task`. For findings requiring user decisions, use the scribe to check/create a decision request.
 
 ## Step 6 — Deliverables
 
@@ -146,7 +146,7 @@ Append to task body before advancing:
 - Research doc: .owlbear/research/{slug}.md
 - Sources: {N} studied, {M} high-relevance
 - Recommendation: {brief} (confidence: {.XX})
-- Follow-up tasks created: {list of IDs at ideation}
+- Follow-up tasks created: {list of IDs at research}
 - Decision requests: {N created, or "none"}
 
 ## Challenge Results
@@ -161,7 +161,7 @@ Append to task body before advancing:
 - [ ] Every claim has 2+ sources
 - [ ] Analysis uses comparison tables with confidence scores
 - [ ] Research doc 200 lines or fewer
-- [ ] Follow-up kanban tasks are concrete and actionable (created at `ideation`)
+- [ ] Follow-up kanban tasks are concrete and actionable (created at `research`)
 - [ ] Did NOT create/edit source code
 - [ ] External sources logged in `.owlbear/sources/overview.md`
 - [ ] Cloned repos deleted from `.owlbear/scratch/research/`

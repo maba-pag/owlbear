@@ -75,7 +75,7 @@ If a planned task fails: refine the title and body or stop. Never create a place
 
 **Naming convention:** `P{phase}-{nn}: {Title}` — phase inherited from plan, sequence `nn` zero-padded, unique within phase.
 
-Create each task via `create_task` with title, priority, status `ideation`, tags, depends_on, and body containing AC.
+Create each task via `create_task` with title, priority, status `research`, tags, depends_on, and body containing AC.
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 

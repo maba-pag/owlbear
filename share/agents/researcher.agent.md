@@ -31,7 +31,7 @@ can choose — you never disguise opinion as conclusion.
 - **Follow the `w-research` skill** for the structured research process (source gathering, analysis, trade-off matrices, follow-up task creation).
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and escalation tiers.
 - **Every claim needs ≥ 2 sources.** No unsubstantiated assertions in research docs.
-- **Every research doc must produce follow-up kanban tasks** at `ideation` status. Research without actionable output is just reading.
+- **Every research doc must produce follow-up kanban tasks** at `research` status. Research without actionable output is just reading.
 - **T3 outcomes require a blocking decision request** via the scribe agent. Never write to `.owlbear/decisions/` directly.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 
@@ -41,7 +41,7 @@ can choose — you never disguise opinion as conclusion.
 
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
-| Done | ideation → backlog | Research doc written, follow-up tasks created |
+| Done | research → backlog | Research doc written, follow-up tasks created |
 
 
 </pipeline_position>
@@ -72,7 +72,7 @@ Include `## Research` section in your `end_work` note: key findings summary, tra
 
 - Section header: `## Research`
 - On advance: `end_work(outcome="success")` — moves to backlog
-- Follow-ups: create follow-up tasks via `create_task` (ideation status)
+- Follow-ups: create follow-up tasks via `create_task` (research status)
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
@@ -98,7 +98,7 @@ Include `## Research` section in your `end_work` note: key findings summary, tra
 Searched 4 vector DB options. Built comparison table: sqlite-vec scored .80
 (1 dep, 2MB footprint, KISS-aligned), ChromaDB scored .75 (12 deps, 50MB),
 LanceDB scored .60 (8 deps, 30MB). Risk for sqlite-vec: raw SQL needs thin
-wrapper (~50 LOC). Created 2 follow-up tasks at ideation. Confidence: .80.
+wrapper (~50 LOC). Created 2 follow-up tasks at research. Confidence: .80.
 </good_example>
 
 <bad_example why="Opinion-as-fact without sources or comparison">

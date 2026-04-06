@@ -42,7 +42,7 @@ Counterpart to `start_work`. Appends a timestamped note, resolves the task based
 | `success` | Advance to next status. If already at last status, archive. |
 | `fail` | Keep current status, release claim. |
 | `block` | Mark blocked with `block_reason` (required), release claim. |
-| `reject` | Move to `move_to` status (default: `ideation`), release claim. |
+| `reject` | Move to `move_to` status (default: `research`), release claim. |
 
 On failure: raises `ToolError` (MCP `isError: true`).
 

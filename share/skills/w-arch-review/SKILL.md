@@ -61,7 +61,7 @@ Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, and res
 |-------------------|------------------|
 | `proceed` + confidence 0.80+ | Continue with original verdict |
 | `reconsider` OR confidence < 0.80 | Re-evaluate, may revise or justify override |
-| `block` | Strong signal to reject to ideation; must provide rebuttal if overriding |
+| `block` | Strong signal to reject to research; must provide rebuttal if overriding |
 
 The architect retains final authority.
 
@@ -75,7 +75,7 @@ The architect retains final authority.
 | **REFINE** | Good concept, AC needs tightening | Use temp-file pattern to rewrite body via `edit_task`, then approve |
 | **SPLIT** | Multiple responsibilities | Create new tasks via `create_task`, update deps, edit/delete original, then release |
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
-| **REJECT** | Missing prerequisite or unclear | Move to `ideation` via `end_work(outcome="reject")`, appending findings |
+| **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
 
 <!-- NON_IMPL_TAGS: Authoritative list at w-dispatch-planning. -->
 

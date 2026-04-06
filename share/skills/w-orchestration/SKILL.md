@@ -65,7 +65,7 @@ If `pick_tasks` returns an empty array, report to user and stop.
 
 | Task status   | Dispatch agent |
 | ------------- | -------------- |
-| `ideation`    | researcher     |
+| `research`    | researcher     |
 | `backlog`     | architect      |
 | `todo`        | test-writer    |
 | `in-progress` | builder        |

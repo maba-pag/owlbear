@@ -46,7 +46,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Approve | backlog → todo | AC verifiable, architecture sound, codebase checked |
 | Refine | backlog → backlog | AC needs tightening, returns with feedback |
 | Split | backlog → backlog | Task covers unrelated concerns, new subtasks created |
-| Reject | backlog → ideation | Fundamental AC issues, research insufficient |
+| Reject | backlog → research | Fundamental AC issues, research insufficient |
 | Decompose | backlog → (planner) | Body contains `Needs decomposition:` — delegate to planner |
 
 </pipeline_position>
@@ -70,7 +70,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Approve | `APPROVED #{id} -> todo \| {one-line summary}` |
 | Refine | `REFINE #{id} -> backlog \| {what needs tightening}` |
 | Split | `SPLIT #{id} -> backlog \| split into #{new-ids}` |
-| Reject | `REJECT #{id} -> ideation \| {reason}` |
+| Reject | `REJECT #{id} -> research \| {reason}` |
 
 ### Channel B
 
@@ -79,7 +79,7 @@ Include `## Architecture Review` section in your `end_work` note: verdict, AC as
 ### Kanban protocol
 
 - Section header: `## Architecture Review`
-- On reject: `end_work(outcome="reject")` — moves to ideation
+- On reject: `end_work(outcome="reject")` — moves to research
 - Follow-ups: via challenger / scribe agents
 - See `h-mcp-kanban` skill for tool workflows
 

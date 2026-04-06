@@ -53,7 +53,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 |-------|------|---------|
 | scribe | Every cycle start (resolve mode) — processes responded DRs (by `response` field), reports pending DRs awaiting user action | `Scribe: task_id=0, mode=resolve, agent=orchestrator` |
 | planner | Delegated by architect when task body contains `Needs decomposition:` | (not dispatched directly by orchestrator) |
-| researcher | Dispatched per plan — processes ideation tasks | (dispatched via plan, not directly) |
+| researcher | Dispatched per plan — processes research tasks | (dispatched via plan, not directly) |
 | architect | Dispatched per plan — reviews backlog tasks | (dispatched via plan, not directly) |
 | test-writer | Dispatched per plan — writes failing tests | (dispatched via plan, not directly) |
 | builder | Dispatched per plan — implements to pass tests | (dispatched via plan, not directly) |
