@@ -1,10 +1,12 @@
 ---
 id: 457
 title: Remove execute/* tools from reviewer agent
-status: docs
+status: archived
 priority: nice-to-have
 created: 2026-03-30T23:47:55.0036687+02:00
-updated: 2026-04-06T04:25:01.3520581+02:00
+updated: 2026-04-06T06:33:09.2586312+02:00
+started: 2026-04-06T06:33:09.2586312+02:00
+completed: 2026-04-06T06:33:09.2586312+02:00
 tags:
     - scope:agents
     - phase-2
@@ -167,3 +169,46 @@ Markdown configuration files only. No OWASP concerns. Security surface reduced b
 AC1/AC2 test docstrings say "FAIL before #457" but reviewer.agent.md was pre-satisfied — a docstring inconsistency, not a defect. Tests remain valid regression guards.
 
 **Deductions: 0 | Confidence: .97 → PASS**
+
+[[2026-04-06]] Mon 05:31
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A (files are the docs) | SKILL.md files were the task deliverable — already updated by builder. copilot-instructions.md has no reviewer/fallback sections (grep → 0 matches). No secondary docs capture these conventions. |
+| 2 | Module docstrings | No | N/A | All changed files are Markdown (share/skills/). No Python modules created or modified. |
+| 3 | External attribution | No | N/A | Sources covered by original research task #317. No new external patterns used in this task. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | .owlbear/research/reviewer-execute-tool-removal.md exists. Linked from task body under ## Research section. Follow-up task #458 created (test task). |
+
+### Files Updated
+- None — SKILL.md files updated by builder are the documentation target. No secondary docs require changes.
+
+### Scratch Files Cleaned
+- None — no .owlbear/scratch/457-* files found.
+
+[[2026-04-06]] Mon 06:33
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: no execute/* in reviewer.agent.md | reviewer.agent.md:9 committed state, 0 execute/ entries | PASS |
+| AC2: no read/terminalLastCommand | reviewer.agent.md:9 committed state, absent | PASS |
+| AC3: retains 8 required tools | reviewer.agent.md:9 committed: vscode/memory, read/problems, read/readFile, read/viewImage, agent, search, owlbear-kanban/*, owlbear-memory/* | PASS |
+| AC4: w-code-review Steps 2,3,4 BLOCK fallback | SKILL.md:42-47, 92-97, 116-121 end_work(outcome=block) present, 0 uv run in fallbacks | PASS |
+| AC5: code-review fallback BLOCK | SKILL.md:50-54 end_work(outcome=block) present, 0 uv run | PASS |
+| AC6: no kanban-md.exe | Select-String grep both SKILL.md files, 0 matches | PASS |
+
+### Test Results
+- pytest: 32 passed, 0 failed (committed state via git stash verification)
+- ruff: All checks passed
+- Note: 3 working-directory failures in test_reviewer_execute_tools_457.py caused by unstaged changes from task #575 (owlbear-kanban/* changed to specific tool names). Committed state at 80b05fc passes 32/32.
+
+### Architect Quality: 5/5
+AC specific, complete, refined during arch review. Exact file paths, step numbers, tool names, BLOCK behavior requirements. No builder improvisation needed.
+
+### Deduction Breakdown
+Starting: 1.00. All 6 AC lines have specific evidence, lint clean, reviewer evidence present and detailed, no task-scope test failures. 0 deductions.
+
+### Confidence: .98
+### Action: archive
