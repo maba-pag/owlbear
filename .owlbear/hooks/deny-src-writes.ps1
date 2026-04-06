@@ -56,7 +56,7 @@ if ($paths.Count -eq 0) {
 foreach ($p in $paths) {
     # Normalize backslashes to forward slashes
     $normalized = $p -replace '\\', '/'
-    $isInTests = $normalized.StartsWith('tests/')
+    $isInTests = $normalized -match '(^|/)tests/'
     if (-not $isInTests) {
         $response = @{
             hookSpecificOutput = @{
