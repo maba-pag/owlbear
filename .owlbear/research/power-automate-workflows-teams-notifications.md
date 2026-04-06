@@ -116,3 +116,25 @@ research (requires user-side verification, not code analysis).
 1. **User verification: test Workflows webhook in corp Teams** — manual test
    following §3.3 procedure. If pass → trigger DR to reopen #514. If fail →
    close #592 chain.
+
+## 6. Verification Outcome (Task #597, 2026-04-06)
+
+User completed manual verification. Power Automate Workflows template ("Post to a
+channel when a webhook request is received") **is available** in the corp tenant,
+but the webhook trigger is **disabled by corporate policy**.
+
+**Error returned:**
+```
+{"error":{"code":"WorkflowTriggerIsNotEnabled","message":"Could not execute workflow
+'...' trigger 'manual' with state 'Suspended': trigger is not enabled."}}
+```
+
+**AC outcome:** "If unavailable" path confirmed. No T3 DR to reopen #514 needed.
+Feature remains blocked by corp policy. Table 3.2 cell "Corp availability: Unknown"
+should be read as **Blocked (trigger disabled by policy)**.
+
+**#514 status:** Decision (Defer/do nothing) remains correct — no webhook mechanism
+available.
+
+**#661** tracks the structural pipeline gap surfaced during this task (no mechanism
+for user-action-required tasks in the pipeline).
