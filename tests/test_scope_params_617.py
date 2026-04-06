@@ -1,4 +1,4 @@
-﻿"""Failing tests for task #617: Expose scope parameters in mcp-knowledge tool signatures.
+"""Failing tests for task #617: Expose scope parameters in mcp-knowledge tool signatures.
 
 TDD RED phase -- all tests must FAIL until the builder adds scope parameters to
 search_knowledge, ingest_document, and list_entities in server.py.
@@ -274,7 +274,7 @@ class TestFromAC_ListEntitiesScopes:
         """list_entities(scopes=['work']) includes scopes=['work'] in the to_thread call."""
         with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
             mock_t.return_value = []
-            await list_entities(_make_ctx(), scopes=["work"])
+            await list_entities(_make_ctx(graph_store=MagicMock()), scopes=["work"])
 
         call_kwargs = mock_t.call_args.kwargs
         assert call_kwargs.get("scopes") == ["work"]
@@ -286,7 +286,7 @@ class TestFromAC_ListEntitiesScopes:
         """list_entities(scopes=['a', 'b']) forwards both scopes via asyncio.to_thread."""
         with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
             mock_t.return_value = []
-            await list_entities(_make_ctx(), scopes=["scope-a", "scope-b"])
+            await list_entities(_make_ctx(graph_store=MagicMock()), scopes=["scope-a", "scope-b"])
 
         call_kwargs = mock_t.call_args.kwargs
         assert call_kwargs.get("scopes") == ["scope-a", "scope-b"]
@@ -298,7 +298,7 @@ class TestFromAC_ListEntitiesScopes:
         """list_entities() with no scopes arg forwards scopes=None via asyncio.to_thread."""
         with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
             mock_t.return_value = []
-            await list_entities(_make_ctx())
+            await list_entities(_make_ctx(graph_store=MagicMock()))
 
         call_kwargs = mock_t.call_args.kwargs
         assert call_kwargs.get("scopes") is None
@@ -310,7 +310,7 @@ class TestFromAC_ListEntitiesScopes:
         """list_entities(scopes=None) forwards None via asyncio.to_thread."""
         with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
             mock_t.return_value = []
-            await list_entities(_make_ctx(), scopes=None)
+            await list_entities(_make_ctx(graph_store=MagicMock()), scopes=None)
 
         call_kwargs = mock_t.call_args.kwargs
         assert call_kwargs.get("scopes") is None
@@ -322,7 +322,7 @@ class TestFromAC_ListEntitiesScopes:
         """list_entities(scopes=[]) forwards [] (empty list is distinct from None)."""
         with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
             mock_t.return_value = []
-            await list_entities(_make_ctx(), scopes=[])
+            await list_entities(_make_ctx(graph_store=MagicMock()), scopes=[])
 
         call_kwargs = mock_t.call_args.kwargs
         assert call_kwargs.get("scopes") == []
@@ -334,7 +334,7 @@ class TestFromAC_ListEntitiesScopes:
         """list_entities(entity_type='concept', scopes=['work']) forwards both filters."""
         with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
             mock_t.return_value = []
-            await list_entities(_make_ctx(), entity_type="concept", scopes=["work"])
+            await list_entities(_make_ctx(graph_store=MagicMock()), entity_type="concept", scopes=["work"])
 
         call_kwargs = mock_t.call_args.kwargs
         assert call_kwargs.get("scopes") == ["work"]
@@ -347,7 +347,7 @@ class TestFromAC_ListEntitiesScopes:
         entities = [_make_entity("ScopedEntity", "concept", "A scoped entity")]
         with patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock) as mock_t:
             mock_t.return_value = entities
-            result = await list_entities(_make_ctx(), scopes=["project-x"])
+            result = await list_entities(_make_ctx(graph_store=MagicMock()), scopes=["project-x"])
 
         assert isinstance(result, list)
         assert result[0]["name"] == "ScopedEntity"
