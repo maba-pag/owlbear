@@ -18,10 +18,12 @@ integration point.
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-org/owlbear.git
+git clone -b dev https://github.com/your-org/owlbear.git
 cd owlbear
 uv sync
 ```
+
+> **Branches:** `dev` is the working branch (full workspace). `main` is the consumer-facing branch — auto-synced product subset, never committed to directly.
 
 Run `.owlbear\kanban\setup.ps1` to download the kanban-md binary, then open VS Code with `code .`.
 
