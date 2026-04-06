@@ -5,7 +5,7 @@ argument-hint: "Scribe: task_id={task_id}, mode={check-or-create|resolve|query},
 user-invocable: false
 disable-model-invocation: true
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
-tools: [read/readFile, search, execute/runInTerminal, execute/getTerminalOutput, edit/createFile, vscode/memory, 'owlbear-kanban/*', 'owlbear-memory/*']
+tools: [read/readFile, search, execute/runInTerminal, execute/getTerminalOutput, edit/createFile, vscode/memory, 'owlbear-kanban/show_task', 'owlbear-kanban/edit_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: []
 ---
 
@@ -68,7 +68,7 @@ Called by the orchestrator at cycle start. Process all pending DRs where the use
    - `response: pending` → **Not responded.** Skip. Include in PENDING count.
    - `response: approved` → **User approved.** Validate `decision:` matches an option label. If valid: write `## Decision Resolved` to task body, unblock, move to resolved. If invalid: treat as `needs-info`.
    - `response: completed` → **Action completed.** Write `## Action Completed` to task body, unblock, move to resolved.
-   - `response: needs-info` → **User has questions.** Write `## Clarification Requested` with user's `notes:` verbatim to task body. Keep task blocked. Reset file to `response: pending`. Signal `NEEDS-INFO`.
+   - `response: needs-info` → **User has questions.** Write `## Clarification Requested` with user's `notes:` verbatim to task body — **but only if the task body does not already contain a `## Clarification Requested` section with identical notes** (idempotency guard). Keep task blocked. Reset file to `response: pending`. Signal `NEEDS-INFO`.
    - `response: rejected` → **User rejects all options.** Write `## Decision Rejected` with user's `notes:` verbatim to task body. Unblock task. Move file to resolved.
 3. Handle stale requests per the w-decision-routing skill's auto-resolve rules.
 4. Report ALL results including pending count.

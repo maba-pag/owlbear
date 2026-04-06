@@ -53,7 +53,7 @@ If validation passes:
 
 The user has follow-up questions in `notes:`. Do NOT treat as approval.
 
-1. **Write clarification to task body** — append `## Clarification Requested` with user's `notes:` verbatim via `edit_task`.
+1. **Write clarification to task body** — append `## Clarification Requested` with user's `notes:` verbatim via `edit_task`. **Idempotency guard:** if the task body already contains a `## Clarification Requested` section with identical notes, skip the append.
 2. **Keep the task blocked.** Do NOT unblock.
 3. **Reset the file** — set `response: pending` and leave in `pending/`. This re-enters the pending queue.
 4. **Signal the originating agent** — return `NEEDS-INFO #{task_id}` so the orchestrator re-dispatches the agent (from `agent:` field) to address the questions. The agent should create a new or updated DR after researching.
@@ -185,7 +185,7 @@ Body includes `## Context`, `## Steps` (with checkboxes), and `## Completion ins
 
 After creating the DR:
 
-1. **If other unblocked tasks exist:** Block the current task via `edit_task(block="DR pending: {filename}")`. Do NOT release the claim — the calling agent does that via `end_work(outcome="block")`. Return the CREATED signal with the instruction to end work.
+1. **If other unblocked tasks exist:** Return the CREATED signal with the instruction to end work. The calling agent blocks the task via `end_work(outcome="block", block_reason="DR pending: {filename}")`. Do NOT call `edit_task(block=...)` — the task is claimed by the calling agent.
 2. **If NO other unblocked tasks exist:** Proceed with recommended option. Mark `urgency: advisory` and `response: auto-approved`.
 
 ## User Notes Are AC Amendments

@@ -13,8 +13,8 @@ Plan-dispatch-loop cycle for the orchestrator. The orchestrator maintains minima
 The orchestrator maintains constant-size context:
 
 - **No board state.** `pick_tasks` reads the board each cycle via MCP tool call; no board state held in context between cycles.
-- **No signal interpretation.** Subagents return a Channel A diagnostic line. Only check: did the agent return normally or crash?
-- **No retry tracking state — except:** `stale_retried` (task IDs dispatched with retry_hint), `last_dispatched` (dict[int, str] — task_id → status from previous pick_tasks result, max 20 entries), `sequential_remaining` (rate-limit sequential counter).
+- **No signal interpretation — except scribe resolve output.** Pipeline subagents return a Channel A diagnostic line. Only check: did the agent return normally or crash? **Exception:** the scribe's resolve-mode report is parsed for `NEEDS-INFO` task IDs and agents (see Step 1).
+- **No retry tracking state — except:** `stale_retried` (task IDs dispatched with retry_hint), `last_dispatched` (dict[int, str] — task_id → status from previous pick_tasks result, max 20 entries), `sequential_remaining` (rate-limit sequential counter), `needs_info_dispatches` (list of {task_id, agent} pairs from scribe NEEDS-INFO signals, cleared each cycle).
 - **Prior cycle results discarded.** Each cycle starts fresh with scope filter, crash IDs, and `stale_retried`.
 
 ## Signal Contracts
@@ -23,7 +23,7 @@ See `r-pipeline-protocol` → Communication for Channel A/B spec.
 
 **pick_tasks output:** Array of task objects (id, status, priority, title, tags). Empty array = nothing dispatchable, stop.
 
-**Subagent output:** Channel A diagnostic line. Do NOT parse for routing. Only check: normal return vs crash.
+**Pipeline subagent output:** Channel A diagnostic line. Do NOT parse for routing. Only check: normal return vs crash. **Exception:** the scribe's resolve-mode output is parsed for `NEEDS-INFO` task IDs (see Step 1).
 
 ## Step 1 — Resolve Pending Decision Requests
 
@@ -35,7 +35,7 @@ runSubagent("scribe", "Scribe: task_id=all, mode=resolve, agent=orchestrator", "
 
 The scribe scans `.owlbear/decisions/pending/`, classifies each file by its `response` field (`pending`, `approved`, `completed`, `needs-info`, `rejected`). It writes summaries to task bodies, unblocks approved/rejected/completed tasks, keeps `needs-info` tasks blocked and signals for re-dispatch, moves resolved files, and handles 5-day auto-resolution.
 
-If the scribe reports `NEEDS-INFO` signals, note the task IDs and originating agents — include them in the dispatch plan so the agent can address the user's questions.
+**NEEDS-INFO dispatch injection:** If the scribe reports `NEEDS-INFO` signals, parse the task IDs and originating agents from the NEEDS-INFO line. Store them as `needs_info_dispatches` — a list of `{task_id, agent}` pairs. These are **injected into the dispatch plan in Step 2** after `pick_tasks` returns, bypassing the blocked-task filter. The originating agent (from the DR's `agent:` field) is dispatched for the task, regardless of the task's current status. This is the ONE exception to "don't interpret subagent output" — the scribe's resolve report is an infrastructure status check, not a pipeline signal.
 
 If the scribe reports `PENDING` DRs awaiting user action, surface them in the cycle output (once per session, cycle 1 only):
 
@@ -58,6 +58,8 @@ Where `{scope_tag}` is the tag from the user's scope filter (e.g., `"phase-2"` f
 If `pick_tasks` returns an empty array, report to user and stop.
 
 **Crash failure exclusion:** Apply a set-difference filter — exclude any task_ids present in the current cycle's `crash_failures` set from the pick_tasks result.
+
+**NEEDS-INFO injection:** Append `needs_info_dispatches` (from Step 1) to the dispatch list. Each entry uses the originating agent from the DR, not the status-to-agent mapping. Skip any that are already in the pick_tasks result or in `crash_failures`.
 
 **Status-to-agent mapping:**
 
@@ -196,12 +198,14 @@ Session complete:
 - [ ] Waves respect wave-size limit (unless in sequential mode)
 - [ ] Wave assembly uses agent-type compatibility rules
 - [ ] Crash failures excluded from dispatch list (set-difference applied)
+- [ ] `needs_info_dispatches` from Step 1 injected into dispatch list (Step 2)
 - [ ] `last_dispatched` updated with current cycle's pick_tasks result
 - [ ] Loop not stopped early — only empty dispatch list ends the session
 
 ## Known Pitfalls
 
-- **Parsing subagent signals:** The orchestrator does NOT parse Channel A for routing. Only check: normal return vs crash.
+- **Parsing pipeline-agent signals:** The orchestrator does NOT parse pipeline agents' Channel A for routing. Only check: normal return vs crash. **Exception:** the scribe's resolve-mode `NEEDS-INFO` line is parsed for task IDs and agents — this is an infrastructure status report, not a pipeline signal.
+- **NEEDS-INFO dispatch injection:** If the scribe signals NEEDS-INFO and the orchestrator does NOT inject those tasks into the dispatch plan, the task stays blocked forever. The user will repeatedly set `response: needs-info`, and the scribe will append duplicate `## Clarification Requested` sections each cycle.
 - **Stale_retried tracking:** Clear an ID when the task appears at a *different* status in the next cycle's pick_tasks result (task has moved). Forgetting to clear causes permanent stale marking.
 - **last_dispatched cap:** Maintain max 20 entries; evict oldest when over limit to prevent context growth.
 - **Wave consolidation:** Currently DEACTIVATED. Do not attempt to merge solo waves of the same restricted type.

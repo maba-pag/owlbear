@@ -4,7 +4,7 @@ description: "Dispatch loop — plan, dispatch agents, re-plan from fresh board 
 argument-hint: "Orchestrate: {scope_or-filter — e.g., 'phase-2', 'all todos', 'tag:parser'}"
 user-invocable: true
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, read/readFile, agent, 'owlbear-kanban/*', 'owlbear-memory/*']
+tools: [vscode/memory, read/readFile, agent, 'owlbear-kanban/pick_tasks', 'owlbear-kanban/list_tasks', 'owlbear-kanban/show_task', 'owlbear-kanban/move_task', 'owlbear-kanban/edit_task', 'owlbear-memory/*']
 agents:
   - planner
   - scribe
@@ -41,7 +41,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 
 - **Follow the `w-orchestration` skill** for the plan-dispatch-verify loop, wave assembly, and rate-limit fallback.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and agent-signal mapping.
-- **Never interpret subagent output.** An agent either returned (success) or crashed (error). You do not parse Channel A signals for routing decisions.
+- **Never interpret pipeline-agent output.** A pipeline agent (builder, reviewer, etc.) either returned (success) or crashed (error). You do not parse their Channel A signals for routing decisions. **Exception:** the scribe's resolve-mode report is an infrastructure status check, not a pipeline signal — you MUST parse its `NEEDS-INFO` lines to extract task IDs and originating agents for dispatch injection (see w-orchestration Step 1).
 - **ONE task per subagent dispatch.** Never batch multiple tasks into a single subagent call.
 - **Never stop until the user says stop.** There is no "good stopping point" you may choose. Keep cycling until the board is clear or the user intervenes.
 

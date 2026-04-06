@@ -4,7 +4,7 @@ title: Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge
 status: in-progress
 priority: nice-to-have
 created: 2026-04-05T00:16:00.8159576+02:00
-updated: 2026-04-05T23:46:21.7395489+02:00
+updated: 2026-04-06T06:53:54.0450454+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -158,3 +158,11 @@ Research parent complete. All deliverables met: research doc, risk analysis per 
 ## Test-Writer Notes
 - Non-implementation task (tagged research) — no tests applicable.
 - Passing through to builder.
+
+## Clarification Requested
+
+User requested additional analysis comparing three approaches instead of two. Clarification notes verbatim:
+
+"between the last and the current DR you dropped the 'Pursue dual-stack facade (original Option A) or ATTACH DATABASE (original Option B)' option that i requested extra info on. please try again and compare only 'Scope-based tool parameters + import/export' and 'dual-stack facade (original Option A)' and 'ATTACH DATABASE' options against each other. I need to understand what each one does, where it is saved, and what the pro/con for each are."
+
+Task remains blocked pending researcher response to clarification request.

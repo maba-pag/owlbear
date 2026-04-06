@@ -292,7 +292,7 @@ async def create_task(  # noqa: PLR0913
     priority: str = "",
     status: str = "",
     tags: str = "",
-) -> str:
+) -> KanbanTask:
     """Create a new kanban task."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     args: list[str] = ["create", title]
@@ -392,8 +392,24 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     args.append("--json")
     stdout, stderr, rc = await _run_kanban(app_ctx, *args)
     if rc != 0:
-        msg = stderr.strip() or stdout.strip()
-        raise ToolError(msg)
+        errmsg = stderr.strip() or stdout.strip()
+        # Auto-retry with --claim when the task is claimed by this agent
+        if "TASK_CLAIMED" in errmsg or "is claimed by" in errmsg:
+            name_out, name_err, name_rc = await _run_kanban(app_ctx, "agent-name")
+            if name_rc == 0:
+                claim_name = name_out.strip()
+                if claim_name and claim_name in errmsg:
+                    retry_args = [*args, "--claim", claim_name]
+                    stdout, stderr, rc = await _run_kanban(app_ctx, *retry_args)
+                    if rc != 0:
+                        msg = stderr.strip() or stdout.strip()
+                        raise ToolError(msg)
+                else:
+                    raise ToolError(errmsg)
+            else:
+                raise ToolError(errmsg)
+        else:
+            raise ToolError(errmsg)
     try:
         return KanbanTask.model_validate_json(stdout)
     except ValidationError as exc:
