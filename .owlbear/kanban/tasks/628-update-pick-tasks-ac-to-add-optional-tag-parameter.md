@@ -1,10 +1,12 @@
 ---
 id: 628
 title: Update pick_tasks AC to add optional tag parameter
-status: review
+status: archived
 priority: needed
 created: 2026-04-05T10:41:53.2291189+02:00
-updated: 2026-04-05T22:20:40.0728361+02:00
+updated: 2026-04-06T02:23:55.9695903+02:00
+started: 2026-04-06T02:23:55.9695903+02:00
+completed: 2026-04-06T02:23:55.9695903+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -146,3 +148,95 @@ ruff: clean on implementation changes
 - ruff: clean
 - No behavioral change when tag is not provided — confirmed by test suite
 - Commit: 2e84207 (shared with #624 and #630)
+
+[[2026-04-06]] Mon 00:20
+## Review Evidence
+
+### Tests
+- `tests/test_pick_tasks_628.py`: **10 passed, 0 failed**
+- Upstream regression (#620 + #621): **39 passed, 0 failed**
+- Run independently by reviewer — not taken from builder self-report.
+
+### Lint
+- `ruff check serve/mcp-kanban/src/owlbear_mcp_kanban/server.py tests/test_pick_tasks_628.py`: **All checks passed**
+
+### Coverage
+- `owlbear_mcp_kanban.server`: 30% (expected — scoped file; relevant `pick_tasks` lines exercised; uncovered lines are error paths + gate internals covered by #620/#621)
+
+### AC Compliance
+
+| AC Line | Mapped Test(s) | Would Fail If AC Violated? | Verdict |
+|---------|---------------|---------------------------|---------|
+| Signature is `pick_tasks(limit: int = 25, tag: str = "") → dict` | `test_has_tag_parameter`, `test_default_tag_is_empty_string`, `test_tag_parameter_annotation_is_str` | Yes — checks parameter presence, default value, type annotation | COVERED |
+| When tag non-empty, append `--tag {value}` to `_run_kanban` args | `test_tag_flag_passed_when_tag_provided`, `test_tag_value_passed_after_flag`, `test_tag_with_colon_passed_literally` | Yes — asserts `--tag` in args and value at correct position | COVERED |
+| Default `""` → no `--tag` arg passed | `test_empty_tag_omits_flag` | Yes — asserts `--tag` NOT in args | COVERED |
+| Follows `list_tasks` `if tag: args += ["--tag", tag]` pattern | `test_empty_tag_omits_flag` + `test_tag_flag_passed_when_tag_provided` | Yes — behavior-verified equivalent | COVERED |
+| All #620 and #621 tests continue to pass | `test_fixed_flags_present_when_tag_provided`, `test_result_format_unchanged_with_tag`, `test_limit_and_tag_both_applied` + upstream suite | Yes — 39 upstream pass | COVERED |
+
+### TestFromAC_ Modification Audit
+Test-writer fixed `test_tag_parameter_annotation_is_str`: replaced `inspect.signature(...).parameters["tag"].annotation is str` with `typing.get_type_hints(pick_tasks)["tag"] is str`. Root cause: PEP 563 (`from __future__ import annotations`) stores annotations as strings; `inspect.signature()` returns `'str'` (string), not `str` (type). Fix uses `typing.get_type_hints()` which evaluates forward refs. **Assessment: IMPROVEMENT** — test is now stricter, not weaker. Does not trigger FAIL.
+
+### Security Review
+- No hardcoded secrets
+- Injection: `_run_kanban` uses `create_subprocess_exec` (confirmed architecture review) — `tag` passed as separate argument, no shell injection vector
+- No path traversal, no unsafe deserialization, no new dependencies
+- Guard `if tag:` prevents empty string passthrough
+
+### Deductions
+None.
+
+### Verdict
+**Confidence: .96 → PASS**
+→ docs
+
+[[2026-04-06]] Mon 00:45
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | `pick_tasks` gained `tag` param. `.github/copilot-instructions.md` is 5-line project-identity blurb — no tool API documentation; nothing to update |
+| 2 | Module docstrings | Yes | Updated | `pick_tasks` docstring updated: added sentence documenting optional tag pre-filtering. Commit d73d25e. ruff: clean |
+| 3 | External attribution | No | N/A | All 6 research sources are codebase-internal (server.py + existing tests); no external patterns used |
+| 4 | CLI changes | No | N/A | No CLI commands changed |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/pick-tasks-tag-parameter.md` exists and is linked from task body |
+
+### Files Updated
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` — `pick_tasks` docstring (commit d73d25e)
+
+### Scratch Files
+None found (`.owlbear/scratch/628-*` — no matches).
+
+### Observation (non-blocking)
+No `_patch_params("pick_tasks", {"tag": ...})` call exists — `pick_tasks.tag` has no MCP schema description, unlike `list_tasks.tag`. Outside doc-writer scope (application code); recommend builder follow-up.
+
+DONE #628 -> done | docs gate passed
+
+[[2026-04-06]] Mon 02:23
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Signature pick_tasks(limit:int=25, tag:str="") to dict | server.py L556 | PASS |
+| Non-empty tag appends --tag {value} to args | server.py L564-565 | PASS |
+| Default "" preserves zero-config (no --tag passed) | server.py L564 if-tag guard | PASS |
+| Follows list_tasks tag passthrough pattern | server.py L184-185 identical pattern | PASS |
+| All #620 and #621 tests continue to pass | 39/39 passed (independent run) | PASS |
+
+### Test Results
+- pytest (task): 10 passed, 0 failed (test_pick_tasks_628.py)
+- pytest (upstream): 39 passed, 0 failed (#620 + #621)
+- Full suite: pre-existing failures outside task scope; no #628-related regressions
+- ruff: All checks passed (server.py + test file)
+
+### Architect Quality: 5/5
+AC specific, testable, references exact pattern (list_tasks L186-187), states behavioral preservation requirement. Clean implementation path.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 5 covered)
+- Lint violations: 0
+- AC quality deduction: 0 (score 5)
+- Missing reviewer section: 0 (present, detailed, PASS at .96)
+- Full-suite task-scope failures: 0
+
+### Confidence: 1.00
+### Action: archive
