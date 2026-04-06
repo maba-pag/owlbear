@@ -7,6 +7,7 @@ import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -26,6 +27,8 @@ from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.schema import init_db as _schema_init_db
+from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
+from owlbear_knowledge.scope_transfer import import_scope as _core_import_scope
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 if TYPE_CHECKING:
@@ -78,6 +81,7 @@ def init_db(path: str) -> sqlite3.Connection:
 class AppContext:
     """Runtime context passed to MCP tools via FastMCP lifespan."""
 
+    conn: sqlite3.Connection
     query_service: KnowledgeQueryService | None
     graph_store: GraphStore | None
     ingest_pipeline: IngestPipeline | None
@@ -145,6 +149,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             web_read_fn=_web_read,
         )
         ctx = AppContext(
+            conn=conn,
             query_service=qs,
             graph_store=gs,
             ingest_pipeline=pipeline,
@@ -167,7 +172,9 @@ __all__ = [
     "_apply_tool_exclusions",
     "app_lifespan",
     "bookmark_source",
+    "export_scope",
     "get_stats",
+    "import_scope",
     "ingest_document",
     "init_db",
     "list_bookmarks",
@@ -347,3 +354,46 @@ async def list_bookmarks(
         {"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags}
         for b in bookmarks
     ]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def import_scope(
+    ctx: Context,
+    project_name: str,
+    path: str | None = None,
+) -> str:
+    """Import a project-local knowledge snapshot into the global KB.
+
+    Reads a portable SQLite file (default: ``.owlbear/knowledge/knowledge.db``)
+    and ingests its documents into the global KB under ``scope="project:{project_name}"``.
+    Duplicate documents (same content hash) are skipped.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    src = Path(path) if path is not None else None
+    return await asyncio.to_thread(
+        _core_import_scope,
+        src,
+        project_name,
+        app_ctx.conn,
+        workspace_root=Path.cwd(),
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def export_scope(
+    ctx: Context,
+    scope: str,
+    output_path: str,
+) -> str:
+    """Export all knowledge for a scope to a portable SQLite file.
+
+    Creates a new SQLite database at *output_path* containing only the rows
+    matching *scope*.  Qdrant embeddings are excluded (re-embedded on import).
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    return await asyncio.to_thread(
+        _core_export_scope,
+        scope,
+        Path(output_path),
+        app_ctx.conn,
+    )
