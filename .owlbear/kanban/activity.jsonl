@@ -1,57 +1,3 @@
-{"timestamp":"2026-03-30T21:38:58.2043082+02:00","action":"release","task_id":386,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:39:51.4715264+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-30T21:39:51.4752568+02:00","action":"release","task_id":220,"detail":"architect"}
-{"timestamp":"2026-03-30T21:40:22.0822296+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T21:40:26.6979609+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T21:42:22.4011111+02:00","action":"edit","task_id":432,"detail":"Implement loop-detection pattern in agent instructions"}
-{"timestamp":"2026-03-30T21:42:22.4059523+02:00","action":"claim","task_id":432,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:42:23.4337474+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-30T21:42:23.4384359+02:00","action":"claim","task_id":433,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:42:51.6192755+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-30T21:42:51.6203039+02:00","action":"release","task_id":99,"detail":"reviewer"}
-{"timestamp":"2026-03-30T21:43:21.0194724+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
-{"timestamp":"2026-03-30T21:43:21.0231652+02:00","action":"claim","task_id":265,"detail":"architect"}
-{"timestamp":"2026-03-30T21:43:22.3019344+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T21:43:22.3088541+02:00","action":"claim","task_id":203,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:43:27.2618679+02:00","action":"edit","task_id":266,"detail":"Add fresh-context retry to builder agent"}
-{"timestamp":"2026-03-30T21:43:27.2666081+02:00","action":"claim","task_id":266,"detail":"architect"}
-{"timestamp":"2026-03-30T21:43:28.7827788+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:43:28.7896648+02:00","action":"claim","task_id":54,"detail":"reviewer"}
-{"timestamp":"2026-03-30T21:45:16.7354491+02:00","action":"edit","task_id":266,"detail":"Add fresh-context retry to builder agent"}
-{"timestamp":"2026-03-30T21:45:16.7401833+02:00","action":"block","task_id":266,"detail":"Pending decision 228-fresh-context-retry.md (approved:false). Task decomposed into #318, #319, #320 -- no atomic AC for builder pipeline."}
-{"timestamp":"2026-03-30T21:45:16.7438597+02:00","action":"release","task_id":266,"detail":"architect"}
-{"timestamp":"2026-03-30T21:45:31.8683777+02:00","action":"edit","task_id":266,"detail":"Add fresh-context retry to builder agent"}
-{"timestamp":"2026-03-30T21:45:39.95528+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:45:53.9707616+02:00","action":"create","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
-{"timestamp":"2026-03-30T21:45:59.7134615+02:00","action":"create","task_id":436,"detail":"Add loop-pattern detection to reviewer checklist"}
-{"timestamp":"2026-03-30T21:46:10.9090231+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:46:25.8708099+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:46:30.622293+02:00","action":"edit","task_id":432,"detail":"Implement loop-detection pattern in agent instructions"}
-{"timestamp":"2026-03-30T21:46:36.0603013+02:00","action":"edit","task_id":54,"detail":"Implement real search_knowledge tool in mcp-knowledge"}
-{"timestamp":"2026-03-30T21:46:36.0639761+02:00","action":"release","task_id":54,"detail":"reviewer"}
-{"timestamp":"2026-03-30T21:46:38.6000191+02:00","action":"edit","task_id":432,"detail":"Implement loop-detection pattern in agent instructions"}
-{"timestamp":"2026-03-30T21:46:49.3852268+02:00","action":"edit","task_id":432,"detail":"Implement loop-detection pattern in agent instructions"}
-{"timestamp":"2026-03-30T21:46:54.744005+02:00","action":"edit","task_id":432,"detail":"Implement loop-detection pattern in agent instructions"}
-{"timestamp":"2026-03-30T21:46:54.7491416+02:00","action":"release","task_id":432,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:47:04.1050731+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-30T21:47:34.6394047+02:00","action":"create","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
-{"timestamp":"2026-03-30T21:47:46.3912887+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
-{"timestamp":"2026-03-30T21:47:46.3949751+02:00","action":"block","task_id":265,"detail":"Pending decisions: 228-parallel-fan-out and 228-esub-utility-subagents (both approved: false). Dependencies #263 and #307 not done."}
-{"timestamp":"2026-03-30T21:48:02.4302444+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-30T21:48:07.8862916+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-30T21:48:07.8899751+02:00","action":"release","task_id":433,"detail":"researcher"}
-{"timestamp":"2026-03-30T21:48:52.81205+02:00","action":"edit","task_id":265,"detail":"Enable parallel fan-out in reviewer agent"}
-{"timestamp":"2026-03-30T21:48:52.8173908+02:00","action":"release","task_id":265,"detail":"architect"}
-{"timestamp":"2026-03-30T21:49:15.7166338+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T21:49:15.7213542+02:00","action":"claim","task_id":184,"detail":"builder"}
-{"timestamp":"2026-03-30T21:51:11.6265289+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T21:51:15.6871124+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-30T21:51:15.6925059+02:00","action":"release","task_id":184,"detail":"builder"}
-{"timestamp":"2026-03-30T21:51:39.0716097+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T21:51:39.0757396+02:00","action":"claim","task_id":44,"detail":"builder"}
-{"timestamp":"2026-03-30T21:52:21.8542792+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T21:52:32.6599495+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T21:52:32.6652937+02:00","action":"release","task_id":203,"detail":"test-writer"}
 {"timestamp":"2026-03-30T21:53:16.4238942+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
 {"timestamp":"2026-03-30T21:53:16.4296613+02:00","action":"claim","task_id":228,"detail":"test-writer"}
 {"timestamp":"2026-03-30T21:53:26.7384505+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
@@ -9998,3 +9944,57 @@
 {"timestamp":"2026-04-06T17:53:51.6047411+02:00","action":"edit","task_id":632,"detail":"Disposition #575: release claim, archive as resolved-by-architecture"}
 {"timestamp":"2026-04-06T17:53:51.6218218+02:00","action":"release","task_id":632,"detail":"robin-amber"}
 {"timestamp":"2026-04-06T17:53:52.2114628+02:00","action":"move","task_id":632,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T17:54:30.3886984+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T17:54:30.40436+02:00","action":"claim","task_id":644,"detail":"mast-warp"}
+{"timestamp":"2026-04-06T17:54:35.1356497+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T17:54:35.1485506+02:00","action":"claim","task_id":661,"detail":"staff-valve"}
+{"timestamp":"2026-04-06T17:54:55.5449433+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T17:54:55.5599557+02:00","action":"claim","task_id":665,"detail":"mold-lunar"}
+{"timestamp":"2026-04-06T17:56:20.4118009+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T17:56:20.4261312+02:00","action":"claim","task_id":597,"detail":"mink-gorge"}
+{"timestamp":"2026-04-06T17:57:04.1737379+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T17:57:04.1865669+02:00","action":"release","task_id":597,"detail":"mink-gorge"}
+{"timestamp":"2026-04-06T17:57:31.1709215+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T17:57:31.1851387+02:00","action":"release","task_id":665,"detail":"mold-lunar"}
+{"timestamp":"2026-04-06T17:59:25.617863+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T17:59:25.6321167+02:00","action":"release","task_id":644,"detail":"mast-warp"}
+{"timestamp":"2026-04-06T18:01:27.9910382+02:00","action":"edit","task_id":661,"detail":"Pipeline handling for user-action-required tasks"}
+{"timestamp":"2026-04-06T18:01:28.0038857+02:00","action":"release","task_id":661,"detail":"staff-valve"}
+{"timestamp":"2026-04-06T18:03:59.4423411+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T18:03:59.4566496+02:00","action":"claim","task_id":665,"detail":"forge-north"}
+{"timestamp":"2026-04-06T18:04:03.048678+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T18:04:03.0645777+02:00","action":"claim","task_id":663,"detail":"swift-lily"}
+{"timestamp":"2026-04-06T18:04:50.9721724+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T18:04:50.9869956+02:00","action":"claim","task_id":597,"detail":"cider-kelp"}
+{"timestamp":"2026-04-06T18:05:15.0844021+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-06T18:05:15.0995531+02:00","action":"claim","task_id":613,"detail":"rust-grove"}
+{"timestamp":"2026-04-06T18:05:58.7425693+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T18:05:58.7575059+02:00","action":"release","task_id":663,"detail":"swift-lily"}
+{"timestamp":"2026-04-06T18:06:05.5488002+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-06T18:06:05.5626885+02:00","action":"release","task_id":613,"detail":"rust-grove"}
+{"timestamp":"2026-04-06T18:06:39.3432404+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T18:06:39.3579941+02:00","action":"release","task_id":597,"detail":"cider-kelp"}
+{"timestamp":"2026-04-06T18:06:51.7445672+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T18:06:51.7596493+02:00","action":"release","task_id":665,"detail":"forge-north"}
+{"timestamp":"2026-04-06T18:07:16.9159771+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T18:07:16.9326846+02:00","action":"claim","task_id":654,"detail":"shore-south"}
+{"timestamp":"2026-04-06T18:08:06.2809481+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T18:08:06.2970419+02:00","action":"claim","task_id":644,"detail":"path-wren"}
+{"timestamp":"2026-04-06T18:08:22.5389618+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T18:08:22.5516689+02:00","action":"claim","task_id":136,"detail":"rain-gate"}
+{"timestamp":"2026-04-06T18:08:50.9547755+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T18:08:50.9671875+02:00","action":"release","task_id":654,"detail":"shore-south"}
+{"timestamp":"2026-04-06T18:12:54.320019+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T18:12:54.3351257+02:00","action":"release","task_id":644,"detail":"path-wren"}
+{"timestamp":"2026-04-06T18:13:00.0555714+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T18:13:00.0699633+02:00","action":"release","task_id":136,"detail":"rain-gate"}
+{"timestamp":"2026-04-06T18:15:19.4470545+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T18:15:19.4615985+02:00","action":"claim","task_id":597,"detail":"eagle-torch"}
+{"timestamp":"2026-04-06T18:15:44.5736438+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T18:15:44.5870008+02:00","action":"claim","task_id":644,"detail":"staff-iron"}
+{"timestamp":"2026-04-06T18:18:19.3449179+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T18:18:19.358769+02:00","action":"release","task_id":644,"detail":"staff-iron"}
+{"timestamp":"2026-04-06T18:46:11.3227959+02:00","action":"priority","task_id":656,"detail":"nice-to-have -\u003e someday"}
+{"timestamp":"2026-04-06T18:46:12.415844+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
+{"timestamp":"2026-04-06T18:46:12.4337727+02:00","action":"release","task_id":597,"detail":"eagle-torch"}
+{"timestamp":"2026-04-06T18:46:13.0491424+02:00","action":"move","task_id":597,"detail":"done -\u003e archived"}

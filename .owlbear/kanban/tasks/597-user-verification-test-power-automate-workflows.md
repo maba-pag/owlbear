@@ -1,10 +1,12 @@
 ---
 id: 597
 title: 'User verification: test Power Automate Workflows webhook in corp Teams'
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-04-04T20:14:08.5441141+02:00
-updated: 2026-04-06T15:04:40.6224269+02:00
+updated: 2026-04-06T18:46:13.0462638+02:00
+started: 2026-04-06T18:46:13.0462638+02:00
+completed: 2026-04-06T18:46:13.0462638+02:00
 tags:
     - phase-3
     - scope:notifications
@@ -401,3 +403,129 @@ Power Automate Workflows webhook triggers are disabled by corporate policy. This
 
 ### Verdict: APPROVE
 ### Action: Advanced to todo. User verification complete with negative result — pipeline agents should pass-through and close. All 6 AC lines have evidence.
+
+[[2026-04-06]] Mon 16:28
+## Test-Writer Notes
+- Non-implementation task (tagged type:test) — no tests applicable.
+- AC describes manual user verification steps in Teams GUI; no Python interfaces exist.
+- User verification completed (cycle 5 architecture review): webhook triggers disabled by corporate policy — "unavailable" path confirmed.
+- Passing through to builder.
+
+[[2026-04-06]] Mon 17:02
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+- Task type:test; user verification completed in cycle 5 architecture review: Power Automate Workflows webhook triggers disabled by corporate policy (WorkflowTriggerIsNotEnabled, state Suspended). "Unavailable" AC path confirmed. All 6 AC lines have evidence.
+
+[[2026-04-06]] Mon 17:57
+## Review Evidence
+### Test Results
+- pytest: N/A — non-implementation task (type:test); zero code changes across both builder cycles
+- ruff: N/A
+- Coverage: N/A
+
+### Pass 1 — CRITICAL
+#### 5.0 Test-Writer AC Coverage
+N/A — no TestFromAC_* classes. Correct for a manual user verification task.
+
+#### 5.1 Security Review
+- No code written; no hardcoded secrets; no new dependencies.
+- PowerShell command in task body: static payload, no user-controlled input inserted, no secrets persisted in codebase.
+- Webhook URL present only in user's test run output in task body, not committed to code.
+- PASS
+
+#### 5.2 Test Integrity
+N/A — no TestFromAC_* classes exist.
+
+#### 5.3 Test Quality
+N/A — manual user verification task; no automated tests applicable.
+
+#### 5.4 Data Safety
+N/A — no code written, no shared mutable state introduced.
+
+#### 5.5 Implementation-Aware Gaps
+N/A — no code written.
+
+#### 5.6 Necessity Check
+N/A — no new dependencies or integrations added.
+
+#### 5.7 Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 (cycles 1 and 2) |
+| Approach variation | N/A — both cycles correctly identified as non-implementation passthrough |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- #661 (pipeline handling for user-action-required tasks) correctly tracks the structural gap surfaced by this task. No action needed here.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| Open Teams → channel → More options → Workflows | Cycle 5 arch review: user confirmed access; workflow created | N/A | PASS |
+| Search for "Post to a channel when a webhook request is received" template | Template found, workflow created (cycle 5) | N/A | PASS |
+| If available: create workflow, copy webhook URL | Workflow created, URL obtained and used in PowerShell test (cycle 5) | N/A | PASS |
+| Test HTTP POST with Adaptive Card JSON via PowerShell | User-provided PowerShell output: WorkflowTriggerIsNotEnabled, state Suspended — real observable artifact | N/A | PASS |
+| If available: T3 DR to reopen #514 | N/A — "unavailable" path correctly taken; webhooks disabled by corporate policy | N/A | N/A (correct path) |
+| If unavailable: document blocker and close | Blocker documented in task body with actual error output; confirmed by cycle 5 arch review | N/A | PASS |
+
+### Prior Review Cycle
+Prior ## Review Evidence section exists (Mon 07:10, .93 PASS, Cycle 1). That review was premature — no user action had occurred. Auditor correctly rejected at .88. This is Cycle 2 review with materially changed conditions: user evidence now present. 3rd+ loop-breaker does not apply — this is a legitimate second review following completion of user action.
+
+### Confidence: .96
+### Verdict: PASS — user verification complete with real observable evidence (PowerShell error output). All 6 AC lines accounted for. Non-implementation passthrough handled correctly throughout. Task ready for docs.
+
+[[2026-04-06]] Mon 18:06
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Non-implementation task (type:test); zero code changes across both pipeline cycles |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | 0 new sources; 6 from #592 already logged in .owlbear/sources/overview.md under "Power Automate Workflows for Teams Notifications (Task #592)" |
+| 4 | CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Updated | .owlbear/research/power-automate-workflows-teams-notifications.md exists and is linked from task body; follow-up #661 created; added Section 6 "Verification Outcome" documenting confirmed negative result (WorkflowTriggerIsNotEnabled, trigger Suspended) so future readers see correct corp availability status |
+
+### Files Updated
+- .owlbear/research/power-automate-workflows-teams-notifications.md — Section 6 added with verification outcome (commit fcb6329)
+
+### Scratch Files Cleaned
+- None (no .owlbear/scratch/597-* files found)
+
+[[2026-04-06]] Mon 18:46
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Open Teams → channel → Workflows | User feedback: "Created Workflow" — accessed Teams GUI, workflow created | PASS |
+| Search for webhook template | Implied by workflow creation — template found and used | PASS |
+| If available: create workflow, copy URL | URL obtained, present in PowerShell test output in task body | PASS |
+| Test HTTP POST with Adaptive Card JSON | PowerShell output: WorkflowTriggerIsNotEnabled, state Suspended — real observable artifact | PASS |
+| If available: T3 DR for #514 | N/A — "unavailable" path correctly taken; webhooks disabled by corp policy | PASS (correct path) |
+| If unavailable: document blocker | Blocker documented in task body (user feedback) and research doc Section 6 (commit fcb6329) | PASS |
+
+### Test Results
+- pytest: 3075 passed, 439 failed, 18 skipped (full suite excl. 1 collection error). Zero failures attributable to #597 (zero code changes). All failures pre-existing from other in-progress tasks.
+- ruff: 5 pre-existing errors (SIM117 x3, PLR0915 x1, RUF059 x1). None attributable to this task.
+
+### Reviewer Evidence
+Present and detailed (cycle 2). All 6 AC lines mapped to PASS with real user evidence. Confidence .96, PASS verdict. Appropriately distinguished from premature cycle 1 review.
+
+### Architect Quality: 4/5
+Clear step-by-step AC for manual verification. Conditional outcomes well-expressed. Test payload provided in correct Adaptive Card JSON format. Minor issue: wrong research doc path corrected by architect in cycle 1 review. Good overall quality.
+
+### Deduction Breakdown
+- All 6 AC lines have evidence: no deduction
+- Lint violations (5 pre-existing, 0 attributable): no deduction
+- AC quality 4/5: no deduction
+- Reviewer evidence present and detailed: no deduction
+- Full-suite failures (0 in task scope): no deduction
+- Total: 0
+
+### Confidence: .98
+### Action: archive
+
+### Notes
+- Task required 5 pipeline cycles due to structural gap: no pipeline mechanism for user-action-required tasks. Follow-up #661 tracks this.
+- Doc-writer added verification outcome (Section 6) to research doc (commit fcb6329).
+- O365 Connectors retire April 30, 2026. Corp availability confirmed negative — feature remains blocked.
