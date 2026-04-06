@@ -377,12 +377,14 @@ User ←→ ideator.agent.md (Mediator)
 
 ```
 .owlbear/briefs/draft-{project-name}/
+  input/                    ← User's reference materials (dropped before or at start of conversation)
+                               (Excel, docs, screenshots, links — anything the user brings)
   context.md                ← Problem, Outcomes, Tier, Landscape summary
-                               (written by Mediator after user conversation + research)
+                               (populated incrementally: M1 adds problem + tier, M2 adds outcomes, M3 adds landscape)
   research-notes.md         ← Detailed codebase/ecosystem findings
                                (written by research subagent during M3)
   decisions.md              ← User decisions as they're made
-                               (written by Mediator after each user choice)
+                               (created empty at start, populated by Mediator after each user choice)
   voices/
     architect.md            ← Architect final position (after Critic cycles)
     architect-debate.md     ← Architect ↔ Critic debate log
@@ -400,15 +402,16 @@ User ←→ ideator.agent.md (Mediator)
 
 | Agent | Reads | Writes |
 |-------|-------|--------|
-| **Mediator** | `context.md`, `decisions.md`, `synthesis.md` ONLY | `context.md`, `decisions.md`, `brief.md` |
-| **Research subagent** | Codebase (via tools), ecosystem (via web fetch) | `research-notes.md` (returns summary to Mediator) |
+| **Mediator** | `input/*`, `context.md`, `decisions.md`, `synthesis.md` | `context.md` (incremental), `decisions.md`, `brief.md` |
+| **Research subagent** | `context.md`, `input/*`, codebase (via tools), ecosystem (via web fetch) | `research-notes.md` (returns summary to Mediator) |
 | **Domain Voice** | `context.md`, `decisions.md`, optionally `research-notes.md` | `voices/{name}.md`, `voices/{name}-debate.md` |
+| **Critic** (standalone, after M1/M2/M4/M5) | `context.md` | Returns response to Mediator (not direct file write) |
 | **Critic** (invoked by voice) | Voice's current draft (passed in prompt) + `context.md` reference | Returns response to invoking voice (not direct file write) |
 | **Pragmatist** | `context.md`, `decisions.md`, ALL `voices/*.md` results | `synthesis.md` |
 | **Final Critic** (optional) | `context.md`, `synthesis.md` | Appends challenges to `synthesis.md` |
 | **Planner** | `brief.md` | Kanban tasks |
 
-**The Mediator reads only Working Directory summary files** (`context.md`, `decisions.md`, `synthesis.md`) — never raw research, debate logs, or individual voice arguments. Its context window stays clean throughout the entire conversation.
+**The Mediator reads only `input/*` (at start) and Working Directory summary files** (`context.md`, `decisions.md`, `synthesis.md`) — never raw research, debate logs, or individual voice arguments. Its context window stays clean throughout the conversation.
 
 ### Voice Reasoning Cycle (with Embedded Critic)
 
@@ -446,10 +449,13 @@ Model assignment is specified per voice agent file via the `model:` key in YAML 
 
 ```
 PHASE 1 — User Conversation (Mediator ↔ User, internal)
+  Mediator reads input/* for reference materials
   Mediator talks with user (Investigator mode)
   Clarifies problem, establishes outcomes, sets tier
+  Writes context.md incrementally (problem after M1, outcomes after M2)
+  Standalone Critic checks after M1 and M2 (reads context.md)
   Invokes research subagent (codebase + ecosystem scan → research-notes.md)
-  Writes: context.md (from conversation + research summary)
+  Appends landscape to context.md (from research summary)
 
 PHASE 2 — Voice Deliberation (parallel)
   Mediator invokes relevant domain voices in parallel:
@@ -497,11 +503,12 @@ PHASE 6 — Brief & Handoff
 
 | Agent | Context Contains | Does NOT Contain |
 |-------|-----------------|-----------------|
-| **Mediator** | User conversation + research summary + 3 file reads (context, decisions, synthesis) | Voice debates, Critic challenges, raw research data, domain arguments |
-| **Research subagent** | Problem brief from Mediator + codebase/web tool results | User conversation, voice results |
-| **Domain Voice** | context.md + optionally research-notes.md + its own critic debate | Other voices' debates, user conversation |
-| **Critic** | Voice's current position + context reference | Other voices, user conversation |
-| **Pragmatist** | All voice results + context + decisions | Voice debate logs, user conversation, raw research |
+| **Mediator** | User conversation + input files + research summary + Working Dir summary files (context, decisions, synthesis) | Voice debates, Critic challenges, raw research data, domain arguments |
+| **Research subagent** | context.md + input files + codebase/web tool results | User conversation, voice results |
+| **Domain Voice** | context.md + optionally research-notes.md + its own critic debate | Other voices' debates, user conversation, input files |
+| **Critic** (standalone) | context.md (read from file, grows per moment) | Other voices, user conversation |
+| **Critic** (voice-embedded) | Voice's current position + context reference | Other voices, user conversation |
+| **Pragmatist** | All voice results + context + decisions | Voice debate logs, user conversation, raw research, input files |
 
 Each agent sees only what it needs. No context is duplicated through the Mediator.
 
@@ -509,13 +516,17 @@ Each agent sees only what it needs. No context is duplicated through the Mediato
 
 The user selects **ideator** in the VS Code agent picker, or invokes by name.
 
-**Argument hint:** `[idea, problem, or feature to explore]`
+**Argument hint:** `[idea, problem, or feature — drop reference files in .owlbear/briefs/draft-new/input/]`
 
-**Context detection on start:**
-- Checks for existing project (`owlbear-project.json`, `.owlbear/briefs/`)
-- Detects whether user references existing code
-- Determines new project vs. change to existing
-- If uncertain, asks
+**On start:**
+1. Creates `.owlbear/briefs/draft-new/` with `input/`, empty `context.md`, empty `decisions.md`
+   - If `draft-new/` already exists (unfinished prior session): asks user to continue or start fresh
+2. Tells user: "Drop any reference files (spreadsheets, documents, screenshots) in the input folder and I'll review them."
+3. Reads `input/*` for any materials the user has already placed
+4. Checks for existing project (`owlbear-project.json`, `.owlbear/briefs/`)
+5. Detects whether user references existing code
+6. Determines new project vs. change to existing; if uncertain, asks
+7. After M1 (when project is named): renames `draft-new/` → `draft-{project-name}/`
 
 ### Agent File Structure
 
@@ -538,11 +549,13 @@ share/skills/
 
 ### Brief Lifecycle
 
-1. **During ideation:** Working Directory at `.owlbear/briefs/draft-{name}/` holds all artifacts
-2. **At approval:** Mediator writes `brief.md` from context + decisions + synthesis
-3. **At handoff:** Mediator creates a **parent task** on the kanban board containing the Brief's key info (problem, outcomes, approach, scope). Planner creates subtasks under it. Tasks do not reference the Brief file directly — needed context lives in the parent task.
-4. **After handoff:** Draft files preserved for audit trail. Cleaned up when the parent task is completed or archived.
-5. **For feature changes:** New draft directory created
+1. **On invocation:** Working Directory created at `.owlbear/briefs/draft-new/` with `input/`, empty `context.md`, empty `decisions.md`
+2. **After M1:** Renamed to `.owlbear/briefs/draft-{project-name}/`
+3. **During ideation:** `context.md` populated incrementally, voices write to `voices/`, Pragmatist writes `synthesis.md`
+4. **At approval:** Mediator writes `brief.md` from context + decisions + synthesis
+5. **At handoff:** Mediator creates a **parent task** on the kanban board containing the Brief's key info (problem, outcomes, approach, scope). Planner creates subtasks under it. Tasks do not reference the Brief file directly — needed context lives in the parent task.
+6. **After handoff:** Draft files preserved for audit trail. Cleaned up when the parent task is completed or archived.
+7. **For feature changes:** New draft directory created
 
 ### Re-entry (Mid-Execution Modification)
 
