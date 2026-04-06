@@ -1,37 +1,3 @@
-{"timestamp":"2026-03-30T21:53:16.4238942+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-30T21:53:16.4296613+02:00","action":"claim","task_id":228,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:53:26.7384505+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T21:53:26.742185+02:00","action":"claim","task_id":208,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:53:34.2865262+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-30T21:53:38.5083149+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-30T21:53:38.5119652+02:00","action":"release","task_id":228,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:55:04.0357098+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T21:55:13.7182206+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T21:55:13.7229417+02:00","action":"block","task_id":44,"detail":"TestFromAC conflict: test_validate_skills.py::TestFromAC_ExitCode::test_exit_code_one_no_arguments asserts exit 1 for no-args, contradicts task-44 TestFromAC_ScriptAutoDiscovery requiring exit 0. Test-writer must delete/update the #84 test before builder can proceed."}
-{"timestamp":"2026-03-30T21:55:14.0778154+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T21:55:14.0819386+02:00","action":"claim","task_id":16,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:55:21.2499998+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-03-30T21:55:21.2547566+02:00","action":"release","task_id":44,"detail":"builder"}
-{"timestamp":"2026-03-30T21:56:52.8543429+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T21:56:52.857913+02:00","action":"claim","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-30T21:57:45.2904471+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T21:57:45.2946756+02:00","action":"release","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-30T21:57:53.0304167+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T21:57:53.0357521+02:00","action":"claim","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-30T21:57:53.5255201+02:00","action":"edit","task_id":143,"detail":"Test: Extract CancelSignal and sandbox_path"}
-{"timestamp":"2026-03-30T21:57:53.5308605+02:00","action":"release","task_id":143,"detail":"builder"}
-{"timestamp":"2026-03-30T21:58:26.7278867+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T21:58:30.6403688+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T21:58:30.644537+02:00","action":"release","task_id":16,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:58:51.5635234+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T21:58:51.5672184+02:00","action":"claim","task_id":179,"detail":"test-writer"}
-{"timestamp":"2026-03-30T21:59:00.6876385+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T21:59:26.7751343+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T21:59:26.7793851+02:00","action":"release","task_id":208,"detail":"test-writer"}
-{"timestamp":"2026-03-30T22:03:51.412937+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T22:03:51.4172006+02:00","action":"claim","task_id":16,"detail":"builder"}
-{"timestamp":"2026-03-30T22:04:23.4643468+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-30T22:04:27.2869925+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
 {"timestamp":"2026-03-30T22:04:27.2906805+02:00","action":"release","task_id":179,"detail":"test-writer"}
 {"timestamp":"2026-03-30T22:06:16.6791722+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
 {"timestamp":"2026-03-30T22:06:20.9022528+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
@@ -9998,3 +9964,37 @@
 {"timestamp":"2026-04-06T18:46:12.415844+02:00","action":"edit","task_id":597,"detail":"User verification: test Power Automate Workflows webhook in corp Teams"}
 {"timestamp":"2026-04-06T18:46:12.4337727+02:00","action":"release","task_id":597,"detail":"eagle-torch"}
 {"timestamp":"2026-04-06T18:46:13.0491424+02:00","action":"move","task_id":597,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T18:46:49.7823902+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T18:46:49.8111509+02:00","action":"claim","task_id":655,"detail":"curl-crisp"}
+{"timestamp":"2026-04-06T18:46:56.3075555+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T18:46:56.322765+02:00","action":"claim","task_id":663,"detail":"crisp-larch"}
+{"timestamp":"2026-04-06T18:47:23.5783245+02:00","action":"edit","task_id":663,"detail":"Document type:user-action convention in r-pipeline-protocol and agent-common"}
+{"timestamp":"2026-04-06T18:47:23.5927129+02:00","action":"release","task_id":663,"detail":"crisp-larch"}
+{"timestamp":"2026-04-06T18:48:05.3268354+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T18:48:05.3428168+02:00","action":"claim","task_id":654,"detail":"lodge-wolf"}
+{"timestamp":"2026-04-06T18:48:06.2417388+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-06T18:48:06.2560274+02:00","action":"claim","task_id":613,"detail":"midge-river"}
+{"timestamp":"2026-04-06T18:48:09.8774379+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T18:48:09.8901416+02:00","action":"release","task_id":655,"detail":"curl-crisp"}
+{"timestamp":"2026-04-06T18:49:29.7992796+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-06T18:49:29.8139776+02:00","action":"release","task_id":613,"detail":"midge-river"}
+{"timestamp":"2026-04-06T18:49:37.3783147+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T18:49:37.3928154+02:00","action":"release","task_id":654,"detail":"lodge-wolf"}
+{"timestamp":"2026-04-06T18:49:56.5815659+02:00","action":"edit","task_id":660,"detail":"Implement resolve-summary.json typed contract for scribe↔orchestrator boundary"}
+{"timestamp":"2026-04-06T18:49:56.596223+02:00","action":"claim","task_id":660,"detail":"shade-oaken"}
+{"timestamp":"2026-04-06T18:50:47.4239387+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T18:50:47.437055+02:00","action":"claim","task_id":665,"detail":"dove-larch"}
+{"timestamp":"2026-04-06T18:51:34.330061+02:00","action":"edit","task_id":665,"detail":"Test: type:user-action in NON_IMPL_TAGS gate sets"}
+{"timestamp":"2026-04-06T18:51:34.3476349+02:00","action":"release","task_id":665,"detail":"dove-larch"}
+{"timestamp":"2026-04-06T18:55:22.1307233+02:00","action":"edit","task_id":660,"detail":"Implement resolve-summary.json typed contract for scribe↔orchestrator boundary"}
+{"timestamp":"2026-04-06T18:55:22.1468599+02:00","action":"release","task_id":660,"detail":"shade-oaken"}
+{"timestamp":"2026-04-06T18:57:12.1651668+02:00","action":"edit","task_id":645,"detail":"P4-05: Create ideator.agent.md (Mediator)"}
+{"timestamp":"2026-04-06T18:57:12.1804346+02:00","action":"claim","task_id":645,"detail":"wheat-lotus"}
+{"timestamp":"2026-04-06T18:57:24.9233593+02:00","action":"edit","task_id":644,"detail":"P4-04: Create critic-voice.agent.md"}
+{"timestamp":"2026-04-06T18:57:24.9405644+02:00","action":"claim","task_id":644,"detail":"bloom-lime"}
+{"timestamp":"2026-04-06T18:58:26.6683245+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-06T18:58:26.6826183+02:00","action":"claim","task_id":613,"detail":"spur-silk"}
+{"timestamp":"2026-04-06T18:59:15.2730789+02:00","action":"edit","task_id":613,"detail":"Create GitHub Actions sync workflow (dev to main)"}
+{"timestamp":"2026-04-06T18:59:15.285016+02:00","action":"release","task_id":613,"detail":"spur-silk"}
+{"timestamp":"2026-04-06T18:59:49.4493871+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
+{"timestamp":"2026-04-06T18:59:49.4638915+02:00","action":"claim","task_id":654,"detail":"vault-hill"}

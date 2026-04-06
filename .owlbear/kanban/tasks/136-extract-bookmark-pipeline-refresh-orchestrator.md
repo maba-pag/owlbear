@@ -1,10 +1,10 @@
 ---
 id: 136
 title: Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools
-status: review
+status: in-progress
 priority: nice-to-have
 created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-06T15:12:14.7049577+02:00
+updated: 2026-04-06T18:13:00.0486265+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -13,8 +13,6 @@ depends_on:
     - 33
     - 135
     - 223
-claimed_by: hill-crypt
-claimed_at: 2026-04-06T15:12:14.7010972+02:00
 class: standard
 ---
 
@@ -256,3 +254,277 @@ Each test was confirmed RED before implementation existed, GREEN after. No prod 
 - ruff: clean
 - Coverage: refresh.py 92%, bookmark_pipeline.py 93% — both above 90%
 - Commit: e10b705
+
+[[2026-04-06]] Mon 15:19
+## Review Evidence
+### Test Results
+pytest: 57 passed, 0 failed
+
+### Lint
+clean: true
+
+### Coverage
+- owlbear_knowledge.bookmark_pipeline: 93% ✅
+- owlbear_knowledge.refresh: 92% ✅ (fixed from 74% via 4 TestBuilderDiscovered tests)
+- owlbear_knowledge.source_store: 77% (pre-existing code, list_enabled is tested)
+- owlbear_mcp_knowledge.server: 47% (pre-existing code, new tools are tested)
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage (re-check after retry 2 + builder cycle 3)
+
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| BookmarkResult model in bookmark_pipeline.py | TestFromAC_BookmarkResultModel (5 tests) | Yes — frozen, fields, defaults | COVERED |
+| BookmarkPipeline constructor, web_read_fn REQUIRED | TestFromAC_BookmarkPipelineConstructor (4 tests) | Yes — TypeError on missing web_read_fn | COVERED |
+| _default_web_read NOT extracted | test_default_web_read_not_exported_from_module | Yes | COVERED |
+| process() cooperative cancellation at each stage | TestFromAC_BookmarkPipelineProcess (8 tests) | Yes — 3 cancel checks at stages 1, 3, 5 | COVERED |
+| RefreshResult + RefreshOrchestrator in refresh.py | TestFromAC_RefreshResultModel, TestFromAC_RefreshOrchestratorConstructor | Yes | COVERED |
+| refresh_all() cooperative cancellation | test_refresh_all_cooperative_cancellation_stops_loop | Yes — mock now targets list_all (line 483), 3 sources, cancel fires before first iteration; results==[] would fail if cancel check removed | COVERED ✅ |
+| file_glob uses sandbox_path | TestFromAC_RefreshOrchestratorFileGlob (2 tests) | Yes — path traversal counted as failed | COVERED |
+| _update_source_record persists | TestFromAC_UpdateSourceRecord (2 tests) | Yes | COVERED |
+| KnowledgeSourceStore.list_enabled(scope) | TestFromAC_ListEnabled (5 tests) | Yes — method, filter, order all tested | COVERED |
+| bookmark_source + list_bookmarks MCP tools + AppContext | TestFromAC_MCPBookmarkTools (8 tests) | Yes | COVERED |
+| __init__.py exports | TestFromAC_InitExports (8 tests) | Yes | COVERED |
+
+#### Security Review — FAIL
+
+**SSRF Vulnerability — server.py `_web_read` function (new code added by this task)**
+
+Location: `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` — `app_lifespan` scope, `_web_read` inner function.
+
+Evidence:
+```python
+async def _web_read(url: str) -> str | None:
+    async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+        resp = await client.get(url)
+```
+- `url` flows directly from user-provided MCP tool parameter: `bookmark_source(ctx, url: str)` → `pipeline.process(url)` → `web_read_fn(url)` → `httpx.get(url, follow_redirects=True)`
+- `follow_redirects=True` without domain validation enables SSRF via redirect chain (e.g., `https://attacker.com/` → `http://169.254.169.254/latest/meta-data/`)
+- No URL scheme validation: `file://`, `gopher://`, `dict://` could be passed
+- No RFC 1918 / link-local / loopback blocklist
+
+Classification: OWASP A10 — Server-Side Request Forgery (SSRF). Automatic FAIL.
+
+**Fix required (builder):**
+1. Add URL scheme validation before passing to httpx: only `http` and `https` schemes accepted. Raise or return `None` on disallowed scheme.
+2. Either: (a) use `follow_redirects=False`, or (b) add a post-redirect hook that validates the resolved URL's IP is not RFC 1918 / link-local / loopback (127.x, 10.x, 192.168.x, 172.16–31.x, 169.254.x, ::1).
+
+#### Test Integrity
+- No TestFromAC_ classes modified or weakened.
+- test_writer Retry 2 removed `test_refresh_all_calls_list_enabled_with_scope` (stale per #554 architect decision) — correctly documented, not a weakening.
+- 4 TestBuilderDiscovered tests are legitimate: each exercises a real code path (url_list status tallying, crawl tallying, refresh_all result collection, exception catch in loop). All would fail if implementation were removed.
+
+#### Test Quality
+All test classes: STRONG assertion specificity, STRONG error-path coverage, STRONG independence. Manual mutation reasoning confirmed for refresh_all cancellation test.
+
+#### Builder Process Quality
+3 builder cycles with documented approach variation (cycle 1: blocked by #554 conflict; cycle 2: web_read_fn + MCP tools; cycle 3: TestBuilderDiscovered for coverage). No tier-3 violation — each cycle was distinct and justified.
+
+### Pass 2 — INFORMATIONAL
+- refresh_all uses `list_all()` + in-memory enabled filter (correct per #554 architect decision, not a defect).
+- source_store.py 77% overall — pre-existing untouched code exempted per suppression rules.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| BookmarkResult + BookmarkPipeline in bookmark_pipeline.py | bookmark_pipeline.py L30, L61 | PASS |
+| web_read_fn REQUIRED | bookmark_pipeline.py L63 — keyword-only, no default | PASS |
+| _default_web_read NOT extracted | Not present in module | PASS |
+| process() cancellation at each stage | bookmark_pipeline.py L115, L127, L139 — 3 cancel checks | PASS |
+| RefreshResult + RefreshOrchestrator in refresh.py | refresh.py L37, L54 | PASS |
+| refresh_all() cooperative cancellation | refresh.py L124-125 — cancel check inside loop | PASS |
+| file_glob uses sandbox_path | refresh.py L204, L221 | PASS |
+| _update_source_record persists | refresh.py L248-257 | PASS |
+| KnowledgeSourceStore.list_enabled(scope) | source_store.py L124 | PASS |
+| bookmark_source tool | server.py L386 @mcp.tool | PASS |
+| list_bookmarks tool | server.py L411 @mcp.tool | PASS |
+| AppContext with bookmark_pipeline + bookmark_store | server.py L64-65 | PASS |
+| bookmark_toolset.py NOT extracted | Not present | PASS |
+| __init__.py exports 4 symbols | __init__.py L16, L17, L32, L33 | PASS |
+
+### Confidence: .64
+### Verdict: FAIL
+
+**Deduction:** −0.34 for SSRF vulnerability in new `_web_read` code (OWASP A10 — automatic FAIL per security rules)
+
+**Action:** Routed to `in-progress` — builder fix: add URL scheme validation and SSRF protection to `_web_read` in server.py before httpx call. Implementation and tests are otherwise complete and correct.
+
+[[2026-04-06]] Mon 16:18
+## Builder Notes (Retry cycle 4 — SSRF fix after review)
+
+### Action taken
+Reviewer identified SSRF vulnerability in the `_web_read` closure inside `app_lifespan`: `follow_redirects=True` with no URL scheme validation allows `file://`, `gopher://`, `dict://` and redirect-chain SSRF.
+
+### Fix: Extract and harden `_web_read`
+- Extracted `_web_read` from the `app_lifespan` closure to module level (makes it importable and testable)
+- Added `urllib.parse.urlparse` scheme check: only `http` and `https` accepted; all others return `None` immediately
+- Changed `follow_redirects=False` (eliminates redirect-chain SSRF)
+- `app_lifespan` still passes `_web_read` as `web_read_fn` — no change to BookmarkPipeline Construction
+
+### TestBuilderDiscovered (4 new tests — RED → GREEN)
+1. `test_web_read_rejects_file_scheme_returns_none` — `file:///etc/passwd` → `None`
+2. `test_web_read_rejects_gopher_scheme_returns_none` — `gopher://` → `None`
+3. `test_web_read_https_scheme_reaches_httpx` — https:// passes scheme check, mock httpx returns content
+4. `test_web_read_http_exception_returns_none` — httpx.ConnectError caught, returns `None`
+
+Each verified RED (ImportError before extraction) then GREEN after fix.
+
+### Files changed
+- `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` — `_web_read` extracted to module level, scheme guard added, `follow_redirects=False`
+- `tests/test_bookmark_pipeline_136.py` — 4 TestBuilderDiscovered tests added
+
+### Results
+- Tests: 61 passed (57 previous + 4 new), 0 failed
+- ruff: clean
+- Coverage: bookmark_pipeline.py 93% ✅, refresh.py 92% ✅, _web_read function 100% covered
+- Commit: fdbf412
+
+[[2026-04-06]] Mon 17:20
+## Review Evidence
+### Test Results
+- pytest: 61 passed, 0 failed (independent run via quality-runner)
+
+### Lint: clean
+
+### Coverage
+- owlbear_knowledge.bookmark_pipeline: 93% ✅
+- owlbear_knowledge.refresh: 92% ✅
+- owlbear_mcp_knowledge.server: 52% (pre-existing code; new tools + _web_read fully tested per prior cycle evidence)
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| BookmarkResult + BookmarkPipeline in bookmark_pipeline.py | TestFromAC_BookmarkResultModel, TestFromAC_BookmarkPipelineConstructor | Yes | COVERED |
+| web_read_fn REQUIRED | test_constructor_without_web_read_fn_raises_type_error | Yes — TypeError on missing arg | COVERED |
+| _default_web_read NOT extracted | test_default_web_read_not_exported_from_module | Yes | COVERED |
+| process() cooperative cancellation at each stage | TestFromAC_BookmarkPipelineProcess (8 tests) | Yes — 3 stage-boundary checks | COVERED |
+| RefreshResult + RefreshOrchestrator in refresh.py | TestFromAC_RefreshResultModel, TestFromAC_RefreshOrchestratorConstructor | Yes | COVERED |
+| refresh_all() cooperative cancellation | test_refresh_all_cooperative_cancellation_stops_loop (fixed: mocks list_all) | Yes — cancel fires before first iteration, results==[] | COVERED |
+| file_glob uses sandbox_path | TestFromAC_RefreshOrchestratorFileGlob (2 tests) | Yes — path traversal counted as failed | COVERED |
+| _update_source_record persists | TestFromAC_UpdateSourceRecord (2 tests) | Yes | COVERED |
+| KnowledgeSourceStore.list_enabled(scope) | TestFromAC_ListEnabled (5 tests) | Yes — method, filter, order all tested | COVERED |
+| bookmark_source + list_bookmarks MCP tools + AppContext | TestFromAC_MCPBookmarkTools (8 tests) | Yes | COVERED |
+| __init__.py exports 4 symbols | TestFromAC_InitExports (8 tests) | Yes | COVERED |
+
+#### Security Review
+- Scheme validation: `urlparse(url).scheme.lower() not in {"http", "https"}` — blocks file://, gopher://, dict:// ✅
+- `follow_redirects=False`: eliminates redirect-chain SSRF (direct code verification) ✅
+- No injection, no hardcoded secrets, no unsafe deserialization ✅
+- Path traversal: sandbox_path guards file_glob ✅
+
+#### Test Integrity
+- No TestFromAC_ classes weakened or removed.
+- test_writer Retry 2 removed stale test per #554 architect decision — correctly documented, not a weakening.
+- 8 TestBuilderDiscovered tests across 2 cycles are legitimate coverage additions.
+
+#### Test Quality — WEAK FINDING
+
+| Dimension | Rating | Evidence |
+|-----------|--------|---------| 
+| Assertion specificity (TestFromAC) | STRONG | Concrete values, frozen-model raises, specific method calls |
+| Negative/error-path coverage | STRONG | TypeError, ValueError, path traversal, web-read failures all tested |
+| Manual mutation reasoning — follow_redirects=False | **WEAK** | test_web_read_https_scheme_reaches_httpx patches httpx.AsyncClient but does not assert `mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)`. Mutating `follow_redirects=False` → `True` in server.py:L124 passes all 61 tests. Redirect-chain SSRF would silently regress. |
+| Test independence | STRONG | No shared mutable state |
+| Descriptive names | STRONG | All test names match intent |
+
+**WEAK on "manual mutation reasoning" for `follow_redirects=False` = automatic FAIL (Step 5.3).**
+
+Root cause: The SSRF fix of cycle 3 introduced a critical security parameter (`follow_redirects=False`) that is not asserted in any test. `test_web_read_rejects_file_scheme_returns_none` and `test_web_read_rejects_gopher_scheme_returns_none` never reach httpx (scheme guard short-circuits). `test_web_read_https_scheme_reaches_httpx` mocks httpx but asserts only the return value, not the constructor kwargs.
+
+Fix required: In `test_web_read_https_scheme_reaches_httpx`, add after the `with patch` block:
+```python
+mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)
+```
+This is a one-line fix that converts the test from outcome-only to mechanism-verified.
+
+#### Data Safety
+- Cancellation cooperative throughout ✅
+- Path sandbox prevents traversal ✅
+- No data safety issues
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 4 |
+| Approach variation | Yes — each cycle had distinct justification |
+| Review cycles | 3 (this is Review Evidence #3) |
+| Loop Detection | LOOP-BREAKER applies — 3rd+ review failure triggers backlog route regardless of root cause |
+
+### Pass 2 — INFORMATIONAL
+- Direct RFC 1918 / loopback access (e.g., `http://169.254.169.254/`) is not blocked by scheme check alone. Previous reviewer accepted `follow_redirects=False` as sufficient (Option A). This is correct for OwlBear's trusted-agent use case. Informational only.
+- source_store.py 77% overall — pre-existing code exempted per suppression rules.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| BookmarkResult + BookmarkPipeline in bookmark_pipeline.py | bookmark_pipeline.py L28, L45 | PASS |
+| web_read_fn REQUIRED | bookmark_pipeline.py L63 — keyword-only, no default | PASS |
+| _default_web_read NOT extracted | Not present in module | PASS |
+| process() cancellation at each stage | bookmark_pipeline.py L115, L127, L139 | PASS |
+| RefreshResult + RefreshOrchestrator in refresh.py | refresh.py L37, L54 | PASS |
+| refresh_all() cooperative cancellation | refresh.py L124-125, test mock fixed (list_all) | PASS |
+| file_glob uses sandbox_path | refresh.py L204, L221 | PASS |
+| _update_source_record persists | refresh.py L248-257 | PASS |
+| KnowledgeSourceStore.list_enabled(scope) | source_store.py L124 | PASS |
+| bookmark_source tool | server.py @mcp.tool | PASS |
+| list_bookmarks tool | server.py @mcp.tool | PASS |
+| AppContext fields | server.py L64-65 | PASS |
+| bookmark_toolset.py NOT extracted | Not present | PASS |
+| __init__.py exports 4 symbols | __init__.py L16, L17, L32, L33 | PASS |
+
+### Confidence: .74
+### Verdict: FAIL
+
+**Deduction:** −0.26 for WEAK test on `follow_redirects=False` parameter (untested regression path for redirect-chain SSRF)
+
+**Routing: backlog (loop-breaker — 3rd review failure on this task)**
+
+Architect action: tiny fix — one assertion in `test_web_read_https_scheme_reaches_httpx`; all other AC and implementation is correct. Decide whether to simply route to todo for the one-line test fix or absorb the test fix at a higher level.
+
+[[2026-04-06]] Mon 17:31
+## Architecture Review (Re-entry after loop-breaker)
+
+### Context
+Task routed to backlog by reviewer loop-breaker (3rd review FAIL). All 14 AC lines PASS. Implementation complete (61 tests, ruff clean). Single remaining gap: `test_web_read_https_scheme_reaches_httpx` does not assert `follow_redirects=False` on the httpx.AsyncClient constructor, meaning the SSRF redirect-chain mitigation is untested for regression.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Knowledge extraction domain + ancillary MCP wrappers |
+| Interface clarity | PASS | All constructors, return types, and side effects specified |
+| Dependency correctness | PASS | #33 archived, #135 archived, #223 archived |
+| Module layering | PASS | knowledge pkg has no HTTP deps; server.py owns _web_read |
+| TDD compliance | PASS | 53 TestFromAC + 8 TestBuilderDiscovered tests exist |
+| KISS/YAGNI | PASS | Minimal extraction, no speculative features |
+| Premise challenge | PASS | Extracting v1 modules to v2 packages is core migration work |
+| Pattern consistency | PASS | Follows AppContext + Protocol pattern from #152 |
+| Security surface | PASS (with AC addition) | _web_read has scheme validation + follow_redirects=False; needs test assertion |
+| Single domain | PASS | scope:knowledge throughout |
+
+### AC Refinement
+Added sub-item under MCP tools AC: `_web_read` must validate URL scheme (http/https only) and use `follow_redirects=False`; test must assert `httpx.AsyncClient` constructor kwargs include `follow_redirects=False`.
+
+This makes the reviewer-discovered SSRF fix formally verifiable. The one-line fix: add `mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)` in `test_web_read_https_scheme_reaches_httpx`.
+
+### Challenge Results
+- Challenger: FALLBACK (no challenger agent available)
+- Architect response: Proceeded per fallback rule
+
+### Verdict: APPROVE (REFINE + advance)
+### Action Taken: Tightened AC with explicit SSRF test assertion requirement. Advanced to todo for test-writer to apply one-line fix.
+
+[[2026-04-06]] Mon 18:13
+## Test-Writer Notes (Retry 3)
+- Fixed `test_web_read_https_scheme_reaches_httpx`: added `mock_cls.assert_called_once_with(follow_redirects=False, timeout=30)` assertion after the `with patch` block
+- Previously: test verified only the return value (`"page content"`); mutating `follow_redirects=False` → `True` left the test green — SSRF regression was silently untestable
+- Now: assertion verifies httpx.AsyncClient constructor kwargs explicitly; mutating `follow_redirects=False` causes `AssertionError`, closing the regression path
+- Architectural endorsement: architect updated AC to require this assertion before routing back to todo
+- Test file: tests/test_bookmark_pipeline_136.py
+- Commit: df7dd25
+- Total: 61 tests, 61 PASS (all pre-existing; no new tests added — existing test strengthened)
+- ruff: clean
+- AC coverage: all 14 AC lines covered; `follow_redirects=False` mechanism now verified (previously only outcome-verified)

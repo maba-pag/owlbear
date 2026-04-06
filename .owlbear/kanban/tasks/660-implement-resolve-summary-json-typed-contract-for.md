@@ -1,10 +1,10 @@
 ---
 id: 660
 title: Implement resolve-summary.json typed contract for scribe↔orchestrator boundary
-status: backlog
+status: review
 priority: important
 created: 2026-04-06T08:01:24.034837+02:00
-updated: 2026-04-06T15:05:43.9971431+02:00
+updated: 2026-04-06T18:55:22.1296624+02:00
 tags:
     - scope:pipeline
     - ' type:refactor'
@@ -73,3 +73,97 @@ Codebase state matches all research doc assumptions:
 - Confidence in original: .80
 - Key challenges: already addressed in #657 (transport-vs-semantics, stale-file risk, Option D dismissal)
 - Researcher response: no new concerns found; all #657 guidance for #660 AC is present
+
+[[2026-04-06]] Mon 16:26
+## Architecture Review
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: replace text-parsing NEEDS-INFO signal with file-based JSON contract. All 11 change points serve this single objective. |
+| Interface clarity | PASS | AC specifies JSON schema (`{resolved, needs_info, pending}` arrays), file location, read/delete lifecycle, and graceful degradation for missing file. Research doc §4 provides exact per-item schema. |
+| Dependency correctness | PASS | Depends on #657 (research) — verified `archived`. No missing dependencies. |
+| Module layering | PASS | All changes are prompt-layer (agent/skill markdown). No Python code. Scribe writes → orchestrator reads: correct dependency direction. |
+| TDD compliance | PASS | Non-impl task (markdown only). Requires `agent` pass-through tag — **add `agent` tag before test-writer processes**. |
+| KISS/YAGNI | PASS | Minimal scope: 4 files, 11 change points, zero Python code. JSON structure is exactly what's needed. |
+| Premise challenge | PASS | Current text-parsing approach requires a critical_rules carve-out exception — replacing it with file-based state is justified. |
+| Pattern consistency | PASS | File-based inter-agent state has precedent (`curation-report.json`). readFile + delete-after-read is standard infrastructure pattern. |
+| Security surface | PASS | No new system boundaries. File written/read within `.owlbear/decisions/` namespace (scribe's existing domain). Trusted internal JSON. |
+| Single domain | PASS | All within pipeline/orchestration domain. All 4 files in `share/agents/` and `share/skills/`. |
+
+### Failure Mode Map
+
+Not applicable — no Python codepaths. All changes are prompt-level instructions for LLM agents. Key edge cases already covered by AC:
+- Scribe fails to write file → AC4: missing file = empty dispatches (graceful degradation)
+- Orchestrator fails to delete → AC3: stale-file mitigation (delete-after-read instruction)
+- Scribe crashes mid-run → partial file is safe: each DR resolution is atomic; delete-after-read prevents stale data; next cycle processes remaining DRs
+
+### Challenge Results
+- Challenger: FALLBACK — no challenger agent available in current session
+- Prior challenge from #657: `reconsider` → confidence revised .85→.80, rebutted. Transport-vs-semantics concern addressed (all options share the semantic property). Stale-file risk mitigated by delete-after-read.
+- Architect assessment: research challenge was thorough; no new concerns found in AC review.
+
+### AC Assessment
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| Scribe writes resolve-summary.json | Verifiable — check file write instruction in scribe output contract | None |
+| Orchestrator reads via readFile | Verifiable — check Step 1 instructions | None |
+| Orchestrator deletes after reading | Verifiable — check delete instruction in Step 1 | None |
+| Missing file = empty dispatches | Verifiable — check graceful degradation language | None |
+| Carve-out exception removed | Verifiable — check orchestrator.agent.md L44 | None |
+| w-orchestration Step 1 updated | Verifiable — check file-read replaces text-parsing | None |
+| w-decision-routing updated | Verifiable — check resolve output spec | None |
+| scribe.agent.md updated | Verifiable — check output contract includes file write | None |
+| NEEDS-INFO still works E2E | Verifiable — trace through updated instructions | None |
+| No regression in DR processing | Verifiable — check all 5 response types still documented | None |
+
+### Architecture Notes
+- After refactor, orchestrator critical_rules "Never interpret pipeline-agent output" becomes absolute (no exception). File reading is infrastructure data access, not output interpretation.
+- Scribe writes file synchronously before returning → no race condition with orchestrator read.
+- Delete-after-read is essential: prevents stale data accumulation across cycles.
+
+### Action Required
+- **Add `agent` pass-through tag** before test-writer processes (non-impl task producing no testable Python code).
+
+### Verdict: APPROVE
+### Action Taken: Advance to todo. All 10 AC lines are verifiable, architecture is sound, dependency #657 archived. Pass-through tag `agent` needed.
+
+[[2026-04-06]] Mon 17:15
+## Test-Writer Notes
+- Non-implementation task (tagged type:refactor, scope:pipeline) — no tests applicable.
+- All 4 files affected are prompt-layer markdown: `share/agents/scribe.agent.md`, `share/agents/orchestrator.agent.md`, `share/skills/w-orchestration/SKILL.md`, `share/skills/w-decision-routing/SKILL.md`.
+- Architecture review explicitly flagged: "Non-impl task (markdown only). Requires `agent` pass-through tag."
+- AC keywords scanned: no `implement`, `function`, `class`, `src/`, `.py`, or Python import references found.
+- Heuristic pass-through: config/docs only (`.agent.md` + `SKILL.md` changes).
+- Passing through to builder.
+
+[[2026-04-06]] Mon 18:55
+## Builder Notes
+
+**Non-implementation task — all changes are prompt-layer markdown (4 files, 11 change points).**
+
+### Files Changed
+- `share/agents/orchestrator.agent.md` — removed carve-out exception from critical_rules; replaced with reference to `resolve-summary.json` via `readFile`
+- `share/agents/scribe.agent.md` — added `needs_info` array collection to needs-info signal flow (L71); added `resolve-summary.json` write instruction + JSON schema to resolve output contract (L100-106)
+- `share/skills/w-orchestration/SKILL.md` — 7 change points: context budget (remove exception), state variable source, signal contracts, Step 1 file-read-and-delete, verification checklist updated, pitfall rewritten for file-based pattern
+- `share/skills/w-decision-routing/SKILL.md` — added step 4 (record in resolve-summary.json) to needs-info flow; step 5 renumbered
+
+### Test Results
+Non-implementation task — no Python code, no tests applicable.
+
+### Lint Status
+No Python files changed — ruff N/A. Markdown files verified via read-back.
+
+### AC Evidence
+- [x] Scribe resolve mode writes `resolve-summary.json` with `{resolved, needs_info, pending}` arrays — added to output contract with JSON schema
+- [x] Orchestrator reads `resolve-summary.json` via `readFile` after scribe returns — updated Step 1
+- [x] Orchestrator deletes `resolve-summary.json` after reading — delete-after-read instruction in Step 1
+- [x] Missing file treated as empty dispatches — graceful degradation note in Step 1
+- [x] Carve-out exception removed from `orchestrator.agent.md` critical_rules — verified
+- [x] `w-orchestration` Step 1 updated: file read replaces text parsing — verified
+- [x] `w-decision-routing` resolve output contract updated — step 4 added to needs-info flow
+- [x] `scribe.agent.md` output contract updated to include file write — verified
+- [x] NEEDS-INFO dispatch still works E2E — same `needs_info_dispatches` injection in Step 2, source is now the JSON file
+- [x] No regression in DR processing — all 5 response types still documented and handled
