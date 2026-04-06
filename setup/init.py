@@ -1,0 +1,205 @@
+"""OwlBear workspace initialiser — setup/init.py.
+
+Usage (CLI):
+    python ../owlbear/setup/init.py [--name NAME] [--type TYPE]
+
+Run from the target project directory.  owlbear_dir is auto-detected from
+the location of this script.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import json
+import os
+import shutil
+from datetime import UTC, datetime
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+_LOCATION_KEYS = frozenset(
+    {
+        "chat.agentFilesLocations",
+        "chat.agentSkillsLocations",
+        "chat.instructionsFilesLocations",
+    }
+)
+
+_SKIP_NAMES = frozenset({"scratch-pad.txt"})
+_SKIP_IF_EXISTS_REL = frozenset({".vscode/mcp.json", "owlbear-project.json"})
+
+
+def _merge_settings(owlbear: dict, existing: dict) -> dict:
+    """Merge owlbear defaults with existing user settings per AC12.
+
+    - chat.*Locations keys: union of inner path dicts; user value wins on conflict.
+    - All other keys: owlbear value as default; existing user value overrides.
+    """
+    all_keys = set(owlbear) | set(existing)
+    merged: dict = {}
+    for key in all_keys:
+        if key in _LOCATION_KEYS:
+            owlbear_inner = owlbear.get(key, {})
+            user_inner = existing.get(key, {})
+            # owlbear paths first, user paths override (user value wins on conflict)
+            merged[key] = {**owlbear_inner, **user_inner}
+        else:
+            # Shallow: existing user value takes priority
+            merged[key] = existing[key] if key in existing else owlbear[key]
+    return merged
+
+
+def _replace_placeholders(content: str, replacements: dict[str, str]) -> str:
+    """Replace all {{key}} tokens in content with the corresponding values."""
+    for key, value in replacements.items():
+        content = content.replace("{{" + key + "}}", value)
+    return content
+
+
+def _write_settings(src: Path, dest: Path, owlbear_path: str) -> None:
+    """Write .vscode/settings.json, merging with existing file if present (AC12)."""
+    template = src.read_text(encoding="utf-8")
+    template = _replace_placeholders(template, {"owlbear_path": owlbear_path})
+    owlbear_settings: dict = json.loads(template)
+
+    existing: dict = {}
+    if dest.exists():
+        with contextlib.suppress(json.JSONDecodeError):
+            existing = json.loads(dest.read_text(encoding="utf-8"))
+
+    merged = _merge_settings(owlbear_settings, existing)
+    dest.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+
+
+def _write_project_json(
+    src: Path,
+    dest: Path,
+    owlbear_path: str,
+    name: str,
+    project_type: str,
+) -> None:
+    """Write owlbear-project.json with computed fields.  Skips if dest already exists."""
+    if dest.exists():
+        return
+    template = src.read_text(encoding="utf-8")
+    template = _replace_placeholders(template, {"name": name, "type": project_type})
+    data: dict = json.loads(template)
+    data["owlbear_path"] = owlbear_path
+    data["created_at"] = datetime.now(tz=UTC).isoformat()
+    dest.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
+    """Write .vscode/mcp.json with five MCP server entries.
+
+    Generates five MCP server entries: github remote + four owlbear stdio
+    servers (kanban, knowledge, memory, project). Entries include owlbear-memory
+    (``-m owlbear_mcp_memory``) and its three siblings. Skips if already exists.
+
+    Args:
+        target_dir: Destination project directory.
+        owlbear_dir: Root of the owlbear installation (contains ``seed/``).
+    """
+    mcp_dest = target_dir / ".vscode" / "mcp.json"
+    if mcp_dest.exists():
+        return
+    mcp_src = owlbear_dir / "seed" / ".vscode" / "mcp.json"
+    owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
+    content = mcp_src.read_text(encoding="utf-8")
+    content = _replace_placeholders(content, {"owlbear_path": owlbear_path})
+    mcp_dest.parent.mkdir(parents=True, exist_ok=True)
+    mcp_dest.write_text(content, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
+def init(
+    target_dir: Path,
+    owlbear_dir: Path,
+    *,
+    name: str | None = None,
+    project_type: str = "bare",
+) -> None:
+    """Initialise an OwlBear workspace in *target_dir*.
+
+    Walks the seed/ tree inside *owlbear_dir*, copies static files, and
+    replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
+    Computed fields (owlbear_path, created_at) are generated here rather than
+    stored as template placeholders.
+
+    Idempotent: ``.vscode/mcp.json`` and ``owlbear-project.json`` are skipped
+    when they already exist.  ``settings.json`` is deep-merged per AC12.
+
+    Args:
+        target_dir: Destination project directory.
+        owlbear_dir: Root of the owlbear installation (contains ``seed/``).
+        name: Project name.  Defaults to *target_dir.name*.
+        project_type: Project type string.  Defaults to ``"bare"``.
+    """
+    seed_dir = owlbear_dir / "seed"
+    owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
+    resolved_name = name if name is not None else target_dir.name
+
+    for src in sorted(seed_dir.rglob("*")):
+        if src.is_dir():
+            continue
+
+        rel = src.relative_to(seed_dir)
+        rel_posix = rel.as_posix()
+
+        if src.name in _SKIP_NAMES:
+            continue
+
+        dest = target_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        # --- per-file dispatch ---
+
+        if rel_posix == ".vscode/settings.json":
+            _write_settings(src, dest, owlbear_path)
+            continue
+
+        if rel_posix == "owlbear-project.json":
+            _write_project_json(src, dest, owlbear_path, resolved_name, project_type)
+            continue
+
+        if rel_posix in _SKIP_IF_EXISTS_REL and dest.exists():
+            continue
+
+        if src.suffix in (".json", ".yml"):
+            content = src.read_text(encoding="utf-8")
+            content = _replace_placeholders(content, {"owlbear_path": owlbear_path})
+            dest.write_text(content, encoding="utf-8")
+        else:
+            shutil.copy2(src, dest)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":  # pragma: no cover
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Initialise an OwlBear workspace in the current directory."
+    )
+    parser.add_argument("--name", default=None, help="Project name (default: directory name)")
+    parser.add_argument(
+        "--type",
+        dest="project_type",
+        default="bare",
+        help="Project type (default: bare)",
+    )
+    args = parser.parse_args()
+
+    _target = Path.cwd()
+    _owlbear = Path(__file__).resolve().parent.parent
+    init(_target, _owlbear, name=args.name, project_type=args.project_type)
+    print(f"OwlBear workspace initialised in '{_target.name}'.")

@@ -1,0 +1,136 @@
+[tool.uv]
+native-tls = true
+
+[tool.uv.workspace]
+members = ["serve/*"]
+
+[dependency-groups]
+dev = [
+  "pytest>=9.0",
+  "pytest-asyncio>=0.25",
+  "pytest-cov>=6.0",
+  "pyyaml>=6.0",
+  "ruff>=0.15",
+  "strictyaml>=1.7",
+]
+validation = [
+  "skills-ref==0.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "serve"]
+addopts = "--import-mode=importlib -m 'not e2e'"
+norecursedirs = ["v1"]
+asyncio_mode = "strict"
+markers = [
+  "api: tests that require API integrations or network services",
+  "slow: tests that are long-running",
+  "integration: marks tests that require the kanban-md binary (deselect with -m 'not integration')",
+  "e2e: end-to-end tests requiring Copilot CLI on PATH (run explicitly with -m e2e)",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = [
+  "serve/orchestrator/src",
+  "serve/knowledge/src",
+  "serve/mcp-kanban/src",
+  "serve/mcp-knowledge/src",
+  "serve/mcp-memory/src",
+  "serve/mcp-project/src",
+  "serve/voice/src",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D1",     # missing docstring rules — not yet enforced
+  "COM812", # trailing comma — conflicts with formatter
+  "ISC001", # implicit string concatenation — conflicts with formatter
+  "S101",   # assert used — needed in tests
+  "N818",   # exception naming — pre-existing API names used in TestFromAC_* tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+".owlbear/scripts/*.py" = [
+  "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
+  "T201",   # print() is intentional in CLI scripts
+]
+"setup/*.py" = [
+  "INP001", # setup/ is not a package — direct-run scripts are expected here
+  "T201",   # print() is intentional in CLI scripts
+]
+"serve/*/examples/**/*.py" = [
+  "INP001", # examples/ is a script-style directory, not a package
+  "T201",   # print() is intentional in example output
+  "EM101",  # string literals in stub raises are acceptable in examples
+]
+"tests/**/*.py" = [
+  "ANN",     # type annotations not required in tests
+  "D",       # docstring rules not enforced in tests
+  "DTZ001",  # naive datetimes used intentionally in negative test cases
+  "E501",    # long assertion messages in test strings are acceptable
+  "EM102",   # f-string in exception message — acceptable in test helpers
+  "I001",    # isort — pre-existing test-writer files may have non-standard order
+  "N801",    # TestFromAC_* class naming convention required by test-writer workflow
+  "PERF401", # list comprehension recommendation — readability preference in tests
+  "PLW1510", # subprocess.run without check — intentional in test assertions
+  "PT001",   # pytest.raises usage — test-writer style preference
+  "RUF100",  # unused noqa — pre-existing marker suppression in test files
+  "S101",    # assert is fine in tests
+  "S105",    # token/password false positives in test assertions
+  "S106",    # hardcoded password in function args — test fixtures
+  "S603",    # subprocess security — test-controlled inputs
+  "S607",    # partial executable path — test-controlled commands
+  "SLF001",  # private member access — needed for white-box testing
+  "ERA001",  # commented-out code — section header comments
+  "PLR2004", # magic values are fine in tests
+  "PLC0415", # imports inside test functions are intentional
+  "TCH",     # type-checking blocks impractical in tests
+  "TRY003",  # exception messages — test helper functions
+  "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
+]
+"serve/*/tests/**/*.py" = [
+  "ANN",     # type annotations not required in tests
+  "D",       # docstring rules not enforced in tests
+  "DTZ001",  # naive datetimes used intentionally in negative test cases
+  "E501",    # long assertion messages in test strings are acceptable
+  "EM102",   # f-string in exception message — acceptable in test helpers
+  "I001",    # isort — pre-existing test-writer files may have non-standard order
+  "N801",    # TestFromAC_* class naming convention required by test-writer workflow
+  "PERF401", # list comprehension recommendation — readability preference in tests
+  "PLW1510", # subprocess.run without check — intentional in test assertions
+  "PT001",   # pytest.raises usage — test-writer style preference
+  "RUF100",  # unused noqa — pre-existing marker suppression in test files
+  "S101",    # assert is fine in tests
+  "S105",    # token/password false positives in test assertions
+  "S106",    # hardcoded password in function args — test fixtures
+  "S603",    # subprocess security — test-controlled inputs
+  "S607",    # partial executable path — test-controlled commands
+  "SLF001",  # private member access — needed for white-box testing
+  "ERA001",  # commented-out code — section header comments
+  "PLR2004", # magic values are fine in tests
+  "PLC0415", # imports inside test functions are intentional
+  "TCH",     # type-checking blocks impractical in tests
+  "TRY003",  # exception messages — test helper functions
+  "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.coverage.run]
+source_pkgs = [
+  "owlbear",
+  "owlbear_orchestrator",
+  "owlbear_knowledge",
+  "owlbear_mcp_kanban",
+  "owlbear_mcp_knowledge",
+  "owlbear_mcp_memory",
+  "owlbear_mcp_project",
+  "owlbear_voice",
+]
