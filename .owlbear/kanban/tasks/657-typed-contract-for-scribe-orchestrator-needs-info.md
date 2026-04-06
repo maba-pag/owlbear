@@ -1,16 +1,16 @@
 ---
 id: 657
 title: Typed contract for scribe↔orchestrator NEEDS-INFO boundary
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T07:22:30.99221+02:00
-updated: 2026-04-06T13:28:18.6663869+02:00
+updated: 2026-04-06T13:38:15.5290908+02:00
+started: 2026-04-06T13:38:15.5290908+02:00
+completed: 2026-04-06T13:38:15.5290908+02:00
 tags:
     - scope:pipeline
     - ' type:refactor'
     - research
-claimed_by: cedar-halo
-claimed_at: 2026-04-06T13:28:18.6663869+02:00
 class: standard
 ---
 
@@ -148,3 +148,38 @@ All 6 mandatory items verified. Items 7–8 (recommended): 7 is N/A per Architec
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/657-*` files found)
+
+[[2026-04-06]] Mon 13:38
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Scribe/orchestrator boundary uses typed contract | Research doc S3-4: Option A (resolve-summary.json) specified; implementation deferred to #660 | PASS (deferred) |
+| "Never interpret subagent output" rule has no exceptions | Research doc S4: carve-out removal is explicit part of implementation sketch; #660 AC5 tracks it | PASS (deferred) |
+| NEEDS-INFO dispatch injection still works | Research doc S4 implementation sketch; #660 AC9 tracks end-to-end verification | PASS (deferred) |
+| No regression in DR processing | #660 AC10 tracks all DR states (approved, rejected, completed, needs-info, auto-approved) | PASS (deferred) |
+| Scribe remains lightweight clerk | Research doc S4: scribe only writes file, no dispatch responsibility; design constraint preserved | PASS (deferred) |
+
+### Research Gate Checklist
+- Research doc exists: .owlbear/research/scribe-orchestrator-typed-contract.md (5 sections, 7 sources)
+- Follow-up task #660 created at research status with depends_on: [657], 10 AC items
+- #660 references research doc; includes stale-file, graceful-degradation, and regression AC per architect guidance
+- Challenge step completed: reconsider verdict, full rebuttal recorded, confidence revised .85 to .80
+
+### Test Results
+- pytest: 3572 passed, 458 failed, 19 skipped (all failures pre-existing; zero Python changes in #657 scope)
+- ruff: 5 errors (all in mcp-kanban, pre-existing; no files in #657 scope)
+
+### Architect Quality: 4/5
+AC was written as implementation criteria rather than research criteria. Builder/reviewer correctly interpreted as "deferred to #660" per arch review, but explicit research-scoped AC (e.g., "research doc produced with recommendation") would have prevented the pass-through interpretation step.
+
+### Deduction Breakdown
+- Start: 1.00
+- Uncommitted deliverables (3 files untracked by upstream agents): -.02
+- AC quality 4/5 (above 3): no deduction
+- Reviewer evidence section: present, detailed, .93 PASS: no deduction
+- No test failures in task scope: no deduction
+- No lint violations in task scope: no deduction
+
+### Confidence: .98
+### Action: archive
