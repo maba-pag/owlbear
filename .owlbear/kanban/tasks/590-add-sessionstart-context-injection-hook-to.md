@@ -1,14 +1,16 @@
 ---
 id: 590
 title: Add SessionStart context injection hook to pipeline agents (Phase 4)
-status: in-progress
+status: done
 priority: someday
 created: 2026-04-04T07:56:04.9327665+02:00
-updated: 2026-04-06T17:26:25.2888167+02:00
+updated: 2026-04-06T23:58:41.722819+02:00
 tags:
     - scope:agents
     - hooks
     - type:build
+claimed_by: path-dune
+claimed_at: 2026-04-06T23:58:41.722819+02:00
 class: standard
 ---
 
@@ -97,3 +99,97 @@ Test file: tests/test_session_context_hook_590.py | 7 classes: TestFromAC_Script
 **Re-run note:** test_doc_writer_has_hooks_section was passing (doc-writer already has a hooks: section with PreToolUse from #639 or similar). Tightened to test_doc_writer_has_hooks_section_with_session_start which asserts SessionStart is in the parsed hooks dict — now fails as required. All 32 FAIL confirmed.
 
 **Ongoing limitation:** deny-src-writes.ps1 absolute-path bug blocks replace_string_in_file from VS Code tools; used PowerShell Set-Content + uv run python workaround to patch the test file.
+
+[[2026-04-06]] Mon 23:05
+## Builder Notes
+
+### Files Changed
+- **Created:** `.owlbear/hooks/session-context.ps1` — reads stdin JSON, runs `git branch --show-current` + `git log --oneline -3 --no-decorate`, outputs `hookSpecificOutput` with `hookEventName: "SessionStart"` and pipe-separated `additionalContext`. Returns `{}` on empty/malformed stdin or git failures.
+- **Edited:** `share/agents/builder.agent.md` — added `SessionStart` hook alongside existing `PostToolUse`
+- **Edited:** `share/agents/test-writer.agent.md` — added `SessionStart` hook alongside existing `PreToolUse`
+- **Edited:** `share/agents/doc-writer.agent.md` — added `SessionStart` hook alongside existing `PreToolUse`
+
+### Test Results
+- **Before:** 32 FAILED (all TestFromAC_* classes)
+- **After:** 32 passed in 27.71s
+- **No TestBuilderDiscovered** tests needed — AC covered all edge cases
+
+### Lint
+- ruff: clean (test file + no Python changed in implementation)
+
+### Coverage
+- N/A — .ps1 script and .agent.md frontmatter only; no Python modules changed
+
+### Commit
+- `5f34a1b` feat: add SessionStart context injection hook to pipeline agents (#590, builder)
+
+[[2026-04-06]] Mon 23:37
+## Review Evidence
+
+### Test Results
+- **pytest:** 32 passed, 0 failed (independently run via quality-runner)
+- **ruff:** clean
+- **Coverage:** N/A — no Python modules changed (`.ps1` + `.agent.md` only)
+
+### Changed Files
+- `.owlbear/hooks/session-context.ps1` — created
+- `share/agents/builder.agent.md` — edited (SessionStart added)
+- `share/agents/test-writer.agent.md` — edited (SessionStart added)
+- `share/agents/doc-writer.agent.md` — edited (SessionStart + PreToolUse)
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Create `.owlbear/hooks/session-context.ps1` reading stdin JSON, running `git branch --show-current` + `git log --oneline -3 --no-decorate`, outputting `hookSpecificOutput` with `hookEventName: "SessionStart"` and pipe-separated `additionalContext` | File exists, confirmed non-empty, correct PS1 logic verified; TestFromAC_ScriptExists (2) pass | PASS |
+| AC2: Add SessionStart to builder, test-writer, doc-writer with `powershell -NoProfile -NonInteractive -File .owlbear/hooks/session-context.ps1` command | All three agent files read — correct hooks: section with exact command; TestFromAC_BuilderAgentHooks, TestFromAC_TestWriterAgentHooks, TestFromAC_DocWriterAgentHooks (6 each) pass | PASS |
+| AC3: Script returns `{}` on malformed JSON, empty stdin, git failures | TestFromAC_ErrorHandling (3 tests) pass; script has explicit checks with `exit 0` after `Write-Output '{}'` | PASS |
+| AC4: Script executes under 5 seconds | TestFromAC_Performance (1 test) passes | PASS |
+| AC5: All three agent files parse as valid YAML with no duplicate keys | `_frontmatter()` + `yaml.safe_load()` tests in each agent class; top-level key regex checks pass; 3 YAML validity tests + 3 duplicate-key tests all pass | PASS |
+| AC6: Conditional — swap to SubagentStart if SessionStart doesn't fire for subagents | Documented known limitation (.60 confidence); verified at build time; no test possible without runtime observation — correctly untested | PASS (conditional) |
+
+### Test Quality Assessment
+
+**Strengths:**
+- 7 test classes with 32 tests covering all AC sub-lines (AC1a–AC7c)
+- Windows-only PowerShell tests correctly skip on non-Windows via `@pytest.mark.skipif(sys.platform != "win32")`
+- YAML structural verification uses `yaml.safe_load()`, not naive string matching
+- Duplicate-key regex correctly anchors to `^[a-zA-Z]` so indented YAML keys are excluded
+- Error path test uses `tmp_path` (non-git dir) — exercising the actual failure mode
+
+**Minor weaknesses (documented, mitigated):**
+1. `test_*_session_start_hook_type_is_command`: checks `type:\s*command` anywhere in frontmatter — acknowledged by test-writer comment "also satisfied by PostToolUse". Mitigated by `test_*_frontmatter_is_valid_yaml` which parses YAML structure. **-0.02**
+2. Stale path references in docstrings and error message strings (`scripts/hooks/session-context.ps1`) — architect corrected the path to `.owlbear/hooks/` but `_SCRIPT_PATH` variable is correct. Messages won't mislead at runtime, only at error-time. **-0.02**
+
+### TestFromAC_* Integrity
+No builder modifications to `TestFromAC_*` classes detected. The test-writer note describes a test name change (`test_doc_writer_has_hooks_section` → `test_doc_writer_has_hooks_section_with_session_start`) made during the RED phase at Mon 17:26, before the builder's session Mon 23:05. Legitimate test tightening by test-writer. ✓
+
+### Security Review
+Script outputs only git metadata (branch name, commit hashes + subjects). Returns `{}` on any failure. No user input processed beyond JSON validation. No secrets or file system writes. No vectors. ✓
+
+### Deductions
+- Weak `type: command` assertion (mitigated by YAML parse tests): **-0.02**
+- Stale path in error messages: **-0.02**
+- Total deductions: **-0.04**
+
+### Verdict
+Confidence: **1.00 - 0.04 = .96** → **PASS**
+
+Action: advance to `docs`
+
+[[2026-04-06]] Mon 23:40
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | SessionStart hook added to 3 agents. `copilot-instructions.md` is 15 lines covering branching/repo structure only — no agent hooks or pipeline content to update. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. Changes are `.ps1` script + `.agent.md` frontmatter only. |
+| 3 | External attribution | No | N/A | VS Code hooks docs already attributed in `.owlbear/sources/overview.md` line 86 (task #37 section), explicitly citing `docs/research/sessionstart-context-injection-hook.md`. Pre-existing attribution covers this task. |
+| 4 | CLI changes | No | N/A | No CLI commands added or changed. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/sessionstart-context-injection-hook.md` exists. Linked from task body. Follow-up tasks: "none (this IS the implementation task)" — correct, no follow-ups required. |
+
+### Files Updated
+- None — all checklist items verified no-impact or already covered.
+
+### Scratch Files Cleaned
+- None — no `.owlbear/scratch/590-*` files found.
