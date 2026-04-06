@@ -1,16 +1,16 @@
 ---
 id: 616
 title: Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge
-status: in-progress
+status: done
 priority: nice-to-have
 created: 2026-04-05T00:16:00.8159576+02:00
-updated: 2026-04-06T06:53:54.0450454+02:00
+updated: 2026-04-06T12:53:24.2602517+02:00
 tags:
     - scope:mcp
     - phase-2
     - research
-blocked: true
-block_reason: 'DR pending: 616-scope-params-approval.md (re-created after scribe error)'
+claimed_by: storm-timber
+claimed_at: 2026-04-06T12:53:24.2602517+02:00
 class: standard
 ---
 
@@ -166,3 +166,116 @@ User requested additional analysis comparing three approaches instead of two. Cl
 "between the last and the current DR you dropped the 'Pursue dual-stack facade (original Option A) or ATTACH DATABASE (original Option B)' option that i requested extra info on. please try again and compare only 'Scope-based tool parameters + import/export' and 'dual-stack facade (original Option A)' and 'ATTACH DATABASE' options against each other. I need to understand what each one does, where it is saved, and what the pro/con for each are."
 
 Task remains blocked pending researcher response to clarification request.
+
+[[2026-04-06]] Mon 08:17
+## Research (three-way comparison — user clarification response)
+- New research doc: .owlbear/research/616-three-way-comparison.md
+- Compares all three options head-to-head per user request:
+  - A: Dual-Stack Facade — two live DBs, live access, but Qdrant cold-start 20-55s/restart, all handlers need merge logic, schema drift risk (~500-800 LOC)
+  - B: ATTACH DATABASE — two live files via single connection, but all ~20 SQL statements rewritten, same Qdrant/schema issues as A (~400-600 LOC)
+  - C: Scope Params + Import/Export — single DB, reuses #135 scope infra, no cold-start/drift, but requires explicit import step (~300 LOC, mostly written)
+- Updated DR: .owlbear/decisions/pending/616-scope-params-approval.md — now presents all three options with what/where/pro/con
+- Recommendation: Option C (.82 confidence). For single-user laptop, import step is negligible vs A/B's Qdrant cold-start and SQL rewrite cost
+- Key differentiator: Qdrant `:memory:` cold-start — A/B must re-embed both DBs on every restart; C avoids this entirely
+- If live access becomes important later, Option B is the best upgrade path from C
+
+## Decision Resolved
+
+**Option:** C: Scope Params + Import/Export
+
+**Rationale:** Single DB with scope params exposed on tool handlers. Import/export tools copy project data to main DB under scope `"project:{name}"`. Minimal code (~300 LOC), no Qdrant cold-start cost, no schema drift, reuses scope infrastructure.
+
+[[2026-04-06]] Mon 12:26
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+
+[[2026-04-06]] Mon 12:34
+## Review Evidence
+
+### Task Type
+Research task (tagged `research`). No implementation, no test surface. Test-writer and builder both passed through correctly. Review scope: research completeness, DR integrity, and follow-up task quality.
+
+---
+
+### Deliverables Verified
+
+| Deliverable | Expected | Found | Status |
+|-------------|----------|-------|--------|
+| Primary research doc | `.owlbear/research/project-local-knowledge-source.md` | Present (file_search confirmed) | PASS |
+| Three-way comparison doc | `.owlbear/research/616-three-way-comparison.md` | Present (file_search confirmed) | PASS |
+| Decision resolved (corrected) | `.owlbear/decisions/resolved/616-scope-params-approval.md` | Present; `response: approved`, `decision: "C: Scope Params + Import/Export"` | PASS |
+| Superseded DR (fabricated) | `.owlbear/decisions/resolved/616-scope-params-import-export.md` | Present — historical artifact, correctly documented as fabricated in task body | INFO |
+| Follow-up: #633 | Per-query scopes override | Archived, .96 reviewer confidence | PASS |
+| Follow-up: #617 | Scope params on tool signatures | Status: docs, .95 reviewer confidence | PASS |
+| Follow-up: #618 | Import/export tools | Archived, .93 reviewer confidence | PASS |
+
+---
+
+### Pass 1 — CRITICAL Checks
+
+**AC compliance:** Task AC was "Needs research and decomposition before implementation AC can be defined." All of the following were delivered: 3 research passes, user-requested three-way comparison doc, risk depth analysis (Qdrant cold-start, schema drift, effort calibration), properly approved DR, three follow-up tasks with verifiable AC that have all been completed and archived/documented. AC exceeded.
+
+**Scribe fabrication incident:** The first `Decision Resolved` section on 2026-04-05 was fabricated by the scribe (claimed "Approved — Option A" when user said "needs more information"). The error was self-detected and documented in the task body (`## Correction note`). A new DR was created and properly approved. The pipeline self-corrected. Final DR state is clean.
+
+**DR integrity verification:**
+- `616-scope-params-approval.md` in `resolved/` — frontmatter `response: approved`, `decision: "C: Scope Params + Import/Export"`, created 2026-04-06.
+- Notes field is blank (`notes: ""`). Decision rationale appears only in the task body "Decision Resolved" section — non-standard scribe pattern. Decision is genuine (DR is in resolved/ with approval), but the attribution chain is incomplete. Minor.
+- "Decision Resolved" section in task body: lacks timestamp and explicit agent attribution (uncharacteristic for scribe-appended sections). Given the corrected DR is in resolved/, this is a process quality note, not a blocking concern.
+
+**Three-way comparison quality:** Reviewed full doc. Covers all three options (A: Dual-stack, B: ATTACH DATABASE, C: Scope params) with: what/where/pro/con per option, tabular comparison on 7 dimensions, key differentiator (Qdrant cold-start), LOC estimates, recommendation at .82 confidence. User clarification request ("please try again and compare only those three") is fully addressed.
+
+**Security surface:** No code was written. No OWASP concerns applicable.
+
+**Test surface:** None applicable. Research tag is correct; test-writer and builder correctly passed through.
+
+---
+
+### Pass 2 — Informational
+
+- The dependency chain at close: #633 (archived) → #617 (docs) → #618 (archived). All downstream tasks resolved. The research parent's deliverables are fully propagated.
+- The 2nd arch review verdict was "APPROVE (note: based on incorrectly resolved DR)". The approval was given despite the DR being the fabricated one. However, the subsequent risk-depth research and three-way comparison were triggered correctly by the user, and the final DR is legitimate. Arch review quality is adequate.
+- The second `Decision Resolved` section in the task body was not authored through the standard scribe `end_work` note pattern. Correct approach would be a scribe note with timestamp appended to task body + DR notes populated. Not a blocking issue.
+
+---
+
+### AC Compliance Summary
+
+| Criterion | Evidence | Status |
+|-----------|----------|--------|
+| Research complete | 3 research passes, three-way comparison at user request | PASS |
+| User questions answered | Qdrant cost, schema drift risk, effort — all answered in risk-depth pass | PASS |
+| DR properly approved | `resolved/616-scope-params-approval.md`, `response: approved` | PASS |
+| Follow-up tasks created with verifiable AC | #617 (docs), #618 (archived), #633 (archived) — all finished | PASS |
+| Scribe error corrected | Documented in task body, corrected DR created and resolved | PASS |
+
+---
+
+### Deductions
+- DR `notes` field blank; decision rationale in task body only — non-standard scribe output. -0.02
+- "Decision Resolved" section lacks timestamp/agent attribution. -0.02
+- 2nd arch review approved on basis of fabricated DR (self-noted, but review missed the fabrication): -0.03
+
+### Verdict
+Confidence: **.93** → **PASS**
+
+[[2026-04-06]] Mon 12:37
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Research task — no implementation, no code changes, no API added |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | Yes | Verified | `.owlbear/sources/overview.md` §67 — "Project-Local Knowledge Source (Task #616)": LightRAG, Mem0, SQLite ATTACH, OwlBear #135 (4 external + 1 internal). All logged during validation pass. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research docs | Yes | Verified | `.owlbear/research/project-local-knowledge-source.md` present; `.owlbear/research/616-three-way-comparison.md` present. Both linked from task body. Follow-ups #617, #618, #633 all resolved. |
+
+### Scratch Files
+No `.owlbear/scratch/616-*` files found — nothing to clean.
+
+### Files Updated
+None — all documentation already in place from research pipeline.
+
+### Verdict
+PASS — research task, all deliverables present and verified. No new documentation required.
