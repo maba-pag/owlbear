@@ -52,16 +52,16 @@ class TestFromAC_VscodeSettingsNoDualPath:
 
 
 class TestFromAC_SetupPyNoDualPath:
-    """AC3: scripts/setup.py must not generate the .github/skills agentSkillsLocations path."""
+    """AC3: setup/init.py must not generate the .github/skills agentSkillsLocations path."""
 
     def _setup_py_text(self) -> str:
-        return (_REPO_ROOT / "scripts" / "setup.py").read_text(encoding="utf-8")
+        return (_REPO_ROOT / "setup" / "init.py").read_text(encoding="utf-8")
 
     def test_setup_py_no_github_skills_reference(self) -> None:
-        """scripts/setup.py must not contain a .github/skills key in agentSkillsLocations."""
+        """setup/init.py must not contain a .github/skills key in agentSkillsLocations."""
         content = self._setup_py_text()
         assert ".github/skills" not in content, (
-            "scripts/setup.py still contains a .github/skills reference "
+            "setup/init.py still contains a .github/skills reference "
             "(line 36) — must be removed"
         )
 

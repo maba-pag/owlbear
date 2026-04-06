@@ -41,13 +41,11 @@ Record: passed/failed counts from the `## Tests` section of the Quality-Runner r
 
 #### Fallback: Quality-Runner Unavailable
 
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
-```powershell
-uv run pytest tests/test_{module}.py -q --tb=short
 ```
-
-See `h-pytest-and-linting` for flags and known pitfalls.
+end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run tests independently")
+```
 
 ## Step 2.5 — Parallel Fan-Out Dispatch
 
@@ -93,13 +91,11 @@ Record: `clean: true/false` and any `violations` from the `## Lint` section.
 
 #### Fallback: Quality-Runner Unavailable
 
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
-```powershell
-uv run ruff check serve/ tests/
 ```
-
-See `h-pytest-and-linting` for flags and known pitfalls.
+end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run lint independently")
+```
 
 ## Step 4 — Run Coverage
 
@@ -119,13 +115,11 @@ Verify touched modules have 90% coverage or higher from the `## Coverage` sectio
 
 #### Fallback: Quality-Runner Unavailable
 
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
-```powershell
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 ```
-
-See `h-pytest-and-linting` for exact flags and known pitfalls.
+end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run coverage independently")
+```
 
 ## Step 5 — Pass 1: CRITICAL Checks
 

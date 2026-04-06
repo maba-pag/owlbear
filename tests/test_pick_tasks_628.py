@@ -1,4 +1,4 @@
-﻿"""Failing tests for task #628: pick_tasks tag parameter passthrough.
+"""Failing tests for task #628: pick_tasks tag parameter passthrough.
 
 Covers all AC items from #628:
   - pick_tasks signature extended to (limit: int = 25, tag: str = "") -> dict
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import typing
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -83,10 +84,11 @@ class TestFromAC_PickTasksTagSignature:
         sig = inspect.signature(pick_tasks)
         assert sig.parameters["tag"].default == ""
 
+
     def test_tag_parameter_annotation_is_str(self) -> None:
         """The `tag` parameter annotation is str (not str | None)."""
-        sig = inspect.signature(pick_tasks)
-        assert sig.parameters["tag"].annotation is str
+        hints = typing.get_type_hints(pick_tasks)
+        assert hints["tag"] is str
 
 
 # ---------------------------------------------------------------------------
@@ -189,3 +191,4 @@ class TestFromAC_PickTasksTagBehavioralPreservation:
         positional_args = list(mock_run.call_args[0])
         assert "--tag" in positional_args
         assert positional_args[positional_args.index("--tag") + 1] == "phase-2"
+

@@ -49,15 +49,11 @@ prompt: |
 
 #### Fallback: Quality-Runner Unavailable
 
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
-```powershell
-uv run pytest tests/test_{module}.py -q --tb=short
-uv run ruff check serve/ tests/
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 ```
-
-See `h-pytest-and-linting` for exact flags and known pitfalls.
+end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run tests, lint, or coverage independently")
+```
 
 ## Verdict
 

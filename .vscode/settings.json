@@ -50,18 +50,7 @@
     "share/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
-  "chat.tools.edits.autoApprove": {
-    "**/.git/**": false,
-    "**/.vscode/*.json": false,
-    "**/{package.json,package-lock.json,server.xml,build.rs,web.config,.gitattributes,.env}": false,
-    "**/*": true,
-    "**/*.{code-workspace,csproj,fsproj,vbproj,vcxproj,proj,targets,props}": false
-  },
   "chat.tools.terminal.autoApprove": {
-    "ForEach-Object": true,
-    ".owlbear\\kanban\\kanban-md.exe": true,
-    "Out-File": true,
-    "Tee-Object": true,
     "Test-Path": true,
     "uv run coverage": true,
     "uv run pytest": true,
@@ -90,9 +79,9 @@
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,
     "**/*.egg-info": true,
-    ".owlbear/scratch": true,
     "v1/.venv": true
   },
+  "git.autorefresh": false,
   "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
   "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
@@ -134,15 +123,18 @@
   "python.testing.pytestEnabled": true,
   "redhat.telemetry.enabled": false,
   "ruff.importStrategy": "useBundled",
+  "scm.countBadge": "off",
+  "scm.defaultViewMode": "tree",
+  "scm.graph.pageOnScroll": false,
   "search.exclude": {
+    ".owlbear/kanban/activity.jsonl": true,
+    ".owlbear/kanban/v1-archive/**": true,
+    ".owlbear/scratch/**": true,
     ".venv": true,
     "**/__pycache__": true,
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,
     "**/*.egg-info": true,
-    ".owlbear/scratch/**": true,
-    ".owlbear/kanban/activity.jsonl": true,
-    ".owlbear/kanban/v1-archive/**": true,
     "v1/.venv": true,
     "v1/**": true
   },

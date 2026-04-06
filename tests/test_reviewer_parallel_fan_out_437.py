@@ -21,20 +21,13 @@ ROOT = Path(__file__).parent.parent
 REVIEWER_AGENT = ROOT / "share" / "agents" / "reviewer.agent.md"
 CODE_REVIEW_SKILL = ROOT / "share" / "skills" / "w-code-review" / "SKILL.md"
 
-# Exact 16-entry tools baseline for reviewer.agent.md (AC 2 regression guard)
+# Exact 8-entry tools baseline for reviewer.agent.md (AC 2 regression guard)
+# Updated by #457/#458: execute/* tools and read/terminalLastCommand removed.
 EXPECTED_TOOLS: list[str] = [
     "vscode/memory",
-    "execute/testFailure",
-    "execute/getTerminalOutput",
-    "execute/awaitTerminal",
-    "execute/killTerminal",
-    "execute/createAndRunTask",
-    "execute/runInTerminal",
-    "execute/runTests",
     "read/problems",
     "read/readFile",
     "read/viewImage",
-    "read/terminalLastCommand",
     "agent",
     "search",
     "owlbear-kanban/*",
@@ -89,17 +82,20 @@ class TestFromAC_ReviewerParallelFanOut:
 
     # --- AC 2: tools: matches 16-entry baseline (regression guard, PASSES throughout) ---
 
-    def test_reviewer_tools_count_is_16(self) -> None:
-        """reviewer.agent.md tools: must have exactly 16 entries (regression guard)."""
+    def test_reviewer_tools_count_is_8(self) -> None:
+        """reviewer.agent.md tools: must have exactly 8 entries (regression guard).
+
+        Updated by #457/#458: execute/* tools and read/terminalLastCommand removed.
+        """
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert len(tools) == 16, (
-            f"Expected exactly 16 tools entries, got {len(tools)}. "
+        assert len(tools) == 8, (
+            f"Expected exactly 8 tools entries, got {len(tools)}. "
             f"Current tools: {tools}"
         )
 
     def test_reviewer_tools_contains_all_baseline_entries(self) -> None:
-        """reviewer.agent.md tools: must contain all 16 baseline entries (regression guard)."""
+        """reviewer.agent.md tools: must contain all 8 baseline entries (regression guard)."""
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         missing = [t for t in EXPECTED_TOOLS if t not in tools]

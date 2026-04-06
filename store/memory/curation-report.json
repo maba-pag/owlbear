@@ -1,0 +1,22 @@
+[
+  {
+    "cycle": "2026-04-06",
+    "note": "Zero-entry cycle - MCP database empty (0 pending), file-based inbox empty. No new entries to process.",
+    "catalog_audit": {
+      "cross_file_duplicates": [
+        {
+          "finding": "CWE-22 path traversal: use is_relative_to() not startswith()",
+          "files": ["process-patterns.md", "ruff-and-lint-discipline.md"],
+          "evidence": "#143-reviewer (both)",
+          "recommendation": "Consolidate: keep canonical in ruff-and-lint-discipline.md; remove duplicate from process-patterns.md on next user-confirmed cleanup"
+        },
+        {
+          "finding": "uv run python -m pytest more reliable than uv run pytest on Windows",
+          "files": ["terminal-output-isolation.md", "uv-and-python-tooling.md"],
+          "evidence": "#76-builder (both)",
+          "recommendation": "Consolidate: canonical in uv-and-python-tooling.md; restatement in terminal-output-isolation.md adds no signal - remove on next user-confirmed cleanup"
+        }
+      ]
+    }
+  }
+]
