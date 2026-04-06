@@ -1,0 +1,52 @@
+name: Sync dev to main
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout dev branch
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 1
+
+      - name: Validate include-list paths exist on dev
+        run: |
+          failed=0
+          for p in share serve seed setup pyproject.toml uv.lock .python-version .gitignore SECURITY.md README-consumer.md; do
+            if [ ! -e "$p" ]; then
+              echo "MISSING: $p"
+              failed=1
+            fi
+          done
+          if [ $failed -ne 0 ]; then
+            echo "Include-list validation failed -- one or more required paths are absent on dev."
+            exit 1
+          fi
+          echo "All include-list paths present."
+
+      - name: Build clean consumer tree
+        run: |
+          TREE=$(mktemp -d)
+          cp -r share serve seed setup "$TREE/"
+          cp pyproject.toml uv.lock .python-version .gitignore SECURITY.md "$TREE/"
+          cp README-consumer.md "$TREE/README.md"
+          echo "TREE=$TREE" >> "$GITHUB_ENV"
+
+      - name: Create orphan commit and force-push to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          cd "$TREE"
+          git init
+          git add -A
+          git commit -m "sync: update from dev (workflow dispatch)"
+          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push origin HEAD:main --force
