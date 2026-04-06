@@ -1,10 +1,12 @@
 ---
 id: 613
 title: Create GitHub Actions sync workflow (dev to main)
-status: done
+status: archived
 priority: needed
 created: 2026-04-04T21:55:26.1899523+02:00
-updated: 2026-04-06T19:20:44.7017132+02:00
+updated: 2026-04-06T19:24:04.4464041+02:00
+started: 2026-04-06T19:24:04.4464041+02:00
+completed: 2026-04-06T19:24:04.4464041+02:00
 tags:
     - scope:infra
     - type:build
@@ -14,8 +16,6 @@ parent: 610
 depends_on:
     - 611
     - 612
-claimed_by: stem-flint
-claimed_at: 2026-04-06T19:20:44.6968313+02:00
 class: standard
 ---
 
@@ -247,3 +247,44 @@ Confidence: .96 → PASS
 
 ### Scratch Files Cleaned
 - None found
+
+[[2026-04-06]] Mon 19:24
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: file exists at .github/workflows/sync-to-main.yml | File present on disk and committed | PASS |
+| AC2: workflow_dispatch only trigger | on: block contains only workflow_dispatch: (L3-4), no push/schedule/PR | PASS |
+| AC3: exact include list, nothing else | cp -r share serve seed setup, cp pyproject.toml uv.lock .python-version .gitignore SECURITY.md, cp README-consumer.md as README.md (L38-43). No other copies. | PASS |
+| AC4: validate paths, exit 1 on missing | Loop iterates full include list, sets failed=1 on missing, exit 1 when failed ne 0 (L24-35) | PASS |
+| AC5: orphan commit, force-push, exact message | git init (L47), git commit -m "sync: update from dev (workflow dispatch)" (L50), git push origin HEAD:main force (L52) | PASS |
+| AC6: .gitignore copied as-is | cp .gitignore in plain copy line (L41) | PASS |
+| AC7: GITHUB_TOKEN + contents:write | permissions: contents: write (L10-11), x-access-token secrets.GITHUB_TOKEN in push URL (L51) | PASS |
+
+### Test Results
+- pytest: 2 skipped, 0 failed. 1 pre-existing collection error (test_planner_gates.py from #207, unrelated import issue)
+- ruff: 5 violations in serve/mcp-kanban/ (pre-existing, unrelated to #613 YAML-only deliverable)
+
+### Architect Quality: 5/5
+ACs refined from 9 to 7 precise, verifiable lines through challenger review. Validation checkpoint added (AC4). Self-contained include-list (AC3). Edge cases documented in Notes (branch protection, .gitignore, dry-run as future-only). No gaps requiring builder improvisation.
+
+### Deduction Breakdown
+Starting at 1.00:
+- AC lines with no evidence: 0 (all 7 PASS) = 0.00
+- Lint violations in task scope: 0 (YAML-only, no Python) = 0.00
+- AC quality score 3 or below: No (5/5) = 0.00
+- Missing reviewer evidence: No (detailed, two cycles with PASS at 0.96) = 0.00
+- Full-suite test failures in task scope: 0 (pre-existing #207 error only) = 0.00
+
+### Process Note
+Deliverable had uncommitted builder cycle-2 fixes. Commit 066bdd7 (from a different context) re-introduced the dry-run scope violation after the reviewer rejected it. Builder's corrective changes were on disk but unstaged. Committed as leftover per Step 4.
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 6c3a3ed | feat | .github/workflows/sync-to-main.yml | #613 |
+| e7e30e6 | fix | .github/workflows/sync-to-main.yml | #613 |
+| 0bb2f8b | fix | .github/workflows/sync-to-main.yml, kanban task | #613 |

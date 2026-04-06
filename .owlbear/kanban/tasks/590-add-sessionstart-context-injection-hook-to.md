@@ -1,16 +1,16 @@
 ---
 id: 590
 title: Add SessionStart context injection hook to pipeline agents (Phase 4)
-status: done
+status: archived
 priority: someday
 created: 2026-04-04T07:56:04.9327665+02:00
-updated: 2026-04-06T23:58:41.722819+02:00
+updated: 2026-04-07T00:10:42.319204+02:00
+started: 2026-04-07T00:10:42.319204+02:00
+completed: 2026-04-07T00:10:42.319204+02:00
 tags:
     - scope:agents
     - hooks
     - type:build
-claimed_by: path-dune
-claimed_at: 2026-04-06T23:58:41.722819+02:00
 class: standard
 ---
 
@@ -193,3 +193,33 @@ Action: advance to `docs`
 
 ### Scratch Files Cleaned
 - None — no `.owlbear/scratch/590-*` files found.
+
+[[2026-04-07]] Tue 00:10
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Create session-context.ps1 with stdin JSON, git commands, hookSpecificOutput | Script verified: 3 error paths return {}, git branch + log, ConvertTo-Json output; TestFromAC_ScriptExists (2 tests) pass | PASS |
+| AC2: Add SessionStart to builder, test-writer, doc-writer agent files | grep confirmed SessionStart at L12 in all 3 agent files; TestFromAC_*AgentHooks (6 tests each) pass | PASS |
+| AC3: Script returns {} on malformed JSON, empty stdin, git failures | 3 explicit Write-Output '{}'; exit 0 blocks in script; TestFromAC_ErrorHandling (3 tests) pass | PASS |
+| AC4: Script executes under 5 seconds | TestFromAC_Performance (1 test) passes | PASS |
+| AC5: All three agent files valid YAML, no duplicate keys | yaml.safe_load + duplicate-key regex tests pass for all 3 agents | PASS |
+| AC6: SubagentStart fallback if SessionStart doesn't fire for subagents | Documented known limitation (.60 confidence), zero-harm if absent, properly untestable without runtime | PASS (conditional) |
+
+### Test Results
+- pytest: 32 passed, 0 failed (task-scoped); full suite has no failures in #590 scope (pre-existing failures in unrelated tasks only)
+- ruff: clean on task files
+
+### Architect Quality: 4/5
+AC was well-specified after 7 architect refinements. Output format, error handling, YAML validity, and fallback strategy all explicit. Minor gap: AC6 conditional is inherently untestable but properly documented with risk assessment.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 6 have evidence) = 0
+- Lint violations in scope: 0 = 0
+- AC quality score 4 (> 3): 0
+- Missing reviewer evidence: not missing, detailed PASS = 0
+- Full-suite failures in task scope: 0 = 0
+- Conditional AC6 untestable: -.02
+
+### Confidence: .98
+### Action: archive

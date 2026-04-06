@@ -1,10 +1,12 @@
 ---
 id: 647
 title: 'P4-07: Create architect-voice.agent.md'
-status: done
+status: archived
 priority: needed
 created: 2026-04-06T07:01:27.4188843+02:00
-updated: 2026-04-07T00:30:29.0468029+02:00
+updated: 2026-04-07T00:41:55.7261438+02:00
+started: 2026-04-07T00:41:55.7261438+02:00
+completed: 2026-04-07T00:41:55.7261438+02:00
 tags:
     - phase-4
     - ' scope:ideator'
@@ -12,8 +14,6 @@ tags:
 depends_on:
     - 644
     - 645
-claimed_by: lime-helm
-claimed_at: 2026-04-07T00:30:29.0445798+02:00
 class: standard
 ---
 
@@ -217,3 +217,46 @@ None — no docs impact.
 
 ### Scratch Files
 None found matching `.owlbear/scratch/647-*`.
+
+[[2026-04-07]] Tue 00:41
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| File exists with valid YAML frontmatter | share/agents/architect-voice.agent.md L1-10, 9-field frontmatter | PASS |
+| user-invocable: false | L5 | PASS |
+| model: Claude Opus 4.6 (copilot) | L7 | PASS |
+| Domain: system design, structure, patterns, component integration | L13 persona text | PASS |
+| Reads: context.md, decisions.md, optionally research-notes.md | L51-57 Input Contract table | PASS |
+| Writes: voices/architect.md + voices/architect-debate.md | L61-75 Output Contract | PASS |
+| Embedded Critic loop ≤5 cycles, invokes critic-voice | L31-40 Voice Reasoning Cycle | PASS |
+| Persona strong opinions, not neutral | L14 "not a neutral summariser" | PASS |
+| agents: [critic-voice] | L9 | PASS |
+| disable-model-invocation: true | L6 | PASS |
+| Tool set exactly 8 | L8 all 8 listed | PASS |
+| argument-hint present | L4 | PASS |
+
+### Test Results
+- pytest: 3867 passed, 434 failed (all pre-existing, 0 in task scope), 19 skipped. 1 collection error (test_planner_gates.py, pre-existing #207).
+- ruff: 5 violations (all pre-existing in serve/mcp-kanban/, 0 in task scope)
+
+### Architect Quality: 5/5
+Specific, complete AC. 3 refinements added (disable-model-invocation, exact tool set, argument-hint). Template pattern and naming coexistence documented. Clean implementation path.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 12 verified)
+- Lint violations in scope: 0
+- AC quality deduction: 0
+- Missing reviewer section: 0
+- Suite failures in scope: 0
+
+### Confidence: 1.00
+### Action: archive
+
+### Note
+Builder did not commit deliverable (file was untracked). Committed as leftover in audit step.
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 9172d7b | feat | share/agents/architect-voice.agent.md, .owlbear/research/architect-voice-agent.md | #647 |

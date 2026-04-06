@@ -1,10 +1,12 @@
 ---
 id: 663
 title: Document type:user-action convention in r-pipeline-protocol and agent-common
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-04-06T16:39:07.7325145+02:00
-updated: 2026-04-06T18:47:23.5772942+02:00
+updated: 2026-04-06T23:18:31.3354218+02:00
+started: 2026-04-06T23:18:31.3354218+02:00
+completed: 2026-04-06T23:18:31.3354218+02:00
 tags:
     - phase-3
     - scope:agent-config
@@ -72,3 +74,107 @@ Skipped — no novel recommendation; documenting existing convention from #661 (
 ## Test-Writer Notes
 - Non-implementation task (tagged type:docs) — no tests applicable.
 - Passing through to builder.
+
+[[2026-04-06]] Mon 21:50
+## Builder Notes
+
+### Files Changed
+- `share/skills/r-pipeline-protocol/SKILL.md` — inserted `### User-Action Tasks` subsection (~50 lines) between `### Decision Tiers` and `### Handoff` in §5 Escalation
+- `share/instructions/agent-common.instructions.md` — appended `## User-Action Detection Responsibilities` section with 5-row agent responsibility table
+- `share/skills/r-project-standards/SKILL.md` — expanded Type row with `type:user-action` and added behavioral note row
+
+### AC Coverage
+- AC1 ✅ r-pipeline-protocol §5 has `### User-Action Tasks` with: tag purpose, detection heuristics table (4 rows), blocking flow (7-step), post-completion fast-path, dual-nature guidance
+- AC2 ✅ agent-common has `## User-Action Detection Responsibilities` with 5-row table (researcher/architect/orchestrator/test-writer+builder+reviewer/auditor)
+- AC3 ✅ Dry-run scenario in r-pipeline-protocol subsection — 8-step walkthrough showing 2 cycles vs #597's 4+ futile cycles
+- AC4 ✅ r-project-standards Type row updated with `type:user-action` + pipeline-behavior note referencing r-pipeline-protocol §5
+
+### Test Results
+Non-implementation task (type:docs) — no tests applicable.
+
+### Lint
+No Python files changed — no ruff run required.
+
+### Notes
+Retry: previous attempt treated as pure non-impl pass-through without writing documentation. This attempt performs the actual documentation work as the AC specifies.
+
+[[2026-04-06]] Mon 22:31
+## Review Evidence
+
+### Type:docs Review
+Non-implementation task (type:docs) — no tests, no lint applicable.
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: r-pipeline-protocol §5 `### User-Action Tasks` subsection (tag purpose, heuristics, blocking flow, post-completion flow) | share/skills/r-pipeline-protocol/SKILL.md §5: purpose statement ✓; 4-row heuristics table ✓; 7-step blocking flow ✓; post-completion fast-path ✓; dual-nature guidance ✓ | PASS |
+| AC2: agent-common detection responsibility table | share/instructions/agent-common.instructions.md: `## User-Action Detection Responsibilities` 5-row table (researcher/architect/orchestrator/test-writer+builder+reviewer/auditor), Responsibility + Action columns ✓ | PASS |
+| AC3: Dry-run scenario showing #597-style loop prevented | share/skills/r-pipeline-protocol/SKILL.md §5: 8-step walkthrough, result note "2 architect cycles vs #597's 4+ futile cycles" ✓ | PASS |
+| AC4: r-project-standards tags section updated | share/skills/r-project-standards/SKILL.md §5 L83-84: Type row expanded with `type:user-action`, behavioral note row with r-pipeline-protocol §5 cross-reference ✓ | PASS |
+
+### Structural Verification
+- Subsection placement: between `### Decision Tiers` and `### Handoff` — matches research insertion points
+- Cross-references consistent across all three files
+- agent-common table appended after existing Per-Agent Section Mapping table as specified
+
+### Deductions
+0
+
+### Verdict
+confidence: .97 → PASS #663 -> docs
+
+[[2026-04-06]] Mon 23:03
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A (already in target files) | New `type:user-action` convention documented in 3 skill/instruction files by builder. `.github/copilot-instructions.md` covers only project identity and repo branches — no pipeline/tag content to update. |
+| 2 | Module docstrings | No | N/A | No Python files modified. |
+| 3 | External attribution | No | N/A | Research notes confirm all sources internal (parent #661 research + target files). |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/document-type-user-action-convention.md` exists; linked in task body under `## Research`. |
+
+### Content Verification
+- `r-pipeline-protocol/SKILL.md` §5: `### User-Action Tasks` subsection present between `### Decision Tiers` and `### Handoff` — tag purpose ✓, 4-row detection heuristics table ✓, 7-step blocking flow ✓, post-completion fast-path ✓, dual-nature guidance ✓, 8-step dry-run scenario (#597 reference) ✓
+- `agent-common.instructions.md`: `## User-Action Detection Responsibilities` present with 5-row table (researcher/architect/orchestrator/test-writer+builder+reviewer/auditor), cross-reference to r-pipeline-protocol §5 ✓
+- `r-project-standards/SKILL.md` L83–84: Type row expanded with `type:user-action`; behavioral note row with r-pipeline-protocol §5 cross-reference ✓
+
+### Files Updated
+- None — builder committed all documentation changes; no gaps found.
+
+### Scratch Files Cleaned
+- None — no `.owlbear/scratch/663-*` files found.
+
+[[2026-04-06]] Mon 23:18
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: r-pipeline-protocol S5 User-Action Tasks subsection | SKILL.md L203-244: tag purpose, 4-row heuristics table, 7-step blocking flow, post-completion fast-path, dual-nature guidance | PASS |
+| AC2: agent-common detection responsibility table | agent-common.instructions.md L24-36: 5-row table (researcher/architect/orchestrator/test-writer+builder+reviewer/auditor) | PASS |
+| AC3: Dry-run scenario showing #597-style loop prevented | SKILL.md L235-244: 8-step walkthrough, result "2 architect cycles vs #597's 4+ futile cycles" | PASS |
+| AC4: r-project-standards tags section updated | SKILL.md L83-84: Type row expanded with type:user-action + behavioral note with r-pipeline-protocol S5 cross-reference | PASS |
+
+### Test Results
+- pytest: 3201 passed, 420 failed (all pre-existing, unrelated to #663), 18 skipped. No cross-task regressions from this task.
+- ruff: N/A (no Python files changed)
+
+### Architect Quality: 4/5
+AC lines are specific and verifiable. AC3 placement not explicit in AC text but clarified in research insertion points (minor gap, not blocking).
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (deduction: 0)
+- Lint violations: 0 (deduction: 0)
+- AC quality score 4/5: no deduction
+- Reviewer evidence section: present, detailed, PASS at .97 (deduction: 0)
+- Full-suite failures in task scope: 0 (deduction: 0)
+- Builder deliverables uncommitted: -.02
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7e27723 | docs | r-pipeline-protocol/SKILL.md, agent-common.instructions.md, r-project-standards/SKILL.md | #663 |

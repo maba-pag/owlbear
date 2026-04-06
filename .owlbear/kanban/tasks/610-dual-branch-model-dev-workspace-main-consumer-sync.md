@@ -1,10 +1,12 @@
 ---
 id: 610
 title: 'Dual-branch model: dev (workspace) + main (consumer sync)'
-status: done
+status: archived
 priority: critical
 created: 2026-04-04T21:54:46.295562+02:00
-updated: 2026-04-06T22:00:21.5592922+02:00
+updated: 2026-04-06T22:14:23.5990048+02:00
+started: 2026-04-06T22:14:23.5990048+02:00
+completed: 2026-04-06T22:14:23.5990048+02:00
 tags:
     - scope:infra
     - type:restructure
@@ -12,8 +14,6 @@ tags:
     - type:config
 depends_on:
     - 598
-claimed_by: dale-port
-claimed_at: 2026-04-06T22:00:21.5592922+02:00
 class: standard
 ---
 
@@ -255,3 +255,37 @@ PASS | confidence 1.00
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/610-*` files found)
+
+[[2026-04-06]] Mon 22:14
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: #611 archived, dev branch on origin, default=main | show_task #611 status=archived; `git branch -r` shows `origin/dev`; prior auditor confirmed `origin/HEAD` to `origin/main` | PASS |
+| AC2: #612 archived, README-consumer.md at repo root | show_task #612 status=archived; `Test-Path README-consumer.md` returns True | PASS |
+| AC3: #613 archived, sync-to-main.yml, workflow_dispatch only | show_task #613 status=archived; `Test-Path .github/workflows/sync-to-main.yml` returns True; file trigger is `workflow_dispatch` only (verified by #613 reviewer) | PASS |
+| AC4: #614 archived, skills-ref in optional group | show_task #614 status=archived; pyproject.toml L16-17: `validation = ["skills-ref==0.1.1"]`, absent from dev group | PASS |
+| AC5: #615 archived, first sync validated | show_task #615 status=archived; #615 auditor independently verified clean main branch via `git ls-tree origin/main`; reviewer .92 PASS, auditor .98 | PASS |
+
+### Test Results
+- pytest: 3169 passed, 452 failed (all pre-existing RED-phase tests from other tasks: voice package, planner gates, etc.), 18 skipped, 1 collection error (test_planner_gates.py import, pre-existing). Zero regressions from #610.
+- ruff: 5 pre-existing issues in mcp-kanban (SIM117 x3, PLR0915, RUF059). Zero from #610.
+
+### Architect Quality: 5/5
+AC refined from vague implementation mix to 5 specific verification ACs, each tied 1:1 to a subtask. Architecture review was thorough (10-criterion eval), converted task to umbrella pattern matching precedent (#19, #20). Clean path.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 5 verified via show_task + file checks)
+- Lint violations from task: 0
+- AC quality deduction: 0 (score 5/5)
+- Missing reviewer evidence: 0 (present, detailed, PASS at 1.00 on 2nd cycle)
+- Full-suite failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| a800de4 | docs | copilot-instructions.md, README.md | #610 (doc-writer) |
+| 9471ac7 | chore | kanban board, activity log | #610 (auditor) |

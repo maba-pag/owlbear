@@ -1,18 +1,18 @@
 ---
 id: 658
 title: Deprecate w-project-scoping SKILL.md frontmatter and body
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T07:23:34.0157731+02:00
-updated: 2026-04-06T21:22:01.9136821+02:00
+updated: 2026-04-06T21:29:23.87231+02:00
+started: 2026-04-06T21:29:23.87231+02:00
+completed: 2026-04-06T21:29:23.87231+02:00
 tags:
     - phase-4
     - ' scope:ideator'
     - ' type:chore'
 depends_on:
     - 643
-claimed_by: tide-thyme
-claimed_at: 2026-04-06T21:22:01.9121627+02:00
 class: standard
 ---
 
@@ -152,3 +152,38 @@ All 5 AC items satisfied by direct file evidence. Non-impl pass-through correctl
 
 ### Scratch Files Cleaned
 - None — no `.owlbear/scratch/658-*` files found.
+
+[[2026-04-06]] Mon 21:29
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| description = "Workflow (DEPRECATED): ..." | SKILL.md L3 exact match | PASS |
+| Deprecation banner after frontmatter | SKILL.md L8 exact match | PASS |
+| Body content preserved below banner | SKILL.md L10-L60 intact (Steps 0-5, schema) | PASS |
+| user-invocable remains true | SKILL.md L4 confirmed | PASS |
+| test_argument_hint_skills.py passes | 4/4 ProjectDefinitionArgumentHint tests pass | PASS |
+
+### Test Results
+- pytest: 4/4 in-scope tests pass. Pre-existing failures: test_planner_gates.py (import error, #207), 16 RED tests in test_argument_hint_skills.py (other skills, not w-project-scoping). None in task scope.
+- ruff: 5 pre-existing issues in serve/mcp-kanban/ only. None in task scope.
+
+### Architect Quality: 4/5
+Well-specified AC with exact string values, file references, and named test file. Task was redundant (subsumed by parent #643) but AC quality itself is solid.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 5 verified)
+- Lint violations in scope: 0
+- AC quality <= 3: no (4/5)
+- Missing reviewer evidence: no (detailed section present)
+- Full-suite failures in scope: 0
+Total deductions: 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 98727c1 | chore | share/skills/w-project-scoping/SKILL.md | #643 (parent, deliverable) |
+| 0443366 | chore | kanban task + activity | #658 |

@@ -1,17 +1,17 @@
 ---
 id: 665
 title: 'Test: type:user-action in NON_IMPL_TAGS gate sets'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T16:46:57.2190253+02:00
-updated: 2026-04-06T23:47:33.2318042+02:00
+updated: 2026-04-06T23:58:16.467589+02:00
+started: 2026-04-06T23:58:16.467589+02:00
+completed: 2026-04-06T23:58:16.467589+02:00
 tags:
     - phase-3
     - ' scope:orchestrator'
     - ' type:test'
 parent: 661
-claimed_by: cape-storm
-claimed_at: 2026-04-06T23:47:33.2299885+02:00
 class: standard
 ---
 
@@ -174,3 +174,41 @@ Confidence: **0.95** → **PASS**
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/665-*` files found)
+
+[[2026-04-06]] Mon 23:58
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| "type:user-action" in _NON_IMPL_TAGS (gates.py) | gates.py L27 confirmed; test_type_user_action_in_non_impl_tags_gates PASSED | PASS |
+| "type:user-action" in _PICK_NON_IMPL_TAGS (server.py) | server.py L534 confirmed; test_type_user_action_in_pick_non_impl_tags_server PASSED | PASS |
+| check_tdd() returns True for in-progress + type:user-action, no TW notes | 3 tests passed (basic, combined tags, minimal body) | PASS |
+| _check_pick_gates() returns True via pick_tasks for in-progress + type:user-action, no TW notes | 2 async tests passed (basic, combined tags) | PASS |
+| All tests FAIL before implementation (TDD RED) | Confirmed in test-writer notes: 7/7 FAIL; now all GREEN | PASS |
+
+### Test Results
+- pytest (task-scoped): 7 passed, 0 failed
+- pytest (full suite): 1 collection error in test_planner_gates.py (pre-existing from task #207, imports check_atomicity which no longer exists in gates.py; NOT in #665 scope)
+- ruff: clean on test file
+
+### Reviewer Evidence
+Detailed PASS at .95 confidence. Thorough AC compliance table, assertion quality analysis, TestFromAC integrity check. Trusted code-level findings.
+
+### Architect Quality: 4/5
+All 5 AC lines precise and directly testable. Minor gap: no explicit edge case AC, but intent was clear and test-writer filled boundary cases naturally (empty body, combined tags). Follows established #630 pattern exactly.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 5 verified)
+- Lint violations: 0 (clean)
+- AC quality score 4 (above 3): 0
+- Missing reviewer evidence: 0 (present and detailed)
+- Full-suite failures in task scope: 0 (collection error is pre-existing, out of scope)
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| ab700c4 | test | tests/test_user_action_non_impl_661.py | #665 |
+| 47cef01 | chore | kanban task file, activity.jsonl | #665 |

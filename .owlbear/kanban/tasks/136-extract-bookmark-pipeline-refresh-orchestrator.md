@@ -1,10 +1,12 @@
 ---
 id: 136
 title: Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-06T20:44:30.123596+02:00
+updated: 2026-04-06T21:15:15.8392319+02:00
+started: 2026-04-06T21:15:15.8392319+02:00
+completed: 2026-04-06T21:15:15.8392319+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -13,8 +15,6 @@ depends_on:
     - 33
     - 135
     - 223
-claimed_by: robin-blade
-claimed_at: 2026-04-06T20:44:30.1188925+02:00
 class: standard
 ---
 
@@ -648,3 +648,56 @@ Cancellation cooperative throughout; path sandbox prevents traversal; no unbound
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/136-*` files found)
+
+[[2026-04-06]] Mon 21:15
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| BookmarkResult + BookmarkPipeline in bookmark_pipeline.py | bookmark_pipeline.py L28, L45; TestFromAC_BookmarkResultModel, TestFromAC_BookmarkPipelineConstructor | PASS |
+| web_read_fn REQUIRED (no default) | bookmark_pipeline.py L63 keyword-only, no default; test_constructor_without_web_read_fn_raises_type_error | PASS |
+| _default_web_read NOT extracted | Not present in module; test_default_web_read_not_exported_from_module | PASS |
+| process() cooperative cancellation at each stage | bookmark_pipeline.py L95, L105, L113; TestFromAC_BookmarkPipelineProcess 8 tests | PASS |
+| RefreshResult + RefreshOrchestrator in refresh.py | refresh.py L32-39, L60-68; TestFromAC_RefreshResultModel, TestFromAC_RefreshOrchestratorConstructor | PASS |
+| refresh_all() cooperative cancellation | refresh.py L120-126; test mock fixed to list_all (Retry 2) | PASS |
+| file_glob uses sandbox_path | refresh.py L182; TestFromAC_RefreshOrchestratorFileGlob 2 tests | PASS |
+| _update_source_record persists | refresh.py L239-253; TestFromAC_UpdateSourceRecord 2 tests | PASS |
+| KnowledgeSourceStore.list_enabled(scope) | source_store.py L123-135; TestFromAC_ListEnabled 5 tests | PASS |
+| bookmark_source MCP tool | server.py @mcp.tool, in __all__; test_bookmark_source_function_registered | PASS |
+| list_bookmarks MCP tool | server.py @mcp.tool, in __all__; test_list_bookmarks_function_registered | PASS |
+| AppContext extended | server.py L83-84 bookmark_pipeline + bookmark_store fields | PASS |
+| bookmark_toolset.py NOT extracted | Not present (negative constraint) | PASS |
+| __init__.py exports 4 symbols | BookmarkResult, BookmarkPipeline, RefreshResult, RefreshOrchestrator in __all__ | PASS |
+| _web_read scheme validation + follow_redirects=False | server.py L114-128; test asserts constructor kwargs at test:L991 | PASS |
+
+### Test Results
+- pytest (task-136): 61 passed, 0 failed
+- pytest (full suite): 3097 passed, 522 failed, 18 skipped (all failures in unrelated modules: ideator, voice, hooks, analysis, etc.)
+- ruff (task-136 files): All checks passed
+
+### Reviewer Evidence
+4 review cycles present. Final review: .96 confidence, PASS. Detailed AC compliance table, security review (SSRF resolved), test quality all STRONG. Trusted code-level findings.
+
+### Architect Quality: 4/5
+Specific and verifiable AC (14 lines with constructor signatures, file paths, behavioral constraints). One gap: SSRF protection for _web_read missing from initial AC, requiring architect re-entry after loop-breaker. Builder/reviewer filled the gap but 3 review cycles could have been prevented with upfront security surface analysis.
+
+### Deduction Breakdown
+- 15 AC lines verified with specific evidence: no deductions
+- Lint: clean (0 deductions)
+- AC quality 4/5 (above 3, no deduction)
+- Reviewer evidence: present and thorough (0 deductions)
+- Full-suite failures: 0 in task scope (0 deductions)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| f315d26 | feat | bookmark_pipeline.py, source_store.py, refresh.py, __init__.py | #136 |
+| 343ecc9 | test | test_bookmark_pipeline_136.py | #136 |
+| 75dec2e | feat | bookmark_pipeline.py, server.py | #136 |
+| 011ad94 | test | test_bookmark_pipeline_136.py | #136 |
+| fdbf412 | fix | server.py, test_bookmark_pipeline_136.py | #136 |
+| df7dd25 | test | test_bookmark_pipeline_136.py | #136 |
+| 7d52334 | chore | kanban board | #136 |

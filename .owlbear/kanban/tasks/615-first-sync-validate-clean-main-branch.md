@@ -1,10 +1,12 @@
 ---
 id: 615
 title: 'First sync: validate clean main branch'
-status: done
+status: archived
 priority: needed
 created: 2026-04-04T21:55:56.253579+02:00
-updated: 2026-04-06T20:34:18.8735782+02:00
+updated: 2026-04-06T20:44:02.8471743+02:00
+started: 2026-04-06T20:44:02.8471743+02:00
+completed: 2026-04-06T20:44:02.8471743+02:00
 tags:
     - scope:infra
     - type:build
@@ -14,8 +16,6 @@ parent: 610
 depends_on:
     - 613
     - 614
-claimed_by: stone-spoke
-claimed_at: 2026-04-06T20:34:18.869854+02:00
 class: standard
 ---
 
@@ -195,3 +195,42 @@ N/A — operational task, no test assertions to evaluate.
 
 ### Scratch Files Cleaned
 - None (`.owlbear/scratch/615-*` — no matches)
+
+[[2026-04-06]] Mon 20:44
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: workflow dispatch exits 0 | .github/workflows/sync-to-main.yml exists, workflow_dispatch trigger present, orphan commit logic correct. GH Actions run self-reported by builder. | PASS (self-report, workflow verified) |
+| AC2: git ls-tree shows only allowed paths | Independently verified: git ls-tree --name-only origin/main returns exactly .gitignore, .python-version, README.md, SECURITY.md, pyproject.toml, seed, serve, setup, share, uv.lock | PASS (independently verified) |
+| AC3: dev-only paths absent from main | Same git ls-tree output: none of .owlbear, store, tests, v1, .github, scripts, docs, conftest.py, owlbear-project.json, Owlbear.code-profile, kanban appear | PASS (independently verified) |
+| AC4: uv sync exits 0, no skills-ref | Builder self-report. Mechanistically plausible: orphan commit approach copies only include-listed paths; skills-ref is in validation group (not installed by uv sync --no-dev) | PASS (self-report, mechanistically plausible) |
+| AC5: setup/init.py creates 3 files | Seed templates verified: seed/.vscode/mcp.json, seed/.vscode/settings.json, seed/owlbear-project.json all exist | PASS (independently verified) |
+| AC6: 4 MCP server imports succeed | Reviewer code-verified all 4 server.py files exist with mcp = FastMCP(...). Builder self-reports import exit 0. | PASS (code-verified) |
+
+### Test Results
+- pytest: 3097 passed, 522 failed, 18 skipped. All 522 failures are from other tasks (voice scaffolding, session context hooks, skill frontmatter, user-action tags, planner gates). Zero failures in #615 scope.
+- ruff: 5 violations in mcp-kanban server code. None in #615 scope (no Python files changed by this task).
+
+### Reviewer Evidence
+Thorough and detailed. PASS verdict at .92. Mechanistic verification of AC2/AC3, code-verified AC5/AC6, correctly flagged AC1/AC4 as self-report. Trusted code-level findings.
+
+### Architect Quality: 5/5
+ACs are precise and mechanically verifiable. Original 7 vague ACs refined into 6 specific ones with explicit commands and exhaustive path lists. Challenger feedback integrated. Notes clarify non-obvious design decisions (import-only rationale, AC2 drift-catch). Exemplary architect work.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC1 self-report (GH Actions state unobservable locally, but workflow verified correct and complete): -0.01
+- AC4 self-report (fresh clone unverifiable, but mechanistically plausible): -0.01
+- No lint violations in scope: no deduction
+- No test failures in scope: no deduction
+- Reviewer evidence present and detailed: no deduction
+- AC quality 5/5: no deduction
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| ed1c389 | chore | kanban task + activity log | #615 |
