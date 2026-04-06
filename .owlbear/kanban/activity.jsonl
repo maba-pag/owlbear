@@ -1,42 +1,3 @@
-{"timestamp":"2026-03-30T20:41:42.9005165+02:00","action":"create","task_id":342,"detail":"E2E-Test-08b037df-2fec-4ec8-b0d7-00e98cb1e7d1"}
-{"timestamp":"2026-03-30T20:41:44.3128092+02:00","action":"delete","task_id":342,"detail":"E2E-Test-08b037df-2fec-4ec8-b0d7-00e98cb1e7d1"}
-{"timestamp":"2026-03-30T20:41:44.9032099+02:00","action":"create","task_id":343,"detail":"E2E-Test-5650898c-fb09-4840-b02a-3a4e739fb48b"}
-{"timestamp":"2026-03-30T20:41:46.3052759+02:00","action":"delete","task_id":343,"detail":"E2E-Test-5650898c-fb09-4840-b02a-3a4e739fb48b"}
-{"timestamp":"2026-03-30T20:41:46.6292325+02:00","action":"create","task_id":344,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
-{"timestamp":"2026-03-30T20:41:47.1751042+02:00","action":"create","task_id":345,"detail":"E2E-Test-03b077a3-6ab1-4f20-a49a-9908f1bf61fe"}
-{"timestamp":"2026-03-30T20:41:48.5133644+02:00","action":"create","task_id":346,"detail":"E2E-Test-5f1d15cd-d2a7-4b00-a239-6acd510c4a08"}
-{"timestamp":"2026-03-30T20:41:50.038559+02:00","action":"delete","task_id":345,"detail":"E2E-Test-03b077a3-6ab1-4f20-a49a-9908f1bf61fe"}
-{"timestamp":"2026-03-30T20:41:50.7474319+02:00","action":"delete","task_id":346,"detail":"E2E-Test-5f1d15cd-d2a7-4b00-a239-6acd510c4a08"}
-{"timestamp":"2026-03-30T20:41:52.623491+02:00","action":"create","task_id":347,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
-{"timestamp":"2026-03-30T20:41:58.3620294+02:00","action":"create","task_id":348,"detail":"Add blocked-task scan for decision-request notifications"}
-{"timestamp":"2026-03-30T20:42:56.1418559+02:00","action":"edit","task_id":26,"detail":"Slack notification integration"}
-{"timestamp":"2026-03-30T20:42:56.1472102+02:00","action":"release","task_id":26,"detail":"researcher"}
-{"timestamp":"2026-03-30T20:43:10.5545971+02:00","action":"create","task_id":349,"detail":"E2E-Test-f6bbbffe-ab63-4f88-ad1e-20bb27ebee07"}
-{"timestamp":"2026-03-30T20:43:12.1040807+02:00","action":"delete","task_id":349,"detail":"E2E-Test-f6bbbffe-ab63-4f88-ad1e-20bb27ebee07"}
-{"timestamp":"2026-03-30T20:43:12.7519088+02:00","action":"create","task_id":350,"detail":"E2E-Test-f824734c-6dfe-4a47-8142-8996916fa16b"}
-{"timestamp":"2026-03-30T20:43:14.1700397+02:00","action":"delete","task_id":350,"detail":"E2E-Test-f824734c-6dfe-4a47-8142-8996916fa16b"}
-{"timestamp":"2026-03-30T20:43:14.8129435+02:00","action":"create","task_id":351,"detail":"E2E-Test-44e2c84c-e8a2-4734-a7ba-d1be51d25501"}
-{"timestamp":"2026-03-30T20:43:16.4923491+02:00","action":"delete","task_id":351,"detail":"E2E-Test-44e2c84c-e8a2-4734-a7ba-d1be51d25501"}
-{"timestamp":"2026-03-30T20:43:17.1886481+02:00","action":"create","task_id":352,"detail":"E2E-Test-551655c5-874e-4928-86ca-153cdecd0712"}
-{"timestamp":"2026-03-30T20:43:18.7559841+02:00","action":"delete","task_id":352,"detail":"E2E-Test-551655c5-874e-4928-86ca-153cdecd0712"}
-{"timestamp":"2026-03-30T20:43:19.4553966+02:00","action":"create","task_id":353,"detail":"E2E-Test-dd8a790d-192e-42c0-93f0-d75e4458b5c3"}
-{"timestamp":"2026-03-30T20:43:21.2560932+02:00","action":"delete","task_id":353,"detail":"E2E-Test-dd8a790d-192e-42c0-93f0-d75e4458b5c3"}
-{"timestamp":"2026-03-30T20:43:22.3654803+02:00","action":"create","task_id":354,"detail":"E2E-Test-c307dce9-4213-4306-8782-0518eb0a4192"}
-{"timestamp":"2026-03-30T20:43:24.3489361+02:00","action":"delete","task_id":354,"detail":"E2E-Test-c307dce9-4213-4306-8782-0518eb0a4192"}
-{"timestamp":"2026-03-30T20:43:25.0558249+02:00","action":"create","task_id":355,"detail":"E2E-Test-ad2db051-074e-4868-9cf6-fedb0432646f"}
-{"timestamp":"2026-03-30T20:43:26.9242281+02:00","action":"create","task_id":356,"detail":"E2E-Test-09202061-6530-42e1-b71c-28c285e97d6f"}
-{"timestamp":"2026-03-30T20:43:29.0195506+02:00","action":"delete","task_id":355,"detail":"E2E-Test-ad2db051-074e-4868-9cf6-fedb0432646f"}
-{"timestamp":"2026-03-30T20:43:29.905564+02:00","action":"delete","task_id":356,"detail":"E2E-Test-09202061-6530-42e1-b71c-28c285e97d6f"}
-{"timestamp":"2026-03-30T20:43:46.4176379+02:00","action":"create","task_id":357,"detail":"E2E-Test-9f46688a-cd4b-47b8-803c-56d9d738a455"}
-{"timestamp":"2026-03-30T20:43:47.8396688+02:00","action":"delete","task_id":357,"detail":"E2E-Test-9f46688a-cd4b-47b8-803c-56d9d738a455"}
-{"timestamp":"2026-03-30T20:43:48.5752549+02:00","action":"create","task_id":358,"detail":"E2E-Test-9b696d42-a1c3-41d5-959d-d26d3f72c3a4"}
-{"timestamp":"2026-03-30T20:43:50.2836866+02:00","action":"delete","task_id":358,"detail":"E2E-Test-9b696d42-a1c3-41d5-959d-d26d3f72c3a4"}
-{"timestamp":"2026-03-30T20:43:50.8957688+02:00","action":"create","task_id":359,"detail":"E2E-Test-5f082558-b047-4afe-802b-4ecf30959885"}
-{"timestamp":"2026-03-30T20:43:52.2508552+02:00","action":"delete","task_id":359,"detail":"E2E-Test-5f082558-b047-4afe-802b-4ecf30959885"}
-{"timestamp":"2026-03-30T20:43:52.9082023+02:00","action":"create","task_id":360,"detail":"E2E-Test-5b990a1e-6fc9-49f6-8a28-393dbac667c7"}
-{"timestamp":"2026-03-30T20:43:54.3665453+02:00","action":"delete","task_id":360,"detail":"E2E-Test-5b990a1e-6fc9-49f6-8a28-393dbac667c7"}
-{"timestamp":"2026-03-30T20:43:55.1306033+02:00","action":"create","task_id":361,"detail":"E2E-Test-0c944ea3-00d0-489a-b30d-f4acad5f3a15"}
-{"timestamp":"2026-03-30T20:43:56.6762963+02:00","action":"delete","task_id":361,"detail":"E2E-Test-0c944ea3-00d0-489a-b30d-f4acad5f3a15"}
 {"timestamp":"2026-03-30T20:43:57.3985055+02:00","action":"create","task_id":362,"detail":"E2E-Test-1862d9a8-3b35-4e21-b24f-d28311c69b2a"}
 {"timestamp":"2026-03-30T20:43:58.8563955+02:00","action":"delete","task_id":362,"detail":"E2E-Test-1862d9a8-3b35-4e21-b24f-d28311c69b2a"}
 {"timestamp":"2026-03-30T20:43:59.4372711+02:00","action":"create","task_id":363,"detail":"E2E-Test-987216d1-e445-4472-a9f5-30d950abcfb9"}
@@ -9998,3 +9959,42 @@
 {"timestamp":"2026-04-06T09:29:10.4590463+02:00","action":"edit","task_id":458,"detail":"Test: Remove execute/* tools from reviewer agent"}
 {"timestamp":"2026-04-06T09:29:10.4696247+02:00","action":"release","task_id":458,"detail":"sand-swift"}
 {"timestamp":"2026-04-06T09:29:10.9685527+02:00","action":"move","task_id":458,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T09:29:52.8163779+02:00","action":"edit","task_id":643,"detail":"P4-03: Deprecate w-project-scoping skill"}
+{"timestamp":"2026-04-06T09:29:52.8286676+02:00","action":"claim","task_id":643,"detail":"flux-knoll"}
+{"timestamp":"2026-04-06T09:30:43.7913083+02:00","action":"edit","task_id":642,"detail":"P4-02: Create .owlbear/briefs/ directory structure"}
+{"timestamp":"2026-04-06T09:30:43.8050977+02:00","action":"claim","task_id":642,"detail":"lotus-rift"}
+{"timestamp":"2026-04-06T09:30:58.9925437+02:00","action":"edit","task_id":641,"detail":"P4-01: Rename kanban status \"ideation\" to \"research\""}
+{"timestamp":"2026-04-06T09:30:59.0052369+02:00","action":"claim","task_id":641,"detail":"fawn-linen"}
+{"timestamp":"2026-04-06T09:31:05.6784774+02:00","action":"edit","task_id":591,"detail":"Add PreToolUse path guard hook to doc-writer agent (Phase 5)"}
+{"timestamp":"2026-04-06T09:31:05.6897161+02:00","action":"claim","task_id":591,"detail":"sage-coral"}
+{"timestamp":"2026-04-06T09:32:39.5006214+02:00","action":"edit","task_id":642,"detail":"P4-02: Create .owlbear/briefs/ directory structure"}
+{"timestamp":"2026-04-06T09:32:39.5141043+02:00","action":"release","task_id":642,"detail":"lotus-rift"}
+{"timestamp":"2026-04-06T09:33:36.8438058+02:00","action":"edit","task_id":643,"detail":"P4-03: Deprecate w-project-scoping skill"}
+{"timestamp":"2026-04-06T09:33:36.8561747+02:00","action":"release","task_id":643,"detail":"flux-knoll"}
+{"timestamp":"2026-04-06T09:33:42.7609071+02:00","action":"edit","task_id":591,"detail":"Add PreToolUse path guard hook to doc-writer agent (Phase 5)"}
+{"timestamp":"2026-04-06T09:33:42.7721853+02:00","action":"release","task_id":591,"detail":"sage-coral"}
+{"timestamp":"2026-04-06T09:38:07.2197316+02:00","action":"edit","task_id":641,"detail":"P4-01: Rename kanban status \"ideation\" to \"research\""}
+{"timestamp":"2026-04-06T09:38:07.230374+02:00","action":"release","task_id":641,"detail":"fawn-linen"}
+{"timestamp":"2026-04-06T09:40:26.7491096+02:00","action":"edit","task_id":633,"detail":"Add per-query scopes override to KnowledgeQueryService.query()"}
+{"timestamp":"2026-04-06T09:40:26.7622542+02:00","action":"claim","task_id":633,"detail":"mist-mesa"}
+{"timestamp":"2026-04-06T09:41:05.9446533+02:00","action":"edit","task_id":642,"detail":"P4-02: Create .owlbear/briefs/ directory structure"}
+{"timestamp":"2026-04-06T09:41:05.9558209+02:00","action":"claim","task_id":642,"detail":"north-lynx"}
+{"timestamp":"2026-04-06T09:41:13.7154831+02:00","action":"edit","task_id":641,"detail":"P4-01: Rename kanban status \"ideation\" to \"research\""}
+{"timestamp":"2026-04-06T09:41:13.7312777+02:00","action":"claim","task_id":641,"detail":"helm-edge"}
+{"timestamp":"2026-04-06T09:42:06.1710182+02:00","action":"edit","task_id":642,"detail":"P4-02: Create .owlbear/briefs/ directory structure"}
+{"timestamp":"2026-04-06T09:42:06.1833583+02:00","action":"release","task_id":642,"detail":"north-lynx"}
+{"timestamp":"2026-04-06T09:42:51.9110888+02:00","action":"edit","task_id":641,"detail":"P4-01: Rename kanban status \"ideation\" to \"research\""}
+{"timestamp":"2026-04-06T09:42:51.9225148+02:00","action":"release","task_id":641,"detail":"helm-edge"}
+{"timestamp":"2026-04-06T10:00:19.0493317+02:00","action":"edit","task_id":633,"detail":"Add per-query scopes override to KnowledgeQueryService.query()"}
+{"timestamp":"2026-04-06T10:00:19.0628279+02:00","action":"release","task_id":633,"detail":"mist-mesa"}
+{"timestamp":"2026-04-06T10:00:19.6851283+02:00","action":"move","task_id":633,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T10:00:58.5670941+02:00","action":"edit","task_id":640,"detail":"Fix 3 remaining pipeline protocol MCP callout tests (test_mcp_tool_references_574.py)"}
+{"timestamp":"2026-04-06T10:00:58.5796503+02:00","action":"claim","task_id":640,"detail":"stone-mace"}
+{"timestamp":"2026-04-06T10:14:33.7697777+02:00","action":"edit","task_id":640,"detail":"Fix 3 remaining pipeline protocol MCP callout tests (test_mcp_tool_references_574.py)"}
+{"timestamp":"2026-04-06T10:14:33.7836944+02:00","action":"release","task_id":640,"detail":"stone-mace"}
+{"timestamp":"2026-04-06T10:14:34.2990962+02:00","action":"move","task_id":640,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T10:14:58.3403005+02:00","action":"edit","task_id":591,"detail":"Add PreToolUse path guard hook to doc-writer agent (Phase 5)"}
+{"timestamp":"2026-04-06T10:14:58.3513833+02:00","action":"claim","task_id":591,"detail":"glade-trout"}
+{"timestamp":"2026-04-06T10:37:36.9617704+02:00","action":"edit","task_id":591,"detail":"Add PreToolUse path guard hook to doc-writer agent (Phase 5)"}
+{"timestamp":"2026-04-06T10:37:36.9872348+02:00","action":"release","task_id":591,"detail":"glade-trout"}
+{"timestamp":"2026-04-06T10:37:37.5221464+02:00","action":"move","task_id":591,"detail":"done -\u003e archived"}

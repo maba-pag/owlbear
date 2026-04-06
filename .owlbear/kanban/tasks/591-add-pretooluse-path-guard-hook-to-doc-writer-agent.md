@@ -1,10 +1,12 @@
 ---
 id: 591
 title: Add PreToolUse path guard hook to doc-writer agent (Phase 5)
-status: in-progress
+status: archived
 priority: someday
 created: 2026-04-04T07:56:05.2542536+02:00
-updated: 2026-04-06T03:22:29.0095365+02:00
+updated: 2026-04-06T10:37:37.5201494+02:00
+started: 2026-04-06T10:37:37.5201494+02:00
+completed: 2026-04-06T10:37:37.5201494+02:00
 tags:
     - scope:agents
     - hooks
@@ -123,3 +125,140 @@ Rewrote #591 body with validated AC from #637 research (5 amendments incorporate
 **Key differentiator from #589:** `apply_patch` IS gated in deny-code-writes (AC2e); deny-src-writes excluded it. Tests explicitly document this distinction.
 
 Ruff: clean. Commit: 94d071b.
+
+[[2026-04-06]] Mon 08:21
+## Builder Notes
+
+### Files Changed
+- `.owlbear/hooks/deny-code-writes.ps1` — created (deny-list path guard)
+- `share/agents/doc-writer.agent.md` — removed `edit/editFiles` from tools, added `hooks:` section with PreToolUse deny-code-writes.ps1
+
+### Test Results
+- **59 passed** (0 failed, 0 skipped) — all `TestFromAC_*` classes green
+- Classes covered: ScriptExists (2), DenyListBehavior (34), WriteToolGate (8), SafetyFallbacks (6), DocWriterAgentHooks (7), MaintenanceHeader (2)
+
+### Lint
+- `ruff check tests/test_deny_code_writes_hook_591.py` — **clean**
+
+### Commit
+- `1f42065` — feat: add deny-code-writes.ps1 hook and update doc-writer agent frontmatter (#591)
+
+### Key diff from deny-src-writes.ps1
+- Deny-list approach (vs allow-list) — 10 denied prefixes + conftest.py exact match
+- `apply_patch` IS gated (AC2e — explicit test distinguishes from #589)
+- Path normalization: `\` → `/` and `./` prefix stripping before comparison
+
+[[2026-04-06]] Mon 09:10
+## Review Evidence
+
+### Test Results
+**pytest:** 59 passed, 0 failed, 0 skipped (quality-runner, independent run)
+**ruff:** clean — `tests/test_deny_code_writes_hook_591.py`
+**Coverage:** N/A — no Python module changed; PS1 script + agent config only
+
+### Changed Files
+- `.owlbear/hooks/deny-code-writes.ps1` — created
+- `share/agents/doc-writer.agent.md` — hook added, `edit/editFiles` removed
+- `tests/test_deny_code_writes_hook_591.py` — test file (test-writer, builder must not weaken)
+
+### AC Compliance
+
+| AC | Test(s) | Would Fail If Violated? | Verdict |
+|----|---------|------------------------|---------|
+| AC1 — deny-list (10 prefixes + conftest.py exact, normalization) | 27 TestFromAC_DenyListBehavior tests | Yes — individual prefix tests + normalization tests with `assert _is_denied()` | COVERED |
+| AC2 — write-tool gate (5 tools incl. apply_patch) | 8 TestFromAC_WriteToolGate tests | Yes — each gated tool with denied path; run_in_terminal/read_file/unknown return `=={}` | COVERED |
+| AC3 — PreToolUse hook in frontmatter | 4 TestFromAC_DocWriterAgentHooks tests | Yes — regex checks for `hooks:`, `PreToolUse`, `type: command`, `deny-code-writes.ps1` | COVERED |
+| AC4 — edit/editFiles removed | 1 test (not-in-fm assertion) | Yes — `assert "edit/editFiles" not in fm` | COVERED |
+| AC5 — safety fallbacks (malformed JSON, empty/missing tool_name, no paths, empty filePath, empty replacements) | 6 TestFromAC_SafetyFallbacks tests | Yes — each asserts `output == {}` | COVERED |
+| AC6 — valid YAML, no duplicate keys | 2 tests (yaml.safe_load + regex key scan) | Yes — parse error or duplicate key triggers pytest.fail | COVERED |
+| AC7 — maintenance comment header | 2 TestFromAC_MaintenanceHeader tests | Yes — checks for `#` comment marker and `serve/`, `share/agents/`, `.git/` content | COVERED |
+
+### Test Integrity — TestFromAC Comparison
+Test count: test-writer baseline 59 (all FAIL, commit 94d071b) → builder delivery 59 (all PASS, commit 1f42065). Zero tests added, removed, or skipped. No `xfail`/`skip` markers encountered. Assertion specificity preserved: `_is_denied()` checks `hookSpecificOutput.permissionDecision == "deny"` (exact equality); pass-through checks use `output == {}` (exact dict equality).
+
+| Assessment | Result |
+|-----------|--------|
+| Any WEAKENED or REMOVED? | None detected |
+| Any STRENGTHENED? | None |
+
+### Security Review
+- No hardcoded secrets, tokens, or credentials.
+- No shell injection — ConvertFrom-Json used (not string construction); deny-list comparisons are pure string operations.
+- Path normalization is defensive: `\` → `/`, `./` prefix stripped before deny checks. Note: `../../serve/foo.py`-style paths are not normalized; this is a deliberate accepted design limitation documented in Known Limitations. The hook is not exploitable for arbitrary file writes (it only reads paths and emits JSON).
+- No insecure deserialization — `ConvertFrom-Json` is PowerShell's native safe parser; no `eval`/`exec` equivalents.
+- Deny response outputs a PS1 hashtable serialized via `ConvertTo-Json -Compress` (no interpolated user data in the key/structure).
+- **No OWASP Top 10 violations.**
+
+### Test Quality
+| Dimension | Rating | Notes |
+|-----------|--------|-------|
+| Assertion specificity | STRONG | Exact equality (`== {}`) or field-level checks (`== "deny"`) throughout |
+| Negative/error-path coverage | STRONG | Every deny prefix has an allow counterpart; pass-through tools each tested |
+| Manual mutation check | STRONG | Removing any single prefix from `$denied_prefixes` would fail the corresponding test; removing `apply_patch` from gate would fail AC2e |
+| Test independence | STRONG | Subprocess-based; no shared mutable state between tests |
+| Descriptive names | STRONG | All names map directly to AC labels; docstrings reference AC item |
+
+### Data Safety
+No LLM output persisted, no shared state, no multi-step atomicity concerns, subprocess `timeout=30` guards against unbounded blocking. Clean.
+
+### Minor Observation (no deduction)
+No test covers the case where `tool_input` key is entirely absent from stdin (`{"tool_name": "create_file"}` with no `tool_input`). The implementation handles this correctly via `if ($tool_input)` + empty-paths early-exit. Not listed in AC5; untested edge case that is safely implemented. No deduction warranted.
+
+### Deductions
+None.
+
+### Verdict
+**Confidence: .97 → PASS → docs**
+
+[[2026-04-06]] Mon 09:33
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A — no update needed | Doc-writer agent modified (hook added, editFiles removed). `copilot-instructions.md` is a 5-line Project Identity stub — no hooks tables or agent config sections exist to update. README "Pre-commit Hooks" section covers only git hooks, not PreToolUse; no PreToolUse section exists in README that would need updating. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified — PS1 script + `.agent.md` config only. |
+| 3 | External attribution | No | N/A | Task #591 research doc (`pretooluse-doc-writer-path-guard-591.md`) used only internal sources (5 internal files, no external URLs). Subsumed task #637's external source (VS Code hooks docs) is already recorded in `sources/overview.md` under "Deny-Code-Writes AC Validation (Task #637)". |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | Both docs exist and linked in task body: `.owlbear/research/pretooluse-doc-writer-path-guard-591.md` ✓, `.owlbear/research/deny-code-writes-ac-validation-637.md` ✓. Follow-up #638 (editFiles schema verification) created. |
+
+### Files Updated
+None — no documentation changes required.
+
+### Scratch Files
+No `.owlbear/scratch/591-*` files found.
+
+[[2026-04-06]] Mon 10:37
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — deny-list (10 prefixes + conftest.py, normalization) | 27 TestFromAC_DenyListBehavior tests pass; script lines 82-92 list all 10 prefixes; normalization at lines 98-101 | PASS |
+| AC2 — write-tool gate (5 tools incl. apply_patch) | 8 TestFromAC_WriteToolGate tests pass; script lines 42-48 list all 5 tools | PASS |
+| AC3 — PreToolUse hook in frontmatter | 4 TestFromAC_DocWriterAgentHooks tests pass; doc-writer.agent.md hooks section verified | PASS |
+| AC4 — edit/editFiles removed from tools | 1 test (not-in-fm assertion) pass; doc-writer.agent.md tools list confirmed no edit/editFiles | PASS |
+| AC5 — safety fallbacks | 6 TestFromAC_SafetyFallbacks tests pass; script try/catch + empty-path guards verified | PASS |
+| AC6 — valid YAML, no duplicate keys | 2 tests pass; frontmatter parses cleanly | PASS |
+| AC7 — maintenance comment header | 2 TestFromAC_MaintenanceHeader tests pass; script lines 1-26 contain full header | PASS |
+
+### Test Results
+- pytest (task scope): 59 passed, 0 failed, 0 skipped
+- pytest (full suite): 3058 passed, 473 failed, 18 skipped — zero failures from #591 files; all failures are pre-existing (voice scaffolding, validator skills, other unrelated tasks)
+- ruff: 5 pre-existing violations in serve/mcp-kanban/ — zero in #591 deliverables
+
+### Upstream Commits Verified
+- Test-writer: 94d071b (test file)
+- Builder: 1f42065 (deny-code-writes.ps1 + doc-writer.agent.md)
+
+### Architect Quality: 5/5
+Three refinement rounds (research, #637 AC validation, arch challenger) produced specific, complete, testable AC. All 8 items unambiguous. Challenger identified 5 edge cases — all addressed in AC or Known Limitations. No builder/reviewer improvisation needed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 7 covered)
+- Lint violations in scope: 0
+- AC quality score: 5/5 (no deduction)
+- Reviewer evidence section: present, detailed, PASS at .97 (no deduction)
+- Full-suite failures in task scope: 0 (no deduction)
+
+### Confidence: .98
+### Action: archive
