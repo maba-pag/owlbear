@@ -35,7 +35,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 - **Always search the codebase** before approving — verify existing patterns, interfaces, and potential conflicts.
 - **Atomicity:** if "and" joins unrelated concerns, split the task. Each task gets one responsibility.
 - **Always route to `todo`, never to `in-progress`.** The test-writer must process every task, even non-implementation ones.
-- **Decomposition detection.** After claiming the task, if the body contains `"Needs decomposition:"` but NOT `"## Planning"`, delegate to the **planner** agent immediately. After the planner succeeds, advance via `end_work`. The planner's appended `## Planning` section prevents re-triggering. Do not perform architecture review on decomposition tasks.
+- **Decomposition detection.** After claiming the task, if the body contains `"Needs decomposition:"` but NOT `"## Planning"` after, delegate to the **planner** agent immediately. After the planner succeeds, use `end_work`. The planner's appended `## Planning` section prevents re-triggering. Do not perform architecture review on decomposition tasks.
 
 </critical_rules>
 

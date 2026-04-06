@@ -68,7 +68,7 @@ Called by the orchestrator at cycle start. Process all pending DRs where the use
    - `response: pending` → **Not responded.** Skip. Include in PENDING count.
    - `response: approved` → **User approved.** Validate `decision:` matches an option label. If valid: write `## Decision Resolved` to task body, unblock, move to resolved. If invalid: treat as `needs-info`.
    - `response: completed` → **Action completed.** Write `## Action Completed` to task body, unblock, move to resolved.
-   - `response: needs-info` → **User has questions.** Write `## Clarification Requested` with user's `notes:` verbatim to task body — **but only if the task body does not already contain a `## Clarification Requested` section with identical notes** (idempotency guard). Keep task blocked. Reset file to `response: pending`. Signal `NEEDS-INFO`.
+   - `response: needs-info` → **User has questions.** Write `## Clarification Requested` with user's `notes:` verbatim to task body — **but only if the task body does not already contain a `## Clarification Requested` section with identical notes** (idempotency guard). Keep task blocked. Reset file to `response: pending`. Collect `{task_id, agent}` in the `needs_info` array for `resolve-summary.json`. Signal `NEEDS-INFO`.
    - `response: rejected` → **User rejects all options.** Write `## Decision Rejected` with user's `notes:` verbatim to task body. Unblock task. Move file to resolved.
 3. Handle stale requests per the w-decision-routing skill's auto-resolve rules.
 4. Report ALL results including pending count.
@@ -95,6 +95,18 @@ Task blocked. End your work with outcome=block and reference this DR in your not
 
 ### resolve
 
+After processing all DRs, write `.owlbear/decisions/resolve-summary.json`:
+
+```json
+{
+  "resolved": [{"task_id": 616, "response": "approved"}],
+  "needs_info": [{"task_id": 616, "agent": "researcher"}],
+  "pending": [{"task_id": 617, "filename": "617-something.md"}]
+}
+```
+
+Write even when all arrays are empty. This file is read by the orchestrator and deleted after reading.
+
 Always output ALL three lines:
 
 ```
@@ -103,7 +115,7 @@ NEEDS-INFO {M} requests | #{task_id} agent={originating_agent}, ...
 PENDING {P} awaiting user | #{task_id} ({filename}), ...
 ```
 
-Set N/M/P to 0 when none. The orchestrator uses PENDING to surface unanswered DRs to the user and NEEDS-INFO to re-dispatch agents.
+Set N/M/P to 0 when none. The orchestrator uses PENDING to surface unanswered DRs to the user and reads `resolve-summary.json` for structured dispatch data.
 
 ### query
 
