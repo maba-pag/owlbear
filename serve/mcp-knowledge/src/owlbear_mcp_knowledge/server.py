@@ -111,6 +111,23 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     return excluded
 
 
+async def _web_read(url: str) -> str | None:
+    """Fetch a URL via httpx. Only http/https schemes allowed; redirects not followed."""
+    from urllib.parse import urlparse  # noqa: PLC0415
+
+    if urlparse(url).scheme.lower() not in {"http", "https"}:
+        return None
+    try:
+        import httpx  # noqa: PLC0415
+
+        async with httpx.AsyncClient(follow_redirects=False, timeout=30) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.text
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
@@ -130,17 +147,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         source_store = KnowledgeSourceStore(conn)
         bookmark_store = BookmarkStore(conn)
         evaluator = SourceEvaluator(model)
-
-        async def _web_read(url: str) -> str | None:
-            try:
-                import httpx  # noqa: PLC0415
-
-                async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-                    resp = await client.get(url)
-                    resp.raise_for_status()
-                    return resp.text
-            except Exception:  # noqa: BLE001
-                return None
 
         bookmark_pipeline = BookmarkPipeline(
             bookmark_store=bookmark_store,

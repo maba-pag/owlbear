@@ -948,3 +948,63 @@ class TestBuilderDiscovered:  # noqa: N801
         results = await orch.refresh_all()
 
         assert results == []
+
+    # -----------------------------------------------------------------------
+    # SSRF protection: _web_read scheme validation (builder-discovered, cycle 4)
+    # -----------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_web_read_rejects_file_scheme_returns_none(self) -> None:
+        """SSRF: file:// scheme must be rejected; returns None without calling httpx."""
+        from owlbear_mcp_knowledge.server import _web_read  # noqa: PLC0415
+
+        result = await _web_read("file:///etc/passwd")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_web_read_rejects_gopher_scheme_returns_none(self) -> None:
+        """SSRF: non-http schemes (gopher, ftp, etc.) must be rejected."""
+        from owlbear_mcp_knowledge.server import _web_read  # noqa: PLC0415
+
+        result = await _web_read("gopher://attacker.com/exploit")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_web_read_https_scheme_reaches_httpx(self) -> None:
+        """https:// scheme passes scheme check and is forwarded to httpx."""
+        from unittest.mock import patch  # noqa: PLC0415
+
+        from owlbear_mcp_knowledge.server import _web_read  # noqa: PLC0415
+
+        mock_resp = MagicMock()
+        mock_resp.text = "page content"
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_resp)
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+            result = await _web_read("https://example.com")
+
+        assert result == "page content"
+
+    @pytest.mark.asyncio
+    async def test_web_read_http_exception_returns_none(self) -> None:
+        """httpx errors (network, HTTP error) are caught and return None."""
+        from unittest.mock import patch  # noqa: PLC0415
+
+        import httpx as httpx_mod  # noqa: PLC0415
+
+        from owlbear_mcp_knowledge.server import _web_read  # noqa: PLC0415
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=httpx_mod.ConnectError("refused"))
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+            result = await _web_read("https://unreachable.example.com")
+
+        assert result is None
