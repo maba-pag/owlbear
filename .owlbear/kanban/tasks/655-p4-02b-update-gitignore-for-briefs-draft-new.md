@@ -1,10 +1,12 @@
 ---
 id: 655
 title: 'P4-02b: Update .gitignore for briefs draft-new/ pattern'
-status: review
+status: archived
 priority: needed
 created: 2026-04-06T07:17:22.9176335+02:00
-updated: 2026-04-06T18:48:09.8729502+02:00
+updated: 2026-04-06T19:52:08.899772+02:00
+started: 2026-04-06T19:52:08.899772+02:00
+completed: 2026-04-06T19:52:08.899772+02:00
 tags:
     - phase-4
     - ' scope:ideator'
@@ -108,3 +110,104 @@ N/A — no codepaths with failure modes; static config file edit.
 - `.owlbear/briefs/.gitkeep`, `README.md`, and completed `draft-{name}/` directories are preserved by construction.
 - AC verified: pattern matches only the transient template; completed dirs remain trackable.
 - Lint/tests: N/A — config-only change.
+
+[[2026-04-06]] Mon 19:16
+## Review Evidence
+
+### Changed Files
+- `.gitignore` — only changed file attributed to this task (23 total unstaged, rest belong to sibling tasks)
+
+### Tests
+- N/A — `type:config` pass-through. Test-writer correctly passed through with no `TestFromAC_*` classes.
+
+### Lint
+- N/A — static config file, no Python changed.
+
+### Coverage  
+- N/A
+
+### Security (5.1)
+- No concerns. Static config file edit with no new system boundaries.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `.gitignore` includes `.owlbear/briefs/draft-new/` | `.gitignore` L60-61 — comment + exact pattern present | PASS |
+| `.gitignore` preserves `.owlbear/briefs/.gitkeep` and `.owlbear/briefs/README.md` | No pattern in full `.gitignore` (L1-70) matches those paths. Scratch wildcard (L56) is scoped to `.owlbear/scratch/*` — does not bleed into `.owlbear/briefs/` | PASS |
+| Completed `draft-{name}/` dirs NOT ignored | Pattern `.owlbear/briefs/draft-new/` is an exact match only — `draft-abc/`, `draft-myproject/` etc. are unaffected | PASS |
+
+### Pass 1 Critical Checks
+- 5.0 TestFromAC audit: N/A — no `TestFromAC_*` classes (type:config task)
+- 5.1 Security: PASS — static config, no new surface
+- 5.2 TestFromAC integrity: N/A
+- 5.3 Test quality: N/A
+- 5.4 Data safety: N/A
+- 5.5 Implementation-aware gap analysis: N/A — single-line config
+- 5.6 Necessity: PASS — pattern did not previously exist; `git check-ignore -v .owlbear/briefs/draft-new/somefile` would return this rule
+- 5.7 Builder process: CLEAN — single cycle, no retries
+
+### Deductions
+0
+
+### Verdict
+Confidence: .98 → PASS
+
+Pattern placement follows existing `.owlbear/scratch/*` precedent. Specific path (not wildcard) correctly prevents over-matching. All 3 AC lines satisfied by construction.
+
+[[2026-04-06]] Mon 19:21
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `.github/copilot-instructions.md` is a 5-line identity stub; no briefs directory or gitignore conventions documented there. Pure config change — no behavior or API changed. |
+| 2 | Module docstrings | No | N/A | No Python files changed — `type:config` task. |
+| 3 | External attribution | No | N/A | Only internal sources used: `.owlbear/research/briefs-directory-structure.md` (parent #642, pre-validated). No external repos/articles/docs cited. |
+| 4 | CLI changes | No | N/A | No CLI changes. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/briefs-directory-structure.md` exists. Linked in task body. Follow-up tasks: none needed — this task IS the implementation follow-up per researcher notes. |
+
+### Implementation Verified
+- `.gitignore` L60-61: comment + `.owlbear/briefs/draft-new/` pattern present exactly as specified in AC and implementation guidance.
+- AC1 PASS: pattern exists. AC2 PASS: no wildcard on parent dir; `.gitkeep` and `README.md` unaffected. AC3 PASS: `draft-new/` is exact-match only; `draft-{name}/` dirs are unaffected.
+
+### Files Updated
+- None — no documentation updates required.
+
+### Scratch Files Cleaned
+- None — no `655-*` scratch files found.
+
+[[2026-04-06]] Mon 19:52
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| .gitignore includes pattern to ignore .owlbear/briefs/draft-new/ | .gitignore L60-61: comment + exact pattern present (verified via git diff and file read) | PASS |
+| .gitignore preserves .owlbear/briefs/.gitkeep and README.md | Full .gitignore L50-70 reviewed: no pattern matches those paths. Scratch wildcard (L56) scoped to .owlbear/scratch/* only | PASS |
+| Completed draft-{name}/ dirs NOT ignored | Pattern .owlbear/briefs/draft-new/ is exact-match only; draft-abc/, draft-myproject/ etc. unaffected by construction | PASS |
+
+### Test Results
+- pytest: N/A (type:config task, no Python changed). Full suite has pre-existing failures from other tasks (test_agent_port_v2.py, test_planner_gates.py) — none related to .gitignore.
+- ruff: N/A (no Python changed)
+
+### Architect Quality: 5/5
+All 3 AC lines specific, verifiable, and correctly scoped. Implementation guidance gave exact placement and content. No builder improvisation needed.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines with no evidence: 0 (all 3 verified with file evidence)
+- Lint violations: 0
+- AC quality deduction: 0 (score 5/5)
+- Missing reviewer evidence: 0 (present, detailed, .98 PASS)
+- Full-suite failures in task scope: 0
+
+### Confidence: .98
+### Action: archive
+
+### Notes
+- Builder did not commit the .gitignore change (unstaged). Auditor committed as 4c13d32. Quality gap noted but not a rubric deduction item.
+- Reviewer evidence thorough: all 3 AC lines mapped with specific line references.
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 4c13d32 | fix(config) | .gitignore | #655 |

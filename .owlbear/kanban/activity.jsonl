@@ -1,28 +1,3 @@
-{"timestamp":"2026-03-30T22:20:37.3971053+02:00","action":"release","task_id":208,"detail":"builder"}
-{"timestamp":"2026-03-30T22:20:42.5593316+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T22:20:42.5640846+02:00","action":"release","task_id":147,"detail":"reviewer"}
-{"timestamp":"2026-03-30T22:20:46.7494867+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T22:21:02.7373964+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T22:21:10.0290268+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T22:21:36.8060078+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T22:21:42.1937771+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T22:21:47.4156219+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-30T22:21:47.4197872+02:00","action":"release","task_id":307,"detail":"architect"}
-{"timestamp":"2026-03-30T22:22:11.5538468+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-30T22:22:11.5575381+02:00","action":"claim","task_id":203,"detail":"builder"}
-{"timestamp":"2026-03-30T22:22:14.8447043+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-03-30T22:22:14.8494606+02:00","action":"claim","task_id":318,"detail":"architect"}
-{"timestamp":"2026-03-30T22:22:16.337485+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T22:22:16.3431867+02:00","action":"claim","task_id":224,"detail":"reviewer"}
-{"timestamp":"2026-03-30T22:22:25.9920337+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T22:22:25.9956539+02:00","action":"claim","task_id":386,"detail":"architect"}
-{"timestamp":"2026-03-30T22:23:33.1546499+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T22:23:39.3618424+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T22:23:45.9876889+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T22:23:45.9897251+02:00","action":"release","task_id":386,"detail":"architect"}
-{"timestamp":"2026-03-30T22:24:42.4333087+02:00","action":"edit","task_id":224,"detail":"Update decision-requests skill for action request type"}
-{"timestamp":"2026-03-30T22:25:55.1788581+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-03-30T22:26:18.2888255+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
 {"timestamp":"2026-03-30T22:26:23.4884858+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
 {"timestamp":"2026-03-30T22:26:23.4921026+02:00","action":"block","task_id":318,"detail":"Decision 228-fresh-context-retry.md pending (approved:false). Feature invalidated if Option D chosen."}
 {"timestamp":"2026-03-30T22:26:23.4962867+02:00","action":"release","task_id":318,"detail":"architect"}
@@ -9998,3 +9973,28 @@
 {"timestamp":"2026-04-06T19:34:43.507016+02:00","action":"edit","task_id":654,"detail":"P4-02a: Create .owlbear/briefs/ directory with README and .gitkeep"}
 {"timestamp":"2026-04-06T19:34:43.5232656+02:00","action":"release","task_id":654,"detail":"fable-dusk"}
 {"timestamp":"2026-04-06T19:34:44.1550023+02:00","action":"move","task_id":654,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-06T19:35:30.3097391+02:00","action":"edit","task_id":658,"detail":"Deprecate w-project-scoping SKILL.md frontmatter and body"}
+{"timestamp":"2026-04-06T19:35:30.3233959+02:00","action":"claim","task_id":658,"detail":"ember-ember"}
+{"timestamp":"2026-04-06T19:35:38.0799232+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T19:35:38.0923869+02:00","action":"claim","task_id":136,"detail":"brisk-blaze"}
+{"timestamp":"2026-04-06T19:35:43.9499577+02:00","action":"edit","task_id":658,"detail":"Deprecate w-project-scoping SKILL.md frontmatter and body"}
+{"timestamp":"2026-04-06T19:35:43.9643279+02:00","action":"release","task_id":658,"detail":"ember-ember"}
+{"timestamp":"2026-04-06T19:40:03.8676069+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-06T19:40:03.8815314+02:00","action":"claim","task_id":615,"detail":"hazel-bloom"}
+{"timestamp":"2026-04-06T19:40:42.9849994+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-06T19:40:42.9984389+02:00","action":"release","task_id":615,"detail":"hazel-bloom"}
+{"timestamp":"2026-04-06T19:40:51.0208917+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T19:40:51.0330796+02:00","action":"release","task_id":136,"detail":"brisk-blaze"}
+{"timestamp":"2026-04-06T19:42:58.1298097+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T19:42:58.1434223+02:00","action":"claim","task_id":655,"detail":"jade-wren"}
+{"timestamp":"2026-04-06T19:43:53.8014583+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T19:43:53.8163122+02:00","action":"claim","task_id":136,"detail":"wick-heath"}
+{"timestamp":"2026-04-06T19:44:53.8875286+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-06T19:44:53.9031091+02:00","action":"claim","task_id":615,"detail":"pulse-basin"}
+{"timestamp":"2026-04-06T19:45:13.2522882+02:00","action":"edit","task_id":615,"detail":"First sync: validate clean main branch"}
+{"timestamp":"2026-04-06T19:45:13.2650658+02:00","action":"release","task_id":615,"detail":"pulse-basin"}
+{"timestamp":"2026-04-06T19:46:17.5321723+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools"}
+{"timestamp":"2026-04-06T19:46:17.5477837+02:00","action":"release","task_id":136,"detail":"wick-heath"}
+{"timestamp":"2026-04-06T19:52:08.3484027+02:00","action":"edit","task_id":655,"detail":"P4-02b: Update .gitignore for briefs draft-new/ pattern"}
+{"timestamp":"2026-04-06T19:52:08.3615446+02:00","action":"release","task_id":655,"detail":"jade-wren"}
+{"timestamp":"2026-04-06T19:52:08.9013518+02:00","action":"move","task_id":655,"detail":"done -\u003e archived"}
