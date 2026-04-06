@@ -1,6 +1,6 @@
 ---
-# >> Your action: set approved to true (edit decision/notes first if you disagree)
-approved: true
+# >> Your action: set response to approved, needs-info, or rejected
+response: approved
 decision: "A: Threshold of 2 failures, builder first"
 notes: ""
 # >> Agent metadata (do not edit)

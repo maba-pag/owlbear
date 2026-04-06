@@ -1,6 +1,6 @@
 ---
-# >> Your action: check off all steps below, then set completed to true
-completed: true
+# >> Your action: set response to completed when done
+response: completed
 notes: "All AC (2,3,4,6,8,9) tested successfully."
 # >> Agent metadata (do not edit)
 request_type: action
@@ -61,5 +61,5 @@ the UI. See the full builder session notes in task #167 body for detailed contex
 
 ## Completion instructions
 
-When all steps above are checked off, set `completed: true` in the YAML header and save.
+When all steps above are checked off, set `response: completed` in the YAML header and save.
 The planner will unblock task #167 automatically on its next cycle.

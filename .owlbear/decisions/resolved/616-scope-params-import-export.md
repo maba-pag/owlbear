@@ -1,5 +1,5 @@
 ---
-approved: needs-info
+response: needs-info
 decision: "user needs more information, see notes"
 notes: "i need more depth on the risk: what is the cost of Qdrant cold-start migration on every restart, Qdrant cold-start latency on restart? How risky and how realistic is schema drift in a single-user local-laptop dev setting? how big is the effort actually? (caution, your time estimates are usually off by a factor of 12-24: you say 3 days but really it is 3-6 hours max.)"
 task_id: 616

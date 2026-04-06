@@ -1,6 +1,6 @@
 ---
-# >> Your action: check off all steps below, then set completed to true
-completed: true
+# >> Your action: set response to completed when done
+response: completed
 notes: "please actually read my input and make changes. your assumptions regarding the available vs code menus is wrong and very outdated."
 # >> Agent metadata (do not edit)
 request_type: action
@@ -31,11 +31,11 @@ directory is ready and waiting at `C:\Users\p362329\Coding\Projects\test-project
 - [ ] **AC4** — In the test-project VS Code window, right-click the Chat panel → select **Diagnostics**. Verify owlbear instructions files appear in the loaded instructions list (should show entries from `../owlbear/instructions/`).
 - [ ] **AC6** — Send a chat message in test-project. After response, expand the **References** section. Verify `.github/copilot-instructions.md` (from test-project) appears in References.
 - [ ] **AC8** — Open the agent picker again. Verify the **Test Agent** (from `test-project/.github/agents/test-agent.agent.md`) appears alongside owlbear agents, with no owlbear agent being hidden or overridden by the project-level agent.
-- [ ] **AC9** — After verification, clean up: delete `C:\Users\p362329\Coding\Projects\test-project\` (the whole directory). Then set `completed: true` in this file and move task #167 to review via `kanban\kanban-md.exe edit 167 --status review`.
+- [ ] **AC9** — After verification, clean up: delete `C:\Users\p362329\Coding\Projects\test-project\` (the whole directory). Then set `response: completed` in this file and move task #167 to review via `kanban\kanban-md.exe edit 167 --status review`.
 
 ## Completion instructions
 
-When all steps above are checked off, set `completed: true` in the YAML header and save.
+When all steps above are checked off, set `response: completed` in the YAML header and save.
 The planner will unblock the task automatically on its next cycle.
 
 Or run manually:

@@ -1,6 +1,6 @@
 ---
-# >> Your action: check off all steps below, then set completed to true
-completed: true
+# >> Your action: set response to completed when done
+response: completed
 notes: "Duplicate of docs\decisions\resolved\167-manual-vs-code-validation.md that was in pending/ at the same time. skipped because already resolved."
 # >> Agent metadata (do not edit)
 request_type: action
@@ -53,5 +53,5 @@ researcher, builder agents. AC3 PASS: /skills showed prompts. AC4 PASS: instruct
 AC6 PASS: copilot-instructions.md linked. AC7 PASS: Test Agent visible. AC8 PASS: no shadowing.
 AC9 PASS: deleted.").
 
-When all steps above are checked off, set `completed: true` in the YAML header and save.
+When all steps above are checked off, set `response: completed` in the YAML header and save.
 The planner will unblock task #167 automatically on its next cycle.

@@ -1,6 +1,6 @@
 ---
-# >> Your action: check off all steps below, then set completed to true
-completed: true
+# >> Your action: set response to completed when done
+response: completed
 notes: "Output: 2026-04-02 19:03:54.272 [info] [#6] [PostToolUse] Completed (NonBlockingError) in 1736ms\n2026-04-02 19:03:54.272 [info] [#6] [PostToolUse] Output: PROBE_EXIT2_FILE_548: tool=create_file. ; 'PROBE_EXIT2_FILE_548' does NOT appear in debug chat log, only in GH CP Chat Hooks Output."
 # >> Agent metadata (do not edit)
 request_type: action
@@ -49,5 +49,5 @@ confidence predicts `-File` will produce BlockingError. See
 
 ## Completion instructions
 
-When all steps above are checked off, set `completed: true` in the YAML header and save.
+When all steps above are checked off, set `response: completed` in the YAML header and save.
 The planner will unblock the task automatically on its next cycle.

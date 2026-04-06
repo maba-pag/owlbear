@@ -1,6 +1,6 @@
 ---
-# >> Your action: check off all steps below, then set completed to true
-completed: true
+# >> Your action: set response to completed when done
+response: completed
 notes: ""
 # >> Agent metadata (do not edit)
 request_type: action
@@ -69,5 +69,5 @@ This directly informs whether task #210 (PostToolUse lint guard) can rely on
 
 ## Completion instructions
 
-When all steps above are checked off, set `completed: true` in the YAML header and save.
+When all steps above are checked off, set `response: completed` in the YAML header and save.
 The planner will unblock task #532 automatically on its next cycle.

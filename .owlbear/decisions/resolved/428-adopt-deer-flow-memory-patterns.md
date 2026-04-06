@@ -1,6 +1,6 @@
 ---
-# >> Your action: set approved to true (edit decision/notes first if you disagree)
-approved: true
+# >> Your action: set response to approved, needs-info, or rejected
+response: approved
 decision: "custom: adopt 1,2,6 unchanges, 4 customized. for details see notes"
 notes: "unchanged: (1) fact schema, (2) confidence threshold gating, (6) category taxonomy. customize (4) max-capacity pruning: no actual pruning, mark for deletion and hide from output, but only user may actually delete, so they can review."
 # >> Agent metadata (do not edit)

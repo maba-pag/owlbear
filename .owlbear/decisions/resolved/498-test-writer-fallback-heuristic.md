@@ -1,6 +1,6 @@
 ---
-# >> Your action: set approved to true (edit decision/notes first if you disagree)
-approved: true
+# >> Your action: set response to approved, needs-info, or rejected
+response: approved
 decision: "A: Content-based heuristic with BLOCK escalation"
 notes: "What does `BLOCK with diagnostic note` even mean, processually? who is supposed to know of this how and to what? block is horrible, if no action is assigned, e.g. a user-decision created. Find a new step 4."
 # >> Agent metadata (do not edit)

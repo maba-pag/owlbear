@@ -1,6 +1,6 @@
 ---
-# >> Your action: set approved to true (edit decision/notes first if you disagree)
-approved: true
+# >> Your action: set response to approved, needs-info, or rejected
+response: approved
 decision: "A: Remove all execute/* tools + read/terminalLastCommand"
 notes: ""
 # >> Agent metadata (do not edit)

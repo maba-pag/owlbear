@@ -1,6 +1,6 @@
 ---
-# >> Your action: set approved to true (edit decision/notes first if you disagree)
-approved: true
+# >> Your action: set response to approved, needs-info, or rejected
+response: approved
 decision: "need more information"
 notes: "while it is true the search/searchsubagent tool containing a codebase search subagent exists to help with context management, user is unsure if it the right agent for this specific task. searching the codebase might be especially important for the architect in order to have context available for the actual architecture task and not have the context window polluted by codebase search for context. please look at this potential agent from this pov and come again with a user-decision. propbably best to do this after Category E-sub is implemented."
 # >> Agent metadata (do not edit)

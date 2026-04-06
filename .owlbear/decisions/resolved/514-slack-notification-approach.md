@@ -1,6 +1,6 @@
 ---
-# >> Your action: set approved to true (edit decision/notes first if you disagree)
-approved: true
+# >> Your action: set response to approved, needs-info, or rejected
+response: approved
 decision: "D: Defer / do nothing"
 notes: "No Slack available. Teams integration due to corp policy currently no possible. So defering right now."
 # >> Agent metadata (do not edit)

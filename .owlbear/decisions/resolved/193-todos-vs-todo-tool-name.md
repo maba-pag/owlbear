@@ -1,6 +1,6 @@
 ---
-# >> Your action: set approved to true (edit decision/notes first if you disagree)
-approved: true
+# >> Your action: set response to approved, needs-info, or rejected
+response: approved
 decision: "more research needed"
 notes: "User has created a screenshot of the current state in the most up to date version of vs code (1.113.0 from March 25th 2026) showing the tool name as `todo` (see docs\decisions\pending\193-todos-vs-todo-tool-name.png). Also, the Tool configuration als o shows the tool is named todo, not todos. No changelog after August 2025 (1.104) even mentions the todo tool, let alone a renaming. The research done so far is not sufficient to conclude that the tool name is `todos` and not `todo`. More research is needed to confirm the current tool name in VS Code."
 # >> Agent metadata (do not edit)
