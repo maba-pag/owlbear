@@ -1,10 +1,12 @@
 ---
 id: 575
 title: 'P2-04: Update pipeline agent files with MCP tool references alongside CLI'
-status: done
+status: archived
 priority: needed
 created: 2026-04-03T11:15:13.4411362+02:00
-updated: 2026-04-06T07:12:45.985583+02:00
+updated: 2026-04-06T07:18:41.8626194+02:00
+started: 2026-04-06T07:18:41.8626194+02:00
+completed: 2026-04-06T07:18:41.8626194+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
@@ -13,8 +15,6 @@ parent: 483
 depends_on:
     - 572
     - 574
-claimed_by: hill-reef
-claimed_at: 2026-04-06T07:12:45.9782745+02:00
 class: standard
 ---
 
@@ -136,3 +136,42 @@ User approved: **Close task #575 as resolved-by-architecture**
 **Decision:** A: Close task #575 as resolved-by-architecture
 
 **Rationale:** Architecture review confirms all acceptance criteria are either invalid, obsolete, already satisfied, or violate DRY principle. All 9 existing pipeline agents implement the correct pattern via h-mcp-kanban skill pointers. No remaining legitimate requirements.
+
+[[2026-04-06]] Mon 07:18
+## Audit
+### AC Verification
+
+Task closed as resolved-by-architecture per user-approved DR (.owlbear/decisions/resolved/575-close-as-resolved-by-architecture.md). No build/review cycle occurred. All AC lines evaluated against codebase state:
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All 11 pipeline agent files updated with MCP tool alternatives alongside CLI | Only 9 pipeline agents exist (share/agents/ grep verified). v2 has zero CLI commands. h-mcp-kanban has lifecycle pattern at line 49. | N/A (resolved-by-architecture) |
+| Agents list: 11 named agents | 9 agents confirmed. kanban-planner.agent.md absent, writer.agent.md absent (= doc-writer), scribe has no kanban protocol section. | N/A (resolved-by-architecture) |
+| Each agent CLI shows MCP equivalent | Zero CLI commands in v2 agent bodies (Select-String verified, 0 matches for kanban-md). | N/A (resolved-by-architecture) |
+| Compound tools documented as preferred | h-mcp-kanban SKILL.md Agent Lifecycle Pattern section exists (line 49). Already done. | N/A (resolved-by-architecture) |
+| No CLI references removed | Zero CLI refs exist in v2 agent bodies. | N/A (resolved-by-architecture) |
+| Must pass #572 agent file checks | Original assertions removed during v2 reorg. | N/A (resolved-by-architecture) |
+
+### Test Results
+- pytest: 182 passed, 73 failed, 2 skipped (full suite). All 73 failures pre-existing: #638 editfiles (16), #572 port tests with stale expectations (17), agent-scoped-hooks research (14), analysis pydantic changes (16+), approve-memory (3). Zero failures in #575 scope (no code changes).
+- ruff: 5 pre-existing errors in mcp-kanban server.py and test_server.py. None in #575 scope.
+
+### Architect Quality: 2/5
+Every AC line was factually incorrect, obsolete, or already satisfied. Task listed 11 agents (9 exist), named non-existent agents (kanban-planner, writer), assumed CLI commands that don't exist in v2, and referenced a requirement already fulfilled by h-mcp-kanban. Required 3 research passes + architecture review + DR to resolve. Mitigating context: AC was written during phase-2 planning before v2 reorg.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC quality score 2/5 (lte 3): -.03
+- Pre-existing test failures (none in task scope): no deduction
+- Pre-existing lint errors (none in task scope): no deduction
+- No reviewer evidence section (N/A, no build cycle for resolved-by-architecture): no deduction
+- Research committed (f684a21), decision resolved, user-approved: no deduction
+
+### Confidence: .97
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| f684a21 | research | .owlbear/research/575-agent-mcp-lifecycle-audit.md | #575 |
+| f9ed931 | chore | .owlbear/decisions/resolved/575-..., .owlbear/kanban/tasks/575-... | #575 |

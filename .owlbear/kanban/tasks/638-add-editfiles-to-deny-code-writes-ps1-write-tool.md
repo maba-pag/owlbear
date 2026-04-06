@@ -245,15 +245,15 @@ All other AC lines pass. Implementation and tests are sound.
 ## Review Evidence (Cycle 2)
 
 ### Cycle Context
-Prior FAIL (.79): AC1 sub-deliverable — `## Verified Schema` section absent from task body.  
+Prior FAIL (.79): AC1 sub-deliverable — `## Verified Schema` section absent from task body.
 Retry fix: Builder added `## Verified Schema` section to task body (kanban task markdown only — no code changes).
 
 ### Test Results
-QR-confirmed (independent run, this cycle): **16 passed, 0 failed** (pytest exit 0)  
+QR-confirmed (independent run, this cycle): **16 passed, 0 failed** (pytest exit 0)
 All 3 TestFromAC_ classes green: EditFilesSchemaArtifact, EditFilesPathExtraction, DocWriterEditFilesToolEntry.
 
 ### Lint
-Python test file: **clean** (ruff exit 0, zero violations)  
+Python test file: **clean** (ruff exit 0, zero violations)
 `.owlbear/hooks/deny-code-writes.ps1`: 93 ruff "invalid-syntax" false positives — ruff parsing PowerShell as Python. Not a real lint failure.
 
 ### Coverage

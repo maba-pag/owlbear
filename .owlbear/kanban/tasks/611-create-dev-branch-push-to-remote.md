@@ -1,16 +1,18 @@
 ---
 id: 611
-title: Create dev branch and push to remote
+title: Create dev branch, push to remote
 status: review
 priority: nice-to-have
 created: 2026-04-04T21:54:56.0860979+02:00
-updated: 2026-04-06T04:05:54.4936427+02:00
+updated: 2026-04-06T15:11:32.1263909+02:00
 tags:
     - scope:infra
     - type:build
     - type:config
     - phase-2
 parent: 610
+claimed_by: thorn-steam
+claimed_at: 2026-04-06T15:11:32.1248094+02:00
 class: standard
 ---
 

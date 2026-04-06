@@ -1,16 +1,16 @@
 ---
 id: 616
 title: Add project-local knowledge source (.owlbear/knowledge/) to mcp-knowledge
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-05T00:16:00.8159576+02:00
-updated: 2026-04-06T12:53:24.2602517+02:00
+updated: 2026-04-06T13:05:12.2677343+02:00
+started: 2026-04-06T13:05:12.2677343+02:00
+completed: 2026-04-06T13:05:12.2677343+02:00
 tags:
     - scope:mcp
     - phase-2
     - research
-claimed_by: storm-timber
-claimed_at: 2026-04-06T12:53:24.2602517+02:00
 class: standard
 ---
 
@@ -279,3 +279,42 @@ None — all documentation already in place from research pipeline.
 
 ### Verdict
 PASS — research task, all deliverables present and verified. No new documentation required.
+
+[[2026-04-06]] Mon 13:05
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Research complete | .owlbear/research/project-local-knowledge-source.md (3 passes), .owlbear/research/616-three-way-comparison.md (user-requested three-way comparison) | PASS |
+| Decomposition into follow-up tasks | #617 (archived), #618 (archived), #633 (archived) -- all with verifiable AC, all completed | PASS |
+
+### Test Results
+- pytest: 3123 passed, 432 failed, 8 skipped (all failures outside #616 scope -- voice, scratch dir, session hooks, skill frontmatter, rename_todo, etc.)
+- ruff: 5 violations, all in mcp-kanban (outside #616 scope)
+
+### Reviewer Evidence
+Present, detailed, PASS at .93. Verified DR integrity, deliverables, scribe fabrication correction. Trusted code-level findings.
+
+### Architect Quality: 4/5
+AC "Needs research and decomposition" is appropriate for a research parent. Deliverables exceeded AC (3 research passes, user-requested three-way comparison, risk-depth analysis). Follow-up tasks had proper verifiable AC. Minor gap: AC could explicitly list expected deliverables.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines without evidence: 0 (0 deduction)
+- Lint violations in scope: 0 (0 deduction)
+- AC quality 4/5 (above 3): 0 deduction
+- Reviewer evidence present and detailed: 0 deduction
+- Full-suite test failures in scope: 0 (0 deduction)
+
+### Process Notes
+- Scribe fabrication incident (fake DR approval) was self-corrected by pipeline. Final DR state clean.
+- Research doc and resolved DR were uncommitted by upstream agents. Committed as leftover in this audit pass.
+- DR notes field blank, Decision Resolved section in body lacks timestamp/agent attribution (reviewer noted, minor process quality gap).
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 89d77bb | docs(research) | 616-three-way-comparison.md, 616-scope-params-approval.md (pending del + resolved add), 616 task | #616 |

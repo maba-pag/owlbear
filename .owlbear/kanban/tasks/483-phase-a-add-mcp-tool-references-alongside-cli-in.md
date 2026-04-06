@@ -182,6 +182,13 @@ Parent AC: all 6 subtasks must be archived. 3 of 6 NOT archived (#574 backlog, #
 - Test-writer flagged as docs pass-through (docs tag, per architect review 2026-04-03).
 - Existing test: tests/test_mcp_tool_references_483.py (73 tests, committed in subtask #572).
 
+[[2026-04-06]] Mon 14:58
+## Builder Notes (disposition #632)
+- All 6 canonical subtasks (#562, #563, #572, #574, #575, #576) are now archived.
+- #575 (update 11 pipeline agent files): archived as resolved-by-architecture — v2 DRY factoring via h-mcp-kanban skill pointer design supersedes original AC. #484 removed CLI, #486 centralized lifecycle pattern.
+- #576 (update 14 skill cheatsheets): archived as resolved-by-architecture — same supersession chain as #575 per Phase B/C consolidation.
+- Parent completion criteria fulfilled: all 6 subtasks archived.
+
 [[2026-04-03]] Fri 19:16
 ## Review Evidence
 

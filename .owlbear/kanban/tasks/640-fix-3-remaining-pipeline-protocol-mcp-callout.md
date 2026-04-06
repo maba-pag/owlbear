@@ -1,16 +1,16 @@
 ---
 id: 640
 title: Fix 3 remaining pipeline protocol MCP callout tests (test_mcp_tool_references_574.py)
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T06:42:11.1505594+02:00
-updated: 2026-04-06T10:00:58.566086+02:00
+updated: 2026-04-06T10:14:34.2979986+02:00
+started: 2026-04-06T10:14:34.2979986+02:00
+completed: 2026-04-06T10:14:34.2979986+02:00
 tags:
     - phase-2
     - ' scope:agent-config'
     - ' type:fix'
-claimed_by: stone-mace
-claimed_at: 2026-04-06T10:00:58.566086+02:00
 class: standard
 ---
 
@@ -202,3 +202,36 @@ N/A — no Python touched.
 **Files updated:** None required.
 **Scratch files:** None found (`.owlbear/scratch/640-*` — no matches).
 **Verdict:** No docs impact — task was a 2-line markdown addition to a skill file following an established inline callout pattern. All 5 checklist items N/A with evidence verified.
+
+[[2026-04-06]] Mon 10:14
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All tests in test_mcp_tool_references_574.py pass | 8/8 passed (uv run pytest, 0 failures) | PASS |
+| 3 specific failures fixed (channel-b append_body, section append_body, handoff edit_task) | test_channel_b_has_append_body_param, test_section_has_mcp_tool[channel-b to append_body], test_section_has_mcp_tool[handoff to edit_task] all GREEN | PASS |
+| Pipeline protocol updated with MCP callouts for Channel B and Handoff | SKILL.md L119: edit_task(append_body="...", timestamp=True); L207: edit_task(append_body="## Handoff\n...") | PASS |
+
+### Test Results
+- pytest (task-specific): 8 passed, 0 failed
+- pytest (full suite): 3096 passed, 459 failed (all pre-existing RED-phase tests from unbuilt tasks: voice, session-context, skill-frontmatter, etc.), 0 failures in task scope
+- ruff: N/A (markdown-only change)
+
+### Architect Quality: 4/5
+Minor: AC line "3 specific failures fixed: channel-b to append_body, section to append_body, handoff to edit_task" uses shorthand labels instead of test names, but intent is unambiguous given the test file reference. Tests defined exact expected strings, making verification clean.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (3/3 verified)
+- Lint violations: 0 (N/A for markdown)
+- AC quality: 4/5 (no deduction, above threshold)
+- Missing reviewer evidence: 0 (present, detailed, 8/8 mapped)
+- Full-suite failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7715b3e | fix | share/skills/r-pipeline-protocol/SKILL.md | #640 |
+| a9342c7 | chore | .owlbear/kanban/tasks/640-*.md | #640 |

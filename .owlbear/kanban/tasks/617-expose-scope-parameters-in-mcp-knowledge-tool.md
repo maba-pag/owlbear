@@ -1,10 +1,12 @@
 ---
 id: 617
 title: Expose scope parameters in mcp-knowledge tool signatures
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-04-05T01:26:23.6081166+02:00
-updated: 2026-04-06T01:24:27.1181018+02:00
+updated: 2026-04-06T12:44:50.962686+02:00
+started: 2026-04-06T12:44:50.962686+02:00
+completed: 2026-04-06T12:44:50.962686+02:00
 tags:
     - scope:mcp
     - phase-2
@@ -115,3 +117,170 @@ AC coverage:
 Failure types: TypeError (unexpected kwarg), AssertionError (kwarg not forwarded), AttributeError (to_thread not reached). All 18 FAIL confirmed by pytest run.
 
 Note: test file written via [System.IO.File]::WriteAllText — create_file hook blocks absolute paths outside tests/ even when targeting tests/.
+
+[[2026-04-06]] Mon 10:45
+## Builder Notes
+
+### Files Changed
+- `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` — AC1 and AC2 wired (scopes to search_knowledge, scope to ingest_document); AC3 wired but blocked by test interface bug
+
+### Test Results
+- 11/18 passed: all `TestFromAC_SearchKnowledgeScopes` (5) and `TestFromAC_IngestDocumentScope` (5) plus `test_default_scopes_none_forwarded_via_to_thread` (1)
+- 7/18 failed: all `TestFromAC_ListEntitiesScopes` (except the default-None test already counted above)
+
+### Reject Reason: TestFromAC_ListEntitiesScopes uses infeasible interface assumption
+
+Every test in `TestFromAC_ListEntitiesScopes` calls `_make_ctx()` WITHOUT a `graph_store` argument. The `_make_ctx()` helper in `test_scope_params_617.py` has `graph_store: object = None` as default, so `app_ctx.graph_store = None`.
+
+The implementation MUST check `if gs is None: return "error: graph store not available"` BEFORE `asyncio.to_thread` is called — required by `test_null_safety_539.py::test_list_entities_null_check_fires_before_entity_type_validation` (AC4).
+
+This null guard fires and returns early before `asyncio.to_thread` is reached. The scope tests then fail because `mock_t.call_args` is `None` → `AttributeError: 'NoneType' object has no attribute 'kwargs'`.
+
+### Fix Required
+Test-writer must update **all 7 tests in `TestFromAC_ListEntitiesScopes`** to pass a non-None `graph_store`:
+
+```python
+# Change this (graph_store defaults to None, null guard fires):
+await list_entities(_make_ctx(), scopes=["work"])
+
+# To this (graph_store is a MagicMock, null guard passes):
+await list_entities(_make_ctx(graph_store=MagicMock()), scopes=["work"])
+```
+
+AC1 (search_knowledge scopes) and AC2 (ingest_document scope) implementations are already correct and in place. Once the test-writer fixes `_make_ctx()` calls in `TestFromAC_ListEntitiesScopes`, AC3 wiring is already done and all 18 tests should pass.
+
+### Lint
+Not run (partial RED state). Will run at next GREEN.
+
+[[2026-04-06]] Mon 11:49
+## Test-Writer Notes (Retry)
+- Retry: Fixed null-guard assumption bug in TestFromAC_ListEntitiesScopes
+- All 7 `_make_ctx()` calls in `TestFromAC_ListEntitiesScopes` updated to `_make_ctx(graph_store=MagicMock())`
+- Without a non-None graph_store, the null guard (`if gs is None: return "error..."`) fires before `asyncio.to_thread`, making those tests unreachable
+- Test file: tests/test_scope_params_617.py
+- Classes: TestFromAC_SearchKnowledgeScopes, TestFromAC_IngestDocumentScope, TestFromAC_ListEntitiesScopes
+- Post-fix status: 18/18 PASS (builder had already wired AC1–AC3 in prior session)
+- ruff: clean
+- Note: fix committed as part of feat(638) commit (15647e9) in prior session — not ideal but in place
+
+[[2026-04-06]] Mon 12:21
+## Builder Notes
+
+### Files Changed
+- `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` — AC1, AC2, AC3 scope params wired (12 insertions, 5 deletions)
+- `tests/test_scope_params_617.py` — committed in prior session (feat(638)/15647e9), 18 tests covering all 5 ACs
+
+### Commit
+- `537e179` feat(617): expose scope params in mcp-knowledge tool signatures
+
+### Test Results
+- 18/18 passed: TestFromAC_SearchKnowledgeScopes (5), TestFromAC_IngestDocumentScope (5), TestFromAC_ListEntitiesScopes (7+1 default) 
+- No builder-discovered tests needed — TestFromAC coverage was comprehensive
+- Prior session: REJECT → test-writer fixed _make_ctx() null-guard assumption → retry GREEN confirmed 18/18
+
+### Lint
+- ruff: clean (serve/mcp-knowledge/src/, tests/test_scope_params_617.py)
+
+### Coverage
+- server.py: 51% overall (expected — only 3 of ~20 tools exercised by this test file; full-suite coverage tracked separately)
+
+### AC Evidence
+| AC | Status | Evidence |
+|----|--------|---------|
+| AC1 | PASS | search_knowledge(scopes=...) → qs.query(…, scopes=scopes) |
+| AC2 | PASS | ingest_document(scope=...) → pipeline.ingest_text(…, scope=scope) |
+| AC3 | PASS | list_entities(scopes=...) → asyncio.to_thread(gs.list_entities, …, scopes=scopes) both branches |
+| AC4 | PASS | Defaults: scopes=None, scope="global" — behavior identical to pre-change |
+| AC5 | PASS | 18 tests in test_scope_params_617.py |
+
+[[2026-04-06]] Mon 12:29
+## Review Evidence
+
+### Test Results
+pytest: **18 passed, 0 failed** (tests/test_scope_params_617.py)
+ruff: **clean** (serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py + test file)
+Coverage: server.py 51% — expected; only 3 of ~20 tools exercised by scope test file; full-suite coverage tracked separately.
+
+### Changed Files (task-relevant)
+- `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` — AC1, AC2, AC3 wired
+- `tests/test_scope_params_617.py` — 18 tests, 3 TestFromAC_* classes
+
+### AC Compliance Table
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1 | `search_knowledge(scopes: list[str] \| None = None)` → `qs.query(query, top_k=limit, scopes=scopes)` (server.py); 6 tests in TestFromAC_SearchKnowledgeScopes | PASS |
+| AC2 | `ingest_document(scope: str = "global")` → `pipeline.ingest_text(text, metadata=metadata, scope=scope)` (server.py); 5 tests in TestFromAC_IngestDocumentScope | PASS |
+| AC3 | `list_entities(scopes: list[str] \| None = None)` → both branches of `asyncio.to_thread(gs.list_entities, ..., scopes=scopes)` (server.py); 7 tests in TestFromAC_ListEntitiesScopes | PASS |
+| AC4 | Defaults `scopes=None`, `scope="global"` preserved; 3 dedicated default-preservation tests confirm kwargs explicitly forwarded | PASS |
+| AC5 | 18 tests in test_scope_params_617.py covering all AC lines | PASS |
+
+### TestFromAC Integrity
+All 3 TestFromAC_* classes intact. Test-writer retry legitimately updated `_make_ctx()` calls in TestFromAC_ListEntitiesScopes to supply non-None `graph_store` — null guard fires before `asyncio.to_thread` otherwise. This is a bug fix, not a weakening. No test removed or assertion relaxed.
+
+### Test Quality Assessment
+- **Assertion specificity:** STRONG — every test inspects `call_args.kwargs` for exact value equality. No lazy `assert result`, no `assert result is not None`.
+- **Negative/error-path coverage:** AC does not require error-path scope tests; null-guard paths covered by pre-existing test_null_safety_539.py.
+- **Manual mutation reasoning:** Removing `scopes=scopes` from any `qs.query()` call would fail `test_scopes_single_value_forwarded_to_query`; removing from `pipeline.ingest_text()` would fail `test_explicit_scope_forwarded_to_ingest_text`; removing from `asyncio.to_thread(gs.list_entities, ...)` would fail `test_scopes_single_value_forwarded_via_to_thread`. All mutations catchable.
+- **asyncio.to_thread mock technique:** `patch("owlbear_mcp_knowledge.server.asyncio.to_thread", new_callable=AsyncMock)` is correct — intercepts the module attribute, `call_args.kwargs` captures forwarded keyword arguments to `to_thread` including `scopes=`.
+- **Test independence:** Each test creates fresh mocks via `_make_ctx()` — no shared mutable state.
+
+### Security Review
+- Scope strings passed as parameters to downstream parameterized queries — same pattern as existing `list_sources(scope=)`. No injection risk.
+- No hardcoded secrets, no path traversal, no unsafe deserialization introduced.
+- No new dependencies.
+
+### Deductions
+- Minor: test_scope_params_617.py was committed in feat(638) commit (15647e9) rather than feat(617). Traceability is imperfect but file is correct, tests pass, AC5 satisfied. -0.02.
+
+### Verdict
+Confidence: **.95** → **PASS**
+
+[[2026-04-06]] Mon 12:33
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | copilot-instructions.md is a 5-line project identity stub — no tool-signature tables. Nothing to update. |
+| 2 | Module docstrings | Yes | Verified | search_knowledge, ingest_document, list_entities docstrings remain accurate after scope param additions. Brief single-line style consistent with list_sources and all other tools in file. No update needed. |
+| 3 | External attribution | No | N/A | Research doc cites only internal sources (codebase files, internal research docs). No external sources require a new sources/overview.md row. |
+| 4 | CLI changes | No | N/A | MCP server only — no CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | .owlbear/research/expose-scope-mcp-knowledge-tools.md exists; linked in task body under [[2026-04-05]] Research section; follow-up task #633 created and in depends_on. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found (.owlbear/scratch/617-* — no matches)
+
+[[2026-04-06]] Mon 12:44
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: search_knowledge scopes param | server.py L200: `scopes: list[str] \| None = None`, forwarded via `qs.query(query, top_k=limit, scopes=scopes)`; 5 tests in TestFromAC_SearchKnowledgeScopes | PASS |
+| AC2: ingest_document scope param | server.py L224: `scope: str = "global"`, forwarded via `pipeline.ingest_text(text, metadata=metadata, scope=scope)`; 5 tests in TestFromAC_IngestDocumentScope | PASS |
+| AC3: list_entities scopes param | server.py L249: `scopes: list[str] \| None = None`, forwarded in both `asyncio.to_thread` branches; 7 tests in TestFromAC_ListEntitiesScopes | PASS |
+| AC4: defaults preserved | `scopes=None`, `scope="global"` defaults; 3 dedicated default-preservation tests | PASS |
+| AC5: new tests verify forwarding | 18 tests in test_scope_params_617.py, all PASS | PASS |
+
+### Test Results
+- pytest (task-scoped): 18 passed, 0 failed (test_scope_params_617.py)
+- pytest (full suite): pre-existing failures in unrelated files (test_acp_client.py etc.), no regressions from task scope
+- ruff: clean (serve/mcp-knowledge/src/ + test file)
+
+### Architect Quality: 4/5
+AC lines were specific and testable. Minor gap: AC1 body originally claimed query() "already supports" scopes, but researcher challenge correctly identified this and created prerequisite #633. By implementation time AC was accurate.
+
+### Deduction Breakdown
+- Start: 1.00
+- Test file committed under feat(638) rather than feat(617): -.02
+- Confidence: .98
+
+### Action: archive
+
+### Commit Verified
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 537e179 | feat(617) | server.py (12 ins, 5 del) | #617 |
+| 15647e9 | feat(638) | test_scope_params_617.py (test file, committed in prior session) | #617 #638 |

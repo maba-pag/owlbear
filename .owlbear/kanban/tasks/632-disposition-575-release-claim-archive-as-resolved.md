@@ -1,10 +1,10 @@
 ---
 id: 632
-title: 'Disposition #575: release claim and archive as resolved-by-architecture'
-status: in-progress
+title: 'Disposition #575: release claim, archive as resolved-by-architecture'
+status: review
 priority: nice-to-have
 created: 2026-04-05T12:57:54.0576608+02:00
-updated: 2026-04-05T23:31:00.1583994+02:00
+updated: 2026-04-06T15:01:55.5377041+02:00
 tags:
     - phase-2
     - ' scope:kanban'
@@ -84,3 +84,13 @@ APPROVED: AC precise, architecture sound. Refined AC3, added type:config tag, up
 ## Test-Writer Notes
 - Non-implementation task (tagged type:config) — no tests applicable.
 - Passing through to builder.
+
+[[2026-04-06]] Mon 15:01
+## Builder Notes
+- Non-implementation task (type:chore + type:config) — board hygiene operations only, no code changes.
+- AC1 (release #575 claim): already done — #575 status=archived, claimed=false (completed by auditor 2026-04-06 Mon 07:18).
+- AC2 (archive #575 as resolved-by-architecture): already done — #575 status=archived with full audit trail including DR user-approval.
+- AC3 (append parent #483 body note): completed — appended timestamped Builder Notes section to .owlbear/kanban/tasks/483-phase-a-add-mcp-tool-references-alongside-cli-in.md documenting all 6 subtasks (#562, #563, #572, #574, #575, #576) archived, #575/#576 both resolved-by-architecture per Phase B/C consolidation (#484 CLI removal, #486 DRY centralization). Parent completion criteria fulfilled.
+- Tests: non-impl pass-through — no tests applicable.
+- Lint: non-impl pass-through — no lint applicable.
+- Files changed: .owlbear/kanban/tasks/483-phase-a-add-mcp-tool-references-alongside-cli-in.md (note appended)

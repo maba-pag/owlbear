@@ -1,15 +1,15 @@
 ---
 id: 633
 title: Add per-query scopes override to KnowledgeQueryService.query()
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-05T12:59:29.4655727+02:00
-updated: 2026-04-06T09:40:26.7481115+02:00
+updated: 2026-04-06T10:00:19.6841263+02:00
+started: 2026-04-06T10:00:19.6841263+02:00
+completed: 2026-04-06T10:00:19.6841263+02:00
 tags:
     - scope:knowledge
     - phase-2
-claimed_by: mist-mesa
-claimed_at: 2026-04-06T09:40:26.7481115+02:00
 class: standard
 ---
 
@@ -219,3 +219,40 @@ None — no documentation updates required.
 
 ### Scratch Files
 No `.owlbear/scratch/633-*` files found — nothing to clean.
+
+[[2026-04-06]] Mon 10:00
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: query() accepts scopes kwarg | query_service.py:86-92 signature, 3 tests (accept kwarg, explicit None, empty list) | PASS |
+| AC2: _search_chunks() accepts scopes kwarg | query_service.py:68 signature, 3 tests | PASS |
+| AC3: Override forwarded, instance not used | query_service.py:70 effective_scopes idiom, 6 tests (vector + retriever paths) | PASS |
+| AC4: None falls back to self._scopes | query_service.py:70 `is not None` check, 4 tests | PASS |
+| AC5: Existing tests pass unchanged | test_query_service_160.py: 23 passed | PASS |
+
+### Test Results
+- test_query_service_633.py: 17 passed, 0 failed
+- test_query_service_160.py: 23 passed, 0 failed (regression)
+- Full suite: many failures from other tasks' RED-phase tests (unrelated to #633 scope)
+- ruff: clean on task scope (serve/knowledge/, test files)
+
+### Architect Quality: 5/5
+AC was specific, testable, complete. 5 clear lines with named idiom. Files Affected accurate. No builder improvisation needed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 5 covered)
+- Lint violations: 0
+- AC quality deduction: 0 (score 5)
+- Missing reviewer evidence: 0 (detailed, PASS at .96)
+- Full-suite failures in task scope: 0
+- Note: builder deliverable (query_service.py) was uncommitted. Committed during audit (7a32471).
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 80b05fc | chore | tests/test_query_service_633.py | #633 |
+| 7a32471 | feat | query_service.py, kanban task | #633 |

@@ -1,10 +1,10 @@
 ---
 id: 136
-title: Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools
+title: Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools
 status: review
 priority: nice-to-have
 created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-06T04:34:22.8986601+02:00
+updated: 2026-04-06T15:12:14.7049577+02:00
 tags:
     - phase-1
     - scope:knowledge
@@ -13,6 +13,8 @@ depends_on:
     - 33
     - 135
     - 223
+claimed_by: hill-crypt
+claimed_at: 2026-04-06T15:12:14.7010972+02:00
 class: standard
 ---
 

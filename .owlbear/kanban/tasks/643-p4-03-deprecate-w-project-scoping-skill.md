@@ -1,16 +1,16 @@
 ---
 id: 643
 title: 'P4-03: Deprecate w-project-scoping skill'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T07:00:16.8966876+02:00
-updated: 2026-04-06T11:51:23.7037676+02:00
+updated: 2026-04-06T12:17:29.1037377+02:00
+started: 2026-04-06T12:17:29.1037377+02:00
+completed: 2026-04-06T12:17:29.1037377+02:00
 tags:
     - phase-4
     - ' scope:ideator'
     - ' type:chore'
-claimed_by: grain-south
-claimed_at: 2026-04-06T11:51:23.7037676+02:00
 class: standard
 ---
 
@@ -173,3 +173,40 @@ None — all documentation changes were the builder's deliverable (committed `98
 
 ### Scratch Files
 None found matching `.owlbear/scratch/643-*` — no cleanup needed.
+
+[[2026-04-06]] Mon 12:17
+## Audit
+### AC Verification (Refined AC)
+| AC | Requirement | Evidence | Status |
+|----|------------|----------|--------|
+| AC1 | description = "Workflow (DEPRECATED): ..." | w-project-scoping/SKILL.md L3: exact match | PASS |
+| AC2 | Deprecation banner after frontmatter | w-project-scoping/SKILL.md L8: exact match | PASS |
+| AC3 | user-invocable: true preserved | w-project-scoping/SKILL.md L4: confirmed | PASS |
+| AC4 | Existing body content preserved | L10+: # Project Scoping and full Steps 0-5 present | PASS |
+| AC5 | h-agent-structure L182: w-project-scoping removed | Text: (e.g., w-retro, h-excalidraw-diagram) only | PASS |
+| AC6 | test_argument_hint_skills passes | TestFromAC_ProjectDefinitionArgumentHint 4/4 PASSED | PASS |
+
+### Test Results
+- pytest full suite: 3085 passed, 446 failed, 18 skipped (437.94s)
+- All 446 failures are pre-existing (test_voice_*, test_session_context_hook_590, test_skill_frontmatter, test_validate_skills_ci, etc.) -- zero in task scope
+- AC6 test: 4/4 PASSED (direct run verified)
+- ruff: 5 pre-existing violations in serve/mcp-kanban/ -- not in task scope
+
+### Architect Quality: 5/5
+Refined AC was exemplary -- exact strings, specific file paths and line numbers, pattern reference (h-kanban-md DEPRECATED precedent), and identified redundant tasks (#658/#659) as subsumed.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 6 verified by direct file read)
+- Lint violations in scope: 0
+- AC quality score: 5/5 (no deduction)
+- Reviewer evidence section: present, detailed, .97 confidence PASS verdict
+- Full-suite failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 98727c1 | chore(skills) | w-project-scoping/SKILL.md, h-agent-structure/SKILL.md | #643 |
+| 4731ebd | chore(kanban) | activity.jsonl, 643 task file | #643 |
