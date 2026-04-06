@@ -1,10 +1,12 @@
 ---
 id: 632
 title: 'Disposition #575: release claim, archive as resolved-by-architecture'
-status: review
+status: archived
 priority: nice-to-have
 created: 2026-04-05T12:57:54.0576608+02:00
-updated: 2026-04-06T15:01:55.5377041+02:00
+updated: 2026-04-06T17:53:52.2103722+02:00
+started: 2026-04-06T17:53:52.2103722+02:00
+completed: 2026-04-06T17:53:52.2103722+02:00
 tags:
     - phase-2
     - ' scope:kanban'
@@ -94,3 +96,79 @@ APPROVED: AC precise, architecture sound. Refined AC3, added type:config tag, up
 - Tests: non-impl pass-through — no tests applicable.
 - Lint: non-impl pass-through — no lint applicable.
 - Files changed: .owlbear/kanban/tasks/483-phase-a-add-mcp-tool-references-alongside-cli-in.md (note appended)
+
+[[2026-04-06]] Mon 16:25
+## Review Evidence
+
+### Test Results
+- N/A — non-implementation task (type:chore + type:config). Test-writer passed through correctly.
+
+### Lint Results
+- N/A — no code changes.
+
+### Changed Files
+- `.owlbear/kanban/tasks/483-phase-a-add-mcp-tool-references-alongside-cli-in.md` (note appended per AC3)
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: #575 claim released | `show_task(575)` → `claimed: false`, `status: "archived"` | PASS |
+| AC2: #575 archived as resolved-by-architecture | #575 body: `## Decision Resolved` + `## Audit` section with DR user-approval; status=archived since 2026-04-06 07:18 | PASS |
+| AC3: #483 body note documenting all 6 subtasks archived | Direct file read: `[[2026-04-06]] Mon 14:58 ## Builder Notes (disposition #632)` present in #483 body — lists #562, #563, #572, #574, #575, #576 as archived; #575/#576 noted as resolved-by-architecture per #484/#486; parent completion criteria stated as fulfilled | PASS |
+
+### Deductions
+- Start: 1.00
+- All AC lines verified via direct board/file inspection (not builder self-report): no deduction
+- Non-impl handled correctly throughout pipeline: no deduction
+- Total deductions: 0
+
+### Confidence: .97
+### Verdict: PASS → docs
+
+[[2026-04-06]] Mon 16:42
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Pure board hygiene (type:chore + type:config) — no behavior, API, or convention changes |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/575-agent-mcp-lifecycle-audit.md` exists; linked in task body; follow-up tasks: none needed (#625 already archived) |
+
+### Files Updated
+None — no docs impact. Only changed file was `.owlbear/kanban/tasks/483-phase-a-add-mcp-tool-references-alongside-cli-in.md` (kanban task body append, not a documentation surface).
+
+### Scratch Files
+None found for task #632 — nothing to clean.
+
+### Verdict: PASS → done
+
+[[2026-04-06]] Mon 17:53
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: #575 claim released | show_task(575): claimed=false, status=archived | PASS |
+| AC2: #575 archived as resolved-by-architecture | #575 body: Decision Resolved + Audit sections; status=archived since 2026-04-06 07:18 | PASS |
+| AC3: Parent #483 body note documenting all 6 subtasks archived | #483 body: Builder Notes (disposition #632) at 2026-04-06 14:58 — lists #562, #563, #572, #574, #575, #576 as archived; #575/#576 noted as resolved-by-architecture per #484/#486 | PASS |
+
+### Test Results
+- pytest: 3094 passed, 475 failed, 8 skipped (full suite, test_planner_gates.py excluded due to pre-existing ImportError from #207). All 475 failures pre-existing across 56 test files. Zero failures in task scope (no Python code changed).
+- ruff: 5 pre-existing errors in mcp-kanban server.py and test_server.py. None in task scope.
+
+### Architect Quality: 5/5
+AC1-AC3 are specific, complete, and directly verifiable. Context provides clear rationale with task references. Architect refined AC3 for precision. Clean implementation path for a disposition chore.
+
+### Deduction Breakdown
+- Start: 1.00
+- All 3 AC lines verified with specific evidence: no deduction
+- Reviewer evidence present and detailed (.97 PASS): no deduction
+- Pre-existing test failures (none in scope): no deduction
+- Pre-existing lint errors (none in scope): no deduction
+
+### Confidence: 1.00
+### Action: archive
