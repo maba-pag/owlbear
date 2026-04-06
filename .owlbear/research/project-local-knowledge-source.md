@@ -63,6 +63,49 @@ Expose the existing `scopes` parameter in `search_knowledge` and `scope` in `ing
 Challenge: reconsider — confidence in original: .55 (revised down from .82)
 Challenger raised valid concern about Qdrant cold-start, 5-handler rewrite cost, and schema drift. Adopted counter-proposal (scope params + import/export) at .80 confidence.
 
+## 4a. Risk Depth Analysis (requested by decision reviewer)
+
+### Qdrant Cold-Start Latency
+
+**Finding: Non-issue for Option C. Already a pre-existing limitation.**
+
+`QdrantVectorStore()` in `server.py:app_lifespan` uses `:memory:` with zero re-indexing on startup. Vector search already returns nothing after every MCP server restart — for ALL data, global included. This is today's status quo, not a new risk introduced by Option C.
+
+Option C avoids the cold-start concern entirely: `import_scope` writes embeddings into the shared in-memory Qdrant once at import time. After restart, both global and imported data are equally gone from Qdrant (but preserved in SQLite). A future re-indexing feature (startup scan of existing chunks → re-embed → upsert) would fix this globally, independent of scope work.
+
+**Hypothetical re-indexing cost (if someone adds it later):**
+
+| KB Size | Chunks | BGE-M3 batches (16/batch) | Model load (CPU, one-time) | Embed time (CPU) | Qdrant upsert | Total |
+|---------|--------|---------------------------|----------------------------|-------------------|---------------|-------|
+| Empty (current) | 0 | 0 | 0s (not loaded) | 0s | 0s | 0s |
+| Small project | ~50 | ~4 | ~15–30s | ~2–8s | <100ms | ~20–40s |
+| Medium project | ~200 | ~13 | ~15–30s | ~7–25s | <100ms | ~25–55s |
+
+Dominated by one-time model load. BGE-M3 is ~2GB, lazy-loaded (`_ensure_model`), CPU-only. The 600s idle timeout auto-unloads it.
+
+### Schema Drift Risk
+
+**Finding: Near-zero for single-user laptop. Zero for Option C.**
+
+Option C uses a single database file. `init_db()` runs on every startup with idempotent `CREATE TABLE IF NOT EXISTS` + migration chain (v1→v8). Schema drift cannot occur — there's only one DB to migrate.
+
+For the rejected dual-stack Option A, schema drift would mean: `.owlbear/knowledge/knowledge.db` in a target project could carry a different schema version. But even then, `init_db()` auto-migrates (`ALTER TABLE ... ADD COLUMN` with `suppress(OperationalError)`). In a single-user laptop setting, the same OwlBear version touches all DBs → versions stay aligned. Risk is theoretical.
+
+**Verdict:** Schema drift was a valid concern for dual-stack; irrelevant for approved Option C.
+
+### Effort Estimate (calibrated)
+
+| Task | What changes | LOC delta | Realistic hours |
+|------|-------------|-----------|-----------------|
+| #617: Scope params | Add `scopes`/`scope` param to 4 of 5 tool handlers (`list_sources` already has `scope`). Pass-through only — downstream `GraphStore.list_entities(scopes=)`, `KnowledgeQueryService(scopes=)`, `IngestPipeline.ingest_text(scope=)` all accept them already. | ~20 | ~1.5h |
+| #617: Tests | 4–5 tests confirming scope params reach downstream services. Mock-based, similar to existing test patterns. | ~60 | ~1h |
+| #618: import_scope | Open external SQLite, read documents/chunks/entities/edges for a scope, insert into current DB + embed into Qdrant. | ~80 | ~2h |
+| #618: export_scope | Query current DB for scope, write to portable SQLite file using `init_db` + `INSERT`. | ~60 | ~1.5h |
+| #618: Tests | ~4 tests for import/export round-trip, scope isolation, missing-file handling. | ~80 | ~1h |
+| **Total** | | **~300 LOC** | **~7h** |
+
+Note: #618 may benefit from decomposition (import and export could be separate tasks). The `list_sources` tool already has `scope` param — one handler is already done.
+
 ## 5. Follow-up Tasks
 
 1. **Expose scope params in MCP tools** — Add `scopes` to `search_knowledge`, `scope` to `ingest_document`, `scope` to `list_entities` tool signatures. Downstream already supports them.
