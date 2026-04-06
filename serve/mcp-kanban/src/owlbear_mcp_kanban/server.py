@@ -454,7 +454,7 @@ async def end_work(  # noqa: PLR0912, PLR0913, C901
     note: str,
     outcome: Literal["success", "fail", "block", "reject"] = "success",
     block_reason: str = "",
-    move_to: str = "ideation",
+    move_to: str = "research",
 ) -> KanbanTask:
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -526,11 +526,13 @@ async def end_work(  # noqa: PLR0912, PLR0913, C901
 # pick_tasks — gate-filtered dispatch list
 # ---------------------------------------------------------------------------
 
-_PICK_AND_PATTERN = re.compile(r"\band\b", re.IGNORECASE)
 _PICK_AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 _PICK_CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
 _PICK_NON_IMPL_TAGS = frozenset(
-    {"research", "docs", "type:config", "type:docs", "test", "type:test", "agent", "quality"}
+    {
+        "research", "docs", "type:config", "type:docs",
+        "test", "type:test", "agent", "quality", "type:user-action",
+    }
 )
 
 _PICK_PRIORITY_RANK: dict[str, int] = {
@@ -547,20 +549,17 @@ _PICK_STATUS_RANK: dict[str, int] = {
     "in-progress": 3,
     "todo": 4,
     "backlog": 5,
-    "ideation": 6,
+    "research": 6,
 }
 _PICK_MAX_PRIORITY_RANK = max(_PICK_PRIORITY_RANK.values())
 _PICK_MAX_STATUS_RANK = max(_PICK_STATUS_RANK.values())
 
 
 def _check_pick_gates(task: dict) -> bool:
-    """Return True if task passes atomicity, TDD, and clarity gates."""
-    title: str = task.get("title", "")
+    """Return True if task passes TDD and clarity gates."""
     status: str = task.get("status", "")
     body: str = task.get("body") or ""
 
-    if _PICK_AND_PATTERN.search(title):
-        return False
     if status == "in-progress" and "## Test-Writer Notes" not in body:
         tags: list[str] = task.get("tags") or []
         if not _PICK_NON_IMPL_TAGS.intersection(tags):
@@ -614,7 +613,7 @@ for _tool_name in ("show_task", "move_task", "edit_task", "create_task", "start_
 # Patch input parameter descriptions for better agent discoverability.
 # FastMCP auto-generates titles from argument names but has no descriptions.
 # ---------------------------------------------------------------------------
-_STATUSES = ["ideation", "backlog", "todo", "in-progress", "review", "docs", "done"]
+_STATUSES = ["research", "backlog", "todo", "in-progress", "review", "docs", "done"]
 _PRIORITIES = ["someday", "nice-to-have", "important", "needed", "critical"]
 _SORT_FIELDS = ["priority", "updated", "id", "title", "status", "created"]
 
