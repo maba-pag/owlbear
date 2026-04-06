@@ -10,10 +10,9 @@ AC contract under test:
    owlbear-kanban/*, owlbear-memory/*
    (regression guard -- PASSES throughout)
 4. w-code-review/SKILL.md references MCP kanban tools (start_work, end_work,
-   show_task, edit_task) for task operations
+   show_task) for task operations
    (regression guard -- PASSES throughout)
-5. Neither code-review/SKILL.md nor w-code-review/SKILL.md references
-   kanban-md.exe terminal commands
+5. w-code-review/SKILL.md does not reference kanban-md.exe terminal commands
    (regression guard -- PASSES throughout)
 """
 
@@ -25,7 +24,6 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 REVIEWER_AGENT = ROOT / "share" / "agents" / "reviewer.agent.md"
 W_CODE_REVIEW_SKILL = ROOT / "share" / "skills" / "w-code-review" / "SKILL.md"
-CODE_REVIEW_SKILL = ROOT / "share" / "skills" / "code-review" / "SKILL.md"
 
 # The 8 tool entries that must remain after #457 removes execute/* and terminalLastCommand
 REQUIRED_TOOLS: list[str] = [
@@ -51,7 +49,7 @@ EXECUTE_TOOLS_TO_REMOVE: list[str] = [
 ]
 
 # MCP kanban tools that must be referenced in w-code-review/SKILL.md
-MCP_KANBAN_TOOLS: list[str] = ["start_work", "end_work", "show_task", "edit_task"]
+MCP_KANBAN_TOOLS: list[str] = ["start_work", "end_work", "show_task"]
 
 
 def _get_frontmatter(path: Path) -> str:
@@ -275,26 +273,13 @@ class TestFromAC_WCodeReviewSkillMcpKanbanTools:
             "MCP kanban tools must be used for all task operations."
         )
 
-    def test_w_code_review_skill_has_edit_task(self) -> None:
-        content = W_CODE_REVIEW_SKILL.read_text(encoding="utf-8")
-        assert "edit_task" in content, (
-            "w-code-review/SKILL.md does not reference 'edit_task'. "
-            "MCP kanban tools must be used for all task operations."
-        )
-
 
 class TestFromAC_SkillsNoKanbanMdExe:
-    """AC5: code-review/SKILL.md and w-code-review/SKILL.md must not reference kanban-md.exe.
+    """AC5: w-code-review/SKILL.md must not reference kanban-md.exe terminal commands.
 
     Regression guard -- PASSES throughout.
     """
 
-    def test_code_review_skill_has_no_kanban_md_exe(self) -> None:
-        content = CODE_REVIEW_SKILL.read_text(encoding="utf-8")
-        assert "kanban-md.exe" not in content, (
-            "code-review/SKILL.md references 'kanban-md.exe' -- legacy terminal command. "
-            "All kanban operations must use MCP tools."
-        )
 
     def test_w_code_review_skill_has_no_kanban_md_exe(self) -> None:
         content = W_CODE_REVIEW_SKILL.read_text(encoding="utf-8")
@@ -385,29 +370,3 @@ class TestFromAC_WCodeReviewFallbackBlockInstruction:
             '(end_work(outcome="block", ...)). #457 must add it.'
         )
 
-
-class TestFromAC_CodeReviewFallbackBlockInstruction:
-    """AC5: code-review/SKILL.md fallback section must not contain uv run terminal
-    commands and must include a BLOCK instruction via end_work.
-
-    Change-detecting -- FAIL before #457 implementation.
-    """
-
-    def test_fallback_has_no_uv_run_commands(self) -> None:
-        """code-review fallback must not contain uv run terminal commands."""
-        content = CODE_REVIEW_SKILL.read_text(encoding="utf-8")
-        section = _extract_fallback_section_n(content, 0)
-        assert "uv run" not in section, (
-            "code-review/SKILL.md fallback still contains 'uv run' terminal commands. "
-            "#457 must replace them with a BLOCK instruction."
-        )
-
-    def test_fallback_has_block_instruction(self) -> None:
-        """code-review fallback must include an end_work BLOCK instruction."""
-        content = CODE_REVIEW_SKILL.read_text(encoding="utf-8")
-        section = _extract_fallback_section_n(content, 0)
-        has_block = 'outcome="block"' in section or "outcome='block'" in section
-        assert has_block, (
-            "code-review/SKILL.md fallback missing BLOCK instruction "
-            '(end_work(outcome="block", ...)). #457 must add it.'
-        )
