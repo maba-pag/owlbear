@@ -1,10 +1,12 @@
 ---
 id: 652
 title: 'P4-12: Create h-voice-panel/SKILL.md handbook'
-status: done
+status: archived
 priority: needed
 created: 2026-04-06T07:03:34.3182692+02:00
-updated: 2026-04-07T05:34:22.2718632+02:00
+updated: 2026-04-07T05:40:51.3134115+02:00
+started: 2026-04-07T05:40:51.3134115+02:00
+completed: 2026-04-07T05:40:51.3134115+02:00
 tags:
     - phase-4
     - ' scope:ideator'
@@ -15,8 +17,6 @@ depends_on:
     - 648
     - 649
     - 650
-claimed_by: lake-field
-claimed_at: 2026-04-07T05:34:22.2678276+02:00
 class: standard
 ---
 
@@ -290,3 +290,46 @@ Deductions: 0. Architecture Review AC2/AC4 amendments were applied by both test-
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/652-*` files found)
+
+[[2026-04-07]] Tue 05:40
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 -- file + frontmatter | share/skills/h-voice-panel/SKILL.md L1-5: name: h-voice-panel, user-invocable: false | PASS |
+| AC2 -- voice characterizations (behavioral calibration) | Voice Roster table L14-23, Behavioral Calibration Guidance L25-37; Architecture Review amendment applied | PASS |
+| AC3 -- invocation patterns | Invocation Patterns section L53-107: parallel batch + sequential deep-dive | PASS |
+| AC4 -- Critic-loop rules (qualitative exit) | Critic Loop Protocol L109-166: "position is solid" exit, max 5 cycles, "do not manufacture" rule | PASS |
+| AC5 -- disagreement resolution | Disagreement Resolution L168-194: surface to user, "Resolution is the user's decision" | PASS |
+| AC6 -- Mediator synthesis rules | Synthesis Rules L196-238: Mediator delegates to pragmatist-voice, convergence modes table | PASS |
+| AC7 -- all 6 voice agents by name | Voice Agent References L218-228: all 6 canonical names listed | PASS |
+
+### Test Results
+- pytest (task scope): 37 passed, 0 failed
+- pytest (full suite): 3481 passed, 424 failed, 18 skipped -- zero failures in task scope; all 424 failures are pre-existing
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+AC was adequate. AC2 ("temperature guidance") and AC4 ("convergence threshold") required interpretation refined during Architecture Review. Builder Guidance section was helpful. No vague AC that "passed" because implementation was equally vague.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines with no evidence: 0 (all 7 verified)
+- Lint violations: 0
+- AC quality score 4 (no deduction; threshold is 3 or below)
+- Reviewer evidence section: present, detailed, PASS at 0.97
+- Full-suite failures in task scope: 0
+- Net deductions: 0
+
+### Confidence: 1.00
+### Action: archive
+
+### Notes
+- Test file tests/test_voice_panel_handbook_652.py was never committed by test-writer (orphaned deliverable). Committed by auditor in chore commit 829b263.
+- Builder commit 86a95ab verified: contains share/skills/h-voice-panel/SKILL.md (238 lines).
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 86a95ab | feat | share/skills/h-voice-panel/SKILL.md | #652 |
+| 829b263 | chore | tests/test_voice_panel_handbook_652.py, kanban board | #652 |

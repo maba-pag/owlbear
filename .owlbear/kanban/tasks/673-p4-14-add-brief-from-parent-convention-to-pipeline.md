@@ -1,10 +1,12 @@
 ---
 id: 673
 title: 'P4-14: Add Brief-from-parent convention to pipeline skill files'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-07T05:38:11.8618391+02:00
-updated: 2026-04-07T06:28:31.9387376+02:00
+updated: 2026-04-07T06:32:37.721706+02:00
+started: 2026-04-07T06:32:37.721706+02:00
+completed: 2026-04-07T06:32:37.721706+02:00
 tags:
     - phase-4
     - ' scope:ideator'
@@ -12,8 +14,6 @@ tags:
     - docs
 depends_on:
     - 653
-claimed_by: brisk-wild
-claimed_at: 2026-04-07T06:28:31.9376583+02:00
 class: standard
 ---
 
@@ -187,3 +187,33 @@ None — all checklist items either verified as-is or not applicable.
 
 ### Scratch Files
 No `.owlbear/scratch/673-*` files found.
+
+[[2026-04-07]] Tue 06:32
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| w-task-decomposition Step 1: Brief detection + child reference | SKILL.md L25: "If the parent task body contains a ## Brief or ## Problem section... Include Brief: see parent #{id}" | PASS |
+| w-orchestration Context Budget: Brief context note | SKILL.md L19: "Brief context: ...available to pipeline agents via parent task lookup (show_task(parent_id)) -- the orchestrator does not use Brief context directly." | PASS |
+| r-pipeline-protocol Reading Rules: Brief context in architect/builder sources | SKILL.md L138: "and Brief context (via parent task, when present)" | PASS |
+| w-arch-review Step 1: parent Brief lookup with graceful-skip | SKILL.md L34: item 6 "Brief context (when parent is set):" with show_task + scan for Brief sections | PASS |
+| Graceful-skip patterns in all updates | w-task-decomp: "If the parent task body contains"; w-orchestration: "may contain"; r-pipeline-protocol: "when present"; w-arch-review: "when parent is set" / "When present" | PASS |
+| No source code changes, markdown only | 4 .md skill files changed. No .py files in diff. | PASS |
+
+### Test Results
+- pytest: 3481 passed, 424 failed (pre-existing, none in task scope -- docs-only task, no Python modified), 18 skipped
+- ruff: N/A (no Python files changed)
+
+### Architect Quality: 4/5
+AC was specific (file + section + content for each line). Minor: AC5 (graceful-skip) is a meta-constraint that could be folded into AC1-4 rather than a standalone item, but not harmful.
+
+### Deduction Breakdown
+- Uncommitted deliverables (builder noted "committed" but files were unstaged): -.01
+
+### Confidence: 0.99
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 4a6b0ef | docs | 4 skill SKILL.md + kanban task file | #673 |

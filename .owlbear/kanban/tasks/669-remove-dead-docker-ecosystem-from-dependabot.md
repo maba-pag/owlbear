@@ -1,16 +1,16 @@
 ---
 id: 669
 title: Remove dead Docker ecosystem from dependabot
-status: done
+status: archived
 priority: needed
 created: 2026-04-06T22:22:41.1186478+02:00
-updated: 2026-04-07T11:48:12.2326869+02:00
+updated: 2026-04-07T11:52:12.1065394+02:00
+started: 2026-04-07T11:52:12.1065394+02:00
+completed: 2026-04-07T11:52:12.1065394+02:00
 tags:
     - scope:ci
     - type:fix
 parent: 672
-claimed_by: sage-plume
-claimed_at: 2026-04-07T11:48:12.2326869+02:00
 class: standard
 ---
 
@@ -142,3 +142,36 @@ Action: advancing to docs
 
 ### Scratch Files Cleaned
 - None (no .owlbear/scratch/669-* files found)
+
+[[2026-04-07]] Tue 11:52
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Docker ecosystem block removed from .github/dependabot.yml | git diff confirms 17-line docker block deleted (lines 49-62). File read: only github-actions and pip ecosystems remain (44 lines). | PASS |
+| github-actions ecosystem still covers MegaLinter action updates | dependabot.yml lines 3-23: package-ecosystem "github-actions", directory "/". MegaLinter used as GitHub Action format. | PASS |
+| pip ecosystem unchanged | dependabot.yml lines 25-44: pip ecosystem block present and complete. | PASS |
+
+### Test Results
+- pytest: 3481 passed, 424 failed, 18 skipped (pre-existing failures, unrelated to config-only change)
+- ruff: 5 errors in server.py/test_server.py (pre-existing, unrelated to task scope)
+
+### Architect Quality: 5/5
+Specific AC with exact file, clear removal target, and preservation constraints. No builder improvisation needed.
+
+### Deduction Breakdown
+- 0 AC lines without evidence: no deduction
+- Lint violations: not in task scope (no Python files changed)
+- AC quality 5/5: no deduction
+- Reviewer evidence present and detailed (.97 PASS): no deduction
+- Full-suite failures: pre-existing, not in task scope: no deduction
+- Note: builder did not commit deliverable (committed by auditor as leftover)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| cc42133 | fix | .github/dependabot.yml | #669 |
+| 4615f72 | chore | kanban board | #669 |

@@ -1,17 +1,17 @@
 ---
 id: 668
 title: Fix megalinter for private repo constraints
-status: done
+status: archived
 priority: needed
 created: 2026-04-06T22:22:31.9554503+02:00
-updated: 2026-04-07T11:40:46.1085072+02:00
+updated: 2026-04-07T11:47:49.3239216+02:00
+started: 2026-04-07T11:47:49.3239216+02:00
+completed: 2026-04-07T11:47:49.3239216+02:00
 tags:
     - scope:ci
     - type:fix
     - type:config
 parent: 672
-claimed_by: zinc-heath
-claimed_at: 2026-04-07T11:40:46.1074449+02:00
 class: standard
 ---
 
@@ -140,3 +140,37 @@ None — no documentation impact identified.
 
 ### Scratch Files Cleaned
 None — no `.owlbear/scratch/668-*` files existed.
+
+[[2026-04-07]] Tue 11:47
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| SARIF upload step removed | git diff: codeql-action/upload-sarif step deleted from megalinter.yml | PASS |
+| APPLY_FIXES removed from .mega-linter.yml | git diff: APPLY_FIXES block (PYTHON_RUFF_FORMAT + MARKDOWN_MARKDOWNLINT) deleted | PASS |
+| Upload-artifact step preserved | megalinter.yml lines 37-43: actions/upload-artifact present | PASS |
+| Job summary step still reports pass/fail | megalinter.yml lines 45-56: conditional pass/fail messages present | PASS |
+| security-events: write removed | megalinter.yml: only contents:read + statuses:write in job permissions | PASS |
+| Job summary SARIF reference removed | git diff: if-block with "SARIF results uploaded to Security tab" deleted from job summary | PASS |
+
+### Test Results
+- pytest: 3481 passed, 424 failed, 18 skipped, 1 error (all pre-existing, unrelated to YAML-only changes)
+- ruff: 5 errors in serve/mcp-kanban/ (pre-existing, unrelated to #668)
+
+### Architect Quality: 5/5
+AC was specific and complete. Each item named exact targets (steps, keys, permissions, line references). AC #6 added via challenger feedback, demonstrating good upstream rigor.
+
+### Deduction Breakdown
+- No deductions. All 6 AC lines verified with diff evidence. Reviewer section present and detailed (.97 PASS). Pre-existing test/lint issues are outside task scope.
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| dc76181 | fix | .github/workflows/megalinter.yml, .mega-linter.yml | #668 |
+| 0810728 | chore | kanban board files | #668 |
+
+### Note
+Builder did not commit deliverables (changes were unstaged). Committed as audit leftover. Non-blocking for this task but noted for process improvement.

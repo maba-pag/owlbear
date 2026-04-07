@@ -1,16 +1,16 @@
 ---
 id: 667
 title: Rewrite sync-to-main with incremental commit strategy
-status: done
+status: archived
 priority: needed
 created: 2026-04-06T22:22:21.0482147+02:00
-updated: 2026-04-07T11:35:23.1603107+02:00
+updated: 2026-04-07T11:40:25.9271826+02:00
+started: 2026-04-07T11:40:25.9271826+02:00
+completed: 2026-04-07T11:40:25.9271826+02:00
 tags:
     - scope:ci
     - type:config
 parent: 672
-claimed_by: grove-sleet
-claimed_at: 2026-04-07T11:35:23.1603107+02:00
 class: standard
 ---
 
@@ -148,3 +148,47 @@ Non-implementation task (type:config) — no Python tests applicable. No pytest/
 
 ### Scratch Files Cleaned
 - None found for `667-*`
+
+[[2026-04-07]] Tue 11:40
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Incremental commits (no force-push) | `git checkout -b consumer origin/main` + `git push origin consumer:main` (no --force) | PASS |
+| First-ever sync handled | `if git fetch origin main 2>/dev/null; then ... else git checkout --orphan consumer` | PASS |
+| Include-list expanded (+4 paths) | Validation loop + build step: `.github .mega-linter.yml .editorconfig .markdownlint.json` | PASS |
+| Validation covers all 14 paths | for-loop over 14 paths, `exit 1` on missing | PASS |
+| Dry-run boolean, skips push | `type: boolean`; push `if: inputs.dry_run != true` | PASS |
+| Metadata: SHA, UTC date, actor | `SHORT_SHA`, `DATE -u`, `${{ github.actor }}` | PASS |
+| Diff preview | `git diff --staged --stat HEAD` / `git ls-files --cached` via GITHUB_STEP_SUMMARY | PASS |
+| Rich commit message | `sync: dev@$SHORT_SHA ($DATE, $actor)` | PASS |
+| Success summary | `if: success()` table with SHA, date, actor, dry-run flag | PASS |
+| Failure summary `if: always()` | `if: ${{ always() && failure() }}` with failure details | PASS |
+| fetch-depth: 0 justified | Comment present explaining incremental approach need | PASS |
+| SHA-pinned action (v6.0.2) | `actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2` | PASS |
+| Concurrency guard preserved | `group: sync-to-main cancel-in-progress: false` | PASS |
+| copilot-instructions.md section 2 updated | Main table row lists all 4 new paths | PASS |
+
+### Test Results
+- pytest: 3519 passed, 410 failed, 8 skipped — 0 failures in task scope (type:config, no Python changes; all 410 failures are pre-existing/unrelated)
+- ruff: N/A (type:config — no Python files changed)
+
+### Architect Quality: 5/5
+Specific and complete — 14 AC lines each precisely verifiable, clear design notes with incremental approach steps, failure mode map provided. No builder improvisation needed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (14/14 verified)
+- Lint violations: 0 (N/A)
+- AC quality penalty: 0 (5/5)
+- Missing reviewer evidence: 0 (present, detailed, 14/14)
+- Full-suite failures in scope: 0
+
+### Confidence: .98
+Note: Deliverables were uncommitted by builder (quality gap noted). Auditor committed per Step 4: `f6c03dc`.
+
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| f6c03dc | chore | .github/workflows/sync-to-main.yml, .github/copilot-instructions.md | #667 |

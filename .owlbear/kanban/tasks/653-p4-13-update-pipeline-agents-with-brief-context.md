@@ -1,10 +1,12 @@
 ---
 id: 653
 title: 'P4-13: Update pipeline agents with Brief context'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T07:03:44.1448783+02:00
-updated: 2026-04-07T06:02:06.0738695+02:00
+updated: 2026-04-07T06:06:39.0470432+02:00
+started: 2026-04-07T06:06:39.0470432+02:00
+completed: 2026-04-07T06:06:39.0470432+02:00
 tags:
     - phase-4
     - ' scope:ideator'
@@ -13,8 +15,6 @@ tags:
 depends_on:
     - 651
     - 652
-claimed_by: root-mill
-claimed_at: 2026-04-07T06:02:06.0717782+02:00
 class: standard
 ---
 
@@ -141,3 +141,35 @@ None found for task 653 (`.owlbear/scratch/653-*` — no results).
 
 ### Verdict
 Checklist passed. No docs impact beyond the research doc produced by the task itself, which is verified accurate and complete.
+
+[[2026-04-07]] Tue 06:06
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Research doc with 3-option comparison | `.owlbear/research/pipeline-brief-context-integration.md` S3C: 3-option table (A: Parent Lookup, B: Inline Summary, C: Doc-Only) | PASS |
+| AC2: Hybrid parent-lookup; 4 skill files; T1; .82 | S3D "Recommended Approach: Hybrid (A + B elements)" with show_task(parent_id); S3D lists 4 files; S4 "Tier: T1"; "Confidence: .82" | PASS |
+| AC3: Follow-up #673 created with AC for all 4 skill files | Task #673 at research status; AC covers w-task-decomposition, w-orchestration, r-pipeline-protocol, w-arch-review; depends_on: [653] | PASS |
+| AC4: No breaking changes | S3C risk: all "None" for breaking changes; S4 "all additive, graceful-skip when absent"; zero code modified | PASS |
+
+### Test Results
+- pytest: 3481 passed, 424 failed, 18 skipped, 1 error (all failures pre-existing, none in task scope — zero code changes)
+- ruff: 5 errors (all pre-existing in mcp-kanban, not in task scope)
+
+### Architect Quality: 4/5
+Original AC lines 1-2 were vague capability statements; architect refined to verifiable research deliverables during arch-review. Original AC lines 3-4 duplicated follow-up #673 and were correctly removed. Post-refinement AC is clean.
+
+### Deduction Breakdown
+- 4 AC lines, all with specific evidence: 0
+- Lint: pre-existing only, not in scope: 0
+- AC quality 4/5: 0
+- Reviewer evidence: present, detailed, PASS at .96: 0
+- Full-suite failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2fb06f0 | docs | pipeline-brief-context-integration.md, 653 task, 673 task | #653 |

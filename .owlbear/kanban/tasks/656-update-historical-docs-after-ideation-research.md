@@ -1,18 +1,18 @@
 ---
 id: 656
 title: Update historical docs after ideation→research rename
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-06T07:19:45.7935685+02:00
-updated: 2026-04-06T18:46:11.3206121+02:00
+updated: 2026-04-07T12:54:51.6771696+02:00
+started: 2026-04-07T12:54:51.6771696+02:00
+completed: 2026-04-07T12:54:51.6771696+02:00
 tags:
     - phase-4
     - ' scope:docs'
     - ' type:chore'
 depends_on:
     - 641
-blocked: true
-block_reason: 'Archive pending: 2x research + 2x architect review unanimously recommend no work'
 class: standard
 ---
 

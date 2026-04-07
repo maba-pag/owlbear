@@ -1,10 +1,12 @@
 ---
 id: 666
 title: Update NON_IMPL_TAGS skill doc references for type:user-action
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T16:47:04.4677636+02:00
-updated: 2026-04-07T05:42:23.7284963+02:00
+updated: 2026-04-07T05:46:10.5544035+02:00
+started: 2026-04-07T05:46:10.5544035+02:00
+completed: 2026-04-07T05:46:10.5544035+02:00
 tags:
     - phase-3
     - ' scope:agent-config'
@@ -12,8 +14,6 @@ tags:
 parent: 661
 depends_on:
     - 662
-claimed_by: gale-wind
-claimed_at: 2026-04-07T05:42:23.7284963+02:00
 class: standard
 ---
 
@@ -160,3 +160,35 @@ None — all documentation was updated by the builder in commit 3b481fb; no furt
 
 ### Scratch Files
 None found matching `.owlbear/scratch/666-*`. Clean.
+
+[[2026-04-07]] Tue 05:46
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| w-dispatch-planning authoritative NON_IMPL_TAGS list includes type:user-action | SKILL.md L25: dispatch table todo row lists type:user-action; L67: Recipe 1 TW:MISSING lists type:user-action | PASS |
+| w-tdd-red NON_IMPL_TAGS reference includes type:user-action | SKILL.md L25: Step 1 item 1 lists type:user-action | PASS |
+| Cross-reference comments consistent with gates.py and server.py | w-arch-review/SKILL.md L91: non-impl tagging note includes type:user-action. All 4 locations match reviewer-verified gates.py and server.py frozensets (9 tags each) | PASS |
+
+### Test Results
+- pytest: 3481 passed, 424 failed, 18 skipped, 1 error (all failures pre-existing, none in task scope; no Python files touched)
+- ruff: N/A (docs-only task, no Python files modified)
+
+### Architect Quality: 4/5
+AC was precise with 3 specific lines and exact file list. Research correctly identified the w-arch-review secondary copy requirement from AC3's cross-reference language. Minor gap: AC didn't explicitly name w-arch-review, relying on implicit cross-reference semantics, but researcher and builder handled it cleanly.
+
+### Deduction Breakdown
+- No AC lines without evidence: 0
+- No lint violations: 0
+- AC quality 4/5: no deduction (threshold is 3 or below)
+- Reviewer evidence section: present, detailed, PASS at 0.96
+- No test failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 3b481fb | docs | w-dispatch-planning/SKILL.md, w-tdd-red/SKILL.md, w-arch-review/SKILL.md | #666 |
+| 750523a | chore | kanban board, research doc | #666 |

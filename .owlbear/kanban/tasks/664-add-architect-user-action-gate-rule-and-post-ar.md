@@ -1,10 +1,12 @@
 ---
 id: 664
 title: Add architect user-action gate rule and post-AR fast-path to w-arch-review
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-06T16:39:08.3017247+02:00
-updated: 2026-04-07T01:08:55.6860319+02:00
+updated: 2026-04-07T02:10:42.0009029+02:00
+started: 2026-04-07T02:10:42.0009029+02:00
+completed: 2026-04-07T02:10:42.0009029+02:00
 tags:
     - phase-3
     - scope:agent-config
@@ -143,3 +145,35 @@ None — all documentation lives in the deliverable file itself (SKILL.md).
 
 ### Scratch Files
 None found matching `.owlbear/scratch/664-*` — clean.
+
+[[2026-04-07]] Tue 02:10
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Step 3 BLOCK verdict for type:user-action (scribe AR, block, end_work("block")) | Step 3 verdict table: new BLOCK row at L87 with correct trigger and actions | PASS |
+| AC2: Detection heuristics (physical actions, external systems, no testable Python, human observation) | Step 2 criterion 13 at L56-64: M1, M2, S1-S3 signals + C1-C3 counter-signals | PASS |
+| AC3: Post-AR fast-path (type:user-action + Action Completed section, verify AC, APPROVE) | Step 0 User-action fast-path at L23: exact trigger conditions, verify-checkboxes, end_work("success"), skip Steps 1-3 | PASS |
+| AC4: Heuristics deterministic (not judgment-based) | Criterion 13 M/S/C framework: C1-C3 exit first, M1+M2 both required, 1+ S1-S3, binary outcome with application order | PASS |
+
+### Test Results
+- pytest: 3380 passed, 422 failed (all pre-existing, 0 in task scope), 18 skipped. test_planner_gates.py excluded (pre-existing import error)
+- ruff: N/A (no .py files modified)
+
+### Architect Quality: 5/5
+AC was specific with 4 verifiable insertion points backed by research doc. Builder needed zero improvisation.
+
+### Deduction Breakdown
+- AC lines without evidence: 0
+- Lint violations: 0 (N/A)
+- AC quality score 3 or below: no (5/5)
+- Missing reviewer evidence: no (present, detailed, .97 PASS)
+- Full-suite failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive
+
+### Commit Verified
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 3298ea0 | docs | share/skills/w-arch-review/SKILL.md | #664 |

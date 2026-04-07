@@ -1,22 +1,25 @@
-[
+﻿[
   {
-    "cycle": "2026-04-06",
-    "note": "Zero-entry cycle - MCP database empty (0 pending), file-based inbox empty. No new entries to process.",
-    "catalog_audit": {
-      "cross_file_duplicates": [
-        {
-          "finding": "CWE-22 path traversal: use is_relative_to() not startswith()",
-          "files": ["process-patterns.md", "ruff-and-lint-discipline.md"],
-          "evidence": "#143-reviewer (both)",
-          "recommendation": "Consolidate: keep canonical in ruff-and-lint-discipline.md; remove duplicate from process-patterns.md on next user-confirmed cleanup"
-        },
-        {
-          "finding": "uv run python -m pytest more reliable than uv run pytest on Windows",
-          "files": ["terminal-output-isolation.md", "uv-and-python-tooling.md"],
-          "evidence": "#76-builder (both)",
-          "recommendation": "Consolidate: canonical in uv-and-python-tooling.md; restatement in terminal-output-isolation.md adds no signal - remove on next user-confirmed cleanup"
-        }
-      ]
-    }
+    "cycle": "2026-04-07T-periodic-3",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. Repo memory quality scan: 10 catalog files reviewed. 1 stale entry corrected (dual skill locations — migration complete). 1 uncertain entry flagged (end_work \\n literal). No promotions, no conflicts.",
+    "entries_processed": 2,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "recommendation": "keep",
+        "reason": "UNCERTAIN — evidence from #546 (old) conflicts with recent task #670 showing proper multi-line output; may only apply when caller passes literal escape sequences vs actual newlines; flagged for user verification"
+      }
+    ],
+    "pruned": [],
+    "catalog_corrections": [
+      {
+        "entry_id": "catalog:v2-architecture-decisions.md#dual-skill-locations",
+        "content_preview": "Dual skill locations during migration — .github/skills/ and .github/agents/ coexist with skills/",
+        "action": "updated",
+        "reason": "STALE — .github/skills/ and .github/agents/ confirmed absent 2026-04-07; entry updated to MIGRATION COMPLETE with corrected canonical paths (share/skills/, share/agents/, share/instructions/)"
+      }
+    ]
   }
 ]
