@@ -18,7 +18,6 @@ jobs:
     permissions:
       contents: read
       statuses: write
-      security-events: write
 
     steps:
       - name: Checkout repository
@@ -42,13 +41,6 @@ jobs:
           path: megalinter-reports
           retention-days: 15
 
-      - name: Upload SARIF report
-        if: always() && hashFiles('megalinter-reports/megalinter-report.sarif') != ''
-        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v3
-        with:
-          sarif_file: megalinter-reports/megalinter-report.sarif
-          category: megalinter
-
       - name: Job summary
         if: always()
         shell: bash
@@ -59,10 +51,6 @@ jobs:
             echo "All linters passed." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "Some linters reported issues. See the [megalinter-reports artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details." >> "$GITHUB_STEP_SUMMARY"
-            if [ -f "megalinter-reports/megalinter-report.sarif" ]; then
-              echo "" >> "$GITHUB_STEP_SUMMARY"
-              echo "SARIF results uploaded to Security tab." >> "$GITHUB_STEP_SUMMARY"
-            fi
           fi
 
       - name: Fail if lint failed

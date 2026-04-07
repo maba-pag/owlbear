@@ -22,11 +22,6 @@ ENABLE_LINTERS:
   # Spelling
   - SPELL_CSPELL
 
-# Safe auto-fixes (formatting only)
-APPLY_FIXES:
-  - PYTHON_RUFF_FORMAT
-  - MARKDOWN_MARKDOWNLINT
-
 # Reporters
 GITHUB_STATUS_REPORTER: true
 MARKDOWN_SUMMARY_REPORTER: true
