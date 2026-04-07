@@ -1,245 +1,3 @@
-{"timestamp":"2026-03-31T00:07:38.0231166+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T00:07:38.0294552+02:00","action":"release","task_id":198,"detail":"writer"}
-{"timestamp":"2026-03-31T00:22:11.9437783+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-31T00:22:20.5752253+02:00","action":"move","task_id":179,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T00:22:27.1388863+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-31T00:22:27.1454213+02:00","action":"release","task_id":179,"detail":"auditor"}
-{"timestamp":"2026-03-31T00:23:05.9722271+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-31T00:24:07.1380892+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-31T00:24:07.1423416+02:00","action":"claim","task_id":203,"detail":"auditor"}
-{"timestamp":"2026-03-31T00:28:32.8410347+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-31T00:28:32.8463238+02:00","action":"claim","task_id":179,"detail":"auditor"}
-{"timestamp":"2026-03-31T00:28:45.1520834+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-31T00:28:45.1580322+02:00","action":"release","task_id":179,"detail":"auditor"}
-{"timestamp":"2026-03-31T00:29:22.4778011+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-31T00:34:16.9101286+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-31T00:34:26.5822136+02:00","action":"move","task_id":203,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T00:34:31.1222223+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-31T00:34:31.1258407+02:00","action":"release","task_id":203,"detail":"auditor"}
-{"timestamp":"2026-03-31T00:35:00.8216455+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-31T00:35:15.0220042+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-31T00:35:22.8193112+02:00","action":"edit","task_id":203,"detail":"Test: Entity extraction and graph builders"}
-{"timestamp":"2026-03-31T03:16:11.4652256+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-31T03:16:11.4694497+02:00","action":"claim","task_id":184,"detail":"auditor"}
-{"timestamp":"2026-03-31T03:20:20.45787+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-31T03:20:26.024445+02:00","action":"move","task_id":184,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T03:20:26.4186614+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-31T03:20:26.4238702+02:00","action":"release","task_id":184,"detail":"auditor"}
-{"timestamp":"2026-03-31T03:20:50.4511987+02:00","action":"edit","task_id":184,"detail":"Create v2 ErrorJournal module with append-only JSONL persistence"}
-{"timestamp":"2026-03-31T03:21:32.9210164+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T03:21:32.9264831+02:00","action":"claim","task_id":198,"detail":"auditor"}
-{"timestamp":"2026-03-31T03:30:11.3194936+02:00","action":"move","task_id":198,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T03:30:22.4904954+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T03:30:22.495668+02:00","action":"release","task_id":198,"detail":"auditor"}
-{"timestamp":"2026-03-31T03:30:46.9725926+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T03:31:08.887098+02:00","action":"move","task_id":225,"detail":"in-progress -\u003e todo"}
-{"timestamp":"2026-03-31T03:31:12.4955087+02:00","action":"move","task_id":307,"detail":"in-progress -\u003e todo"}
-{"timestamp":"2026-03-31T03:31:19.822498+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T03:32:06.8153644+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-31T03:32:06.8289626+02:00","action":"claim","task_id":212,"detail":"auditor"}
-{"timestamp":"2026-03-31T03:32:19.9781191+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T03:32:20.4274133+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-31T03:32:20.4321786+02:00","action":"unblock","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-31T03:37:34.2131716+02:00","action":"move","task_id":212,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T03:37:39.8357109+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-31T03:37:39.8399321+02:00","action":"release","task_id":212,"detail":"auditor"}
-{"timestamp":"2026-03-31T03:37:56.8899555+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-31T03:38:20.049989+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-31T03:38:20.0541421+02:00","action":"claim","task_id":385,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:38:22.0726478+02:00","action":"edit","task_id":212,"detail":"Update #86 research doc to reflect command-execution hook model"}
-{"timestamp":"2026-03-31T03:38:22.7594855+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
-{"timestamp":"2026-03-31T03:38:22.7637167+02:00","action":"claim","task_id":227,"detail":"architect"}
-{"timestamp":"2026-03-31T03:38:47.569738+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-31T03:38:47.5744125+02:00","action":"claim","task_id":147,"detail":"builder"}
-{"timestamp":"2026-03-31T03:38:49.6804563+02:00","action":"edit","task_id":455,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:38:49.6851424+02:00","action":"claim","task_id":455,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:38:53.0988082+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-31T03:38:53.1030142+02:00","action":"claim","task_id":180,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:39:05.3478958+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T03:39:05.351604+02:00","action":"claim","task_id":454,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:39:34.2146117+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
-{"timestamp":"2026-03-31T03:39:38.7944787+02:00","action":"edit","task_id":227,"detail":"Create action request file for blocked task 167"}
-{"timestamp":"2026-03-31T03:39:38.7992405+02:00","action":"release","task_id":227,"detail":"architect"}
-{"timestamp":"2026-03-31T03:39:53.0626406+02:00","action":"create","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T03:40:02.1324336+02:00","action":"create","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
-{"timestamp":"2026-03-31T03:40:10.0290234+02:00","action":"create","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
-{"timestamp":"2026-03-31T03:40:17.7638195+02:00","action":"create","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
-{"timestamp":"2026-03-31T03:40:20.5461213+02:00","action":"edit","task_id":455,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:40:32.4852775+02:00","action":"edit","task_id":455,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:40:36.0008511+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-31T03:40:37.1855919+02:00","action":"edit","task_id":455,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:40:45.6223853+02:00","action":"edit","task_id":455,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:40:46.1329969+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-31T03:40:51.470246+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-31T03:40:51.4756598+02:00","action":"release","task_id":385,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:40:56.1270691+02:00","action":"edit","task_id":455,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:41:01.1599621+02:00","action":"edit","task_id":455,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:41:01.1646571+02:00","action":"release","task_id":455,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:41:04.8524788+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-31T03:41:04.8582385+02:00","action":"block","task_id":147,"detail":"TestFromAC_ExplicitSignatureEnforcement conflicts with existing TestFromAC tests: making protocol_version or cwd required breaks 5+ prior error-classification tests that call those methods with no args. See Builder Notes 2026-03-31 for full analysis and required fix."}
-{"timestamp":"2026-03-31T03:41:04.8629667+02:00","action":"release","task_id":147,"detail":"builder"}
-{"timestamp":"2026-03-31T03:41:38.1302923+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T03:41:38.1350569+02:00","action":"release","task_id":454,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:41:45.289481+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T03:41:45.2950588+02:00","action":"claim","task_id":308,"detail":"reviewer"}
-{"timestamp":"2026-03-31T03:41:45.8818072+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T03:41:45.8868421+02:00","action":"claim","task_id":226,"detail":"architect"}
-{"timestamp":"2026-03-31T03:41:57.2376057+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T03:41:57.2418213+02:00","action":"claim","task_id":454,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:42:49.798802+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-31T03:42:49.8023911+02:00","action":"claim","task_id":16,"detail":"builder"}
-{"timestamp":"2026-03-31T03:42:59.4955172+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T03:43:08.5965336+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T03:43:08.6012418+02:00","action":"release","task_id":308,"detail":"reviewer"}
-{"timestamp":"2026-03-31T03:43:14.0736321+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T03:43:37.0098052+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-31T03:43:52.4237595+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-31T03:43:52.9649536+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-31T03:43:52.9691907+02:00","action":"release","task_id":180,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:44:47.2198555+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T03:44:47.744672+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T03:44:48.2544806+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T03:44:48.7475975+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T03:44:49.3461383+02:00","action":"edit","task_id":385,"detail":"Mandatory user-decision gate for research-driven features and architectural changes"}
-{"timestamp":"2026-03-31T03:44:55.6883488+02:00","action":"create","task_id":463,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-03-31T03:45:14.6040131+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T03:45:14.6098194+02:00","action":"release","task_id":454,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:45:18.2798115+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T03:45:25.3623697+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T03:45:25.3688544+02:00","action":"release","task_id":226,"detail":"architect"}
-{"timestamp":"2026-03-31T03:46:07.9787664+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
-{"timestamp":"2026-03-31T03:46:07.9840055+02:00","action":"claim","task_id":435,"detail":"builder"}
-{"timestamp":"2026-03-31T03:47:35.6803889+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
-{"timestamp":"2026-03-31T03:47:44.1475159+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
-{"timestamp":"2026-03-31T03:47:44.1517929+02:00","action":"release","task_id":435,"detail":"builder"}
-{"timestamp":"2026-03-31T03:48:04.7097165+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-31T03:48:04.7147247+02:00","action":"claim","task_id":33,"detail":"builder"}
-{"timestamp":"2026-03-31T03:48:27.6128268+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-31T03:48:31.8829409+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-31T03:48:31.8876575+02:00","action":"release","task_id":16,"detail":"builder"}
-{"timestamp":"2026-03-31T03:48:37.8523378+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-31T03:48:37.8559925+02:00","action":"release","task_id":33,"detail":"builder"}
-{"timestamp":"2026-03-31T03:48:56.7250424+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T03:48:56.7292128+02:00","action":"claim","task_id":386,"detail":"builder"}
-{"timestamp":"2026-03-31T03:48:59.9420652+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-31T03:48:59.9456923+02:00","action":"claim","task_id":99,"detail":"reviewer"}
-{"timestamp":"2026-03-31T03:49:01.2669093+02:00","action":"edit","task_id":436,"detail":"Add loop-pattern detection to reviewer checklist"}
-{"timestamp":"2026-03-31T03:49:01.273809+02:00","action":"claim","task_id":436,"detail":"architect"}
-{"timestamp":"2026-03-31T03:49:02.1648369+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T03:49:02.1701968+02:00","action":"release","task_id":386,"detail":"builder"}
-{"timestamp":"2026-03-31T03:49:09.445321+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T03:49:09.4496002+02:00","action":"claim","task_id":386,"detail":"builder"}
-{"timestamp":"2026-03-31T03:49:16.9554363+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T03:49:16.9590478+02:00","action":"release","task_id":386,"detail":"builder"}
-{"timestamp":"2026-03-31T03:51:31.5810146+02:00","action":"edit","task_id":436,"detail":"Add loop-pattern detection to reviewer checklist"}
-{"timestamp":"2026-03-31T03:51:52.4236791+02:00","action":"edit","task_id":436,"detail":"Add loop-pattern detection to reviewer checklist"}
-{"timestamp":"2026-03-31T03:51:52.4312689+02:00","action":"release","task_id":436,"detail":"architect"}
-{"timestamp":"2026-03-31T03:51:52.9687824+02:00","action":"delete","task_id":436,"detail":"Add loop-pattern detection to reviewer checklist"}
-{"timestamp":"2026-03-31T03:52:13.641371+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T03:52:13.6460899+02:00","action":"claim","task_id":459,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:52:15.5032696+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
-{"timestamp":"2026-03-31T03:52:15.508385+02:00","action":"claim","task_id":461,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:52:16.8847901+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
-{"timestamp":"2026-03-31T03:52:16.891121+02:00","action":"claim","task_id":462,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:52:20.1772254+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
-{"timestamp":"2026-03-31T03:52:20.1814157+02:00","action":"claim","task_id":460,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:53:45.1443385+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
-{"timestamp":"2026-03-31T03:53:45.1493145+02:00","action":"release","task_id":460,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:54:04.1150037+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
-{"timestamp":"2026-03-31T03:54:38.5581772+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
-{"timestamp":"2026-03-31T03:54:48.1683842+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
-{"timestamp":"2026-03-31T03:54:54.7870545+02:00","action":"edit","task_id":462,"detail":"Update agent-common defer-to-user boundary with tier classification"}
-{"timestamp":"2026-03-31T03:54:54.7917047+02:00","action":"release","task_id":462,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:54:57.0516807+02:00","action":"create","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T03:55:23.3433714+02:00","action":"edit","task_id":99,"detail":"Test: mcp-project server tools and resources"}
-{"timestamp":"2026-03-31T03:55:23.3486293+02:00","action":"release","task_id":99,"detail":"reviewer"}
-{"timestamp":"2026-03-31T03:55:35.6115135+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T03:55:48.7053347+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-31T03:55:48.7104815+02:00","action":"claim","task_id":220,"detail":"reviewer"}
-{"timestamp":"2026-03-31T03:56:02.3050616+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-31T03:56:02.3103485+02:00","action":"claim","task_id":33,"detail":"builder"}
-{"timestamp":"2026-03-31T03:56:05.5420948+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T03:56:11.1947604+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T03:56:11.1989193+02:00","action":"release","task_id":459,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:56:34.212079+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
-{"timestamp":"2026-03-31T03:56:34.216254+02:00","action":"release","task_id":33,"detail":"builder"}
-{"timestamp":"2026-03-31T03:56:43.8404144+02:00","action":"edit","task_id":461,"detail":"Add decision-request verification to architect backlog gate"}
-{"timestamp":"2026-03-31T03:56:43.8457327+02:00","action":"release","task_id":461,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:57:23.150859+02:00","action":"edit","task_id":456,"detail":"Implement audit-centric dispatch-cycle trace ID"}
-{"timestamp":"2026-03-31T03:57:23.1564231+02:00","action":"claim","task_id":456,"detail":"researcher"}
-{"timestamp":"2026-03-31T03:58:26.2152327+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-31T03:58:42.8325861+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-31T03:58:47.3884754+02:00","action":"edit","task_id":220,"detail":"Add gate_warned tracking to orchestration SKILL.md"}
-{"timestamp":"2026-03-31T03:58:47.3931392+02:00","action":"release","task_id":220,"detail":"reviewer"}
-{"timestamp":"2026-03-31T03:59:12.8793086+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T03:59:12.8846204+02:00","action":"claim","task_id":225,"detail":"test-writer"}
-{"timestamp":"2026-03-31T03:59:20.0214384+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T03:59:20.026578+02:00","action":"claim","task_id":386,"detail":"builder"}
-{"timestamp":"2026-03-31T03:59:24.8322813+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T03:59:24.8370674+02:00","action":"release","task_id":386,"detail":"builder"}
-{"timestamp":"2026-03-31T03:59:33.3246369+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T03:59:41.2144208+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T03:59:41.6239916+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T03:59:41.6298276+02:00","action":"release","task_id":225,"detail":"test-writer"}
-{"timestamp":"2026-03-31T04:00:17.7447175+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T04:00:17.7493672+02:00","action":"claim","task_id":228,"detail":"test-writer"}
-{"timestamp":"2026-03-31T04:00:25.8331731+02:00","action":"edit","task_id":456,"detail":"Implement audit-centric dispatch-cycle trace ID"}
-{"timestamp":"2026-03-31T04:00:25.8368548+02:00","action":"release","task_id":456,"detail":"researcher"}
-{"timestamp":"2026-03-31T04:00:33.5250748+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T04:00:33.5306216+02:00","action":"release","task_id":228,"detail":"test-writer"}
-{"timestamp":"2026-03-31T04:00:37.2259221+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-31T04:00:37.2321296+02:00","action":"claim","task_id":307,"detail":"test-writer"}
-{"timestamp":"2026-03-31T04:01:43.4753822+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-31T04:01:48.4689667+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-31T04:01:48.4750382+02:00","action":"release","task_id":307,"detail":"test-writer"}
-{"timestamp":"2026-03-31T04:03:03.938089+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T04:03:03.9449838+02:00","action":"claim","task_id":228,"detail":"builder"}
-{"timestamp":"2026-03-31T04:03:42.0994255+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-31T04:03:42.103604+02:00","action":"claim","task_id":141,"detail":"test-writer"}
-{"timestamp":"2026-03-31T04:05:30.51083+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T04:05:42.2077893+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-03-31T04:05:42.2115588+02:00","action":"release","task_id":228,"detail":"builder"}
-{"timestamp":"2026-03-31T04:06:15.2892448+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T04:06:15.2926043+02:00","action":"claim","task_id":225,"detail":"builder"}
-{"timestamp":"2026-03-31T04:06:56.7739066+02:00","action":"create","task_id":465,"detail":"Challenger subagent — adversarial in-process review for architect decisions"}
-{"timestamp":"2026-03-31T04:07:12.0921579+02:00","action":"edit","task_id":141,"detail":"Test: Voice process manager"}
-{"timestamp":"2026-03-31T04:07:12.0968469+02:00","action":"release","task_id":141,"detail":"test-writer"}
-{"timestamp":"2026-03-31T04:07:26.6751843+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T04:07:26.6793427+02:00","action":"release","task_id":225,"detail":"builder"}
-{"timestamp":"2026-03-31T04:07:37.4950028+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T04:09:31.7217341+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T04:09:31.7259393+02:00","action":"claim","task_id":464,"detail":"researcher"}
-{"timestamp":"2026-03-31T04:09:32.3824528+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T04:09:32.3875332+02:00","action":"claim","task_id":308,"detail":"writer"}
-{"timestamp":"2026-03-31T04:10:03.7252912+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-31T04:10:03.7294596+02:00","action":"claim","task_id":307,"detail":"builder"}
-{"timestamp":"2026-03-31T04:10:27.4280247+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T04:10:37.5433398+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T04:10:42.1902523+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T04:10:42.1940903+02:00","action":"release","task_id":308,"detail":"writer"}
-{"timestamp":"2026-03-31T04:12:08.2260005+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
-{"timestamp":"2026-03-31T04:12:08.235946+02:00","action":"release","task_id":307,"detail":"builder"}
-{"timestamp":"2026-03-31T04:12:12.2109757+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T04:12:29.3392808+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T04:12:33.2481357+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T04:12:33.252366+02:00","action":"claim","task_id":459,"detail":"architect"}
-{"timestamp":"2026-03-31T04:12:33.7289195+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T04:12:33.7336012+02:00","action":"claim","task_id":225,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:12:34.6005615+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T04:12:34.6048387+02:00","action":"release","task_id":464,"detail":"researcher"}
-{"timestamp":"2026-03-31T04:12:35.1242125+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T04:12:35.1276764+02:00","action":"claim","task_id":454,"detail":"architect"}
-{"timestamp":"2026-03-31T04:12:42.7591141+02:00","action":"edit","task_id":460,"detail":"Update researcher agent and research-workflow skill with tier classification"}
-{"timestamp":"2026-03-31T04:12:42.7634299+02:00","action":"claim","task_id":460,"detail":"architect"}
-{"timestamp":"2026-03-31T04:16:22.5354081+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-31T04:16:22.5400896+02:00","action":"release","task_id":225,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:16:52.5252203+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T04:18:18.7436157+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T04:18:19.5579459+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T04:19:05.1745451+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
-{"timestamp":"2026-03-31T04:19:49.8242725+02:00","action":"edit","task_id":459,"detail":"Update decision-requests skill with impact_tier field and T3 indefinite blocking"}
-{"timestamp":"2026-03-31T04:19:49.8301171+02:00","action":"release","task_id":459,"detail":"architect"}
-{"timestamp":"2026-03-31T04:20:05.1611929+02:00","action":"edit","task_id":307,"detail":"Create Code-Reader subagent (agent.md)"}
 {"timestamp":"2026-03-31T04:20:05.1671739+02:00","action":"claim","task_id":307,"detail":"builder"}
 {"timestamp":"2026-03-31T04:20:29.0820731+02:00","action":"edit","task_id":454,"detail":"Add Step 6.7 loop-detection check to code-review skill"}
 {"timestamp":"2026-03-31T04:20:29.0873635+02:00","action":"release","task_id":454,"detail":"architect"}
@@ -9998,3 +9756,245 @@
 {"timestamp":"2026-04-07T02:34:51.2418055+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
 {"timestamp":"2026-04-07T02:34:51.2556837+02:00","action":"release","task_id":662,"detail":"coal-north"}
 {"timestamp":"2026-04-07T02:34:51.8653699+02:00","action":"move","task_id":662,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T02:36:04.8382164+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T02:36:04.8532997+02:00","action":"claim","task_id":651,"detail":"mace-snow"}
+{"timestamp":"2026-04-07T02:37:38.7387022+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T02:37:38.7510507+02:00","action":"claim","task_id":652,"detail":"path-flint"}
+{"timestamp":"2026-04-07T02:41:25.4949499+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T02:41:25.5091603+02:00","action":"release","task_id":652,"detail":"path-flint"}
+{"timestamp":"2026-04-07T02:42:38.9966737+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T02:42:39.0098797+02:00","action":"release","task_id":651,"detail":"mace-snow"}
+{"timestamp":"2026-04-07T02:44:07.0390437+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T02:44:07.0519512+02:00","action":"claim","task_id":666,"detail":"mace-fork"}
+{"timestamp":"2026-04-07T02:45:10.9850376+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T02:45:11.1841969+02:00","action":"claim","task_id":651,"detail":"cove-mist"}
+{"timestamp":"2026-04-07T02:46:07.3171729+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T02:46:07.3629005+02:00","action":"release","task_id":666,"detail":"mace-fork"}
+{"timestamp":"2026-04-07T02:49:24.1915781+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T02:49:24.2053124+02:00","action":"release","task_id":651,"detail":"cove-mist"}
+{"timestamp":"2026-04-07T02:50:46.7867016+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T02:50:46.8011903+02:00","action":"claim","task_id":666,"detail":"fort-lily"}
+{"timestamp":"2026-04-07T02:51:19.3991254+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T02:51:19.4121197+02:00","action":"release","task_id":666,"detail":"fort-lily"}
+{"timestamp":"2026-04-07T02:51:46.8165816+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T02:51:46.832403+02:00","action":"claim","task_id":651,"detail":"dale-reef"}
+{"timestamp":"2026-04-07T02:54:17.6309923+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T02:54:17.646738+02:00","action":"claim","task_id":652,"detail":"light-smoke"}
+{"timestamp":"2026-04-07T02:54:25.0929221+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T02:54:25.1087787+02:00","action":"release","task_id":651,"detail":"dale-reef"}
+{"timestamp":"2026-04-07T02:56:31.2855386+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T02:56:31.3013565+02:00","action":"release","task_id":652,"detail":"light-smoke"}
+{"timestamp":"2026-04-07T02:59:10.6620426+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T02:59:10.6789323+02:00","action":"claim","task_id":666,"detail":"staff-zeal"}
+{"timestamp":"2026-04-07T03:00:29.410143+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T03:00:29.4247136+02:00","action":"claim","task_id":651,"detail":"crypt-spur"}
+{"timestamp":"2026-04-07T03:00:34.6345918+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T03:00:34.6510062+02:00","action":"claim","task_id":652,"detail":"dusk-orbit"}
+{"timestamp":"2026-04-07T03:00:35.6166216+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T03:00:35.6325577+02:00","action":"release","task_id":666,"detail":"staff-zeal"}
+{"timestamp":"2026-04-07T03:01:25.794388+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T03:01:25.8059839+02:00","action":"release","task_id":651,"detail":"crypt-spur"}
+{"timestamp":"2026-04-07T03:03:27.2882627+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T03:03:27.3012608+02:00","action":"release","task_id":652,"detail":"dusk-orbit"}
+{"timestamp":"2026-04-07T05:17:41.0890441+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T05:17:41.1173331+02:00","action":"claim","task_id":651,"detail":"lunar-plume"}
+{"timestamp":"2026-04-07T05:17:46.6702647+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T05:17:46.6830199+02:00","action":"claim","task_id":652,"detail":"fire-snow"}
+{"timestamp":"2026-04-07T05:19:52.7905696+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T05:19:52.8079922+02:00","action":"release","task_id":652,"detail":"fire-snow"}
+{"timestamp":"2026-04-07T05:28:44.4545115+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T05:28:44.4660265+02:00","action":"release","task_id":651,"detail":"lunar-plume"}
+{"timestamp":"2026-04-07T05:28:45.0252723+02:00","action":"move","task_id":651,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T05:29:11.0655343+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T05:29:11.0785162+02:00","action":"claim","task_id":666,"detail":"forge-salt"}
+{"timestamp":"2026-04-07T05:31:56.8004082+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T05:31:56.81206+02:00","action":"release","task_id":666,"detail":"forge-salt"}
+{"timestamp":"2026-04-07T05:33:31.0751266+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:33:31.088898+02:00","action":"claim","task_id":653,"detail":"cove-cider"}
+{"timestamp":"2026-04-07T05:33:33.9944801+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T05:33:34.0065397+02:00","action":"claim","task_id":666,"detail":"cider-eagle"}
+{"timestamp":"2026-04-07T05:34:22.277087+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T05:34:22.2883625+02:00","action":"claim","task_id":652,"detail":"lake-field"}
+{"timestamp":"2026-04-07T05:34:57.9828104+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T05:34:58.0024457+02:00","action":"release","task_id":666,"detail":"cider-eagle"}
+{"timestamp":"2026-04-07T05:38:11.8687414+02:00","action":"create","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T05:38:27.2224434+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:38:27.2436868+02:00","action":"release","task_id":653,"detail":"cove-cider"}
+{"timestamp":"2026-04-07T05:40:50.7865747+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T05:40:50.7972488+02:00","action":"release","task_id":652,"detail":"lake-field"}
+{"timestamp":"2026-04-07T05:40:51.315033+02:00","action":"move","task_id":652,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T05:41:59.4737388+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:41:59.4864994+02:00","action":"claim","task_id":653,"detail":"gate-foam"}
+{"timestamp":"2026-04-07T05:42:23.7335491+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T05:42:23.7452271+02:00","action":"claim","task_id":666,"detail":"gale-wind"}
+{"timestamp":"2026-04-07T05:46:09.8858465+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T05:46:09.9007475+02:00","action":"release","task_id":666,"detail":"gale-wind"}
+{"timestamp":"2026-04-07T05:46:10.5557364+02:00","action":"move","task_id":666,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T05:46:13.3739628+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:46:13.3899438+02:00","action":"release","task_id":653,"detail":"gate-foam"}
+{"timestamp":"2026-04-07T05:47:18.3902251+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:47:18.4114837+02:00","action":"claim","task_id":653,"detail":"echo-cloud"}
+{"timestamp":"2026-04-07T05:47:32.7179522+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:47:32.7337213+02:00","action":"release","task_id":653,"detail":"echo-cloud"}
+{"timestamp":"2026-04-07T05:48:29.9991255+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:48:30.0113354+02:00","action":"claim","task_id":653,"detail":"lake-lodge"}
+{"timestamp":"2026-04-07T05:49:00.4088537+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:49:00.4245686+02:00","action":"release","task_id":653,"detail":"lake-lodge"}
+{"timestamp":"2026-04-07T05:58:40.7344125+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:58:40.747727+02:00","action":"claim","task_id":653,"detail":"midge-elder"}
+{"timestamp":"2026-04-07T05:59:01.0845432+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:59:01.0987824+02:00","action":"release","task_id":653,"detail":"midge-elder"}
+{"timestamp":"2026-04-07T05:59:59.6134859+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T05:59:59.6266052+02:00","action":"claim","task_id":653,"detail":"port-shore"}
+{"timestamp":"2026-04-07T06:00:51.1818252+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T06:00:51.1934172+02:00","action":"release","task_id":653,"detail":"port-shore"}
+{"timestamp":"2026-04-07T06:02:06.0749125+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T06:02:06.0876635+02:00","action":"claim","task_id":653,"detail":"root-mill"}
+{"timestamp":"2026-04-07T06:02:07.2376934+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:02:07.2497663+02:00","action":"claim","task_id":673,"detail":"zone-falcon"}
+{"timestamp":"2026-04-07T06:03:51.3567572+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:03:51.3724757+02:00","action":"release","task_id":673,"detail":"zone-falcon"}
+{"timestamp":"2026-04-07T06:06:38.5695268+02:00","action":"edit","task_id":653,"detail":"P4-13: Update pipeline agents with Brief context"}
+{"timestamp":"2026-04-07T06:06:38.5797707+02:00","action":"release","task_id":653,"detail":"root-mill"}
+{"timestamp":"2026-04-07T06:06:39.0480705+02:00","action":"move","task_id":653,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T06:07:29.9111173+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:07:29.9238051+02:00","action":"claim","task_id":673,"detail":"crisp-mace"}
+{"timestamp":"2026-04-07T06:13:49.0204376+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:14:08.7465299+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:14:08.7576255+02:00","action":"release","task_id":673,"detail":"crisp-mace"}
+{"timestamp":"2026-04-07T06:15:27.1371803+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:15:27.1481808+02:00","action":"claim","task_id":673,"detail":"hive-grain"}
+{"timestamp":"2026-04-07T06:15:36.9637147+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:15:36.9763999+02:00","action":"release","task_id":673,"detail":"hive-grain"}
+{"timestamp":"2026-04-07T06:20:37.0245497+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:20:37.0384612+02:00","action":"claim","task_id":673,"detail":"stem-drift"}
+{"timestamp":"2026-04-07T06:22:14.6033024+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:22:14.6161315+02:00","action":"release","task_id":673,"detail":"stem-drift"}
+{"timestamp":"2026-04-07T06:23:19.7881507+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:23:19.7996575+02:00","action":"claim","task_id":673,"detail":"flint-torch"}
+{"timestamp":"2026-04-07T06:25:20.0904032+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:25:20.1004713+02:00","action":"release","task_id":673,"detail":"flint-torch"}
+{"timestamp":"2026-04-07T06:26:29.5305769+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:26:29.5435843+02:00","action":"claim","task_id":673,"detail":"flux-tiger"}
+{"timestamp":"2026-04-07T06:27:25.3965211+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:27:25.4081382+02:00","action":"release","task_id":673,"detail":"flux-tiger"}
+{"timestamp":"2026-04-07T06:28:31.9387376+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:28:31.9527084+02:00","action":"claim","task_id":673,"detail":"brisk-wild"}
+{"timestamp":"2026-04-07T06:32:37.0934023+02:00","action":"edit","task_id":673,"detail":"P4-14: Add Brief-from-parent convention to pipeline skill files"}
+{"timestamp":"2026-04-07T06:32:37.1294958+02:00","action":"release","task_id":673,"detail":"brisk-wild"}
+{"timestamp":"2026-04-07T06:32:37.7252218+02:00","action":"move","task_id":673,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T09:03:02.5161577+02:00","action":"move","task_id":672,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-04-07T09:03:03.9642494+02:00","action":"move","task_id":671,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-04-07T09:03:04.8890886+02:00","action":"move","task_id":669,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-04-07T09:03:05.4992101+02:00","action":"move","task_id":668,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-04-07T09:03:06.0525192+02:00","action":"move","task_id":667,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-04-07T09:03:06.7730075+02:00","action":"move","task_id":670,"detail":"todo -\u003e backlog"}
+{"timestamp":"2026-04-07T09:06:01.8302882+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T09:06:01.8457068+02:00","action":"claim","task_id":668,"detail":"deep-gleam"}
+{"timestamp":"2026-04-07T09:06:01.9294216+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T09:06:01.9601514+02:00","action":"claim","task_id":667,"detail":"hull-fjord"}
+{"timestamp":"2026-04-07T09:06:02.9842616+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T09:06:02.996221+02:00","action":"claim","task_id":672,"detail":"field-sand"}
+{"timestamp":"2026-04-07T09:06:04.928956+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T09:06:04.9431718+02:00","action":"claim","task_id":669,"detail":"char-gale"}
+{"timestamp":"2026-04-07T09:09:44.7128703+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T09:09:44.7265643+02:00","action":"release","task_id":669,"detail":"char-gale"}
+{"timestamp":"2026-04-07T09:13:18.8380819+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T09:13:18.8528246+02:00","action":"release","task_id":668,"detail":"deep-gleam"}
+{"timestamp":"2026-04-07T09:13:50.0764719+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T09:13:50.088831+02:00","action":"release","task_id":667,"detail":"hull-fjord"}
+{"timestamp":"2026-04-07T09:15:15.8186428+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T09:15:15.833387+02:00","action":"release","task_id":672,"detail":"field-sand"}
+{"timestamp":"2026-04-07T09:16:57.6492726+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T09:16:57.6616883+02:00","action":"claim","task_id":672,"detail":"atlas-zinc"}
+{"timestamp":"2026-04-07T09:17:10.4876953+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T09:17:10.4985681+02:00","action":"claim","task_id":668,"detail":"thorn-halo"}
+{"timestamp":"2026-04-07T09:17:36.6447005+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T09:17:36.659729+02:00","action":"release","task_id":672,"detail":"atlas-zinc"}
+{"timestamp":"2026-04-07T09:17:37.8698469+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T09:17:37.8824945+02:00","action":"claim","task_id":669,"detail":"light-slate"}
+{"timestamp":"2026-04-07T09:17:40.9134142+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T09:17:40.9259421+02:00","action":"claim","task_id":667,"detail":"quick-zinc"}
+{"timestamp":"2026-04-07T09:17:55.2921961+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T09:17:55.3056368+02:00","action":"release","task_id":668,"detail":"thorn-halo"}
+{"timestamp":"2026-04-07T09:18:02.5272525+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T09:18:02.5415079+02:00","action":"release","task_id":669,"detail":"light-slate"}
+{"timestamp":"2026-04-07T09:18:09.8681522+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T09:18:09.8823328+02:00","action":"release","task_id":667,"detail":"quick-zinc"}
+{"timestamp":"2026-04-07T09:20:19.5156933+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T09:20:19.5323293+02:00","action":"claim","task_id":667,"detail":"hill-flare"}
+{"timestamp":"2026-04-07T09:20:29.3030117+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-07T09:20:29.3156126+02:00","action":"claim","task_id":670,"detail":"shell-brave"}
+{"timestamp":"2026-04-07T10:52:10.3476785+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T10:52:10.3620538+02:00","action":"claim","task_id":667,"detail":"raven-otter"}
+{"timestamp":"2026-04-07T10:52:22.8757005+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-07T10:52:22.8889478+02:00","action":"claim","task_id":670,"detail":"quick-twig"}
+{"timestamp":"2026-04-07T10:56:04.324903+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-07T10:56:04.3391138+02:00","action":"release","task_id":670,"detail":"quick-twig"}
+{"timestamp":"2026-04-07T11:14:31.1695621+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T11:14:31.1855568+02:00","action":"release","task_id":667,"detail":"raven-otter"}
+{"timestamp":"2026-04-07T11:14:58.0382309+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T11:14:58.0566463+02:00","action":"claim","task_id":668,"detail":"dune-mink"}
+{"timestamp":"2026-04-07T11:15:59.2063687+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T11:15:59.2265536+02:00","action":"release","task_id":668,"detail":"dune-mink"}
+{"timestamp":"2026-04-07T11:16:50.6937672+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T11:16:50.7104845+02:00","action":"claim","task_id":669,"detail":"calm-haven"}
+{"timestamp":"2026-04-07T11:17:26.2706624+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T11:17:26.2862916+02:00","action":"release","task_id":669,"detail":"calm-haven"}
+{"timestamp":"2026-04-07T11:17:47.9377401+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T11:17:47.955745+02:00","action":"claim","task_id":672,"detail":"rift-mint"}
+{"timestamp":"2026-04-07T11:17:56.7950031+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T11:17:56.8140987+02:00","action":"release","task_id":672,"detail":"rift-mint"}
+{"timestamp":"2026-04-07T11:20:50.6670711+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T11:20:50.6813821+02:00","action":"claim","task_id":668,"detail":"brisk-lunar"}
+{"timestamp":"2026-04-07T11:20:53.8246507+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T11:20:53.8378483+02:00","action":"claim","task_id":672,"detail":"port-port"}
+{"timestamp":"2026-04-07T11:21:10.636935+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T11:21:10.6501547+02:00","action":"claim","task_id":669,"detail":"moss-delta"}
+{"timestamp":"2026-04-07T11:22:41.2939981+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T11:22:41.3083811+02:00","action":"release","task_id":668,"detail":"brisk-lunar"}
+{"timestamp":"2026-04-07T11:22:50.7938538+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T11:22:50.8073013+02:00","action":"release","task_id":672,"detail":"port-port"}
+{"timestamp":"2026-04-07T11:23:29.938301+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T11:23:29.9501936+02:00","action":"claim","task_id":667,"detail":"nectar-ledge"}
+{"timestamp":"2026-04-07T11:24:20.0820875+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T11:24:20.0996038+02:00","action":"release","task_id":667,"detail":"nectar-ledge"}
+{"timestamp":"2026-04-07T11:24:42.4401848+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T11:24:42.4518726+02:00","action":"release","task_id":669,"detail":"moss-delta"}
+{"timestamp":"2026-04-07T11:25:05.7896235+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-07T11:25:05.8022308+02:00","action":"claim","task_id":670,"detail":"vine-raven"}
+{"timestamp":"2026-04-07T11:25:49.4124006+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-07T11:25:49.4261367+02:00","action":"release","task_id":670,"detail":"vine-raven"}
+{"timestamp":"2026-04-07T11:27:09.5577382+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-07T11:27:09.5825801+02:00","action":"claim","task_id":670,"detail":"lark-mast"}
+{"timestamp":"2026-04-07T11:28:03.4814163+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T11:28:03.4975975+02:00","action":"claim","task_id":668,"detail":"rain-knoll"}
+{"timestamp":"2026-04-07T11:28:03.5965867+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T11:28:03.6419139+02:00","action":"claim","task_id":669,"detail":"dusk-lime"}
+{"timestamp":"2026-04-07T11:28:50.4797911+02:00","action":"edit","task_id":669,"detail":"Remove dead Docker ecosystem from dependabot"}
+{"timestamp":"2026-04-07T11:28:50.4929104+02:00","action":"release","task_id":669,"detail":"dusk-lime"}
+{"timestamp":"2026-04-07T11:29:36.1828919+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T11:29:36.1983812+02:00","action":"claim","task_id":667,"detail":"mold-timber"}
+{"timestamp":"2026-04-07T11:30:11.107718+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T11:30:11.1209979+02:00","action":"release","task_id":668,"detail":"rain-knoll"}
+{"timestamp":"2026-04-07T11:31:17.7621829+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T11:31:17.7770363+02:00","action":"release","task_id":667,"detail":"mold-timber"}
+{"timestamp":"2026-04-07T11:31:21.0171359+02:00","action":"edit","task_id":670,"detail":"Create .cspell.json for project vocabulary"}
+{"timestamp":"2026-04-07T11:31:21.0289473+02:00","action":"release","task_id":670,"detail":"lark-mast"}
+{"timestamp":"2026-04-07T11:31:53.2731378+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T11:31:53.2857587+02:00","action":"claim","task_id":672,"detail":"lime-mesa"}
+{"timestamp":"2026-04-07T11:33:28.6355509+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T11:33:28.6507426+02:00","action":"block","task_id":672,"detail":"2/5 subtasks incomplete: #670 in review, #671 in backlog. Unblock and re-dispatch when all 5 subtasks reach done."}
+{"timestamp":"2026-04-07T11:33:28.6634851+02:00","action":"release","task_id":672,"detail":"lime-mesa"}
+{"timestamp":"2026-04-07T11:34:50.4133092+02:00","action":"edit","task_id":671,"detail":"Bootstrap CI workflows to main branch"}
+{"timestamp":"2026-04-07T11:34:50.425732+02:00","action":"claim","task_id":671,"detail":"gleam-bolt"}
+{"timestamp":"2026-04-07T11:35:23.1655245+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T11:35:23.1770962+02:00","action":"claim","task_id":667,"detail":"grove-sleet"}
+{"timestamp":"2026-04-07T11:37:11.7361064+02:00","action":"edit","task_id":671,"detail":"Bootstrap CI workflows to main branch"}
+{"timestamp":"2026-04-07T11:37:11.7710578+02:00","action":"block","task_id":671,"detail":"type:user-action — manual bootstrap operation requires human to dispatch sync-to-main workflow and verify GitHub Actions UI"}
+{"timestamp":"2026-04-07T11:37:11.7854396+02:00","action":"release","task_id":671,"detail":"gleam-bolt"}
+{"timestamp":"2026-04-07T11:40:25.3150513+02:00","action":"edit","task_id":667,"detail":"Rewrite sync-to-main with incremental commit strategy"}
+{"timestamp":"2026-04-07T11:40:25.3282887+02:00","action":"release","task_id":667,"detail":"grove-sleet"}
+{"timestamp":"2026-04-07T11:40:25.9287912+02:00","action":"move","task_id":667,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T11:40:46.1095693+02:00","action":"edit","task_id":668,"detail":"Fix megalinter for private repo constraints"}
+{"timestamp":"2026-04-07T11:40:46.1212929+02:00","action":"claim","task_id":668,"detail":"zinc-heath"}
