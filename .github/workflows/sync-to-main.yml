@@ -2,6 +2,11 @@ name: Sync dev to main
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run — show diff preview and skip push"
+        type: boolean
+        default: false
 
 concurrency:
   group: sync-to-main
@@ -16,47 +21,139 @@ jobs:
 
     steps:
       - name: Checkout dev branch (full history)
+        # fetch-depth: 0 needed — incremental approach attaches new commits to origin/main HEAD
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: dev
           fetch-depth: 0
 
+      - name: Capture dev metadata
+        run: |
+          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+          echo "DATE=$(date -u +"%Y-%m-%d")" >> "$GITHUB_ENV"
+
       - name: Validate include-list paths exist on dev
         run: |
           failed=0
-          for p in share serve seed setup pyproject.toml uv.lock .python-version .gitignore SECURITY.md README-consumer.md; do
+          for p in \
+            share serve seed setup \
+            pyproject.toml uv.lock .python-version .gitignore SECURITY.md \
+            README-consumer.md \
+            .github .mega-linter.yml .editorconfig .markdownlint.json; do
             if [ ! -e "$p" ]; then
               echo "MISSING: $p"
               failed=1
             fi
           done
           if [ $failed -ne 0 ]; then
-            echo "Include-list validation failed -- one or more required paths are absent on dev."
+            echo "Include-list validation failed — one or more required paths are absent on dev."
             exit 1
           fi
           echo "All include-list paths present."
 
-      - name: Build clean consumer tree
+      - name: Configure git identity
         run: |
-          TREE=$(mktemp -d)
-          cp -r share serve seed setup "$TREE/"
-          cp pyproject.toml uv.lock .python-version .gitignore SECURITY.md "$TREE/"
-          cp README-consumer.md "$TREE/README.md"
-          echo "TREE=$TREE" >> "$GITHUB_ENV"
-
-      - name: Create orphan commit and push to main
-        run: |
-          cd "$TREE"
-          git init
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "sync: update from dev (workflow dispatch)"
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-          git push origin HEAD:main --force
 
-      - name: Write job summary
+      - name: Prepare consumer branch
+        # Incremental: new commit is a child of origin/main.
+        # First-ever sync: create orphan branch when main does not exist yet.
         run: |
-          echo "## Sync Complete" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Actor:** ${{ github.actor }}" >> "$GITHUB_STEP_SUMMARY"
+          if git fetch origin main --no-tags 2>/dev/null; then
+            echo "main branch exists — creating incremental commit on top of origin/main"
+            git checkout -b consumer origin/main
+            echo "MAIN_EXISTS=true" >> "$GITHUB_ENV"
+          else
+            echo "main branch not found — creating orphan commit (first-ever sync)"
+            git checkout --orphan consumer
+            echo "MAIN_EXISTS=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build consumer tree
+        run: |
+          # Clear working tree so no dev-only or stale main files bleed through
+          git rm -rf . --quiet || true
+          # Restore include-list files from dev
+          git checkout dev -- \
+            share serve seed setup \
+            pyproject.toml uv.lock .python-version .gitignore SECURITY.md \
+            .github .mega-linter.yml .editorconfig .markdownlint.json
+          # README-consumer.md on dev becomes README.md on main
+          git checkout dev -- README-consumer.md
+          git mv README-consumer.md README.md
+
+      - name: Detect changes
+        run: |
+          if [ "$MAIN_EXISTS" = "true" ] && git diff --staged --quiet HEAD 2>/dev/null; then
+            echo "NO_CHANGES=true" >> "$GITHUB_ENV"
+            echo "No changes detected — main is already up to date."
+          else
+            echo "NO_CHANGES=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Diff preview
+        run: |
+          {
+            echo "### Diff preview"
+            echo ""
+            if [ "$NO_CHANGES" = "true" ]; then
+              echo "No changes — main is already up to date."
+            elif [ "$MAIN_EXISTS" = "false" ]; then
+              echo "First-ever sync — files to be committed:"
+              echo ""
+              echo '```'
+              git ls-files --cached
+              echo '```'
+            else
+              echo '```'
+              git diff --staged --stat HEAD
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit
+        if: ${{ env.NO_CHANGES != 'true' }}
+        run: |
+          git commit -m "sync: dev@${{ env.SHORT_SHA }} (${{ env.DATE }}, ${{ github.actor }})"
+
+      - name: Push to main
+        if: ${{ env.NO_CHANGES != 'true' && inputs.dry_run != true }}
+        run: |
+          git push origin consumer:main
+
+      - name: Job summary — success
+        if: ${{ success() }}
+        run: |
+          {
+            echo ""
+            if [ "$NO_CHANGES" = "true" ]; then
+              echo "## Sync — No Changes"
+            elif [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "## Sync Dry Run"
+            else
+              echo "## Sync Complete"
+            fi
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **SHA** | \`${{ env.SHORT_SHA }}\` |"
+            echo "| **Date** | ${{ env.DATE }} |"
+            echo "| **Actor** | ${{ github.actor }} |"
+            echo "| **Dry run** | ${{ inputs.dry_run }} |"
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo ""
+              echo "> Push skipped (dry run). Re-run without dry_run to sync."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Job summary — failure
+        if: ${{ always() && failure() }}
+        run: |
+          {
+            echo "## Sync Failed"
+            echo ""
+            echo "Failed for actor **${{ github.actor }}** at SHA \`${{ env.SHORT_SHA || 'unknown' }}\` on ${{ env.DATE || 'unknown' }}."
+            echo ""
+            echo "Check the step logs above for details."
+          } >> "$GITHUB_STEP_SUMMARY"
