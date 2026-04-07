@@ -22,6 +22,8 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 Read input (free-text, plan doc section, or requirements). Identify phase number, deliverables, and implicit ordering.
 
+If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive scope, investment tier, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
+
 Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
 ## Step 2 — Check Board State

@@ -16,6 +16,7 @@ The orchestrator maintains constant-size context:
 - **No signal interpretation.** Pipeline subagents return a Channel A diagnostic line. Only check: did the agent return normally or crash? After scribe returns, read `resolve-summary.json` for structured dispatch data (see Step 1).
 - **No retry tracking state — except:** `stale_retried` (task IDs dispatched with retry_hint), `last_dispatched` (dict[int, str] — task_id → status from previous pick_tasks result, max 20 entries), `sequential_remaining` (rate-limit sequential counter), `needs_info_dispatches` (list of {task_id, agent} pairs from scribe `resolve-summary.json`, cleared each cycle).
 - **Prior cycle results discarded.** Each cycle starts fresh with scope filter, crash IDs, and `stale_retried`.
+- **Brief context:** The ideator's parent task body may contain a Brief artifact (Problem, Outcomes, Approach, Scope, Investment Tier). This context is available to pipeline agents via parent task lookup (`show_task(parent_id)`) — the orchestrator does not use Brief context directly.
 
 ## Signal Contracts
 

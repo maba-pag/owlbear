@@ -135,7 +135,7 @@ See .owlbear/scratch/480-reviewer.md for full evidence.
 
 - **Orchestrator:** never reads task bodies. Re-plans from board state each cycle.
 - **Pipeline agents** (reviewer, doc-writer, auditor): read predecessor sections via task body.
-- **Architect / builder:** read task body for AC, architecture notes, and research pointers.
+- **Architect / builder:** read task body for AC, architecture notes, research pointers, and Brief context (via parent task, when present).
 
 To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
 
