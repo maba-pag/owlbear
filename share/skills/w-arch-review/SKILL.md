@@ -88,7 +88,7 @@ The architect retains final authority.
 
 <!-- NON_IMPL_TAGS: Authoritative list at w-dispatch-planning. -->
 
-> **Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`. Add the bare tag if missing.
+> **Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action`. Add the bare tag if missing.
 
 > **Always move to `todo`, never to `in-progress`.** The test-writer must process every task to write a pass-through note. Skipping causes Gate 4 violations downstream.
 

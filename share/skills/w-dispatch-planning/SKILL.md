@@ -22,7 +22,7 @@ The dispatcher assigns agents based on task status:
 | ------------- | -------------- | -------------------------------------------------------- | ---------------------- |
 | `research`    | researcher     | Research investigation, move to `backlog`                | No                     |
 | `backlog`     | architect      | Architecture review, move to `todo`                      | No                     |
-| `todo`        | test-writer    | Write failing tests (RED phase), move to `in-progress`   | Yes — tags `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality` |
+| `todo`        | test-writer    | Write failing tests (RED phase), move to `in-progress`   | Yes — tags `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action` |
 | `in-progress` | builder        | GREEN phase, move to `review`                            | Yes — if test-writer passed through |
 | `review`      | reviewer       | Quality verification, move to `docs`                     | No                     |
 | `docs`        | doc-writer     | Documentation gate, move to `done`                       | No                     |
@@ -64,7 +64,7 @@ If the response is empty, output `{"dispatch":[]}` and stop.
 **Gate flags** — for each task, compute warning flags:
 
 <!-- NON_IMPL_TAGS — authoritative list -->
-- `TW:MISSING` — status is `in-progress`, body lacks `## Test-Writer Notes` section, and task has none of the non-impl pass-through tags: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`
+- `TW:MISSING` — status is `in-progress`, body lacks `## Test-Writer Notes` section, and task has none of the non-impl pass-through tags: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action`
 - `AC:MISSING` — status is `todo`, `in-progress`, `review`, `docs`, or `done`, and body contains no bullet lines (lines starting `- ` or `N. `)
 - `DECOMP` — body contains `Needs decomposition:`
 - `ARCH:REVIEWED` — body contains `## Architecture Review`
