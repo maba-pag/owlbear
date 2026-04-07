@@ -14,5 +14,5 @@ user-invocable: false
 ## Board Configuration
 
 - **Config:** `.owlbear/kanban/config.yml`
-- **Statuses:** ideation, backlog, todo, in-progress, review, docs, done
+- **Statuses:** research, backlog, todo, in-progress, review, docs, done
 - **Priorities:** `someday` < `nice-to-have` < `important` (default) < `needed` < `critical`

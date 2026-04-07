@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [scribe, Explore, quality-runner]
 ---
 
@@ -65,7 +65,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 
 ### Channel B
 
-Append `## Audit` section with: AC verification table (AC line / evidence / status), test results, deduction breakdown, confidence score, action. See `w-task-verification` skill for the full output template.
+Include `## Audit` section in your `end_work` note: AC verification table (AC line / evidence / status), test results, deduction breakdown, confidence score, action. See `w-task-verification` skill for the full output template.
 
 ### Kanban protocol
 

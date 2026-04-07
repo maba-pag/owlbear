@@ -93,7 +93,7 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 ### Follow-up Task Quality
 
 - Every follow-up task requires concrete acceptance criteria. Single-responsibility. List affected files.
-- Target `backlog` status. Exception: researchers create follow-up tasks at `ideation`.
+- Target `backlog` status. Exception: researchers create follow-up tasks at `research`.
 - Simple follow-up: create directly. Complex decomposition (multiple interdependent subtasks): write `Needs decomposition: {reason}` in the task body — the orchestrator will route the task to the planner.
 
 Use `create_task(title="...", status="backlog", ...)` to create follow-up tasks (see `h-mcp-kanban`).
@@ -114,7 +114,9 @@ Channel A is diagnostic only — the orchestrator does not parse or interpret th
 
 Rich context appended to the task body before returning. Downstream agents read this via the task body. The orchestrator never reads it.
 
-For command syntax to append body content, see the `h-mcp-kanban` skill — section `## Channel B Protocol`. Use `edit_task(append_body="...", timestamp=True)` to append with a datestamp.
+Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended with a timestamp automatically. See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
+To append a mid-task note outside the `end_work` lifecycle, use `edit_task(append_body="...", timestamp=True)` (see `h-mcp-kanban`).
 
 ### Per-Agent Signal Mapping
 
@@ -133,7 +135,7 @@ See .owlbear/scratch/480-reviewer.md for full evidence.
 
 - **Orchestrator:** never reads task bodies. Re-plans from board state each cycle.
 - **Pipeline agents** (reviewer, doc-writer, auditor): read predecessor sections via task body.
-- **Architect / builder:** read task body for AC, architecture notes, and research pointers.
+- **Architect / builder:** read task body for AC, architecture notes, research pointers, and Brief context (via parent task, when present).
 
 To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
 
@@ -179,14 +181,14 @@ See `h-mcp-memory` for full tool reference.
 
 Routine gate rejections (reviewer FAIL, doc-writer reject) use simple status movement and claim release — **no blocking**. The task re-enters the pipeline automatically on the next dispatch cycle.
 
-When an agent cannot proceed (missing dependencies, infeasible AC, vague scope), it calls the **scribe** to create a DR. The scribe sets the block flag; the calling agent then calls `end_work(outcome="block")` to release its claim and append its reasoning to the task body. The scribe's return message tells the agent what to do.
+When an agent cannot proceed (missing dependencies, infeasible AC, vague scope) or discovers the AC requires physical user action (manual testing, GUI verification, credential setup, deployment), it calls the **scribe** to create a DR or action request. Do not pass through hoping a downstream agent will handle it. The scribe creates the file; the calling agent then calls `end_work(outcome="block", block_reason="DR pending: {filename}")` to release its claim and append its reasoning to the task body.
 
 The kanban `block` action is reserved for:
 
 - Stale tasks — blocked for triage by orchestrator
 - Tasks with pending DRs — blocked until user responds
 
-To set a block reason: `edit_task(task_id="{id}", block="reason")`. To clear it: `edit_task(task_id="{id}", unblock=True)` (see `h-mcp-kanban`).
+Blocking and unblocking outside the standard lifecycle (e.g., orchestrator triage) uses `edit_task(block="reason")` / `edit_task(unblock=True)` (see `h-mcp-kanban`).
 
 ### Decision Tiers
 
@@ -198,6 +200,50 @@ To set a block reason: `edit_task(task_id="{id}", block="reason")`. To clear it:
 
 All DR/AR creation goes through the **scribe** agent. Never write to `.owlbear/decisions/` directly. If in doubt, create the DR — the cost is lower than guessing.
 
+### User-Action Tasks
+
+Some tasks require a physical action from the user before the automated pipeline can proceed (GUI verification, portal authentication, manual deployment, credential setup). The `type:user-action` tag identifies these tasks and triggers a structured blocking flow.
+
+**Detection heuristics** — architect is the mandatory gate:
+
+| Signal | Examples |
+|--------|----------|
+| Physical-action verbs in AC | Open, Click, Navigate, Verify in browser/GUI |
+| External-system references | Teams, Azure portal, GitHub UI, external tools |
+| No testable Python interfaces | AC requires human observation, not assertions |
+| Manual checkbox steps | Steps the user must perform by hand |
+
+Researcher may provisionally tag `type:user-action` during research; architect confirms or removes.
+
+**Blocking flow:**
+
+1. Architect detects `type:user-action` → creates action request via scribe
+2. Architect calls `end_work(outcome="block", block_reason="AR pending: {filename}")`
+3. `pick_tasks` excludes the blocked task — no agents dispatched
+4. User performs the action → sets `response: completed` in the AR file
+5. Scribe resolves: appends `## Action Completed` to task body, unblocks task
+6. Architect (re-entry): sees `## Action Completed` + `type:user-action` → verifies AC → approves to `todo`
+7. Test-writer and builder pass through (tag is in `NON_IMPL_TAGS`)
+
+**Post-completion fast-path:** When a `type:user-action` task re-enters architect review with `## Action Completed` in the body, the architect verifies that AC checkboxes are satisfied, then approves directly without full re-evaluation. This extends the "Resolved Decision Pre-flight" check to action-completed tasks.
+
+**Dual-nature tasks:** When the same feature requires both user action and code change, split into two tasks: a `type:user-action` task (AR + block) and a code task. The code task sets `depends_on` to the user-action task to enforce ordering.
+
+**Dry-run scenario — #597-style loop prevented:**
+
+1. Task created: "Verify Teams Workflows availability" with `type:user-action` tag
+2. Researcher: validates research, confirms `type:user-action`
+3. Architect: detects tag → creates AR via scribe → blocks → `end_work(outcome="block")`
+4. Orchestrator cycle: `pick_tasks` returns nothing for this task (blocked) — no agents dispatched
+5. User: performs action → sets `response: completed` in AR file
+6. Scribe resolve: appends `## Action Completed`, unblocks task
+7. Architect (re-entry): sees `## Action Completed` + `type:user-action` → verifies AC → approves
+8. Pipeline: test-writer/builder pass through (NON_IMPL_TAGS), reviewer/auditor verify → archive
+
+Result: **2 architect cycles** (initial block + post-completion review) vs #597's **4+ futile cycles** with no resolution.
+
 ### Handoff
 
-When you cannot continue: describe current state, what failed, open questions, and next step in the task body. Use the **scribe** agent for user-must-do-X scenarios (manual testing, credentials, deployments). Append the handoff note via `edit_task(task_id="{id}", append_body="...")` (see `h-mcp-kanban`).
+When you cannot finish the task yourself, describe current state, what failed, open questions, and next step in the task body. Include the handoff note in your `end_work(note="## Handoff\n...", outcome="fail")` call.
+
+For programmatic handoff notes, use `edit_task(append_body="## Handoff\n...")` (see `h-mcp-kanban`).

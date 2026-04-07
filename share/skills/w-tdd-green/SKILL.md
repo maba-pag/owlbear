@@ -22,8 +22,7 @@ Verify the task is in `in-progress` status (the test-writer already moved it her
 
 Check the task body for `## Test-Writer Notes` containing "Non-implementation task" or "non-impl pass-through". If found:
 
-1. Append note via `edit_task` (with `append_body`): "## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review."
-2. Advance via `end_work` (moves to `review` + releases claim).
+1. Advance via `end_work(note="## Builder Notes\n- Non-implementation task — no code changes needed.\n- Passing through to review.")` (moves to `review` + releases claim).
 3. Return: `DONE #{id} -> review | non-impl pass-through, no code changes`
 4. **Stop here.**
 
@@ -202,7 +201,7 @@ Handle fix-attempt result:
 
 ## Step 7 — Deliverables
 
-Append builder notes to task body via `edit_task` (with `append_body` and `timestamp=True`).
+Include builder notes in your `end_work` note.
 
 Commit per `r-project-standards` → Commit Discipline:
 

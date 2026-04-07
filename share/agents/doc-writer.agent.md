@@ -6,8 +6,15 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [scribe]
+hooks:
+  SessionStart:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/session-context.ps1
+  PreToolUse:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-code-writes.ps1
 ---
 
 <persona>
@@ -67,7 +74,7 @@ to review, you don't fix it yourself.
 
 ### Channel B
 
-Append `## Docs Gate` section with: checklist table (check / applies? / status / evidence), files updated, scratch files cleaned. See `w-doc-update` skill for the full output template.
+Include `## Docs Gate` section in your `end_work` note: checklist table (check / applies? / status / evidence), files updated, scratch files cleaned. See `w-doc-update` skill for the full output template.
 
 ### Kanban protocol
 

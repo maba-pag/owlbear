@@ -1,11 +1,14 @@
 """Gate predicate functions for the OwlBear dispatch planner.
 
 Gates 1 (status), 2 (dependency), and 6 (claim) are handled upstream by CLI
-flags passed to read_board(). The three predicates here cover:
-  - Gate 3: atomicity (single-concern title heuristic)
+flags passed to read_board(). The two predicates here cover:
   - Gate 4: TDD readiness (in-progress tasks without a non-impl tag must have
     Test-Writer Notes; non-impl pass-through tasks are exempt)
   - Gate 5: clarity (active tasks must have bullet or numbered AC)
+
+Atomicity (single-concern) is evaluated by the architect during review, not
+as a hard dispatch gate.  Multi-concern tasks get routed to the planner via
+the existing ``Needs decomposition:`` body marker.
 """
 
 from __future__ import annotations
@@ -16,22 +19,14 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from owlbear.planner.models import Task
 
-_AND_PATTERN = re.compile(r"\band\b", re.IGNORECASE)
 _AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 _CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
 _NON_IMPL_TAGS = frozenset(
-    {"research", "docs", "type:config", "type:docs", "test", "type:test", "agent", "quality"}
+    {
+        "research", "docs", "type:config", "type:docs",
+        "test", "type:test", "agent", "quality", "type:user-action",
+    }
 )
-
-
-def check_atomicity(task: Task) -> bool:
-    """Return True if the task title has no word-boundary 'and'.
-
-    This is a heuristic approximation for single-concern scope.
-    False positives (e.g. 'sandwich') are prevented by word boundaries.
-    Tasks that fail re-enter the next dispatch cycle automatically.
-    """
-    return not bool(_AND_PATTERN.search(task.title))
 
 
 def check_tdd(task: Task) -> bool:
@@ -55,7 +50,7 @@ def check_clarity(task: Task) -> bool:
 
     Active statuses (todo, in-progress, review, docs, done) require at least
     one bullet (- item) or numbered list item (1. item) in the body.
-    Pre-pipeline statuses (ideation, backlog) are exempt — AC not required yet.
+    Pre-pipeline statuses (research, backlog) are exempt — AC not required yet.
     """
     if task.status in _CLARITY_STATUSES:
         return bool(_AC_PATTERN.search(task.body))
@@ -63,9 +58,10 @@ def check_clarity(task: Task) -> bool:
 
 
 def check_gates(task: Task) -> bool:
-    """Composite gate: returns True only if atomicity, TDD, and clarity all pass.
+    """Composite gate: returns True only if TDD and clarity gates pass.
 
     Gates 1, 2, and 6 are handled by CLI flags in read_board() before this
-    function is called.
+    function is called.  Atomicity is evaluated by the architect during
+    review, not as a dispatch gate.
     """
-    return check_atomicity(task) and check_tdd(task) and check_clarity(task)
+    return check_tdd(task) and check_clarity(task)

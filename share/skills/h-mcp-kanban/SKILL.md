@@ -42,46 +42,44 @@ Counterpart to `start_work`. Appends a timestamped note, resolves the task based
 | `success` | Advance to next status. If already at last status, archive. |
 | `fail` | Keep current status, release claim. |
 | `block` | Mark blocked with `block_reason` (required), release claim. |
-| `reject` | Move to `move_to` status (default: `ideation`), release claim. |
+| `reject` | Move to `move_to` status (default: `research`), release claim. |
 
 On failure: raises `ToolError` (MCP `isError: true`).
 
 ## Agent Lifecycle Pattern
 
-Every pipeline agent follows a 3-call MCP lifecycle per task:
+Every pipeline agent follows a 2-call MCP lifecycle per task:
 
 ```python
 # 1. Claim + read
 task = start_work(task_id="480")
 
-# 2. Channel B (mid-task notes, repeatable)
-edit_task(task_id="480", append_body="## Builder Notes\n- Files changed: ...", timestamp=True)
+# 2. (do the actual work)
 
-# 3. Advance + release
-end_work(task_id="480", note="12 tests passed, ruff clean", outcome="success")
+# 3. Append agent notes + advance + release — all in one call
+end_work(task_id="480", note="## Builder Notes\n- Files changed: ...\n\n12 tests passed, ruff clean", outcome="success")
 ```
 
-## Channel B Protocol
-
-Append running notes and the final agent section to the task body via `edit_task`:
-
-```python
-# Mid-task notes or final section (repeatable, always timestamped)
-edit_task(task_id="480", append_body="## Builder Notes\n- Files changed: ...", timestamp=True)
-```
+Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended to the task body with a timestamp, then the task advances and the claim is released — all atomically.
 
 For the section header to use per agent, see `agent-common.instructions.md` — `## Per-Agent Section Mapping`.
+
+### edit_task (advanced)
+
+`edit_task` is available for field edits (tags, dependencies, blocking, unblocking) but is **not needed** for the standard lifecycle. The server auto-resolves claim identity when the calling agent owns the claim.
+
+Do not use `edit_task` to append agent notes — use `end_work(note="...")` instead.
 
 ## Compound vs Single Tool Guidance
 
 | Situation | Recommended Tools |
 |-----------|------------------|
-| Normal lifecycle (claim, work, advance) | `start_work` → `edit_task` (Channel B) → `end_work` |
+| Normal lifecycle (claim, work, advance) | `start_work` → `end_work` |
 | Block mid-task | `end_work(outcome="block", block_reason="...")` |
 | Reject (send back in pipeline) | `end_work(outcome="reject", move_to="todo")` |
 | Inspect without claiming | `show_task` only |
 | Scan the board | `list_tasks` with filters |
-| Partial status move | `edit_task(status="...")` |
+| Edit fields on a claimed task | `edit_task` (auto-resolves claim) |
 
 ## Error Handling
 

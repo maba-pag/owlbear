@@ -80,6 +80,7 @@ Tags are free-form. Conventions:
 |----------|---------|---------|
 | Phase | `phase-1` … `phase-12` | Group by project phase |
 | Category | `config`, `tooling`, `docs`, `test`, `cli`, `agent` | Area touched |
-| Type | `type:build`, `type:test`, `type:docs` | Kind of work |
+| Type | `type:build`, `type:test`, `type:docs`, `type:user-action` | Kind of work |
+| | `type:user-action` — requires physical user action before pipeline can continue; architect creates AR, blocks task, and uses fast-path on re-entry (see r-pipeline-protocol §5) | |
 | Scope | `scope:copilot`, `scope:core`, `scope:cli` | Codebase part |
 | Rigor | `rigor:lean`, `rigor:standard`, `rigor:thorough` | Quality-vs-speed profile |

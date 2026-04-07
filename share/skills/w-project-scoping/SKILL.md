@@ -1,9 +1,11 @@
 ---
 name: w-project-scoping
-description: "Workflow: Project scoping — turn a vague idea into a structured project definition"
+description: "Workflow (DEPRECATED): Project scoping — use ideator agent instead"
 user-invocable: true
 argument-hint: "[project name or idea]"
 ---
+
+> **Deprecated.** Superseded by the Ideator agent (Phase 4). Retained for reference until ideator ships.
 
 # Project Scoping
 

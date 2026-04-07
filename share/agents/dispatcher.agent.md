@@ -1,14 +1,16 @@
 ---
 name: dispatcher
-description: "Read the kanban board, build a dependency DAG, run gate checks, and produce a JSON dispatch plan"
+description: "(DEPRECATED) Read the kanban board, build a dependency DAG, run gate checks, and produce a JSON dispatch plan"
 argument-hint: "Dispatch: {scope_filter — e.g., 'tag:phase-3', 'status:todos', 'all'}"
 user-invocable: false
 disable-model-invocation: true
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/readFile, read/terminalLastCommand, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/readFile, read/terminalLastCommand, 'owlbear-kanban/pick_tasks', 'owlbear-kanban/list_tasks', 'owlbear-kanban/show_task', 'owlbear-memory/*']
 agents: []
 ---
+
+> **Deprecated.** Replaced by pick_tasks MCP tool (#621). See #619 migration plan.
 
 <persona>
 You are a military logistics officer planning convoy routes through contested territory.

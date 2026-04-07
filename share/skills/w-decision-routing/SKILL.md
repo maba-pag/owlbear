@@ -27,38 +27,47 @@ This skill does NOT claim a task — the scribe operates on behalf of the callin
 
 ### Mode 2: resolve
 
-Scan `.owlbear/decisions/pending/` for files where the user has responded (any `approved` value other than `false`), or `completed: true` (action requests). Handle each file according to the `approved` value:
+Scan ALL `*.md` files in `.owlbear/decisions/pending/`. Read each file's YAML frontmatter and classify by the `response` field:
 
-#### approved: true — Full approval
+#### response: pending — Not yet responded
 
-**Validation gate:** Before processing, verify that the `decision:` field contains a recognizable option label (matches one of the `### {letter}: {title}` headings in the body's `## Options` section). If the `decision:` field does NOT match any option — e.g., it contains a meta-comment like "needs more information" or "not sure yet" — treat the file as `approved: needs-info` instead, regardless of the boolean flag. Log the mismatch.
+Skip. Include in PENDING count for the orchestrator to surface.
+
+#### response: approved — Full approval (decision requests)
+
+**Validation gate:** Verify the `decision:` field contains a recognizable option label (matches a `### {letter}: {title}` heading from the body's `## Options` section). If the `decision:` field does NOT match any option — e.g., it contains a meta-comment like "needs more information" — treat as `response: needs-info` instead. Log the mismatch.
 
 If validation passes:
 
-1. **Write summary to task body** — extract `decision:`/`notes:` verbatim and append `## Decision Resolved` to the task body via `edit_task` (with `append_body`).
+1. **Write summary to task body** — extract `decision:`/`notes:` verbatim and append `## Decision Resolved` via `edit_task` (with `append_body`).
 2. **Unblock the task** — via `edit_task` (with `unblock=True`).
-3. **Move the pending file** to `.owlbear/decisions/resolved/`. If it already exists in `resolved/`, delete the `pending/` copy.
-
-#### approved: needs-info — Clarification requested
-
-The user has seen the DR and has follow-up questions in `notes:`. Do NOT treat this as approval.
-
-1. **Write clarification to task body** — append `## Clarification Requested` with the user's `notes:` verbatim to the task body via `edit_task` (with `append_body`).
-2. **Keep the task blocked.** Do NOT unblock.
-3. **Reset the file** — set `approved: false` and move back to `pending/` (or leave in place if already there). This re-enters the pending queue.
-4. **Signal the originating agent** — return `NEEDS-INFO #{task_id}` so the orchestrator can re-dispatch the originating agent (from the `agent:` field) to address the user's questions. After the agent researches, it should create a NEW DR (or update the existing one) for the user to approve.
-
-#### approved: rejected — User rejects all options
-
-The user does not want any of the presented options.
-
-1. **Write rejection to task body** — append `## Decision Rejected` with the user's `notes:` verbatim.
-2. **Unblock the task** — the originating agent needs to re-scope or abandon.
 3. **Move the pending file** to `.owlbear/decisions/resolved/`.
 
-**Auto-resolution (5-day timeout):** `impact_tier: 2` decisions (or missing `impact_tier`) staying `approved: false` for 5+ days get auto-resolved with the agent's pre-filled recommendation. Update with `approved: auto` and unblock.
+#### response: completed — Action request completed
 
-**T3 decisions do NOT auto-resolve.** `impact_tier: 3` blocks indefinitely until explicit user approval.
+1. **Write completion to task body** — append `## Action Completed` with `notes:` verbatim via `edit_task`.
+2. **Unblock the task.**
+3. **Move the pending file** to `.owlbear/decisions/resolved/`.
+
+#### response: needs-info — Clarification requested
+
+The user has follow-up questions in `notes:`. Do NOT treat as approval.
+
+1. **Write clarification to task body** — append `## Clarification Requested` with user's `notes:` verbatim via `edit_task`. **Idempotency guard:** if the task body already contains a `## Clarification Requested` section with identical notes, skip the append.
+2. **Keep the task blocked.** Do NOT unblock.
+3. **Reset the file** — set `response: pending` and leave in `pending/`. This re-enters the pending queue.
+4. **Record in resolve-summary.json** — add `{"task_id": {task_id}, "agent": "{agent:}"}` to the `needs_info` array (written by scribe at end of resolve mode, after all DRs are processed).
+5. **Signal the originating agent** — return `NEEDS-INFO #{task_id}` so the orchestrator re-dispatches the agent (from `agent:` field) to address the questions. The agent should create a new or updated DR after researching.
+
+#### response: rejected — User rejects all options
+
+1. **Write rejection to task body** — append `## Decision Rejected` with user's `notes:` verbatim.
+2. **Unblock the task** — originating agent re-scopes or abandons.
+3. **Move the pending file** to `.owlbear/decisions/resolved/`.
+
+**Auto-resolution (5-day timeout):** `impact_tier: 2` decisions (or missing `impact_tier`) staying `response: pending` for 5+ days get auto-resolved with the agent's pre-filled recommendation. Update with `response: auto-approved` and unblock.
+
+**T3 decisions do NOT auto-resolve.** `impact_tier: 3` blocks indefinitely until explicit user response.
 
 ### Mode 3: query
 
@@ -96,8 +105,8 @@ Create when the user must **do something** (not decide):
 
 ```yaml
 ---
-# >> Your action: set approved to true, needs-info, or rejected
-approved: false
+# >> Your action: set response to approved, needs-info, or rejected
+response: pending
 decision: "A: {recommended option}"
 notes: ""
 # >> Agent metadata
@@ -110,14 +119,15 @@ impact_tier: {2|3}
 ---
 ```
 
-#### `approved` field values
+#### `response` field values
 
-| Value | Meaning |
-|-------|--------|
-| `false` | Untouched / pending (default) |
-| `true` | Approved — proceed with option in `decision:` |
-| `needs-info` | User has follow-up questions in `notes:` — keep blocked, re-dispatch agent |
-| `rejected` | User rejects all options — unblock for re-scoping |
+| Value | Meaning | Task blocked? |
+|-------|---------|---------------|
+| `pending` | Not yet responded (default) | yes |
+| `approved` | Proceed with option in `decision:` | no |
+| `needs-info` | User has questions in `notes:` — re-dispatch agent | yes |
+| `rejected` | User rejects all options — re-scope | no |
+| `auto-approved` | 5-day timeout (T2 only) — proceed with recommendation | no |
 
 ### Body Structure
 
@@ -159,7 +169,8 @@ impact_tier: {2|3}
 
 ```yaml
 ---
-completed: false
+# >> Your action: set response to completed or rejected
+response: pending
 notes: ""
 request_type: action
 task_id: {id}
@@ -175,8 +186,8 @@ Body includes `## Context`, `## Steps` (with checkboxes), and `## Completion ins
 
 After creating the DR:
 
-1. **If other unblocked tasks exist:** Block the current task via `edit_task(block="DR pending: {filename}")`. Do NOT release the claim — the calling agent does that via `end_work(outcome="block")`. Return the CREATED signal with the instruction to end work.
-2. **If NO other unblocked tasks exist:** Proceed with recommended option. Mark `urgency: advisory` and `approved: auto`.
+1. **If other unblocked tasks exist:** Return the CREATED signal with the instruction to end work. The calling agent blocks the task via `end_work(outcome="block", block_reason="DR pending: {filename}")`. Do NOT call `edit_task(block=...)` — the task is claimed by the calling agent.
+2. **If NO other unblocked tasks exist:** Proceed with recommended option. Mark `urgency: advisory` and `response: auto-approved`.
 
 ## User Notes Are AC Amendments
 
@@ -194,11 +205,11 @@ DONE #{task_id} -> {status} | {mode}: {result summary}
 
 - [ ] In check-or-create mode: searched BOTH pending and resolved folders
 - [ ] In check-or-create mode: existing DR actually covers the same concern (not different aspect)
-- [ ] In resolve mode: validated `decision:` field matches an option label before treating `approved: true` as approval
-- [ ] In resolve mode: `needs-info` files kept blocked, reset to `approved: false`, signal sent to originating agent
-- [ ] In resolve mode: wrote `## Decision Resolved`, `## Clarification Requested`, or `## Decision Rejected` to EVERY responded task's body
-- [ ] In resolve mode: moved approved/rejected files from pending to resolved; needs-info files stay in pending
-- [ ] In resolve mode: unblocked EVERY approved or rejected task (NOT needs-info)
+- [ ] In resolve mode: classified each file by its `response` field value
+- [ ] In resolve mode: validated `decision:` field matches an option label before treating `response: approved` as approval
+- [ ] In resolve mode: `needs-info` files kept blocked, reset to `response: pending`, signal sent to originating agent
+- [ ] In resolve mode: wrote `## Decision Resolved`, `## Clarification Requested`, `## Decision Rejected`, or `## Action Completed` to every responded task's body
+- [ ] In resolve mode: moved approved/rejected/completed files from pending to resolved; needs-info/pending files stay in pending
 - [ ] T3 decisions not auto-resolved (only T2 and unspecified tiers)
 - [ ] Returned exactly one Channel A signal line
 - [ ] No duplicate DRs created for the same concern
@@ -210,4 +221,4 @@ DONE #{task_id} -> {status} | {mode}: {result summary}
 - **T3 auto-resolution:** Impact tier 3 decisions NEVER auto-resolve. A 5-day timer on a T3 decision silently bypasses mandatory user approval.
 - **Missing body write in resolve mode:** The critical step is writing `## Decision Resolved` to the task body. Without it, downstream agents cannot see the user's feedback — the file move alone is insufficient.
 - **Stale pending files:** Files that were manually resolved (moved to resolved) but still have copies in pending cause double-processing. Check for duplicates.
-- **Decision field mismatch (safety net):** If `approved: true` but `decision:` contains a meta-comment (e.g., "needs more information", "not sure", "defer") instead of a valid option label, the scribe MUST treat it as `needs-info`. Never fabricate or substitute a decision the user didn't make. This is the most critical validation — it prevents silent misinterpretation of user intent.
+- **Decision field mismatch (safety net):** If `response: approved` but `decision:` contains a meta-comment (e.g., "needs more information", "not sure", "defer") instead of a valid option label, the scribe MUST treat it as `needs-info`. Never fabricate or substitute a decision the user didn't make. This is the most critical validation — it prevents silent misinterpretation of user intent.

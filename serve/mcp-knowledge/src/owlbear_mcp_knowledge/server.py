@@ -7,6 +7,7 @@ import os
 import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -26,6 +27,8 @@ from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.schema import init_db as _schema_init_db
+from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
+from owlbear_knowledge.scope_transfer import import_scope as _core_import_scope
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 if TYPE_CHECKING:
@@ -78,6 +81,7 @@ def init_db(path: str) -> sqlite3.Connection:
 class AppContext:
     """Runtime context passed to MCP tools via FastMCP lifespan."""
 
+    conn: sqlite3.Connection
     query_service: KnowledgeQueryService | None
     graph_store: GraphStore | None
     ingest_pipeline: IngestPipeline | None
@@ -107,6 +111,23 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     return excluded
 
 
+async def _web_read(url: str) -> str | None:
+    """Fetch a URL via httpx. Only http/https schemes allowed; redirects not followed."""
+    from urllib.parse import urlparse  # noqa: PLC0415
+
+    if urlparse(url).scheme.lower() not in {"http", "https"}:
+        return None
+    try:
+        import httpx  # noqa: PLC0415
+
+        async with httpx.AsyncClient(follow_redirects=False, timeout=30) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.text
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
@@ -127,17 +148,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         bookmark_store = BookmarkStore(conn)
         evaluator = SourceEvaluator(model)
 
-        async def _web_read(url: str) -> str | None:
-            try:
-                import httpx  # noqa: PLC0415
-
-                async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
-                    resp = await client.get(url)
-                    resp.raise_for_status()
-                    return resp.text
-            except Exception:  # noqa: BLE001
-                return None
-
         bookmark_pipeline = BookmarkPipeline(
             bookmark_store=bookmark_store,
             evaluator=evaluator,
@@ -145,6 +155,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             web_read_fn=_web_read,
         )
         ctx = AppContext(
+            conn=conn,
             query_service=qs,
             graph_store=gs,
             ingest_pipeline=pipeline,
@@ -167,7 +178,9 @@ __all__ = [
     "_apply_tool_exclusions",
     "app_lifespan",
     "bookmark_source",
+    "export_scope",
     "get_stats",
+    "import_scope",
     "ingest_document",
     "init_db",
     "list_bookmarks",
@@ -182,13 +195,18 @@ _app_context: AppContext | None = None
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def search_knowledge(ctx: Context, query: str, limit: int = 5) -> list[SearchResult] | str:
+async def search_knowledge(
+    ctx: Context,
+    query: str,
+    limit: int = 5,
+    scopes: list[str] | None = None,
+) -> list[SearchResult] | str:
     """Search the knowledge base for relevant context."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     qs = app_ctx.query_service
     if qs is None:
         return "error: Knowledge service not available."
-    results = await qs.query(query, top_k=limit)
+    results = await qs.query(query, top_k=limit, scopes=scopes)
     return [{"title": r.title, "score": r.score, "snippet": r.snippet} for r in results]
 
 
@@ -209,6 +227,7 @@ async def ingest_document(
     ctx: Context,
     text: str,
     metadata: dict[str, Any] | None = None,
+    scope: str = "global",
 ) -> str:
     """Ingest a text document into the knowledge base."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -216,7 +235,7 @@ async def ingest_document(
     if pipeline is None:
         return "error: ingest pipeline not available"
     try:
-        result = await pipeline.ingest_text(text, metadata=metadata)
+        result = await pipeline.ingest_text(text, metadata=metadata, scope=scope)
     except Exception as exc:  # noqa: BLE001
         return f"error: ingestion failed: {exc}"
     else:
@@ -233,6 +252,7 @@ async def list_entities(
     entity_type: str | None = None,
     offset: int = 0,
     limit: int = 50,
+    scopes: list[str] | None = None,
 ) -> list[EntityInfo] | str:
     """List entities in the knowledge graph."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -246,9 +266,9 @@ async def list_entities(
         except ValueError:
             valid = ", ".join(e.value for e in EntityType)
             return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(gs.list_entities, entity_type=et)
+        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
     else:
-        entities = await asyncio.to_thread(gs.list_entities)
+        entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
     return [
@@ -347,3 +367,46 @@ async def list_bookmarks(
         {"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags}
         for b in bookmarks
     ]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def import_scope(
+    ctx: Context,
+    project_name: str,
+    path: str | None = None,
+) -> str:
+    """Import a project-local knowledge snapshot into the global KB.
+
+    Reads a portable SQLite file (default: ``.owlbear/knowledge/knowledge.db``)
+    and ingests its documents into the global KB under ``scope="project:{project_name}"``.
+    Duplicate documents (same content hash) are skipped.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    src = Path(path) if path is not None else None
+    return await asyncio.to_thread(
+        _core_import_scope,
+        src,
+        project_name,
+        app_ctx.conn,
+        workspace_root=Path.cwd(),
+    )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+async def export_scope(
+    ctx: Context,
+    scope: str,
+    output_path: str,
+) -> str:
+    """Export all knowledge for a scope to a portable SQLite file.
+
+    Creates a new SQLite database at *output_path* containing only the rows
+    matching *scope*.  Qdrant embeddings are excluded (re-embedded on import).
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    return await asyncio.to_thread(
+        _core_export_scope,
+        scope,
+        Path(output_path),
+        app_ctx.conn,
+    )

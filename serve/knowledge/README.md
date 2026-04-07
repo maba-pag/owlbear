@@ -32,7 +32,7 @@ The `BgeM3EmbeddingProvider` uses `BAAI/bge-m3` from Hugging Face. The model (~2
 
 ## Module overview
 
-Modules are grouped by concern. All 22 public modules are importable without optional deps.
+Modules are grouped by concern. All 23 public modules are importable without optional deps.
 
 ### Data stores
 | Module | Classes / Functions |
@@ -79,6 +79,7 @@ Modules are grouped by concern. All 22 public modules are importable without opt
 | `cancellation` | `CancelSignal`, `LinkedCancelSignal` |
 | `consolidation` | `ConsolidationService`, `ConsolidationInsight` |
 | `evaluator` | `SourceEvaluator`, `EvaluationResult` |
+| `scope_transfer` | `import_scope`, `export_scope` |
 
 ## Qdrant setup modes
 

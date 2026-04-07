@@ -104,7 +104,7 @@ Write this file **before** appending to the task body.
 
 ### 5b — Append to task body
 
-If dispatched with a task ID, append curation report to task body via `edit_task` (with `append_body` and `timestamp=True`).
+If dispatched with a task ID, include the curation report in your `end_work` note.
 
 ## Step 6 — Advance
 

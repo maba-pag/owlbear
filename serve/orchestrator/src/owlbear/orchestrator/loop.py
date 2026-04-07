@@ -17,6 +17,7 @@ from owlbear.orchestrator.waves import Wave, assemble_waves
 from owlbear.planner.board import read_board
 from owlbear.planner.selector import select_tasks
 from owlbear_orchestrator.acp_client import AcpClient, AcpClientError
+from owlbear_orchestrator.error_journal import ErrorJournal, ErrorLoggerAdapter
 from owlbear_orchestrator.process_supervisor import ProcessSupervisor
 
 if TYPE_CHECKING:
@@ -428,6 +429,7 @@ async def orchestrate(  # noqa: PLR0913
     scope: str | None = None,
     wave_size: int = 4,
     audit_log: AuditLog | None = None,
+    error_journal: ErrorJournal | None = None,
 ) -> None:
     """Top-level entry point: wire infrastructure and run the dispatch loop.
 
@@ -443,6 +445,8 @@ async def orchestrate(  # noqa: PLR0913
         scope: Optional tag filter forwarded to read_board().
         wave_size: Maximum entries per dispatch wave.
         audit_log: Optional audit logger injected into dispatch.
+        error_journal: Optional error journal injected into AcpClient; defaults
+            to a new ErrorJournal at .owlbear/error-journal.jsonl.
     """
     if client is not None:
         await run_loop(
@@ -464,7 +468,9 @@ async def orchestrate(  # noqa: PLR0913
         client_impl = _OrchestratorClient()
         conn = connect_to_agent(client_impl, stdin, stdout)
         await conn.initialize(protocol_version=PROTOCOL_VERSION)
-        acp_client = AcpClient(conn)
+        if error_journal is None:
+            error_journal = ErrorJournal(Path(".owlbear/error-journal.jsonl"))
+        acp_client = AcpClient(conn, error_logger=ErrorLoggerAdapter(error_journal))
         await run_loop(
             kanban_bin=kanban_bin,
             kanban_dir=kanban_dir,

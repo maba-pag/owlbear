@@ -14,13 +14,15 @@ Break complex features into atomic, test-driven kanban tasks with explicit depen
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
-This skill does NOT claim a task — the planner creates tasks rather than processing one through the pipeline. If dispatched with a parent task ID, read the parent via `show_task` to understand scope and context.
+**Claiming:** When **dispatcher-dispatched** (parent task ID provided), claim the parent task via `start_work` — it returns the task body, making a separate `show_task` call redundant. When **user-invoked**, read the task via `show_task` without claiming.
 
 **Execution mode:** When **orchestrator-dispatched** (parent task ID provided), execute `create_task` calls directly and report created IDs. When **user-invoked**, output planned tasks for review — do NOT execute them.
 
 ## Step 1 — Read the Plan
 
 Read input (free-text, plan doc section, or requirements). Identify phase number, deliverables, and implicit ordering.
+
+If the parent task body contains a `## Brief` or `## Problem` section (Brief artifact, produced by ideation), use it to derive scope, investment tier, and approach constraints for decomposition. Include `Brief: see parent #{id}` reference in each child task body.
 
 Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
@@ -75,11 +77,11 @@ If a planned task fails: refine the title and body or stop. Never create a place
 
 **Naming convention:** `P{phase}-{nn}: {Title}` — phase inherited from plan, sequence `nn` zero-padded, unique within phase.
 
-Create each task via `create_task` with title, priority, status `ideation`, tags, depends_on, and body containing AC.
+Create each task via `create_task` with title, priority, status `research`, tags, depends_on, and body containing AC.
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
 
-If dispatched with a parent task ID, append the planning summary to the parent body via `edit_task` (with `append_body` and `timestamp=True`).
+If dispatched with a parent task ID, include the planning summary in your `end_work` note.
 
 ## Step 7 — Visualize Dependencies
 

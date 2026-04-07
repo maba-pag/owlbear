@@ -29,7 +29,7 @@ description: "OwlBear system instructions — decision heuristics, system awaren
 ### Pipeline
 
 ```
-ideation → (researcher) → backlog → (architect) → todo → (test-writer) → in-progress → (builder) → review → (reviewer) → docs → (doc-writer) → done → (auditor) → archived
+research → (researcher) → backlog → (architect) → todo → (test-writer) → in-progress → (builder) → review → (reviewer) → docs → (doc-writer) → done → (auditor) → archived
 ```
 
 ### Directory Structure

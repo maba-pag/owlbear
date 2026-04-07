@@ -30,7 +30,7 @@ jobs:
       - name: Capture dev metadata
         run: |
           echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "DATE=$(date -u +\"%Y-%m-%d\")" >> "$GITHUB_ENV"
+          echo "DATE=$(date -u +"%Y-%m-%d")" >> "$GITHUB_ENV"
 
       - name: Validate include-list paths exist on dev
         run: |

@@ -18,6 +18,10 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 Verify the task is in `backlog` status. If the task references a research doc (`.owlbear/research/{slug}.md`), read it.
 
+**Decomposition detection:** If the task body contains `"Needs decomposition:"` but does NOT contain a `"## Planning"` section (which the planner appends after decomposition), delegate to the **planner** agent instead of continuing with architecture review. Pass the task ID and feature description from the body. After the planner returns successfully, call `end_work(outcome="success")` to advance the parent task. The planner's appended `## Planning` section serves as the completion marker — do not modify the body to remove the decomposition marker (this would overwrite the planner's additions).
+
+**User-action fast-path:** If the task is tagged `type:user-action` AND the body contains a `## Action Completed` section, verify that all AC checkboxes are checked. If complete, advance via `end_work(outcome="success")` — skip Steps 1–3. This task is already resolved.
+
 **Reject placeholders immediately:** `TEMP-*` titles or empty/unscoped bodies — create a DR via scribe explaining the task needs scope, release claim, do not process.
 
 ## Step 1 — Analyze Codebase Context
@@ -27,6 +31,7 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 3. Check `depends_on` — are dependencies actually `done`? Use `show_task` for each dependency if needed.
 4. Identify: existing patterns to follow, interfaces to respect, invariants to maintain.
 5. Check the task body for prior architecture notes, research pointers, and reviewer feedback from previous cycles.
+6. **Brief context (when parent is set):** If the task has a `parent` field, call `show_task(parent_id)` and scan for Brief sections (`## Brief`, `## Problem`, `## Outcomes`, `## Approach`, `## Scope`, `## Investment Tier`). When present, use this context to inform AC evaluation and builder guidance.
 
 ## Step 2 — Evaluate Architecture
 
@@ -49,6 +54,12 @@ Assess the task against `r-architecture-standards` and general architectural pri
 
 12. **Decision-request verification** — if the task references `.owlbear/research/*.md` or is tagged `research`, query the scribe to check for an approved DR. No approved DR for T3 research = use the REJECT path.
 
+13. **User-action detection** — Does this task require a human physical action with no testable Python interface? Apply the M/S/C rule in order:
+    - **Counter-signals (C) — exit immediately if ANY present:** (C1) AC defines a function signature, importable module, or assertion target; (C2) AC specifies expected test outcomes; (C3) task already tagged `type:test` or `type:config`
+    - **Mandatory (M) — BOTH required:** (M1) AC defines no testable Python interface; (M2) completion can only be verified by a human, not by running code
+    - **Signals (S) — ≥1 required:** (S1) AC uses physical-action verbs (Open, Click, Navigate, Configure via GUI, Deploy manually); (S2) AC names external systems (Teams, Azure portal, GitHub UI, browser, dashboards); (S3) AC lists manual steps the user must physically perform
+    - **Outcome:** no counter-signal AND M1+M2 AND ≥1 S → `type:user-action` detected → use BLOCK verdict (Step 3)
+
 ## Step 2.5 — Challenge Proposed Verdict
 
 Before deciding in Step 3, challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE, optional for REFINE, skip for SPLIT/REJECT.
@@ -59,7 +70,7 @@ Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, and res
 |-------------------|------------------|
 | `proceed` + confidence 0.80+ | Continue with original verdict |
 | `reconsider` OR confidence < 0.80 | Re-evaluate, may revise or justify override |
-| `block` | Strong signal to reject to ideation; must provide rebuttal if overriding |
+| `block` | Strong signal to reject to research; must provide rebuttal if overriding |
 
 The architect retains final authority.
 
@@ -73,15 +84,16 @@ The architect retains final authority.
 | **REFINE** | Good concept, AC needs tightening | Use temp-file pattern to rewrite body via `edit_task`, then approve |
 | **SPLIT** | Multiple responsibilities | Create new tasks via `create_task`, update deps, edit/delete original, then release |
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
-| **REJECT** | Missing prerequisite or unclear | Move to `ideation` via `end_work(outcome="reject")`, appending findings |
+| **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
+| **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via scribe (`Scribe: task_id={id}, mode=check-or-create`), tag task `type:user-action` if missing, `end_work(outcome="block")` |
 
 <!-- NON_IMPL_TAGS: Authoritative list at w-dispatch-planning. -->
 
-> **Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`. Add the bare tag if missing.
+> **Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action`. Add the bare tag if missing.
 
 > **Always move to `todo`, never to `in-progress`.** The test-writer must process every task to write a pass-through note. Skipping causes Gate 4 violations downstream.
 
-Append the architecture review to the task body via `edit_task` (with `append_body` and `timestamp=True`) before the final status move.
+Include the architecture review in your `end_work` note.
 
 Return Channel A signal per `r-pipeline-protocol`.
 
@@ -121,11 +133,12 @@ Append to task body before advancing:
 - [ ] Read full task details and research doc (if referenced)
 - [ ] Searched codebase for related patterns
 - [ ] Checked task body for prior context (architecture notes, reviewer feedback)
-- [ ] All 12 Step 2 criteria evaluated
+- [ ] All 13 Step 2 criteria evaluated
 - [ ] Challenger invoked for APPROVE verdicts (or fallback noted)
+- [ ] `type:user-action` tasks blocked (BLOCK verdict) rather than approved
 - [ ] Non-impl tasks tagged with pass-through tag before approving
 - [ ] Did NOT create/edit `.py`, `.toml`, or test files
-- [ ] Architecture review appended to task body via `edit_task`
+- [ ] Architecture review included in `end_work` note
 
 ## Known Pitfalls
 

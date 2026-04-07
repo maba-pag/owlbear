@@ -24,11 +24,11 @@ STATUS_RANK: dict[str, int] = {
     "in-progress": 3,
     "todo": 4,
     "backlog": 5,
-    "ideation": 6,
+    "research": 6,
 }
 
 STATUS_AGENT_MAP: dict[str, str] = {
-    "ideation": "researcher",
+    "research": "researcher",
     "backlog": "architect",
     "todo": "test-writer",
     "in-progress": "builder",
@@ -43,7 +43,7 @@ _MAX_PRIORITY_RANK = max(PRIORITY_RANK.values())
 _MAX_STATUS_RANK = max(STATUS_RANK.values())
 
 _TARGET_STATUS: dict[str, str] = {
-    "ideation": "backlog",
+    "research": "backlog",
     "backlog": "todo",
     "todo": "in-progress",
     "in-progress": "review",

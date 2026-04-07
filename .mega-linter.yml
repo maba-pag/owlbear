@@ -1,0 +1,80 @@
+# MegaLinter configuration for OwlBear
+# https://megalinter.io/configuration/
+
+# Explicit linter list — only what applies to this project
+ENABLE_LINTERS:
+  # Python
+  - PYTHON_RUFF
+  - PYTHON_RUFF_FORMAT
+  - PYTHON_BANDIT
+  # PowerShell
+  - POWERSHELL_POWERSHELL
+  # Formats
+  - JSON_JSONLINT
+  - MARKDOWN_MARKDOWNLINT
+  - YAML_YAMLLINT
+  # Tooling
+  - ACTION_ACTIONLINT
+  - EDITORCONFIG_EDITORCONFIG_CHECKER
+  # Security / Repository
+  - REPOSITORY_GITLEAKS
+  - REPOSITORY_SECRETLINT
+  # Spelling
+  - SPELL_CSPELL
+
+# Reporters
+GITHUB_STATUS_REPORTER: true
+MARKDOWN_SUMMARY_REPORTER: true
+SARIF_REPORTER: true
+
+# Exclude paths that are generated, archived, or third-party
+FILTER_REGEX_EXCLUDE: >-
+  (\.owlbear/kanban/v1-archive/
+  |\.owlbear/scratch/
+  |\.venv/
+  |v1/
+  |__pycache__/
+  |\.egg-info/
+  |uv\.lock$)
+
+# ──────────────────────────────────────────────
+# Linter-specific configuration
+# ──────────────────────────────────────────────
+
+# Ruff — uses pyproject.toml config
+PYTHON_RUFF_CLI_LINT_MODE: project
+PYTHON_RUFF_CONFIG_FILE: pyproject.toml
+
+# Ruff format — uses pyproject.toml config
+PYTHON_DEFAULT_STYLE: ruff
+
+# Bandit — security-focused Python linter
+PYTHON_BANDIT_ARGUMENTS: "--recursive --severity-level medium"
+
+# Actionlint — restrict to workflow files
+ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
+
+# YAML — strict mode
+YAML_YAMLLINT_ARGUMENTS: "--strict"
+# Exclude kanban task files from YAML lint (frontmatter-only markdown files)
+YAML_YAMLLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/kanban/'
+
+# JSON — quiet output
+JSON_JSONLINT_ARGUMENTS: "--quiet"
+
+# Markdown — auto-fix enabled
+MARKDOWN_MARKDOWNLINT_ARGUMENTS: "--fix"
+MARKDOWN_MARKDOWNLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/kanban/'
+
+# Gitleaks — secret detection
+REPOSITORY_GITLEAKS_ARGUMENTS: "--no-banner"
+
+# cspell — spell checking (will need .cspell.json for custom words)
+SPELL_CSPELL_FILTER_REGEX_INCLUDE: '(\.md$|\.py$|\.ps1$)'
+
+# ──────────────────────────────────────────────
+# Performance
+# ──────────────────────────────────────────────
+FLAVOR_SUGGESTIONS: false
+PARALLEL: true
+SHOW_ELAPSED_TIME: true

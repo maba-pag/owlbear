@@ -54,7 +54,7 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 For tasks tagged `research`:
 
 1. Research doc exists at `.owlbear/research/{slug}.md`
-2. Follow-up tasks created at `ideation` or higher, OR doc states "no action needed" with justification, OR a decision request exists
+2. Follow-up tasks created at `research` or higher, OR doc states "no action needed" with justification, OR a decision request exists
 3. Follow-up tasks reference the research doc
 4. If none of the above, reject to backlog — follow-up creation was missed
 
@@ -105,7 +105,7 @@ Before committing: `git status --short` and `git diff --cached` to verify only t
 
 ## Step 5 — Advance
 
-Append the audit section to the task body via `edit_task` (with `append_body` and `timestamp=True`).
+Include the audit section in your `end_work` note.
 
 Then advance based on confidence:
 
@@ -155,7 +155,7 @@ After committing, append commit log:
 - [ ] Architect quality score assigned (1-5)
 - [ ] Full test suite passed (cross-task regressions checked)
 - [ ] Confidence score calculated using deduction rubric (not gut feeling)
-- [ ] Audit section appended to task body via `edit_task`
+- [ ] Audit section included in `end_work` note
 - [ ] Upstream commits verified; leftover files committed per `r-project-standards`
 - [ ] Channel A signal returned as final output — nothing after it
 
@@ -165,4 +165,4 @@ After committing, append commit log:
 - **Gut-feeling confidence (.93–.97):** If your score lands in this range without an explicit deduction calculation, recalculate. Scores here are unreliable without itemized deductions.
 - **VS Code auto-staging:** VS Code silently re-serializes `.agent.md` files. Run `git diff --cached agents/` before committing and unstage unexpected changes with `git reset HEAD`.
 - **Monolithic commits:** Each task gets its own commit. Never batch multiple tasks into one commit.
-- **Body content parsing:** Avoid `->` arrows and `--flag` patterns in body text passed to `edit_task` — use prose equivalents or the temp-file pattern (see `h-mcp-kanban`).
+- **Body content parsing:** Avoid `->` arrows and `--flag` patterns in body text passed to `end_work` — use prose equivalents (see `h-mcp-kanban`).

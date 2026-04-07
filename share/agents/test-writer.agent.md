@@ -6,9 +6,12 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: [scribe, quality-runner]
 hooks:
+  SessionStart:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/session-context.ps1
   PreToolUse:
     - type: command
       command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-src-writes.ps1
@@ -72,7 +75,7 @@ in it must fail when you hand it off.
 
 ### Channel B
 
-Append `## Test-Writer Notes` section with: test file path, class names, tests per category (happy/edge/error/boundary), total count with fail confirmation, AC coverage table. See `w-tdd-red` skill for the full output template.
+Include `## Test-Writer Notes` section in your `end_work` note: test file path, class names, tests per category (happy/edge/error/boundary), total count with fail confirmation, AC coverage table. See `w-tdd-red` skill for the full output template.
 
 ### Kanban protocol
 
