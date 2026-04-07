@@ -1,10 +1,12 @@
 ---
 id: 671
 title: Bootstrap CI workflows to main branch
-status: backlog
+status: archived
 priority: needed
 created: 2026-04-06T22:23:06.3075808+02:00
-updated: 2026-04-07T11:37:11.7330425+02:00
+updated: 2026-04-07T16:04:35.0147617+02:00
+started: 2026-04-07T16:04:35.0147617+02:00
+completed: 2026-04-07T16:04:35.0147617+02:00
 tags:
     - scope:ci
     - type:user-action
@@ -13,8 +15,6 @@ depends_on:
     - 667
     - 668
     - 669
-blocked: true
-block_reason: type:user-action — manual bootstrap operation requires human to dispatch sync-to-main workflow and verify GitHub Actions UI
 class: standard
 ---
 

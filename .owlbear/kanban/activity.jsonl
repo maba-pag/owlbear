@@ -1,9 +1,3 @@
-{"timestamp":"2026-03-31T04:32:24.5245674+02:00","action":"claim","task_id":435,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:32:38.0173243+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T04:32:38.0235695+02:00","action":"claim","task_id":386,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:32:58.8315859+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-31T04:32:58.8368681+02:00","action":"claim","task_id":16,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:34:37.5818538+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
 {"timestamp":"2026-03-31T04:34:45.5152741+02:00","action":"move","task_id":308,"detail":"done -\u003e archived"}
 {"timestamp":"2026-03-31T04:34:46.0473984+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
 {"timestamp":"2026-03-31T04:34:46.0515725+02:00","action":"release","task_id":308,"detail":"auditor"}
@@ -9998,3 +9992,9 @@
 {"timestamp":"2026-04-07T12:54:44.0637568+02:00","action":"edit","task_id":656,"detail":"Update historical docs after ideation→research rename"}
 {"timestamp":"2026-04-07T12:54:44.0773858+02:00","action":"unblock","task_id":656,"detail":"Update historical docs after ideation→research rename"}
 {"timestamp":"2026-04-07T12:54:51.6787589+02:00","action":"move","task_id":656,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-07T16:04:30.7093728+02:00","action":"edit","task_id":671,"detail":"Bootstrap CI workflows to main branch"}
+{"timestamp":"2026-04-07T16:04:30.7236047+02:00","action":"unblock","task_id":671,"detail":"Bootstrap CI workflows to main branch"}
+{"timestamp":"2026-04-07T16:04:35.0157809+02:00","action":"move","task_id":671,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-07T16:04:38.9246318+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T16:04:38.9416908+02:00","action":"unblock","task_id":672,"detail":"CI infrastructure rework (epic)"}
+{"timestamp":"2026-04-07T16:04:42.1174785+02:00","action":"move","task_id":672,"detail":"backlog -\u003e archived"}

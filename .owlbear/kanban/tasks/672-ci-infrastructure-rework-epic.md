@@ -1,16 +1,16 @@
 ---
 id: 672
 title: CI infrastructure rework (epic)
-status: backlog
+status: archived
 priority: needed
 created: 2026-04-06T22:41:55.5351404+02:00
-updated: 2026-04-07T11:33:28.6344943+02:00
+updated: 2026-04-07T16:04:42.1156629+02:00
+started: 2026-04-07T16:04:42.1156629+02:00
+completed: 2026-04-07T16:04:42.1156629+02:00
 tags:
     - scope:ci
     - type:epic
     - type:config
-blocked: true
-block_reason: '2/5 subtasks incomplete: #670 in review, #671 in backlog. Unblock and re-dispatch when all 5 subtasks reach done.'
 class: standard
 ---
 
