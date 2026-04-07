@@ -41,6 +41,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 _REPO_ROOT = Path(__file__).parent.parent
 _SCRIPT_PATH = _REPO_ROOT / ".owlbear" / "hooks" / "deny-writes.ps1"
 _REVIEWER_AGENT = _REPO_ROOT / "share" / "agents" / "reviewer.agent.md"

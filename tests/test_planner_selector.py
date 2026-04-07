@@ -2,7 +2,7 @@
 
 Covers the interface contract from AC:
   - PRIORITY_RANK: all 5 priorities, correct ordering (critical=0 to someday=4)
-  - STATUS_RANK: all 7 statuses, correct ordering (done=0 to ideation=6)
+  - STATUS_RANK: all 7 statuses, correct ordering (done=0 to research=6)
   - STATUS_AGENT_MAP: all 7 statuses mapped to correct pipeline agent names
   - DISPATCH_CAP: value is 20
   - select_tasks(): empty input, single task, gate exclusion, sorting,
@@ -82,23 +82,23 @@ class TestFromAC_Constants:
             "in-progress",
             "todo",
             "backlog",
-            "ideation",
+            "research",
         }
 
     def test_status_rank_correct_ordering(self) -> None:
-        """STATUS_RANK: done=0, docs=1, review=2, in-progress=3, todo=4, backlog=5, ideation=6."""
+        """STATUS_RANK: done=0, docs=1, review=2, in-progress=3, todo=4, backlog=5, research=6."""
         assert STATUS_RANK["done"] == 0
         assert STATUS_RANK["docs"] == 1
         assert STATUS_RANK["review"] == 2
         assert STATUS_RANK["in-progress"] == 3
         assert STATUS_RANK["todo"] == 4
         assert STATUS_RANK["backlog"] == 5
-        assert STATUS_RANK["ideation"] == 6
+        assert STATUS_RANK["research"] == 6
 
     def test_status_agent_map_has_all_seven_statuses(self) -> None:
         """STATUS_AGENT_MAP contains all 7 pipeline statuses."""
         assert set(STATUS_AGENT_MAP.keys()) == {
-            "ideation",
+            "research",
             "backlog",
             "todo",
             "in-progress",
@@ -109,7 +109,7 @@ class TestFromAC_Constants:
 
     def test_status_agent_map_correct_agents(self) -> None:
         """STATUS_AGENT_MAP maps each status to the correct pipeline agent."""
-        assert STATUS_AGENT_MAP["ideation"] == "researcher"
+        assert STATUS_AGENT_MAP["research"] == "researcher"
         assert STATUS_AGENT_MAP["backlog"] == "architect"
         assert STATUS_AGENT_MAP["todo"] == "test-writer"
         assert STATUS_AGENT_MAP["in-progress"] == "builder"

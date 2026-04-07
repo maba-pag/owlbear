@@ -66,7 +66,7 @@ def _mock_proc(stdout: str = "ok", stderr: str = "", returncode: int = 0) -> Asy
 
 
 _DEFAULT_STATUSES: list[str] = [
-    "ideation", "backlog", "todo", "in-progress", "review", "docs", "done"
+    "research", "backlog", "todo", "in-progress", "review", "docs", "done"
 ]
 
 
@@ -1012,10 +1012,10 @@ class TestFromAC_EndWork:
         assert edit_args[edit_args.index("--status") + 1] == "backlog"
         assert "--release" in edit_args
 
-    # AC: default move_to is ideation
+    # AC: default move_to is research
     @pytest.mark.asyncio
-    async def test_reject_default_move_to_is_ideation(self) -> None:
-        """outcome=reject without explicit move_to: --status ideation is used."""
+    async def test_reject_default_move_to_is_research(self) -> None:
+        """outcome=reject without explicit move_to: --status research is used."""
         mcp_ctx = self._make_mcp_ctx_with_statuses()
 
         with self._patch_run_always() as mock_run:
@@ -1027,7 +1027,7 @@ class TestFromAC_EndWork:
         assert edit_calls
         edit_args = list(edit_calls[-1][0])
         assert "--status" in edit_args
-        assert edit_args[edit_args.index("--status") + 1] == "ideation"
+        assert edit_args[edit_args.index("--status") + 1] == "research"
 
     # ------------------------------------------------------------------ error propagation (error)
 

@@ -25,6 +25,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 # ---------------------------------------------------------------------------
 # Import target — will raise ModuleNotFoundError until script exists (RED)
 # ---------------------------------------------------------------------------

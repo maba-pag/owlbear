@@ -14,6 +14,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
+
 class TestFromAC_MainEntrypoint:
     """AC: `python -m owlbear_orchestrator.analysis` executes __main__.py which calls _cli.main()."""
 

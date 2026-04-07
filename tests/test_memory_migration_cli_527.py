@@ -31,6 +31,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 _REPO_ROOT = Path(__file__).parent.parent
 _PACKAGE_DIR = _REPO_ROOT / "serve" / "mcp-memory"
 _MIGRATE_PY = _PACKAGE_DIR / "src" / "owlbear_mcp_memory" / "migrate.py"

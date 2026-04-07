@@ -39,13 +39,13 @@ board:
     name: test
 tasks_dir: tasks
 statuses:
-    - name: ideation
+    - name: research
     - name: backlog
     - name: todo
 priorities:
     - important
 defaults:
-    status: ideation
+    status: research
     priority: important
     class: standard
 tui:
@@ -161,7 +161,7 @@ class TestFromAC_Integration:
             show_result = await client.call_tool("show_task", {"task_id": "1"})
         text = show_result.content[0].text
         assert "Show Roundtrip Task" in text
-        assert "ideation" in text  # default status per config.yml statuses
+        assert "research" in text  # default status per config.yml statuses
 
     # AC: create + move + show — status change persists after move
     @pytest.mark.integration

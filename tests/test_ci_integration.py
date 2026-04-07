@@ -26,6 +26,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 _PROJECT_ROOT = Path(__file__).parent.parent
 _SCRIPT = _PROJECT_ROOT / "scripts" / "validate_skills.py"
 _SKILLS_DIR = _PROJECT_ROOT / "share" / "skills"

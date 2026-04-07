@@ -18,6 +18,10 @@ import sys
 import tomllib
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 # ---------------------------------------------------------------------------
 # Repo-level paths — resolved relative to this test file
 # ---------------------------------------------------------------------------

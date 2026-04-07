@@ -49,6 +49,8 @@ from owlbear_mcp_memory.approve import main  # type: ignore[import]
 from owlbear_mcp_memory.server import AppContext
 from owlbear_mcp_memory.tools import list_entries, set_approval_state
 
+pytestmark = pytest.mark.slow
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 

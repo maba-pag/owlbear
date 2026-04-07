@@ -37,7 +37,7 @@ board:
     name: test-integration
 tasks_dir: tasks
 statuses:
-    - name: ideation
+    - name: research
     - name: backlog
     - name: todo
     - name: in-progress
@@ -51,7 +51,7 @@ priorities:
     - needed
     - critical
 defaults:
-    status: ideation
+    status: research
     priority: important
     class: standard
 tui:

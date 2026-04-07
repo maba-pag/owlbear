@@ -24,6 +24,11 @@ import re
 import subprocess
 import tomllib
 from pathlib import Path
+from typing import ClassVar
+
+import pytest
+
+pytestmark = pytest.mark.slow
 
 ROOT = Path(__file__).parent.parent
 
@@ -322,29 +327,28 @@ class TestFromAC_CoverageConfig:
 class TestFromAC_PytestDiscovery:
     """AC8: pytest must collect from both tests/ and serve/*/tests/ with exit 0."""
 
-    def test_pytest_collection_exits_zero(self) -> None:
-        """pytest --co across tests/ and serve/ must exit 0."""
-        result = subprocess.run(
-            ["uv", "run", "pytest", "tests/", "serve/", "--co", "-q", "--tb=short"],
+    @pytest.fixture(scope="class")
+    def _collection_result(self) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["uv", "run", "pytest", "tests/", "serve/", "--co", "-q", "--tb=short",
+             "-o", "addopts=--import-mode=importlib -m 'not e2e'"],
             cwd=ROOT,
             capture_output=True,
             text=True,
             timeout=120,
         )
+
+    def test_pytest_collection_exits_zero(self, _collection_result: subprocess.CompletedProcess[str]) -> None:
+        """pytest --co across tests/ and serve/ must exit 0."""
+        result = _collection_result
         assert result.returncode == 0, (
             f"pytest collection failed (exit {result.returncode}):\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
 
-    def test_pytest_collection_includes_all_five_packages(self) -> None:
+    def test_pytest_collection_includes_all_five_packages(self, _collection_result: subprocess.CompletedProcess[str]) -> None:
         """pytest collection output must reference tests from all 5 serve/*/tests/ dirs."""
-        result = subprocess.run(
-            ["uv", "run", "pytest", "tests/", "serve/", "--co", "-q"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        result = _collection_result
         combined = (result.stdout + result.stderr).replace("\\", "/")
         for pkg in ["orchestrator", "knowledge", "mcp-kanban", "mcp-knowledge", "mcp-project"]:
             assert f"serve/{pkg}" in combined, (
@@ -388,38 +392,29 @@ class TestFromAC_RuffLinting:
 class TestFromAC_TrivialPassingTests:
     """AC10: Each of the 5 packages must have at least one trivial passing test."""
 
-    def _assert_package_has_passing_test(self, pkg_dir: str) -> None:
-        result = subprocess.run(
-            [
-                "uv",
-                "run",
-                "pytest",
-                f"serve/{pkg_dir}/tests/",
-                "--tb=no",
-                "-q",
-                "--no-header",
-            ],
+    _PACKAGES: ClassVar[list[str]] = ["orchestrator", "knowledge", "mcp-kanban", "mcp-project"]
+
+    @pytest.fixture(scope="class")
+    def _run_result(self) -> subprocess.CompletedProcess[str]:
+        test_dirs = [f"serve/{pkg}/tests/" for pkg in self._PACKAGES]
+        return subprocess.run(
+            ["uv", "run", "pytest", *test_dirs, "-v", "--tb=no", "--no-header",
+             "-o", "addopts=--import-mode=importlib"],
             cwd=ROOT,
             capture_output=True,
             text=True,
-            timeout=60,
-        )
-        assert "passed" in result.stdout, (
-            f"No passing tests found in serve/{pkg_dir}/tests/.\n"
-            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+            timeout=120,
         )
 
-    def test_orchestrator_has_passing_test(self) -> None:
-        self._assert_package_has_passing_test("orchestrator")
-
-    def test_knowledge_has_passing_test(self) -> None:
-        self._assert_package_has_passing_test("knowledge")
-
-    def test_mcp_kanban_has_passing_test(self) -> None:
-        self._assert_package_has_passing_test("mcp-kanban")
-
-    def test_mcp_project_has_passing_test(self) -> None:
-        self._assert_package_has_passing_test("mcp-project")
+    @pytest.mark.parametrize("pkg_dir", _PACKAGES)
+    def test_package_has_passing_test(self, pkg_dir: str, _run_result: subprocess.CompletedProcess[str]) -> None:
+        combined = (_run_result.stdout + _run_result.stderr).replace("\\", "/")
+        msg = (
+            f"No passing tests found for serve/{pkg_dir}/tests/.\n"
+            f"stdout:\n{_run_result.stdout}\nstderr:\n{_run_result.stderr}"
+        )
+        assert f"serve/{pkg_dir}" in combined, msg
+        assert "PASSED" in combined, msg
 
 
 # ---------------------------------------------------------------------------

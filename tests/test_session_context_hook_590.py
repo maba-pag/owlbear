@@ -62,6 +62,8 @@ from time import monotonic
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 _REPO_ROOT = Path(__file__).parent.parent
 _SCRIPT_PATH = _REPO_ROOT / ".owlbear" / "hooks" / "session-context.ps1"
 _BUILDER_AGENT = _REPO_ROOT / "share" / "agents" / "builder.agent.md"

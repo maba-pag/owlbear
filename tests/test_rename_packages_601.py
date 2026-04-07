@@ -36,6 +36,10 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 WORKSPACE_ROOT = Path(__file__).parent.parent
 PYPROJECT = WORKSPACE_ROOT / "pyproject.toml"
 GITIGNORE = WORKSPACE_ROOT / ".gitignore"

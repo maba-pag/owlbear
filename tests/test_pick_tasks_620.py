@@ -6,7 +6,7 @@ Covers all AC items from #620:
   - Gate filtering: tasks failing atomicity/TDD/clarity gates are excluded
   - Limit: `limit=5` caps output at 5 entries
   - Default limit is 25
-  - Sort order: critical+done-adjacent tasks appear before someday+ideation tasks
+  - Sort order: critical+done-adjacent tasks appear before someday+research tasks
   - Empty board: returns empty dispatch list
   - Archived tasks excluded (--archived NOT passed)
   - Blocked/claimed tasks excluded (--unblocked --not-blocked --unclaimed flags passed)
@@ -239,10 +239,10 @@ class TestFromAC_PickTasksGateFiltering:
         assert 6 in ids
 
     @pytest.mark.asyncio
-    async def test_clarity_gate_exempt_for_ideation(self) -> None:
-        """ideation task without bullet AC still passes (pre-pipeline status exempt)."""
+    async def test_clarity_gate_exempt_for_research(self) -> None:
+        """research task without bullet AC still passes (pre-pipeline status exempt)."""
         mcp_ctx = _make_mcp_ctx()
-        t = _task(id=7, status="ideation", body="Just a raw idea, no AC yet")
+        t = _task(id=7, status="research", body="Just a raw idea, no AC yet")
         with patch("owlbear_mcp_kanban.server._run_kanban", AsyncMock(return_value=_board(t))):
             result = await pick_tasks(mcp_ctx)
         ids = [e["task_id"] for e in result["dispatch"]]
@@ -322,7 +322,7 @@ class TestFromAC_PickTasksLimit:
 
 
 class TestFromAC_PickTasksSortOrder:
-    """Sort order: critical+done-adjacent tasks before someday+ideation."""
+    """Sort order: critical+done-adjacent tasks before someday+research."""
 
     @pytest.mark.asyncio
     async def test_critical_before_someday(self) -> None:
@@ -339,14 +339,14 @@ class TestFromAC_PickTasksSortOrder:
         assert ids.index(2) < ids.index(1)
 
     @pytest.mark.asyncio
-    async def test_review_before_ideation(self) -> None:
-        """review status (done-adjacent) appears before ideation in dispatch."""
+    async def test_review_before_research(self) -> None:
+        """review status (done-adjacent) appears before research in dispatch."""
         mcp_ctx = _make_mcp_ctx()
-        t_ideation = _task(id=1, status="ideation", title="An ideation task", body="raw idea")
+        t_research = _task(id=1, status="research", title="A research task", body="raw idea")
         t_review = _task(id=2, status="review", title="A review task")
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
-            AsyncMock(return_value=_board(t_ideation, t_review)),
+            AsyncMock(return_value=_board(t_research, t_review)),
         ):
             result = await pick_tasks(mcp_ctx)
         ids = [e["task_id"] for e in result["dispatch"]]

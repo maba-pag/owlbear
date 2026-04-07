@@ -1,7 +1,7 @@
 """Failing tests for task #145: planner gate checker and task selector (TDD RED).
 
 Covers the interface contract from AC:
-  - gates.py: check_atomicity, check_tdd, check_clarity, check_gates
+  - gates.py: check_tdd, check_clarity, check_gates
   - selector.py: PRIORITY_RANK, STATUS_RANK, STATUS_AGENT_MAP, DISPATCH_CAP, select_tasks
   - __init__.py: public exports for gates and selector symbols
 
@@ -17,7 +17,6 @@ from datetime import UTC, datetime
 # ---------------------------------------------------------------------------
 from owlbear.planner.models import DispatchPlan, Task  # already exists from #144
 from owlbear.planner.gates import (  # type: ignore[import]
-    check_atomicity,
     check_clarity,
     check_gates,
     check_tdd,
@@ -71,45 +70,6 @@ def _make_task(  # noqa: PLR0913
 class TestFromAC_GateChecker:
     """Contract tests for gates.py functions derived from #145 AC."""
 
-    # -- check_atomicity happy path ----------------------------------------
-
-    def test_check_atomicity_clean_title_returns_true(self) -> None:
-        task = _make_task(title="Implement feature")
-        assert check_atomicity(task) is True
-
-    def test_check_atomicity_and_inside_word_not_matched(self) -> None:
-        """'and' inside 'sandbox' is not a word-boundary match."""
-        task = _make_task(title="Implement sandbox feature")
-        assert check_atomicity(task) is True
-
-    def test_check_atomicity_and_inside_standby_not_matched(self) -> None:
-        """'and' inside 'standby' is not a word-boundary match."""
-        task = _make_task(title="standby mode implementation")
-        assert check_atomicity(task) is True
-
-    def test_check_atomicity_and_inside_command_not_matched(self) -> None:
-        """'and' inside 'command' is not a word-boundary match."""
-        task = _make_task(title="Run command handler")
-        assert check_atomicity(task) is True
-
-    # -- check_atomicity error path ----------------------------------------
-
-    def test_check_atomicity_word_and_in_title_returns_false(self) -> None:
-        task = _make_task(title="Fix auth and authorization")
-        assert check_atomicity(task) is False
-
-    def test_check_atomicity_and_at_start_of_title_returns_false(self) -> None:
-        task = _make_task(title="and also do this")
-        assert check_atomicity(task) is False
-
-    def test_check_atomicity_and_at_end_of_title_returns_false(self) -> None:
-        task = _make_task(title="research and")
-        assert check_atomicity(task) is False
-
-    def test_check_atomicity_and_surrounded_by_spaces_returns_false(self) -> None:
-        task = _make_task(title="parse and validate")
-        assert check_atomicity(task) is False
-
     # -- check_tdd happy path -----------------------------------------------
 
     def test_check_tdd_todo_status_returns_true(self) -> None:
@@ -133,8 +93,8 @@ class TestFromAC_GateChecker:
         task = _make_task(status="done", body="")
         assert check_tdd(task) is True
 
-    def test_check_tdd_ideation_without_notes_returns_true(self) -> None:
-        task = _make_task(status="ideation", body="")
+    def test_check_tdd_research_without_notes_returns_true(self) -> None:
+        task = _make_task(status="research", body="")
         assert check_tdd(task) is True
 
     # -- check_tdd error path -----------------------------------------------
@@ -180,13 +140,13 @@ class TestFromAC_GateChecker:
         task = _make_task(status="done", body="- item")
         assert check_clarity(task) is True
 
-    def test_check_clarity_ideation_empty_body_returns_true(self) -> None:
-        """ideation status: AC not required yet."""
-        task = _make_task(status="ideation", body="")
+    def test_check_clarity_research_empty_body_returns_true(self) -> None:
+        """research status: AC not required yet."""
+        task = _make_task(status="research", body="")
         assert check_clarity(task) is True
 
-    def test_check_clarity_ideation_prose_only_returns_true(self) -> None:
-        task = _make_task(status="ideation", body="Just an idea with no bullets")
+    def test_check_clarity_research_prose_only_returns_true(self) -> None:
+        task = _make_task(status="research", body="Just an idea with no bullets")
         assert check_clarity(task) is True
 
     def test_check_clarity_backlog_empty_body_returns_true(self) -> None:
@@ -221,10 +181,6 @@ class TestFromAC_GateChecker:
     def test_check_gates_all_pass_returns_true(self) -> None:
         task = _make_task(title="Implement feature", status="todo", body="- [ ] item")
         assert check_gates(task) is True
-
-    def test_check_gates_atomicity_fails_returns_false(self) -> None:
-        task = _make_task(title="Fix auth and caching", status="todo", body="- [ ] item")
-        assert check_gates(task) is False
 
     def test_check_gates_tdd_fails_returns_false(self) -> None:
         task = _make_task(title="Implement feature", status="in-progress", body="- [ ] item")
@@ -275,11 +231,11 @@ class TestFromAC_TaskSelector:
         assert STATUS_RANK["done"] == 0
 
     def test_status_rank_has_seven_keys(self) -> None:
-        expected = {"done", "docs", "review", "in-progress", "todo", "backlog", "ideation"}
+        expected = {"done", "docs", "review", "in-progress", "todo", "backlog", "research"}
         assert set(STATUS_RANK.keys()) == expected
 
-    def test_status_rank_order_done_to_ideation(self) -> None:
-        """Pipeline proximity: done(0) < docs(1) < review(2) < in-progress(3) < todo(4) < backlog(5) < ideation(6)."""
+    def test_status_rank_order_done_to_research(self) -> None:
+        """Pipeline proximity: done(0) < docs(1) < review(2) < in-progress(3) < todo(4) < backlog(5) < research(6)."""
         assert (
             STATUS_RANK["done"]
             < STATUS_RANK["docs"]
@@ -287,17 +243,17 @@ class TestFromAC_TaskSelector:
             < STATUS_RANK["in-progress"]
             < STATUS_RANK["todo"]
             < STATUS_RANK["backlog"]
-            < STATUS_RANK["ideation"]
+            < STATUS_RANK["research"]
         )
 
     # -- STATUS_AGENT_MAP constant ------------------------------------------
 
     def test_status_agent_map_has_seven_entries(self) -> None:
-        expected = {"ideation", "backlog", "todo", "in-progress", "review", "docs", "done"}
+        expected = {"research", "backlog", "todo", "in-progress", "review", "docs", "done"}
         assert set(STATUS_AGENT_MAP.keys()) == expected
 
     def test_status_agent_map_all_correct_agents(self) -> None:
-        assert STATUS_AGENT_MAP["ideation"] == "researcher"
+        assert STATUS_AGENT_MAP["research"] == "researcher"
         assert STATUS_AGENT_MAP["backlog"] == "architect"
         assert STATUS_AGENT_MAP["todo"] == "test-writer"
         assert STATUS_AGENT_MAP["in-progress"] == "builder"
@@ -356,7 +312,7 @@ class TestFromAC_TaskSelector:
 
     def test_select_tasks_excludes_gate_failing_tasks(self) -> None:
         good = _make_task(task_id=1, title="Implement feature", status="todo", body="- [ ] item")
-        bad = _make_task(task_id=2, title="Fix auth and caching", status="todo", body="- [ ] item")
+        bad = _make_task(task_id=2, title="Fix caching", status="todo", body="No bullets here")
         result = select_tasks([good, bad])
         task_ids = [e.task_id for e in result.entries]
         assert 1 in task_ids
@@ -364,8 +320,8 @@ class TestFromAC_TaskSelector:
 
     def test_select_tasks_all_fail_gates_returns_empty_entries(self) -> None:
         tasks = [
-            _make_task(task_id=1, title="Fix auth and logging", status="todo", body="no bullets"),
-            _make_task(task_id=2, title="Refactor and migrate", status="in-progress", body=""),
+            _make_task(task_id=1, title="Fix logging", status="todo", body="no bullets"),
+            _make_task(task_id=2, title="Refactor migration", status="in-progress", body=""),
         ]
         result = select_tasks(tasks)
         assert result.entries == []
@@ -472,7 +428,7 @@ class TestFromAC_TaskSelector:
         assert any(e.task_id == 1 for e in result.entries)
 
     def test_select_tasks_unknown_status_sorts_after_known_statuses(self) -> None:
-        known = _make_task(task_id=1, title="A", status="ideation", priority="important", body="")
+        known = _make_task(task_id=1, title="A", status="research", priority="important", body="")
         unknown = _make_task(task_id=2, title="B", status="exotic-status", priority="important", body="- item")
         result = select_tasks([known, unknown])
         ids = [e.task_id for e in result.entries]
@@ -491,11 +447,6 @@ class TestFromAC_PlannerInit:
         from owlbear.planner import check_gates as _cg  # type: ignore[import]
 
         assert callable(_cg)
-
-    def test_check_atomicity_importable_from_owlbear_planner(self) -> None:
-        from owlbear.planner import check_atomicity as _ca  # type: ignore[import]
-
-        assert callable(_ca)
 
     def test_check_tdd_importable_from_owlbear_planner(self) -> None:
         from owlbear.planner import check_tdd as _ct  # type: ignore[import]
