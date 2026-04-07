@@ -1,10 +1,12 @@
 ---
 id: 662
 title: Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)
-status: review
+status: archived
 priority: needed
 created: 2026-04-06T16:39:07.1761895+02:00
-updated: 2026-04-07T01:04:34.3737008+02:00
+updated: 2026-04-07T02:34:51.8632883+02:00
+started: 2026-04-07T02:34:51.8632883+02:00
+completed: 2026-04-07T02:34:51.8632883+02:00
 tags:
     - phase-3
     - scope:orchestrator
@@ -74,3 +76,89 @@ This subtask's code was already implemented during the parent #661 lifecycle. Th
 - Implementation already landed in commit 6ee05d3 during parent #661 builder phase.
 - Verified: `type:user-action` present in `_NON_IMPL_TAGS` (gates.py) and `_PICK_NON_IMPL_TAGS` (server.py).
 - Passing through to review.
+
+[[2026-04-07]] Tue 01:57
+## Review Evidence
+
+### Tests
+pytest: 7 passed, 0 failed, 0 skipped (test_user_action_non_impl_661.py)
+
+### Lint
+ruff: 2 violations in server.py (PLR0915:337 — too many statements; RUF059:398 — unused unpacked variable `name_err`). Both violations are at lines 337/398, well outside the frozenset change at L531–539. Pre-existing issues, not introduced by this task. Gates.py: clean.
+
+### Coverage
+gates.py: 67%, server.py: 28%. Low overall but scoped test coverage for the frozenset + behavioral paths is adequate for a 2-line config change.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Add `type:user-action` to `_NON_IMPL_TAGS` in gates.py | `"type:user-action"` confirmed at gates.py:L25 (frozenset literal, read from source) | PASS |
+| Add `type:user-action` to `_PICK_NON_IMPL_TAGS` in server.py | `"type:user-action"` confirmed at server.py:L534 (frozenset literal, read from source) | PASS |
+| Existing tests pass (no regressions) | 7/7 pass; no failed tests in scoped run | PASS |
+
+### TestFromAC Audit
+- `TestFromAC_UserActionNonImplFrozensets`: 2 direct membership tests — would both fail if tag absent. ✓
+- `TestFromAC_CheckTDD_UserActionExemption`: 3 behavioral tests on `check_tdd()` — would fail if frozenset missing tag. ✓
+- `TestFromAC_PickTasksUserActionExemption`: 2 `pick_tasks` dispatch tests — would fail if `_PICK_NON_IMPL_TAGS` missing tag. ✓
+- No TestFromAC_* modifications by builder. ✓
+
+### Security
+Pure frozenset constant additions. No new imports, no system boundaries, no injection surfaces. Clean.
+
+### Deductions
+- Pre-existing lint violations (PLR0915, RUF059) in server.py noted but not deducted — clearly pre-existing, not introduced by this task.
+- 0 deductions.
+
+### Verdict
+Confidence: .96 → PASS
+
+[[2026-04-07]] Tue 02:01
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | Frozenset constants changed; `copilot-instructions.md` contains no NON_IMPL_TAGS enumeration. Skills doc updates (dispatch-planning, tdd-red) explicitly split to #666 (depends_on #662). No update needed here. |
+| 2 | Module docstrings | Yes | Verified | gates.py and server.py docstrings reference "non-impl pass-through tags" generically without enumerating. Both `check_tdd()` and `pick_tasks()` docstrings remain accurate after tag addition. |
+| 3 | External attribution | No | N/A | Pure frozenset constant addition; no external repos, articles, or docs used. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/user-action-required-pipeline-handling.md` exists (parent #661 research). Task body correctly notes N/A for own research doc and references the parent doc. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/662-*` files found)
+
+[[2026-04-07]] Tue 02:34
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Add `type:user-action` to `_NON_IMPL_TAGS` in gates.py | Confirmed at gates.py:L27 (grep: `"type:user-action"` in frozenset literal) | PASS |
+| Add `type:user-action` to `_PICK_NON_IMPL_TAGS` in server.py | Confirmed at server.py:L534 (grep: `"type:user-action"` in frozenset literal) | PASS |
+| Existing tests pass (no regressions) | 7/7 task-specific tests pass. Full suite: 3380 passed, 422 failed, 18 skipped. All 422 failures are pre-existing (voice scaffolding, agent renames, atomicity gate, etc.) with 0 in task scope. | PASS |
+
+### Test Results
+- pytest (scoped): 7 passed, 0 failed (test_user_action_non_impl_661.py)
+- pytest (full): 3380 passed, 422 failed, 18 skipped (0 failures in task scope; all pre-existing)
+- ruff: 2 pre-existing violations in server.py (PLR0915:337, RUF059:398) well outside changed lines; gates.py clean
+
+### Reviewer Evidence
+Present and detailed. PASS verdict at .96. AC compliance table, TestFromAC audit, security check, and deduction breakdown all included. Trusted code-level findings.
+
+### Architect Quality: 5/5
+AC lines are specific (exact file paths, exact constant names), complete (all locations covered), and cleanly verifiable. No builder improvisation needed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (3/3 verified) = 0
+- Lint violations introduced: 0 (2 in server.py are pre-existing) = 0
+- AC quality score: 5/5 = 0
+- Missing reviewer evidence: no (present and detailed) = 0
+- Full-suite in-scope failures: 0 = 0
+- Total deductions: 0
+
+### Confidence: .98
+### Action: archive
+
+Note: 422 pre-existing full-suite failures logged. Collection error in test_planner_gates.py (missing check_atomicity import) also pre-existing. Implementation commit: 6ee05d3.

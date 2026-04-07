@@ -1,33 +1,3 @@
-{"timestamp":"2026-03-30T23:55:35.3247908+02:00","action":"claim","task_id":225,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:55:36.0499246+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T23:55:36.0536121+02:00","action":"claim","task_id":386,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:55:48.0320034+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T23:55:49.7686524+02:00","action":"edit","task_id":225,"detail":"Update agent-common handoff to reference action requests"}
-{"timestamp":"2026-03-30T23:55:49.7733721+02:00","action":"release","task_id":225,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:55:50.971691+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-30T23:55:50.9769172+02:00","action":"release","task_id":386,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:56:03.5935236+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-30T23:56:03.5972239+02:00","action":"claim","task_id":208,"detail":"auditor"}
-{"timestamp":"2026-03-30T23:58:03.840679+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-30T23:58:03.8486139+02:00","action":"claim","task_id":147,"detail":"test-writer"}
-{"timestamp":"2026-03-30T23:59:45.8377957+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-30T23:59:45.8442685+02:00","action":"claim","task_id":16,"detail":"test-writer"}
-{"timestamp":"2026-03-31T00:00:37.6029648+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-31T00:00:37.6083955+02:00","action":"release","task_id":147,"detail":"test-writer"}
-{"timestamp":"2026-03-31T00:02:21.2552749+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-31T00:02:21.2604275+02:00","action":"release","task_id":16,"detail":"test-writer"}
-{"timestamp":"2026-03-31T00:04:37.0482829+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T00:04:42.4045232+02:00","action":"move","task_id":208,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T00:04:53.5877861+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T00:04:53.5935755+02:00","action":"release","task_id":208,"detail":"auditor"}
-{"timestamp":"2026-03-31T00:05:27.097449+02:00","action":"edit","task_id":208,"detail":"Test: orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T00:05:48.0923133+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T00:05:48.0965137+02:00","action":"claim","task_id":198,"detail":"writer"}
-{"timestamp":"2026-03-31T00:05:49.5312197+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
-{"timestamp":"2026-03-31T00:05:49.5365638+02:00","action":"claim","task_id":179,"detail":"auditor"}
-{"timestamp":"2026-03-31T00:07:10.669621+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T00:07:30.6753523+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
-{"timestamp":"2026-03-31T00:07:37.3336954+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
 {"timestamp":"2026-03-31T00:07:38.0231166+02:00","action":"edit","task_id":198,"detail":"Expand validate_agents.py to check all tool names against canonical registry"}
 {"timestamp":"2026-03-31T00:07:38.0294552+02:00","action":"release","task_id":198,"detail":"writer"}
 {"timestamp":"2026-03-31T00:22:11.9437783+02:00","action":"edit","task_id":179,"detail":"Implement analysis module with pattern detectors"}
@@ -9998,3 +9968,33 @@
 {"timestamp":"2026-04-07T01:54:38.6547807+02:00","action":"edit","task_id":650,"detail":"P4-10: Create security-voice.agent.md"}
 {"timestamp":"2026-04-07T01:54:38.6713882+02:00","action":"release","task_id":650,"detail":"fjord-lodge"}
 {"timestamp":"2026-04-07T01:54:39.2838619+02:00","action":"move","task_id":650,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T01:55:19.4218483+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-07T01:55:19.4360439+02:00","action":"claim","task_id":662,"detail":"fork-quick"}
+{"timestamp":"2026-04-07T01:57:27.509389+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-07T01:57:27.5226619+02:00","action":"release","task_id":662,"detail":"fork-quick"}
+{"timestamp":"2026-04-07T01:59:15.4026336+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T01:59:15.4176547+02:00","action":"claim","task_id":651,"detail":"forge-zone"}
+{"timestamp":"2026-04-07T01:59:16.6018346+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T01:59:16.6172135+02:00","action":"claim","task_id":652,"detail":"raven-trout"}
+{"timestamp":"2026-04-07T01:59:16.6897831+02:00","action":"edit","task_id":664,"detail":"Add architect user-action gate rule and post-AR fast-path to w-arch-review"}
+{"timestamp":"2026-04-07T01:59:16.7424495+02:00","action":"claim","task_id":664,"detail":"zeal-rust"}
+{"timestamp":"2026-04-07T01:59:20.7769618+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-07T01:59:20.7919425+02:00","action":"claim","task_id":662,"detail":"pond-edge"}
+{"timestamp":"2026-04-07T02:01:05.1940907+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-07T02:01:05.2087768+02:00","action":"release","task_id":662,"detail":"pond-edge"}
+{"timestamp":"2026-04-07T02:03:53.9491132+02:00","action":"edit","task_id":651,"detail":"P4-11: Create w-ideation/SKILL.md workflow"}
+{"timestamp":"2026-04-07T02:03:53.9638531+02:00","action":"release","task_id":651,"detail":"forge-zone"}
+{"timestamp":"2026-04-07T02:09:07.3195301+02:00","action":"edit","task_id":652,"detail":"P4-12: Create h-voice-panel/SKILL.md handbook"}
+{"timestamp":"2026-04-07T02:09:07.3358967+02:00","action":"release","task_id":652,"detail":"raven-trout"}
+{"timestamp":"2026-04-07T02:10:41.4208644+02:00","action":"edit","task_id":664,"detail":"Add architect user-action gate rule and post-AR fast-path to w-arch-review"}
+{"timestamp":"2026-04-07T02:10:41.4348746+02:00","action":"release","task_id":664,"detail":"zeal-rust"}
+{"timestamp":"2026-04-07T02:10:42.002475+02:00","action":"move","task_id":664,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-07T02:12:17.689216+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T02:12:17.7021488+02:00","action":"claim","task_id":666,"detail":"flare-foam"}
+{"timestamp":"2026-04-07T02:12:18.4240081+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-07T02:12:18.4380168+02:00","action":"claim","task_id":662,"detail":"coal-north"}
+{"timestamp":"2026-04-07T02:14:36.399132+02:00","action":"edit","task_id":666,"detail":"Update NON_IMPL_TAGS skill doc references for type:user-action"}
+{"timestamp":"2026-04-07T02:14:36.4128973+02:00","action":"release","task_id":666,"detail":"flare-foam"}
+{"timestamp":"2026-04-07T02:34:51.2418055+02:00","action":"edit","task_id":662,"detail":"Add type:user-action to NON_IMPL_TAGS (gates.py + server.py)"}
+{"timestamp":"2026-04-07T02:34:51.2556837+02:00","action":"release","task_id":662,"detail":"coal-north"}
+{"timestamp":"2026-04-07T02:34:51.8653699+02:00","action":"move","task_id":662,"detail":"done -\u003e archived"}
