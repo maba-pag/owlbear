@@ -8,7 +8,8 @@ All tests must FAIL until #33 adds StructuredExtractor to owlbear_knowledge/prot
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import inspect
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -77,6 +78,42 @@ class TestFromAC_StructuredExtractorProtocol:
         """Object with 'run' instead of 'extract' does not satisfy StructuredExtractor."""
         obj = _WrongMethodName()
         assert not isinstance(obj, StructuredExtractor)
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_AsyncStructuredExtractorProtocol
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AsyncStructuredExtractorProtocol:
+    """AC1: StructuredExtractor.extract() must be declared async (task #697/#687)."""
+
+    def test_extract_is_coroutine_function(self) -> None:
+        """StructuredExtractor.extract() must be an async coroutine function."""
+        assert inspect.iscoroutinefunction(
+            StructuredExtractor.extract
+        ), "StructuredExtractor.extract() is not async — protocol must declare 'async def extract'"
+
+    def test_extract_not_a_plain_synchronous_method(self) -> None:
+        """extract() must NOT be a plain sync function — the protocol contract requires async."""
+        is_plain_sync = inspect.isfunction(StructuredExtractor.extract) and not inspect.iscoroutinefunction(
+            StructuredExtractor.extract
+        )
+        assert not is_plain_sync, (
+            "StructuredExtractor.extract() is a plain sync function — must be declared async"
+        )
+
+    def test_asyncmock_spec_exposes_async_extract_when_protocol_is_async(self) -> None:
+        """AsyncMock(spec=StructuredExtractor) must produce an AsyncMock for the extract attribute.
+
+        When the protocol declares extract() as async, AutoSpec / AsyncMock auto-promotes
+        the attribute mock to an AsyncMock. FAIL now (extract is sync), PASS after #687.
+        """
+        mock = AsyncMock(spec=StructuredExtractor)
+        assert inspect.iscoroutinefunction(mock.extract), (
+            "AsyncMock with StructuredExtractor spec did not make extract() async — "
+            "StructuredExtractor.extract() must be declared async"
+        )
 
     def test_plain_object_fails_isinstance(self) -> None:
         """A bare object() with no methods does not satisfy StructuredExtractor."""

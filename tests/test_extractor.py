@@ -10,7 +10,8 @@ All tests must FAIL until #33 implements the DI-based EntityExtractor.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+import inspect
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -32,6 +33,18 @@ def _make_mock_extractor(result: ExtractionResult | None = None) -> MagicMock:
     """Return a MagicMock satisfying StructuredExtractor with a fixed return value."""
     mock = MagicMock(spec=StructuredExtractor)
     mock.extract.return_value = result if result is not None else ExtractionResult()
+    return mock
+
+
+def _make_async_extractor(result: ExtractionResult | None = None) -> MagicMock:
+    """Return a mock with an explicit AsyncMock extract() representing the future async protocol.
+
+    When StructuredExtractor.extract() is sync (current RED state), AsyncMock(spec=...)
+    auto-downgrades .extract to a MagicMock. Explicitly assigning AsyncMock forces the
+    attribute to be async regardless of spec, so tests correctly FAIL until #687.
+    """
+    mock = MagicMock(spec=StructuredExtractor)
+    mock.extract = AsyncMock(return_value=result if result is not None else ExtractionResult())
     return mock
 
 
@@ -192,3 +205,84 @@ class TestFromAC_PromptConstants:
         assert hasattr(inter_doc_mod, "INTER_DOC_PROMPT"), "INTER_DOC_PROMPT missing from inter_doc_graph_builder module"
         assert isinstance(inter_doc_mod.INTER_DOC_PROMPT, str)
         assert len(inter_doc_mod.INTER_DOC_PROMPT) > 0
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EntityExtractorAsyncDelegation
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EntityExtractorAsyncDelegation:
+    """AC2: EntityExtractor must await the async StructuredExtractor (task #697/#687).
+
+    All tests use AsyncMock for the injected extractor. They FAIL against the current
+    sync protocol (extractor.py calls _extractor.extract() without await) and PASS
+    after #687 adds 'await' to that call.
+    """
+
+    @pytest.mark.asyncio
+    async def test_result_is_extraction_result_not_coroutine(self) -> None:
+        """EntityExtractor.extract() must return ExtractionResult, not a coroutine object."""
+        mock_ext = _make_async_extractor()
+        extractor = EntityExtractor(extractor=mock_ext)
+        result = await extractor.extract("non-empty text to trigger extraction")
+        assert not inspect.iscoroutine(result), (
+            "EntityExtractor returned a coroutine — missing 'await' before _extractor.extract()"
+        )
+        assert isinstance(result, ExtractionResult)
+
+    @pytest.mark.asyncio
+    async def test_async_extractor_is_awaited_not_just_called(self) -> None:
+        """EntityExtractor must await the injected async extractor, not merely call it."""
+        mock_ext = _make_async_extractor()
+        extractor = EntityExtractor(extractor=mock_ext)
+        await extractor.extract("text that triggers delegation to async extractor")
+        mock_ext.extract.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_entities_from_async_extractor_are_returned_correctly(self) -> None:
+        """Entities from the awaited async extractor appear in the returned ExtractionResult."""
+        entity = _make_entity("AsyncExtractedEntity")
+        expected = ExtractionResult(entities=[entity])
+        mock_ext = _make_async_extractor(result=expected)
+        extractor = EntityExtractor(extractor=mock_ext)
+        result = await extractor.extract("AsyncExtractedEntity is extracted via async")
+        assert isinstance(result, ExtractionResult)
+        assert len(result.entities) == 1
+        assert result.entities[0].name == "AsyncExtractedEntity"
+
+    @pytest.mark.asyncio
+    async def test_edges_from_async_extractor_are_returned(self) -> None:
+        """Edges from the awaited async extractor appear in the returned ExtractionResult."""
+        entity = _make_entity("EdgeSource")
+        edge = Edge(
+            source_id=entity.id,
+            target_id="another-id",
+            relation=RelationType.RELATED_TO,
+        )
+        expected = ExtractionResult(entities=[entity], edges=[edge])
+        mock_ext = _make_async_extractor(result=expected)
+        extractor = EntityExtractor(extractor=mock_ext)
+        result = await extractor.extract("EdgeSource is related to something")
+        assert isinstance(result, ExtractionResult)
+        assert len(result.edges) == 1
+        assert result.edges[0].relation == RelationType.RELATED_TO
+
+    @pytest.mark.asyncio
+    async def test_result_is_exact_object_from_async_extractor(self) -> None:
+        """The returned ExtractionResult is the exact object from the awaited async extractor."""
+        entity = _make_entity("ExactObjSentinel")
+        expected = ExtractionResult(entities=[entity])
+        mock_ext = _make_async_extractor(result=expected)
+        extractor = EntityExtractor(extractor=mock_ext)
+        result = await extractor.extract("ExactObjSentinel uniquely identifies this test")
+        assert result is expected
+
+    @pytest.mark.asyncio
+    async def test_async_extractor_exception_propagates(self) -> None:
+        """If the async extractor raises, the exception propagates from EntityExtractor.extract()."""
+        mock_ext = MagicMock(spec=StructuredExtractor)
+        mock_ext.extract = AsyncMock(side_effect=RuntimeError("async extraction failure sentinel"))
+        extractor = EntityExtractor(extractor=mock_ext)
+        with pytest.raises(RuntimeError, match="async extraction failure sentinel"):
+            await extractor.extract("text that triggers async exception")
