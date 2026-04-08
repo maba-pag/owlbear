@@ -148,42 +148,17 @@ class TestFromAC_RefreshResultModel:  # noqa: N801
 
 
 # ===========================================================================
-# AC: CrawlHandler type alias exists at module level
-# ===========================================================================
-
-
-class TestFromAC_CrawlHandlerAlias:  # noqa: N801
-    """CrawlHandler is a Callable type alias exported at module level."""
-
-    def test_type_alias_exists_at_module_level(self) -> None:
-        import owlbear_knowledge.refresh as refresh_mod  # noqa: PLC0415
-
-        assert hasattr(refresh_mod, "CrawlHandler")
-
-
-# ===========================================================================
 # AC: RefreshOrchestrator constructor
 # ===========================================================================
 
 
 class TestFromAC_RefreshOrchestratorConstructor:  # noqa: N801
-    """Constructor accepts store, pipeline, optional crawl_handler, optional workspace_root."""
+    """Constructor accepts store, pipeline, optional workspace_root."""
 
     def test_required_params_only(self) -> None:
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
         orch = RefreshOrchestrator(store=MagicMock(), pipeline=MagicMock())
-        assert orch is not None
-
-    def test_all_optional_params(self, tmp_path: Path) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        orch = RefreshOrchestrator(
-            store=MagicMock(),
-            pipeline=MagicMock(),
-            crawl_handler=None,
-            workspace_root=tmp_path,
-        )
         assert orch is not None
 
     def test_workspace_root_none_is_valid(self) -> None:
@@ -244,25 +219,6 @@ class TestFromAC_RefreshDispatch:  # noqa: N801
 
         assert isinstance(result, RefreshResult)
         assert result.source_id == source.id
-
-    @pytest.mark.asyncio
-    async def test_crawl_dispatch_delegates_to_handler(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult  # noqa: PLC0415
-
-        crawl_handler = AsyncMock(return_value=[_ok_ingest_result("d1")])
-        store_mock = MagicMock()
-        store_mock.update = MagicMock()
-
-        orch = RefreshOrchestrator(
-            store=store_mock,
-            pipeline=MagicMock(),
-            crawl_handler=crawl_handler,
-        )
-        source = _make_source(source_type=SourceType.CRAWL)
-        result = await orch.refresh(source)
-
-        assert isinstance(result, RefreshResult)
-        crawl_handler.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_file_glob_dispatch_returns_refresh_result(self, tmp_path: Path) -> None:
@@ -472,46 +428,6 @@ class TestFromAC_UrlListHandler:  # noqa: N801
 
         assert result.failed == 1
         assert result.refreshed == 0
-
-
-# ===========================================================================
-# AC: crawl handler
-# ===========================================================================
-
-
-class TestFromAC_CrawlHandlerDispatch:  # noqa: N801
-    """crawl delegates to injected crawl_handler; raises ValueError when handler is None."""
-
-    @pytest.mark.asyncio
-    async def test_delegates_to_injected_handler(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult  # noqa: PLC0415
-
-        ingest_results = [_ok_ingest_result("d1"), _ok_ingest_result("d2")]
-        crawl_handler = AsyncMock(return_value=ingest_results)
-        store_mock = MagicMock()
-        store_mock.update = MagicMock()
-
-        orch = RefreshOrchestrator(
-            store=store_mock,
-            pipeline=MagicMock(),
-            crawl_handler=crawl_handler,
-        )
-        source = _make_source(source_type=SourceType.CRAWL, config={"seed": "https://x.com"})
-        result = await orch.refresh(source)
-
-        assert isinstance(result, RefreshResult)
-        crawl_handler.assert_called_once()
-        assert result.refreshed == 2
-
-    @pytest.mark.asyncio
-    async def test_raises_value_error_when_crawl_handler_is_none(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        orch = RefreshOrchestrator(store=MagicMock(), pipeline=MagicMock(), crawl_handler=None)
-        source = _make_source(source_type=SourceType.CRAWL)
-
-        with pytest.raises(ValueError, match="crawl"):
-            await orch.refresh(source)
 
 
 # ===========================================================================
@@ -905,48 +821,6 @@ class TestFromAC_SandboxPathPermissionError:  # noqa: N801
         assert result.refreshed == 0
         assert len(result.errors) == 1
         assert "path escape attempt" in result.errors[0]
-
-
-class TestFromAC_CrawlIngestResultCounting:  # noqa: N801
-    """_handle_crawl counts skipped and failed results correctly (lines 213-214)."""
-
-    @pytest.mark.asyncio
-    async def test_crawl_skipped_status_counted_as_skipped_not_refreshed(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        crawl_handler = AsyncMock(return_value=[_skipped_ingest_result()])
-        store_mock = MagicMock()
-        store_mock.update = MagicMock()
-
-        orch = RefreshOrchestrator(
-            store=store_mock,
-            pipeline=MagicMock(),
-            crawl_handler=crawl_handler,
-        )
-        source = _make_source(source_type=SourceType.CRAWL)
-        result = await orch.refresh(source)
-
-        assert result.skipped == 1
-        assert result.refreshed == 0
-
-    @pytest.mark.asyncio
-    async def test_crawl_failed_status_counted_as_failed(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        crawl_handler = AsyncMock(return_value=[_failed_ingest_result()])
-        store_mock = MagicMock()
-        store_mock.update = MagicMock()
-
-        orch = RefreshOrchestrator(
-            store=store_mock,
-            pipeline=MagicMock(),
-            crawl_handler=crawl_handler,
-        )
-        source = _make_source(source_type=SourceType.CRAWL)
-        result = await orch.refresh(source)
-
-        assert result.failed == 1
-        assert result.refreshed == 0
 
 
 class TestFromAC_FileGlobPerFileHandling:  # noqa: N801

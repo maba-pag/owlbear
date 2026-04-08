@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -12,22 +11,14 @@ from pydantic import BaseModel, ConfigDict
 
 import owlbear_knowledge.intake as _intake
 from owlbear_knowledge._paths import sandbox_path
-from owlbear_knowledge.ingest import IngestResult
 from owlbear_knowledge.models import KnowledgeSource, SourceType
 
 if TYPE_CHECKING:
     from owlbear_knowledge.cancellation import CancelSignal
-    from owlbear_knowledge.ingest import IngestPipeline
+    from owlbear_knowledge.ingest import IngestPipeline, IngestResult
     from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Types
-# ---------------------------------------------------------------------------
-
-CrawlHandler = Callable[..., Awaitable[list[IngestResult]]]
-
 
 # ---------------------------------------------------------------------------
 # Models
@@ -57,7 +48,6 @@ class RefreshOrchestrator:
     Args:
         store: KnowledgeSourceStore (or compatible) for CRUD operations.
         pipeline: IngestPipeline for ingesting intake results.
-        crawl_handler: Optional async callable for CRAWL-type sources.
         workspace_root: Root directory for file sandbox; defaults to Path.cwd().
     """
 
@@ -66,12 +56,10 @@ class RefreshOrchestrator:
         *,
         store: KnowledgeSourceStore | object,
         pipeline: IngestPipeline | object,
-        crawl_handler: CrawlHandler | None = None,
         workspace_root: Path | None = None,
     ) -> None:
         self._store = store
         self._pipeline = pipeline
-        self._crawl_handler = crawl_handler
         self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
 
     async def refresh(
@@ -89,7 +77,7 @@ class RefreshOrchestrator:
             RefreshResult with per-status counters.
 
         Raises:
-            ValueError: If the source is disabled or (for CRAWL) no handler is set.
+            ValueError: If the source is disabled.
         """
         if not source.enabled:
             msg = f"Source {source.id!r} is disabled"
@@ -97,8 +85,6 @@ class RefreshOrchestrator:
 
         if source.source_type == SourceType.URL_LIST:
             result = await self._handle_url_list(source, cancel=cancel)
-        elif source.source_type == SourceType.CRAWL:
-            result = await self._handle_crawl(source)
         elif source.source_type == SourceType.FILE_GLOB:
             result = await self._handle_file_glob(source, cancel=cancel)
         else:
@@ -167,31 +153,6 @@ class RefreshOrchestrator:
             except Exception as exc:  # noqa: BLE001
                 failed += 1
                 errors.append(str(exc))
-
-        return RefreshResult(
-            source_id=source.id,
-            refreshed=refreshed,
-            skipped=skipped,
-            failed=failed,
-            errors=errors,
-        )
-
-    async def _handle_crawl(self, source: KnowledgeSource) -> RefreshResult:
-        if self._crawl_handler is None:
-            msg = "crawl_handler is required for CRAWL sources but was not provided"
-            raise ValueError(msg)
-
-        ingest_results: list[IngestResult] = await self._crawl_handler(source.config)
-        refreshed = skipped = failed = 0
-        errors: list[str] = []
-
-        for result in ingest_results:
-            if result.status == "ok":
-                refreshed += 1
-            elif result.status == "skipped":
-                skipped += 1
-            else:
-                failed += 1
 
         return RefreshResult(
             source_id=source.id,

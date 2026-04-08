@@ -38,7 +38,6 @@ class SourceType(StrEnum):
     """Classification of knowledge sources."""
 
     URL_LIST = "url_list"
-    CRAWL = "crawl"
     FILE_GLOB = "file_glob"
 
 

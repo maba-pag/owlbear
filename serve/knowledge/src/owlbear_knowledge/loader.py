@@ -36,7 +36,7 @@ _INLINE_EMPTY_SEQ_RE = re.compile(r":\s*\[\s*\]\s*$", re.MULTILINE)
 _SOURCE_SCHEMA = sy.Map(
     {
         "name": sy.Str(),
-        "type": sy.Enum(["file_glob", "url_list", "crawl"]),
+        "type": sy.Enum(["file_glob", "url_list"]),
         "config": sy.MapPattern(sy.Str(), sy.Str()),
         sy.Optional("scope"): sy.Str(),
         sy.Optional("enabled"): sy.Bool(),

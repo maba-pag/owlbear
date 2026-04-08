@@ -171,7 +171,7 @@ class TestFromAC_IngestDocument:
         """metadata is passed to ingest_text as the metadata= keyword argument."""
         pipeline = AsyncMock()
         pipeline.ingest_text.return_value = _make_ingest_result()
-        meta: dict[str, str] = {"url": "http://example.com", "type": "crawl"}
+        meta: dict[str, str] = {"url": "http://example.com", "type": "url_list"}
 
         await ingest_document(
             _make_mcp_ctx(_make_app_context(ingest_pipeline=pipeline)),

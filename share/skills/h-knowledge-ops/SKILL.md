@@ -136,16 +136,13 @@ Queries auto-filter to `["global", "project:{id}"]` when a project is active.
 
 **RelationType:** `defines`, `imports`, `depends_on`, `related_to`, `implements`, `documents`, `governed_by`
 
-**SourceType:** `url_list`, `crawl`, `file_glob`
+**SourceType:** `url_list`, `file_glob`
 
 Config examples per source type:
 
 ```json
 // url_list — list of URLs to fetch
 {"urls": ["https://example.com/page1", "https://example.com/page2"]}
-
-// crawl — start URL + depth
-{"start_url": "https://docs.example.com", "max_depth": 2}
 
 // file_glob — workspace-relative glob pattern
 {"pattern": "docs/**/*.md"}

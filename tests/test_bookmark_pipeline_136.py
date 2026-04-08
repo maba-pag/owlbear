@@ -404,7 +404,7 @@ class TestFromAC_RefreshResultModel:  # noqa: N801
 
 
 class TestFromAC_RefreshOrchestratorConstructor:  # noqa: N801
-    """RefreshOrchestrator constructor accepts store, pipeline, crawl_handler, workspace_root."""
+    """RefreshOrchestrator constructor accepts store, pipeline, workspace_root."""
 
     def test_constructor_accepts_required_params(self) -> None:
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
@@ -412,17 +412,6 @@ class TestFromAC_RefreshOrchestratorConstructor:  # noqa: N801
         orch = RefreshOrchestrator(
             store=MagicMock(),
             pipeline=MagicMock(),
-        )
-        assert orch is not None
-
-    def test_constructor_accepts_optional_params(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        orch = RefreshOrchestrator(
-            store=MagicMock(),
-            pipeline=MagicMock(),
-            crawl_handler=None,
-            workspace_root=Path.cwd(),
         )
         assert orch is not None
 
@@ -464,15 +453,6 @@ class TestFromAC_RefreshOrchestratorRefresh:  # noqa: N801
         result = await orch.refresh(source)
         assert isinstance(result, RefreshResult)
         assert result.source_id == source.id
-
-    @pytest.mark.asyncio
-    async def test_refresh_crawl_without_handler_raises_value_error(self) -> None:
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        orch = RefreshOrchestrator(store=MagicMock(), pipeline=MagicMock(), crawl_handler=None)
-        source = _make_source(source_type=SourceType.CRAWL)
-        with pytest.raises(ValueError, match="crawl"):
-            await orch.refresh(source)
 
     @pytest.mark.asyncio
     async def test_refresh_all_cooperative_cancellation_stops_loop(self) -> None:
@@ -886,34 +866,6 @@ class TestBuilderDiscovered:  # noqa: N801
         assert result.failed == 1
 
     @pytest.mark.asyncio
-    async def test_handle_crawl_with_handler_tallies_all_statuses(self) -> None:
-        """_handle_crawl invokes crawl_handler and tallies ok/skipped/failed results."""
-        from owlbear_knowledge.ingest import IngestResult  # noqa: PLC0415
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        crawl_results = [
-            IngestResult(document_id="d1", chunk_count=1, entity_count=0, edge_count=0, status="ok"),
-            IngestResult(document_id="d2", chunk_count=0, entity_count=0, edge_count=0, status="skipped"),
-            IngestResult(document_id="d3", chunk_count=0, entity_count=0, edge_count=0, status="failed"),
-        ]
-        crawl_handler = AsyncMock(return_value=crawl_results)
-        store_mock = MagicMock()
-        store_mock.update = MagicMock()
-
-        orch = RefreshOrchestrator(
-            store=store_mock,
-            pipeline=MagicMock(),
-            crawl_handler=crawl_handler,
-        )
-        source = _make_source(source_type=SourceType.CRAWL, config={"seed_url": "https://example.com"})
-        result = await orch.refresh(source)
-
-        crawl_handler.assert_called_once_with(source.config)
-        assert result.refreshed == 1
-        assert result.skipped == 1
-        assert result.failed == 1
-
-    @pytest.mark.asyncio
     async def test_refresh_all_collects_successful_results(self) -> None:
         """refresh_all appends RefreshResult when source refresh succeeds."""
         from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult  # noqa: PLC0415
@@ -930,24 +882,6 @@ class TestBuilderDiscovered:  # noqa: N801
 
         assert len(results) == 1
         assert isinstance(results[0], RefreshResult)
-
-    @pytest.mark.asyncio
-    async def test_refresh_all_exception_from_source_is_caught(self) -> None:
-        """refresh_all catches exceptions from individual refresh() and returns empty list."""
-        from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
-
-        store_mock = MagicMock()
-        # CRAWL source with crawl_handler=None causes refresh() to raise ValueError
-        store_mock.list_all.return_value = [
-            _make_source(name="crawl-src", source_type=SourceType.CRAWL, config={}),
-        ]
-        store_mock.update = MagicMock()
-
-        orch = RefreshOrchestrator(store=store_mock, pipeline=MagicMock(), crawl_handler=None)
-        # Must not propagate; exception is logged and swallowed
-        results = await orch.refresh_all()
-
-        assert results == []
 
     # -----------------------------------------------------------------------
     # SSRF protection: _web_read scheme validation (builder-discovered, cycle 4)
