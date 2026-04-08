@@ -1,11 +1,13 @@
 # skills/
 
-29 skill definitions in the default VS Code discovery location (`share/skills/{name}/SKILL.md`).
+32 skill definitions in the default VS Code discovery location (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 14 | Workflow — step-by-step procedures |
+| `w-` | 15 | Workflow — step-by-step procedures |
 | `r-` | 3 | Rules — shared conventions |
-| `h-` | 12 | Handbook — domain knowledge |
+| `h-` | 14 | Handbook — domain knowledge |
+
+Deprecated/archived: `h-kanban-md` (DEPRECATED), `w-dispatch-planning` (ARCHIVED), `w-project-scoping` (DEPRECATED).
 
 See `h-agent-structure` for structural standards and naming grammar.
