@@ -17,7 +17,8 @@ $write_tools = @(
     'replace_string_in_file',
     'multi_replace_string_in_file',
     'apply_patch',
-    'create_directory'
+    'create_directory',
+    'editFiles'
 )
 
 if ($tool_name -and ($write_tools -contains $tool_name)) {

@@ -17,7 +17,9 @@ $write_tools = @(
     'create_file',
     'replace_string_in_file',
     'multi_replace_string_in_file',
-    'create_directory'
+    'create_directory',
+    'apply_patch',
+    'editFiles'
 )
 
 # Pass-through for non-write tools or missing/empty tool_name
@@ -43,6 +45,16 @@ if ($tool_input) {
     foreach ($r in $tool_input.replacements) {
         $rfp = $r.filePath
         if ($rfp -is [string] -and $rfp.Length -gt 0) { $paths += $rfp }
+    }
+
+    # files[*] (editFiles) -- string elements or object-with-filePath elements
+    foreach ($f in $tool_input.files) {
+        if ($f -is [string] -and $f.Length -gt 0) {
+            $paths += $f
+        } elseif ($null -ne $f) {
+            $efp = $f.filePath
+            if ($efp -is [string] -and $efp.Length -gt 0) { $paths += $efp }
+        }
     }
 }
 
