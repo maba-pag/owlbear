@@ -7,6 +7,10 @@ disable-model-invocation: true
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
 tools: [execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/awaitTerminal, execute/killTerminal, read/readFile, vscode/memory, read/terminalLastCommand, execute/testFailure]
 agents: []
+hooks:
+  PreToolUse:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-scratch-only-writes.ps1
 ---
 
 <persona>
