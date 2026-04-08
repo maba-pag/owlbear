@@ -18,8 +18,8 @@ For curation workflow, see `w-mem-curation`.
 | `get_knowledge` | Retrieve memory entries for an agent, sorted by scope-specificity | `agent_id` (required), `limit`, `categories`, `min_confidence` |
 | `record_learning` | Record a new learning entry | `agent_id`, `content`, `category`, `confidence` (all required), `scope_agent`, `scope_project` |
 | `list_entries` | List entries with optional filters | `agent_id`, `category`, `status`, `include_deleted` |
-| `set_approval_state` | Transition an entry's approval state | `entry_id`, `new-state` (both required) |
-| `mark_for-deletion` | Soft-delete an entry (idempotent) | `entry_id` (required) |
+| `set_approval_state` | Transition an entry's approval state | `entry_id`, `new_state` (both required) |
+| `mark_for_deletion` | Soft-delete an entry (idempotent) | `entry_id` (required) |
 
 ## get_knowledge
 
@@ -94,13 +94,13 @@ Transitions an entry's approval state. Raises `ToolError` if the entry does not 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `entry_id` | str | (required) | UUID of the entry |
-| `new-state` | str | (required) | One of: `approved`, `deleted`, `pending` |
+| `new_state` | str | (required) | One of: `approved`, `deleted`, `pending` |
 
 **Allowed transitions:** `pending → approved`, `pending → deleted`, `deleted → pending`.
 
 Returns: success message string, or `error: {msg}` for disallowed transitions. Raises `ToolError` if entry not found.
 
-## mark_for-deletion
+## mark_for_deletion
 
 Soft-deletes an entry by setting `approval_state` to `deleted`. Idempotent — calling on an already-deleted entry is a no-op.
 
@@ -115,6 +115,6 @@ Returns: success message string. Raises `ToolError` if entry not found.
 | Env var | Default | Description |
 |---------|---------|-------------|
 | `MEMORY_TOOLS_EXCLUDE` | (unset) | Comma-separated tool names to remove at startup; unknown names silently ignored |
-| `OWLBEAR_MEMORY_DB_PATH` | `store/memory.db` | Path to the SQLite database file |
+| `OWLBEAR_MEMORY_DB_PATH` | `store/memory/memory.db` | Path to the SQLite database file |
 
-**Tool exclusion example:** Set `MEMORY_TOOLS_EXCLUDE=mark_for-deletion,set_approval_state` to restrict agents to read-only + record operations.
+**Tool exclusion example:** Set `MEMORY_TOOLS_EXCLUDE=mark_for_deletion,set_approval_state` to restrict agents to read-only + record operations.
