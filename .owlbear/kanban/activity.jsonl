@@ -1,14 +1,3 @@
-{"timestamp":"2026-03-31T04:34:45.5152741+02:00","action":"move","task_id":308,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T04:34:46.0473984+02:00","action":"edit","task_id":308,"detail":"Add strictyaml to knowledge package dependencies"}
-{"timestamp":"2026-03-31T04:34:46.0515725+02:00","action":"release","task_id":308,"detail":"auditor"}
-{"timestamp":"2026-03-31T04:35:24.3892149+02:00","action":"edit","task_id":435,"detail":"Consolidate loop detection rules in agent-common.instructions.md"}
-{"timestamp":"2026-03-31T04:35:24.3928888+02:00","action":"release","task_id":435,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:35:30.40524+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T04:35:30.4093886+02:00","action":"release","task_id":386,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:35:49.9951049+02:00","action":"edit","task_id":386,"detail":"Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context"}
-{"timestamp":"2026-03-31T04:35:50.0003354+02:00","action":"claim","task_id":386,"detail":"reviewer"}
-{"timestamp":"2026-03-31T04:36:39.6826697+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
-{"timestamp":"2026-03-31T04:36:44.2485916+02:00","action":"edit","task_id":16,"detail":"Build mcp-knowledge server"}
 {"timestamp":"2026-03-31T04:36:44.253701+02:00","action":"release","task_id":16,"detail":"reviewer"}
 {"timestamp":"2026-03-31T04:37:42.035997+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
 {"timestamp":"2026-03-31T04:37:51.1734174+02:00","action":"edit","task_id":33,"detail":"Extract entity extraction + graph builders"}
@@ -9998,3 +9987,14 @@
 {"timestamp":"2026-04-07T16:04:38.9246318+02:00","action":"edit","task_id":672,"detail":"CI infrastructure rework (epic)"}
 {"timestamp":"2026-04-07T16:04:38.9416908+02:00","action":"unblock","task_id":672,"detail":"CI infrastructure rework (epic)"}
 {"timestamp":"2026-04-07T16:04:42.1174785+02:00","action":"move","task_id":672,"detail":"backlog -\u003e archived"}
+{"timestamp":"2026-04-08T17:12:36.9851407+02:00","action":"create","task_id":674,"detail":"Fix stale `packages/` path constants in root test files"}
+{"timestamp":"2026-04-08T18:14:33.5759996+02:00","action":"create","task_id":675,"detail":"Add per-package tests for mcp-memory server"}
+{"timestamp":"2026-04-08T18:26:20.801204+02:00","action":"create","task_id":676,"detail":"Wire StructuredExtractor to activate knowledge graph layer"}
+{"timestamp":"2026-04-08T18:30:31.9613393+02:00","action":"create","task_id":677,"detail":"Add deny-writes hook to read-only agents (auditor, code-reader, challenger)"}
+{"timestamp":"2026-04-08T18:34:28.3187922+02:00","action":"create","task_id":678,"detail":"Update share/agents and share/skills READMEs to reflect current counts"}
+{"timestamp":"2026-04-08T18:35:53.3494408+02:00","action":"create","task_id":679,"detail":"Add cleanup policy for .owlbear/scratch directory"}
+{"timestamp":"2026-04-08T18:40:23.4487495+02:00","action":"create","task_id":680,"detail":"Standardize MCP tool error signaling (ToolError vs error strings)"}
+{"timestamp":"2026-04-08T19:03:20.5870237+02:00","action":"create","task_id":681,"detail":"Research web search options for agent pipeline"}
+{"timestamp":"2026-04-08T19:03:48.5020501+02:00","action":"create","task_id":682,"detail":"Research: how to wire analysis detectors into the agent pipeline"}
+{"timestamp":"2026-04-08T19:18:21.614853+02:00","action":"create","task_id":683,"detail":"Research: diagram rendering tool for agents"}
+{"timestamp":"2026-04-08T19:18:22.1660086+02:00","action":"create","task_id":684,"detail":"Research: Playwright browser integration for agents"}
