@@ -27,9 +27,10 @@ WIRED_AGENTS = ["builder", "reviewer", "auditor", "test-writer"]
 REQUIRED_EXECUTE_TOOLS = [
     "execute/testFailure",
     "execute/getTerminalOutput",
+    "execute/sendToTerminal",
     "execute/awaitTerminal",
     "execute/killTerminal",
-    "execute/createAndRunTask",
+    "execute/executionSubagent",
     "execute/runInTerminal",
     "execute/runTests",
 ]

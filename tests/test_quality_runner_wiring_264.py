@@ -39,9 +39,10 @@ QUALITY_RUNNER_SKILLS = [
 EXECUTE_TOOLS_ALL = [
     "execute/testFailure",
     "execute/getTerminalOutput",
+    "execute/sendToTerminal",
     "execute/awaitTerminal",
     "execute/killTerminal",
-    "execute/createAndRunTask",
+    "execute/executionSubagent",
     "execute/runInTerminal",
     "execute/runTests",
 ]

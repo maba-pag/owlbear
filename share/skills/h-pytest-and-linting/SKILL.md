@@ -24,11 +24,13 @@ uv run pytest tests/test_{module}.py -q --tb=short
 uv run pytest tests/ serve/ -m "not api" -q --tb=short
 ```
 
-For full suite runs, use `isBackground=true` + `get_terminal_output` to avoid terminal corruption from long-lived VS Code sessions:
+For full suite runs, use `isBackground=true` to avoid terminal corruption from long-lived VS Code sessions. With `backgroundNotifications` enabled, the agent is automatically notified when the command finishes — no manual polling needed:
 
 ```powershell
 run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", isBackground=true)
-# Then: get_terminal_output(id=...)
+# Agent receives automatic notification on completion
+# Then: get_terminal_output(id=...) to retrieve the output
+# If the terminal needs input: send_to_terminal(id=..., data="...")
 ```
 
 `testpaths` in `pyproject.toml` is `["tests", "serve"]`, so bare `uv run pytest` also discovers `serve/`. Passing both paths explicitly is preferred for clarity.

@@ -41,9 +41,10 @@ REQUIRED_TOOLS: list[str] = [
 EXECUTE_TOOLS_TO_REMOVE: list[str] = [
     "execute/testFailure",
     "execute/getTerminalOutput",
+    "execute/sendToTerminal",
     "execute/awaitTerminal",
     "execute/killTerminal",
-    "execute/createAndRunTask",
+    "execute/executionSubagent",
     "execute/runInTerminal",
     "execute/runTests",
 ]
@@ -119,12 +120,12 @@ class TestFromAC_ReviewerNoExecuteTools:
             "must be removed by #457."
         )
 
-    def test_tools_contains_no_execute_create_and_run_task(self) -> None:
-        """execute/createAndRunTask must be removed from reviewer tools."""
+    def test_tools_contains_no_execute_execution_subagent(self) -> None:
+        """execute/executionSubagent must be removed from reviewer tools."""
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "execute/createAndRunTask" not in tools, (
-            "reviewer.agent.md tools still contains execute/createAndRunTask -- "
+        assert "execute/executionSubagent" not in tools, (
+            "reviewer.agent.md tools still contains execute/executionSubagent -- "
             "must be removed by #457."
         )
 
