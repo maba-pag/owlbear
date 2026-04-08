@@ -17,7 +17,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
-VOICE_PYPROJECT = ROOT / "packages" / "voice" / "pyproject.toml"
+VOICE_PYPROJECT = ROOT / "serve" / "voice" / "pyproject.toml"
 
 
 def _load_voice_pyproject() -> dict:

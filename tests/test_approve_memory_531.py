@@ -38,7 +38,7 @@ pytestmark = pytest.mark.slow
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = Path(__file__).parent.parent
-_PACKAGE_DIR = _REPO_ROOT / "packages" / "mcp-memory"
+_PACKAGE_DIR = _REPO_ROOT / "serve" / "mcp-memory"
 _APPROVE_PY = _PACKAGE_DIR / "src" / "owlbear_mcp_memory" / "approve.py"
 
 # ---------------------------------------------------------------------------

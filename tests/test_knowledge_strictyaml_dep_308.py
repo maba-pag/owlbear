@@ -19,7 +19,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 _WORKSPACE_ROOT = Path(__file__).parent.parent
-_KNOWLEDGE_PYPROJECT = _WORKSPACE_ROOT / "packages" / "knowledge" / "pyproject.toml"
+_KNOWLEDGE_PYPROJECT = _WORKSPACE_ROOT / "serve" / "knowledge" / "pyproject.toml"
 _UV_LOCK = _WORKSPACE_ROOT / "uv.lock"
 _PACKAGE_NAME = "owlbear-knowledge"
 

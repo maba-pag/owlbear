@@ -583,7 +583,7 @@ class TestFromAC_PyprojectHttpxDep:
     def _load_pyproject(self) -> dict:
         import tomllib
 
-        pyproject_path = Path(__file__).parent.parent / "packages" / "knowledge" / "pyproject.toml"
+        pyproject_path = Path(__file__).parent.parent / "serve" / "knowledge" / "pyproject.toml"
         return tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
 
     def test_intake_optional_dep_group_exists(self) -> None:

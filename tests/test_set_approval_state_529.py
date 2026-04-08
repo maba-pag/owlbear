@@ -29,7 +29,7 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).parent.parent
-_TOOLS_PY = _REPO_ROOT / "packages" / "mcp-memory" / "src" / "owlbear_mcp_memory" / "tools.py"
+_TOOLS_PY = _REPO_ROOT / "serve" / "mcp-memory" / "src" / "owlbear_mcp_memory" / "tools.py"
 
 
 def _tools_source() -> str:

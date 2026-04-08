@@ -714,7 +714,7 @@ class TestFromAC_PackageManifest:  # noqa: N801
         import pathlib
         import tomllib
 
-        path = pathlib.Path(__file__).parent.parent / "packages" / "knowledge" / "pyproject.toml"
+        path = pathlib.Path(__file__).parent.parent / "serve" / "knowledge" / "pyproject.toml"
         with path.open("rb") as f:
             return tomllib.load(f)
 

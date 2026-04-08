@@ -40,7 +40,7 @@ from owlbear_mcp_memory.server import AppContext
 from owlbear_mcp_memory.tools import record_learning
 
 _REPO_ROOT = Path(__file__).parent.parent
-_SRC = _REPO_ROOT / "packages" / "mcp-memory" / "src" / "owlbear_mcp_memory"
+_SRC = _REPO_ROOT / "serve" / "mcp-memory" / "src" / "owlbear_mcp_memory"
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS memory_entries (

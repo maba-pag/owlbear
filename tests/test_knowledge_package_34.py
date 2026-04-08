@@ -21,7 +21,7 @@ from owlbear_knowledge.query_service import KnowledgeQueryService
 # Helpers
 # ---------------------------------------------------------------------------
 
-_PACKAGE_ROOT = pathlib.Path(__file__).parent.parent / "packages" / "knowledge"
+_PACKAGE_ROOT = pathlib.Path(__file__).parent.parent / "serve" / "knowledge"
 
 
 def _make_service(

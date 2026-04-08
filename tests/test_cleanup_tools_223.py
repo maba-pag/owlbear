@@ -44,7 +44,7 @@ class TestFromAC_ToolsCleanup:
         """AC1: The source file packages/mcp-knowledge/src/owlbear_mcp_knowledge/tools.py must not exist."""
         tools_path = (
             WORKSPACE_ROOT
-            / "packages"
+            / "serve"
             / "mcp-knowledge"
             / "src"
             / "owlbear_mcp_knowledge"

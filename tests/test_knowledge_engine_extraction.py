@@ -348,7 +348,7 @@ class TestFromAC_PackageDependencies:  # noqa: N801
     """AC: Package has its own pyproject.toml with correct dependencies."""
 
     def _pyproject_content(self) -> str:
-        path = Path(__file__).parent.parent / "packages" / "knowledge" / "pyproject.toml"
+        path = Path(__file__).parent.parent / "serve" / "knowledge" / "pyproject.toml"
         return path.read_text(encoding="utf-8")
 
     def test_pyproject_lists_qdrant_client_dependency(self) -> None:

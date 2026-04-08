@@ -224,7 +224,7 @@ class TestFromAC_SafeFilesUnchanged:
             "Owlbear.code-profile",
             "kanban/config.yml",
             "docs/research",
-            "packages",
+            "serve",
             "agents",
             "skills",
             "instructions",

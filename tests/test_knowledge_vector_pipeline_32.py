@@ -42,13 +42,13 @@ except ImportError:
 
 _KNOWLEDGE_SRC = (
     Path(__file__).parent.parent
-    / "packages"
+    / "serve"
     / "knowledge"
     / "src"
     / "owlbear_knowledge"
 )
 _PYPROJECT = (
-    Path(__file__).parent.parent / "packages" / "knowledge" / "pyproject.toml"
+    Path(__file__).parent.parent / "serve" / "knowledge" / "pyproject.toml"
 )
 
 _DENSE_DIM = 1024
