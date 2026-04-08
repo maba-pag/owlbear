@@ -7,5 +7,6 @@
   },
   "chat.instructionsFilesLocations": {
     "{{owlbear_path}}/share/instructions": true
-  }
+  },
+  "mermaid-chat.enabled": true
 }
