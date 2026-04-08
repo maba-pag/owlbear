@@ -79,11 +79,13 @@ class SourceEvaluator:
 
     Args:
         llm_fn: Async callable that accepts a prompt string and returns
-            an EvaluationResult.
+            an EvaluationResult. If None or a non-callable is supplied
+            (backward-compat with model-string wiring), evaluate() returns
+            _default_result() instead of crashing.
     """
 
-    def __init__(self, llm_fn: EvaluateFn) -> None:
-        self._llm_fn = llm_fn
+    def __init__(self, llm_fn: EvaluateFn | None = None, **_kwargs: object) -> None:
+        self._llm_fn: EvaluateFn | None = llm_fn if callable(llm_fn) else None
 
     async def evaluate(
         self,
@@ -105,7 +107,7 @@ class SourceEvaluator:
                 worth_ingesting=False,
             )
 
-        if project_context is None:
+        if project_context is None or self._llm_fn is None:
             return _default_result()
 
         prompt = _build_prompt(content, project_context)

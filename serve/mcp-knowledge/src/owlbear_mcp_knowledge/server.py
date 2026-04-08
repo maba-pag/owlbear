@@ -19,7 +19,7 @@ from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
-from owlbear_knowledge.evaluator import SourceEvaluator
+from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
@@ -111,6 +111,23 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     return excluded
 
 
+def make_evaluate_fn(model: str) -> EvaluateFn:  # noqa: ARG001
+    """Return an EvaluateFn callable for the given model name.
+
+    Placeholder that returns a neutral EvaluationResult. Real LLM scoring
+    via PydanticAI is wired by #701 (depends on #676).
+    """
+
+    async def _evaluate(_prompt: str) -> EvaluationResult:
+        return EvaluationResult(
+            relevance_score=0.5,
+            summary="No project context available -- neutral evaluation.",
+            worth_ingesting=True,
+        )
+
+    return _evaluate
+
+
 async def _web_read(url: str) -> str | None:
     """Fetch a URL via httpx. Only http/https schemes allowed; redirects not followed."""
     from urllib.parse import urlparse  # noqa: PLC0415
@@ -146,7 +163,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         pipeline = IngestPipeline(doc_store, extractor, chunker)
         source_store = KnowledgeSourceStore(conn)
         bookmark_store = BookmarkStore(conn)
-        evaluator = SourceEvaluator(model)
+        evaluator = SourceEvaluator(llm_fn=make_evaluate_fn(model))
 
         bookmark_pipeline = BookmarkPipeline(
             bookmark_store=bookmark_store,
