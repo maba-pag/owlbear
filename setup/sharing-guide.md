@@ -18,7 +18,7 @@ Both repos must sit on the same drive and in a sibling layout for the relative p
 work.
 
 > **Windows limitation:** owlbear and the project must be on the **same drive**.
-> Cross-drive relative paths raise a `ValueError` in `setup.py` before any files are
+Cross-drive relative paths raise a `ValueError` in `init.py` before any files are
 > written. macOS and Linux are not affected.
 
 ---
@@ -36,10 +36,10 @@ git clone https://github.com/your-org/my-project.git C:\Dev\my-project
 
 # 3. Bootstrap owlbear into the project workspace
 cd C:\Dev\my-project
-python ..\owlbear\scripts\setup.py
+python ..\owlbear\setup\init.py
 
 # 4. Download kanban-md (Windows only)
-.\kanban\setup.ps1
+.\.owlbear\kanban\setup.ps1
 
 # 5. Open the project in VS Code
 code .
@@ -58,14 +58,14 @@ troubleshooting reference.
 
 | Resource | Location | Shared? |
 |----------|----------|---------|
-| Agents (`.agent.md`) | `../owlbear/.github/agents/` | Yes — all teammates get the same agents |
-| Skills (`SKILL.md`) | `../owlbear/.github/skills/` | Yes — all teammates get the same skills |
-| Instructions (`*.instructions.md`) | `../owlbear/.github/instructions/` | Yes — shared baseline |
-| MCP server code | `../owlbear/packages/` | Yes — started from owlbear via `uv run --project` |
-| Kanban board | `kanban/tasks/` in project | No — per-project |
+| Agents (`.agent.md`) | `../owlbear/share/agents/` | Yes — all teammates get the same agents |
+| Skills (`SKILL.md`) | `../owlbear/share/skills/` | Yes — all teammates get the same skills |
+| Instructions (`*.instructions.md`) | `../owlbear/share/instructions/` | Yes — shared baseline |
+| MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
+| Kanban board | `.owlbear/kanban/tasks/` in project | No — per-project |
 | `owlbear-project.json` | project root | No — per-project |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
-| `data/knowledge/` | project root | No — per-project |
+| `.owlbear/knowledge/` | project root | No — per-project |
 
 Project-local resources can override or extend shared owlbear resources. See the
 [Customization](setup-guide.md#adding-local-agents) section of the setup guide.
@@ -89,7 +89,7 @@ both appear in the picker.
 The `.github/copilot-instructions.md` file in the project directory is the right place
 for project-specific rules (coding style, domain conventions, restricted tools). This
 file takes priority over the owlbear shared instructions and is already created by
-`setup.py` — teammates just need to keep it in source control.
+`init.py` — teammates just need to keep it in source control.
 
 ### Monorepo alternative
 

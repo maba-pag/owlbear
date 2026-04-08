@@ -15,7 +15,7 @@ Before running setup, ensure the following are installed on your machine:
 | Git | Clone and version control | [git-scm.com](https://git-scm.com/) |
 
 > **Windows limitation:** owlbear and your project must be on the **same drive**.
-> `setup.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
+> `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
 > resolving paths across different Windows drive letters (e.g., `C:\` vs `D:\`).
 
 ---
@@ -31,10 +31,10 @@ mkdir my-project
 
 # 3. Bootstrap the OwlBear workspace from inside your project directory
 cd my-project
-python ..\owlbear\scripts\setup.py
+python ..\owlbear\setup\init.py
 
 # 4. Download kanban-md (Windows only)
-.\kanban\setup.ps1
+.\.owlbear\kanban\setup.ps1
 
 # 5. Open the project in VS Code
 code .
@@ -44,20 +44,20 @@ code .
 
 ## What Setup Creates
 
-Running `setup.py` writes the following files into your project directory:
+Running `init.py` writes the following files into your project directory:
 
 | File / Directory | Purpose | Idempotency |
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions | Merged (owlbear keys as defaults; your existing keys are preserved) |
-| `.vscode/mcp.json` | Registers 4 MCP servers (GitHub remote + 3 owlbear stdio) | Skipped if file already exists |
-| `kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Skipped if file already exists |
-| `kanban/setup.ps1` | Script to download `kanban-md.exe` | Skipped if file already exists |
-| `kanban/tasks/` | Empty task directory | Created if missing |
-| `data/knowledge/` | Knowledge store directory | Created if missing |
-| `.github/copilot-instructions.md` | Project-level Copilot system prompt | Skipped if file already exists |
+| `.vscode/mcp.json` | Registers 5 MCP servers (GitHub remote + 4 owlbear stdio) | Skipped if file already exists |
+| `.owlbear/kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Always written |
+| `.owlbear/kanban/setup.ps1` | Script to download `kanban-md.exe` | Always written |
+| `.owlbear/hooks/deny-writes.ps1` | Reviewer write guard hook | Always written |
+| `.owlbear/hooks/lint-changed.ps1` | Builder lint feedback hook | Always written |
+| `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Created if missing |
 | `owlbear-project.json` | Project metadata (name, type, owlbear path) | Skipped if file already exists |
 
-After running `kanban/setup.ps1`, a `kanban/kanban-md.exe` binary is also downloaded.
+After running `.owlbear/kanban/setup.ps1`, a `kanban-md.exe` binary is also downloaded.
 
 ---
 
@@ -71,17 +71,13 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 
 | What to check | How to verify |
 |---------------|---------------|
-| OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/.github/agents/` |
-| OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/.github/skills/` |
-| Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/.github/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — owlbearKanban should show `running` |
+| OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
+| OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
+| Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
+| MCP servers running | Run `MCP: List Servers` from the Command Palette — owlbear-kanba should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
 this shows chronological tool calls, LLM requests, and prompt discovery events.
-
-> **MCP server status:** Only `owlbearKanban` is fully operational. `owlbearKnowledge`
-> and `owlbearProject` are under development and will show startup errors — this is
-> expected and non-blocking.
 
 ---
 
@@ -89,7 +85,7 @@ this shows chronological tool calls, LLM requests, and prompt discovery events.
 
 ### Adding local agents
 
-Place `.agent.md` files anywhere in your project (e.g., `.github/agents/`). VS Code loads
+Place `.agent.md` files anywhere in your project (e.g., `.owlbear/agents/`). VS Code loads
 agents from all configured locations simultaneously — both owlbear agents and your project
 agents will appear in the agent picker.
 
@@ -103,8 +99,8 @@ To register your local agent directory, add to `.vscode/settings.json`:
 ```json
 {
   "chat.agentFilesLocations": {
-    "../owlbear/.github/agents": true,
-    ".github/agents": true
+    "../owlbear/share/agents": true,
+    ".owlbear/agents": true
   }
 }
 ```
@@ -222,12 +218,12 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Symptom | Likely cause | Resolution |
 |---------|-------------|------------|
 | Agents not appearing in picker | Wrong path in `chat.agentFilesLocations` | Open Diagnostics view; verify path relative to project root matches owlbear location |
-| Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `setup.py` if the key is absent |
+| Skills not auto-loading | `chat.agentSkillsLocations` missing or path wrong | Check `.vscode/settings.json`; re-run `init.py` if the key is absent |
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
-| MCP server fails to start | Stub server (`owlbearKnowledge`, `owlbearProject`) or `uv` not on PATH | For stub servers: expected, non-blocking. For `uv` issues: run `uv --version` to confirm installation |
+| MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |
-| `kanban-md.exe` missing | `kanban/setup.ps1` not run yet | Run `.\kanban\setup.ps1` from your project directory |
+| `kanban-md.exe` missing | `.owlbear/kanban/setup.ps1` not run yet | Run `.\.owlbear\kanban\setup.ps1` from your project directory |
 
 For deeper debugging, use **"Show Chat Debug View"** (Chat view ellipsis `…` menu) to inspect
 raw LLM request/response payloads.
