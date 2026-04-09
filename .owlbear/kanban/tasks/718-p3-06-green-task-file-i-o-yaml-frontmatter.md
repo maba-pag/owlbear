@@ -1,10 +1,12 @@
 ---
 id: 718
 title: 'P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)'
-status: docs
+status: archived
 priority: critical
 created: 2026-04-09T03:25:30.2736084+02:00
-updated: 2026-04-09T15:07:52.0734066+02:00
+updated: 2026-04-09T16:03:12.8300135+02:00
+started: 2026-04-09T16:03:12.8300135+02:00
+completed: 2026-04-09T16:03:12.8300135+02:00
 tags:
     - kanban
     - phase-3
@@ -245,3 +247,54 @@ None. All Pass 1 criteria met.
 
 ### Verdict
 confidence: .97 → PASS #718 → docs
+
+[[2026-04-09]] Thu 15:10
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Internal implementation change only (direct write → atomic write); function signatures, return types, and public API unchanged. `copilot-instructions.md` has no section on mcp-kanban engine internals — no update needed. |
+| 2 | Module docstrings | Yes | Verified | Read full `task_io.py` (260 lines). All 5 public functions have accurate docstrings: `generate_slug`, `make_task_filename`, `validate_path_containment`, `read_task`, `write_task`. Module-level docstring accurate. `write_task` docstring ("created or overwritten") remains correct — atomic mechanism is an implementation detail callers don't observe. |
+| 3 | External attribution | No | N/A | Atomic write pattern (`tempfile.mkstemp + os.replace`) is standard Python stdlib — no external repo or article citation in builder/reviewer notes. |
+| 4 | CLI changes | No | N/A | Task scope: one Python module (`task_io.py`). No CLI entry points added or modified. |
+| 5 | Research doc | No | N/A | No `.owlbear/research/` file produced. Architecture review conducted inline in task body (not a separate research artifact). |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found (`718-*` — no matches)
+
+[[2026-04-09]] Thu 16:03
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `read_task(path)` parses YAML frontmatter + body into TaskRecord | task_io.py:148-189; TestFromAC_ReadTaskFile 12/12 pass | PASS |
+| `write_task(path, record)` writes TaskRecord in correct format | task_io.py:192-234; TestFromAC_WriteTaskFile 10/10 pass | PASS |
+| Unknown YAML fields preserved on round-trip | TaskRecord extra="allow"; TestFromAC_RoundTrip 8/8 pass | PASS |
+| Path containment validated before every I/O | validate_path_containment() at task_io.py:109-142; TestFromAC_PathContainment 6/6 pass | PASS |
+| Slug: `[a-z0-9-]`, max 80 chars, frozen at creation | generate_slug() at task_io.py:80-93; TestFromAC_SlugGeneration 8/8 pass | PASS |
+| Windows reserved filenames rejected | _WINDOWS_RESERVED frozenset; TestFromAC_WindowsReservedNames 9/9 pass | PASS |
+| Atomic writes via temp file + os.replace() | task_io.py:228-234: mkstemp(dir=path.parent) + Path.replace() + suppress cleanup; TestFromAC_AtomicWrites 4/4 pass | PASS |
+| All #717 and #715 tests pass | 63/63 pass (test_kanban_task_io.py) | PASS |
+
+### Test Results
+- pytest (task scope): 63 passed, 0 failed
+- pytest (full suite): 3876 passed, 379 failed, 18 skipped — 0 failures in test_kanban_task_io.py; all 379 failures are pre-existing in unrelated test files
+- ruff: All checks passed
+
+### Architect Quality: 5/5
+AC was specific and complete. Architect review itself identified the atomic writes gap and issued a mandatory correction with implementation guidance. Clean implementation path.
+
+### Deduction Breakdown
+- No deductions. All 8 AC lines have specific test/code evidence. Reviewer section detailed with PASS verdict. Lint clean. No task-scope test failures.
+
+### Confidence: .98
+### Action: archive
+
+### Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 9b4af24 | feat | task_io.py | #718 |
+| fd185f3 | test | test_kanban_task_io.py | #718 |
