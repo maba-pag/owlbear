@@ -1,16 +1,16 @@
 ---
 id: 684
 title: 'Research: Playwright browser integration for agents'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-08T19:18:22.1617576+02:00
-updated: 2026-04-09T02:02:50.0379966+02:00
+updated: 2026-04-09T02:06:50.3662149+02:00
+started: 2026-04-09T02:06:50.3662149+02:00
+completed: 2026-04-09T02:06:50.3662149+02:00
 tags:
     - scope:tools
     - ' type:research'
     - ' source:analysis'
-claimed_by: cliff-nova
-claimed_at: 2026-04-09T02:02:50.0379966+02:00
 class: standard
 ---
 
@@ -160,3 +160,41 @@ Confidence: .97 → PASS
 **Scratch files:** No `.owlbear/scratch/684-*` files found.
 
 **Verdict:** PASS — docs gate clean.
+
+[[2026-04-09]] Thu 02:06
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Use case inventory with priority assessment | Research doc §3.1 — 6 use cases in priority table (High/Medium/Low), high-priority already covered by httpx | PASS |
+| AC2: Evaluate scope options against use cases | Research doc §3.2 — 4 options compared across 10 criteria in matrix | PASS |
+| AC3: Assess Playwright dependency and install impact | Research doc §3.3 — ~5 MB pip + 300-500 MB browser binaries, absent from v2 deps | PASS |
+| AC4: Recommendation with follow-up tasks | Research doc §4 — defer (YAGNI), Option B when demand emerges (.75 confidence). Follow-up #696 created (source:research-684 tag), now at docs status | PASS |
+
+### Research Task Checks
+- Research doc exists at `.owlbear/research/playwright-browser-integration-v2.md` ✓
+- Follow-up #696 created, tagged `source:research-684`, progressing (at `docs` status) ✓
+- #696 has downstream #703 (implementation) ✓
+
+### Test Results
+- pytest: 2348 passed, 156 failed, 11 skipped — all failures pre-existing (no code changes in this research task)
+- ruff: 5 errors in `serve/mcp-kanban/` — unrelated to task scope
+
+### Architect Quality: 4/5
+AC lines are specific and independently verifiable for a research task. Minor gap: AC4 could specify follow-up status expectations, but intent is clear.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 4 PASS) → no deduction
+- Lint violations in scope: 0 → no deduction
+- AC quality ≤ 3: No (4/5) → no deduction
+- Missing reviewer evidence: No (present, detailed, .97 PASS) → no deduction
+- Full-suite failures in task scope: 0 (research task, no code) → no deduction
+- Note: research doc was uncommitted by upstream — committed as leftover (7901cd9)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7901cd9 | docs | playwright-browser-integration-v2.md, 684 task body | #684 |

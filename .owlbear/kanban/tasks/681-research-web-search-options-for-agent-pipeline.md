@@ -1,16 +1,16 @@
 ---
 id: 681
 title: Research web search options for agent pipeline
-status: done
+status: archived
 priority: important
 created: 2026-04-08T19:03:20.5804986+02:00
-updated: 2026-04-09T00:52:31.9901664+02:00
+updated: 2026-04-09T00:58:34.7604341+02:00
+started: 2026-04-09T00:58:34.7604341+02:00
+completed: 2026-04-09T00:58:34.7604341+02:00
 tags:
     - scope:tools
     - ' type:research'
     - ' source:analysis'
-claimed_by: kelp-wild
-claimed_at: 2026-04-09T00:52:31.9901664+02:00
 class: standard
 ---
 
@@ -146,3 +146,41 @@ Confidence: 0.98 → PASS → docs
 
 ### Scratch Files Cleaned
 - None — no `.owlbear/scratch/681-*` files found
+
+[[2026-04-09]] Thu 00:58
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Research doc in `.owlbear/research/` evaluating ≥3 options | `.owlbear/research/web-search-mcp-options.md` exists; §3.1 matrix covers 4 options (ddgs, Brave, Tavily, Custom) | PASS |
+| AC2: Trade-off matrix (API key, free tier, rate limits, quality, MCP) | §3.1: 10-criterion comparison table covers all required dimensions | PASS |
+| AC3: Recommendation with confidence score | §4: "Use ddgs built-in MCP server. Confidence: .85" | PASS |
+| AC4: Follow-up task(s) if recommendation favorable | #686 at `research` status, `depends_on: [681]`, `source:research-681` tag | PASS |
+
+### Research Task Verification (Step 1a)
+- Research doc exists at `.owlbear/research/web-search-mcp-options.md` ✓
+- Follow-up #686 created at `research` status ✓
+- Follow-up references research doc in body ✓
+
+### Test Results
+- pytest: 3664 passed, 382 failed, 18 skipped — no failures in task scope (type:research, no code changes)
+- ruff: 5 errors — none in task scope (all in mcp-kanban server.py and test_server.py)
+
+### Architect Quality: 5/5
+AC lines are specific, verifiable, and complete. All 4 deliverables map directly to observable artifacts. Conditional AC4 is well-structured.
+
+### Deduction Breakdown
+- No AC evidence gaps: 0
+- No lint violations in scope: 0
+- AC quality 5/5: 0
+- Reviewer evidence present and detailed (.98 PASS): 0
+- No full-suite failures in scope: 0
+- Note: research doc was uncommitted by upstream — committed in audit Step 4
+
+### Confidence: .99
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| ccd3f31 | docs(research) | web-search-mcp-options.md, #681 task, #686 task | #681 |

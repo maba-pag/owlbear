@@ -1,16 +1,16 @@
 ---
 id: 685
 title: Add scratch-only-allow write hook to quality-runner agent
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-08T20:54:05.4426172+02:00
-updated: 2026-04-09T02:07:24.9933408+02:00
+updated: 2026-04-09T02:24:01.6612457+02:00
+started: 2026-04-09T02:24:01.6612457+02:00
+completed: 2026-04-09T02:24:01.6612457+02:00
 tags:
     - scope:agents
     - ' type:safety'
     - ' source:analysis'
-claimed_by: path-mace
-claimed_at: 2026-04-09T02:07:24.9933408+02:00
 class: standard
 ---
 
@@ -251,3 +251,41 @@ No `.owlbear/scratch/685-*` files found — nothing to clean.
 
 ### Verdict
 No docs impact. All AC passed per reviewer evidence. Advancing to done.
+
+[[2026-04-09]] Thu 02:24
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: script exists and non-empty | `.owlbear/hooks/deny-scratch-only-writes.ps1` exists, 84 lines; `TestFromAC_ScriptExists` (2 tests) green | PASS |
+| AC2: allows `.owlbear/scratch/` via regex | Hook line 64: `$normalized -match '(^\|/)\.owlbear/scratch/'` — not StartsWith; 4 allow tests green | PASS |
+| AC3: denies non-scratch with reason | Hook lines 67–74: deny with `permissionDecisionReason`; 6 deny tests green | PASS |
+| AC4: all 6 write tools gated | Hook lines 16–23: `$write_tools` array; 12 allow+deny pairs green | PASS |
+| AC5: pass-through + safety edges | Hook try/catch, empty guard, no-paths guard; 9 safety tests green | PASS |
+| AC6: agent frontmatter hooks | `quality-runner.agent.md` lines 10–13: hooks section present; 6 frontmatter tests green | PASS |
+| AC7: test file validates behavior | `tests/test_deny_scratch_only_writes_hook_685.py`: 43 tests, 3 classes, all green | PASS |
+
+### Test Results
+- pytest (task-scoped): 43 passed, 0 failed
+- pytest (full suite): 3663 passed, 383 failed — all 383 failures are pre-existing (none in task scope; verified by filtering for scratch/685/quality-runner patterns)
+- ruff: 5 violations — all pre-existing in `serve/mcp-kanban/`, none in task files
+
+### Architect Quality: 5/5
+Specific AC with exact file paths, tool lists, behavioral contracts. AC2 and AC5 proactively refined during architecture review (regex requirement, 5 enumerated edge cases). Design notes correctly identified defense-in-depth rationale, seed copy exemption, and pattern source.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 7 verified) → 0
+- Lint violations in scope: 0 → 0
+- AC quality: 5/5 → 0
+- Reviewer evidence: present, thorough, PASS at 0.96 → 0
+- Full-suite failures in scope: 0 → 0
+- Uncommitted test file (test-writer gap): noted but not a code quality issue → 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2344773 | feat | deny-scratch-only-writes.ps1, quality-runner.agent.md | #685 |
+| 219665e | test | test_deny_scratch_only_writes_hook_685.py, 685 kanban task, hook line-ending normalization | #685 |

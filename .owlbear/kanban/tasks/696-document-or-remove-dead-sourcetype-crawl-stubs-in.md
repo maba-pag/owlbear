@@ -1,15 +1,15 @@
 ---
 id: 696
 title: Document or remove dead SourceType.CRAWL stubs in knowledge engine
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-08T21:31:29.3651006+02:00
-updated: 2026-04-09T03:06:53.9154307+02:00
+updated: 2026-04-09T03:24:28.3678891+02:00
+started: 2026-04-09T03:24:28.3678891+02:00
+completed: 2026-04-09T03:24:28.3678891+02:00
 tags:
     - scope:knowledge
     - ' source:research-684'
-claimed_by: port-glow
-claimed_at: 2026-04-09T03:06:53.9154307+02:00
 class: standard
 ---
 
@@ -169,3 +169,41 @@ None. Scope is tightly bounded to a research/decision deliverable.
 
 ### Scratch Files Cleaned
 - None found (no `.owlbear/scratch/696-*` files)
+
+[[2026-04-09]] Thu 03:24
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Decision on remove vs document approach | `.owlbear/research/dead-crawl-stubs-696.md` — recommends removal with .85 confidence, rationale across trade-off matrix, 3 key insights | PASS |
+| AC2: If removing: stubs deleted, tests updated | Delegated to #703 (in-progress, 7-AC spec covering all 8 files). Correct — #696 is research/decision only | PASS (delegated) |
+| AC3: If documenting: FUTURE comment | N/A — removal path chosen, documentation path closed | PASS (N/A) |
+
+### Research Task Checklist (Step 1a)
+- Research doc at `.owlbear/research/dead-crawl-stubs-696.md`: EXISTS
+- Follow-up #703 created at in-progress: EXISTS, references source:research-696
+- Follow-up references research doc: YES (owning task #696 in doc header)
+
+### Test Results
+- pytest: 3705 passed, 380 failed, 8 skipped (pre-existing; zero code changed by #696)
+- ruff: 5 pre-existing violations, none in #696 scope
+- Collection error in test_planner_gates.py (pre-existing ImportError, unrelated)
+
+### Architect Quality: 4/5
+AC was clear for a decision task. Conditional AC2/AC3 structure slightly unconventional but unambiguous. Decision scope cleanly separated from implementation (#703).
+
+### Deduction Breakdown
+- AC lines: 3/3 verified with evidence → no deduction
+- Uncommitted deliverables (research doc + kanban task not committed by upstream): -.02
+- Pre-existing test failures: not task-scoped → no deduction
+- Pre-existing lint: not task-scoped → no deduction
+- AC quality 4/5: → no deduction
+- Reviewer evidence: present, detailed, PASS at .97 → no deduction
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| db16f1a | docs | .owlbear/research/dead-crawl-stubs-696.md, .owlbear/kanban/tasks/696-*.md | #696 |

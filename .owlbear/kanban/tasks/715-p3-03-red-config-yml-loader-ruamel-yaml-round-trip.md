@@ -1,10 +1,12 @@
 ---
 id: 715
 title: 'P3-03: RED — config.yml loader (ruamel.yaml round-trip)'
-status: done
+status: archived
 priority: needed
 created: 2026-04-09T03:25:03.4706335+02:00
-updated: 2026-04-09T12:19:49.426543+02:00
+updated: 2026-04-09T12:42:46.9877315+02:00
+started: 2026-04-09T12:42:46.9877315+02:00
+completed: 2026-04-09T12:42:46.9877315+02:00
 tags:
     - kanban
     - phase-3
@@ -12,8 +14,6 @@ tags:
 parent: 712
 depends_on:
     - 714
-claimed_by: trail-lake
-claimed_at: 2026-04-09T12:19:49.4234129+02:00
 class: standard
 ---
 
@@ -234,3 +234,41 @@ None — `file_search` for `.owlbear/scratch/715-*` returned 0 results.
 
 ### Verdict
 PASS — all applicable checklist items verified. Docstrings accurate. Attribution current. No docs changes required.
+
+[[2026-04-09]] Thu 12:42
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test loads config.yml → BoardConfig with correct statuses, priorities, defaults, next_id | `TestFromAC_LoadConfig` — 11 tests: type/value assertions on `len(statuses)==7`, `list(priorities)==[...]`, `defaults.status=="research"`, `next_id==100` | PASS |
+| Test round-trips config.yml without data loss or field reordering | `TestFromAC_RoundTrip` — 6 tests: load→save→reload cycle, top-level key order comparison | PASS |
+| Test preserves comments and unknown fields | `TestFromAC_PreservesCommentsAndUnknownFields` — 6 tests: exact comment strings (`# Board configuration`, `# default priority`, `# duration string`), vendor field `extra_vendor_field: preserved-value` | PASS |
+| Test next_id increment (load, increment, save, verify) | `TestFromAC_NextIdIncrement` — 4 tests: single increment, near-zero boundary, multi-cycle accumulation | PASS |
+| Test timestamp resolver disabled | `TestFromAC_TimestampResolverDisabled` — 4 tests: `not isinstance(datetime.date)`, `isinstance(str)` for date-like, ISO 8601, and duration strings | PASS |
+| All tests fail (RED gate) | Test-writer confirmed `ModuleNotFoundError` at collection; builder added module → 31/31 pass | PASS |
+
+### Test Results
+- pytest: 1221 passed, 80 failed, 3 skipped (80 failures all pre-existing in unrelated files: test_analysis.py, test_challenger_agent_467.py, test_disable_model_invocation.py, etc. — 0 failures in task-scoped files)
+- ruff: 5 violations, all in `server.py`/`test_server.py` — NOT in #715 files. Task files clean.
+
+### Architect Quality: 4/5
+AC lines were specific and mechanically verifiable. Minor gap: import path/function signatures not in AC body (added by architect in architecture notes after challenger flag). Overall well-scoped for RED phase.
+
+### Process Note
+Test file `tests/test_kanban_engine_config.py` was never committed by test-writer — found as untracked. Committed as leftover in `2da2a83`. Not a quality gap, but a process gap.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 6 covered) → -0.00
+- Lint violations in task files: 0 → -0.00
+- AC quality ≤ 3: no (4/5) → -0.00
+- Missing reviewer evidence: no (detailed, PASS at .97) → -0.00
+- Full-suite failures in task scope: 0 → -0.00
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| edf1b95 | feat | config_loader.py, pyproject.toml | #715 |
+| 2da2a83 | test | test_kanban_engine_config.py, 715-*.md | #715 |

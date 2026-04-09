@@ -1,16 +1,16 @@
 ---
 id: 688
 title: Fix SourceEvaluator wiring — model string passed where EvaluateFn callable expected
-status: done
+status: archived
 priority: important
 created: 2026-04-08T21:06:19.3482222+02:00
-updated: 2026-04-09T01:36:57.6028333+02:00
+updated: 2026-04-09T02:02:09.8763578+02:00
+started: 2026-04-09T02:02:09.8763578+02:00
+completed: 2026-04-09T02:02:09.8763578+02:00
 tags:
     - scope:knowledge
     - ' type:bug'
     - ' source:research'
-claimed_by: eagle-mast
-claimed_at: 2026-04-09T01:36:57.6028333+02:00
 class: standard
 ---
 
@@ -253,3 +253,36 @@ No `.owlbear/scratch/688-*` files found. Clean.
 
 ### Verdict
 Docs gate PASSED — no documentation changes required.
+
+[[2026-04-09]] Thu 02:02
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: SourceEvaluator receives proper async callable | server.py:166 `SourceEvaluator(llm_fn=make_evaluate_fn(model))`; tests 1-3 pass (source inspection + factory existence + callable check) | PASS |
+| AC2: Real relevance scores (not exception-fallback) | evaluator.py:89 coerces string→None; evaluate() returns `_default_result()` not crash-fallback; tests 4-5 pass | PASS |
+| AC3: Graceful degradation if LLM unavailable | evaluator.py:109-113 catches exceptions, returns neutral EvaluationResult; tests 6-7 pass | PASS |
+
+### Test Results
+- pytest (task-scoped): 54 passed, 0 failed (7 wiring + 47 evaluator)
+- pytest (full suite): 3701 passed, 369 failed — failures are pre-existing across 52 unrelated files; 0 failures in task-scoped files; builder confirmed bookmark_pipeline failures via git stash comparison
+- ruff: 5 violations in mcp-kanban (unrelated to task scope); knowledge domain clean
+
+### Architect Quality: 4/5
+AC lines specific and verifiable. Three clear criteria with test mapping. Minor gap: AC2 "real relevance scores" required arch review clarification to scope as "not exception-fallback" given #701 decomposition. Decomposition into #700/#701 was clean and well-reasoned.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 3 PASS) → -0.00
+- Lint violations in scope: 0 → -0.00
+- AC quality ≤3: no (4/5) → -0.00
+- Missing reviewer section: no (present, detailed, PASS) → -0.00
+- Full-suite failures in task scope: 0 → -0.00
+
+### Confidence: 0.98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 55b7631 | fix | evaluator.py, server.py | #688 |
+| 459362c | chore | task file, test file, research doc | #688 |

@@ -1,16 +1,16 @@
 ---
 id: 676
 title: Wire StructuredExtractor to activate knowledge graph layer
-status: done
+status: archived
 priority: important
 created: 2026-04-08T18:26:20.7985508+02:00
-updated: 2026-04-09T05:02:51.0000656+02:00
+updated: 2026-04-09T05:11:05.9146714+02:00
+started: 2026-04-09T05:11:05.9146714+02:00
+completed: 2026-04-09T05:11:05.9146714+02:00
 tags:
     - scope:knowledge
     - ' type:feature'
     - ' source:analysis'
-claimed_by: shore-bone
-claimed_at: 2026-04-09T05:02:51.0000656+02:00
 class: standard
 ---
 
@@ -303,3 +303,34 @@ No `.owlbear/scratch/676-*` files found — nothing to clean.
 
 ### Summary
 Decomposition container. All AC delegated to 8 subtasks (#697, #687, #704, #698, #705, #689, #699, #690). Reviewer evidence present (2 cycles). Research doc complete. Sources attributed. No documentation action required.
+
+[[2026-04-09]] Thu 05:11
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Implement concrete StructuredExtractor | Delegated to #689 (exists, AC1 specifies LLMExtractor in knowledge engine) | PASS |
+| AC2: Wire into EntityExtractor in app_lifespan() | Delegated to #690 (exists, AC covers wiring) | PASS |
+| AC3: Verify entities/edges in get_stats | Delegated to #699 + #690 (integration tests + wiring) | PASS |
+| AC4: Graph expansion search context | Delegated to #699 + #690 (AC covers graph-augmented retrieval) | PASS |
+| AC5: Graceful degradation | Delegated to #689 (AC5) + #690 (AC5) | PASS |
+| AC6: Lives in knowledge engine package | Delegated to #689 (AC1 specifies knowledge engine location) | PASS |
+| (Implicit) Graph builders await async extract | #704 (tests) + #705 (GREEN) — added cycle 2 | PASS |
+
+### Test Results
+- pytest: 3686 passed, 389 failed, 18 skipped, 2 errors — failures pre-existing, NOT in task scope (#676 produced zero code)
+- ruff: 5 issues in mcp-kanban scope (not knowledge), pre-existing
+
+### Architect Quality: 4/5
+AC lines were specific and verifiable. Initial decomposition missed graph builder async migration callsites (graph_builder.py:122/130, inter_doc_graph_builder.py:154) — caught by reviewer cycle 1, resolved by architect with #704/#705 in cycle 2. Minor gap self-corrected within pipeline.
+
+### Deduction Breakdown
+- −0.02: Metadata defects on #687, #689, #690 (depends_on: [676] instead of TDD predecessors, parent: null). Mitigated: tasks in research status, architect documented repair instructions as CRITICAL orchestrator prerequisite. Not yet dispatchable.
+
+### Confidence: 0.98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 0adeaaa | chore(kanban) | research doc, 676 task, 8 subtask files | #676, #687, #689, #690, #697, #698, #699, #704, #705 |

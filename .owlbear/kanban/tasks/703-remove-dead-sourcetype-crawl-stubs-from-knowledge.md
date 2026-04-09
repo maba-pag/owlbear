@@ -1,15 +1,15 @@
 ---
 id: 703
 title: Remove dead SourceType.CRAWL stubs from knowledge engine
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-08T22:02:27.130349+02:00
-updated: 2026-04-09T06:33:12.5370246+02:00
+updated: 2026-04-09T06:47:29.9302258+02:00
+started: 2026-04-09T06:47:29.9302258+02:00
+completed: 2026-04-09T06:47:29.9302258+02:00
 tags:
     - scope:knowledge
     - ' source:research-696'
-claimed_by: gorge-wild
-claimed_at: 2026-04-09T06:33:12.5370246+02:00
 class: standard
 ---
 
@@ -396,3 +396,44 @@ None — all documentation verified accurate; no edits needed.
 
 ### Outcome
 Docs gate passed. No documentation files required updating.
+
+[[2026-04-09]] Thu 06:47
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — SourceType.CRAWL removed | Enum = {URL_LIST, FILE_GLOB}; 3 TestFromAC tests pass | PASS |
+| AC2 — crawl code removed from refresh.py | No CrawlHandler/crawl_handler/_handle_crawl; 3 TestFromAC tests pass | PASS |
+| AC3 — "crawl" removed from loader schema | _SOURCE_SCHEMA enum = ["file_glob", "url_list"]; 1 TestFromAC test passes | PASS |
+| AC4 — crawl tests removed from 3 files | AST-scan parametrized test × 3 files; 3 TestFromAC tests pass | PASS |
+| AC5 — remaining tests pass | 107/107 scoped tests pass; full suite 413 failures all in unrelated files (59 files, none in knowledge scope) | PASS |
+| AC6 — no CRAWL/crawl_handler in source | File-scan test of serve/knowledge/src/; grep confirms zero matches | PASS |
+| AC7 — skill doc updated | h-knowledge-ops/SKILL.md shows only url_list, file_glob; doc-only, not testable | PASS |
+
+### Test Results
+- pytest (scoped): 107 passed, 0 failed
+- pytest (full): 3730 passed, 413 failed, 18 skipped — all failures in unrelated test files (agents, skills, voice, CI, etc.)
+- ruff (scoped): clean
+
+### Architect Quality: 5/5
+Highly specific AC: exact files, line numbers, component names, enum members. AC7 caught by challenger during arch review. No builder improvisation needed. Clean implementation path.
+
+### Deduction Breakdown
+No deductions applied.
+- All 7 AC lines have specific evidence (tests + independent verification)
+- Lint clean in scope
+- AC quality 5/5
+- Reviewer evidence present and detailed (PASS at .96, 2nd cycle)
+- Full-suite failures verified unrelated to #703 scope
+- Note: builder retry left docstring cleanup uncommitted — committed in audit leftovers (5346397); process gap, not a verification gap
+
+### Confidence: 1.0
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 965deca | test | test_remove_crawl_stubs_703.py | #703 |
+| 0482bd7 | refactor | models.py, refresh.py, loader.py, 5 test files, SKILL.md | #703 |
+| 91111e3 | test | test_remove_crawl_stubs_703.py | #703 |
+| 5346397 | chore | test_refresh_orchestrator.py, kanban task file | #703 |

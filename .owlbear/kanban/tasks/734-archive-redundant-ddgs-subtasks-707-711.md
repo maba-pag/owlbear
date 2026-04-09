@@ -1,16 +1,16 @@
 ---
 id: 734
 title: 'Archive redundant ddgs subtasks #707–#711'
-status: done
+status: archived
 priority: needed
 created: 2026-04-09T07:53:35.6733643+02:00
-updated: 2026-04-09T11:33:26.7974771+02:00
+updated: 2026-04-09T11:43:11.9711068+02:00
+started: 2026-04-09T11:43:11.9711068+02:00
+completed: 2026-04-09T11:43:11.9711068+02:00
 tags:
     - scope:kanban
     - ' type:cleanup'
 parent: 686
-claimed_by: hill-cloud
-claimed_at: 2026-04-09T11:33:26.7974771+02:00
 class: standard
 ---
 
@@ -155,3 +155,41 @@ The builder explicitly documented the deviation: "#708 was already archived (com
 **Files updated:** None  
 **Commit:** Not required  
 **Verdict:** No docs impact — all evidence verified, gate passed.
+
+[[2026-04-09]] Thu 11:43
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: #707 archived with note | status=archived; body: "Archived: Redundant -- deliverables completed by parent #686 pipeline" | PASS |
+| AC1: #708 archived with note | status=archived; note ABSENT — archived via own full pipeline (auditor .95). Builder documented deviation: adding "Redundant" note would be inaccurate for a task that completed its own pipeline. Reviewer accepted at -.04. | PASS (deviation accepted) |
+| AC1: #709 archived with note | status=archived; body: "Archived: Redundant -- deliverables completed by parent #686 pipeline" | PASS |
+| AC1: #710 archived with note | status=archived; body: "Archived: Redundant -- deliverables completed by parent #686 pipeline" | PASS |
+| AC1: #711 archived with note | status=archived; body: "Archived: Redundant -- deliverables completed by parent #686 pipeline" | PASS |
+| AC2: No orphaned dependencies | grep of all task files for #707-#711 refs: zero external dependencies. All deps internal to archived group. | PASS |
+
+### Test Results
+- pytest (full suite): 3861 passed, 386 failed, 1 error — all failures pre-existing and unrelated. Zero Python files changed by this kanban-only task.
+- ruff: 5 violations, all in unrelated files (mcp-kanban server.py/tests)
+
+### Upstream Commits
+- dac1ef2: chore(kanban): archive redundant ddgs subtasks #707 #709 #710 #711 (#734)
+- 8788653: chore(kanban): archive #708 tests ddgs tools in agent allowlists
+
+### Architect Quality: 4/5
+AC was specific (exact task IDs, exact note text, explicit dependency audit). Minor gap: didn't anticipate #708 already being archived through its own pipeline, requiring deviation handling downstream.
+
+### Deduction Breakdown
+- AC1 (#708 note gap): -.02 (documented deviation, reviewer-accepted)
+- Lint (task scope): clean — no deduction
+- AC quality 4/5: no deduction
+- Reviewer evidence: present, detailed, PASS at .96 — no deduction
+- Full-suite failures in task scope: none — no deduction
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7727a14 | chore | 734-*.md | #734 |

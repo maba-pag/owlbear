@@ -1,18 +1,18 @@
 ---
 id: 733
 title: 'Decompose #712: Native kanban engine into atomic subtasks (Phase 1-3)'
-status: done
+status: archived
 priority: needed
 created: 2026-04-09T03:49:14.6128637+02:00
-updated: 2026-04-09T10:42:33.2235527+02:00
+updated: 2026-04-09T10:52:03.413364+02:00
+started: 2026-04-09T10:52:03.413364+02:00
+completed: 2026-04-09T10:52:03.413364+02:00
 tags:
     - phase-3
     - infrastructure
     - kanban
 depends_on:
     - 712
-claimed_by: steam-keen
-claimed_at: 2026-04-09T10:42:33.221975+02:00
 class: standard
 ---
 
@@ -193,3 +193,38 @@ No `.owlbear/scratch/733-*` files found — nothing to clean.
 
 ### Verdict
 No docs impact. Non-implementation redundant pass-through. All checklist items N/A or verified. Advancing to done.
+
+[[2026-04-09]] Thu 10:52
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Phase 1 subtasks: config, I/O, 8 ops, compound ops — TDD pairs | #713-#728 confirmed parent=712 via list_tasks + show_task. RED/GREEN pairs verified. | PASS |
+| Phase 2 subtasks: MCP migration, test migration | #729-#730 confirmed parent=712. depends_on chains correct. | PASS |
+| Phase 3 subtasks: remove binary, update docs | #731-#732 confirmed parent=712, tagged type:test / type:docs. | PASS |
+| Dependency graph reflects build order | depends_on chains verified: models→config→I/O→(listing∥CRUD)→claiming→compound+activity→MCP→(integration∥cleanup) | PASS |
+| All subtasks children of #712 | All 20 tasks (#713-#732) confirmed parent=712. #713-#714 archived, #715-#732 active. | PASS |
+| CRITICAL CONSTRAINT: subprocess server works throughout Phase 1 | Phase 2 (#729-#730) atomic switchover. Phase 1 tasks scoped to engine module only — no server.py changes. | PASS |
+
+### Test Results
+- pytest: 3770 passed, 387 failed, 18 skipped, 3 errors — all failures pre-existing; no code changed by this task; zero regressions possible
+- ruff: 5 pre-existing violations in serve/mcp-kanban/server.py and tests/test_server.py — not in task scope
+
+### Architect Quality: 4/5
+AC was specific and verifiable against board state (6 concrete lines). Minor issue: task was redundant — decomposition was already complete when #733 was created. Process coordination gap (researcher/planner), not an AC quality problem.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines without evidence: 0 (all 6 PASS) → 0
+- Lint violations in task scope: 0 → 0
+- AC quality ≤ 3: No (4/5) → 0
+- Missing reviewer evidence: No (present, detailed, PASS at .96) → 0
+- Full-suite failures in task scope: 0 (no code changed) → 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| a6e0dda | chore | .owlbear/kanban/tasks/733-*.md | #733 |

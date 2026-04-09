@@ -1,164 +1,3 @@
-{"timestamp":"2026-03-31T14:08:11.083815+02:00","action":"release","task_id":34,"detail":"test-writer"}
-{"timestamp":"2026-03-31T14:08:15.0239258+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T14:08:15.0270267+02:00","action":"release","task_id":478,"detail":"test-writer"}
-{"timestamp":"2026-03-31T14:10:31.1354187+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
-{"timestamp":"2026-03-31T14:10:35.3964927+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
-{"timestamp":"2026-03-31T14:10:35.4011244+02:00","action":"release","task_id":470,"detail":"builder"}
-{"timestamp":"2026-03-31T14:11:26.5202518+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T14:11:26.5255042+02:00","action":"claim","task_id":433,"detail":"builder"}
-{"timestamp":"2026-03-31T14:12:57.5266947+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T14:12:57.5306044+02:00","action":"release","task_id":433,"detail":"builder"}
-{"timestamp":"2026-03-31T14:15:49.1704578+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-31T14:15:49.1735369+02:00","action":"unblock","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-03-31T14:15:49.6826592+02:00","action":"edit","task_id":428,"detail":"deer-flow deep dive: memory system + subagent delegation patterns"}
-{"timestamp":"2026-03-31T14:15:49.6874857+02:00","action":"unblock","task_id":428,"detail":"deer-flow deep dive: memory system + subagent delegation patterns"}
-{"timestamp":"2026-03-31T14:17:26.2579401+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T14:17:26.2625836+02:00","action":"claim","task_id":491,"detail":"builder"}
-{"timestamp":"2026-03-31T14:17:28.2863645+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-31T14:17:28.2914833+02:00","action":"claim","task_id":1,"detail":"writer"}
-{"timestamp":"2026-03-31T14:20:11.9683989+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-31T14:20:11.9731199+02:00","action":"release","task_id":1,"detail":"writer"}
-{"timestamp":"2026-03-31T14:22:22.5640826+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T14:22:39.0514123+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T14:22:39.0561191+02:00","action":"release","task_id":491,"detail":"builder"}
-{"timestamp":"2026-03-31T14:23:09.1505431+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T14:23:09.1558759+02:00","action":"claim","task_id":489,"detail":"architect"}
-{"timestamp":"2026-03-31T14:23:11.463787+02:00","action":"edit","task_id":428,"detail":"deer-flow deep dive: memory system + subagent delegation patterns"}
-{"timestamp":"2026-03-31T14:23:11.4681029+02:00","action":"claim","task_id":428,"detail":"architect"}
-{"timestamp":"2026-03-31T14:23:18.975513+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T14:23:18.9802703+02:00","action":"claim","task_id":226,"detail":"builder"}
-{"timestamp":"2026-03-31T14:24:31.5291757+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T14:24:36.9137673+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T14:24:44.3458288+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T14:24:45.2577471+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T14:24:45.7907317+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T14:24:45.796533+02:00","action":"release","task_id":226,"detail":"builder"}
-{"timestamp":"2026-03-31T14:24:53.0121353+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T14:25:27.464971+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-03-31T14:25:27.4723113+02:00","action":"claim","task_id":499,"detail":"researcher"}
-{"timestamp":"2026-03-31T14:25:33.3456009+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T14:25:33.3502562+02:00","action":"release","task_id":489,"detail":"architect"}
-{"timestamp":"2026-03-31T14:26:06.366954+02:00","action":"edit","task_id":428,"detail":"deer-flow deep dive: memory system + subagent delegation patterns"}
-{"timestamp":"2026-03-31T14:26:12.9256353+02:00","action":"edit","task_id":428,"detail":"deer-flow deep dive: memory system + subagent delegation patterns"}
-{"timestamp":"2026-03-31T14:26:12.9297466+02:00","action":"block","task_id":428,"detail":"DR file docs/decisions/pending/428-adopt-deer-flow-memory-patterns.md does not exist. AC line 8 unmet. T3 research requires approved DR before downstream tasks can proceed."}
-{"timestamp":"2026-03-31T14:26:12.9350404+02:00","action":"release","task_id":428,"detail":"architect"}
-{"timestamp":"2026-03-31T14:28:58.792214+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-03-31T14:29:05.0446477+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-03-31T14:29:05.0482081+02:00","action":"release","task_id":499,"detail":"researcher"}
-{"timestamp":"2026-03-31T14:29:44.9307746+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
-{"timestamp":"2026-03-31T14:29:44.9349432+02:00","action":"claim","task_id":470,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:29:48.4657648+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T14:29:48.4699352+02:00","action":"claim","task_id":467,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:29:52.30101+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:29:52.3051966+02:00","action":"claim","task_id":476,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:29:57.8563676+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:29:57.8600389+02:00","action":"claim","task_id":475,"detail":"builder"}
-{"timestamp":"2026-03-31T14:33:52.7841086+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
-{"timestamp":"2026-03-31T14:33:52.7883547+02:00","action":"release","task_id":470,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:34:00.0628863+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:34:22.4774368+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:34:22.4826324+02:00","action":"release","task_id":476,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:34:27.1134331+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:34:27.1180814+02:00","action":"claim","task_id":476,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:34:29.1218566+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:34:31.7994656+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:34:31.8042695+02:00","action":"release","task_id":476,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:34:33.7328351+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:34:33.737082+02:00","action":"release","task_id":475,"detail":"builder"}
-{"timestamp":"2026-03-31T14:37:18.1061587+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T14:37:35.8568479+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T14:37:36.2667116+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T14:37:36.2718721+02:00","action":"release","task_id":467,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:38:19.2162744+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T14:38:19.2209983+02:00","action":"claim","task_id":433,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:38:31.5838327+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T14:38:31.5868865+02:00","action":"claim","task_id":146,"detail":"test-writer"}
-{"timestamp":"2026-03-31T14:38:44.6306049+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T14:38:44.6358335+02:00","action":"claim","task_id":478,"detail":"builder"}
-{"timestamp":"2026-03-31T14:38:58.1092002+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-31T14:38:58.1139627+02:00","action":"claim","task_id":147,"detail":"test-writer"}
-{"timestamp":"2026-03-31T14:40:05.9991265+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-31T14:40:31.2830921+02:00","action":"edit","task_id":147,"detail":"Fix AcpClient wrapper API to forward required SDK parameters"}
-{"timestamp":"2026-03-31T14:40:31.2889475+02:00","action":"release","task_id":147,"detail":"test-writer"}
-{"timestamp":"2026-03-31T14:40:32.3138404+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T14:40:32.3149757+02:00","action":"release","task_id":433,"detail":"reviewer"}
-{"timestamp":"2026-03-31T14:40:37.4793869+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T14:45:11.4114616+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T14:45:11.4161578+02:00","action":"release","task_id":146,"detail":"test-writer"}
-{"timestamp":"2026-03-31T14:45:24.7290208+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T14:45:29.6439969+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T14:51:29.2238085+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T14:51:38.5841173+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T14:51:43.7306656+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T14:51:43.7362572+02:00","action":"release","task_id":478,"detail":"builder"}
-{"timestamp":"2026-03-31T14:57:27.9308445+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T14:57:27.9371871+02:00","action":"claim","task_id":476,"detail":"writer"}
-{"timestamp":"2026-03-31T14:57:34.8815281+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-31T14:57:34.8883384+02:00","action":"claim","task_id":1,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:00:47.2052282+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:00:47.2143704+02:00","action":"release","task_id":476,"detail":"writer"}
-{"timestamp":"2026-03-31T15:05:01.0844869+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-31T15:05:07.7888243+02:00","action":"move","task_id":1,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T15:05:13.1965976+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-31T15:05:13.2046614+02:00","action":"release","task_id":1,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:05:38.8684217+02:00","action":"edit","task_id":1,"detail":"ACP protocol deep-dive"}
-{"timestamp":"2026-03-31T15:06:35.8926474+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-31T15:06:35.8990489+02:00","action":"claim","task_id":34,"detail":"builder"}
-{"timestamp":"2026-03-31T15:06:36.8191308+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T15:06:36.8271515+02:00","action":"claim","task_id":433,"detail":"writer"}
-{"timestamp":"2026-03-31T15:06:38.6465802+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-03-31T15:06:38.6541265+02:00","action":"claim","task_id":499,"detail":"architect"}
-{"timestamp":"2026-03-31T15:06:42.9938993+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T15:06:43.0013666+02:00","action":"claim","task_id":467,"detail":"writer"}
-{"timestamp":"2026-03-31T15:08:23.8262664+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-03-31T15:08:23.8315829+02:00","action":"block","task_id":499,"detail":"Dependency deadlock (#499 depends_on #387 in ideation depends_on #428 blocked) and redundant with #387 AC scope. Merge into #387 or reverse dependency."}
-{"timestamp":"2026-03-31T15:08:23.8389665+02:00","action":"release","task_id":499,"detail":"architect"}
-{"timestamp":"2026-03-31T15:10:03.5876946+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T15:10:03.5935903+02:00","action":"release","task_id":467,"detail":"writer"}
-{"timestamp":"2026-03-31T15:10:46.2390613+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T15:11:04.9288327+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T15:11:04.9346973+02:00","action":"release","task_id":433,"detail":"writer"}
-{"timestamp":"2026-03-31T15:11:58.1800897+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-31T15:12:13.5762301+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-31T15:12:14.1667561+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-31T15:12:14.1740997+02:00","action":"release","task_id":34,"detail":"builder"}
-{"timestamp":"2026-03-31T15:12:39.0421339+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:12:39.0479624+02:00","action":"claim","task_id":475,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:12:40.0032809+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T15:12:40.0096855+02:00","action":"claim","task_id":226,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:12:40.1993717+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T15:12:40.2060833+02:00","action":"claim","task_id":491,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:12:50.8419961+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T15:12:50.8495063+02:00","action":"claim","task_id":464,"detail":"builder"}
-{"timestamp":"2026-03-31T15:14:03.8817494+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T15:14:03.8876501+02:00","action":"release","task_id":464,"detail":"builder"}
-{"timestamp":"2026-03-31T15:16:48.5980286+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:17:10.5316168+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:17:30.5135918+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:17:30.5204775+02:00","action":"release","task_id":475,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:17:59.1657717+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T15:18:09.1823435+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T15:18:09.1893216+02:00","action":"release","task_id":226,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:21:34.7085473+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T15:21:54.3604763+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T15:21:59.1974815+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T15:21:59.2032396+02:00","action":"release","task_id":491,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:22:31.0172587+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T15:22:31.0235815+02:00","action":"claim","task_id":478,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:22:53.0727505+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:22:53.0785942+02:00","action":"claim","task_id":431,"detail":"builder"}
-{"timestamp":"2026-03-31T15:23:54.2853066+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
-{"timestamp":"2026-03-31T15:23:54.2962568+02:00","action":"claim","task_id":470,"detail":"test-writer"}
-{"timestamp":"2026-03-31T15:24:20.5911072+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:24:47.5059207+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:24:49.3381341+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:25:00.4595851+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:25:22.9799058+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:25:45.9515576+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:25:45.9580445+02:00","action":"release","task_id":431,"detail":"builder"}
-{"timestamp":"2026-03-31T15:26:12.6257706+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T15:26:12.636607+02:00","action":"claim","task_id":489,"detail":"test-writer"}
-{"timestamp":"2026-03-31T15:26:55.4534845+02:00","action":"edit","task_id":470,"detail":"Add start_work compound tool to mcp-kanban server"}
 {"timestamp":"2026-03-31T15:26:55.4615101+02:00","action":"release","task_id":470,"detail":"test-writer"}
 {"timestamp":"2026-03-31T15:28:18.4777914+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
 {"timestamp":"2026-03-31T15:28:18.4870367+02:00","action":"release","task_id":478,"detail":"reviewer"}
@@ -9998,3 +9837,164 @@
 {"timestamp":"2026-04-09T09:19:26.4966259+02:00","action":"move","task_id":711,"detail":"backlog -\u003e archived"}
 {"timestamp":"2026-04-09T09:20:22.2100272+02:00","action":"edit","task_id":734,"detail":"Archive redundant ddgs subtasks #707–#711"}
 {"timestamp":"2026-04-09T09:20:22.2232956+02:00","action":"release","task_id":734,"detail":"field-leaf"}
+{"timestamp":"2026-04-09T09:20:35.2025218+02:00","action":"edit","task_id":698,"detail":"Tests: LLMExtractor implementation"}
+{"timestamp":"2026-04-09T09:20:35.2187781+02:00","action":"release","task_id":698,"detail":"crypt-spire"}
+{"timestamp":"2026-04-09T09:20:55.4021694+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T09:20:55.4177499+02:00","action":"release","task_id":715,"detail":"mast-atlas"}
+{"timestamp":"2026-04-09T09:22:26.3766163+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T09:22:26.3908464+02:00","action":"release","task_id":717,"detail":"quail-gorge"}
+{"timestamp":"2026-04-09T10:42:33.224599+02:00","action":"edit","task_id":733,"detail":"Decompose #712: Native kanban engine into atomic subtasks (Phase 1-3)"}
+{"timestamp":"2026-04-09T10:42:33.2370549+02:00","action":"claim","task_id":733,"detail":"steam-keen"}
+{"timestamp":"2026-04-09T10:42:37.3709797+02:00","action":"edit","task_id":698,"detail":"Tests: LLMExtractor implementation"}
+{"timestamp":"2026-04-09T10:42:37.3853618+02:00","action":"claim","task_id":698,"detail":"twig-vine"}
+{"timestamp":"2026-04-09T10:43:59.3412326+02:00","action":"edit","task_id":698,"detail":"Tests: LLMExtractor implementation"}
+{"timestamp":"2026-04-09T10:43:59.6815242+02:00","action":"release","task_id":698,"detail":"twig-vine"}
+{"timestamp":"2026-04-09T10:52:02.8418438+02:00","action":"edit","task_id":733,"detail":"Decompose #712: Native kanban engine into atomic subtasks (Phase 1-3)"}
+{"timestamp":"2026-04-09T10:52:02.8587234+02:00","action":"release","task_id":733,"detail":"steam-keen"}
+{"timestamp":"2026-04-09T10:52:03.4149521+02:00","action":"move","task_id":733,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T10:52:34.8814535+02:00","action":"edit","task_id":734,"detail":"Archive redundant ddgs subtasks #707–#711"}
+{"timestamp":"2026-04-09T10:52:34.8933135+02:00","action":"claim","task_id":734,"detail":"zinc-palm"}
+{"timestamp":"2026-04-09T10:52:56.5455542+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T10:52:56.5637459+02:00","action":"claim","task_id":717,"detail":"creek-dale"}
+{"timestamp":"2026-04-09T10:55:15.4134402+02:00","action":"edit","task_id":734,"detail":"Archive redundant ddgs subtasks #707–#711"}
+{"timestamp":"2026-04-09T10:55:15.428026+02:00","action":"release","task_id":734,"detail":"zinc-palm"}
+{"timestamp":"2026-04-09T11:00:54.8072293+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T11:00:54.8192831+02:00","action":"release","task_id":717,"detail":"creek-dale"}
+{"timestamp":"2026-04-09T11:02:26.494069+02:00","action":"edit","task_id":734,"detail":"Archive redundant ddgs subtasks #707–#711"}
+{"timestamp":"2026-04-09T11:02:26.5078106+02:00","action":"claim","task_id":734,"detail":"spark-ridge"}
+{"timestamp":"2026-04-09T11:02:44.891591+02:00","action":"edit","task_id":698,"detail":"Tests: LLMExtractor implementation"}
+{"timestamp":"2026-04-09T11:02:44.9068168+02:00","action":"claim","task_id":698,"detail":"void-marsh"}
+{"timestamp":"2026-04-09T11:02:57.717389+02:00","action":"edit","task_id":734,"detail":"Archive redundant ddgs subtasks #707–#711"}
+{"timestamp":"2026-04-09T11:02:57.7327127+02:00","action":"release","task_id":734,"detail":"spark-ridge"}
+{"timestamp":"2026-04-09T11:13:12.1099278+02:00","action":"edit","task_id":698,"detail":"Tests: LLMExtractor implementation"}
+{"timestamp":"2026-04-09T11:13:12.1342231+02:00","action":"release","task_id":698,"detail":"void-marsh"}
+{"timestamp":"2026-04-09T11:13:12.744699+02:00","action":"move","task_id":698,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T11:13:43.2672791+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T11:13:43.2811297+02:00","action":"claim","task_id":715,"detail":"blaze-oaken"}
+{"timestamp":"2026-04-09T11:14:09.1253614+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T11:14:09.1423891+02:00","action":"claim","task_id":717,"detail":"stone-ridge"}
+{"timestamp":"2026-04-09T11:16:57.8353859+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T11:16:57.8522842+02:00","action":"claim","task_id":689,"detail":"gust-wick"}
+{"timestamp":"2026-04-09T11:18:39.8515525+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T11:18:39.8670543+02:00","action":"release","task_id":689,"detail":"gust-wick"}
+{"timestamp":"2026-04-09T11:26:23.0441725+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T11:26:23.0562285+02:00","action":"release","task_id":715,"detail":"blaze-oaken"}
+{"timestamp":"2026-04-09T11:31:51.142543+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T11:31:51.1574567+02:00","action":"release","task_id":717,"detail":"stone-ridge"}
+{"timestamp":"2026-04-09T11:33:26.7974771+02:00","action":"edit","task_id":734,"detail":"Archive redundant ddgs subtasks #707–#711"}
+{"timestamp":"2026-04-09T11:33:26.8202361+02:00","action":"claim","task_id":734,"detail":"hill-cloud"}
+{"timestamp":"2026-04-09T11:33:47.4089128+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T11:33:47.4255+02:00","action":"claim","task_id":717,"detail":"ivory-halo"}
+{"timestamp":"2026-04-09T11:37:02.4793944+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T11:37:02.5229835+02:00","action":"release","task_id":717,"detail":"ivory-halo"}
+{"timestamp":"2026-04-09T11:43:11.3109275+02:00","action":"edit","task_id":734,"detail":"Archive redundant ddgs subtasks #707–#711"}
+{"timestamp":"2026-04-09T11:43:11.3257446+02:00","action":"release","task_id":734,"detail":"hill-cloud"}
+{"timestamp":"2026-04-09T11:43:11.9733252+02:00","action":"move","task_id":734,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T11:44:14.8431373+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T11:44:14.8548537+02:00","action":"claim","task_id":715,"detail":"wave-fort"}
+{"timestamp":"2026-04-09T11:44:43.7296353+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T11:44:43.7429002+02:00","action":"claim","task_id":689,"detail":"marsh-nectar"}
+{"timestamp":"2026-04-09T11:46:35.0627839+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T11:46:35.0751681+02:00","action":"release","task_id":689,"detail":"marsh-nectar"}
+{"timestamp":"2026-04-09T12:01:21.9249873+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T12:01:21.9393358+02:00","action":"release","task_id":715,"detail":"wave-fort"}
+{"timestamp":"2026-04-09T12:03:13.2295598+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T12:03:13.2399003+02:00","action":"claim","task_id":717,"detail":"bloom-fire"}
+{"timestamp":"2026-04-09T12:03:33.0318186+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T12:03:33.0459457+02:00","action":"claim","task_id":715,"detail":"zeal-drift"}
+{"timestamp":"2026-04-09T12:13:05.0880095+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T12:13:05.1019107+02:00","action":"release","task_id":715,"detail":"zeal-drift"}
+{"timestamp":"2026-04-09T12:14:21.1996456+02:00","action":"edit","task_id":717,"detail":"P3-05: RED — task file I/O (read, write, round-trip)"}
+{"timestamp":"2026-04-09T12:14:21.2139233+02:00","action":"release","task_id":717,"detail":"bloom-fire"}
+{"timestamp":"2026-04-09T12:14:21.8409709+02:00","action":"move","task_id":717,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T12:15:20.3149513+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T12:15:20.3319286+02:00","action":"claim","task_id":689,"detail":"wheat-wolf"}
+{"timestamp":"2026-04-09T12:18:40.7121033+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T12:18:40.7301747+02:00","action":"release","task_id":689,"detail":"wheat-wolf"}
+{"timestamp":"2026-04-09T12:19:31.5515143+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T12:19:31.5718757+02:00","action":"claim","task_id":716,"detail":"cape-spray"}
+{"timestamp":"2026-04-09T12:19:49.428112+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T12:19:49.4413662+02:00","action":"claim","task_id":715,"detail":"trail-lake"}
+{"timestamp":"2026-04-09T12:19:52.2755172+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T12:19:52.2871792+02:00","action":"claim","task_id":689,"detail":"lime-lotus"}
+{"timestamp":"2026-04-09T12:20:57.6707601+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T12:20:57.8754682+02:00","action":"release","task_id":689,"detail":"lime-lotus"}
+{"timestamp":"2026-04-09T12:22:50.3615312+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T12:22:50.3897673+02:00","action":"release","task_id":716,"detail":"cape-spray"}
+{"timestamp":"2026-04-09T12:42:46.3650684+02:00","action":"edit","task_id":715,"detail":"P3-03: RED — config.yml loader (ruamel.yaml round-trip)"}
+{"timestamp":"2026-04-09T12:42:46.376728+02:00","action":"release","task_id":715,"detail":"trail-lake"}
+{"timestamp":"2026-04-09T12:42:46.9897684+02:00","action":"move","task_id":715,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T12:49:22.8670789+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T12:49:22.8814623+02:00","action":"claim","task_id":716,"detail":"fork-lake"}
+{"timestamp":"2026-04-09T12:49:28.1352916+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T12:49:28.1492658+02:00","action":"claim","task_id":699,"detail":"cliff-gate"}
+{"timestamp":"2026-04-09T12:49:43.5534489+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T12:49:43.5641002+02:00","action":"claim","task_id":689,"detail":"deep-field"}
+{"timestamp":"2026-04-09T12:56:04.8494303+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T12:56:04.8672339+02:00","action":"release","task_id":699,"detail":"cliff-gate"}
+{"timestamp":"2026-04-09T13:02:40.0816773+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:02:40.1039907+02:00","action":"release","task_id":716,"detail":"fork-lake"}
+{"timestamp":"2026-04-09T13:07:57.7655063+02:00","action":"edit","task_id":689,"detail":"Implement LLMExtractor concrete StructuredExtractor using PydanticAI"}
+{"timestamp":"2026-04-09T13:07:57.7772873+02:00","action":"release","task_id":689,"detail":"deep-field"}
+{"timestamp":"2026-04-09T13:07:58.3511272+02:00","action":"move","task_id":689,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T13:08:40.2324639+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:08:40.2510557+02:00","action":"claim","task_id":716,"detail":"helm-grove"}
+{"timestamp":"2026-04-09T13:08:48.9981292+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T13:08:49.0107835+02:00","action":"claim","task_id":699,"detail":"plume-forge"}
+{"timestamp":"2026-04-09T13:23:07.0429216+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:23:07.0555339+02:00","action":"release","task_id":716,"detail":"helm-grove"}
+{"timestamp":"2026-04-09T13:34:11.8186448+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T13:34:11.8345012+02:00","action":"release","task_id":699,"detail":"plume-forge"}
+{"timestamp":"2026-04-09T13:35:00.2907936+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T13:35:00.3210588+02:00","action":"claim","task_id":699,"detail":"dove-deep"}
+{"timestamp":"2026-04-09T13:35:23.6840508+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:35:23.6996732+02:00","action":"claim","task_id":716,"detail":"wind-delta"}
+{"timestamp":"2026-04-09T13:36:55.8757276+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T13:36:55.8904446+02:00","action":"release","task_id":699,"detail":"dove-deep"}
+{"timestamp":"2026-04-09T13:38:33.3176515+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:38:33.3335643+02:00","action":"release","task_id":716,"detail":"wind-delta"}
+{"timestamp":"2026-04-09T13:39:38.4284354+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T13:39:38.4423561+02:00","action":"claim","task_id":699,"detail":"wolf-fable"}
+{"timestamp":"2026-04-09T13:39:53.7775209+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:39:53.7949364+02:00","action":"claim","task_id":716,"detail":"brew-drift"}
+{"timestamp":"2026-04-09T13:41:13.9346883+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:41:13.9486148+02:00","action":"release","task_id":716,"detail":"brew-drift"}
+{"timestamp":"2026-04-09T13:44:02.4856734+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T13:44:02.4987595+02:00","action":"release","task_id":699,"detail":"wolf-fable"}
+{"timestamp":"2026-04-09T13:44:59.1761402+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T13:44:59.1991888+02:00","action":"claim","task_id":718,"detail":"knoll-jade"}
+{"timestamp":"2026-04-09T13:45:15.7945227+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T13:45:15.8102229+02:00","action":"claim","task_id":716,"detail":"willow-zone"}
+{"timestamp":"2026-04-09T13:45:17.0279265+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T13:45:17.0445473+02:00","action":"claim","task_id":699,"detail":"pearl-coal"}
+{"timestamp":"2026-04-09T13:48:43.2152303+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T13:48:43.2324171+02:00","action":"release","task_id":718,"detail":"knoll-jade"}
+{"timestamp":"2026-04-09T14:07:46.0826984+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T14:07:46.0959462+02:00","action":"release","task_id":699,"detail":"pearl-coal"}
+{"timestamp":"2026-04-09T14:08:34.649531+02:00","action":"edit","task_id":716,"detail":"P3-04: GREEN — config.yml loader"}
+{"timestamp":"2026-04-09T14:08:34.6625531+02:00","action":"release","task_id":716,"detail":"willow-zone"}
+{"timestamp":"2026-04-09T14:08:35.3116467+02:00","action":"move","task_id":716,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T14:19:38.4662992+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T14:19:38.536728+02:00","action":"claim","task_id":718,"detail":"fawn-gleam"}
+{"timestamp":"2026-04-09T14:20:06.6523318+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T14:20:06.9169682+02:00","action":"claim","task_id":699,"detail":"glow-crisp"}
+{"timestamp":"2026-04-09T14:22:48.7923289+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T14:22:48.8083569+02:00","action":"release","task_id":699,"detail":"glow-crisp"}
+{"timestamp":"2026-04-09T14:35:38.409328+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T14:35:38.4207515+02:00","action":"release","task_id":718,"detail":"fawn-gleam"}
+{"timestamp":"2026-04-09T14:36:48.351416+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T14:36:48.3668934+02:00","action":"claim","task_id":718,"detail":"spray-hull"}
+{"timestamp":"2026-04-09T14:37:04.718672+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T14:37:04.7314356+02:00","action":"claim","task_id":699,"detail":"steam-rust"}
+{"timestamp":"2026-04-09T14:44:58.5823586+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T14:44:58.5967318+02:00","action":"release","task_id":718,"detail":"spray-hull"}
+{"timestamp":"2026-04-09T15:01:55.2636395+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T15:01:55.2796987+02:00","action":"release","task_id":699,"detail":"steam-rust"}
+{"timestamp":"2026-04-09T15:03:26.0429845+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T15:03:26.0571947+02:00","action":"claim","task_id":718,"detail":"orbit-lynx"}
+{"timestamp":"2026-04-09T15:03:41.7063154+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T15:03:41.7206464+02:00","action":"claim","task_id":699,"detail":"fork-isle"}
+{"timestamp":"2026-04-09T15:04:20.895987+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T15:04:20.9081296+02:00","action":"release","task_id":699,"detail":"fork-isle"}
+{"timestamp":"2026-04-09T15:07:52.0788218+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T15:07:52.1250363+02:00","action":"release","task_id":718,"detail":"orbit-lynx"}

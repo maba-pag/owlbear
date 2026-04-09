@@ -1,16 +1,16 @@
 ---
 id: 693
 title: Validate analysis proposal utility over 2-3 orchestration cycles
-status: done
+status: archived
 priority: someday
 created: 2026-04-08T21:16:13.8840637+02:00
-updated: 2026-04-09T04:14:58.5349733+02:00
+updated: 2026-04-09T04:21:08.8789704+02:00
+started: 2026-04-09T04:21:08.8789704+02:00
+completed: 2026-04-09T04:21:08.8789704+02:00
 tags:
     - scope:orchestrator
     - ' type:research'
     - ' source:research-682'
-claimed_by: willow-basin
-claimed_at: 2026-04-09T04:14:58.5349733+02:00
 class: standard
 ---
 
@@ -148,3 +148,43 @@ No `.owlbear/scratch/693-*` files found.
 
 ### Notes
 `## Review Evidence` section present in task body ✓. All upstream agents (researcher, architect, test-writer, builder, reviewer) confirmed `type:research` pass-through with no testable interface. Gate is clean.
+
+[[2026-04-09]] Thu 04:21
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Run CLI after 2-3 sessions | Research doc §3.1: `store/audit/` non-existent, zero JSONL, `cli.py` never creates `AuditLog`. Premise empirically unfulfillable. | INVALIDATED (valid) |
+| AC2: Document useful proposals | Depends on AC1; no data = no proposals. | INVALIDATED (valid) |
+| AC3: Decide Phase 2 warrant | Research doc §4: Phase 2 NOT warranted. 6 codebase points verified by architect. | PASS |
+| AC4: Create follow-up if warranted | Phase 2 not warranted → no follow-up needed. Correctly declined. | PASS |
+
+### Research Task Verification (Step 1a)
+- Research doc exists: `.owlbear/research/analysis-proposal-validation.md` ✓
+- Follow-up: "no action needed" with justification (Phase 2 not warranted) ✓
+- 8 sources studied, 5 high-relevance, empirical finding ✓
+
+### Test Results
+- pytest: 3667 passed, 394 failed, 18 skipped (112.86s). Zero failures in task scope — task changed no Python files. 394 failures are pre-existing cross-task regressions.
+- ruff: 5 violations in `serve/mcp-kanban/` — none in files touched by this task.
+
+### Architect Quality: 4/5
+AC set up a clear validation gate. AC3/AC4 directly verifiable. AC1/AC2 having invalid premises is not an AC quality issue — discovering the invalid premise IS the research deliverable. Minor gap: AC could have included an explicit "if premise invalid, document why" clause.
+
+### Upstream Commit Gap
+Both deliverables (research doc + kanban task file) were uncommitted. Committed by auditor as `d80ef54`.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 4 have specific evidence)
+- Lint violations in scope: 0
+- AC quality ≤ 3: 0 (score 4/5)
+- Missing reviewer section: 0 (present, detailed, .97 PASS)
+- Full-suite failures in scope: 0
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| d80ef54 | chore | kanban task, research doc | #693 |

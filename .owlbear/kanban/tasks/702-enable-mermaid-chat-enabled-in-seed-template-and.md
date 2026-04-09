@@ -1,15 +1,15 @@
 ---
 id: 702
 title: Enable mermaid-chat.enabled in seed template and document diagram rendering paths for agents
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-08T21:56:26.0224615+02:00
-updated: 2026-04-09T04:34:20.5339283+02:00
+updated: 2026-04-09T04:46:03.8214308+02:00
+started: 2026-04-09T04:46:03.8214308+02:00
+completed: 2026-04-09T04:46:03.8214308+02:00
 tags:
     - scope:copilot
     - ' type:config'
-claimed_by: crane-gate
-claimed_at: 2026-04-09T04:34:20.5339283+02:00
 class: standard
 ---
 
@@ -191,3 +191,37 @@ No `.owlbear/scratch/702-*` files found — nothing to clean.
 
 ### Commit
 No doc-writer edits required. Builder commit `16999ad` is the authoritative commit for this task.
+
+[[2026-04-09]] Thu 04:46
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: `mermaid-chat.enabled: true` in seed template | `seed/.vscode/settings.json` line 11 confirmed | PASS |
+| AC2: 3-row diagram routing table in agent-common | `agent-common.instructions.md` lines 38-46: Mermaid/HTML+CDN/Excalidraw rows confirmed | PASS |
+| AC3: Existing tests pass, ruff clean | `test_setup_init.py`: 46 passed, 0 failed; ruff violations (5) all in `serve/mcp-kanban/` — not touched by #702 | PASS |
+| AC4: setup-guide mentions mermaid-chat.enabled | `setup/setup-guide.md` line 51 confirmed | PASS |
+
+### Test Results
+- pytest (full suite): 3678 passed, 397 failed — all failures in unrelated modules (bearclaw voice, analysis, planner gates, etc.), none in task scope
+- pytest (task-scoped): test_setup_init.py 46 passed, 0 failed
+- ruff: 5 pre-existing violations in serve/mcp-kanban/ — no violations in task-changed files
+
+### Architect Quality: 5/5
+Specific file paths, exact setting name, exact table structure. AC4's "if appropriate" qualifier well-judged. No builder improvisation needed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 → no deduction
+- Lint violations in task scope: 0 → no deduction
+- AC quality ≤ 3: no (5/5) → no deduction
+- Missing reviewer evidence: no (detailed, PASS) → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 16999ad | feat | seed/.vscode/settings.json, agent-common.instructions.md, setup-guide.md | #702 |
+| e22f7d5 | chore | 702 task file | #702 |
