@@ -1,4 +1,4 @@
-"""OwlBear MCP kanban server — exposes kanban-md operations as MCP tools."""
+"""OwlBear MCP kanban server — exposes KanbanEngine operations as MCP tools."""
 
 from __future__ import annotations
 
