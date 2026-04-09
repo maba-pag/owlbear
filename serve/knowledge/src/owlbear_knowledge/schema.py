@@ -200,13 +200,8 @@ def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
 def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     """Migrate a v5 database to v6 — adds knowledge_sources table."""
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope "
-        "ON knowledge_sources(name, scope)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (6, datetime.now(tz=UTC).isoformat()),
@@ -216,9 +211,7 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
 def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
     """Migrate a v6 database to v7 — adds bookmarks table."""
     conn.execute(_CREATE_BOOKMARKS)
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
@@ -296,16 +289,9 @@ def init_db(conn: sqlite3.Connection) -> None:
     for table in _SCOPE_TABLES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_scope ON {table}(scope)")
 
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope "
-        "ON knowledge_sources(name, scope)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
-    )
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
 
     conn.commit()

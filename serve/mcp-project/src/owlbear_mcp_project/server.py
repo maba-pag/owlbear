@@ -50,13 +50,16 @@ class ProjectListItem(TypedDict):
     name: str
     path: str
 
-_STRUCTURE_EXCLUDES: frozenset[str] = frozenset({
-    ".git",
-    "__pycache__",
-    "node_modules",
-    ".venv",
-    ".mypy_cache",
-})
+
+_STRUCTURE_EXCLUDES: frozenset[str] = frozenset(
+    {
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        ".mypy_cache",
+    }
+)
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:

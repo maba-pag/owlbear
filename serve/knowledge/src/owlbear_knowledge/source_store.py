@@ -54,8 +54,7 @@ class KnowledgeSourceStore:
         )
 
     _SELECT_COLS = (
-        "id, name, source_type, config, scope, enabled, priority, "
-        "last_refreshed_at, last_error, created_at, updated_at"
+        "id, name, source_type, config, scope, enabled, priority, last_refreshed_at, last_error, created_at, updated_at"
     )
 
     def _select_from_sources(self) -> str:

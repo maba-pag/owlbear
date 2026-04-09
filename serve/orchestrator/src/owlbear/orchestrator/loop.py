@@ -57,6 +57,7 @@ def _try_audit(fn: Callable[..., None], *args: object, context: str) -> None:
 class _OrchestratorClient(Client):  # type: ignore[misc]
     """Minimal concrete ACP Client used by the orchestrator dispatch loop."""
 
+
 # Prompt prefix per agent type.  Used by format_prompt() to build dispatch prompts.
 AGENT_PROMPT_PREFIX: dict[str, str] = {
     "architect": "Architect Review",
@@ -309,10 +310,7 @@ async def _dispatch_parallel(  # noqa: PLR0913
 
     if retry_entries:
         retry_results = await asyncio.gather(
-            *[
-                dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id)
-                for e in retry_entries
-            ],
+            *[dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id) for e in retry_entries],
             return_exceptions=True,
         )
         for entry, result in zip(retry_entries, retry_results, strict=True):
@@ -406,9 +404,7 @@ async def run_loop(  # noqa: PLR0913
                     entry.agent,
                     wave_num,
                 )
-            result = await dispatch_wave(
-                wave, client, state, audit_log=audit_log, cycle_id=cycle_id
-            )
+            result = await dispatch_wave(wave, client, state, audit_log=audit_log, cycle_id=cycle_id)
             cycle_failures |= set(result.failures)
 
         _logger.debug(

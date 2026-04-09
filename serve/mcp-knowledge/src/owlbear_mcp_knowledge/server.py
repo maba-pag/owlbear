@@ -125,6 +125,7 @@ def make_evaluate_fn(model: str) -> EvaluateFn:
 
         return make_pydantic_evaluate_fn(model)
     except ImportError:
+
         async def _evaluate(_prompt: str) -> EvaluationResult:
             return EvaluationResult(
                 relevance_score=0.5,
@@ -300,10 +301,7 @@ async def list_entities(
         entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
-    return [
-        {"name": e.name, "entity_type": e.entity_type, "description": e.description}
-        for e in page
-    ]
+    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -323,10 +321,7 @@ async def knowledge_stats(ctx: Context) -> str:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
-    return (
-        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
-        f"{edge_count} edges"
-    )
+    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
 @mcp.resource("knowledge://stats")
@@ -336,10 +331,7 @@ async def _knowledge_stats_bridge() -> str:
         return "Knowledge base: 0 documents, 0 entities, 0 edges"
     gs = _app_context.graph_store
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
-    return (
-        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
-        f"{edge_count} edges"
-    )
+    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
 async def knowledge_stats_resource(ctx: Context | None = None) -> str:
@@ -351,10 +343,7 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
     else:
         counts_fn = lambda: (0, 0, 0)  # noqa: E731
     doc_count, entity_count, edge_count = await asyncio.to_thread(counts_fn)
-    return (
-        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
-        f"{edge_count} edges"
-    )
+    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -392,10 +381,7 @@ async def list_bookmarks(
     if store is None:
         return []
     bookmarks = await asyncio.to_thread(store.list, tag=tag, min_score=min_score)
-    return [
-        {"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags}
-        for b in bookmarks
-    ]
+    return [{"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags} for b in bookmarks]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))

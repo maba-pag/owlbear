@@ -188,9 +188,7 @@ def init(
 if __name__ == "__main__":  # pragma: no cover
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Initialise an OwlBear workspace in the current directory."
-    )
+    parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
     parser.add_argument("--name", default=None, help="Project name (default: directory name)")
     parser.add_argument(
         "--type",

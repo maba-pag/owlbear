@@ -204,9 +204,18 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
         msg = stderr.strip() or stdout.strip()
         raise ToolError(msg)
     _strip = {
-        "body", "file", "created", "updated",
-        "class", "started", "completed", "assignee", "claimed_by", "claimed_at",
-        "due", "estimate",
+        "body",
+        "file",
+        "created",
+        "updated",
+        "class",
+        "started",
+        "completed",
+        "assignee",
+        "claimed_by",
+        "claimed_at",
+        "due",
+        "estimate",
     }
     try:
         tasks = json.loads(stdout)
@@ -224,7 +233,9 @@ async def list_tasks(  # noqa: PLR0912, PLR0913, C901
 
 # Set outputSchema for list_tasks (lean task array)
 _list_tasks_tool_obj = next(
-    t for t in mcp._tool_manager._tools.values() if t.name == "list_tasks"  # noqa: SLF001
+    t
+    for t in mcp._tool_manager._tools.values()  # noqa: SLF001
+    if t.name == "list_tasks"
 )
 _list_tasks_tool_obj.fn_metadata.output_schema = {
     "type": "object",
@@ -530,8 +541,15 @@ _PICK_AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 _PICK_CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
 _PICK_NON_IMPL_TAGS = frozenset(
     {
-        "research", "docs", "type:config", "type:docs",
-        "test", "type:test", "agent", "quality", "type:user-action",
+        "research",
+        "docs",
+        "type:config",
+        "type:docs",
+        "test",
+        "type:test",
+        "agent",
+        "quality",
+        "type:user-action",
     }
 )
 
@@ -596,9 +614,7 @@ async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
 
     passing.sort(key=_sort_key)
     capped = passing[:limit]
-    return {
-        "dispatch": [{"task_id": int(t["id"]), "status": str(t["status"])} for t in capped]
-    }
+    return {"dispatch": [{"task_id": int(t["id"]), "status": str(t["status"])} for t in capped]}
 
 
 # Override outputSchema for tools that return KanbanTask. This ensures the
@@ -630,47 +646,62 @@ def _patch_params(
             props[param].update(meta)
 
 
-_patch_params("list_tasks", {
-    "status": {"enum": _STATUSES},
-    "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
-    "priority": {"enum": _PRIORITIES},
-    "search": {"description": "Full-text search in titles and bodies"},
-    "sort": {"enum": _SORT_FIELDS},
-    "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
-})
-
-_patch_params("create_task", {
-    "body": {"description": "Markdown body (objectives, AC, context)"},
-    "depends_on": {"description": "Comma-separated dependency task IDs"},
-    "parent": {"description": "Parent task ID for subtask hierarchy"},
-    "priority": {"enum": _PRIORITIES},
-    "status": {"enum": _STATUSES},
-    "tags": {"description": "Comma-separated tags"},
-})
-
-_patch_params("move_task", {
-    "status": {"enum": [*_STATUSES, "archived"]},
-})
-
-_patch_params("edit_task", {
-    "body": {"description": "Replace the entire task body"},
-    "block": {"description": "Block reason (empty = no change)"},
-    "tags": {"description": "Replace all tags (comma-separated)"},
-    "priority": {"enum": _PRIORITIES},
-    "append_body": {"description": "Append to body (preserves existing content)"},
-    "status": {"enum": _STATUSES},
-    "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-    "add_dep": {"description": "Add dependency task IDs (comma-separated, e.g. '601,602')"},
-    "remove_dep": {"description": "Remove dependency task IDs (comma-separated, e.g. '601,602')"},
-    "parent": {"description": "Parent task ID for subtask hierarchy"},
-    "depends_on": {"description": "Not supported on edit. Use add_dep / remove_dep instead."},
-})
-
-_patch_params("end_work", {
-    "note": {"description": "Summary note appended to task body"},
-    "outcome": {
-        "description": "success = advance, fail = stay, block = mark blocked, reject = move back",
+_patch_params(
+    "list_tasks",
+    {
+        "status": {"enum": _STATUSES},
+        "tag": {"description": "Filter by tag, e.g. 'phase-2'"},
+        "priority": {"enum": _PRIORITIES},
+        "search": {"description": "Full-text search in titles and bodies"},
+        "sort": {"enum": _SORT_FIELDS},
+        "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
     },
-    "block_reason": {"description": "Required when outcome=block"},
-    "move_to": {"enum": _STATUSES, "description": "Target status when outcome=reject"},
-})
+)
+
+_patch_params(
+    "create_task",
+    {
+        "body": {"description": "Markdown body (objectives, AC, context)"},
+        "depends_on": {"description": "Comma-separated dependency task IDs"},
+        "parent": {"description": "Parent task ID for subtask hierarchy"},
+        "priority": {"enum": _PRIORITIES},
+        "status": {"enum": _STATUSES},
+        "tags": {"description": "Comma-separated tags"},
+    },
+)
+
+_patch_params(
+    "move_task",
+    {
+        "status": {"enum": [*_STATUSES, "archived"]},
+    },
+)
+
+_patch_params(
+    "edit_task",
+    {
+        "body": {"description": "Replace the entire task body"},
+        "block": {"description": "Block reason (empty = no change)"},
+        "tags": {"description": "Replace all tags (comma-separated)"},
+        "priority": {"enum": _PRIORITIES},
+        "append_body": {"description": "Append to body (preserves existing content)"},
+        "status": {"enum": _STATUSES},
+        "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
+        "add_dep": {"description": "Add dependency task IDs (comma-separated, e.g. '601,602')"},
+        "remove_dep": {"description": "Remove dependency task IDs (comma-separated, e.g. '601,602')"},
+        "parent": {"description": "Parent task ID for subtask hierarchy"},
+        "depends_on": {"description": "Not supported on edit. Use add_dep / remove_dep instead."},
+    },
+)
+
+_patch_params(
+    "end_work",
+    {
+        "note": {"description": "Summary note appended to task body"},
+        "outcome": {
+            "description": "success = advance, fail = stay, block = mark blocked, reject = move back",
+        },
+        "block_reason": {"description": "Required when outcome=block"},
+        "move_to": {"enum": _STATUSES, "description": "Target status when outcome=reject"},
+    },
+)

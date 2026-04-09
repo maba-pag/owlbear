@@ -141,9 +141,7 @@ class RefreshOrchestrator:
                 break
             try:
                 intake_result = await _intake.read_url(url)
-                ingest_result: IngestResult = await self._pipeline.ingest(
-                    intake_result, scope=source.scope
-                )
+                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":
                     refreshed += 1
                 elif ingest_result.status == "skipped":
@@ -191,12 +189,8 @@ class RefreshOrchestrator:
                 break
             try:
                 safe_path = sandbox_path(self._workspace_root, file_path)
-                intake_result = await _intake.read_file(
-                    safe_path, workspace_root=self._workspace_root
-                )
-                ingest_result: IngestResult = await self._pipeline.ingest(
-                    intake_result, scope=source.scope
-                )
+                intake_result = await _intake.read_file(safe_path, workspace_root=self._workspace_root)
+                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":
                     refreshed += 1
                 elif ingest_result.status == "skipped":

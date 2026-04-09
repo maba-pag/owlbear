@@ -150,9 +150,7 @@ class VoiceProcessManager:
 
     # -- internal ----------------------------------------------------------
 
-    async def _shutdown_phases_2_to_6(
-        self, proc: asyncio.subprocess.Process
-    ) -> None:
+    async def _shutdown_phases_2_to_6(self, proc: asyncio.subprocess.Process) -> None:
         """Execute shutdown phases 2-6 (close stdin, then kill)."""
         # Phase 2: close stdin
         if proc.stdin is not None:
@@ -161,9 +159,7 @@ class VoiceProcessManager:
 
         # Phase 3: wait with shutdown_timeout
         try:
-            await asyncio.wait_for(
-                proc.wait(), timeout=self._shutdown_timeout
-            )
+            await asyncio.wait_for(proc.wait(), timeout=self._shutdown_timeout)
         except TimeoutError:
             pass
         else:
@@ -176,9 +172,7 @@ class VoiceProcessManager:
 
         # Phase 5: wait with kill_timeout
         try:
-            await asyncio.wait_for(
-                proc.wait(), timeout=self._kill_timeout
-            )
+            await asyncio.wait_for(proc.wait(), timeout=self._kill_timeout)
         except TimeoutError:
             pass
         else:
@@ -218,9 +212,7 @@ class VoiceProcessManager:
         # Read lines until ready or EOF
         while True:
             try:
-                line = await asyncio.wait_for(
-                    proc.stdout.readline(), timeout=self._init_timeout
-                )
+                line = await asyncio.wait_for(proc.stdout.readline(), timeout=self._init_timeout)
             except TimeoutError as exc:
                 proc.kill()
                 timeout_msg = f"Voice addon did not send ready within {self._init_timeout}s"
@@ -276,4 +268,3 @@ class VoiceProcessManager:
             raise exc
         _log.info("Restarting voice addon (attempt %d)", self._restart_count)
         await self._spawn_and_handshake()
-

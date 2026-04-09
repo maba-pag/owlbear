@@ -90,28 +90,22 @@ class StatusStore:
             )
         else:
             self._conn.execute(
-                "UPDATE document_status SET status = ?, error = ?, scope = ?, updated_at = ? "
-                "WHERE document_id = ?",
+                "UPDATE document_status SET status = ?, error = ?, scope = ?, updated_at = ? WHERE document_id = ?",
                 (status, error, scope, now, document_id),
             )
         self._conn.commit()
 
-    def find_status_by_source(
-        self, source: str, scope: str = "global"
-    ) -> DocumentStatus | None:
+    def find_status_by_source(self, source: str, scope: str = "global") -> DocumentStatus | None:
         """Look up a previously-ingested document by source URI."""
         row = self._conn.execute(
-            "SELECT document_id, content_hash, status "
-            "FROM document_status WHERE source = ? AND scope = ?",
+            "SELECT document_id, content_hash, status FROM document_status WHERE source = ? AND scope = ?",
             (source, scope),
         ).fetchone()
         if row is None:
             return None
         return DocumentStatus(document_id=row[0], content_hash=row[1], status=row[2])
 
-    def check_content_changed(
-        self, source: str, content: str, scope: str = "global"
-    ) -> tuple[bool, str | None]:
+    def check_content_changed(self, source: str, content: str, scope: str = "global") -> tuple[bool, str | None]:
         """Check whether *content* differs from the previously-ingested version.
 
         Returns:

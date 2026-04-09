@@ -59,9 +59,7 @@ class TranscriptJsonListener(_BaseListener):  # type: ignore[misc, valid-type]
 
     def on_line_completed(self, line_idx: int, text: str) -> None:
         """Emit a final transcript-type message when a line is complete."""
-        self._write(
-            {"type": "transcript", "text": text, "line_idx": line_idx, "final": True}
-        )
+        self._write({"type": "transcript", "text": text, "line_idx": line_idx, "final": True})
 
     def on_error(self, exc: Exception) -> None:
         """Log error detail to stderr and emit an error-type NDJSON message."""
@@ -126,17 +124,10 @@ class SttRunner:
         try:
             import moonshine_voice  # noqa: PLC0415
         except ImportError as exc:
-            msg = (
-                "moonshine-voice is required for STT. "
-                "Install it with: pip install moonshine-voice"
-            )
+            msg = "moonshine-voice is required for STT. Install it with: pip install moonshine-voice"
             raise ImportError(msg) from exc
 
-        model_arch = (
-            self._model_arch
-            if self._model_arch is not None
-            else moonshine_voice.ModelArch.SMALL_STREAMING
-        )
+        model_arch = self._model_arch if self._model_arch is not None else moonshine_voice.ModelArch.SMALL_STREAMING
         model_path = moonshine_voice.get_model_for_language(self._language, model_arch)
         transcriber = moonshine_voice.MicTranscriber(
             model_path, model_arch=model_arch, update_interval=self._update_interval

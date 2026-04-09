@@ -9,17 +9,20 @@ if TYPE_CHECKING:
 
 __all__ = ["build_tree"]
 
-_DEFAULT_EXCLUDE: frozenset[str] = frozenset({
-    ".git",
-    "__pycache__",
-    "node_modules",
-    ".venv",
-    ".mypy_cache",
-})
+_DEFAULT_EXCLUDE: frozenset[str] = frozenset(
+    {
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        ".mypy_cache",
+    }
+)
 
 
 def _iter_children(
-    path: Path, hidden: frozenset[str],
+    path: Path,
+    hidden: frozenset[str],
 ) -> list[Path]:
     """Return sorted, filtered children of *path*."""
     try:

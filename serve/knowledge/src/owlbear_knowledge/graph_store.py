@@ -217,8 +217,7 @@ class GraphStore:
     def get_edge(self, edge_id: str) -> Edge | None:
         """Return the :class:`Edge` with *edge_id*, or ``None``."""
         row = self._conn.execute(
-            "SELECT id, source_id, target_id, relation, weight, metadata, scope "
-            "FROM edges WHERE id = ?",
+            "SELECT id, source_id, target_id, relation, weight, metadata, scope FROM edges WHERE id = ?",
             (edge_id,),
         ).fetchone()
         if row is None:
@@ -360,8 +359,7 @@ class GraphStore:
     def insert_document(self, doc: Document) -> None:
         """Insert *doc* into the ``documents`` table."""
         self._conn.execute(
-            "INSERT INTO documents (id, title, content, metadata, created_at, scope) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
             (
                 doc.id,
                 doc.title,

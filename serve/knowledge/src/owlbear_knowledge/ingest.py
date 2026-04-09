@@ -90,20 +90,22 @@ class IngestPipeline:
             await asyncio.to_thread(self._docs.insert_document, doc)  # type: ignore[union-attr]
 
             chunk_ids: list[str] = await asyncio.to_thread(
-                self._docs.store_chunks, doc_id, chunks  # type: ignore[union-attr]
+                self._docs.store_chunks,
+                doc_id,
+                chunks,  # type: ignore[union-attr]
             )
             chunk_texts = [c.text for c in chunks]
             await asyncio.to_thread(
-                self._docs.store_embeddings, chunk_ids, chunk_texts  # type: ignore[union-attr]
+                self._docs.store_embeddings,
+                chunk_ids,
+                chunk_texts,  # type: ignore[union-attr]
             )
 
             extraction_results = await asyncio.gather(
                 *(self._extractor.extract(chunk.text) for chunk in chunks),
                 return_exceptions=True,
             )
-            valid_extractions = [
-                r for r in extraction_results if not isinstance(r, BaseException)
-            ]
+            valid_extractions = [r for r in extraction_results if not isinstance(r, BaseException)]
             entity_count, edge_count = self._docs.store_extractions(valid_extractions)  # type: ignore[union-attr]
 
         except Exception:  # catch-all for unexpected ingest failures
@@ -167,7 +169,9 @@ class IngestPipeline:
             chunk_texts = [c.text for c in chunks]
 
             embed_coro = asyncio.to_thread(
-                self._docs.store_embeddings, chunk_ids, chunk_texts  # type: ignore[union-attr]
+                self._docs.store_embeddings,
+                chunk_ids,
+                chunk_texts,  # type: ignore[union-attr]
             )
             extract_coros = [self._extractor.extract(c.text) for c in chunks]
 
@@ -198,4 +202,3 @@ class IngestPipeline:
             edge_count=edge_count,
             status="ok",
         )
-

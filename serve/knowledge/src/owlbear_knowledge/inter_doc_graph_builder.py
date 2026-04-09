@@ -53,9 +53,7 @@ entities list empty — only return edges.
 
 def _stamp_inter_edge(edge: Edge) -> Edge:
     """Return a copy of *edge* stamped with inter-doc weight and source."""
-    return edge.model_copy(
-        update={"weight": _INTER_WEIGHT, "metadata": {**edge.metadata, "source": _INTER_SOURCE}}
-    )
+    return edge.model_copy(update={"weight": _INTER_WEIGHT, "metadata": {**edge.metadata, "source": _INTER_SOURCE}})
 
 
 def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:

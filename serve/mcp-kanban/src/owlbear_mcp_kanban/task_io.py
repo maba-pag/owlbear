@@ -58,9 +58,7 @@ _NoTimestampLoader.yaml_implicit_resolvers = {
 # ---------------------------------------------------------------------------
 
 _WINDOWS_RESERVED: frozenset[str] = frozenset(
-    ["con", "prn", "aux", "nul"]
-    + [f"com{i}" for i in range(1, 10)]
-    + [f"lpt{i}" for i in range(1, 10)]
+    ["con", "prn", "aux", "nul"] + [f"com{i}" for i in range(1, 10)] + [f"lpt{i}" for i in range(1, 10)]
 )
 
 # ---------------------------------------------------------------------------

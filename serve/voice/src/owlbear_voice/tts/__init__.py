@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import kokoro  # noqa: F401
+
     _kokoro_available = True
 except ImportError:
     _kokoro_available = False
@@ -44,8 +45,6 @@ def create_tts_backend(voice: str, speed: float) -> TTSBackend:
             logger.debug("Selecting Kokoro TTS backend")
             return KokoroTTSBackend(voice=voice, speed=speed)
         except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "Kokoro backend init failed (%s); falling back to pyttsx3", exc
-            )
+            logger.warning("Kokoro backend init failed (%s); falling back to pyttsx3", exc)
     logger.debug("Selecting pyttsx3 TTS backend")
     return Pyttsx3TTSBackend(voice=voice, speed=speed)

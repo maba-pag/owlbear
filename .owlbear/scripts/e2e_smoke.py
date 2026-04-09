@@ -97,12 +97,18 @@ def _run_kanban(args: list[str], *, check: bool = True) -> subprocess.CompletedP
 
 def _create_task(title: str) -> int:
     """Create temp task on the board; return its integer ID."""
-    _run_kanban([
-        "create", title,
-        "--status", "todo",
-        "--tags", "e2e-smoke",
-        "--body", "Temp task for E2E smoke test — safe to delete.",
-    ])
+    _run_kanban(
+        [
+            "create",
+            title,
+            "--status",
+            "todo",
+            "--tags",
+            "e2e-smoke",
+            "--body",
+            "Temp task for E2E smoke test — safe to delete.",
+        ]
+    )
     result = _run_kanban(["list", "--json", "--tag", "e2e-smoke", "--status", "todo"])
     tasks: list[dict] = json.loads(result.stdout)
     # Match both tag (already filtered) AND UUID title substring for uniqueness
