@@ -435,6 +435,85 @@ class KanbanEngine:
         log_activity(self._activity_log_path, "release", record.id, self._agent_name)
         return record
 
+    def start_work(self, task_id: str, *, now: datetime | None = None) -> TaskRecord:
+        """Claim a task and return its full record (compound start-of-work operation).
+
+        Delegates to :meth:`claim_task`, inheriting its blocked guard and rival-claim
+        logic.
+
+        Args:
+            task_id: Numeric task ID as a string.
+            now:     Reference time for claim expiry (injectable for tests).
+
+        Returns:
+            Updated :class:`TaskRecord` with claim fields set.
+
+        Raises:
+            FileNotFoundError: No task matching ``task_id``.
+            ValueError: Task is blocked or already claimed by a live rival.
+        """
+        return self.claim_task(task_id, now=now)
+
+    def end_work(
+        self,
+        task_id: str,
+        *,
+        note: str,
+        outcome: str = "success",
+        block_reason: str = "",
+        move_to: str = "research",
+    ) -> TaskRecord:
+        """Finalise a work session: append note, update task state, release claim.
+
+        Args:
+            task_id:      Numeric task ID as a string.
+            note:         Text to append (prefixed with ``[[YYYY-MM-DD]]`` timestamp).
+            outcome:      One of ``"success"``, ``"fail"``, ``"block"``, ``"reject"``.
+            block_reason: Required when *outcome* is ``"block"``; stored on the task.
+            move_to:      Target status when *outcome* is ``"reject"`` (default ``"research"``).
+
+        Returns:
+            Updated :class:`TaskRecord` reflecting the new state.
+
+        Raises:
+            ValueError:        *outcome* is ``"block"`` but *block_reason* is empty.
+            FileNotFoundError: No task matching ``task_id``.
+        """
+        if outcome == "block" and not block_reason:
+            msg = "block_reason is required when outcome='block'"
+            raise ValueError(msg)
+
+        # Append timestamped note first (before any status/claim mutation).
+        self.edit_task(task_id, append_body=note, timestamp=True)
+
+        if outcome == "success":
+            statuses = [s["name"] for s in self._config.statuses]
+            record = self.show_task(task_id)
+            current_idx = statuses.index(record.status) if record.status in statuses else -1
+            is_last = current_idx == len(statuses) - 1
+
+            if is_last:
+                self.release_task(task_id)
+                return self.move_task(task_id, "archived")
+
+            next_status = statuses[current_idx + 1]
+            self.release_task(task_id)
+            return self.move_task(task_id, next_status)
+
+        if outcome == "fail":
+            return self.release_task(task_id)
+
+        if outcome == "block":
+            self.edit_task(task_id, blocked=True, block_reason=block_reason)
+            return self.release_task(task_id)
+
+        if outcome == "reject":
+            self.release_task(task_id)
+            return self.move_task(task_id, move_to)
+
+        msg = f"Unknown outcome: {outcome!r}"
+        raise ValueError(msg)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
