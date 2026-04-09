@@ -1,27 +1,3 @@
-{"timestamp":"2026-03-31T15:31:37.1622983+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T15:31:37.1691932+02:00","action":"claim","task_id":467,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:31:52.6438322+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:31:52.6523669+02:00","action":"claim","task_id":475,"detail":"writer"}
-{"timestamp":"2026-03-31T15:39:09.5070261+02:00","action":"move","task_id":467,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T15:39:14.6321249+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T15:39:14.6390719+02:00","action":"release","task_id":467,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:39:18.926549+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:39:32.623028+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T15:39:37.6563239+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T15:40:01.0471777+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:40:01.0530922+02:00","action":"release","task_id":475,"detail":"writer"}
-{"timestamp":"2026-03-31T15:40:02.8765407+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
-{"timestamp":"2026-03-31T15:41:00.2091725+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:41:00.2156317+02:00","action":"claim","task_id":476,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:41:13.0991607+02:00","action":"edit","task_id":468,"detail":"Integrate Challenger into arch-review workflow (Step 3.5)"}
-{"timestamp":"2026-03-31T15:41:13.1104588+02:00","action":"claim","task_id":468,"detail":"researcher"}
-{"timestamp":"2026-03-31T15:42:51.908551+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T15:42:51.9159118+02:00","action":"claim","task_id":491,"detail":"writer"}
-{"timestamp":"2026-03-31T15:44:26.9259724+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T15:44:26.9331608+02:00","action":"release","task_id":491,"detail":"writer"}
-{"timestamp":"2026-03-31T15:44:50.1172832+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
-{"timestamp":"2026-03-31T15:45:00.5304459+02:00","action":"move","task_id":476,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T15:45:01.3371584+02:00","action":"edit","task_id":476,"detail":"Add dep/parent/title params to edit_task, switch to JSON output"}
 {"timestamp":"2026-03-31T15:45:01.3476426+02:00","action":"release","task_id":476,"detail":"auditor"}
 {"timestamp":"2026-03-31T15:45:21.2803207+02:00","action":"edit","task_id":468,"detail":"Integrate Challenger into arch-review workflow (Step 3.5)"}
 {"timestamp":"2026-03-31T15:45:26.4283342+02:00","action":"edit","task_id":468,"detail":"Integrate Challenger into arch-review workflow (Step 3.5)"}
@@ -9998,3 +9974,27 @@
 {"timestamp":"2026-04-09T15:27:26.5194971+02:00","action":"move","task_id":699,"detail":"done -\u003e archived"}
 {"timestamp":"2026-04-09T19:24:37.1976249+02:00","action":"edit","task_id":690,"detail":"Wire LLMExtractor into MCP knowledge server app_lifespan"}
 {"timestamp":"2026-04-09T19:24:37.2299091+02:00","action":"claim","task_id":690,"detail":"nova-hive"}
+{"timestamp":"2026-04-09T19:32:04.5307522+02:00","action":"edit","task_id":690,"detail":"Wire LLMExtractor into MCP knowledge server app_lifespan"}
+{"timestamp":"2026-04-09T19:32:04.542802+02:00","action":"release","task_id":690,"detail":"nova-hive"}
+{"timestamp":"2026-04-09T19:32:05.1114013+02:00","action":"move","task_id":690,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T19:32:22.395335+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:32:22.409614+02:00","action":"claim","task_id":720,"detail":"pearl-otter"}
+{"timestamp":"2026-04-09T19:34:58.7863281+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:34:58.7970219+02:00","action":"release","task_id":720,"detail":"pearl-otter"}
+{"timestamp":"2026-04-09T19:35:42.0751089+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:35:42.0883104+02:00","action":"claim","task_id":720,"detail":"star-halo"}
+{"timestamp":"2026-04-09T19:46:50.5908402+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:46:50.6043461+02:00","action":"release","task_id":720,"detail":"star-halo"}
+{"timestamp":"2026-04-09T19:47:50.1757651+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:47:50.1881344+02:00","action":"claim","task_id":720,"detail":"path-cove"}
+{"timestamp":"2026-04-09T19:52:40.9635868+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:52:40.9778835+02:00","action":"release","task_id":720,"detail":"path-cove"}
+{"timestamp":"2026-04-09T19:53:43.7115658+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:53:43.7250804+02:00","action":"claim","task_id":720,"detail":"dale-reef"}
+{"timestamp":"2026-04-09T19:54:27.942233+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:54:27.9574158+02:00","action":"release","task_id":720,"detail":"dale-reef"}
+{"timestamp":"2026-04-09T19:55:35.6820018+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T19:55:35.6976998+02:00","action":"claim","task_id":720,"detail":"cold-quake"}
+{"timestamp":"2026-04-09T20:07:17.0500894+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
+{"timestamp":"2026-04-09T20:07:17.0615919+02:00","action":"release","task_id":720,"detail":"cold-quake"}
+{"timestamp":"2026-04-09T20:07:17.6318009+02:00","action":"move","task_id":720,"detail":"done -\u003e archived"}

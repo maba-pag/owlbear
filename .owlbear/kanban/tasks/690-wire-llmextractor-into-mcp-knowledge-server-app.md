@@ -1,10 +1,12 @@
 ---
 id: 690
 title: Wire LLMExtractor into MCP knowledge server app_lifespan
-status: done
+status: archived
 priority: needed
 created: 2026-04-08T21:06:20.2270499+02:00
-updated: 2026-04-09T19:24:37.1958382+02:00
+updated: 2026-04-09T19:32:05.1098042+02:00
+started: 2026-04-09T19:32:05.1098042+02:00
+completed: 2026-04-09T19:32:05.1098042+02:00
 tags:
     - scope:mcp-knowledge
     - ' type:feature'
@@ -13,8 +15,6 @@ parent: 676
 depends_on:
     - 699
     - 689
-claimed_by: nova-hive
-claimed_at: 2026-04-09T19:24:37.1897712+02:00
 class: standard
 ---
 
@@ -331,3 +331,43 @@ None — documentation is accurate as-is.
 
 ### Scratch Files
 None found matching `.owlbear/scratch/690-*`.
+
+[[2026-04-09]] Thu 19:32
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: app_lifespan creates LLMExtractor(model), passes as EntityExtractor(extractor=...) | server.py L170-171: `llm_extractor = LLMExtractor(model)` + `EntityExtractor(model, extractor=llm_extractor)` in try block; 3 tests pass (TestFromAC_LLMExtractorWiring) | PASS |
+| AC2: pyproject.toml declares owlbear-knowledge[llm] | pyproject.toml L6: `owlbear-knowledge[llm]` in dependencies; 1 test pass (TestFromAC_PyprojectDependency) | PASS |
+| AC3: ingest → entity_count > 0 and edge_count > 0 | Wiring connects mocked LLMExtractor; 1 test pass (TestFromAC_IngestWithLLMExtractor) | PASS |
+| AC4a: GraphAugmentedRetriever(vs, gs, emb) → KnowledgeQueryService(retriever=gar) | server.py L174-175: `gar = GraphAugmentedRetriever(vs, gs, emb)` + `KnowledgeQueryService(..., retriever=gar)`; 3 tests pass with strengthened positional-order assertion | PASS |
+| AC4b: search_knowledge response includes entity_type | server.py L241: `entity_type=r.entity_type` in dict; SearchResult TypedDict has `entity_type: str | None`; 3 tests pass | PASS |
+| AC5: graceful degradation | server.py L172-173: `except Exception` falls back to `EntityExtractor(model)` without extractor=; 4 tests pass (ImportError, RuntimeError, unset env var) | PASS |
+
+### Test Results
+- pytest (task-scoped): 15 passed, 0 failed
+- pytest (full suite): 2915 passed, 129 failed, 3 errors — all failures are pre-existing, none in task scope (verified via git log on failing test files — last change was line-ending normalization)
+- ruff: clean (0 violations)
+
+### Commit Integrity
+- `9789850` feat: enhance knowledge service with LLMExtractor and GraphAugmentedRetriever (server.py + pyproject.toml)
+- `b512053` test: strengthen GAR positional-order assertion (#690, test-writer)
+- `21cd09a` test: extend failing tests for LLM wiring (#690, test-writer)
+
+### Architect Quality: 4/5
+AC was originally adequate with one ambiguous item (AC4 "graph expansion context"). Architect correctly identified the ambiguity from research findings and split into AC4a/AC4b with specific wiring targets. Metadata defects (depends_on, parent, tags) also corrected during arch review. Solid upstream work.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (-.00)
+- Lint violations: 0 (-.00)
+- AC quality score ≤ 3: No (4/5) (-.00)
+- Missing reviewer evidence: No — two detailed review cycles (-.00)
+- Full-suite failures in task scope: 0 (-.00)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| ba6c12e | chore | kanban activity + task file | #690 |
