@@ -14,6 +14,7 @@ RED failure modes by AC:
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -406,4 +407,95 @@ class TestFromAC_LLMExtractorImportError:
         _, kwargs = mock_entity_cls.call_args
         assert "extractor" not in kwargs, (
             "Fallback EntityExtractor must NOT receive extractor= kwarg when LLMExtractor fails"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_PyprojectDependency — AC2
+# Verifies owlbear-mcp-knowledge/pyproject.toml declares owlbear-knowledge[llm].
+# RED: current pyproject.toml lists "owlbear-knowledge" (no [llm] extra) → AssertionError.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PyprojectDependency:
+    """Tests that owlbear-mcp-knowledge pyproject.toml declares the owlbear-knowledge[llm] extra."""
+
+    def test_pyproject_declares_owlbear_knowledge_llm_extra(self) -> None:
+        """owlbear-mcp-knowledge/pyproject.toml lists owlbear-knowledge[llm] as a dependency."""
+        import tomllib  # noqa: PLC0415
+
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        with pyproject_path.open("rb") as f:
+            config = tomllib.load(f)
+        deps: list[str] = config["project"]["dependencies"]
+        assert any("owlbear-knowledge[llm]" in d for d in deps), (
+            "owlbear-mcp-knowledge must declare owlbear-knowledge[llm] as a dependency. "
+            f"Current dependencies: {deps}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_GracefulDegradation — AC5 (boundary/edge)
+# AC5: graceful degradation when OWLBEAR_MODEL is unset OR LLM is unavailable.
+# TestFromAC_LLMExtractorImportError covers ImportError; these tests cover:
+#   1. Generic Exception (RuntimeError) from LLMExtractor construction → degrade not crash.
+#   2. OWLBEAR_MODEL unset → app_lifespan still yields a valid context.
+# RED: all fail with AttributeError — LLMExtractor not a module attribute of server.py.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GracefulDegradation:
+    """Tests graceful degradation edge cases for AC5: generic exception and unset OWLBEAR_MODEL."""
+
+    @pytest.mark.asyncio
+    async def test_app_lifespan_yields_context_when_llm_extractor_raises_generic_exception(
+        self,
+    ) -> None:
+        """app_lifespan yields AppContext when LLMExtractor raises a non-ImportError exception."""
+        with (
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=MagicMock()),
+            patch("owlbear_mcp_knowledge.server.GraphStore"),
+            patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
+            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
+            patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
+            patch("owlbear_mcp_knowledge.server.EntityExtractor"),
+            patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
+            patch(
+                "owlbear_mcp_knowledge.server.LLMExtractor",
+                side_effect=RuntimeError("unexpected construction failure"),
+            ),
+        ):
+            ctx_yielded = None
+            async with app_lifespan(MagicMock()) as ctx:
+                ctx_yielded = ctx
+
+        assert ctx_yielded is not None, (
+            "app_lifespan must yield a valid AppContext even after generic LLMExtractor failure"
+        )
+
+    @pytest.mark.asyncio
+    async def test_app_lifespan_yields_context_when_owlbear_model_env_not_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """app_lifespan yields AppContext when OWLBEAR_MODEL is not set (uses default + degrades gracefully)."""
+        monkeypatch.delenv("OWLBEAR_MODEL", raising=False)
+        with (
+            patch("owlbear_mcp_knowledge.server.init_db", return_value=MagicMock()),
+            patch("owlbear_mcp_knowledge.server.GraphStore"),
+            patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
+            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
+            patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
+            patch("owlbear_mcp_knowledge.server.EntityExtractor"),
+            patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
+            patch(
+                "owlbear_mcp_knowledge.server.LLMExtractor",
+                side_effect=ImportError("pydantic_ai not available"),
+            ),
+        ):
+            ctx_yielded = None
+            async with app_lifespan(MagicMock()) as ctx:
+                ctx_yielded = ctx
+
+        assert ctx_yielded is not None, (
+            "app_lifespan must yield a valid AppContext when OWLBEAR_MODEL is not set"
         )
