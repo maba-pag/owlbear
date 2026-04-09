@@ -453,3 +453,97 @@ class TestFromAC_TimestampResolverDisabled:
         snapshot_date = dumped.get("snapshot_date")
         assert isinstance(snapshot_date, str)
         assert not isinstance(snapshot_date, datetime.date)
+
+
+# ===========================================================================
+# TestBuilderDiscovered
+# ===========================================================================
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered coverage gaps for uncovered branches in config_loader.py."""
+
+    def test_save_config_creates_file_when_not_exists(self, tmp_path: Path) -> None:
+        """save_config creates config.yml from scratch when file does not yet exist.
+
+        Covers the ``else: raw = CommentedMap()`` branch in save_config
+        (line 78 — config_path.exists() is False).
+        """
+        from owlbear_mcp_kanban.engine_models import BoardDefaults, BoardInfo
+
+        config = BoardConfig(
+            version=1,
+            board=BoardInfo(name="NewBoard"),
+            tasks_dir="tasks",
+            statuses=[{"name": "todo"}, {"name": "done"}],
+            priorities=["important"],
+            defaults=BoardDefaults(status="todo", priority="important"),
+            next_id=1,
+            claim_timeout="30m",
+        )
+        config_path = tmp_path / "config.yml"
+        assert not config_path.exists()
+
+        save_config(tmp_path, config)
+
+        assert config_path.exists()
+        reloaded = load_config(tmp_path)
+        assert reloaded.version == 1
+        assert reloaded.next_id == 1
+
+    def test_save_config_updates_changed_scalar_in_same_length_sequence(
+        self, tmp_path: Path
+    ) -> None:
+        """Changing a scalar item in a same-length sequence persists via save.
+
+        Covers ``elif old_item != new_item: old_value[i] = new_item``
+        (lines 119-120) — the priorities list has same length but one item changed.
+        """
+        (tmp_path / "config.yml").write_text(_BASE_CONFIG_YAML, encoding="utf-8")
+        config = load_config(tmp_path)
+        # Mutate one priority in-place (same length, changed scalar value)
+        new_priorities = list(config.priorities)
+        new_priorities[0] = "asap"
+        config.priorities = new_priorities
+
+        save_config(tmp_path, config)
+        reloaded = load_config(tmp_path)
+
+        assert reloaded.priorities[0] == "asap"
+        assert len(reloaded.priorities) == len(new_priorities)
+
+    def test_save_config_replaces_sequence_on_length_change(
+        self, tmp_path: Path
+    ) -> None:
+        """Changing sequence length replaces the whole sequence in save_config.
+
+        Covers ``else: target[key] = new_value`` for the length-changed
+        sequence branch (line 133).
+        """
+        (tmp_path / "config.yml").write_text(_BASE_CONFIG_YAML, encoding="utf-8")
+        config = load_config(tmp_path)
+        original_count = len(config.statuses)
+        # Remove one status entry — length changes
+        config.statuses = config.statuses[:-1]
+
+        save_config(tmp_path, config)
+        reloaded = load_config(tmp_path)
+
+        assert len(reloaded.statuses) == original_count - 1
+
+    def test_save_config_persists_changed_scalar_field(
+        self, tmp_path: Path
+    ) -> None:
+        """Changing a top-level scalar field persists via save_config.
+
+        Covers the outer ``else: target[key] = new_value`` branch (line 135)
+        — tasks_dir changes from "tasks" to "items".
+        """
+        (tmp_path / "config.yml").write_text(_BASE_CONFIG_YAML, encoding="utf-8")
+        config = load_config(tmp_path)
+        config.tasks_dir = "items"
+
+        save_config(tmp_path, config)
+        reloaded = load_config(tmp_path)
+
+        assert reloaded.tasks_dir == "items"
