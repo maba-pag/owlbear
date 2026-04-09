@@ -1,77 +1,3 @@
-{"timestamp":"2026-03-31T15:45:01.3476426+02:00","action":"release","task_id":476,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:45:21.2803207+02:00","action":"edit","task_id":468,"detail":"Integrate Challenger into arch-review workflow (Step 3.5)"}
-{"timestamp":"2026-03-31T15:45:26.4283342+02:00","action":"edit","task_id":468,"detail":"Integrate Challenger into arch-review workflow (Step 3.5)"}
-{"timestamp":"2026-03-31T15:45:26.4347586+02:00","action":"release","task_id":468,"detail":"researcher"}
-{"timestamp":"2026-03-31T15:46:02.8014932+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T15:46:02.8091432+02:00","action":"claim","task_id":433,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:54:22.0140626+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T15:54:31.9251404+02:00","action":"move","task_id":433,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T15:54:36.8404001+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T15:54:36.8474588+02:00","action":"release","task_id":433,"detail":"auditor"}
-{"timestamp":"2026-03-31T15:54:50.8897085+02:00","action":"edit","task_id":433,"detail":"Add structured tool-error handling guidance to agent instructions"}
-{"timestamp":"2026-03-31T15:55:27.0125766+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:55:27.0203257+02:00","action":"claim","task_id":431,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:55:29.4403263+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-31T15:55:29.4524416+02:00","action":"claim","task_id":34,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:56:03.3712667+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T15:56:03.3834226+02:00","action":"claim","task_id":464,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:58:14.7434599+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:58:14.7516268+02:00","action":"release","task_id":431,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:59:07.7787483+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T15:59:11.9591774+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T15:59:29.1132039+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T15:59:32.5177499+02:00","action":"edit","task_id":464,"detail":"Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3"}
-{"timestamp":"2026-03-31T15:59:32.523847+02:00","action":"release","task_id":464,"detail":"reviewer"}
-{"timestamp":"2026-03-31T16:04:29.2422309+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T16:04:29.2509335+02:00","action":"claim","task_id":146,"detail":"builder"}
-{"timestamp":"2026-03-31T16:09:16.7160747+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T16:09:21.8810852+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T16:09:27.0500975+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T16:09:33.2310358+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T16:09:44.5057695+02:00","action":"edit","task_id":146,"detail":"Implement orchestrator dispatch loop"}
-{"timestamp":"2026-03-31T16:09:44.5131892+02:00","action":"block","task_id":146,"detail":"Test contradiction: test_non_rate_limit_crash_no_wave_level_retry_single_call (count==1 PASS) vs test_non_rate_limit_crash_dispatch_entry_called_twice_retry_once (count==2 FAIL). Same setup, impossible to satisfy both. Remove old test to unblock."}
-{"timestamp":"2026-03-31T16:09:44.5195107+02:00","action":"release","task_id":146,"detail":"builder"}
-{"timestamp":"2026-03-31T16:10:05.7618428+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-31T16:10:30.7997828+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
-{"timestamp":"2026-03-31T16:10:30.8044202+02:00","action":"release","task_id":34,"detail":"reviewer"}
-{"timestamp":"2026-03-31T16:11:43.6645599+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T16:11:43.6717136+02:00","action":"claim","task_id":489,"detail":"builder"}
-{"timestamp":"2026-03-31T16:12:01.9368239+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T16:12:01.9454766+02:00","action":"claim","task_id":226,"detail":"test-writer"}
-{"timestamp":"2026-03-31T16:12:07.5275659+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T16:12:09.0029425+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T16:12:09.0116624+02:00","action":"claim","task_id":478,"detail":"test-writer"}
-{"timestamp":"2026-03-31T16:12:11.5968798+02:00","action":"edit","task_id":226,"detail":"Update planner Recipe 0 for action request resolution"}
-{"timestamp":"2026-03-31T16:12:11.6038119+02:00","action":"release","task_id":226,"detail":"test-writer"}
-{"timestamp":"2026-03-31T16:12:35.0010774+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-31T16:12:35.0079462+02:00","action":"claim","task_id":180,"detail":"test-writer"}
-{"timestamp":"2026-03-31T16:14:46.6199807+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T16:14:51.0916997+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T16:14:51.098866+02:00","action":"release","task_id":478,"detail":"test-writer"}
-{"timestamp":"2026-03-31T16:15:08.4483318+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T16:15:13.1060906+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T16:15:13.1134923+02:00","action":"release","task_id":489,"detail":"builder"}
-{"timestamp":"2026-03-31T16:17:51.3756214+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-31T16:17:56.3031031+02:00","action":"edit","task_id":180,"detail":"Add CLI entrypoint for analysis pipeline"}
-{"timestamp":"2026-03-31T16:17:56.3093521+02:00","action":"release","task_id":180,"detail":"test-writer"}
-{"timestamp":"2026-03-31T16:21:00.3091421+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T16:21:00.3138822+02:00","action":"claim","task_id":491,"detail":"auditor"}
-{"timestamp":"2026-03-31T16:23:46.4560692+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T16:23:46.4608914+02:00","action":"claim","task_id":431,"detail":"writer"}
-{"timestamp":"2026-03-31T16:28:21.4417899+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T16:29:18.8851802+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T16:29:39.1099456+02:00","action":"edit","task_id":431,"detail":"Test: KB data loader script and sources manifest"}
-{"timestamp":"2026-03-31T16:29:39.1163199+02:00","action":"release","task_id":431,"detail":"writer"}
-{"timestamp":"2026-03-31T16:31:03.5173653+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T16:31:08.1924195+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T16:31:14.2732721+02:00","action":"move","task_id":491,"detail":"done -\u003e archived"}
-{"timestamp":"2026-03-31T16:31:19.5793793+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T16:31:19.5851816+02:00","action":"release","task_id":491,"detail":"auditor"}
-{"timestamp":"2026-03-31T16:31:28.199324+02:00","action":"edit","task_id":491,"detail":"Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server"}
-{"timestamp":"2026-03-31T16:32:11.447229+02:00","action":"edit","task_id":475,"detail":"Add status and parent params to create_task, switch to JSON output"}
-{"timestamp":"2026-03-31T16:32:11.4525278+02:00","action":"claim","task_id":475,"detail":"auditor"}
-{"timestamp":"2026-03-31T16:32:20.2615517+02:00","action":"edit","task_id":465,"detail":"Challenger subagent — adversarial in-process review for architect decisions"}
-{"timestamp":"2026-03-31T16:32:20.2670833+02:00","action":"claim","task_id":465,"detail":"architect"}
 {"timestamp":"2026-03-31T16:33:41.6892011+02:00","action":"edit","task_id":468,"detail":"Integrate Challenger into arch-review workflow (Step 3.5)"}
 {"timestamp":"2026-03-31T16:33:41.6949431+02:00","action":"claim","task_id":468,"detail":"architect"}
 {"timestamp":"2026-03-31T16:34:22.7278534+02:00","action":"edit","task_id":34,"detail":"Knowledge package integration + hybrid search"}
@@ -9998,3 +9924,77 @@
 {"timestamp":"2026-04-09T20:07:17.0500894+02:00","action":"edit","task_id":720,"detail":"P3-08: GREEN — task listing with filters"}
 {"timestamp":"2026-04-09T20:07:17.0615919+02:00","action":"release","task_id":720,"detail":"cold-quake"}
 {"timestamp":"2026-04-09T20:07:17.6318009+02:00","action":"move","task_id":720,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T20:08:38.5609475+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:08:38.5752403+02:00","action":"claim","task_id":722,"detail":"brew-curl"}
+{"timestamp":"2026-04-09T20:12:30.4838568+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:12:30.496408+02:00","action":"release","task_id":722,"detail":"brew-curl"}
+{"timestamp":"2026-04-09T20:14:02.8759314+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:14:02.8886606+02:00","action":"claim","task_id":722,"detail":"coal-dock"}
+{"timestamp":"2026-04-09T20:22:21.8065194+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:22:21.8184837+02:00","action":"release","task_id":722,"detail":"coal-dock"}
+{"timestamp":"2026-04-09T20:23:51.3547231+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:23:51.3676247+02:00","action":"claim","task_id":722,"detail":"dusk-lynx"}
+{"timestamp":"2026-04-09T20:28:26.8049435+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:28:26.8178639+02:00","action":"release","task_id":722,"detail":"dusk-lynx"}
+{"timestamp":"2026-04-09T20:29:27.8815649+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:29:27.8968887+02:00","action":"claim","task_id":722,"detail":"pine-light"}
+{"timestamp":"2026-04-09T20:30:28.2892729+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:30:28.3055817+02:00","action":"release","task_id":722,"detail":"pine-light"}
+{"timestamp":"2026-04-09T20:31:19.9433987+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T20:31:19.9552573+02:00","action":"claim","task_id":723,"detail":"mist-crypt"}
+{"timestamp":"2026-04-09T20:31:20.4530926+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T20:31:20.4655532+02:00","action":"claim","task_id":727,"detail":"quill-dale"}
+{"timestamp":"2026-04-09T20:31:34.4622481+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:31:34.4756279+02:00","action":"claim","task_id":722,"detail":"zinc-nectar"}
+{"timestamp":"2026-04-09T20:35:37.0669745+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T20:35:37.0823312+02:00","action":"release","task_id":723,"detail":"mist-crypt"}
+{"timestamp":"2026-04-09T20:39:32.4220146+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T20:39:32.4347933+02:00","action":"release","task_id":727,"detail":"quill-dale"}
+{"timestamp":"2026-04-09T20:45:26.2237058+02:00","action":"edit","task_id":722,"detail":"P3-10: GREEN — task CRUD operations"}
+{"timestamp":"2026-04-09T20:45:26.2566832+02:00","action":"release","task_id":722,"detail":"zinc-nectar"}
+{"timestamp":"2026-04-09T20:45:26.7666009+02:00","action":"move","task_id":722,"detail":"done -\u003e archived"}
+{"timestamp":"2026-04-09T20:46:13.7556347+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T20:46:13.7687759+02:00","action":"claim","task_id":723,"detail":"sand-thorn"}
+{"timestamp":"2026-04-09T20:46:42.0470116+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T20:46:42.062242+02:00","action":"claim","task_id":727,"detail":"heron-falcon"}
+{"timestamp":"2026-04-09T20:50:37.1781954+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T20:50:37.2111445+02:00","action":"release","task_id":727,"detail":"heron-falcon"}
+{"timestamp":"2026-04-09T20:51:50.8678396+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T20:51:50.8812398+02:00","action":"release","task_id":723,"detail":"sand-thorn"}
+{"timestamp":"2026-04-09T20:53:58.5780824+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T20:53:58.5906821+02:00","action":"claim","task_id":723,"detail":"quail-haven"}
+{"timestamp":"2026-04-09T21:03:09.6613746+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:03:09.6747625+02:00","action":"release","task_id":723,"detail":"quail-haven"}
+{"timestamp":"2026-04-09T21:05:19.2999234+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:05:19.3119735+02:00","action":"claim","task_id":727,"detail":"hull-blade"}
+{"timestamp":"2026-04-09T21:10:08.4928878+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:10:08.5048971+02:00","action":"release","task_id":727,"detail":"hull-blade"}
+{"timestamp":"2026-04-09T21:11:05.4601202+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:11:05.4724872+02:00","action":"claim","task_id":727,"detail":"rift-palm"}
+{"timestamp":"2026-04-09T21:11:11.2401106+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:11:11.2557658+02:00","action":"claim","task_id":723,"detail":"moss-moth"}
+{"timestamp":"2026-04-09T21:13:35.1929768+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:13:35.2102368+02:00","action":"release","task_id":727,"detail":"rift-palm"}
+{"timestamp":"2026-04-09T21:14:43.4080497+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:14:43.422944+02:00","action":"release","task_id":723,"detail":"moss-moth"}
+{"timestamp":"2026-04-09T21:15:51.7072163+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:15:51.7213158+02:00","action":"claim","task_id":723,"detail":"heath-glow"}
+{"timestamp":"2026-04-09T21:16:40.4392787+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:16:40.452757+02:00","action":"claim","task_id":727,"detail":"mink-midge"}
+{"timestamp":"2026-04-09T21:16:56.6689649+02:00","action":"edit","task_id":727,"detail":"P3-15: RED — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:16:56.6951398+02:00","action":"release","task_id":727,"detail":"mink-midge"}
+{"timestamp":"2026-04-09T21:18:54.5543666+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:18:54.5673015+02:00","action":"release","task_id":723,"detail":"heath-glow"}
+{"timestamp":"2026-04-09T21:19:42.491292+02:00","action":"edit","task_id":728,"detail":"P3-16: GREEN — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:19:42.5042705+02:00","action":"claim","task_id":728,"detail":"flora-ledge"}
+{"timestamp":"2026-04-09T21:19:43.9133595+02:00","action":"edit","task_id":724,"detail":"P3-12: GREEN — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:19:43.9277346+02:00","action":"claim","task_id":724,"detail":"leaf-mast"}
+{"timestamp":"2026-04-09T21:19:58.3275995+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:19:58.3379538+02:00","action":"claim","task_id":723,"detail":"midge-hull"}
+{"timestamp":"2026-04-09T21:20:31.5528014+02:00","action":"edit","task_id":724,"detail":"P3-12: GREEN — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:20:31.5646344+02:00","action":"release","task_id":724,"detail":"leaf-mast"}
+{"timestamp":"2026-04-09T21:25:15.6202341+02:00","action":"edit","task_id":728,"detail":"P3-16: GREEN — activity.jsonl logging"}
+{"timestamp":"2026-04-09T21:25:15.6324104+02:00","action":"release","task_id":728,"detail":"flora-ledge"}
+{"timestamp":"2026-04-09T21:27:58.1977068+02:00","action":"edit","task_id":723,"detail":"P3-11: RED — claiming protocol and agent-name generation"}
+{"timestamp":"2026-04-09T21:27:58.2084921+02:00","action":"release","task_id":723,"detail":"midge-hull"}
+{"timestamp":"2026-04-09T21:27:58.7232452+02:00","action":"move","task_id":723,"detail":"done -\u003e archived"}
