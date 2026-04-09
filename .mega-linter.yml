@@ -49,8 +49,8 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
 # ──────────────────────────────────────────────
 
 # Ruff — uses pyproject.toml config (select=["ALL"] includes bandit S-rules)
+# Auto-discovers pyproject.toml from project root; no explicit config path needed.
 PYTHON_RUFF_CLI_LINT_MODE: project
-PYTHON_RUFF_CONFIG_FILE: pyproject.toml
 
 # Ruff format — uses pyproject.toml config
 PYTHON_DEFAULT_STYLE: ruff

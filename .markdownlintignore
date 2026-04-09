@@ -1,3 +1,6 @@
+.owlbear/briefs/*/
+.owlbear/decisions
+.owlbear/kanban/tasks
 .owlbear/research
 .owlbear/scratch
 .github
