@@ -1,16 +1,16 @@
 ---
 id: 697
 title: 'Tests: async StructuredExtractor protocol'
-status: done
+status: archived
 priority: needed
 created: 2026-04-08T21:37:23.4121614+02:00
-updated: 2026-04-09T04:00:04.7732346+02:00
+updated: 2026-04-09T04:14:12.4530475+02:00
+started: 2026-04-09T04:14:12.4530475+02:00
+completed: 2026-04-09T04:14:12.4530475+02:00
 tags:
     - scope:knowledge
     - type:test
 parent: 676
-claimed_by: raven-path
-claimed_at: 2026-04-09T04:00:04.7721944+02:00
 class: standard
 ---
 
@@ -324,3 +324,36 @@ None found (`.owlbear/scratch/697-*` — no results).
 ### Files Updated
 
 None.
+
+[[2026-04-09]] Thu 04:14
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: assert extract() is coroutine function | 3 tests in TestFromAC_AsyncStructuredExtractorProtocol — all FAIL (RED) confirmed via pytest | PASS |
+| AC2: AsyncMock + await EntityExtractor.extract() | 6 tests in TestFromAC_EntityExtractorAsyncDelegation — all FAIL (RED) confirmed via pytest | PASS |
+| AC3: all new/modified tests FAIL | 12 total RED (3 AC1 + 6 AC2 + 3 modified delegation tests) — 12 failed, 19 passed in scoped run | PASS |
+
+### Test Results
+- pytest (scoped): 12 failed, 19 passed — all failures are intentional RED-phase tests ✓
+- pytest (full suite): 394 failed, 3667 passed — pre-existing failures in 53 unrelated files, none caused by #697
+- ruff: 5 violations in serve/mcp-kanban/ — none in task scope, clean for task files
+
+### Architect Quality: 4/5
+AC was clear and directly verifiable. Minor gap: AC3 "all new/modified tests FAIL" did not explicitly define "new" vs "relocated" — the reviewer had to interpret. Builder/reviewer resolved cleanly.
+
+### Commit Integrity Note
+Retry test-writer changes (AC3 fix + delegation mock updates) were left uncommitted. Original commit b15bdc0 had the AC3 violation. Committed by auditor as ccc9f1a.
+
+### Deduction Breakdown
+- −0.02: Uncommitted retry deliverables (test-writer process gap)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| b15bdc0 | test | test_structured_extractor_protocol.py, test_extractor.py | #697 (test-writer) |
+| ccc9f1a | test | test_extractor.py, test_structured_extractor_protocol.py | #697 (test-writer retry, committed by auditor) |
+| ebe46e6 | chore | 697-tests-async-structuredextractor-protocol.md | #697 (auditor) |
