@@ -1,5 +1,39 @@
 ﻿[
   {
+    "cycle": "2026-04-09T-periodic-8",
+    "note": "Periodic curation cycle 8. Channel A: MCP owlbearMemory not accessible this session. Channel B: inbox empty. 4 entries processed (3 from cycle-7 carries, 1 new). 1 promotion: ruamel-yaml-timestamp-resolver (MEDIUM→HIGH via #716 corroboration → added to process-patterns.md). 2 kept MEDIUM (final 3rd carry): pre-shipped-red-green-cross-task, test-writer-uncommitted-file. 1 new MEDIUM (ruff CRLF→LF normalization, already in ruff-and-lint-discipline.md) — keep for corroboration. 0 pruned this cycle. 0 conflicts.",
+    "entries_processed": 4,
+    "promotions": [
+      {
+        "entry_id": "inline:#715-builder+#716-builder:ruamel-yaml-timestamp-resolver",
+        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level — avoids global side effects)",
+        "recommendation": "approve",
+        "reason": "HIGH — 2 independent corroborations (#715 design + #716 confirmed working). Specific, non-obvious, actionable. Added to process-patterns.md."
+      }
+    ],
+    "kept_medium": [
+      {
+        "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "recommendation": "keep",
+        "reason": "MEDIUM (3rd carry, final) — variant of existing process-patterns.md 'pre-existing test/implementation state' entry (lines 48-56), but cross-task; still single observation"
+      },
+      {
+        "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "recommendation": "keep",
+        "reason": "MEDIUM (3rd carry, final) — existing pipeline-handoff rule covers researchers but not test-writers; single occurrence"
+      },
+      {
+        "entry_id": "ruff-and-lint-discipline.md:200-207:ruff-crlf-normalization",
+        "content_preview": "ruff check --fix normalizes CRLF→LF on Windows; makes git diff show full-file changes; --ignore-cr-at-eol separates CRLF noise from real changes",
+        "recommendation": "keep",
+        "reason": "MEDIUM (1st carry) — specific, non-obvious, actionable. Single megalinter session source. Keep for second sighting."
+      }
+    ],
+    "pruned": []
+  },
+  {
     "cycle": "2026-04-09T-periodic-7",
     "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. New findings: findings-2026-04-09-d8e6149.md (MegaLinter on commit d8e6149). 7 entries reviewed (3 new + 4 carried). 0 promotions. 3 kept MEDIUM (all from cycle 6 carries — 2nd carry). 5 pruned: 4 new findings (editorconfig-v1archive NOISE, json-bom-vscode LOW, ruff-72-residual LOW, yamllint-conventions NOISE) + 1 dropped after 4th carry (#703-docstring-overclaim, no second sighting). Security note: gitleaks now CLEAN on d8e6149 (was 6 secrets on d5ed020 from cycle 6) — prior security alert RESOLVED, no user action needed.",
     "entries_processed": 7,
