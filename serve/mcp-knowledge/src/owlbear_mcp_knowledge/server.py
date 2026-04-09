@@ -111,21 +111,25 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     return excluded
 
 
-def make_evaluate_fn(model: str) -> EvaluateFn:  # noqa: ARG001
+def make_evaluate_fn(model: str) -> EvaluateFn:
     """Return an EvaluateFn callable for the given model name.
 
-    Placeholder that returns a neutral EvaluationResult. Real LLM scoring
-    via PydanticAI is wired by #701 (depends on #676).
+    Delegates to ``make_pydantic_evaluate_fn`` when pydantic-ai is installed.
+    Falls back to a neutral no-op stub when pydantic-ai is absent.
     """
+    try:
+        from owlbear_knowledge.evaluator import make_pydantic_evaluate_fn  # noqa: PLC0415
 
-    async def _evaluate(_prompt: str) -> EvaluationResult:
-        return EvaluationResult(
-            relevance_score=0.5,
-            summary="No project context available -- neutral evaluation.",
-            worth_ingesting=True,
-        )
+        return make_pydantic_evaluate_fn(model)
+    except ImportError:
+        async def _evaluate(_prompt: str) -> EvaluationResult:
+            return EvaluationResult(
+                relevance_score=0.5,
+                summary="No project context available -- neutral evaluation.",
+                worth_ingesting=True,
+            )
 
-    return _evaluate
+        return _evaluate
 
 
 async def _web_read(url: str) -> str | None:

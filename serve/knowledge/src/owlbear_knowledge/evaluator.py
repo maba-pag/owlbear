@@ -50,6 +50,31 @@ class EvaluationResult(BaseModel):
 EvaluateFn = Callable[[str], Awaitable[EvaluationResult]]
 
 
+def make_pydantic_evaluate_fn(model: str) -> EvaluateFn:
+    """Return an async EvaluateFn backed by a PydanticAI Agent.
+
+    Constructs ``pydantic_ai.Agent(model, output_type=EvaluationResult,
+    system_prompt=EVALUATION_PROMPT)`` and returns a coroutine callable that
+    forwards the prompt to ``agent.run()`` and returns ``result.output``.
+
+    Raises:
+        ImportError: when pydantic-ai is not installed.
+    """
+    import pydantic_ai  # noqa: PLC0415
+
+    agent = pydantic_ai.Agent(
+        model,
+        output_type=EvaluationResult,
+        system_prompt=EVALUATION_PROMPT,
+    )
+
+    async def _evaluate(prompt: str) -> EvaluationResult:
+        result = await agent.run(prompt)
+        return result.output
+
+    return _evaluate
+
+
 def _default_result() -> EvaluationResult:
     """Return a neutral EvaluationResult when no project context is available."""
     return EvaluationResult(
