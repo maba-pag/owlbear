@@ -218,7 +218,7 @@ class TestUsageTrackerSummary:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_UsageSummaryNoneWindow:  # noqa: N801
+class TestFromAC_UsageSummaryNoneWindow:
     """summary(window=None) uses load() to get all records regardless of age."""
 
     def test_summary_none_window_includes_all_records(self, tmp_path: Path) -> None:

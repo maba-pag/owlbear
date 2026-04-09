@@ -97,7 +97,7 @@ def _count_bare_calls(func_node: ast.AST, callee_name: str) -> int:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RecoverCallSitesAwait:  # noqa: N801
+class TestFromAC_RecoverCallSitesAwait:
     """_recover_from_error must ``await _log_to_journal(...)`` at every call site."""
 
     def test_recover_from_error_is_async(self) -> None:
@@ -140,7 +140,7 @@ class TestFromAC_RecoverCallSitesAwait:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ErrorJournalSynchronous:  # noqa: N801
+class TestFromAC_ErrorJournalSynchronous:
     """ErrorJournal and JsonlStore must have zero async methods."""
 
     def test_error_journal_log_is_not_coroutine(self) -> None:
@@ -189,7 +189,7 @@ class TestFromAC_ErrorJournalSynchronous:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_LoopDetectionUnchanged:  # noqa: N801
+class TestFromAC_LoopDetectionUnchanged:
     """loop_detection.py._log_to_journal must remain synchronous."""
 
     def test_loop_detection_log_to_journal_is_sync_def(self) -> None:
@@ -232,7 +232,7 @@ class TestFromAC_LoopDetectionUnchanged:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_NoNewDependencies:  # noqa: N801
+class TestFromAC_NoNewDependencies:
     """daemon.py must not introduce new third-party imports for async journal."""
 
     # Known third-party imports in daemon.py (pre-#541 baseline).

@@ -648,7 +648,7 @@ _AX_TEXTBOX = SimpleNamespace(
 )
 
 
-class TestFromAC_BrowserSnapshotDelegation:  # noqa: N801
+class TestFromAC_BrowserSnapshotDelegation:
     """_snapshot wrapper delegates to self._manager.snapshot(filter=...)."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -690,7 +690,7 @@ class TestFromAC_BrowserSnapshotDelegation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BrowserSnapshotOutput:  # noqa: N801
+class TestFromAC_BrowserSnapshotOutput:
     """_snapshot formats list[AXNodeInfo] as '[{id}] {role}: {name}' per line."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -733,7 +733,7 @@ class TestFromAC_BrowserSnapshotOutput:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BrowserSnapshotDescription:  # noqa: N801
+class TestFromAC_BrowserSnapshotDescription:
     """browser_snapshot tool description includes token-cost guidance."""
 
     def test_description_contains_interactive(self) -> None:

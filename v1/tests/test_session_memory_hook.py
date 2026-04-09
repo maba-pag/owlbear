@@ -23,7 +23,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SessionMemoryHook:  # noqa: N801
+class TestFromAC_SessionMemoryHook:
     """AC lines 1-8: SessionMemoryHook class, constructor, register,
     SESSION_END handler, empty-messages edge case, graceful degradation,
     and directory creation."""
@@ -243,7 +243,7 @@ class TestFromAC_SessionMemoryHook:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ContextManagerSessionRestore:  # noqa: N801
+class TestFromAC_ContextManagerSessionRestore:
     """AC lines 9-10: ContextManager.instructions reads session-memory.md."""
 
     def test_instructions_includes_session_memory(self, tmp_path: Path) -> None:
@@ -324,7 +324,7 @@ class TestFromAC_ContextManagerSessionRestore:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SessionMemoryConfig:  # noqa: N801
+class TestFromAC_SessionMemoryConfig:
     """AC line 11: session_memory_enabled in OwlBearSettings."""
 
     def test_setting_defaults_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -368,7 +368,7 @@ class TestFromAC_SessionMemoryConfig:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SessionMemoryBootstrap:  # noqa: N801
+class TestFromAC_SessionMemoryBootstrap:
     """AC lines 12-13: Bootstrap wiring in __init__.py, guarded by config."""
 
     def test_wire_post_model_hooks_registers_when_enabled(

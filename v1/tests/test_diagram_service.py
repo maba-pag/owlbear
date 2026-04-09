@@ -334,7 +334,7 @@ class TestHttpxConfig:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ExcalidrawSupport:  # noqa: N801
+class TestFromAC_ExcalidrawSupport:
     """Excalidraw support: SVG generation, PNG rejection, SUPPORTED_TYPES membership."""
 
     @pytest.mark.asyncio
@@ -374,7 +374,7 @@ class TestFromAC_ExcalidrawSupport:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SvgOnlyTypes:  # noqa: N801
+class TestFromAC_SvgOnlyTypes:
     """_SVG_ONLY_TYPES module-level constant: existence, type, content, consistency."""
 
     def test_svg_only_types_constant_exists(self) -> None:

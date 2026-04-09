@@ -8,13 +8,13 @@ import sys
 import owlbear.memory.knowledge as pkg
 
 
-class TestFromAC_QdrantNotEagerlyLoaded:  # noqa: N801
+class TestFromAC_QdrantNotEagerlyLoaded:
     """Importing the knowledge package must not eagerly pull in qdrant (#546)."""
 
     def test_knowledge_import_does_not_load_qdrant(self) -> None:
         """After `import owlbear.memory.knowledge`, neither qdrant_client nor the
         qdrant submodule should appear in sys.modules."""
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [
                 sys.executable,
                 "-c",

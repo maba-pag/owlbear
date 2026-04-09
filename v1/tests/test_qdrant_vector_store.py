@@ -492,7 +492,7 @@ class TestImportanceByTypeKeys:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ColBERTQuantizationConfig:  # noqa: N801
+class TestFromAC_ColBERTQuantizationConfig:
     """After _ensure_collection(), ColBERT vector has ScalarQuantization(INT8)."""
 
     def test_colbert_has_scalar_quantization(self, store) -> None:

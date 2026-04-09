@@ -26,7 +26,7 @@ def _raise_runtime_error() -> None:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_IsSubclass:  # noqa: N801
+class TestFromAC_IsSubclass:
     """Each custom exception must be a subclass of OwlBearError."""
 
     def test_blocked_command_error_is_subclass(self) -> None:
@@ -53,7 +53,7 @@ class TestFromAC_IsSubclass:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BlanketCatch:  # noqa: N801
+class TestFromAC_BlanketCatch:
     """``except OwlBearError`` must catch all 3 custom exceptions."""
 
     def test_catches_blocked_command_error(self) -> None:
@@ -112,7 +112,7 @@ class TestFromAC_BlanketCatch:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_TimeoutErrorCompat:  # noqa: N801
+class TestFromAC_TimeoutErrorCompat:
     """AskUserTimeoutError must remain catchable as TimeoutError (MI)."""
 
     def test_is_subclass_of_timeout_error(self) -> None:
@@ -139,7 +139,7 @@ class TestFromAC_TimeoutErrorCompat:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ClassifyBlockedURL:  # noqa: N801
+class TestFromAC_ClassifyBlockedURL:
     """classify_error must explicitly handle BlockedURLError as PERMANENT."""
 
     def test_classify_blocked_url_error_returns_permanent(self) -> None:

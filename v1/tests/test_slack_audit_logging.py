@@ -65,7 +65,7 @@ async def _connect_and_get_handler(
 # ===========================================================================
 
 
-class TestFromAC_AcceptedMessageInfoLog:  # noqa: N801
+class TestFromAC_AcceptedMessageInfoLog:
     """AC 2: accepted message produces INFO log with user_id and text length."""
 
     @pytest.mark.asyncio
@@ -148,7 +148,7 @@ class TestFromAC_AcceptedMessageInfoLog:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_ContentNeverLogged:  # noqa: N801
+class TestFromAC_ContentNeverLogged:
     """AC 3: no log emitted by _handle_socket_event contains event text."""
 
     @pytest.mark.asyncio
@@ -216,7 +216,7 @@ class TestFromAC_ContentNeverLogged:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_DebugLineRemoved:  # noqa: N801
+class TestFromAC_DebugLineRemoved:
     """AC 4: 'Enqueued Slack message: ...' debug log pattern no longer emitted."""
 
     @pytest.mark.asyncio
@@ -271,7 +271,7 @@ class TestFromAC_DebugLineRemoved:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_SubtypeDropLogged:  # noqa: N801
+class TestFromAC_SubtypeDropLogged:
     """AC 5: subtype-filtered drops produce a DEBUG log with the subtype value."""
 
     @pytest.mark.asyncio
@@ -348,7 +348,7 @@ class TestFromAC_SubtypeDropLogged:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_RejectionLogUnchanged:  # noqa: N801
+class TestFromAC_RejectionLogUnchanged:
     """AC 6: existing #795 rejection WARNING is still present and correct."""
 
     @pytest.mark.asyncio

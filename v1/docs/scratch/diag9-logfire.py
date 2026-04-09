@@ -2,7 +2,6 @@
 
 import pathlib
 import subprocess
-import sys
 import time
 
 out = pathlib.Path("docs/scratch/diag9-output.txt")
@@ -33,7 +32,7 @@ try:
     from logfire._internal.config_params import ParamManager
 
     pm = ParamManager.create(None)
-    log(f"ParamManager ok")
+    log("ParamManager ok")
 except Exception as e:
     log(f"ParamManager error: {e}")
 

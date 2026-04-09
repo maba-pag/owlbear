@@ -1,6 +1,6 @@
 """Fix en-dash/em-dash ruff errors and remove duplicate class in test file."""
 
-import pathlib, re
+import pathlib
 
 p = pathlib.Path("tests/test_retrospective_hook.py")
 t = p.read_text(encoding="utf-8")
@@ -9,7 +9,7 @@ t = p.read_text(encoding="utf-8")
 lines = t.splitlines()
 for i, line in enumerate(lines, 1):
     if "\u2013" in line or "\u2014" in line:
-        print(f"{i}: {repr(line[:100])}")
+        print(f"{i}: {line[:100]!r}")
 
 # Fix en-dash (U+2013) -> hyphen-minus in the docstring and comment
 t2 = t.replace(
@@ -35,7 +35,7 @@ else:
 lines2 = t2.splitlines()
 for i, line in enumerate(lines2, 1):
     if "\u2013" in line or "\u2014" in line:
-        print(f"REMAINING {i}: {repr(line[:100])}")
+        print(f"REMAINING {i}: {line[:100]!r}")
 
 p.write_text(t2, encoding="utf-8")
 print("Done.")

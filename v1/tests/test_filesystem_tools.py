@@ -362,7 +362,7 @@ class TestSearchFiles:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_FileToolsetCoverageGaps:  # noqa: N801
+class TestFromAC_FileToolsetCoverageGaps:
     """Cover minor edge-case paths in FileToolset."""
 
     def test_update_workspace_sets_root_to_resolved_path(self, tmp_path: object) -> None:

@@ -79,7 +79,7 @@ def _stub_service(
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsolidationConnNone:  # noqa: N801
+class TestFromAC_ConsolidationConnNone:
     """When consolidation_conn is None the output must be identical to pre-feature behavior."""
 
     def test_none_conn_produces_no_insight_section(self) -> None:
@@ -108,7 +108,7 @@ class TestFromAC_ConsolidationConnNone:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_InsightsAppendedAfterRAG:  # noqa: N801
+class TestFromAC_InsightsAppendedAfterRAG:
     """Insights must appear after the RAG output, not before."""
 
     def test_insights_appear_after_rag_section(self) -> None:
@@ -135,7 +135,7 @@ class TestFromAC_InsightsAppendedAfterRAG:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_TokenBudget:  # noqa: N801
+class TestFromAC_TokenBudget:
     """Insights share the same max_tokens budget as RAG; budget must not be exceeded."""
 
     def test_total_output_within_budget(self) -> None:
@@ -172,7 +172,7 @@ class TestFromAC_TokenBudget:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_EmptyTable:  # noqa: N801
+class TestFromAC_EmptyTable:
     """A connected DB with no consolidation rows must produce baseline output."""
 
     def test_empty_table_no_insight_section(self) -> None:
@@ -198,7 +198,7 @@ class TestFromAC_EmptyTable:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ExceptionHandling:  # noqa: N801
+class TestFromAC_ExceptionHandling:
     """Consolidation query failures must be caught and logged at WARNING."""
 
     def test_corrupt_conn_still_returns_rag_output(self) -> None:
@@ -247,7 +247,7 @@ class TestFromAC_ExceptionHandling:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_InsightFormat:  # noqa: N801
+class TestFromAC_InsightFormat:
     """Insights must be formatted with a header and bullet points."""
 
     def test_header_present(self) -> None:
@@ -303,7 +303,7 @@ class TestFromAC_InsightFormat:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BootstrapWiring:  # noqa: N801
+class TestFromAC_BootstrapWiring:
     """Bootstrap must pass consolidation_conn=infra.conn when enabled, else None."""
 
     def test_enabled_passes_infra_conn(self) -> None:

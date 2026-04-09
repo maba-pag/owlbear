@@ -150,7 +150,7 @@ def db() -> sqlite3.Connection:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SchemaVersionConstant:  # noqa: N801
+class TestFromAC_SchemaVersionConstant:
     """_SCHEMA_VERSION must be 8 (bumped from 7 by consolidation migration)."""
 
     def test_schema_version_is_8(self) -> None:
@@ -162,7 +162,7 @@ class TestFromAC_SchemaVersionConstant:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_FreshDbEntitiesImportance:  # noqa: N801
+class TestFromAC_FreshDbEntitiesImportance:
     """A fresh init_db creates entities table with importance column."""
 
     def test_entities_has_importance_column(self, db: sqlite3.Connection) -> None:
@@ -183,7 +183,7 @@ class TestFromAC_FreshDbEntitiesImportance:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_FreshDbChunksConsolidated:  # noqa: N801
+class TestFromAC_FreshDbChunksConsolidated:
     """A fresh init_db creates chunks table with consolidated column."""
 
     def test_chunks_has_consolidated_column(self, db: sqlite3.Connection) -> None:
@@ -204,7 +204,7 @@ class TestFromAC_FreshDbChunksConsolidated:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_FreshDbConsolidationsTable:  # noqa: N801
+class TestFromAC_FreshDbConsolidationsTable:
     """A fresh init_db creates the consolidations table with all columns."""
 
     def test_consolidations_table_exists(self, db: sqlite3.Connection) -> None:
@@ -242,7 +242,7 @@ class TestFromAC_FreshDbConsolidationsTable:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MigrateV7ToV8EntitiesImportance:  # noqa: N801
+class TestFromAC_MigrateV7ToV8EntitiesImportance:
     """v7 → v8 migration adds importance column to entities."""
 
     def test_entities_importance_added(self) -> None:
@@ -263,7 +263,7 @@ class TestFromAC_MigrateV7ToV8EntitiesImportance:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MigrateV7ToV8ChunksConsolidated:  # noqa: N801
+class TestFromAC_MigrateV7ToV8ChunksConsolidated:
     """v7 → v8 migration adds consolidated column to chunks."""
 
     def test_chunks_consolidated_added(self) -> None:
@@ -284,7 +284,7 @@ class TestFromAC_MigrateV7ToV8ChunksConsolidated:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MigrateV7ToV8ConsolidationsTable:  # noqa: N801
+class TestFromAC_MigrateV7ToV8ConsolidationsTable:
     """v7 → v8 migration creates the consolidations table."""
 
     def test_consolidations_table_created(self) -> None:
@@ -312,7 +312,7 @@ class TestFromAC_MigrateV7ToV8ConsolidationsTable:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MigrateV7DataPreserved:  # noqa: N801
+class TestFromAC_MigrateV7DataPreserved:
     """Existing v7 data rows survive the v8 migration."""
 
     def test_existing_documents_preserved(self) -> None:
@@ -391,7 +391,7 @@ class TestFromAC_MigrateV7DataPreserved:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MigrateV7DefaultValues:  # noqa: N801
+class TestFromAC_MigrateV7DefaultValues:
     """Existing v7 entity rows get importance=0.5 and chunk rows get consolidated=0."""
 
     def test_existing_entity_gets_default_importance(self) -> None:
@@ -414,7 +414,7 @@ class TestFromAC_MigrateV7DefaultValues:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_Idempotency:  # noqa: N801
+class TestFromAC_Idempotency:
     """Double-calling init_db must be safe — no errors, no data loss."""
 
     def test_idempotent_v7_migration(self) -> None:

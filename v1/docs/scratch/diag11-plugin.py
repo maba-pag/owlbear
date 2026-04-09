@@ -35,7 +35,7 @@ log("test B: check _internal __init__.py")
 try:
     spec2 = importlib.util.find_spec("logfire._internal")
     log(f"_internal spec: {spec2.origin if spec2 else 'NOT FOUND'}")
-    has_init = spec2 and spec2.origin and not spec2.origin.endswith("__init__.py") is False
+    has_init = spec2 and spec2.origin and spec2.origin.endswith("__init__.py") is not False
     log(f"has __init__.py: {spec2.origin}")
 except Exception as e:
     log(f"error: {e}")

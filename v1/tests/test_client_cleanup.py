@@ -32,7 +32,7 @@ def _make_openai_auth_error() -> openai.AuthenticationError:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BootstrapClientRegistration:  # noqa: N801
+class TestFromAC_BootstrapClientRegistration:
     """SP1: Bootstrap calls create_copilot_client directly, builds model
     inline, registers cleanup, and sets agent._openai_client."""
 
@@ -164,7 +164,7 @@ class TestFromAC_BootstrapClientRegistration:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_CleanupAwaitsAsync:  # noqa: N801
+class TestFromAC_CleanupAwaitsAsync:
     """SP2: Cleanup loop properly awaits async callables and _chat_async
     runs cleanup in its finally block."""
 
@@ -284,7 +284,7 @@ class TestFromAC_CleanupAwaitsAsync:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_DaemonAuthRefresh:  # noqa: N801
+class TestFromAC_DaemonAuthRefresh:
     """SP3: _handle_classified_error AUTH branch closes old client before
     replacement and updates agent._openai_client."""
 

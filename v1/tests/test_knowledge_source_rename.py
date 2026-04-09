@@ -15,7 +15,7 @@ import importlib
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_NewNamesExist:  # noqa: N801
+class TestFromAC_NewNamesExist:
     """After rename, the full-prefix function names must be importable."""
 
     def test_knowledge_source_add_importable(self) -> None:
@@ -48,7 +48,7 @@ class TestFromAC_NewNamesExist:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_OldNamesRemoved:  # noqa: N801
+class TestFromAC_OldNamesRemoved:
     """After rename, the old abbreviated names must NOT exist in the module."""
 
     def test_ks_add_no_longer_exists(self) -> None:

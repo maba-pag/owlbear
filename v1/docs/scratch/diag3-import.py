@@ -20,7 +20,6 @@ import dotenv
 log(f"dotenv ok, version={dotenv.__version__ if hasattr(dotenv, '__version__') else 'unknown'}")
 
 log("importing typing_inspection...")
-import typing_inspection
 
 log("typing_inspection ok")
 
@@ -32,7 +31,6 @@ log(
 )
 
 log("importing BaseSettings from pydantic_settings...")
-from pydantic_settings import BaseSettings
 
 log("BaseSettings ok")
 

@@ -104,7 +104,7 @@ def _edge(source_id: str, target_id: str) -> Edge:
 # ===========================================================================
 
 
-class TestFromAC_EntityImportanceField:  # noqa: N801
+class TestFromAC_EntityImportanceField:
     """Entity.importance is a float, default 0.5, constrained to [0.0, 1.0]."""
 
     def test_default_importance_is_half(self) -> None:
@@ -167,7 +167,7 @@ class TestFromAC_EntityImportanceField:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_ExtractorImportance:  # noqa: N801
+class TestFromAC_ExtractorImportance:
     """EntityExtractor.extract() returns entities with importance populated."""
 
     def test_extraction_prompt_mentions_importance(self) -> None:
@@ -217,7 +217,7 @@ class TestFromAC_ExtractorImportance:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_GraphStoreImportanceRoundTrip:  # noqa: N801
+class TestFromAC_GraphStoreImportanceRoundTrip:
     """insert_entity / get_entity / list_entities preserve importance."""
 
     def test_round_trip_via_get(self, graph_store: GraphStore) -> None:
@@ -281,7 +281,7 @@ class TestFromAC_GraphStoreImportanceRoundTrip:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_ExpandSortsByImportance:  # noqa: N801
+class TestFromAC_ExpandSortsByImportance:
     """_expand() orders neighbors by importance DESC when weight_by_importance=True."""
 
     def test_higher_importance_first(
@@ -361,7 +361,7 @@ class TestFromAC_ExpandSortsByImportance:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_ImportanceIgnoredByDefault:  # noqa: N801
+class TestFromAC_ImportanceIgnoredByDefault:
     """Default behavior does not sort by importance."""
 
     def test_default_weight_by_importance_is_false(

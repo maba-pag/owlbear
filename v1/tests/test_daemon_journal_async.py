@@ -49,7 +49,7 @@ def _make_journal() -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_LogToJournalIsCoroutine:  # noqa: N801
+class TestFromAC_LogToJournalIsCoroutine:
     """_log_to_journal must be declared as async def."""
 
     def test_is_coroutinefunction(self) -> None:
@@ -62,7 +62,7 @@ class TestFromAC_LogToJournalIsCoroutine:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_LogToJournalNoneJournal:  # noqa: N801
+class TestFromAC_LogToJournalNoneJournal:
     """When journal is None, _log_to_journal must return without touching to_thread."""
 
     def test_journal_none_skips_to_thread(self) -> None:
@@ -103,7 +103,7 @@ class TestFromAC_LogToJournalNoneJournal:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_LogToJournalToThread:  # noqa: N801
+class TestFromAC_LogToJournalToThread:
     """_log_to_journal must delegate to asyncio.to_thread(journal.log, ...)."""
 
     def test_calls_to_thread_with_journal_log(self) -> None:
@@ -253,7 +253,7 @@ class TestFromAC_LogToJournalToThread:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_LogToJournalBestEffort:  # noqa: N801
+class TestFromAC_LogToJournalBestEffort:
     """_log_to_journal must swallow exceptions from asyncio.to_thread."""
 
     def test_exception_from_to_thread_does_not_propagate(self) -> None:

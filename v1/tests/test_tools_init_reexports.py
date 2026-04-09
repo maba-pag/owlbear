@@ -207,7 +207,7 @@ class TestFromAC_ToolsImportSideEffect:
 
     def test_bare_import_does_not_load_github_api_or_retry(self) -> None:
         """Fresh subprocess: bare import owlbear.tools must not load github_api or core.retry."""
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [
                 sys.executable,
                 "-c",

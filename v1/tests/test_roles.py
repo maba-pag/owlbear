@@ -271,7 +271,7 @@ class TestApplyRolePolicyCombinedToolset:
 # ── TestFromAC: allowed_tools field (AC1) ─────────────────────────
 
 
-class TestFromAC_AllowedToolsField:  # noqa: N801
+class TestFromAC_AllowedToolsField:
     """AC1: RolePolicy.allowed_tools: frozenset[str] field exists."""
 
     def test_role_policy_has_allowed_tools_field(self) -> None:
@@ -302,7 +302,7 @@ class TestFromAC_AllowedToolsField:  # noqa: N801
 # ── TestFromAC: apply_role_policy with allow-list (AC2, AC3, AC4, AC6) ──
 
 
-class TestFromAC_ApplyAllowList:  # noqa: N801
+class TestFromAC_ApplyAllowList:
     """AC2-4,6: apply_role_policy honours allowed_tools filtering."""
 
     def test_non_empty_allowed_permits_listed_tools(self) -> None:
@@ -409,7 +409,7 @@ class TestFromAC_ApplyAllowList:  # noqa: N801
 # ── TestFromAC: VALIDATOR_POLICY allow-list model (AC5) ───────────
 
 
-class TestFromAC_ValidatorAllowListModel:  # noqa: N801
+class TestFromAC_ValidatorAllowListModel:
     """AC5: VALIDATOR_POLICY uses allow-list, not 2-item deny-list."""
 
     def test_validator_policy_has_non_empty_allowed_tools(self) -> None:
@@ -467,7 +467,7 @@ class TestFromAC_ValidatorAllowListModel:  # noqa: N801
 # ── TestFromAC: AgentRegistry applies allow-list (AC7) ────────────
 
 
-class TestFromAC_RegistryAllowListPolicy:  # noqa: N801
+class TestFromAC_RegistryAllowListPolicy:
     """AC7: AgentRegistry applies allow-list policy to agents with role=validator."""
 
     def test_registry_applies_allow_list_to_validator_role(
@@ -517,7 +517,7 @@ class TestFromAC_RegistryAllowListPolicy:  # noqa: N801
 # ── TestFromAC: #741 VALIDATOR_POLICY deviations (AC3) ───────────
 
 
-class TestFromAC_ValidatorPolicyDeviations741:  # noqa: N801
+class TestFromAC_ValidatorPolicyDeviations741:
     """#741 AC3 deviations from research doc Section 5."""
 
     def test_validator_includes_run_command(self) -> None:
@@ -555,7 +555,7 @@ class TestFromAC_ValidatorPolicyDeviations741:  # noqa: N801
 # ── TestFromAC: #741 BUILDER_POLICY unchanged (AC4) ──────────────
 
 
-class TestFromAC_BuilderPolicyUnchanged741:  # noqa: N801
+class TestFromAC_BuilderPolicyUnchanged741:
     """#741 AC4: BUILDER_POLICY unchanged — empty allowed_tools = full access."""
 
     def test_builder_has_empty_allowed_tools(self) -> None:

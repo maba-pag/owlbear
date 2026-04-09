@@ -546,7 +546,7 @@ class TestWebReadRetry:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ExtractContentMigration:  # noqa: N801
+class TestFromAC_ExtractContentMigration:
     """AC2 + AC3: wrapping semantics after switching from trafilatura to extract_content."""
 
     @pytest.mark.usefixtures("mock_httpx_client")

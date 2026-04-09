@@ -27,7 +27,7 @@ def _make_channel() -> SlackChannel:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SendFileDelegation:  # noqa: N801
+class TestFromAC_SendFileDelegation:
     """send_file delegates to send_image with correct arguments."""
 
     @pytest.mark.asyncio
@@ -57,7 +57,7 @@ class TestFromAC_SendFileDelegation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SendFileNoCaptionDefault:  # noqa: N801
+class TestFromAC_SendFileNoCaptionDefault:
     """When caption is omitted, send_file uses path.name as caption."""
 
     @pytest.mark.asyncio
@@ -98,7 +98,7 @@ class TestFromAC_SendFileNoCaptionDefault:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SendFileErrorPropagation:  # noqa: N801
+class TestFromAC_SendFileErrorPropagation:
     """When send_image raises, send_file propagates the exception (no double fallback)."""
 
     @pytest.mark.asyncio
@@ -136,7 +136,7 @@ class TestFromAC_SendFileErrorPropagation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SendFileSignature:  # noqa: N801
+class TestFromAC_SendFileSignature:
     """send_file signature matches the ChannelPlugin protocol."""
 
     def test_send_file_is_overridden_on_slack_channel(self) -> None:

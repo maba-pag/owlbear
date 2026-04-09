@@ -19,7 +19,7 @@ from typing import Any, get_type_hints
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConsumerParamAnnotations:  # noqa: N801
+class TestFromAC_ConsumerParamAnnotations:
     """Each hook consumer callback must declare a typed payload parameter,
     not ``object``.
 
@@ -181,7 +181,7 @@ class TestFromAC_ConsumerParamAnnotations:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_NoIsinstanceGuards:  # noqa: N801
+class TestFromAC_NoIsinstanceGuards:
     """Consumer __call__ methods must not contain ``isinstance(data, dict)``
     early-return guards.  Once the parameter is typed, the guard is dead code.
 
@@ -293,7 +293,7 @@ class TestFromAC_NoIsinstanceGuards:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MakeHandlerClosureTyping:  # noqa: N801
+class TestFromAC_MakeHandlerClosureTyping:
     """NotificationHook._make_handler closure must declare ``data: dict[str, Any]``
     and remove the ``isinstance(data, dict)`` inline guard.
 
@@ -351,7 +351,7 @@ class TestFromAC_MakeHandlerClosureTyping:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RegistryGuardPreserved:  # noqa: N801
+class TestFromAC_RegistryGuardPreserved:
     """The isinstance(data, dict) check in skills/registry.py serves a
     different purpose (YAML parsing validation) and must NOT be removed.
 

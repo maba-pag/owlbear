@@ -7,7 +7,7 @@ import typing
 from owlbear.core.observability import EventStore, ToolStats
 
 
-class TestFromAC_ToolStatsTypedDict:  # noqa: N801
+class TestFromAC_ToolStatsTypedDict:
     """ToolStats TypedDict exists with the correct shape (AC1)."""
 
     def test_importable(self) -> None:
@@ -40,7 +40,7 @@ class TestFromAC_ToolStatsTypedDict:  # noqa: N801
         assert len(hints) == 3
 
 
-class TestFromAC_ToolStatsReturnAnnotation:  # noqa: N801
+class TestFromAC_ToolStatsReturnAnnotation:
     """tool_stats() return type references ToolStats (AC2)."""
 
     def test_return_annotation_is_dict_str_toolstats(self) -> None:

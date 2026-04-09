@@ -40,7 +40,7 @@ REMOVED_SYMBOLS: frozenset[str] = frozenset(
 )
 
 
-class TestFromAC_RemovedSymbols:  # noqa: N801
+class TestFromAC_RemovedSymbols:
     """AC 2: Removed symbols must not be accessible from the package."""
 
     @pytest.mark.parametrize("name", sorted(REMOVED_SYMBOLS))
@@ -52,7 +52,7 @@ class TestFromAC_RemovedSymbols:  # noqa: N801
             getattr(pkg, name)
 
 
-class TestFromAC_TextChunkerImportFix:  # noqa: N801
+class TestFromAC_TextChunkerImportFix:
     """AC 3: TextChunker must not be importable from the top-level package."""
 
     def test_text_chunker_not_on_package(self) -> None:
@@ -63,7 +63,7 @@ class TestFromAC_TextChunkerImportFix:  # noqa: N801
             _ = pkg.TextChunker  # type: ignore[attr-defined]
 
 
-class TestFromAC_ConsolidationImportFix:  # noqa: N801
+class TestFromAC_ConsolidationImportFix:
     """AC 4: ConsolidationService must not be importable from the top-level package."""
 
     def test_consolidation_service_not_on_package(self) -> None:
@@ -74,7 +74,7 @@ class TestFromAC_ConsolidationImportFix:  # noqa: N801
             _ = pkg.ConsolidationService  # type: ignore[attr-defined]
 
 
-class TestFromAC_NoStaleImportLines:  # noqa: N801
+class TestFromAC_NoStaleImportLines:
     """AC 2: The __init__.py must not reference removed symbols at all.
 
     After #550, the module-level ``_LAZY_IMPORTS`` (or any successor

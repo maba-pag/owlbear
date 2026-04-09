@@ -24,7 +24,7 @@ from owlbear.tools.browser.safety import URLSafetyGuard
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BlockedURLErrorDefinition:  # noqa: N801
+class TestFromAC_BlockedURLErrorDefinition:
     """BlockedURLError must be defined in owlbear.core.exceptions as an OwlBearError subclass."""
 
     def test_is_owlbear_error_subclass(self) -> None:
@@ -81,7 +81,7 @@ class TestFromAC_BlockedURLErrorDefinition:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_URLSafetyGuardCheckURL:  # noqa: N801
+class TestFromAC_URLSafetyGuardCheckURL:
     """check_url() must raise BlockedURLError for blocklist and allowlist denials."""
 
     def test_check_url_raises_for_blocklist_match(self) -> None:
@@ -160,7 +160,7 @@ class TestFromAC_URLSafetyGuardCheckURL:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ToolsInitScope:  # noqa: N801
+class TestFromAC_ToolsInitScope:
     """BlockedURLError must not be added to owlbear.tools.__all__ by this task."""
 
     def test_blocked_url_error_not_in_tools_all(self) -> None:

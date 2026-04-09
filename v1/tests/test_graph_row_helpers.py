@@ -86,7 +86,7 @@ def _edge_row(
 # ===========================================================================
 
 
-class TestFromAC_EntityFromRow:  # noqa: N801
+class TestFromAC_EntityFromRow:
     """_entity_from_row(row) staticmethod: 9-element tuple, _load_meta, importance default."""
 
     def test_entity_from_row_exists_as_staticmethod(self) -> None:
@@ -147,7 +147,7 @@ class TestFromAC_EntityFromRow:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_EdgeFromRow:  # noqa: N801
+class TestFromAC_EdgeFromRow:
     """_edge_from_row(row) staticmethod: 7-element tuple, _load_meta for metadata."""
 
     def test_edge_from_row_exists_as_staticmethod(self) -> None:
@@ -194,7 +194,7 @@ class TestFromAC_EdgeFromRow:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_EntityMethodsDelegation:  # noqa: N801
+class TestFromAC_EntityMethodsDelegation:
     """All entity CRUD methods must call _entity_from_row (not inline-construct)."""
 
     @pytest.fixture(autouse=True)
@@ -252,7 +252,7 @@ class TestFromAC_EntityMethodsDelegation:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_EdgeMethodsDelegation:  # noqa: N801
+class TestFromAC_EdgeMethodsDelegation:
     """All edge CRUD methods must call _edge_from_row (not inline-construct)."""
 
     @pytest.fixture(autouse=True)
@@ -299,7 +299,7 @@ class TestFromAC_EdgeMethodsDelegation:  # noqa: N801
 # ===========================================================================
 
 
-class TestFromAC_NoInlineConstruction:  # noqa: N801
+class TestFromAC_NoInlineConstruction:
     """Source-level check: no inline Entity/Edge tuple-indexed construction remains."""
 
     def _get_graph_source(self) -> str:

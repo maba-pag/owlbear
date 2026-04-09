@@ -33,7 +33,7 @@ _PREVIOUSLY_EXPORTED = [
 ]
 
 
-class TestFromAC_CoreInitNoReExports:  # noqa: N801
+class TestFromAC_CoreInitNoReExports:
     """core/__init__.py must not re-export symbols or define __all__."""
 
     def test_no_all_attribute(self) -> None:

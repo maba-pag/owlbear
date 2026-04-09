@@ -18,7 +18,7 @@ import typer
 from bearclaw.commands import _cli_error
 
 
-class TestFromAC_CliErrorBehavior:  # noqa: N801
+class TestFromAC_CliErrorBehavior:
     """AC: _cli_error(msg) writes 'Error: {msg}' to stderr and raises typer.Exit(code=1)."""
 
     def test_raises_typer_exit(self) -> None:
@@ -54,7 +54,7 @@ class TestFromAC_CliErrorBehavior:  # noqa: N801
         assert captured.err.rstrip("\n") == "Error: connection refused"
 
 
-class TestFromAC_CliErrorNoReturnAnnotation:  # noqa: N801
+class TestFromAC_CliErrorNoReturnAnnotation:
     """AC: NoReturn annotation is present (inspect check)."""
 
     def test_return_annotation_is_noreturn(self) -> None:
@@ -63,7 +63,7 @@ class TestFromAC_CliErrorNoReturnAnnotation:  # noqa: N801
         assert hints.get("return") is NoReturn
 
 
-class TestFromAC_CliErrorMessageFormats:  # noqa: N801
+class TestFromAC_CliErrorMessageFormats:
     """AC: Parametrize message arg with >=3 formats (plain, f-string result, empty)."""
 
     @pytest.mark.parametrize(
@@ -148,7 +148,7 @@ def _find_raw_exit_code_1(source: str) -> list[int]:
     return hits
 
 
-class TestFromAC_ZeroRawExitCode1:  # noqa: N801
+class TestFromAC_ZeroRawExitCode1:
     """AC 3: Zero raw typer.Exit(code=1) anywhere in src/bearclaw/.
 
     The only allowed typer.Exit(code=1) is inside _cli_error() in __init__.py.
@@ -177,7 +177,7 @@ class TestFromAC_ZeroRawExitCode1:  # noqa: N801
         assert violations == [], "Raw typer.Exit(code=1) found:\n" + "\n".join(violations)
 
 
-class TestFromAC_AllModulesUseCliError:  # noqa: N801
+class TestFromAC_AllModulesUseCliError:
     """AC 4: All 7 affected command modules import and call _cli_error."""
 
     @pytest.mark.parametrize("module", _AFFECTED_MODULES)

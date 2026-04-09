@@ -22,12 +22,10 @@ os.environ["LOGFIRE_IGNORE_NO_CONFIG"] = "1"
 log("env vars set: LOGFIRE_SEND_TO_LOGFIRE=false, LOGFIRE_IGNORE_NO_CONFIG=1")
 
 log("importing pydantic_settings...")
-from pydantic_settings import BaseSettings
 
 log("pydantic_settings ok!")
 
 log("importing owlbear.config...")
-from owlbear.config import OwlBearSettings
 
 log("owlbear.config ok!")
 

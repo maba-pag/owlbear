@@ -14,7 +14,7 @@ import subprocess
 import sys
 
 
-class TestFromAC_BlockedURLErrorLocation:  # noqa: N801
+class TestFromAC_BlockedURLErrorLocation:
     """BlockedURLError must be defined in owlbear.core.exceptions (task #850)."""
 
     # -- AC2: structural — errors.py must not import from tools.browser.safety --
@@ -48,14 +48,14 @@ class TestFromAC_BlockedURLErrorLocation:  # noqa: N801
         assert classify_error(err) == ErrorCategory.PERMANENT
 
 
-class TestFromAC_DaemonCleanImport:  # noqa: N801
+class TestFromAC_DaemonCleanImport:
     """A fresh subprocess must import owlbear.daemon without owlbear.tools pre-seeding."""
 
     # -- AC4: cold import of owlbear.daemon without tools pre-seeding -----------
 
     def test_daemon_import_without_tools_preseeding(self) -> None:
         """Fresh subprocess can import owlbear.daemon with no owlbear.tools pre-seeding."""
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [
                 sys.executable,
                 "-c",
@@ -75,7 +75,7 @@ class TestFromAC_DaemonCleanImport:  # noqa: N801
         """Fresh subprocess: import owlbear.config then owlbear.daemon, then verify
         BlockedURLError is importable from owlbear.core.exceptions with no pre-seeding.
         """
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(
             [
                 sys.executable,
                 "-c",

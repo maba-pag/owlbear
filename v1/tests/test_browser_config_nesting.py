@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ModelConfigNestedPartialUpdate:  # noqa: N801
+class TestFromAC_ModelConfigNestedPartialUpdate:
     """AC1: model_config must have nested_model_default_partial_update=True."""
 
     def test_nested_model_default_partial_update_is_true(self) -> None:
@@ -49,7 +49,7 @@ class TestFromAC_ModelConfigNestedPartialUpdate:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BrowserConfigModuleLayering:  # noqa: N801
+class TestFromAC_BrowserConfigModuleLayering:
     """AC3: BrowserConfig class must be defined in owlbear.config leaf node."""
 
     def test_browser_config_module_is_owlbear_config(self) -> None:
@@ -81,7 +81,7 @@ class TestFromAC_BrowserConfigModuleLayering:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BootstrapHooksUseSettingsBrowser:  # noqa: N801
+class TestFromAC_BootstrapHooksUseSettingsBrowser:
     """AC5: build_hooks must pass settings.browser to URLSafetyGuard."""
 
     def test_build_hooks_passes_settings_browser_to_url_safety_guard(self) -> None:
@@ -106,7 +106,7 @@ class TestFromAC_BootstrapHooksUseSettingsBrowser:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BootstrapToolsetsUseSettingsBrowser:  # noqa: N801
+class TestFromAC_BootstrapToolsetsUseSettingsBrowser:
     """AC5: build_toolsets must pass settings.browser to BrowserToolset."""
 
     def test_build_toolsets_passes_settings_browser_to_browser_toolset(
@@ -135,7 +135,7 @@ class TestFromAC_BootstrapToolsetsUseSettingsBrowser:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_WebSearchToolsetBrowserConfigParam:  # noqa: N801
+class TestFromAC_WebSearchToolsetBrowserConfigParam:
     """AC5: _build_web_search_toolset must accept a browser_config parameter."""
 
     def test_build_web_search_toolset_signature_includes_browser_config(self) -> None:
@@ -157,7 +157,7 @@ class TestFromAC_WebSearchToolsetBrowserConfigParam:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_HydratorSettingsParam:  # noqa: N801
+class TestFromAC_HydratorSettingsParam:
     """AC5: _build_hydrator must accept a settings parameter and use settings.browser."""
 
     def test_build_hydrator_signature_includes_settings(self) -> None:
@@ -199,7 +199,7 @@ class TestFromAC_HydratorSettingsParam:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BrowserFallbackDefaultsPreserved:  # noqa: N801
+class TestFromAC_BrowserFallbackDefaultsPreserved:
     """AC6: BrowserManager/BrowserToolset None-config fallback uses owlbear.config.BrowserConfig."""
 
     def test_browser_manager_none_config_fallback_from_owlbear_config(self) -> None:

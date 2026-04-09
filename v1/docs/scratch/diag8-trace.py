@@ -31,7 +31,6 @@ __builtins__.__import__ = tracing_import
 log("start")
 
 try:
-    from pydantic_settings import BaseSettings
 
     log("pydantic_settings imported ok")
 except Exception as e:

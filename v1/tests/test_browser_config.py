@@ -280,7 +280,7 @@ class TestCDPEndpointUrlparseFailure:
 # --- Retroactive coverage: unparseable CDP endpoint (#831) ---
 
 
-class TestFromAC_BrowserConfigCdpUnparseable:  # noqa: N801
+class TestFromAC_BrowserConfigCdpUnparseable:
     """cdp_endpoint with an unparseable URL path raises ValidationError."""
 
     def test_cdp_endpoint_unparseable_url_raises_validation_error(self) -> None:

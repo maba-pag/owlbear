@@ -25,7 +25,7 @@ _GITHUB_API_PY = _SRC_ROOT / "tools" / "github_api.py"
 _TERMINAL_PY = _SRC_ROOT / "tools" / "terminal.py"
 
 
-class TestFromAC_EmitPreToolUseExists:  # noqa: N801
+class TestFromAC_EmitPreToolUseExists:
     """AC: async def emit_pre_tool_use() added to hooks.py and exported."""
 
     def test_importable_from_hooks_module(self) -> None:
@@ -68,7 +68,7 @@ class TestFromAC_EmitPreToolUseExists:  # noqa: N801
         )
 
 
-class TestFromAC_EmitPreToolUseBehavior:  # noqa: N801
+class TestFromAC_EmitPreToolUseBehavior:
     """AC: null-guard on hooks inside the utility; emits PRE_TOOL_USE."""
 
     @pytest.mark.asyncio
@@ -128,7 +128,7 @@ class TestFromAC_EmitPreToolUseBehavior:  # noqa: N801
         assert handler.call_args[0][0]["args"] == {}
 
 
-class TestFromAC_NoEmitHookMethodsRemain:  # noqa: N801
+class TestFromAC_NoEmitHookMethodsRemain:
     """AC: No _emit_hook methods remain in git_local, kanban, github_api.
 
     Also: no inline PRE_TOOL_USE emission in terminal.py.
@@ -180,7 +180,7 @@ class TestFromAC_NoEmitHookMethodsRemain:  # noqa: N801
         )
 
 
-class TestFromAC_CallSitesUseUtility:  # noqa: N801
+class TestFromAC_CallSitesUseUtility:
     """AC: All 4 call-sites use await emit_pre_tool_use(self._hooks, ...)."""
 
     @staticmethod

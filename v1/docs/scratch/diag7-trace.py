@@ -1,7 +1,6 @@
 """Diagnostic 7: use sys.settrace to monitor import progress."""
 
 import pathlib
-import sys
 import time
 
 out = pathlib.Path("docs/scratch/diag7-output.txt")
@@ -36,7 +35,6 @@ log("start - tracing all imports")
 
 try:
     log(">>> from pydantic_settings import BaseSettings")
-    from pydantic_settings import BaseSettings
 
     log("<<< pydantic_settings imported ok")
 except Exception as e:

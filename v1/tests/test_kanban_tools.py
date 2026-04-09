@@ -241,7 +241,7 @@ class TestKanbanList:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BlockFilterEnum:  # noqa: N801
+class TestFromAC_BlockFilterEnum:
     """block_filter kwarg replaces 3 mutually-exclusive booleans (#820)."""
 
     @pytest.mark.asyncio
@@ -887,7 +887,7 @@ class TestHookEmission:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_KanbanToolDescriptions:  # noqa: N801
+class TestFromAC_KanbanToolDescriptions:
     """Enriched tool descriptions expose board semantics to the LLM."""
 
     def _desc(self, tool_name: str) -> str:

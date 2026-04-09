@@ -81,7 +81,7 @@ def _wire_mock_inner(agent: OwlBearAgent, output: str = "ok") -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BoardContextInit:  # noqa: N801
+class TestFromAC_BoardContextInit:
     """OwlBearAgent.__init__ accepts optional board_context_provider parameter."""
 
     def test_init_defaults_provider_to_none(self, tmp_path: Path) -> None:
@@ -107,7 +107,7 @@ class TestFromAC_BoardContextInit:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BoardContextTurnConcatenation:  # noqa: N801
+class TestFromAC_BoardContextTurnConcatenation:
     """turn() merges board and knowledge context into instructions= string."""
 
     def test_turn_calls_get_context(self, tmp_path: Path) -> None:
@@ -242,7 +242,7 @@ class TestFromAC_BoardContextTurnConcatenation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BoardContextCallOrder:  # noqa: N801
+class TestFromAC_BoardContextCallOrder:
     """Board context provider is called before knowledge service."""
 
     def test_provider_called_before_knowledge_service(self, tmp_path: Path) -> None:
@@ -281,7 +281,7 @@ class TestFromAC_BoardContextCallOrder:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BoardContextGracefulDegradation:  # noqa: N801
+class TestFromAC_BoardContextGracefulDegradation:
     """Provider exceptions are caught, logged, and the turn continues."""
 
     def test_turn_continues_on_provider_exception(self, tmp_path: Path) -> None:
@@ -368,7 +368,7 @@ class TestFromAC_BoardContextGracefulDegradation:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BoardContextConfig:  # noqa: N801
+class TestFromAC_BoardContextConfig:
     """OwlBearSettings has board_context_enabled bool, default True."""
 
     def test_default_is_true(self) -> None:
@@ -400,7 +400,7 @@ class TestFromAC_BoardContextConfig:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BoardContextBootstrap:  # noqa: N801
+class TestFromAC_BoardContextBootstrap:
     """Bootstrap constructs BoardContextProvider when enabled and passes to agent."""
 
     @pytest.mark.asyncio

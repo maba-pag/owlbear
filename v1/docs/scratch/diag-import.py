@@ -17,7 +17,6 @@ log("start")
 
 try:
     log("importing owlbear...")
-    import owlbear
 
     log("owlbear imported ok")
 except Exception as e:
@@ -25,7 +24,6 @@ except Exception as e:
 
 try:
     log("importing owlbear.config...")
-    from owlbear.config import OwlBearSettings, get_settings
 
     log("config imported ok")
 except Exception as e:
@@ -33,7 +31,6 @@ except Exception as e:
 
 try:
     log("importing conftest deps (pytest)...")
-    import pytest
 
     log("pytest imported ok")
 except Exception as e:
@@ -49,7 +46,6 @@ except Exception as e:
 
 try:
     log("importing owlbear.tools.diagram...")
-    from owlbear.tools.diagram import service
 
     log("diagram.service imported ok")
 except Exception as e:
@@ -58,7 +54,6 @@ except Exception as e:
 try:
     log("importing test_diagram_service module directly...")
     sys.path.insert(0, "tests")
-    import test_diagram_service
 
     log("test_diagram_service imported ok")
 except Exception as e:

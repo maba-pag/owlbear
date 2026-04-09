@@ -50,7 +50,7 @@ def _find_owlbearsettings_call_lines(source: str) -> list[int]:
 # ── AC: All 13 OwlBearSettings() calls replaced with get_settings() ──────
 
 
-class TestFromAC_CallSiteReplacement:  # noqa: N801
+class TestFromAC_CallSiteReplacement:
     """Each command module must import and use get_settings(), not OwlBearSettings()."""
 
     @pytest.mark.parametrize("module_name", COMMAND_MODULES)
@@ -75,7 +75,7 @@ class TestFromAC_CallSiteReplacement:  # noqa: N801
 # ── AC: 32 test patch targets unified — no per-module OwlBearSettings ────
 
 
-class TestFromAC_UnifiedPatchTarget:  # noqa: N801
+class TestFromAC_UnifiedPatchTarget:
     """Command modules must not re-export OwlBearSettings in their namespace.
 
     After migration, the only valid patch target is
@@ -95,7 +95,7 @@ class TestFromAC_UnifiedPatchTarget:  # noqa: N801
 # ── AC: Autouse fixture in tests/conftest.py calls cache_clear ───────────
 
 
-class TestFromAC_CacheClearFixture:  # noqa: N801
+class TestFromAC_CacheClearFixture:
     """``tests/conftest.py`` must have an autouse fixture clearing the cache."""
 
     def test_conftest_imports_get_settings(self) -> None:
@@ -158,7 +158,7 @@ _STALE_PATCH_RE = re.compile(r"bearclaw\.commands\.\w+\.OwlBearSettings")
 _TESTS_DIR = Path(__file__).parent
 
 
-class TestFromAC_TestFilePatchTargets:  # noqa: N801
+class TestFromAC_TestFilePatchTargets:
     """All test files must use ``owlbear.config.OwlBearSettings`` as the patch
     target — no per-module ``bearclaw.commands.{mod}.OwlBearSettings`` strings
     remain anywhere in the test suite.

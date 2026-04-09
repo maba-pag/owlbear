@@ -15,7 +15,7 @@ from typing import get_type_hints
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_TypedDictImports:  # noqa: N801
+class TestFromAC_TypedDictImports:
     """Each of the 9 TypedDict classes must be importable from owlbear.core.hooks."""
 
     def test_import_pre_tool_use_data(self) -> None:
@@ -51,7 +51,7 @@ class TestFromAC_TypedDictImports:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_PayloadFieldShapes:  # noqa: N801
+class TestFromAC_PayloadFieldShapes:
     """Verify each TypedDict declares the expected keys via get_type_hints."""
 
     def test_pre_tool_use_data_has_tool_name_and_args(self) -> None:
@@ -115,7 +115,7 @@ class TestFromAC_PayloadFieldShapes:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_PostToolUseDataShapes:  # noqa: N801
+class TestFromAC_PostToolUseDataShapes:
     """PostToolUseData must accept HookedToolset and ApprovalGateToolset shapes."""
 
     def test_hooked_toolset_shape(self) -> None:
@@ -165,7 +165,7 @@ class TestFromAC_PostToolUseDataShapes:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_HandlerType:  # noqa: N801
+class TestFromAC_HandlerType:
     """Handler must be Callable[[dict[str, Any]], None]."""
 
     def test_handler_param_is_dict(self) -> None:
@@ -198,7 +198,7 @@ class TestFromAC_HandlerType:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_CoreInitExports:  # noqa: N801
+class TestFromAC_CoreInitExports:
     """All 9 TypedDict names must appear in owlbear.core.__all__."""
 
     EXPECTED_EXPORTS = (

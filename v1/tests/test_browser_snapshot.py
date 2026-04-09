@@ -162,7 +162,7 @@ def cdp_session():
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_AXNodeInfo:  # noqa: N801
+class TestFromAC_AXNodeInfo:
     """AXNodeInfo frozen dataclass: id, role, name, description, properties."""
 
     def test_construction_with_all_fields(self):
@@ -205,7 +205,7 @@ class TestFromAC_AXNodeInfo:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SnapshotFull:  # noqa: N801
+class TestFromAC_SnapshotFull:
     """snapshot(filter='full') returns list[AXNodeInfo] with all non-ignored nodes."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -268,7 +268,7 @@ class TestFromAC_SnapshotFull:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SnapshotInteractive:  # noqa: N801
+class TestFromAC_SnapshotInteractive:
     """snapshot(filter='interactive') returns only focusable/actionable nodes."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -344,7 +344,7 @@ class TestFromAC_SnapshotInteractive:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SnapshotText:  # noqa: N801
+class TestFromAC_SnapshotText:
     """snapshot(filter='text') returns only StaticText + heading nodes."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -395,7 +395,7 @@ class TestFromAC_SnapshotText:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SnapshotCDPSession:  # noqa: N801
+class TestFromAC_SnapshotCDPSession:
     """CDP session is created and detached per call (no leaked sessions)."""
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -449,7 +449,7 @@ class TestFromAC_SnapshotCDPSession:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SnapshotBothModes:  # noqa: N801
+class TestFromAC_SnapshotBothModes:
     """snapshot() works in both launch and CDP modes."""
 
     @pytest.mark.asyncio(loop_scope="function")

@@ -71,7 +71,7 @@ def _result(
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_EvalCase:  # noqa: N801
+class TestFromAC_EvalCase:
     """EvalCase dataclass has case_id, prompt, agent_name, expected_tools."""
 
     def test_has_case_id_field(self) -> None:
@@ -101,7 +101,7 @@ class TestFromAC_EvalCase:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_EvalResult:  # noqa: N801
+class TestFromAC_EvalResult:
     """EvalResult dataclass has case, actual_tools, passed, error."""
 
     def test_has_case_field(self) -> None:
@@ -131,7 +131,7 @@ class TestFromAC_EvalResult:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ExtractToolCalls:  # noqa: N801
+class TestFromAC_ExtractToolCalls:
     """extract_tool_calls extracts ToolCallPart.tool_name from ModelMessage list."""
 
     def test_extracts_single_tool_call(self) -> None:
@@ -210,7 +210,7 @@ class TestFromAC_ExtractToolCalls:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MatchTools:  # noqa: N801
+class TestFromAC_MatchTools:
     """match_tools returns True when set(expected) <= set(actual)."""
 
     def test_exact_match(self) -> None:
@@ -244,7 +244,7 @@ class TestFromAC_MatchTools:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RunEval:  # noqa: N801
+class TestFromAC_RunEval:
     """run_eval takes cases + run_fn callable and evaluates each case."""
 
     def test_evaluates_single_case(self) -> None:
@@ -326,7 +326,7 @@ class TestFromAC_RunEval:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ComputeAccuracy:  # noqa: N801
+class TestFromAC_ComputeAccuracy:
     """compute_accuracy returns {agent_name: passed_count / total_count}."""
 
     def test_all_pass(self) -> None:
@@ -384,7 +384,7 @@ class TestFromAC_ComputeAccuracy:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_FormatEvalReport:  # noqa: N801
+class TestFromAC_FormatEvalReport:
     """format_eval_report produces markdown with per-case table and summary."""
 
     def test_returns_string(self) -> None:

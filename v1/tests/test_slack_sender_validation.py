@@ -16,7 +16,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConfigField:  # noqa: N801
+class TestFromAC_ConfigField:
     """AC 1: OwlBearSettings.slack_allowed_user_ids with default empty list."""
 
     def test_field_exists_on_settings(self, default_settings: object) -> None:
@@ -48,7 +48,7 @@ class TestFromAC_ConfigField:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ConstructorKwarg:  # noqa: N801
+class TestFromAC_ConstructorKwarg:
     """AC 2: SlackChannel.__init__ accepts allowed_user_ids: frozenset[str]."""
 
     def test_init_accepts_allowed_user_ids_kwarg(self) -> None:
@@ -94,7 +94,7 @@ class TestFromAC_ConstructorKwarg:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SubtypeFilter:  # noqa: N801
+class TestFromAC_SubtypeFilter:
     """AC 3: _handle_socket_event drops message events that have a subtype field."""
 
     @pytest.mark.asyncio
@@ -214,7 +214,7 @@ class TestFromAC_SubtypeFilter:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_UserAllowlistFilter:  # noqa: N801
+class TestFromAC_UserAllowlistFilter:
     """AC 4: Messages from disallowed users dropped when allowlist is non-empty."""
 
     @pytest.mark.asyncio
@@ -331,7 +331,7 @@ class TestFromAC_UserAllowlistFilter:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RejectionLogging:  # noqa: N801
+class TestFromAC_RejectionLogging:
     """AC 5/6: Rejected senders logged at WARNING with user_id, no message content."""
 
     @pytest.mark.asyncio
@@ -459,7 +459,7 @@ class TestFromAC_RejectionLogging:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_AllowedUserEnqueued:  # noqa: N801
+class TestFromAC_AllowedUserEnqueued:
     """AC 6: Message from an allowed user is enqueued normally."""
 
     @pytest.mark.asyncio
@@ -542,7 +542,7 @@ class TestFromAC_AllowedUserEnqueued:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_EmptyAllowlistAcceptsAll:  # noqa: N801
+class TestFromAC_EmptyAllowlistAcceptsAll:
     """AC 7: Empty allowlist (default) accepts all senders."""
 
     @pytest.mark.asyncio
@@ -633,7 +633,7 @@ class TestFromAC_EmptyAllowlistAcceptsAll:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_BootstrapWiring:  # noqa: N801
+class TestFromAC_BootstrapWiring:
     """AC 8: create_channel() passes frozenset(settings.slack_allowed_user_ids)."""
 
     @patch("owlbear.channels.slack.SlackChannel")
@@ -692,7 +692,7 @@ class TestFromAC_BootstrapWiring:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_CheckOrdering:  # noqa: N801
+class TestFromAC_CheckOrdering:
     """AC 5 (from #795): Subtype check runs BEFORE user check."""
 
     @pytest.mark.asyncio
@@ -759,7 +759,7 @@ class TestFromAC_CheckOrdering:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RateLimitConfig:  # noqa: N801
+class TestFromAC_RateLimitConfig:
     """Config + constructor wiring for rate limiting."""
 
     def test_settings_field_exists(self, default_settings: object) -> None:
@@ -818,7 +818,7 @@ class TestFromAC_RateLimitConfig:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RateLimitEnforcement:  # noqa: N801
+class TestFromAC_RateLimitEnforcement:
     """Enforcement of sliding-window rate limiting in _handle_socket_event."""
 
     @pytest.mark.asyncio
@@ -1072,7 +1072,7 @@ class TestFromAC_RateLimitEnforcement:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_SlidingWindow:  # noqa: N801
+class TestFromAC_SlidingWindow:
     """Sliding window behaviour: expiry pruning and per-user isolation."""
 
     @pytest.mark.asyncio
@@ -1197,7 +1197,7 @@ class TestFromAC_SlidingWindow:  # noqa: N801
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_RateLimitBootstrap:  # noqa: N801
+class TestFromAC_RateLimitBootstrap:
     """Bootstrap wiring: create_channel passes rate_limit_per_minute from settings."""
 
     @patch("owlbear.channels.slack.SlackChannel")

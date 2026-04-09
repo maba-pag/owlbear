@@ -31,7 +31,7 @@ def _dummy_resolver(name: str) -> MagicMock:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ModelParamRequired:  # noqa: N801
+class TestFromAC_ModelParamRequired:
     """Each function must raise TypeError when chat_model / default_model
     is omitted — proving the parameter has no default value.
 

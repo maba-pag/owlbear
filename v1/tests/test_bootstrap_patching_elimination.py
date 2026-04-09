@@ -24,7 +24,7 @@ import pytest
 # ===================================================================
 
 
-class TestFromAC_AgentRegistryDI:  # noqa: N801
+class TestFromAC_AgentRegistryDI:
     """OwlBearAgent.__init__ accepts agent_registry and wires it into deps."""
 
     def test_constructor_accepts_agent_registry_kwarg(self) -> None:
@@ -78,7 +78,7 @@ class TestFromAC_AgentRegistryDI:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_ProjectToolsetDirectDeps:  # noqa: N801
+class TestFromAC_ProjectToolsetDirectDeps:
     """ProjectToolset.__init__ accepts session, context, toolsets directly."""
 
     def test_constructor_accepts_session_param(self) -> None:
@@ -282,7 +282,7 @@ class TestFromAC_ProjectToolsetDirectDeps:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_BootstrapPatchDeleted:  # noqa: N801
+class TestFromAC_BootstrapPatchDeleted:
     """Post-construction patching functions removed from bootstrap."""
 
     def test_patch_project_toolset_agent_deleted_from_toolsets(self) -> None:
@@ -307,7 +307,7 @@ class TestFromAC_BootstrapPatchDeleted:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_AddProjectToolsetSignature:  # noqa: N801
+class TestFromAC_AddProjectToolsetSignature:
     """_add_project_toolset() receives session, context, toolsets directly."""
 
     def test_accepts_session_param(self) -> None:
@@ -360,7 +360,7 @@ class TestFromAC_AddProjectToolsetSignature:  # noqa: N801
 # ===================================================================
 
 
-class TestFromAC_BootstrapCreationOrder:  # noqa: N801
+class TestFromAC_BootstrapCreationOrder:
     """SessionStore and ContextManager created before _add_project_toolset call."""
 
     def test_session_and_context_created_before_project_toolset(self) -> None:

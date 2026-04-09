@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-class TestFromAC_KnowledgePublicAPI:  # noqa: N801
+class TestFromAC_KnowledgePublicAPI:
     """__all__ must be defined and contain exactly the 14 AC symbols."""
 
     EXPECTED_EXPORTS: frozenset[str] = frozenset(

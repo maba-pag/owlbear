@@ -23,7 +23,7 @@ def _clear_settings_cache() -> Generator[None, None, None]:
     get_settings.cache_clear()
 
 
-class TestFromAC_GetSettingsSingleton:  # noqa: N801
+class TestFromAC_GetSettingsSingleton:
     """AC-driven tests: get_settings() returns a @functools.cache singleton."""
 
     def test_get_settings_returns_cached_instance(self) -> None:
@@ -40,7 +40,7 @@ class TestFromAC_GetSettingsSingleton:  # noqa: N801
         assert refreshed is not original
 
 
-class TestFromAC_GetSettingsEdgeCases:  # noqa: N801
+class TestFromAC_GetSettingsEdgeCases:
     """Edge cases and boundary conditions for the get_settings singleton."""
 
     def test_get_settings_returns_owlbearsettings_instance(self) -> None:

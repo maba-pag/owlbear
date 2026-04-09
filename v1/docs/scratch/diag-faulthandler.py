@@ -2,7 +2,6 @@
 
 import faulthandler
 import pathlib
-import sys
 
 # Dump traceback to file after 10 seconds if still running
 dump_file = pathlib.Path("docs/scratch/hang-traceback.txt").open("w")

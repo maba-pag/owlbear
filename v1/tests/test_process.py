@@ -6,7 +6,7 @@ import os
 from unittest.mock import patch
 
 
-class TestFromAC_IsProcessAlive:  # noqa: N801
+class TestFromAC_IsProcessAlive:
     """Contract tests for is_process_alive(pid) in owlbear.process.
 
     AC: New file src/owlbear/process.py with public
@@ -84,7 +84,7 @@ class TestFromAC_IsProcessAlive:  # noqa: N801
             assert is_process_alive(1) is False
 
 
-class TestFromAC_ModuleImportability:  # noqa: N801
+class TestFromAC_ModuleImportability:
     """AC: owlbear.process must be importable and expose is_process_alive."""
 
     def test_module_importable(self) -> None:
