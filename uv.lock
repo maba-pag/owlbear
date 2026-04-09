@@ -2980,13 +2980,13 @@ version = "0.1.0"
 source = { editable = "serve/mcp-knowledge" }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
-    { name = "owlbear-knowledge" },
+    { name = "owlbear-knowledge", extra = ["llm"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.26" },
-    { name = "owlbear-knowledge", editable = "serve/knowledge" },
+    { name = "owlbear-knowledge", extras = ["llm"], editable = "serve/knowledge" },
 ]
 
 [[package]]

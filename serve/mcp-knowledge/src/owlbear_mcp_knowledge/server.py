@@ -23,9 +23,11 @@ from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEval
 from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
+from owlbear_knowledge.llm_extractor import LLMExtractor
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
+from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
 from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
 from owlbear_knowledge.scope_transfer import import_scope as _core_import_scope
@@ -44,6 +46,7 @@ class SearchResult(TypedDict):
     title: str
     score: float
     snippet: str
+    entity_type: str | None
 
 
 class SourceInfo(TypedDict):
@@ -159,10 +162,15 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         gs = GraphStore(conn)
         vs = QdrantVectorStore()
         emb = BgeM3EmbeddingProvider()
-        qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb)
-        doc_store = DocumentStore(conn, gs, vs, emb)
         model = os.environ.get("OWLBEAR_MODEL", _DEFAULT_MODEL)
-        extractor = EntityExtractor(model)
+        try:
+            llm_extractor = LLMExtractor(model)
+            extractor = EntityExtractor(model, extractor=llm_extractor)
+        except Exception:  # noqa: BLE001
+            extractor = EntityExtractor(model)
+        gar = GraphAugmentedRetriever(vs, gs, emb)
+        qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
+        doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
         pipeline = IngestPipeline(doc_store, extractor, chunker)
         source_store = KnowledgeSourceStore(conn)
@@ -228,7 +236,7 @@ async def search_knowledge(
     if qs is None:
         return "error: Knowledge service not available."
     results = await qs.query(query, top_k=limit, scopes=scopes)
-    return [{"title": r.title, "score": r.score, "snippet": r.snippet} for r in results]
+    return [{"title": r.title, "score": r.score, "snippet": r.snippet, "entity_type": r.entity_type} for r in results]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
