@@ -1,12 +1,12 @@
 # MegaLinter configuration for OwlBear
 # https://megalinter.io/configuration/
+# Version: v9.4.0 (python flavor)
 
 # Explicit linter list — only what applies to this project
 ENABLE_LINTERS:
-  # Python
+  # Python (bandit rules covered via ruff select=["ALL"] S-prefix)
   - PYTHON_RUFF
   - PYTHON_RUFF_FORMAT
-  - PYTHON_BANDIT
   # PowerShell
   - POWERSHELL_POWERSHELL
   # Formats
@@ -18,9 +18,8 @@ ENABLE_LINTERS:
   - EDITORCONFIG_EDITORCONFIG_CHECKER
   # Security / Repository
   - REPOSITORY_GITLEAKS
-  - REPOSITORY_SECRETLINT
-  # Spelling
-  - SPELL_CSPELL
+  - REPOSITORY_DEVSKIM
+  - REPOSITORY_TRIVY
 
 # Reporters
 GITHUB_STATUS_REPORTER: true
@@ -37,44 +36,56 @@ FILTER_REGEX_EXCLUDE: >-
   |\.egg-info/
   |uv\.lock$)
 
+# Directory-level pre-filter (faster than regex, excluded at any depth)
+ADDITIONAL_EXCLUDED_DIRECTORIES:
+  - v1
+  - store
+  - .venv
+  - __pycache__
+  - node_modules
+
 # ──────────────────────────────────────────────
 # Linter-specific configuration
 # ──────────────────────────────────────────────
 
-# Ruff — uses pyproject.toml config
+# Ruff — uses pyproject.toml config (select=["ALL"] includes bandit S-rules)
 PYTHON_RUFF_CLI_LINT_MODE: project
 PYTHON_RUFF_CONFIG_FILE: pyproject.toml
 
 # Ruff format — uses pyproject.toml config
 PYTHON_DEFAULT_STYLE: ruff
 
-# Bandit — security-focused Python linter
-PYTHON_BANDIT_ARGUMENTS: "--recursive --severity-level medium"
-
 # Actionlint — restrict to workflow files
 ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
 
 # YAML — strict mode
 YAML_YAMLLINT_ARGUMENTS: "--strict"
-# Exclude kanban task files from YAML lint (frontmatter-only markdown files)
 YAML_YAMLLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/kanban/'
 
 # JSON — quiet output
 JSON_JSONLINT_ARGUMENTS: "--quiet"
 
-# Markdown — auto-fix enabled
-MARKDOWN_MARKDOWNLINT_ARGUMENTS: "--fix"
+# Markdown
 MARKDOWN_MARKDOWNLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/kanban/'
+
+# EditorConfig — GitHub Actions annotations
+EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions"
 
 # Gitleaks — secret detection
 REPOSITORY_GITLEAKS_ARGUMENTS: "--no-banner"
 
-# cspell — spell checking (will need .cspell.json for custom words)
-SPELL_CSPELL_FILTER_REGEX_INCLUDE: '(\.md$|\.py$|\.ps1$)'
+# DevSkim — security anti-pattern detection (all languages)
+REPOSITORY_DEVSKIM_DISABLE_ERRORS: false
+
+# Trivy — vulnerability + misconfiguration scanning
+REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv --skip-dirs v1"
 
 # ──────────────────────────────────────────────
-# Performance
+# Performance & Display
 # ──────────────────────────────────────────────
 FLAVOR_SUGGESTIONS: false
 PARALLEL: true
 SHOW_ELAPSED_TIME: true
+SHOW_SKIPPED_LINTERS: false
+PRINT_ALPACA: false
+SKIP_LINTER_OUTPUT_SANITIZATION: true  # private repo — safe to skip for perf
