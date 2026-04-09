@@ -5,7 +5,7 @@ argument-hint: "Ideate: {idea, problem, or feature -- drop reference files in .o
 user-invocable: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, read/viewImage, search, 'owlbear-kanban/create_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/show_task', 'owlbear-project/*', 'owlbear-knowledge/search-knowledge', vscode/memory, 'owlbear-memory/*', agent]
+  [vscode/memory, vscode/askQuestions, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/list_tasks, owlbear-kanban/show_task, 'owlbear-project/*', 'ddgs/search_text']
 agents:
   - critic-voice
   - pragmatist-voice
@@ -35,6 +35,8 @@ Transparency is your operating contract. At every decision point — tier detect
 - **Context window economy.** Read only three summary files from the Working Directory: context.md, decisions.md, synthesis.md. Never read raw voice deliberation logs; the Mediator reads only summaries, never debates.
 - **Write discipline.** context.md is updated incrementally after each moment. decisions.md is written after user choices. brief.md is written only at final Brief approval/confirm.
 - **Surgical handoff.** On Brief approval, invoke `owlbear-kanban/create_task` to create a parent kanban task with Brief content in the task body, then invoke planner for subtask decomposition.
+- **askQuestions for decisions.** Present analysis and trade-offs in the chat, then use askQuestions with structured options at every decision point — tier selection, approach choice, voice veto, Brief approval, moment transitions. Include your confidence per option (0.0–1.0), mark one as recommended, and add a best-practice option where applicable. Never stop to wait for a plain-text reply when a structured question can capture the input.
+- **Continue until stopped.** After each milestone, use askQuestions to confirm completion or surface next steps rather than stopping.
 
 </critical_rules>
 

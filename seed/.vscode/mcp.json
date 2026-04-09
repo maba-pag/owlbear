@@ -7,22 +7,59 @@
     "owlbear-kanban": {
       "type": "stdio",
       "command": "uv",
-      "args": ["--project", "{{owlbear_path}}", "run", "python", "-m", "owlbear_mcp_kanban"]
+      "args": [
+        "--project",
+        "{{owlbear_path}}",
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_kanban"
+      ]
     },
     "owlbear-knowledge": {
       "type": "stdio",
       "command": "uv",
-      "args": ["--project", "{{owlbear_path}}", "run", "python", "-m", "owlbear_mcp_knowledge"]
+      "args": [
+        "--project",
+        "{{owlbear_path}}",
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_knowledge"
+      ]
     },
     "owlbear-memory": {
       "type": "stdio",
       "command": "uv",
-      "args": ["--project", "{{owlbear_path}}", "run", "python", "-m", "owlbear_mcp_memory"]
+      "args": [
+        "--project",
+        "{{owlbear_path}}",
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_memory"
+      ]
     },
     "owlbear-project": {
       "type": "stdio",
       "command": "uv",
-      "args": ["--project", "{{owlbear_path}}", "run", "python", "-m", "owlbear_mcp_project"]
+      "args": [
+        "--project",
+        "{{owlbear_path}}",
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_project"
+      ]
+    },
+    "ddgs": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "ddgs",
+        "mcp"
+      ]
     }
   }
 }
