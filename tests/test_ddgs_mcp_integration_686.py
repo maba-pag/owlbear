@@ -20,6 +20,7 @@ import importlib.metadata
 import importlib.util
 import json
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -274,4 +275,144 @@ class TestFromAC_DdgsMcpSmoke:
         assert (major, minor) >= (9, 13), (
             f"ddgs {version_str} is below the required minimum 9.13.\n"
             "MCP server support was added in v9.13 — the dep pin must be >=9.13."
+        )
+
+    def test_ddgs_mcp_server_startup_responds_to_initialize(self) -> None:
+        """AC5: ddgs MCP server must respond to a JSON-RPC 'initialize' request via stdio."""
+        initialize_msg = (
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "pytest-smoke", "version": "0.1"},
+                },
+            })
+            + "\n"
+        )
+        result = subprocess.run(
+            ["uv", "run", "ddgs", "mcp"],
+            input=initialize_msg,
+            capture_output=True,
+            timeout=15,
+            text=True,
+        )
+        assert result.stdout.strip(), (
+            "ddgs MCP server produced no stdout in response to 'initialize' — "
+            "AC5 requires the server to start and respond over stdio.  "
+            f"exit={result.returncode}  stderr={result.stderr[:200]!r}"
+        )
+        first_line = result.stdout.strip().splitlines()[0]
+        response = json.loads(first_line)
+        assert response.get("jsonrpc") == "2.0", (
+            f"Response must be JSON-RPC 2.0, got: {first_line!r}"
+        )
+        assert "result" in response, (
+            f"'initialize' response must contain 'result', got: {first_line!r}"
+        )
+
+    def test_ddgs_mcp_server_tools_list_contains_search_text(self) -> None:
+        """AC5: tools/list from the running ddgs MCP server must include 'search_text'."""
+        msgs = "\n".join([
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "pytest-smoke", "version": "0.1"},
+                },
+            }),
+            json.dumps({
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            }),
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {},
+            }),
+        ]) + "\n"
+        result = subprocess.run(
+            ["uv", "run", "ddgs", "mcp"],
+            input=msgs,
+            capture_output=True,
+            timeout=15,
+            text=True,
+        )
+        lines = [ln for ln in result.stdout.strip().splitlines() if ln.strip()]
+        assert lines, (
+            "ddgs MCP server produced no output — cannot verify tools.  "
+            f"exit={result.returncode}  stderr={result.stderr[:200]!r}"
+        )
+        tool_names: list[str] = []
+        for line in lines:
+            try:
+                msg = json.loads(line)
+                result_data = msg.get("result", {})
+                if "tools" in result_data:
+                    tool_names = [t.get("name", "") for t in result_data["tools"]]
+                    break
+            except json.JSONDecodeError:
+                continue
+        assert "search_text" in tool_names, (
+            f"'search_text' not found in ddgs MCP server tools: {tool_names}\n"
+            "AC5 requires the live MCP server to expose the 'search_text' tool."
+        )
+
+    def test_ddgs_mcp_server_tools_list_contains_extract_content(self) -> None:
+        """AC5: tools/list from the running ddgs MCP server must include 'extract_content'."""
+        msgs = "\n".join([
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "pytest-smoke", "version": "0.1"},
+                },
+            }),
+            json.dumps({
+                "jsonrpc": "2.0",
+                "method": "notifications/initialized",
+                "params": {},
+            }),
+            json.dumps({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/list",
+                "params": {},
+            }),
+        ]) + "\n"
+        result = subprocess.run(
+            ["uv", "run", "ddgs", "mcp"],
+            input=msgs,
+            capture_output=True,
+            timeout=15,
+            text=True,
+        )
+        lines = [ln for ln in result.stdout.strip().splitlines() if ln.strip()]
+        assert lines, (
+            "ddgs MCP server produced no output — cannot verify tools.  "
+            f"exit={result.returncode}  stderr={result.stderr[:200]!r}"
+        )
+        tool_names: list[str] = []
+        for line in lines:
+            try:
+                msg = json.loads(line)
+                result_data = msg.get("result", {})
+                if "tools" in result_data:
+                    tool_names = [t.get("name", "") for t in result_data["tools"]]
+                    break
+            except json.JSONDecodeError:
+                continue
+        assert "extract_content" in tool_names, (
+            f"'extract_content' not found in ddgs MCP server tools: {tool_names}\n"
+            "AC5 requires the live MCP server to expose the 'extract_content' tool."
         )
