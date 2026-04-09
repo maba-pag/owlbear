@@ -190,6 +190,25 @@ Session complete:
   Cycles: 2
 ```
 
+## Post-Session Diagnostics
+
+After a session completes, run the analysis CLI as an optional health check to surface pipeline patterns:
+
+```
+python -m owlbear_orchestrator.analysis --format markdown
+```
+
+This scans `store/audit/` and reports any detected anomalies. Results are informational — no automated action is taken (Phase 1 manual-first strategy per research #682).
+
+| Detector | Pattern | Fires When |
+|----------|---------|------------|
+| `high_error_rate_detector` | `high_error_rate` | Agent ≥ 40% failure rate over 3+ completions |
+| `slow_agent_detector` | `slow_agent` | Agent avg duration > 2× other-agents avg (3+ completions) |
+| `repeated_failure_detector` | `repeated_failure` | Same task fails 2+ times |
+| `stale_dispatch_detector` | `stale_dispatch` | Dispatch > 1h old with no matching completion |
+
+Use `--window HOURS` to limit the scan window, or `--audit-dir PATH` to target a non-default audit directory.
+
 ## Verification Checklist
 
 - [ ] Scribe called at start of **every** cycle (Step 4 loops to Step 1)
