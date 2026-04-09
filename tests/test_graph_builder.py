@@ -12,7 +12,7 @@ All tests must FAIL until #33 implements the DI-based IntraDocGraphBuilder.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -39,6 +39,18 @@ def _make_mock_extractor(edges: list[Edge] | None = None) -> MagicMock:
     """Return a mock StructuredExtractor returning ExtractionResult with given edges."""
     mock = MagicMock(spec=StructuredExtractor)
     mock.extract.return_value = ExtractionResult(edges=edges or [])
+    return mock
+
+
+def _make_async_mock_extractor(edges: list[Edge] | None = None) -> MagicMock:
+    """Return a mock StructuredExtractor with an explicit AsyncMock extract().
+
+    Represents the future async protocol: extract() is async def, so callers
+    must await it.  Tests using this mock FAIL until graph_builder.py adds
+    'await' before _extractor.extract() (AC3 from task #687).
+    """
+    mock = MagicMock(spec=StructuredExtractor)
+    mock.extract = AsyncMock(return_value=ExtractionResult(edges=edges or []))
     return mock
 
 
@@ -254,3 +266,66 @@ class TestBuilderDiscovered:
         result = await builder.build(entities, vector_store=mock_vs, scope="global")
         mock_vs.search_similar.assert_called_once()
         assert result == GraphBuildResult()
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_IntraDocAsyncExtractorAwait — AC3 from task #687
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_IntraDocAsyncExtractorAwait:
+    """AC3: IntraDocGraphBuilder must await extractor.extract() (task #687).
+
+    Uses an explicit AsyncMock for the injected extractor. Tests FAIL against
+    the current sync call in graph_builder.py (L122, L130 call without 'await')
+    and PASS after #687 adds 'await self._extractor.extract(prompt)'.
+    """
+
+    @pytest.mark.asyncio
+    async def test_extract_is_awaited_in_single_call_path(self) -> None:
+        """IntraDocGraphBuilder must await extract() for ≤80 entities (single-call path)."""
+        mock_ext = _make_async_mock_extractor()
+        builder = IntraDocGraphBuilder(extractor=mock_ext)
+        entities = [_make_entity("a"), _make_entity("b")]
+        await builder.build(entities, scope="global", document_id="doc1")
+        mock_ext.extract.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_result_not_coroutine_in_single_call_path(self) -> None:
+        """build() returns GraphBuildResult (not a coroutine) when extract is async."""
+        mock_ext = _make_async_mock_extractor()
+        builder = IntraDocGraphBuilder(extractor=mock_ext)
+        entities = [_make_entity("a"), _make_entity("b")]
+        result = await builder.build(entities, scope="global", document_id="doc1")
+        assert isinstance(result, GraphBuildResult)
+
+    @pytest.mark.asyncio
+    async def test_extract_is_awaited_in_batched_path(self) -> None:
+        """IntraDocGraphBuilder must await extract() in batched mode (>80 entities, 2 types)."""
+        mock_ext = _make_async_mock_extractor()
+        builder = IntraDocGraphBuilder(extractor=mock_ext)
+        entities = [_make_entity(f"c{i}", EntityType.CONCEPT) for i in range(41)]
+        entities += [_make_entity(f"f{i}", EntityType.FILE) for i in range(40)]
+        assert len(entities) == 81
+        await builder.build(entities, scope="global", document_id="doc1")
+        assert mock_ext.extract.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_result_not_coroutine_in_batched_path(self) -> None:
+        """build() returns GraphBuildResult in batched mode (>80 entities) when extract is async."""
+        mock_ext = _make_async_mock_extractor()
+        builder = IntraDocGraphBuilder(extractor=mock_ext)
+        entities = [_make_entity(f"c{i}", EntityType.CONCEPT) for i in range(41)]
+        entities += [_make_entity(f"f{i}", EntityType.FILE) for i in range(40)]
+        result = await builder.build(entities, scope="global", document_id="doc1")
+        assert isinstance(result, GraphBuildResult)
+
+    @pytest.mark.asyncio
+    async def test_edges_from_async_extractor_appear_in_result(self) -> None:
+        """Edges returned by the awaited async extractor are present in GraphBuildResult."""
+        entities = [_make_entity("a"), _make_entity("b")]
+        raw_edge = _make_raw_edge(entities[0].id, entities[1].id)
+        mock_ext = _make_async_mock_extractor(edges=[raw_edge])
+        builder = IntraDocGraphBuilder(extractor=mock_ext)
+        result = await builder.build(entities, scope="global", document_id="doc1")
+        assert len(result.edges) == 1

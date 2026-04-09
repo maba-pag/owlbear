@@ -13,7 +13,7 @@ All tests must FAIL until #33 creates owlbear_knowledge/inter_doc_graph_builder.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -43,6 +43,18 @@ def _make_raw_edge(source_id: str, target_id: str) -> Edge:
 def _make_mock_extractor(edges: list[Edge] | None = None) -> MagicMock:
     mock = MagicMock(spec=StructuredExtractor)
     mock.extract.return_value = ExtractionResult(edges=edges or [])
+    return mock
+
+
+def _make_async_mock_extractor(edges: list[Edge] | None = None) -> MagicMock:
+    """Return a mock StructuredExtractor with an explicit AsyncMock extract().
+
+    Represents the future async protocol: extract() is async def, so callers
+    must await it.  Tests using this mock FAIL until inter_doc_graph_builder.py
+    adds 'await' before _extractor.extract() (AC4 from task #687).
+    """
+    mock = MagicMock(spec=StructuredExtractor)
+    mock.extract = AsyncMock(return_value=ExtractionResult(edges=edges or []))
     return mock
 
 
@@ -389,3 +401,80 @@ class TestFromAC_InterDocGraphBuilderConstructorParams:
             args, kwargs = call
             top_k_used = kwargs.get("top_k") if "top_k" in kwargs else (args[1] if len(args) > 1 else None)
             assert top_k_used == 10, f"Expected default top_k=10, got {top_k_used}"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_InterDocAsyncExtractorAwait — AC4 from task #687
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_InterDocAsyncExtractorAwait:
+    """AC4: InterDocGraphBuilder must await extractor.extract() (task #687).
+
+    Uses an explicit AsyncMock for the injected extractor. Tests FAIL against
+    the current sync call in inter_doc_graph_builder.py (L154 call without 'await')
+    and PASS after #687 adds 'await self._extractor.extract(prompt)'.
+    """
+
+    @pytest.mark.asyncio
+    async def test_extract_is_awaited_for_cross_doc_pair(self) -> None:
+        """InterDocGraphBuilder must await extract() when a cross-doc candidate pair exists."""
+        e1 = _make_entity("a", doc_id="doc_A")
+        e2 = _make_entity("b", doc_id="doc_B")
+        mock_vs = _make_mock_vector_store(similar=[(e2.id, 0.9)])
+        mock_ext = _make_async_mock_extractor()
+        builder = InterDocGraphBuilder(
+            extractor=mock_ext,
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+        )
+        await builder.build([e1, e2], scope="global")
+        mock_ext.extract.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_result_not_coroutine_for_cross_doc_pair(self) -> None:
+        """build() returns GraphBuildResult (not a coroutine) when extract is async."""
+        e1 = _make_entity("a", doc_id="doc_A")
+        e2 = _make_entity("b", doc_id="doc_B")
+        mock_vs = _make_mock_vector_store(similar=[(e2.id, 0.9)])
+        mock_ext = _make_async_mock_extractor()
+        builder = InterDocGraphBuilder(
+            extractor=mock_ext,
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+        )
+        result = await builder.build([e1, e2], scope="global")
+        assert isinstance(result, GraphBuildResult)
+
+    @pytest.mark.asyncio
+    async def test_extract_awaited_once_per_batch(self) -> None:
+        """InterDocGraphBuilder must await extract() once per batch of 40 cross-doc pairs."""
+        entity_b = _make_entity("b", doc_id="doc_B")
+        entities_a = [_make_entity(f"a{i}", doc_id="doc_A") for i in range(41)]
+        all_entities = [*entities_a, entity_b]
+        mock_vs = _make_mock_vector_store(similar=[(entity_b.id, 0.9)])
+        mock_ext = _make_async_mock_extractor()
+        builder = InterDocGraphBuilder(
+            extractor=mock_ext,
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+        )
+        await builder.build(all_entities, scope="global")
+        assert mock_ext.extract.await_count == 2  # 41 pairs → 2 batches of 40
+
+    @pytest.mark.asyncio
+    async def test_edges_from_async_extractor_are_stamped_and_returned(self) -> None:
+        """Edges returned by the awaited async extractor are stamped and in GraphBuildResult."""
+        e1 = _make_entity("a", doc_id="doc_A")
+        e2 = _make_entity("b", doc_id="doc_B")
+        raw_edge = _make_raw_edge(e1.id, e2.id)
+        mock_vs = _make_mock_vector_store(similar=[(e2.id, 0.9)])
+        mock_ext = _make_async_mock_extractor(edges=[raw_edge])
+        builder = InterDocGraphBuilder(
+            extractor=mock_ext,
+            vector_store=mock_vs,
+            graph_store=_make_mock_graph_store(),
+        )
+        result = await builder.build([e1, e2], scope="global")
+        assert len(result.edges) == 1
+        assert result.edges[0].weight == 0.4
