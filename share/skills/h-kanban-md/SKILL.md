@@ -1,4 +1,4 @@
-﻿---
+---
 name: h-kanban-md
 description: "Handbook (DEPRECATED): kanban-md CLI reference — use h-mcp-kanban instead"
 user-invocable: false
