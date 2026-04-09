@@ -204,7 +204,7 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MCP Spec 2025-06-18 — Tools § Error Handling | modelcontextprotocol.io/specification/2025-06-18/server/tools | Two error mechanisms: protocol errors (JSON-RPC) and tool execution errors (`isError: true`); `error: ` prefix supplements `isError` | docs/research/mcp-server-error-return-standardization.md | 2026-03-31 |
+| MCP Spec 2025-06-18 — Tools § Error Handling | modelcontextprotocol.io/specification/2025-06-18/server/tools | Two error mechanisms: protocol errors (JSON-RPC) and tool execution errors (`isError: true`); `error:` prefix supplements `isError` | docs/research/mcp-server-error-return-standardization.md | 2026-03-31 |
 | MCP Python SDK v1.26.0 README | github.com/modelcontextprotocol/python-sdk | FastMCP catches exceptions as ToolError → `isError: true`; normal returns yield `isError: false`; structured output auto-generation from type annotations | docs/research/mcp-server-error-return-standardization.md | 2026-03-31 |
 
 ## Register owlbear-memory MCP Server (Task #571)
@@ -356,7 +356,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | kanban-md CLI v0.33.0 help | (local binary) | `edit --help` flag verification for --add-dep, --remove-dep, --parent, --title, --json | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
 | Existing expand-mcp-kanban research (#56) | docs/research/expand-mcp-kanban-tools.md | Prior gap analysis identifying missing edit params | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
-| MCP Python SDK v1.26.0 README | https://github.com/modelcontextprotocol/python-sdk | Structured output patterns: TypedDict, Pydantic, dict return types; outputSchema auto-detection | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
+| MCP Python SDK v1.26.0 README | <https://github.com/modelcontextprotocol/python-sdk> | Structured output patterns: TypedDict, Pydantic, dict return types; outputSchema auto-detection | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
 | MCP Python SDK mcp.types module | (installed package: mcp.types L1310-1380) | Tool.outputSchema and CallToolResult.structuredContent field definitions | docs/research/edit-task-dep-parent-title-json.md | 2026-03-31 |
 
 ## mcp-knowledge Structured Returns (Task #507)
@@ -370,8 +370,8 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| FastMCP Tools docs | https://gofastmcp.com/servers/tools | Literal type support, ToolError, async patterns, structured output | docs/research/end-work-compound-tool.md | 2026-03-31 |
-| MCP Spec — Tools | https://modelcontextprotocol.io/specification/2025-03-26/server/tools | Tool design patterns, error reporting model | docs/research/end-work-compound-tool.md | 2026-03-31 |
+| FastMCP Tools docs | <https://gofastmcp.com/servers/tools> | Literal type support, ToolError, async patterns, structured output | docs/research/end-work-compound-tool.md | 2026-03-31 |
+| MCP Spec — Tools | <https://modelcontextprotocol.io/specification/2025-03-26/server/tools> | Tool design patterns, error reporting model | docs/research/end-work-compound-tool.md | 2026-03-31 |
 
 ## deer-flow Subagent Patterns for Wave Dispatch (Task #500)
 
@@ -409,8 +409,8 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| FastMCP tool registration docs | https://gofastmcp.com/servers/fastmcp#tools | Tool parameter typing conventions for Optional[bool] tri-state | docs/research/modernize-list-tasks.md | 2026-03-31 |
-| Python typing.Optional docs | https://docs.python.org/3/library/typing.html#typing.Optional | Optional[bool] tri-state pattern reference | docs/research/modernize-list-tasks.md | 2026-03-31 |
+| FastMCP tool registration docs | <https://gofastmcp.com/servers/fastmcp#tools> | Tool parameter typing conventions for Optional[bool] tri-state | docs/research/modernize-list-tasks.md | 2026-03-31 |
+| Python typing.Optional docs | <https://docs.python.org/3/library/typing.html#typing.Optional> | Optional[bool] tri-state pattern reference | docs/research/modernize-list-tasks.md | 2026-03-31 |
 
 ## Challenger Researcher Expansion (Task #469)
 
@@ -418,104 +418,104 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Challenger subagent design (owning: #465) | docs/research/challenger-subagent-design.md | Expansion path S3h, I/O contract S3d, interaction model S3b | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
 | Arch-review Step 3.5 integration (#468) | skills/arch-review/SKILL.md | Implemented challenger integration pattern as template | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
-| Du et al. 2023 — Multiagent Debate | https://arxiv.org/abs/2305.14325 | Single-round debate improves factuality over self-reflection | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
-| Liang et al. 2024 — MAD (EMNLP) | https://arxiv.org/abs/2305.19118 | Degeneration-of-Thought in self-reflection; external challenge needed | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
+| Du et al. 2023 — Multiagent Debate | <https://arxiv.org/abs/2305.14325> | Single-round debate improves factuality over self-reflection | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
+| Liang et al. 2024 — MAD (EMNLP) | <https://arxiv.org/abs/2305.19118> | Degeneration-of-Thought in self-reflection; external challenge needed | docs/research/challenger-researcher-expansion.md | 2026-03-31 |
 
 ## start_work Compound Tool (Task #470)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| MCP Python SDK (FastMCP) | https://github.com/modelcontextprotocol/python-sdk | `@mcp.tool()` decorator patterns, return types, compound tool feasibility | docs/research/start-work-compound-tool.md | 2026-03-31 |
-| FastMCP Tools docs | https://gofastmcp.com/servers/tools | Tool arguments, structured output, error handling patterns | docs/research/start-work-compound-tool.md | 2026-03-31 |
+| MCP Python SDK (FastMCP) | <https://github.com/modelcontextprotocol/python-sdk> | `@mcp.tool()` decorator patterns, return types, compound tool feasibility | docs/research/start-work-compound-tool.md | 2026-03-31 |
+| FastMCP Tools docs | <https://gofastmcp.com/servers/tools> | Tool arguments, structured output, error handling patterns | docs/research/start-work-compound-tool.md | 2026-03-31 |
 
 ## Recipe 0 Tier-Aware Auto-Resolution (Task #464)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Per-environment wait-timers: production has required-reviewers with no auto-bypass, staging has wait-timers — validates tier-differentiated auto-resolve | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
-| AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | UserProxyAgent blocks indefinitely until user responds — validates indefinite T3 blocking in single-user system | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
+| GitHub Actions environment protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Per-environment wait-timers: production has required-reviewers with no auto-bypass, staging has wait-timers — validates tier-differentiated auto-resolve | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
+| AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | UserProxyAgent blocks indefinitely until user responds — validates indefinite T3 blocking in single-user system | docs/research/recipe0-tier-aware-auto-resolve.md | 2026-03-31 |
 
-## KANBAN_TOOLS_EXCLUDE Config (Task #473)
+## KANBAN_TOOLS_EXCLUDE Config (Task #473) — Supplemental
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| FastMCP v1.x server.py | https://github.com/modelcontextprotocol/python-sdk/blob/v1.x/src/mcp/server/fastmcp/server.py | `remove_tool(name)` public API for post-registration tool removal | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
-| MCP Python SDK README | https://github.com/modelcontextprotocol/python-sdk | `@mcp.tool()` registration pattern, lifespan conventions | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
+| FastMCP v1.x server.py | <https://github.com/modelcontextprotocol/python-sdk/blob/v1.x/src/mcp/server/fastmcp/server.py> | `remove_tool(name)` public API for post-registration tool removal | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
+| MCP Python SDK README | <https://github.com/modelcontextprotocol/python-sdk> | `@mcp.tool()` registration pattern, lifespan conventions | docs/research/kanban-tools-exclude-config.md | 2026-03-31 |
 
 ## Impact-Tier Decision Requests (Task #459)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | UserProxyAgent blocks indefinitely; HandoffTermination typed pause pattern — validates T3 indefinite blocking | docs/research/impact-tier-decision-requests.md | 2026-03-31 |
-| GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Per-environment wait-timers with auto-approve; required-reviewer gates — validates tiered timeout model | docs/research/impact-tier-decision-requests.md | 2026-03-31 |
+| AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | UserProxyAgent blocks indefinitely; HandoffTermination typed pause pattern — validates T3 indefinite blocking | docs/research/impact-tier-decision-requests.md | 2026-03-31 |
+| GitHub Actions environment protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Per-environment wait-timers with auto-approve; required-reviewer gates — validates tiered timeout model | docs/research/impact-tier-decision-requests.md | 2026-03-31 |
 
 ## Extend Decision-Request for Action Requests (Task #221)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | HandoffTermination pattern for async user requests — typed pause point, structured resume input | docs/research/extend-decision-request-for-action-requests.md | 2026-03-30 |
-| CrewAI Task docs | https://docs.crewai.com/concepts/tasks | `human_input` attribute, callback mechanism for blocking on user review | docs/research/extend-decision-request-for-action-requests.md | 2026-03-30 |
-| GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Required-reviewer approval gate pattern — structured file-based state with auto-timeout and well-known directory | docs/research/extend-decision-request-for-action-requests.md | 2026-03-30 |
+| AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination pattern for async user requests — typed pause point, structured resume input | docs/research/extend-decision-request-for-action-requests.md | 2026-03-30 |
+| CrewAI Task docs | <https://docs.crewai.com/concepts/tasks> | `human_input` attribute, callback mechanism for blocking on user review | docs/research/extend-decision-request-for-action-requests.md | 2026-03-30 |
+| GitHub Actions environment protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required-reviewer approval gate pattern — structured file-based state with auto-timeout and well-known directory | docs/research/extend-decision-request-for-action-requests.md | 2026-03-30 |
 
 ## deer-flow Adoptable Patterns (Task #386)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| deer-flow repo (v2 main) | https://github.com/bytedance/deer-flow | Apache-2.0 | Middleware chain (loop detection, tool error handling, summarization), memory system (fact confidence, debounced queue), subagent executor (dual pools, trace IDs, tool filtering), guardrail provider pattern, SOUL personality config, deferred tool registry, MCP cache mtime invalidation | `docs/research/deer-flow-adoptable-patterns.md` | 2026-03-30 |
-| LangChain Agent Middleware docs | https://python.langchain.com/docs/how_to/agent_middleware | N/A | Middleware chain concept validation, AgentMiddleware interface | `docs/research/deer-flow-adoptable-patterns.md` | 2026-03-30 |
+| deer-flow repo (v2 main) | <https://github.com/bytedance/deer-flow> | Apache-2.0 | Middleware chain (loop detection, tool error handling, summarization), memory system (fact confidence, debounced queue), subagent executor (dual pools, trace IDs, tool filtering), guardrail provider pattern, SOUL personality config, deferred tool registry, MCP cache mtime invalidation | `docs/research/deer-flow-adoptable-patterns.md` | 2026-03-30 |
+| LangChain Agent Middleware docs | <https://python.langchain.com/docs/how_to/agent_middleware> | N/A | Middleware chain concept validation, AgentMiddleware interface | `docs/research/deer-flow-adoptable-patterns.md` | 2026-03-30 |
 
 ## KB Data Loader and Sources Manifest (Task #176)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| GraphRAG YAML config | https://microsoft.github.io/graphrag/config/yaml/ | Input file pattern and YAML config structure for document ingestion | docs/research/kb-data-loader-manifest.md | 2026-03-30 |
-| LightRAG insert API | https://github.com/HKUDS/LightRAG | Batch insertion pattern, doc_status_storage delta detection | docs/research/kb-data-loader-manifest.md | 2026-03-30 |
-| LlamaIndex SimpleDirectoryReader | https://developers.llamaindex.ai/python/framework/module_guides/loading/simpledirectoryreader/ | Glob-based file discovery, metadata extraction pattern | docs/research/kb-data-loader-manifest.md | 2026-03-30 |
+| GraphRAG YAML config | <https://microsoft.github.io/graphrag/config/yaml/> | Input file pattern and YAML config structure for document ingestion | docs/research/kb-data-loader-manifest.md | 2026-03-30 |
+| LightRAG insert API | <https://github.com/HKUDS/LightRAG> | Batch insertion pattern, doc_status_storage delta detection | docs/research/kb-data-loader-manifest.md | 2026-03-30 |
+| LlamaIndex SimpleDirectoryReader | <https://developers.llamaindex.ai/python/framework/module_guides/loading/simpledirectoryreader/> | Glob-based file discovery, metadata extraction pattern | docs/research/kb-data-loader-manifest.md | 2026-03-30 |
 
 ## Subagent Nesting Architecture (Task #228)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| VS Code Agents Concepts | https://code.visualstudio.com/docs/copilot/concepts/agents | CC-BY-4.0 | Parallel subagent execution, context isolation, subagent key characteristics | `docs/research/subagent-nesting-architecture.md` | 2026-03-30 |
-| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | CC-BY-4.0 | Nesting depth (max 5), coordinator/worker pattern, multi-perspective review, nested subagents setting | `docs/research/subagent-nesting-architecture.md` | 2026-03-30 |
-| VS Code Custom Agents docs | https://code.visualstudio.com/docs/copilot/customization/custom-agents | CC-BY-4.0 | agents field overrides disable-model-invocation, inherit vs assign mode, user-invocable | `docs/research/subagent-nesting-architecture.md` | 2026-03-30 |
+| VS Code Agents Concepts | <https://code.visualstudio.com/docs/copilot/concepts/agents> | CC-BY-4.0 | Parallel subagent execution, context isolation, subagent key characteristics | `docs/research/subagent-nesting-architecture.md` | 2026-03-30 |
+| VS Code Subagents Guide | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Nesting depth (max 5), coordinator/worker pattern, multi-perspective review, nested subagents setting | `docs/research/subagent-nesting-architecture.md` | 2026-03-30 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | agents field overrides disable-model-invocation, inherit vs assign mode, user-invocable | `docs/research/subagent-nesting-architecture.md` | 2026-03-30 |
 
 ## Reviewer Parallel Fan-Out (Task #265)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| VS Code Agents Concepts | https://code.visualstudio.com/docs/copilot/concepts/agents | CC-BY-4.0 | Parallel subagent execution confirmation, context isolation benefits | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
-| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | CC-BY-4.0 | Multi-perspective review pattern ("Thorough Reviewer"), coordinator/worker orchestration | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
-| VS Code Custom Agents docs | https://code.visualstudio.com/docs/copilot/customization/custom-agents | CC-BY-4.0 | agents array override for disable-model-invocation, assign vs inherit tool modes | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
+| VS Code Agents Concepts | <https://code.visualstudio.com/docs/copilot/concepts/agents> | CC-BY-4.0 | Parallel subagent execution confirmation, context isolation benefits | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
+| VS Code Subagents Guide | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Multi-perspective review pattern ("Thorough Reviewer"), coordinator/worker orchestration | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | agents array override for disable-model-invocation, assign vs inherit tool modes | `docs/research/reviewer-parallel-fan-out.md` | 2026-03-30 |
 
 ## Dispatch-Cycle Trace ID (Task #434)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| W3C Trace Context | https://www.w3.org/TR/trace-context/ | trace-id (16-byte UUID) propagation standard, parent-id per span, trace-flags | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
-| OpenTelemetry Traces | https://opentelemetry.io/docs/concepts/signals/traces/ | trace_id + span_id context propagation, parent-child correlation model | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
-| LangSmith Observability | https://docs.langchain.com/langsmith/observability-concepts | Trace = collection of runs bound by trace_id, threads linked by session_id | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
+| W3C Trace Context | <https://www.w3.org/TR/trace-context/> | trace-id (16-byte UUID) propagation standard, parent-id per span, trace-flags | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
+| OpenTelemetry Traces | <https://opentelemetry.io/docs/concepts/signals/traces/> | trace_id + span_id context propagation, parent-child correlation model | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
+| LangSmith Observability | <https://docs.langchain.com/langsmith/observability-concepts> | Trace = collection of runs bound by trace_id, threads linked by session_id | docs/research/dispatch-cycle-trace-id.md | 2026-03-30 |
 
 ## Reviewer execute/* Tool Removal (Task #317)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | CC-BY-4.0 | Subagent tool independence from parent agent | `docs/research/reviewer-execute-tool-removal.md` | 2026-03-30 |
-| VS Code Custom Agents docs | https://code.visualstudio.com/docs/copilot/customization/custom-agents | CC-BY-4.0 | Least privilege via assign mode, tool set security | `docs/research/reviewer-execute-tool-removal.md` | 2026-03-30 |
+| VS Code Subagents Guide | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Subagent tool independence from parent agent | `docs/research/reviewer-execute-tool-removal.md` | 2026-03-30 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | Least privilege via assign mode, tool set security | `docs/research/reviewer-execute-tool-removal.md` | 2026-03-30 |
 
 ## Reviewer Loop Pattern Detection (Task #436)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| deer-flow LoopDetectionMiddleware | https://github.com/bytedance/deer-flow | Apache-2.0 | Hash-based tool call dedup, warn@3/stop@5 thresholds, sliding window tracking | `docs/research/reviewer-loop-pattern-detection.md` | 2026-03-30 |
-| AutoGen termination conditions | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/termination.html | MIT | Composable termination (MaxMessage, FunctionCall, Text), stateful+resettable pattern | `docs/research/reviewer-loop-pattern-detection.md` | 2026-03-30 |
+| deer-flow LoopDetectionMiddleware | <https://github.com/bytedance/deer-flow> | Apache-2.0 | Hash-based tool call dedup, warn@3/stop@5 thresholds, sliding window tracking | `docs/research/reviewer-loop-pattern-detection.md` | 2026-03-30 |
+| AutoGen termination conditions | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/termination.html> | MIT | Composable termination (MaxMessage, FunctionCall, Text), stateful+resettable pattern | `docs/research/reviewer-loop-pattern-detection.md` | 2026-03-30 |
 
 ## Planner Recipe 0 Action Request Extension (Task #226)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| GitHub Actions environment protection | https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment | Wait-timer auto-approve after timeout; structured file-based gate with auto-resolution precedent | docs/research/planner-recipe0-action-request-extension.md | 2026-03-30 |
-| AutoGen Human-in-the-Loop docs | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html | HandoffTermination typed pause-point pattern; confirms structured resume signals | docs/research/planner-recipe0-action-request-extension.md | 2026-03-30 |
+| GitHub Actions environment protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Wait-timer auto-approve after timeout; structured file-based gate with auto-resolution precedent | docs/research/planner-recipe0-action-request-extension.md | 2026-03-30 |
+| AutoGen Human-in-the-Loop docs | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination typed pause-point pattern; confirms structured resume signals | docs/research/planner-recipe0-action-request-extension.md | 2026-03-30 |
 
 ## Analysis Module Implementation Readiness (Task #179)
 
@@ -541,8 +541,8 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| deer-flow LoopDetectionMiddleware | https://github.com/bytedance/deer-flow → `backend/packages/harness/deerflow/agents/middlewares/loop_detection_middleware.py` | Apache-2.0 | Hash-based tool call dedup, 3-warn/5-stop thresholds, sliding window, LRU per-thread tracking | `docs/research/loop-detection-instruction-patterns.md` | 2026-03-30 |
-| Microsoft AutoGen termination conditions | https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/termination.html | MIT | MaxMessageTermination, composable conditions (AND/OR), custom FunctionCallTermination | `docs/research/loop-detection-instruction-patterns.md` | 2026-03-30 |
+| deer-flow LoopDetectionMiddleware | <https://github.com/bytedance/deer-flow> → `backend/packages/harness/deerflow/agents/middlewares/loop_detection_middleware.py` | Apache-2.0 | Hash-based tool call dedup, 3-warn/5-stop thresholds, sliding window, LRU per-thread tracking | `docs/research/loop-detection-instruction-patterns.md` | 2026-03-30 |
+| Microsoft AutoGen termination conditions | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/termination.html> | MIT | MaxMessageTermination, composable conditions (AND/OR), custom FunctionCallTermination | `docs/research/loop-detection-instruction-patterns.md` | 2026-03-30 |
 
 ## Hook AC Command-Execution Model Correction (Task #213)
 
@@ -2661,7 +2661,7 @@ External repos and resources studied during OwlBear development.
 | Quoroom Room stuck detection | docs/research/quoroom-room.md Â§3.4 | MIT | Progress-based detection: productiveToolCalls counter, STUCK directive injection | `docs/research/stale-execution-detector.md` | 2026-03-07 |
 | Symphony reconciliation | docs/research/symphony.md Â§3.2 | MIT | Per-tick reconcile pattern: stall detection + state refresh for running tasks | `docs/research/stale-execution-detector.md` | 2026-03-07 |
 
-## Enhanced bearclaw status with rich.Panel (Task #631)
+## Enhanced bearclaw status with rich.Panel (Task #631) — Supplemental
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
@@ -2888,8 +2888,8 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | deer-flow test_harness_boundary.py (MIT) | github.com/bytedance/deer-flow | AST-based import boundary scan pattern (~50 LOC, zero deps) | docs/research/ast-package-boundary-enforcement.md | 2026-04-01 |
 | import-linter v2.11 (BSD-2) | github.com/seddonym/import-linter | Mature Python architecture linter with forbidden/independence/layers contracts | docs/research/ast-package-boundary-enforcement.md | 2026-04-01 |
-| VS Code MCP Config Reference | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | CC-BY-4.0 | `.vscode/mcp.json` stdio server registration format, `uv run` command pattern | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
-| MCP Tools Spec (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | CC-BY-4.0 | Tool definition schema, `isError` field semantics, input schema annotations | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| VS Code MCP Config Reference (CC-BY-4.0) | <https://code.visualstudio.com/docs/copilot/reference/mcp-configuration> | `.vscode/mcp.json` stdio server registration format, `uv run` command pattern | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
+| MCP Tools Spec (2025-06-18) (CC-BY-4.0) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | Tool definition schema, `isError` field semantics, input schema annotations | `docs/research/build-mcp-kanban-server.md` | 2026-03-28 |
 
 ## mcp-kanban Unit Test Strategy (Task #89)
 
@@ -2913,20 +2913,20 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | CC-BY-4.0 | One-shot subagent model, coordinator/worker pattern, multi-perspective review, nesting depth max 5 | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
-| VS Code Custom Agents docs | https://code.visualstudio.com/docs/copilot/customization/custom-agents | CC-BY-4.0 | agents array override for disable-model-invocation, assign vs inherit tool modes | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
-| Du et al. — Improving Factuality through Multiagent Debate (2023) | https://arxiv.org/abs/2305.14325 | CC-BY-4.0 | Multi-agent debate improves factuality and reasoning; single-round debate effective | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
-| Liang et al. — MAD: Multi-Agent Debate (EMNLP 2024) | https://arxiv.org/abs/2305.19118 | arxiv nonexclusive | Degeneration-of-Thought in self-reflection; external adversarial challenge breaks DoT | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
-| Chan et al. — ChatEval multi-agent debate (2023) | https://arxiv.org/abs/2308.07201 | arxiv nonexclusive | Multi-annotator collaboration outperforms single-agent evaluation | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
-| CrewAI Task Guardrails | <https://docs.crewai.com/concepts/tasks> | Sequential guardrail validation pattern — prerequisite check before task proceeds | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
-| AutoGen Human-in-the-Loop | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | HandoffTermination early termination when prerequisite unmet | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
-| GitHub Actions Environment Protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | Required-reviewer gate blocks before any work runs | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
+| VS Code Subagents Guide | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | One-shot subagent model, coordinator/worker pattern, multi-perspective review, nesting depth max 5 | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | agents array override for disable-model-invocation, assign vs inherit tool modes | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| Du et al. — Improving Factuality through Multiagent Debate (2023) | <https://arxiv.org/abs/2305.14325> | CC-BY-4.0 | Multi-agent debate improves factuality and reasoning; single-round debate effective | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| Liang et al. — MAD: Multi-Agent Debate (EMNLP 2024) | <https://arxiv.org/abs/2305.19118> | arxiv nonexclusive | Degeneration-of-Thought in self-reflection; external adversarial challenge breaks DoT | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| Chan et al. — ChatEval multi-agent debate (2023) | <https://arxiv.org/abs/2308.07201> | arxiv nonexclusive | Multi-annotator collaboration outperforms single-agent evaluation | `docs/research/challenger-subagent-design.md` | 2026-03-31 |
+| CrewAI Task Guardrails | <https://docs.crewai.com/concepts/tasks> | N/A | Sequential guardrail validation pattern — prerequisite check before task proceeds | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
+| AutoGen Human-in-the-Loop | <https://microsoft.github.io/autogen/stable/user-guide/agentchat-user-guide/tutorial/human-in-the-loop.html> | N/A | HandoffTermination early termination when prerequisite unmet | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
+| GitHub Actions Environment Protection | <https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-deployments/managing-environments-for-deployment> | N/A | Required-reviewer gate blocks before any work runs | `docs/research/architect-dr-verification-gate.md` | 2026-03-31 |
 
 ## Challenger Arch-Review Integration (Task #468)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| VS Code Subagents Guide | https://code.visualstudio.com/docs/copilot/agents/subagents | agents array overrides disable-model-invocation, one-shot return model | `docs/research/challenger-arch-review-integration.md` | 2026-03-31 |
+| VS Code Subagents Guide | <https://code.visualstudio.com/docs/copilot/agents/subagents> | agents array overrides disable-model-invocation, one-shot return model | `docs/research/challenger-arch-review-integration.md` | 2026-03-31 |
 | OwlBear #465 Challenger design | docs/research/challenger-subagent-design.md | Integration protocol S3e-f, trigger points, error handling | `docs/research/challenger-arch-review-integration.md` | 2026-03-31 |
 | OwlBear #228 nesting research | docs/research/subagent-nesting-architecture.md | L2 nesting confirmed, assign mode validation | `docs/research/challenger-arch-review-integration.md` | 2026-03-31 |
 
@@ -3117,7 +3117,7 @@ External repos and resources studied during OwlBear development.
 | PEP 544 â€” Protocols: Structural subtyping | <https://peps.python.org/pep-0544/> | N/A | Protocol default method bodies, Protocol inheritance, `runtime_checkable` semantics, structural vs nominal subtyping interaction | `docs/research/channel-protocol-extension.md` | 2026-03-06 |
 | mypy Protocol documentation | <https://mypy.readthedocs.io/en/stable/protocols.html> | N/A | Default implementations in Protocols, mixin usage with Protocols, explicit vs structural conformance | `docs/research/channel-protocol-extension.md` | 2026-03-06 |
 
-## Typed Hook Payloads Research (Task #483)
+## Typed Hook Payloads Research (Task #483) — Supplemental
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
@@ -3589,7 +3589,7 @@ External repos and resources studied during OwlBear development.
 | VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | CC-BY-4.0 | `disable-model-invocation` field definition: prevents subagent invocation (default false) | `docs/research/disable-model-invocation-pipeline-agents.md` | 2026-03-27 |
 | VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | CC-BY-4.0 | Override behavior: explicit `agents` array overrides `disable-model-invocation: true` | `docs/research/disable-model-invocation-pipeline-agents.md` | 2026-03-27 |
 
-## Build Setup Script Research (Task #12)
+## Build Setup Script Research (Task #12) — Supplemental
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
@@ -3607,7 +3607,7 @@ External repos and resources studied during OwlBear development.
 | pytest monkeypatch docs | <https://docs.pytest.org/en/stable/how-to/monkeypatch.html> | MIT | monkeypatch.chdir for auto-detection tests, monkeypatch.setattr for path resolution | `docs/research/test-setup-script-core.md` | 2026-03-28 |
 | v1 test_project_workspace.py | `v1/tests/test_project_workspace.py` | N/A (internal) | Scaffold test pattern: tmp_path fixtures, MagicMock for subprocess, direct filesystem assertions | `docs/research/test-setup-script-core.md` | 2026-03-28 |
 
-## v2 Test Infrastructure Research (Task #35)
+## v2 Test Infrastructure Research (Task #35) — Supplemental
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
