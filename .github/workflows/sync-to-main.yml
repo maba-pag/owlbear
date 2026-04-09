@@ -1,6 +1,7 @@
+---
 name: Sync dev to main
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       dry_run:

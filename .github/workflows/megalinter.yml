@@ -1,6 +1,7 @@
+---
 name: MegaLinter
 
-on:
+"on":
   workflow_dispatch:
 
 concurrency:
