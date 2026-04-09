@@ -52,7 +52,10 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
 
 # Ruff — uses pyproject.toml config (select=["ALL"] includes bandit S-rules)
 # Auto-discovers pyproject.toml from project root; no explicit config path needed.
+# --extend-exclude ensures v1/ is excluded even when MegaLinter's project-mode
+# bypasses file-level FILTER_REGEX_EXCLUDE.
 PYTHON_RUFF_CLI_LINT_MODE: project
+PYTHON_RUFF_ARGUMENTS: "--extend-exclude v1/"
 
 # Ruff format — uses pyproject.toml config
 PYTHON_DEFAULT_STYLE: ruff
