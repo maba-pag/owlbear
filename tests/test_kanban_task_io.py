@@ -14,9 +14,12 @@ Import path: owlbear_mcp_kanban.task_io (module does not exist yet).
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
 from pathlib import Path
 from typing import ClassVar
+from unittest.mock import patch
 
 import pytest
 
@@ -714,3 +717,76 @@ class TestBuilderDiscovered:
         )
         with pytest.raises(ValueError, match=r"closing"):
             read_task(task_file)
+
+
+# ===========================================================================
+# TestFromAC_AtomicWrites (#718 AC: Atomic writes via temp file + os.replace())
+# ===========================================================================
+
+
+class TestFromAC_AtomicWrites:
+    """Tests for #718 AC: Atomic writes via temp file + os.replace().
+
+    The current write_task uses path.write_text() (non-atomic).
+    All tests here must FAIL until write_task is changed to use
+    tempfile + os.replace().
+    """
+
+    def test_write_task_calls_os_replace(self, tmp_path: Path) -> None:
+        """write_task must call os.replace exactly once (atomic rename)."""
+        task_file = tmp_path / "42-test.md"
+        with patch("os.replace") as mock_replace:
+            write_task(task_file, _MINIMAL_RECORD)
+        mock_replace.assert_called_once()
+
+    def test_write_task_os_replace_destination_is_task_file(self, tmp_path: Path) -> None:
+        """The second argument of os.replace must be the intended task file path."""
+        task_file = tmp_path / "42-test.md"
+        with patch("os.replace") as mock_replace, contextlib.suppress(Exception):
+            write_task(task_file, _MINIMAL_RECORD)
+        assert mock_replace.called, "os.replace was not called - write is non-atomic"
+        _src, dst = mock_replace.call_args[0]
+        assert Path(dst) == task_file
+
+    def test_write_task_temp_file_in_same_directory_as_target(self, tmp_path: Path) -> None:
+        """Source path passed to os.replace must be in the same directory as target.
+
+        This ensures the rename is same-filesystem and therefore truly atomic.
+        """
+        task_file = tmp_path / "42-test.md"
+        observed_src: list[Path] = []
+        real_replace = os.replace
+
+        def spy_replace(src: str, dst: str) -> None:
+            observed_src.append(Path(src))
+            return real_replace(src, dst)
+
+        with patch("os.replace", side_effect=spy_replace):
+            write_task(task_file, _MINIMAL_RECORD)
+
+        assert len(observed_src) == 1, "os.replace must be called exactly once"
+        assert observed_src[0].parent == task_file.parent, (
+            f"Temp file {observed_src[0]} is not in the same directory as {task_file}"
+        )
+
+    def test_write_task_original_preserved_when_replace_fails(
+        self, tmp_path: Path
+    ) -> None:
+        """If os.replace fails, the original task file content must remain intact.
+
+        Atomic guarantee: writing fails before touching the destination.
+        """
+        task_file = tmp_path / "42-original.md"
+        original = (
+            "---\nid: 42\ntitle: Original title\nstatus: backlog\n"
+            "priority: nice-to-have\ncreated: 2026-04-01T00:00:00+00:00\n"
+            "updated: 2026-04-01T00:00:00+00:00\n---\nOriginal body content.\n"
+        )
+        task_file.write_text(original, encoding="utf-8")
+
+        with patch("os.replace", side_effect=OSError("simulated disk full")), pytest.raises(
+            OSError, match="simulated disk full"
+        ):
+            write_task(task_file, _MINIMAL_RECORD)
+
+        assert task_file.read_text(encoding="utf-8") == original
