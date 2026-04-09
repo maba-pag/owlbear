@@ -40,6 +40,9 @@ _ARCHIVE_DIR_NAME = "v1-archive"
 class KanbanEngine:
     """Native kanban engine backed by filesystem task files.
 
+    All mutating operations (create, edit, move, claim, release) append an
+    entry to ``{kanban_dir}/activity.jsonl``, creating the file on first write.
+
     Args:
         kanban_dir:  Root directory of the kanban board.
         agent_name:  Fixed agent identity for this instance.  Generated as
