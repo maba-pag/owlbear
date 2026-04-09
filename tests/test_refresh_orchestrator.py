@@ -2,9 +2,8 @@
 
 Tests the contract for:
 - RefreshResult model in refresh.py (new module)
-- CrawlHandler type alias in refresh.py
 - RefreshOrchestrator class: constructor, refresh(), refresh_all()
-- Handler dispatch: url_list, crawl, file_glob
+- Handler dispatch: url_list, file_glob
 - _update_source_record: persists outcome via store.update
 - CancelSignal integration (between items & between sources)
 - IngestResult status counting (ok → refreshed, skipped → skipped, failed → failed)
