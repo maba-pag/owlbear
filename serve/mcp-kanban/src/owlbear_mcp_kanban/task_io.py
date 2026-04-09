@@ -22,13 +22,14 @@ Timestamps are preserved as plain strings to avoid Go 7-digit nanosecond
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
-from typing import TYPE_CHECKING, Any
+import tempfile
+from pathlib import Path
+from typing import Any
 
 import yaml
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 from owlbear_mcp_kanban.engine_models import TaskRecord
 
@@ -220,4 +221,13 @@ def write_task(path: Path, record: TaskRecord) -> None:
     )
 
     content = f"---\n{yaml_str}---\n{body}"
-    path.write_text(content, encoding="utf-8")
+
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(content)
+        Path(tmp_path).replace(path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            Path(tmp_path).unlink()
+        raise
