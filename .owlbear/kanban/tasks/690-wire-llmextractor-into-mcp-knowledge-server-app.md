@@ -4,7 +4,7 @@ title: Wire LLMExtractor into MCP knowledge server app_lifespan
 status: done
 priority: needed
 created: 2026-04-08T21:06:20.2270499+02:00
-updated: 2026-04-09T17:22:56.9634155+02:00
+updated: 2026-04-09T19:24:37.1958382+02:00
 tags:
     - scope:mcp-knowledge
     - ' type:feature'
@@ -13,6 +13,8 @@ parent: 676
 depends_on:
     - 699
     - 689
+claimed_by: nova-hive
+claimed_at: 2026-04-09T19:24:37.1897712+02:00
 class: standard
 ---
 
