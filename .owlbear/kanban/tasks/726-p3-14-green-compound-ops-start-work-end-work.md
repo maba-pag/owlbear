@@ -1,10 +1,10 @@
 ---
 id: 726
 title: 'P3-14: GREEN — compound ops (start_work, end_work)'
-status: todo
+status: done
 priority: critical
 created: 2026-04-09T03:27:37.7135664+02:00
-updated: 2026-04-09T22:57:46.2374469+02:00
+updated: 2026-04-09T23:17:32.4547552+02:00
 tags:
     - kanban
     - phase-3
@@ -12,6 +12,8 @@ tags:
 parent: 712
 depends_on:
     - 725
+claimed_by: dove-crane
+claimed_at: 2026-04-09T23:17:32.4520307+02:00
 class: standard
 ---
 
@@ -72,3 +74,117 @@ GREEN phase for compound operations `start_work()` and `end_work()` on `KanbanEn
 
 ### Verdict: APPROVE
 ### Action Taken: Approved #726 to todo. All AC pre-satisfied by #725 builder (commit 2b5be73, reviewed .96, audited .98). Downstream agents process as pass-throughs. Unblocks #729.
+
+[[2026-04-09]] Thu 23:01
+## Test-Writer Notes
+- Non-implementation pass-through: GREEN phase task with all AC pre-satisfied by #725 builder (commit 2b5be73).
+- Existing test file: tests/test_kanban_engine_compound.py (36 tests, 7 TestFromAC_* classes)
+- AC coverage verified against existing tests:
+  | AC Line | Covered By |
+  |---------|-----------|
+  | start_work: blocked guard, claim, return TaskRecord | TestFromAC_StartWork (7 tests) |
+  | end_work: timestamped note, advance/stay/block/reject, release claim | TestFromAC_EndWorkSuccess + Fail + Block + Reject (22 tests) |
+  | Status advancement: index + move to next; last status → archive | TestFromAC_EndWorkSuccessLastStatus (3 tests) |
+  | block_reason required when outcome=block | TestFromAC_EndWorkBlockGuard (3 tests) |
+  | All #725 tests pass | Verified: 36/36 PASS |
+- New tests would pass immediately (implementation exists) — no failing tests possible per RED-phase constraint.
+- Architecture review (body) explicitly states: "Downstream agents should process this task as pass-throughs."
+
+[[2026-04-09]] Thu 23:03
+## Builder Notes
+- Non-implementation pass-through — no code changes needed.
+- All 5 AC lines pre-satisfied by #725 builder (commit 2b5be73, reviewed .96, audited .98).
+- Verified: 36/36 tests pass in tests/test_kanban_engine_compound.py (last terminal run confirms).
+- Files changed: none.
+- Passing through to review.
+
+[[2026-04-09]] Thu 23:07
+## Review Evidence
+
+### Test Results
+- pytest: 36 passed, 0 failed, 0 skipped (tests/test_kanban_engine_compound.py)
+
+### Lint: clean (ruff exit 0)
+
+### Coverage: owlbear_mcp_kanban.engine: 67% (scoped run — expected; no new code added; compound tests cover start_work/end_work methods only; full engine coverage measured by broader test suite)
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| start_work: blocked guard, claim, return TaskRecord | TestFromAC_StartWork (7 tests) | YES — test_start_work_sets_claimed_by checks claimed_by==agent_name; test_start_work_blocked_task_raises_value_error checks ValueError with "blocked" substring | COVERED |
+| end_work: append timestamped note, advance/stay/block/reject, release claim | TestFromAC_EndWorkSuccess + Fail + Block + Reject (22 tests) | YES — timestamp regex assertion; status == "backlog"; blocked is True; claimed_by/claimed_at are None | COVERED |
+| Status advancement: index current, move to next; last status triggers archive | TestFromAC_EndWorkSuccessLastStatus (3 tests) | YES — checks task_files==[], file created in archive dir, note preserved | COVERED |
+| block_reason required when outcome=block | TestFromAC_EndWorkBlockGuard (3 tests) | YES — expects ValueError; test_end_work_block_missing_reason_does_not_set_blocked confirms no partial mutation (blocked=False after reject) | COVERED |
+| All #725 tests pass | Verified independently: 36/36 PASS | N/A — test run evidence | COVERED |
+
+#### Security Review
+- Guard ordering: blocked check before mutation — SAFE (engine.py:385-387)
+- No partial mutation on error: block_reason guard raises before edit_task — SAFE (engine.py:464-466), confirmed by test
+- Path traversal: _find_task_path globs task_id-*.md + task_io.py validate_path_containment — SAFE
+- Note injection: markdown append only, no HTML rendering surface — SAFE
+- Archive dir creation: mkdir(parents=True, exist_ok=True) — SAFE
+- No hardcoded secrets, no eval/exec, no unsafe deserialization
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| All 36 TestFromAC_* tests | None (builder made zero code changes) | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|---------|
+| Assertion specificity | STRONG | Exact value checks (==, is True/False, regex match); no generic truthiness |
+| Negative/error-path coverage | STRONG | Blocked guard, block_reason guard, nonexistent task — all explicit with state verification |
+| Manual mutation reasoning | STRONG | All critical assertions verified to fail under violation scenarios |
+| Test independence | STRONG | Fresh tmpdir + pinned agent_name fixtures per test |
+| Descriptive test names | STRONG | test_end_work_block_empty_reason_raises, test_start_work_blocked_task_raises_value_error |
+
+#### Data Safety
+- No unvalidated LLM output persisted; no shared mutable state; engine methods are sequential file ops (pre-existing design, not new)
+
+#### Implementation-Aware Gaps
+- Unknown outcome value: no test for end_work with outcome not in {success,fail,block,reject}. Defensive code exists but untested. INFORMATIONAL — not AC requirement; omitted from coverage for #726.
+- Status not in config statuses: current_idx fallback untested. INFORMATIONAL — boundary condition outside AC scope.
+- Both flagged as informational; neither is an AC-line obligation nor a CRITICAL gap.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 |
+| Approach variation | N/A (pass-through) |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- Unknown outcome and status=-1 boundary edge cases lack explicit tests (noted above)
+- Concurrent file I/O: no locking; acceptable for single-agent workflow design
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| start_work: blocked guard, claim, return TaskRecord | engine.py:438-456 delegates to claim_task:385-401 | TestFromAC_StartWork (7 tests) | PASS |
+| end_work: timestamped note, advance/stay/block/reject, release claim | engine.py:458-520 handles all 4 outcomes | TestFromAC_EndWork* (22 tests) | PASS |
+| Status advancement: index current, move to next; last triggers archive | engine.py:469-471 statuses.index + is_last + move_task("archived") | TestFromAC_EndWorkSuccessLastStatus (3 tests) | PASS |
+| block_reason required when outcome=block | engine.py:464-466 ValueError guard before any mutation | TestFromAC_EndWorkBlockGuard (3 tests) | PASS |
+| All #725 tests pass | 36/36 PASS — pytest exit 0, independently verified | Full test file | PASS |
+
+### Confidence: .97
+### Verdict: PASS
+
+[[2026-04-09]] Thu 23:09
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | copilot-instructions.md is a project-identity doc; does not track engine-level method APIs. No behavior-facing consumers documented there. |
+| 2 | Module docstrings | Yes | Verified | engine.py:438-520 — `start_work` and `end_work` both have complete, accurate docstrings. `start_work` documents delegation to `claim_task`, blocked/rival-claim guards, and exception paths. `end_work` documents all 4 outcomes, all params (note, outcome, block_reason, move_to), and both exception paths. Matches implementation exactly. |
+| 3 | External attribution | No | N/A | Builder made zero code changes; no external patterns introduced. |
+| 4 | CLI changes | No | N/A | No CLI additions or modifications. |
+| 5 | Research doc | No | N/A | No research doc produced; task was an arch-review-approved pass-through. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/726-*` files exist)
