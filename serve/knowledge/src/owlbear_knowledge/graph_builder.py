@@ -119,7 +119,7 @@ class IntraDocGraphBuilder:
         all_edges: list[Edge] = []
         if len(entities) <= _INTRA_BATCH_THRESHOLD:
             prompt = _build_intra_prompt(entities, scope, document_id)
-            result = self._extractor.extract(prompt)
+            result = await self._extractor.extract(prompt)
             all_edges.extend(result.edges)
         else:
             by_type: dict[str, list[Entity]] = defaultdict(list)
@@ -127,7 +127,7 @@ class IntraDocGraphBuilder:
                 by_type[ent.entity_type].append(ent)
             for etype_entities in by_type.values():
                 prompt = _build_intra_prompt(etype_entities, scope, document_id)
-                result = self._extractor.extract(prompt)
+                result = await self._extractor.extract(prompt)
                 all_edges.extend(result.edges)
 
         stamped = [_stamp_intra_edge(e) for e in all_edges]

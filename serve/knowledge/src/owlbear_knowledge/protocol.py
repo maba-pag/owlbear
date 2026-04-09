@@ -87,8 +87,8 @@ class VectorStoreProtocol(Protocol):
 class StructuredExtractor(Protocol):
     """Protocol for structured entity/relationship extraction via LLM.
 
-    Any object with an ``extract(prompt: str) -> ExtractionResult`` method
+    Any object with an ``async extract(prompt: str) -> ExtractionResult`` method
     satisfies this protocol.  Checked at runtime via :func:`isinstance`.
     """
 
-    def extract(self, prompt: str) -> ExtractionResult: ...
+    async def extract(self, prompt: str) -> ExtractionResult: ...

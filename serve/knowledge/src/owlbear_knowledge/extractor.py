@@ -97,4 +97,4 @@ class EntityExtractor:
         if metadata:
             prefix = "\n".join(f"{k}: {v}" for k, v in metadata.items())
             prompt = f"{prefix}\n{text}"
-        return self._extractor.extract(prompt)
+        return await self._extractor.extract(prompt)

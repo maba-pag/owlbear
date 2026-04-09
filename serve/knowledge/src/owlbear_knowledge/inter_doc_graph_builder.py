@@ -151,7 +151,7 @@ class InterDocGraphBuilder:
         for i in range(0, len(candidate_pairs), _INTER_BATCH_SIZE):
             batch = candidate_pairs[i : i + _INTER_BATCH_SIZE]
             prompt = _build_inter_prompt(batch, scope)
-            result = self._extractor.extract(prompt)
+            result = await self._extractor.extract(prompt)
             all_edges.extend(result.edges)
 
         stamped = [_stamp_inter_edge(e) for e in all_edges]
