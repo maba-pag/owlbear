@@ -29,6 +29,7 @@ SARIF_REPORTER: true
 # Exclude paths that are generated, archived, or third-party
 FILTER_REGEX_EXCLUDE: >-
   (\.owlbear/kanban/v1-archive/
+  |\.owlbear/research/
   |\.owlbear/scratch/
   |\.venv/
   |v1/
