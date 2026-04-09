@@ -258,17 +258,7 @@ class TestFromAC_GraphAugmentedRetrieverWiring:
             async with app_lifespan(MagicMock()):
                 pass
 
-        args, kwargs = mock_gar_cls.call_args
-        positional = list(args)
-        assert mock_vs in positional or kwargs.get("vector_store") is mock_vs, (
-            "GraphAugmentedRetriever must receive the QdrantVectorStore instance"
-        )
-        assert mock_gs in positional or kwargs.get("graph_store") is mock_gs, (
-            "GraphAugmentedRetriever must receive the GraphStore instance"
-        )
-        assert mock_emb in positional or kwargs.get("embedding_provider") is mock_emb, (
-            "GraphAugmentedRetriever must receive the BgeM3EmbeddingProvider instance"
-        )
+        mock_gar_cls.assert_called_once_with(mock_vs, mock_gs, mock_emb)
 
 
 # ---------------------------------------------------------------------------
