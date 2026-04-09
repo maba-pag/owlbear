@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 import re
 from contextlib import asynccontextmanager
@@ -13,7 +12,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from pydantic import BeforeValidator, ValidationError
+from pydantic import BeforeValidator
 
 from owlbear_mcp_kanban.engine import KanbanEngine
 from owlbear_mcp_kanban.models import KanbanTask
@@ -40,8 +39,6 @@ __all__ = [
     "AppContext",
     "StrId",
     "_apply_tool_exclusions",
-    "_parse_task_json",
-    "_run_kanban",
     "_show_validated",
     "app_lifespan",
     "create_task",
@@ -56,22 +53,6 @@ __all__ = [
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
-_DEFAULT_KANBAN_BIN = _DEFAULT_KANBAN_DIR / "kanban-md.exe"
-
-
-class _ForwardSlashPath(Path):
-    """Path subclass whose ``__str__`` always uses forward slashes.
-
-    On Windows, ``pathlib.Path`` normalises forward slashes to backslashes in
-    ``__str__``.  When an env-var path such as ``KANBAN_BIN=/usr/bin/kanban``
-    is stored as a plain ``Path``, ``str(path)`` would return the
-    backslash-separated form and break equality checks against the original
-    string.  This subclass preserves the user-supplied separator, enabling
-    cross-platform env-var round-trips.
-    """
-
-    def __str__(self) -> str:
-        return super().__str__().replace(os.sep, "/")
 
 
 @dataclass
@@ -117,27 +98,6 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
 
 
 mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
-
-
-async def _run_kanban(ctx: AppContext, *args: str) -> tuple[str, str, int]:
-    """Run kanban-md with the given args plus ``--no-color --dir`` flags.
-
-    Returns:
-        A ``(stdout, stderr, returncode)`` tuple.
-    """
-    full_args = (*args, "--no-color", "--dir", str(ctx.kanban_dir))
-    proc = await asyncio.create_subprocess_exec(
-        str(ctx.kanban_bin),
-        *full_args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout_bytes, stderr_bytes = await proc.communicate()
-    return (
-        stdout_bytes.decode("utf-8", errors="replace"),
-        stderr_bytes.decode("utf-8", errors="replace"),
-        proc.returncode or 0,
-    )
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -237,15 +197,6 @@ async def _show_validated(app_ctx: AppContext, task_id: str) -> KanbanTask:
         msg = str(exc)
         raise ToolError(msg) from exc
     return _record_to_task(record)
-
-
-async def _parse_task_json(stdout: str) -> KanbanTask:
-    """Parse raw ``--json`` output into a validated KanbanTask."""
-    try:
-        return KanbanTask.model_validate_json(stdout)
-    except ValidationError as exc:
-        msg = f"Invalid task JSON: {exc}"
-        raise ToolError(msg) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
