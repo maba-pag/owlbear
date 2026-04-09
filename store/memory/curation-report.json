@@ -1,5 +1,184 @@
 ﻿[
   {
+    "cycle": "2026-04-09T-periodic-7",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. New findings: findings-2026-04-09-d8e6149.md (MegaLinter on commit d8e6149). 7 entries reviewed (3 new + 4 carried). 0 promotions. 3 kept MEDIUM (all from cycle 6 carries — 2nd carry). 5 pruned: 4 new findings (editorconfig-v1archive NOISE, json-bom-vscode LOW, ruff-72-residual LOW, yamllint-conventions NOISE) + 1 dropped after 4th carry (#703-docstring-overclaim, no second sighting). Security note: gitleaks now CLEAN on d8e6149 (was 6 secrets on d5ed020 from cycle 6) — prior security alert RESOLVED, no user action needed.",
+    "entries_processed": 7,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "recommendation": "keep",
+        "reason": "MEDIUM (2nd carry) — variant of existing process-patterns.md 'pre-existing test/implementation state' entry (lines 48-56), but cross-task; still single observation; keep one more cycle"
+      },
+      {
+        "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "recommendation": "keep",
+        "reason": "MEDIUM (2nd carry) — existing pipeline-handoff rule covers researchers but not test-writers; single occurrence; keep one more cycle"
+      },
+      {
+        "entry_id": "inline:#715-builder:ruamel-yaml-timestamp-resolver",
+        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level — avoids global side effects)",
+        "recommendation": "keep",
+        "reason": "MEDIUM (2nd carry) — specific, non-obvious, actionable YAML technique; single use of ruamel.yaml in codebase (#715); keep one more cycle to check for second usage"
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
+        "content_preview": "test-writer docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer flagged MISSING",
+        "recommendation": "reject",
+        "reason": "DROP — 4th carry with no second independent sighting. Lean-catalog principle: stop carrying MEDIUM entries with no recurrence after 4 cycles. Idiosyncratic single instance."
+      },
+      {
+        "entry_id": "findings-2026-04-09-d8e6149:editorconfig-v1archive-lines",
+        "content_preview": "editorconfig-checker: hundreds of line-too-long errors in .owlbear/kanban/v1-archive/activity.jsonl",
+        "recommendation": "reject",
+        "reason": "NOISE — archive JSONL file with long lines by nature; fix is to exclude .owlbear/kanban/v1-archive/ from editorconfig-checker; not an agent process pattern"
+      },
+      {
+        "entry_id": "findings-2026-04-09-d8e6149:json-bom-vscode-mcp",
+        "content_preview": ".vscode/mcp.json has UTF-8 BOM — jsonlint parse error on token BOM",
+        "recommendation": "reject",
+        "reason": "LOW — instance of documented pattern (Set-Content adds BOM on PS 5.1, terminal-output-isolation.md:45-49); not a new finding"
+      },
+      {
+        "entry_id": "findings-2026-04-09-d8e6149:ruff-72-residual-errors",
+        "content_preview": "ruff: 72 errors after MegaLinter ruff config fix (5289→72); includes ExceptionGroup undefined name and unused imports",
+        "recommendation": "reject",
+        "reason": "LOW — operational CI residual post-fix; unused imports in v1/stubs + E402 ordering; ExceptionGroup is a config issue (target-version); not an agent behavior pattern"
+      },
+      {
+        "entry_id": "findings-2026-04-09-d8e6149:yamllint-warnings",
+        "content_preview": "yamllint: 6 warnings across 4 files — missing '---' doc-start, truthy value conventions in GitHub Actions workflows",
+        "recommendation": "reject",
+        "reason": "NOISE — style conventions; not recurring agent behavior; dev would fix these on first encounter via yamllint output"
+      }
+    ],
+    "security_resolved": [
+      {
+        "entry_id": "findings-2026-04-09-d5ed020:gitleaks-6-secrets",
+        "content_preview": "gitleaks: 1 error, 6 secrets detected in CI run on commit d5ed020",
+        "status": "RESOLVED",
+        "reason": "gitleaks passes cleanly on commit d8e6149 — secrets were false positives or addressed. No user action needed. Prior 'user_attention_required' flag from cycle 6 superseded."
+      }
+    ]
+  },
+  {
+    "cycle": "2026-04-09T-periodic-6",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. Task scan: #689 (LLMExtractor done), #715 (config_loader archived). New artifacts: findings-2026-04-09-d5ed020.md (MegaLinter CI). 9 entries reviewed (7 new + 2 carried). 0 promotions. 3 kept MEDIUM (B,C,D new). 3 pruned (A,F,G). Stale UNCERTAIN dropped (end_work-\\n — 4 cycles no new evidence; catalog note at kanban-md-limits.md:268 already expresses uncertainty). 1 HIGH security flag: gitleaks detected 6 secrets in commit d5ed020 — requires user-created cleanup task. Carried: docstring-overclaim-coverage (MEDIUM, cycle 3) + 3 new MEDIUMs.",
+    "entries_processed": 9,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
+        "content_preview": "test-writer docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer flagged MISSING",
+        "recommendation": "keep",
+        "reason": "MEDIUM — now 3 cycles, still single observation; promote if second independent sighting occurs"
+      },
+      {
+        "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "recommendation": "keep",
+        "reason": "MEDIUM — variant of existing process-patterns.md 'pre-existing test/implementation state' (lines 48-56), but from a cross-task commit; needs second independent observation before adding a variant to catalog"
+      },
+      {
+        "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "recommendation": "keep",
+        "reason": "MEDIUM — single occurrence; existing pipeline-handoff rule covers researchers but not test-writers; watch for second occurrence before promoting"
+      },
+      {
+        "entry_id": "inline:#715-builder:ruamel-yaml-timestamp-resolver",
+        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level — avoids global side effects)",
+        "recommendation": "keep",
+        "reason": "MEDIUM — specific, non-obvious, actionable YAML technique; single occurrence; watch for second use of ruamel.yaml before promoting to catalog"
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "inline:#689-reviewer:pydanticai-result-type-rename",
+        "content_preview": "PydanticAI v1 used result_type=ExtractionResult but current API uses output_type=ExtractionResult",
+        "recommendation": "reject",
+        "reason": "LOW — specific API version detail, not a process pattern; single occurrence; developer would discover via docs or type error immediately"
+      },
+      {
+        "entry_id": "findings-2026-04-09-d5ed020:editorconfig-widespread-crlf",
+        "content_preview": "editorconfig-checker: widespread CRLF line endings and UTF-8-SIG encoding across serve/, tests/, share/",
+        "recommendation": "reject",
+        "reason": "LOW — pre-existing quality debt, not a new process pattern; CRLF/kanban-file issue already in process-patterns.md; UTF-8-SIG note known Windows editor issue; individual file cleanup is operational work not catalog-worthy"
+      },
+      {
+        "entry_id": "findings-2026-04-09-d5ed020:ruff-5289-errors",
+        "content_preview": "ruff: 5,289 errors across 301 files; no auto-fix applied",
+        "recommendation": "reject",
+        "reason": "NOISE — pre-existing formatting debt; task-scoped lint discipline already in ruff-and-lint-discipline.md; repo-wide ruff noise is the documented pattern"
+      }
+    ],
+    "dropped_stale": [
+      {
+        "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "action": "dropped",
+        "reason": "UNCERTAIN for 4 consecutive cycles with no new evidence either way. Catalog entry at kanban-md-limits.md:268 already contains a ⚠ CURATOR NOTE expressing the uncertainty. Continuing to carry this entry adds no value — the uncertainty is already documented in the catalog for users to assess on first use."
+      }
+    ],
+    "user_attention_required": [
+      {
+        "entry_id": "findings-2026-04-09-d5ed020:gitleaks-6-secrets",
+        "content_preview": "gitleaks: 1 error, 6 secrets detected in CI run on commit d5ed020",
+        "recommendation": "approve",
+        "reason": "HIGH — security concern; 6 potential secrets found in CI scan; requires a kanban cleanup task to audit and rotate/remove. This curator cannot create tasks — user action required."
+      }
+    ],
+    "catalog_corrections": []
+  },
+  {
+    "cycle": "2026-04-09T-periodic-5",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (memory tools unavailable in session; consistent with cycle-4 DB-empty report). Channel B: 0 inbox files. Inline scan: 2 recently-done task bodies (#701 PydanticAI wiring, #714 RED/GREEN pass-through). 0 promotions: both inline findings rated LOW (covered by existing catalog entries). 2 MEDIUM/UNCERTAIN entries carried from cycle 4: (1) end_work \\n literal (UNCERTAIN, 3rd cycle — no new evidence); (2) reviewer docstring-overclaim coverage (MEDIUM, single observation from #703 — watch for recurrence). Catalog in good shape.",
+    "entries_processed": 2,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "recommendation": "keep",
+        "reason": "UNCERTAIN (cycle 3→4→5) — catalog warning note already at kanban-md-limits.md:268; no new evidence disambiguating behavior; user verification still needed"
+      },
+      {
+        "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
+        "content_preview": "test-writer docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer flagged MISSING",
+        "recommendation": "keep",
+        "reason": "MEDIUM — still single occurrence; needs second independent observation before promotion to process-patterns.md"
+      }
+    ],
+    "pruned": [],
+    "catalog_corrections": []
+  },
+  {
+    "cycle": "2026-04-09T-periodic-4",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (memory_entries table empty, 0 rows). Channel B: 0 inbox files (inbox dir empty). No memory commits since 2026-04-07. Legacy inline scan: 2 recently-done task bodies reviewed (#713, #703). 1 MEDIUM finding from #703 (test-writer docstring overclaiming AC coverage without TestFromAC_ class — single occurrence, not yet recurring). 1 UNCERTAIN entry carried forward from prior cycle (end_work \\n literal — unresolved). No promotions, no prunings, no conflicts.",
+    "entries_processed": 0,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "recommendation": "keep",
+        "reason": "UNCERTAIN (carried from cycle 3) — evidence from #546 (old) conflicts with recent task #670 showing proper multi-line output; no new disambiguating evidence in cycle 4; flagged for user verification"
+      },
+      {
+        "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
+        "content_preview": "test_remove_crawl_stubs_703.py docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer correctly flagged MISSING",
+        "recommendation": "keep",
+        "reason": "MEDIUM — single occurrence; actionable pattern for reviewers (cross-check each AC claim in docstring against presence of TestFromAC_ class) but not yet recurring; watch for second observation before promoting to process-patterns.md"
+      }
+    ],
+    "pruned": [],
+    "catalog_corrections": []
+  },
+  {
     "cycle": "2026-04-07T-periodic-3",
     "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. Repo memory quality scan: 10 catalog files reviewed. 1 stale entry corrected (dual skill locations — migration complete). 1 uncertain entry flagged (end_work \\n literal). No promotions, no conflicts.",
     "entries_processed": 2,
