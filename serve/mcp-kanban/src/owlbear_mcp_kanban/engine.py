@@ -20,6 +20,7 @@ import random
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from owlbear_mcp_kanban.activity_log import log_activity
 from owlbear_mcp_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_mcp_kanban.config_loader import load_config, save_config
 from owlbear_mcp_kanban.engine_models import TaskRecord
@@ -53,6 +54,7 @@ class KanbanEngine:
             if agent_name is not None
             else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
+        self._activity_log_path = kanban_dir / "activity.jsonl"
 
     @property
     def agent_name(self) -> str:
@@ -218,6 +220,7 @@ class KanbanEngine:
         config.next_id = task_id + 1
         save_config(self._kanban_dir, config)
 
+        log_activity(self._activity_log_path, "create", record.id, record.title)
         return record
 
     def edit_task(  # noqa: PLR0912, PLR0913, C901
@@ -264,6 +267,7 @@ class KanbanEngine:
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
+        old_blocked = record.blocked
 
         if title is not None:
             record.title = title
@@ -307,6 +311,22 @@ class KanbanEngine:
         record.updated = datetime.now(tz=UTC).isoformat()
 
         write_task(task_path, record)
+
+        if blocked is not None and old_blocked != record.blocked:
+            if record.blocked:
+                log_activity(self._activity_log_path, "block", record.id, block_reason or "")
+            else:
+                log_activity(self._activity_log_path, "unblock", record.id, "")
+        else:
+            changed = [name for name, val in [
+                ("title", title), ("body", body), ("priority", priority),
+                ("status", status), ("parent", parent), ("add_tags", add_tags),
+                ("remove_tags", remove_tags), ("add_deps", add_deps),
+                ("remove_deps", remove_deps), ("blocked", blocked),
+                ("block_reason", block_reason), ("append_body", append_body),
+            ] if val is not None]
+            log_activity(self._activity_log_path, "edit", record.id, ", ".join(changed) or "updated")
+
         return record
 
     def move_task(self, task_id: str, status: str) -> TaskRecord:
@@ -330,6 +350,7 @@ class KanbanEngine:
 
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
+        old_status = record.status
 
         if status == "archived":
             self._archive_dir.mkdir(parents=True, exist_ok=True)
@@ -341,6 +362,7 @@ class KanbanEngine:
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(task_path, record)
 
+        log_activity(self._activity_log_path, "move", record.id, f"{old_status} -> {record.status}")
         return record
 
     def claim_task(self, task_id: str, *, now: datetime | None = None) -> TaskRecord:
@@ -380,6 +402,7 @@ class KanbanEngine:
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
         write_task(task_path, record)
+        log_activity(self._activity_log_path, "claim", record.id, self._agent_name)
         return record
 
     def release_task(self, task_id: str) -> TaskRecord:
@@ -403,6 +426,7 @@ class KanbanEngine:
         record.claimed_at = None
         record.updated = datetime.now(tz=UTC).isoformat()
         write_task(task_path, record)
+        log_activity(self._activity_log_path, "release", record.id, self._agent_name)
         return record
 
     # ------------------------------------------------------------------
