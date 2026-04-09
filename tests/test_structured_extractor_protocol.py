@@ -79,6 +79,19 @@ class TestFromAC_StructuredExtractorProtocol:
         obj = _WrongMethodName()
         assert not isinstance(obj, StructuredExtractor)
 
+    def test_plain_object_fails_isinstance(self) -> None:
+        """A bare object() with no methods does not satisfy StructuredExtractor."""
+        assert not isinstance(object(), StructuredExtractor)
+
+    def test_protocol_has_extract_attribute(self) -> None:
+        """StructuredExtractor exposes 'extract' as a protocol method."""
+        assert hasattr(StructuredExtractor, "extract")
+
+    def test_mock_with_spec_satisfies_protocol(self) -> None:
+        """MagicMock(spec=StructuredExtractor) passes isinstance check."""
+        mock = MagicMock(spec=StructuredExtractor)
+        assert isinstance(mock, StructuredExtractor)
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_AsyncStructuredExtractorProtocol
@@ -114,16 +127,3 @@ class TestFromAC_AsyncStructuredExtractorProtocol:
             "AsyncMock with StructuredExtractor spec did not make extract() async — "
             "StructuredExtractor.extract() must be declared async"
         )
-
-    def test_plain_object_fails_isinstance(self) -> None:
-        """A bare object() with no methods does not satisfy StructuredExtractor."""
-        assert not isinstance(object(), StructuredExtractor)
-
-    def test_protocol_has_extract_attribute(self) -> None:
-        """StructuredExtractor exposes 'extract' as a protocol method."""
-        assert hasattr(StructuredExtractor, "extract")
-
-    def test_mock_with_spec_satisfies_protocol(self) -> None:
-        """MagicMock(spec=StructuredExtractor) passes isinstance check."""
-        mock = MagicMock(spec=StructuredExtractor)
-        assert isinstance(mock, StructuredExtractor)

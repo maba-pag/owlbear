@@ -90,7 +90,7 @@ class TestFromAC_EntityExtractor:
     @pytest.mark.asyncio
     async def test_nonempty_input_delegates_to_injected_extractor(self) -> None:
         """Non-empty input causes exactly one call to the injected extractor."""
-        mock_ext = _make_mock_extractor()
+        mock_ext = _make_async_extractor()
         extractor = EntityExtractor(extractor=mock_ext)
         await extractor.extract("pytest is a testing framework")
         mock_ext.extract.assert_called_once()
@@ -105,7 +105,7 @@ class TestFromAC_EntityExtractor:
             relation=RelationType.RELATED_TO,
         )
         expected = ExtractionResult(entities=[entity], edges=[edge])
-        mock_ext = _make_mock_extractor(result=expected)
+        mock_ext = _make_async_extractor(result=expected)
         extractor = EntityExtractor(extractor=mock_ext)
         result = await extractor.extract("TDD is related to testing")
         assert result is expected
@@ -113,7 +113,7 @@ class TestFromAC_EntityExtractor:
     @pytest.mark.asyncio
     async def test_extractor_called_with_single_string_argument(self) -> None:
         """The injected extractor.extract() is called with a single string argument (the prompt)."""
-        mock_ext = _make_mock_extractor()
+        mock_ext = _make_async_extractor()
         extractor = EntityExtractor(extractor=mock_ext)
         await extractor.extract("hello world")
         mock_ext.extract.assert_called_once()
@@ -126,7 +126,7 @@ class TestFromAC_EntityExtractor:
     @pytest.mark.asyncio
     async def test_metadata_keys_and_values_appear_in_prompt(self) -> None:
         """Each key and value from the metadata dict is included in the prompt."""
-        mock_ext = _make_mock_extractor()
+        mock_ext = _make_async_extractor()
         extractor = EntityExtractor(extractor=mock_ext)
         metadata = {"scope": "project", "doc_id": "abc123"}
         await extractor.extract("some text", metadata=metadata)
@@ -139,7 +139,7 @@ class TestFromAC_EntityExtractor:
     @pytest.mark.asyncio
     async def test_metadata_prefix_appears_before_main_text(self) -> None:
         """The metadata prefix occurs earlier in the prompt than the main text."""
-        mock_ext = _make_mock_extractor()
+        mock_ext = _make_async_extractor()
         extractor = EntityExtractor(extractor=mock_ext)
         text = "the_actual_content_marker_zxq"
         metadata = {"key": "unique_meta_sentinel"}
@@ -150,7 +150,7 @@ class TestFromAC_EntityExtractor:
     @pytest.mark.asyncio
     async def test_no_metadata_includes_original_text_in_prompt(self) -> None:
         """Without metadata, the prompt contains the original text."""
-        mock_ext = _make_mock_extractor()
+        mock_ext = _make_async_extractor()
         extractor = EntityExtractor(extractor=mock_ext)
         text = "plain text without metadata"
         await extractor.extract(text)
@@ -160,7 +160,7 @@ class TestFromAC_EntityExtractor:
     @pytest.mark.asyncio
     async def test_none_metadata_does_not_raise(self) -> None:
         """metadata=None is accepted and does not error."""
-        mock_ext = _make_mock_extractor()
+        mock_ext = _make_async_extractor()
         extractor = EntityExtractor(extractor=mock_ext)
         result = await extractor.extract("some text", metadata=None)
         assert isinstance(result, ExtractionResult)
@@ -168,7 +168,7 @@ class TestFromAC_EntityExtractor:
     @pytest.mark.asyncio
     async def test_empty_metadata_dict_does_not_raise(self) -> None:
         """metadata={} is accepted and does not error."""
-        mock_ext = _make_mock_extractor()
+        mock_ext = _make_async_extractor()
         extractor = EntityExtractor(extractor=mock_ext)
         result = await extractor.extract("some text", metadata={})
         assert isinstance(result, ExtractionResult)
