@@ -1,10 +1,12 @@
 ---
 id: 727
 title: 'P3-15: RED — activity.jsonl logging'
-status: done
+status: archived
 priority: needed
 created: 2026-04-09T03:27:45.3139969+02:00
-updated: 2026-04-09T21:28:42.7645348+02:00
+updated: 2026-04-09T21:36:42.9077916+02:00
+started: 2026-04-09T21:36:42.9077916+02:00
+completed: 2026-04-09T21:36:42.9077916+02:00
 tags:
     - kanban
     - phase-3
@@ -12,8 +14,6 @@ tags:
 parent: 712
 depends_on:
     - 722
-claimed_by: mold-plume
-claimed_at: 2026-04-09T21:28:42.7619423+02:00
 class: standard
 ---
 
@@ -207,3 +207,38 @@ None found — no `.owlbear/scratch/727-*` files exist.
 
 ### Verdict
 Docs gate passed. No impact items requiring update.
+
+[[2026-04-09]] Thu 21:36
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test log entry format: exact JSON schema | TestFromAC_LogEntryFormat (11 tests) — `set(entry.keys()) == {"timestamp","action","task_id","detail"}`, type/value checks | PASS |
+| Each action verb produces correct log entry (7 verbs) | TestFromAC_ActionVerbs (14 tests) — 7 parametrized + 7 named, exact verb equality | PASS |
+| Append-only semantics | TestFromAC_AppendOnlySemantics (6 tests) — insertion order, untouched first entry, 10-call sequence | PASS |
+| Log file created if missing | TestFromAC_LogFileMissing (4 tests) — existence before/after, per-verb creation, no truncation | PASS |
+| All tests fail (RED gate) | Test-writer confirmed: 1 collection error (ImportError), 0 collected. Builder then passed 39/39 | PASS |
+
+### Test Results
+- pytest: 3,073 passed, 129 failed, 1 error, 18 skipped — **0 failures in task scope** (test_kanban_engine_activity.py: 39/39 passed). Pre-existing failures: missing lint-changed.ps1 (~23), qdrant-client (~2), various analysis/kanban/orchestrator mismatches.
+- ruff: clean (0 violations)
+
+### Architect Quality: 4/5
+AC was specific with exact JSON schema. Minor gap: AC2 said "each action verb" without enumerating — architect review resolved this with explicit 7-verb vocabulary from the brief synthesis. Good upstream quality.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (−.00)
+- Lint violations: 0 (−.00)
+- AC quality ≤ 3: no (4/5) (−.00)
+- Missing reviewer section: no — thorough, confidence 1.00 (−.00)
+- Full-suite failures in task scope: 0 (−.00)
+- Note: builder did not commit `activity_log.py` (untracked `??`). Committed as orphaned deliverable in auditor step.
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 92341cd | test | tests/test_kanban_engine_activity.py | #727 |
+| 04ca90b | feat | activity_log.py, 727 task, activity.jsonl | #727 |
