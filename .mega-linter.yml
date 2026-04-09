@@ -28,15 +28,7 @@ MARKDOWN_SUMMARY_REPORTER: true
 SARIF_REPORTER: true
 
 # Exclude paths that are generated, archived, or third-party
-FILTER_REGEX_EXCLUDE: >-
-  (\.owlbear/kanban/v1-archive/
-  |\.owlbear/research/
-  |\.owlbear/scratch/
-  |\.venv/
-  |v1/
-  |__pycache__/
-  |\.egg-info/
-  |uv\.lock$)
+FILTER_REGEX_EXCLUDE: '(\.owlbear/kanban/(v1-archive|tasks)/|\.owlbear/research/|\.owlbear/scratch/|\.owlbear/decisions/|\.venv/|v1/|__pycache__/|\.egg-info/|uv\.lock$)'
 
 # Directory-level pre-filter (faster than regex, excluded at any depth)
 ADDITIONAL_EXCLUDED_DIRECTORIES:
@@ -74,7 +66,10 @@ JSON_JSONLINT_ARGUMENTS: "--quiet"
 MARKDOWN_MARKDOWNLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/kanban/'
 
 # EditorConfig — GitHub Actions annotations
-EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions"
+# --disable-indent-size: ruff handles Python indent; editorconfig-checker
+# false-positives on docstring content (2-space RST lists inside 4-space code).
+# Tabs-vs-spaces (indent_style) is still enforced.
+EDITORCONFIG_EDITORCONFIG_CHECKER_ARGUMENTS: "-f github-actions --disable-indent-size"
 
 # Gitleaks — secret detection
 REPOSITORY_GITLEAKS_ARGUMENTS: "--no-banner"
