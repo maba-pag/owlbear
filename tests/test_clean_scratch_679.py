@@ -72,22 +72,17 @@ class TestFromAC_CleanScratchInvocable:
 
     def test_script_file_exists_at_expected_path(self) -> None:
         assert _SCRIPT_PATH.exists(), (
-            f"Script not found at {_SCRIPT_PATH}. "
-            "Builder must create `.owlbear/scripts/clean_scratch.py`."
+            f"Script not found at {_SCRIPT_PATH}. Builder must create `.owlbear/scripts/clean_scratch.py`."
         )
 
     def test_script_exits_zero_on_dry_run(self, scratch: Path) -> None:
         """Script must exit 0 when invoked with --dry-run on an empty directory."""
         result = _run("--scratch-dir", str(scratch), "--dry-run")
-        assert result.returncode == 0, (
-            f"Script exited {result.returncode}.\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Script exited {result.returncode}.\nstderr: {result.stderr}"
 
     def test_script_exits_zero_on_normal_run(self, scratch: Path) -> None:
         result = _run("--scratch-dir", str(scratch))
-        assert result.returncode == 0, (
-            f"Script exited {result.returncode}.\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"Script exited {result.returncode}.\nstderr: {result.stderr}"
 
 
 # ---------------------------------------------------------------------------
@@ -166,9 +161,7 @@ class TestFromAC_CleanScratchAgeFiltering:
         result = _run("--scratch-dir", str(scratch))
 
         assert result.returncode == 0
-        assert not just_over.exists(), (
-            "File 30 days + 1 second old should have been deleted."
-        )
+        assert not just_over.exists(), "File 30 days + 1 second old should have been deleted."
 
     def test_empty_scratch_dir_exits_zero(self, scratch: Path) -> None:
         """Edge: empty directory must not cause an error."""
@@ -273,8 +266,7 @@ class TestFromAC_CleanScratchDryRun:
 
         assert result.returncode == 0
         assert "would_be_deleted.txt" in result.stdout, (
-            "Dry-run must print the name of files that would be deleted. "
-            f"stdout: {result.stdout!r}"
+            f"Dry-run must print the name of files that would be deleted. stdout: {result.stdout!r}"
         )
 
     def test_dry_run_does_not_print_recent_files_as_targets(self, scratch: Path) -> None:
@@ -285,9 +277,7 @@ class TestFromAC_CleanScratchDryRun:
         result = _run("--scratch-dir", str(scratch), "--dry-run")
 
         assert result.returncode == 0
-        assert "keep_me.txt" not in result.stdout, (
-            "Dry-run must not list recent files as deletion targets."
-        )
+        assert "keep_me.txt" not in result.stdout, "Dry-run must not list recent files as deletion targets."
 
 
 # ---------------------------------------------------------------------------
@@ -307,9 +297,7 @@ class TestFromAC_CleanScratchSummary:
 
         assert result.returncode == 0
         # Summary must mention 1 file deleted (or "deleted: 1" style)
-        assert "1" in result.stdout, (
-            f"Summary must report 1 deleted file. stdout: {result.stdout!r}"
-        )
+        assert "1" in result.stdout, f"Summary must report 1 deleted file. stdout: {result.stdout!r}"
 
     def test_summary_reports_preserved_count(self, scratch: Path) -> None:
         recent = scratch / "recent.txt"
@@ -319,9 +307,7 @@ class TestFromAC_CleanScratchSummary:
         result = _run("--scratch-dir", str(scratch))
 
         assert result.returncode == 0
-        assert "1" in result.stdout, (
-            f"Summary must report 1 preserved file. stdout: {result.stdout!r}"
-        )
+        assert "1" in result.stdout, f"Summary must report 1 preserved file. stdout: {result.stdout!r}"
 
     def test_summary_contains_deleted_keyword(self, scratch: Path) -> None:
         old = scratch / "a.txt"
@@ -351,6 +337,4 @@ class TestFromAC_CleanScratchSummary:
         result = _run("--scratch-dir", str(scratch))
 
         assert result.returncode == 0
-        assert "0" in result.stdout, (
-            f"Summary must report 0 for empty dir. stdout: {result.stdout!r}"
-        )
+        assert "0" in result.stdout, f"Summary must report 0 for empty dir. stdout: {result.stdout!r}"

@@ -38,9 +38,7 @@ class TestFromAC_PackageStructure:
     def test_root_pyproject_declares_workspace_members(self) -> None:
         """Root pyproject.toml must declare workspace members = ['serve/*'] (renamed from packages/*)."""
         content = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        assert "serve/*" in content, (
-            "workspace members 'serve/*' not declared in ROOT/pyproject.toml"
-        )
+        assert "serve/*" in content, "workspace members 'serve/*' not declared in ROOT/pyproject.toml"
 
     # -- packages/orchestrator --
 
@@ -50,9 +48,7 @@ class TestFromAC_PackageStructure:
 
     def test_orchestrator_init_stub_exists(self) -> None:
         """serve/orchestrator/src/owlbear/__init__.py stub must exist."""
-        assert (
-            ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "__init__.py"
-        ).exists()
+        assert (ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "__init__.py").exists()
 
     # -- serve/knowledge --
 
@@ -62,14 +58,7 @@ class TestFromAC_PackageStructure:
 
     def test_knowledge_init_stub_exists(self) -> None:
         """serve/knowledge/src/owlbear_knowledge/__init__.py stub must exist."""
-        assert (
-            ROOT
-            / "serve"
-            / "knowledge"
-            / "src"
-            / "owlbear_knowledge"
-            / "__init__.py"
-        ).exists()
+        assert (ROOT / "serve" / "knowledge" / "src" / "owlbear_knowledge" / "__init__.py").exists()
 
     # -- serve/mcp-kanban --
 
@@ -79,14 +68,7 @@ class TestFromAC_PackageStructure:
 
     def test_mcp_kanban_init_stub_exists(self) -> None:
         """serve/mcp-kanban/src/owlbear_mcp_kanban/__init__.py stub must exist."""
-        assert (
-            ROOT
-            / "serve"
-            / "mcp-kanban"
-            / "src"
-            / "owlbear_mcp_kanban"
-            / "__init__.py"
-        ).exists()
+        assert (ROOT / "serve" / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "__init__.py").exists()
 
     # -- serve/mcp-knowledge --
 
@@ -96,14 +78,7 @@ class TestFromAC_PackageStructure:
 
     def test_mcp_knowledge_init_stub_exists(self) -> None:
         """serve/mcp-knowledge/src/owlbear_mcp_knowledge/__init__.py stub must exist."""
-        assert (
-            ROOT
-            / "serve"
-            / "mcp-knowledge"
-            / "src"
-            / "owlbear_mcp_knowledge"
-            / "__init__.py"
-        ).exists()
+        assert (ROOT / "serve" / "mcp-knowledge" / "src" / "owlbear_mcp_knowledge" / "__init__.py").exists()
 
     # -- serve/mcp-project --
 
@@ -113,14 +88,7 @@ class TestFromAC_PackageStructure:
 
     def test_mcp_project_init_stub_exists(self) -> None:
         """serve/mcp-project/src/owlbear_mcp_project/__init__.py stub must exist."""
-        assert (
-            ROOT
-            / "serve"
-            / "mcp-project"
-            / "src"
-            / "owlbear_mcp_project"
-            / "__init__.py"
-        ).exists()
+        assert (ROOT / "serve" / "mcp-project" / "src" / "owlbear_mcp_project" / "__init__.py").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -133,27 +101,19 @@ class TestFromAC_DirectoryStructure:
 
     def test_agents_dir_has_readme(self) -> None:
         """share/agents/ must contain a README.md placeholder."""
-        assert (ROOT / "share" / "agents" / "README.md").exists(), (
-            "ROOT/share/agents/README.md not found"
-        )
+        assert (ROOT / "share" / "agents" / "README.md").exists(), "ROOT/share/agents/README.md not found"
 
     def test_skills_dir_has_readme(self) -> None:
         """share/skills/ must contain a README.md placeholder."""
-        assert (ROOT / "share" / "skills" / "README.md").exists(), (
-            "ROOT/share/skills/README.md not found"
-        )
+        assert (ROOT / "share" / "skills" / "README.md").exists(), "ROOT/share/skills/README.md not found"
 
     def test_instructions_dir_has_readme(self) -> None:
         """share/instructions/ must contain a README.md placeholder."""
-        assert (ROOT / "share" / "instructions" / "README.md").exists(), (
-            "ROOT/share/instructions/README.md not found"
-        )
+        assert (ROOT / "share" / "instructions" / "README.md").exists(), "ROOT/share/instructions/README.md not found"
 
     def test_setup_init_exists(self) -> None:
         """setup/init.py must exist (scripts/setup.py was deleted in #609 AC7)."""
-        assert (ROOT / "setup" / "init.py").exists(), (
-            "ROOT/setup/init.py not found"
-        )
+        assert (ROOT / "setup" / "init.py").exists(), "ROOT/setup/init.py not found"
 
     def test_data_knowledge_general_gitkeep_exists(self) -> None:
         """store/knowledge/general/ must exist and contain a .gitkeep sentinel."""
@@ -182,9 +142,7 @@ class TestFromAC_BuildVerification:
             capture_output=True,
             check=False,
         )
-        assert result.returncode == 0, (
-            f"uv sync --all-extras failed:\n{result.stderr.decode(errors='replace')}"
-        )
+        assert result.returncode == 0, f"uv sync --all-extras failed:\n{result.stderr.decode(errors='replace')}"
 
     @pytest.mark.parametrize(
         "module",
@@ -204,9 +162,7 @@ class TestFromAC_BuildVerification:
             capture_output=True,
             check=False,
         )
-        assert result.returncode == 0, (
-            f"import {module} failed:\n{result.stderr.decode(errors='replace')}"
-        )
+        assert result.returncode == 0, f"import {module} failed:\n{result.stderr.decode(errors='replace')}"
 
 
 # ---------------------------------------------------------------------------
@@ -227,9 +183,7 @@ class TestFromAC_ConfigUpdates:
     def test_gitignore_has_store_knowledge_db_pattern(self) -> None:
         """.gitignore must contain store/knowledge/*.db ignore pattern."""
         content = (ROOT / ".gitignore").read_text(encoding="utf-8")
-        assert "store/knowledge/*.db" in content, (
-            "store/knowledge/*.db not found in .gitignore"
-        )
+        assert "store/knowledge/*.db" in content, "store/knowledge/*.db not found in .gitignore"
 
     # -- .pre-commit-config.yaml bandit --
 
@@ -240,27 +194,19 @@ class TestFromAC_ConfigUpdates:
         bandit_block_match = re.search(r"- id: bandit\n((?:\s+.*\n)*)", content)
         assert bandit_block_match, "bandit hook not found in .pre-commit-config.yaml"
         bandit_block = bandit_block_match.group(0)
-        assert "serve/" in bandit_block, (
-            "bandit hook does not target serve/ in .pre-commit-config.yaml"
-        )
-        assert "src/" not in bandit_block, (
-            "bandit hook still targets src/ in .pre-commit-config.yaml"
-        )
+        assert "serve/" in bandit_block, "bandit hook does not target serve/ in .pre-commit-config.yaml"
+        assert "src/" not in bandit_block, "bandit hook still targets src/ in .pre-commit-config.yaml"
 
     # -- .vscode/settings.json --
 
     def _read_vscode_settings(self) -> dict:  # type: ignore[type-arg]
         """Return parsed .vscode/settings.json."""
-        return json.loads(
-            (ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8")
-        )
+        return json.loads((ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8"))
 
     def test_vscode_settings_has_agent_locations(self) -> None:
         """chat.agentFilesLocations must exist pointing to share/agents/ (five-tier restructure)."""
         settings = self._read_vscode_settings()
-        assert "chat.agentFilesLocations" in settings, (
-            "chat.agentFilesLocations must be set to point to share/agents/"
-        )
+        assert "chat.agentFilesLocations" in settings, "chat.agentFilesLocations must be set to point to share/agents/"
 
     def test_vscode_settings_has_skills_locations(self) -> None:
         """chat.agentSkillsLocations must exist pointing to share/skills/ (five-tier restructure)."""

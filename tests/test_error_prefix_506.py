@@ -86,18 +86,14 @@ class TestFromAC_ErrorPrefixKnowledge:
         """search_knowledge returns string starting with 'error: ' when query_service is None."""
         ctx = _make_kn_ctx(query_service=None)
         result = await search_knowledge(ctx, query="anything")
-        assert result.startswith("error: "), (
-            f"Expected 'error: ' prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Expected 'error: ' prefix, got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_search_knowledge_no_service_exact_error_string(self) -> None:
         """search_knowledge returns exact string 'error: Knowledge service not available.' when service is None."""
         ctx = _make_kn_ctx(query_service=None)
         result = await search_knowledge(ctx, query="test")
-        assert result == "error: Knowledge service not available.", (
-            f"Expected exact string, got: {result!r}"
-        )
+        assert result == "error: Knowledge service not available.", f"Expected exact string, got: {result!r}"
 
     # -- AC1: ingest_document — pipeline exception ----------------------------
 
@@ -108,9 +104,7 @@ class TestFromAC_ErrorPrefixKnowledge:
         pipeline.ingest_text.side_effect = RuntimeError("disk full")
         ctx = _make_kn_ctx(ingest_pipeline=pipeline)
         result = await ingest_document(ctx, text="hello")
-        assert result.startswith("error: "), (
-            f"Expected 'error: ' prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Expected 'error: ' prefix, got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_ingest_document_error_starts_with_error_ingestion_failed(self) -> None:
@@ -130,9 +124,7 @@ class TestFromAC_ErrorPrefixKnowledge:
         pipeline.ingest_text.side_effect = RuntimeError("oops")
         ctx = _make_kn_ctx(ingest_pipeline=pipeline)
         result = await ingest_document(ctx, text="text")
-        assert not result.startswith("Ingestion failed:"), (
-            f"Old uppercase prefix still present: {result!r}"
-        )
+        assert not result.startswith("Ingestion failed:"), f"Old uppercase prefix still present: {result!r}"
 
     # -- AC2: list_entities — invalid entity type -----------------------------
 
@@ -141,9 +133,7 @@ class TestFromAC_ErrorPrefixKnowledge:
         """list_entities returns string starting with 'error: ' for an invalid entity_type."""
         ctx = _make_kn_ctx()
         result = await list_entities(ctx, entity_type="BOGUS_ENTITY_TYPE_XYZ")
-        assert result.startswith("error: "), (
-            f"Expected 'error: ' prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Expected 'error: ' prefix, got: {result!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -188,9 +178,7 @@ class TestFromAC_ErrorPrefixProject:
         # tmp_path is a real empty temp dir — no README.md present
         ctx = _make_proj_ctx(project_root=tmp_path)
         result = await project_readme(ctx)
-        assert result.startswith("error: "), (
-            f"Expected 'error: ' prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Expected 'error: ' prefix, got: {result!r}"
 
     @pytest.mark.asyncio
     async def test_project_readme_no_readme_exact_error_string(
@@ -200,9 +188,7 @@ class TestFromAC_ErrorPrefixProject:
         """project_readme returns exact message 'error: No README.md found in project root.'."""
         ctx = _make_proj_ctx(project_root=tmp_path)
         result = await project_readme(ctx)
-        assert result == "error: No README.md found in project root.", (
-            f"Expected exact string, got: {result!r}"
-        )
+        assert result == "error: No README.md found in project root.", f"Expected exact string, got: {result!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -215,16 +201,12 @@ class TestFromAC_KnowledgeServerAll:
 
     def test_server_has_dunder_all(self) -> None:
         """owlbear_mcp_knowledge.server defines __all__."""
-        assert hasattr(kn_server, "__all__"), (
-            "owlbear_mcp_knowledge.server has no __all__ attribute"
-        )
+        assert hasattr(kn_server, "__all__"), "owlbear_mcp_knowledge.server has no __all__ attribute"
 
     def test_server_all_is_sequence(self) -> None:
         """owlbear_mcp_knowledge.server.__all__ is a list or tuple."""
         all_attr = kn_server.__all__  # type: ignore[attr-defined]
-        assert isinstance(all_attr, (list, tuple)), (
-            f"__all__ should be list or tuple, got {type(all_attr)}"
-        )
+        assert isinstance(all_attr, (list, tuple)), f"__all__ should be list or tuple, got {type(all_attr)}"
 
     def test_server_all_is_non_empty(self) -> None:
         """owlbear_mcp_knowledge.server.__all__ exports at least one name."""

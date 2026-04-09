@@ -78,8 +78,7 @@ class TestFromAC_ListToolOutputSchemas:
         schema = _get_output_schema("search_knowledge")
         assert schema is not None, "search_knowledge tool or fn_metadata not found"
         assert "$defs" in schema, (
-            "output_schema for search_knowledge missing '$defs'; "
-            "expected TypedDict SearchResult to be defined there"
+            "output_schema for search_knowledge missing '$defs'; expected TypedDict SearchResult to be defined there"
         )
         assert "SearchResult" in schema["$defs"], (
             f"'SearchResult' not found in $defs; available keys: {list(schema['$defs'])}"
@@ -122,8 +121,7 @@ class TestFromAC_ListToolOutputSchemas:
         schema = _get_output_schema("list_sources")
         assert schema is not None, "list_sources tool or fn_metadata not found"
         assert "$defs" in schema, (
-            "output_schema for list_sources missing '$defs'; "
-            "expected TypedDict SourceInfo to be defined there"
+            "output_schema for list_sources missing '$defs'; expected TypedDict SourceInfo to be defined there"
         )
         assert "SourceInfo" in schema["$defs"], (
             f"'SourceInfo' not found in $defs; available keys: {list(schema['$defs'])}"
@@ -166,8 +164,7 @@ class TestFromAC_ListToolOutputSchemas:
         schema = _get_output_schema("list_entities")
         assert schema is not None, "list_entities tool or fn_metadata not found"
         assert "$defs" in schema, (
-            "output_schema for list_entities missing '$defs'; "
-            "expected TypedDict EntityInfo to be defined there"
+            "output_schema for list_entities missing '$defs'; expected TypedDict EntityInfo to be defined there"
         )
         assert "EntityInfo" in schema["$defs"], (
             f"'EntityInfo' not found in $defs; available keys: {list(schema['$defs'])}"
@@ -297,8 +294,7 @@ class TestFromAC_IngestDocumentAnnotations:
         """ingest_document ToolAnnotations must have destructiveHint=False (not None)."""
         annotations = _get_tool_annotations("ingest_document")
         assert annotations is not None, (
-            "ingest_document has no ToolAnnotations object; "
-            "readOnlyHint=False and destructiveHint=False must be set"
+            "ingest_document has no ToolAnnotations object; readOnlyHint=False and destructiveHint=False must be set"
         )
         assert annotations.destructiveHint is False, (  # type: ignore[union-attr]
             f"Expected destructiveHint=False for ingest_document, "

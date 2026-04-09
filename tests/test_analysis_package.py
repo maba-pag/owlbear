@@ -111,10 +111,7 @@ def _make_proposal(**overrides: Any) -> AnalysisProposal:
 
 def _completions(agent: str, outcomes: list[str]) -> list[CompletionEvent]:
     t = NOW - timedelta(minutes=30)
-    return [
-        _completion(i, agent, o, 1000, t + timedelta(seconds=i))
-        for i, o in enumerate(outcomes)
-    ]
+    return [_completion(i, agent, o, 1000, t + timedelta(seconds=i)) for i, o in enumerate(outcomes)]
 
 
 # ---------------------------------------------------------------------------

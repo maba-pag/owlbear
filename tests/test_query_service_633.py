@@ -1,4 +1,4 @@
-﻿"""Tests for per-query scopes override in KnowledgeQueryService --- task #633.
+"""Tests for per-query scopes override in KnowledgeQueryService --- task #633.
 
 AC coverage:
 - AC1: query() accepts optional scopes: list[str] | None = None parameter
@@ -20,9 +20,7 @@ from owlbear_knowledge.retrieval import RetrievalResult
 def _make_graph() -> MagicMock:
     graph = MagicMock()
     graph.get_document_id_for_chunk.return_value = "doc1"
-    graph.get_document.return_value = MagicMock(
-        title="Title", content="content " * 50, scope="global"
-    )
+    graph.get_document.return_value = MagicMock(title="Title", content="content " * 50, scope="global")
     graph.list_entities_for_document.return_value = []
     return graph
 
@@ -68,7 +66,6 @@ def _fake_retriever(chunks=None) -> MagicMock:
 
 
 class TestFromAC_PerQueryScopesOverride:
-
     @pytest.mark.asyncio(loop_scope="function")
     async def test_query_accepts_scopes_kwarg_without_raising(self) -> None:
         """AC1: query() must accept a scopes keyword argument without TypeError."""
@@ -146,9 +143,7 @@ class TestFromAC_PerQueryScopesOverride:
         svc._search_chunks("q", 5, scopes=["override"])
         call_args = retriever.retrieve.call_args
         all_values = list(call_args.args) + list(call_args.kwargs.values())
-        assert ["override"] in all_values, (
-            f"Override scopes not found in retriever.retrieve call: {call_args}"
-        )
+        assert ["override"] in all_values, f"Override scopes not found in retriever.retrieve call: {call_args}"
 
     def test_search_chunks_override_does_not_use_instance_scopes_retriever(self) -> None:
         """AC3: Instance scopes must not reach retriever.retrieve when override is provided."""
@@ -157,9 +152,7 @@ class TestFromAC_PerQueryScopesOverride:
         svc._search_chunks("q", 5, scopes=["override"])
         call_args = retriever.retrieve.call_args
         all_values = list(call_args.args) + list(call_args.kwargs.values())
-        assert ["instance-scope"] not in all_values, (
-            "Instance scopes must not be forwarded when override is provided"
-        )
+        assert ["instance-scope"] not in all_values, "Instance scopes must not be forwarded when override is provided"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_query_override_scopes_forwarded_to_retriever(self) -> None:
@@ -169,9 +162,7 @@ class TestFromAC_PerQueryScopesOverride:
         await svc.query("q", scopes=["override"])
         call_args = retriever.retrieve.call_args
         all_values = list(call_args.args) + list(call_args.kwargs.values())
-        assert ["override"] in all_values, (
-            f"Override scopes not in retriever.retrieve: {call_args}"
-        )
+        assert ["override"] in all_values, f"Override scopes not in retriever.retrieve: {call_args}"
 
     def test_search_chunks_none_scopes_uses_instance_scopes_vector(self) -> None:
         """AC4: _search_chunks(scopes=None) falls back to self._scopes for search_similar."""
@@ -201,9 +192,7 @@ class TestFromAC_PerQueryScopesOverride:
         svc._search_chunks("q", 5, scopes=None)
         call_args = retriever.retrieve.call_args
         all_values = list(call_args.args) + list(call_args.kwargs.values())
-        assert ["instance-scope"] in all_values, (
-            f"self._scopes not in retriever.retrieve when scopes=None: {call_args}"
-        )
+        assert ["instance-scope"] in all_values, f"self._scopes not in retriever.retrieve when scopes=None: {call_args}"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_query_none_scopes_uses_instance_scopes_retriever(self) -> None:

@@ -258,9 +258,7 @@ class TestFromAC_RoundTrip:
         roundtripped_text = (tmp_path / "config.yml").read_text(encoding="utf-8")
         assert "class: standard" in roundtripped_text
 
-    def test_roundtrip_config_is_valid_board_config_instance(
-        self, tmp_path: Path
-    ) -> None:
+    def test_roundtrip_config_is_valid_board_config_instance(self, tmp_path: Path) -> None:
         """Reloaded config is a valid BoardConfig after round-trip."""
         (tmp_path / "config.yml").write_text(_BASE_CONFIG_YAML, encoding="utf-8")
         config = load_config(tmp_path)
@@ -286,9 +284,7 @@ class TestFromAC_PreservesCommentsAndUnknownFields:
         text_after = config_path.read_text(encoding="utf-8")
         assert "# Board configuration" in text_after
 
-    def test_inline_comment_on_priority_survives_roundtrip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_inline_comment_on_priority_survives_roundtrip(self, tmp_path: Path) -> None:
         """Inline comment ('# default priority') on priorities line survives round-trip."""
         config_path = tmp_path / "config.yml"
         config_path.write_text(_ANNOTATED_CONFIG_YAML, encoding="utf-8")
@@ -297,9 +293,7 @@ class TestFromAC_PreservesCommentsAndUnknownFields:
         text_after = config_path.read_text(encoding="utf-8")
         assert "# default priority" in text_after
 
-    def test_inline_comment_on_claim_timeout_survives_roundtrip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_inline_comment_on_claim_timeout_survives_roundtrip(self, tmp_path: Path) -> None:
         """Inline comment on claim_timeout line survives round-trip."""
         config_path = tmp_path / "config.yml"
         config_path.write_text(_ANNOTATED_CONFIG_YAML, encoding="utf-8")
@@ -317,9 +311,7 @@ class TestFromAC_PreservesCommentsAndUnknownFields:
         assert "tui:" in text_after
         assert "title_lines" in text_after
 
-    def test_extra_vendor_field_preserved_after_roundtrip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_extra_vendor_field_preserved_after_roundtrip(self, tmp_path: Path) -> None:
         """Unknown top-level vendor field ('extra_vendor_field') survives round-trip."""
         (tmp_path / "config.yml").write_text(_ANNOTATED_CONFIG_YAML, encoding="utf-8")
         config = load_config(tmp_path)
@@ -343,9 +335,7 @@ class TestFromAC_PreservesCommentsAndUnknownFields:
 class TestFromAC_NextIdIncrement:
     """Tests for AC4: next_id can be incremented, saved, and reloaded with new value."""
 
-    def test_increment_next_id_persists_after_save_and_reload(
-        self, tmp_path: Path
-    ) -> None:
+    def test_increment_next_id_persists_after_save_and_reload(self, tmp_path: Path) -> None:
         """Incrementing next_id then saving persists the new value on reload."""
         (tmp_path / "config.yml").write_text(_BASE_CONFIG_YAML, encoding="utf-8")
         config = load_config(tmp_path)
@@ -415,9 +405,7 @@ class TestFromAC_TimestampResolverDisabled:
         assert isinstance(snapshot_date, str)
         assert snapshot_date == "2026-04-09"
 
-    def test_iso_datetime_string_remains_str_not_datetime(
-        self, tmp_path: Path
-    ) -> None:
+    def test_iso_datetime_string_remains_str_not_datetime(self, tmp_path: Path) -> None:
         """A full ISO 8601 datetime field stays as str after load, not datetime.datetime."""
         import datetime
 
@@ -430,9 +418,7 @@ class TestFromAC_TimestampResolverDisabled:
         assert isinstance(snapshot_ts, str)
         assert "2026-04-09" in snapshot_ts
 
-    def test_claim_timeout_duration_string_is_str_not_timedelta(
-        self, tmp_path: Path
-    ) -> None:
+    def test_claim_timeout_duration_string_is_str_not_timedelta(self, tmp_path: Path) -> None:
         """claim_timeout '1h' is a str, not datetime.timedelta, after load."""
         import datetime
 
@@ -491,9 +477,7 @@ class TestBuilderDiscovered:
         assert reloaded.version == 1
         assert reloaded.next_id == 1
 
-    def test_save_config_updates_changed_scalar_in_same_length_sequence(
-        self, tmp_path: Path
-    ) -> None:
+    def test_save_config_updates_changed_scalar_in_same_length_sequence(self, tmp_path: Path) -> None:
         """Changing a scalar item in a same-length sequence persists via save.
 
         Covers ``elif old_item != new_item: old_value[i] = new_item``
@@ -512,9 +496,7 @@ class TestBuilderDiscovered:
         assert reloaded.priorities[0] == "asap"
         assert len(reloaded.priorities) == len(new_priorities)
 
-    def test_save_config_replaces_sequence_on_length_change(
-        self, tmp_path: Path
-    ) -> None:
+    def test_save_config_replaces_sequence_on_length_change(self, tmp_path: Path) -> None:
         """Changing sequence length replaces the whole sequence in save_config.
 
         Covers ``else: target[key] = new_value`` for the length-changed
@@ -531,9 +513,7 @@ class TestBuilderDiscovered:
 
         assert len(reloaded.statuses) == original_count - 1
 
-    def test_save_config_persists_changed_scalar_field(
-        self, tmp_path: Path
-    ) -> None:
+    def test_save_config_persists_changed_scalar_field(self, tmp_path: Path) -> None:
         """Changing a top-level scalar field persists via save_config.
 
         Covers the outer ``else: target[key] = new_value`` branch (line 135)

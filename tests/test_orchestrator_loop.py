@@ -123,8 +123,8 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         """Builder wave fills light-flex slots first, then heavy-flex."""
         entries = [
             _entry(1, "builder"),
-            _entry(2, "doc-writer"),      # light flex
-            _entry(3, "reviewer"),    # heavy flex
+            _entry(2, "doc-writer"),  # light flex
+            _entry(3, "reviewer"),  # heavy flex
         ]
         waves = assemble_waves(entries, wave_size=4, cycle=1)
         # All three go into the builder wave
@@ -154,9 +154,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         waves = assemble_waves(entries, wave_size=4, cycle=1)
         for wave in waves:
             agents = _wave_agents(wave)
-            assert not ("auditor" in agents and "builder" in agents), (
-                "auditor and builder must not share a wave"
-            )
+            assert not ("auditor" in agents and "builder" in agents), "auditor and builder must not share a wave"
 
     def test_overflow_flex_agents_chunked_into_wave_size_waves(self) -> None:
         """Remaining flex agents after builder/auditor fill go into overflow waves."""
@@ -212,7 +210,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
             _entry(2, "researcher"),
             _entry(3, "doc-writer"),
             _entry(4, "architect"),  # fills auditor wave to capacity
-            _entry(5, "builder"),    # solo builder wave → drop
+            _entry(5, "builder"),  # solo builder wave → drop
         ]
         waves = assemble_waves(entries, wave_size=4, cycle=1)
         dispatched_agents = [e.agent for w in waves for e in w.entries]
@@ -306,15 +304,31 @@ class TestFromAC_FormatPrompt:  # noqa: N801
     def test_all_nine_agent_types_have_prefix_entry(self) -> None:
         """AGENT_PROMPT_PREFIX covers exactly the 9 defined agent types."""
         expected = {
-            "architect", "builder", "reviewer", "test-writer",
-            "researcher", "doc-writer", "auditor", "planner", "curator",
+            "architect",
+            "builder",
+            "reviewer",
+            "test-writer",
+            "researcher",
+            "doc-writer",
+            "auditor",
+            "planner",
+            "curator",
         }
         assert set(AGENT_PROMPT_PREFIX.keys()) == expected
 
-    @pytest.mark.parametrize("agent", [
-        "architect", "builder", "reviewer", "test-writer",
-        "researcher", "doc-writer", "auditor", "planner",
-    ])
+    @pytest.mark.parametrize(
+        "agent",
+        [
+            "architect",
+            "builder",
+            "reviewer",
+            "test-writer",
+            "researcher",
+            "doc-writer",
+            "auditor",
+            "planner",
+        ],
+    )
     def test_non_curator_agent_includes_task_id_in_prompt(self, agent: str) -> None:
         """Each non-curator agent prompt contains '#{task_id}'."""
         entry = _entry(101, agent)
@@ -375,9 +389,7 @@ class TestFromAC_DispatchEntry:  # noqa: N801
     async def test_acp_client_error_returns_false_no_retry(self) -> None:
         """AcpClientError: returns False; new_session called ONCE (no retry in dispatch_entry)."""
         client = _make_client()
-        client.new_session = AsyncMock(
-            side_effect=AcpClientError("acp failure", category=MagicMock())
-        )
+        client.new_session = AsyncMock(side_effect=AcpClientError("acp failure", category=MagicMock()))
         result = await dispatch_entry(_entry(7, "builder"), client)
         assert result is False
         client.new_session.assert_called_once()
@@ -407,9 +419,7 @@ class TestFromAC_DispatchEntry:  # noqa: N801
         entry = _entry(42, "builder")
         await dispatch_entry(entry, client)
         _, kwargs = client.new_session.call_args
-        assert kwargs.get("mcp_servers") == [], (
-            "new_session must be called with mcp_servers=[] per AC"
-        )
+        assert kwargs.get("mcp_servers") == [], "new_session must be called with mcp_servers=[] per AC"
 
 
 # ===========================================================================
@@ -450,9 +460,7 @@ class TestFromAC_DispatchWave:  # noqa: N801
     async def test_rate_limit_hyphenated_sets_sequential_remaining_and_flag(self) -> None:
         """'rate-limited' in exception message → sequential_remaining=3, rate_limited=True."""
         client = _make_client()
-        client.new_session = AsyncMock(
-            side_effect=Exception("agent is rate-limited, please wait")
-        )
+        client.new_session = AsyncMock(side_effect=Exception("agent is rate-limited, please wait"))
         state = LoopState(sequential_remaining=0)
         result = await dispatch_wave(self._make_wave("builder"), client, state)
         assert state.sequential_remaining == 3
@@ -462,9 +470,7 @@ class TestFromAC_DispatchWave:  # noqa: N801
     async def test_rate_limit_underscore_variant(self) -> None:
         """'rate_limited' in exception message triggers sequential mode."""
         client = _make_client()
-        client.new_session = AsyncMock(
-            side_effect=Exception("rate_limited: quota exceeded")
-        )
+        client.new_session = AsyncMock(side_effect=Exception("rate_limited: quota exceeded"))
         state = LoopState(sequential_remaining=0)
         result = await dispatch_wave(self._make_wave("builder"), client, state)
         assert state.sequential_remaining == 3
@@ -474,9 +480,7 @@ class TestFromAC_DispatchWave:  # noqa: N801
     async def test_rate_limit_rate_limits_variant(self) -> None:
         """'rate limits' in exception message triggers sequential mode."""
         client = _make_client()
-        client.new_session = AsyncMock(
-            side_effect=Exception("exceeded rate limits for your plan")
-        )
+        client.new_session = AsyncMock(side_effect=Exception("exceeded rate limits for your plan"))
         state = LoopState(sequential_remaining=0)
         result = await dispatch_wave(self._make_wave("builder"), client, state)
         assert state.sequential_remaining == 3
@@ -538,9 +542,7 @@ class TestFromAC_DispatchWave:  # noqa: N801
     ) -> None:
         """Sequential mode: rate-limit exception sets rate_limited=True on CycleResult."""
         client = _make_client()
-        client.new_session = AsyncMock(
-            side_effect=Exception("rate-limited by provider")
-        )
+        client.new_session = AsyncMock(side_effect=Exception("rate-limited by provider"))
         state = LoopState(sequential_remaining=2)
         result = await dispatch_wave(self._make_wave("builder"), client, state)
         assert result.rate_limited is True
@@ -569,7 +571,7 @@ class TestFromAC_DispatchWave:  # noqa: N801
         wave = self._make_wave("researcher", "builder")  # task_ids 1, 2
         result = await dispatch_wave(wave, client, state)
         assert 1 in result.successes  # researcher (task_id=1) succeeded
-        assert 2 in result.failures   # builder (task_id=2) failed
+        assert 2 in result.failures  # builder (task_id=2) failed
 
 
 # ===========================================================================
@@ -808,10 +810,9 @@ class TestFromAC_RunLoopCallSignature:  # noqa: N801
                 client=client,
                 scope="phase-3",
             )
-        assert any(
-            c.kwargs.get("scope") == "phase-3"
-            for c in read_board_mock.call_args_list
-        ), "scope must be forwarded to read_board"
+        assert any(c.kwargs.get("scope") == "phase-3" for c in read_board_mock.call_args_list), (
+            "scope must be forwarded to read_board"
+        )
 
 
 class TestFromAC_OrchestratorPackageExports:  # noqa: N801
@@ -915,9 +916,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
         fn = getattr(pkg, "orchestrate", None)
         assert fn is not None, "orchestrate not exported from owlbear.orchestrator"
         sig = inspect.signature(fn)
-        assert "copilot_cmd" in sig.parameters, (
-            "orchestrate must have copilot_cmd parameter per AC"
-        )
+        assert "copilot_cmd" in sig.parameters, "orchestrate must have copilot_cmd parameter per AC"
 
     def test_orchestrate_scope_defaults_to_none(self) -> None:
         """orchestrate() must have scope: str | None = None keyword-only parameter."""
@@ -995,9 +994,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
 
         conn.initialize.assert_called_once()
         _, kwargs = conn.initialize.call_args
-        assert "protocol_version" in kwargs, (
-            "initialize() must be called with protocol_version kwarg"
-        )
+        assert "protocol_version" in kwargs, "initialize() must be called with protocol_version kwarg"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_orchestrate_forwards_scope_to_run_loop(self) -> None:
@@ -1020,10 +1017,9 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
                 scope="phase-2",
             )
 
-        assert any(
-            c.kwargs.get("scope") == "phase-2"
-            for c in run_loop_mock.call_args_list
-        ), "scope must be forwarded to run_loop()"
+        assert any(c.kwargs.get("scope") == "phase-2" for c in run_loop_mock.call_args_list), (
+            "scope must be forwarded to run_loop()"
+        )
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_orchestrate_calls_mark_healthy_after_loop(self) -> None:

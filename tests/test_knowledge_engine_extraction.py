@@ -293,9 +293,7 @@ class TestFromAC_HybridSearchExtraction:  # noqa: N801
         assert isinstance(results, list)
 
     @pytest.mark.asyncio
-    async def test_query_service_top_k_limits_result_count(
-        self, mock_embedding_provider: MagicMock
-    ) -> None:
+    async def test_query_service_top_k_limits_result_count(self, mock_embedding_provider: MagicMock) -> None:
         """query() returns no more than top_k results."""
         many_results = [(f"doc-{i}", 0.9 - i * 0.05) for i in range(12)]
         store = MagicMock(spec=VectorStoreProtocol)
@@ -358,14 +356,9 @@ class TestFromAC_PackageDependencies:  # noqa: N801
     def test_pyproject_lists_embedding_library_dependency(self) -> None:
         """packages/knowledge/pyproject.toml must declare FlagEmbedding or fastembed."""
         content = self._pyproject_content()
-        has_embedding_lib = (
-            "FlagEmbedding" in content
-            or "fastembed" in content
-            or "sentence-transformers" in content
-        )
+        has_embedding_lib = "FlagEmbedding" in content or "fastembed" in content or "sentence-transformers" in content
         assert has_embedding_lib, (
-            "pyproject.toml must declare an embedding library "
-            "(FlagEmbedding, fastembed, or sentence-transformers)"
+            "pyproject.toml must declare an embedding library (FlagEmbedding, fastembed, or sentence-transformers)"
         )
 
 

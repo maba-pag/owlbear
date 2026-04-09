@@ -96,8 +96,17 @@ def _insert_entry(  # noqa: PLR0913
             scope_agent, scope_project, approval_state, deleted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            eid, content, category, confidence, created_at, updated_at, source,
-            scope_agent, scope_project, approval_state, deleted_at,
+            eid,
+            content,
+            category,
+            confidence,
+            created_at,
+            updated_at,
+            source,
+            scope_agent,
+            scope_project,
+            approval_state,
+            deleted_at,
         ),
     )
     conn.commit()
@@ -122,9 +131,7 @@ class TestFromAC_ApprovalStateMachine:
         result = await set_approval_state(ctx, entry_id=entry_id, new_state="approved")
 
         assert "approved" in result
-        row = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row[0] == "approved"
 
     @pytest.mark.asyncio
@@ -154,9 +161,7 @@ class TestFromAC_ApprovalStateMachine:
         result = await set_approval_state(ctx, entry_id=entry_id, new_state="pending")
 
         assert "pending" in result
-        row = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row[0] == "pending"
 
     @pytest.mark.asyncio
@@ -198,9 +203,7 @@ class TestFromAC_ApprovalStateMachine:
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
         with pytest.raises(ToolError):
-            await set_approval_state(
-                ctx, entry_id="does-not-exist", new_state="approved"
-            )
+            await set_approval_state(ctx, entry_id="does-not-exist", new_state="approved")
 
 
 # ---------------------------------------------------------------------------
@@ -217,9 +220,7 @@ class TestFromAC_RecordLearningValidation:
         conn = _make_conn()
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await record_learning(
-            ctx, agent_id="a", content="x", category="knowledge", confidence=0.69
-        )
+        result = await record_learning(ctx, agent_id="a", content="x", category="knowledge", confidence=0.69)
 
         assert isinstance(result, str)
         assert result.startswith("error:")
@@ -231,9 +232,7 @@ class TestFromAC_RecordLearningValidation:
         conn = _make_conn()
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await record_learning(
-            ctx, agent_id="a", content="x", category="knowledge", confidence=0.0
-        )
+        result = await record_learning(ctx, agent_id="a", content="x", category="knowledge", confidence=0.0)
 
         assert isinstance(result, str)
         assert result.startswith("error:")
@@ -244,9 +243,7 @@ class TestFromAC_RecordLearningValidation:
         conn = _make_conn()
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await record_learning(
-            ctx, agent_id="a", content="x", category="bogus", confidence=0.9
-        )
+        result = await record_learning(ctx, agent_id="a", content="x", category="bogus", confidence=0.9)
 
         assert isinstance(result, str)
         assert result.startswith("error:")
@@ -259,13 +256,14 @@ class TestFromAC_RecordLearningValidation:
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
         result = await record_learning(
-            ctx, agent_id="a", content="boundary test", category="knowledge",
+            ctx,
+            agent_id="a",
+            content="boundary test",
+            category="knowledge",
             confidence=0.7,
         )
 
-        assert not result.startswith("error:"), (
-            "confidence == 0.7 must be accepted, not rejected"
-        )
+        assert not result.startswith("error:"), "confidence == 0.7 must be accepted, not rejected"
         # Result should be a valid UUID string
         uuid.UUID(result)  # raises ValueError if not a valid UUID
 
@@ -283,9 +281,7 @@ class TestFromAC_GetKnowledgeSortOrder:
         """AC4: entry scoped to agent+project appears before global entry."""
         conn = _make_conn()
         _insert_entry(conn, content="global", scope_agent=None, scope_project=None)
-        _insert_entry(
-            conn, content="specific", scope_agent="alice", scope_project="proj-a"
-        )
+        _insert_entry(conn, content="specific", scope_agent="alice", scope_project="proj-a")
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj-a"))
 
         results = await get_knowledge(ctx, agent_id="alice")
@@ -330,9 +326,7 @@ class TestFromAC_MarkForDeletion:
         result = await mark_for_deletion(ctx, entry_id=entry_id)
 
         assert "deletion" in result
-        row = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row[0] == "deleted"
 
     @pytest.mark.asyncio
@@ -346,9 +340,7 @@ class TestFromAC_MarkForDeletion:
         second_result = await mark_for_deletion(ctx, entry_id=entry_id)
 
         assert isinstance(second_result, str)
-        assert not second_result.startswith("error:"), (
-            "Second mark_for_deletion call must succeed (idempotent)"
-        )
+        assert not second_result.startswith("error:"), "Second mark_for_deletion call must succeed (idempotent)"
 
     @pytest.mark.asyncio
     async def test_nonexistent_entry_raises_tool_error(self) -> None:
@@ -425,9 +417,7 @@ class TestFromAC_ListEntriesFilters:
 
         contents = [r["content"] for r in results]
         assert "live-entry" in contents
-        assert "dead-entry" not in contents, (
-            "Deleted entries must be excluded when include_deleted=False (default)"
-        )
+        assert "dead-entry" not in contents, "Deleted entries must be excluded when include_deleted=False (default)"
 
     @pytest.mark.asyncio
     async def test_include_deleted_shows_deleted_entries(self) -> None:
@@ -448,28 +438,33 @@ class TestFromAC_ListEntriesFilters:
         """AC6: multiple filters are AND-combined."""
         conn = _make_conn()
         _insert_entry(
-            conn, content="match",
-            scope_agent="alice", category="preference", approval_state="approved",
+            conn,
+            content="match",
+            scope_agent="alice",
+            category="preference",
+            approval_state="approved",
         )
         _insert_entry(
-            conn, content="wrong-agent",
-            scope_agent="bob", category="preference", approval_state="approved",
+            conn,
+            content="wrong-agent",
+            scope_agent="bob",
+            category="preference",
+            approval_state="approved",
         )
         _insert_entry(
-            conn, content="wrong-category",
-            scope_agent="alice", category="goal", approval_state="approved",
+            conn,
+            content="wrong-category",
+            scope_agent="alice",
+            category="goal",
+            approval_state="approved",
         )
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        results = await list_entries(
-            ctx, agent_id="alice", category="preference", status="approved"
-        )
+        results = await list_entries(ctx, agent_id="alice", category="preference", status="approved")
 
         assert isinstance(results, list)
         contents = [r["content"] for r in results]
-        assert contents == ["match"], (
-            "Only entries matching all three filters should be returned"
-        )
+        assert contents == ["match"], "Only entries matching all three filters should be returned"
 
     @pytest.mark.asyncio
     async def test_no_filters_returns_all_non_deleted(self) -> None:

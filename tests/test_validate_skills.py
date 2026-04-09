@@ -80,8 +80,7 @@ class TestFromAC_ValidateSkillFilter:
         skill_dir = tmp_path / "opt-skill"
         _write_skill(
             skill_dir,
-            "name: opt-skill\ndescription: Optional fields skill.\n"
-            "license: MIT\ncompatibility: VS Code 1.90+",
+            "name: opt-skill\ndescription: Optional fields skill.\nlicense: MIT\ncompatibility: VS Code 1.90+",
         )
         assert validate_skill(skill_dir) == []
 
@@ -142,9 +141,7 @@ class TestFromAC_ValidateSkillFilter:
 
     # --- Boundary: vendor error mixed with real error ---
 
-    def test_vendor_plus_missing_description_real_error_survives(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_plus_missing_description_real_error_survives(self, tmp_path: Path) -> None:
         """AC3 boundary: vendor field + missing description → real error still present."""
         skill_dir = tmp_path / "mixed-skill"
         _write_skill(
@@ -156,9 +153,7 @@ class TestFromAC_ValidateSkillFilter:
         # The vendor-field error must NOT appear in filtered output
         assert not any("user-invocable" in e for e in errors)
 
-    def test_vendor_plus_name_mismatch_real_error_survives(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_plus_name_mismatch_real_error_survives(self, tmp_path: Path) -> None:
         """AC3 boundary: vendor field + name mismatch → mismatch error still present."""
         skill_dir = tmp_path / "name-mix"
         _write_skill(
@@ -223,10 +218,7 @@ class TestFromAC_ErrorPaths:
         missing = tmp_path / "no-such-dir"
         errors = validate_skill(missing)
         assert errors
-        assert any(
-            "exist" in e.lower() or "not found" in e.lower() or "no such" in e.lower()
-            for e in errors
-        )
+        assert any("exist" in e.lower() or "not found" in e.lower() or "no such" in e.lower() for e in errors)
 
     def test_non_directory_path_returns_descriptive_error(self, tmp_path: Path) -> None:
         """validate_skill returns a descriptive error when given a file path, not a dir."""
@@ -264,9 +256,7 @@ class TestFromAC_ErrorPaths:
 class TestFromAC_AC3MessageSpecificity:
     """AC3 message content: error messages must reference the specific failed check."""
 
-    def test_missing_description_error_mentions_description(
-        self, tmp_path: Path
-    ) -> None:
+    def test_missing_description_error_mentions_description(self, tmp_path: Path) -> None:
         """AC3: missing-description error message contains the word 'description'."""
         skill_dir = tmp_path / "no-desc-msg"
         _write_skill(skill_dir, "name: no-desc-msg")

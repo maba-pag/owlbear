@@ -125,9 +125,7 @@ class TestFromAC_PromptTaskIdParsing:
         assert "42" in show_args
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_parses_id_surrounded_by_text(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_parses_id_surrounded_by_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() extracts task ID when '#N' is embedded in a longer sentence."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -142,9 +140,7 @@ class TestFromAC_PromptTaskIdParsing:
         assert "99" in show_args
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_uses_first_id_when_multiple_present(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_uses_first_id_when_multiple_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() uses the first matching #N when multiple task IDs appear in text."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -160,9 +156,7 @@ class TestFromAC_PromptTaskIdParsing:
         assert "20" not in show_args
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_raises_on_missing_task_id(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_raises_on_missing_task_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() raises an exception when no #N is present in the prompt text."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -177,9 +171,7 @@ class TestFromAC_PromptTaskIdParsing:
             )
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_raises_on_empty_prompt_text(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_raises_on_empty_prompt_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() raises an exception when the TextContentBlock contains empty text."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -203,9 +195,7 @@ class TestFromAC_PromptSubprocessCalls:
     """prompt() calls kanban-md show, edit, and move as list-args subprocesses (no shell=True)."""
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_calls_show_with_task_id(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_calls_show_with_task_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() calls subprocess.run with 'show' and the task ID."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -218,9 +208,7 @@ class TestFromAC_PromptSubprocessCalls:
         assert "42" in show_calls[0]
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_calls_edit_with_annotation(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_calls_edit_with_annotation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() calls subprocess.run with 'edit', the task ID, and 'Mock agent processed' text."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -234,9 +222,7 @@ class TestFromAC_PromptSubprocessCalls:
         assert "Mock agent processed" in combined
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_calls_move_with_task_id(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_calls_move_with_task_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() calls subprocess.run with 'move' and the task ID."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -249,9 +235,7 @@ class TestFromAC_PromptSubprocessCalls:
         assert "42" in move_calls[0]
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_subprocess_args_are_list_not_shell(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_subprocess_args_are_list_not_shell(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """All subprocess.run calls use list args and must not pass shell=True."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -266,9 +250,7 @@ class TestFromAC_PromptSubprocessCalls:
             assert shell is not True, "subprocess.run must not use shell=True"
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_subprocess_calls_include_board_dir(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_subprocess_calls_include_board_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """All kanban-md subprocess calls include the KANBAN_DIR board directory."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -289,9 +271,7 @@ class TestFromAC_PromptResponse:
     """prompt() must return PromptResponse(stop_reason='end_turn')."""
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_returns_prompt_response(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_returns_prompt_response(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() return value is a PromptResponse instance."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -301,9 +281,7 @@ class TestFromAC_PromptResponse:
         assert isinstance(result, PromptResponse)
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_prompt_stop_reason_is_end_turn(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_prompt_stop_reason_is_end_turn(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """prompt() response.stop_reason is 'end_turn'."""
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         monkeypatch.delenv("KANBAN_BIN", raising=False)
@@ -322,9 +300,7 @@ class TestFromAC_EnvVarConfig:
     """Board dir and binary path are resolved from KANBAN_DIR / KANBAN_BIN env vars."""
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_kanban_bin_env_var_used_for_binary_path(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_kanban_bin_env_var_used_for_binary_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When KANBAN_BIN is set, that path is used as the kanban-md binary."""
         custom_bin = "/custom/path/kanban-md"
         monkeypatch.setenv("KANBAN_BIN", custom_bin)
@@ -333,14 +309,10 @@ class TestFromAC_EnvVarConfig:
         with patch(f"{_MODULE}.subprocess.run", return_value=_subprocess_ok()) as mock_run:
             await agent.prompt(prompt=_prompt_blocks("#42"), session_id=_SESSION_ID)
         first_call_args = mock_run.call_args_list[0].args[0]
-        assert first_call_args[0] == custom_bin, (
-            f"Binary must be KANBAN_BIN '{custom_bin}', got '{first_call_args[0]}'"
-        )
+        assert first_call_args[0] == custom_bin, f"Binary must be KANBAN_BIN '{custom_bin}', got '{first_call_args[0]}'"
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_kanban_bin_fallback_when_env_var_absent(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_kanban_bin_fallback_when_env_var_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When KANBAN_BIN is unset, binary falls back to 'kanban/kanban-md.exe'."""
         monkeypatch.delenv("KANBAN_BIN", raising=False)
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
@@ -353,9 +325,7 @@ class TestFromAC_EnvVarConfig:
         )
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_kanban_dir_env_var_passed_to_all_subprocess_calls(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_kanban_dir_env_var_passed_to_all_subprocess_calls(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """KANBAN_DIR env var value appears in every kanban-md subprocess call."""
         custom_dir = "/custom/board/dir"
         monkeypatch.setenv("KANBAN_DIR", custom_dir)
@@ -366,9 +336,7 @@ class TestFromAC_EnvVarConfig:
         assert len(mock_run.call_args_list) >= 3, "Expected show + edit + move calls"  # noqa: PLR2004
         for c in mock_run.call_args_list:
             args_str = " ".join(c.args[0])
-            assert custom_dir in args_str, (
-                f"KANBAN_DIR '{custom_dir}' must appear in call args: {c.args[0]}"
-            )
+            assert custom_dir in args_str, f"KANBAN_DIR '{custom_dir}' must appear in call args: {c.args[0]}"
 
 
 # ---------------------------------------------------------------------------

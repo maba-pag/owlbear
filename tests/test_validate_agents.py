@@ -128,9 +128,7 @@ class TestFromAC_ValidateAgentsTodoCheck:
         )
         errors = validate_agent(agent_file)
         bare_todo_errors = [e for e in errors if "bare 'todo'" in e or "bare todo" in e.lower()]
-        assert not bare_todo_errors, (
-            f"'todo_extra' should not trigger the bare-todo ban check; got: {bare_todo_errors}"
-        )
+        assert not bare_todo_errors, f"'todo_extra' should not trigger the bare-todo ban check; got: {bare_todo_errors}"
 
     def test_argument_hint_with_todos_does_not_trigger(self, tmp_path: Path) -> None:
         """AC1: 'todos' in argument-hint does not trigger failure.
@@ -143,9 +141,7 @@ class TestFromAC_ValidateAgentsTodoCheck:
         _write_agent(
             agent_file,
             _agent_content(
-                "name: planner-like\n"
-                "argument-hint: 'Orchestrate: {status:todos}'\n"
-                "tools: [read/readFile]",
+                "name: planner-like\nargument-hint: 'Orchestrate: {status:todos}'\ntools: [read/readFile]",
             ),
         )
         assert validate_agent(agent_file) == []
@@ -195,18 +191,12 @@ class TestFromAC_ValidateAgentsResolveCheck:
         errors = validate_agent(agent_file)
         assert errors, "Expected errors for resolveMemoryFileUri in file body"
 
-    def test_resolve_uri_in_frontmatter_description_fails(
-        self, tmp_path: Path
-    ) -> None:
+    def test_resolve_uri_in_frontmatter_description_fails(self, tmp_path: Path) -> None:
         """AC2: resolveMemoryFileUri in any frontmatter field value triggers failure."""
         agent_file = tmp_path / "bad-fm.agent.md"
         _write_agent(
             agent_file,
-            _agent_content(
-                "name: bad-fm\n"
-                "tools: [todos]\n"
-                "description: 'Uses resolveMemoryFileUri internally'"
-            ),
+            _agent_content("name: bad-fm\ntools: [todos]\ndescription: 'Uses resolveMemoryFileUri internally'"),
         )
         errors = validate_agent(agent_file)
         assert errors, "Expected errors for resolveMemoryFileUri in description field"
@@ -224,9 +214,7 @@ class TestFromAC_ValidateAgentsPreCommitHook:
     def test_validate_agents_hook_id_present(self) -> None:
         """AC3: id: validate-agents line exists in .pre-commit-config.yaml."""
         content = self._precommit_text()
-        assert "validate-agents" in content, (
-            "No 'validate-agents' hook id found in .pre-commit-config.yaml"
-        )
+        assert "validate-agents" in content, "No 'validate-agents' hook id found in .pre-commit-config.yaml"
 
     def test_validate_agents_files_pattern_present(self) -> None:
         r"""AC3: files: ^share/agents/.*\.agent\.md$ pattern exists in config."""
@@ -242,9 +230,7 @@ class TestFromAC_ValidateAgentsPreCommitHook:
         assert local_pos != -1, "'repo: local' not found in .pre-commit-config.yaml"
         # Everything from the first 'repo: local' onwards should contain the hook
         local_section = content[local_pos:]
-        assert "validate-agents" in local_section, (
-            "'validate-agents' hook is not inside a 'repo: local' block"
-        )
+        assert "validate-agents" in local_section, "'validate-agents' hook is not inside a 'repo: local' block"
 
 
 # ---------------------------------------------------------------------------
@@ -277,10 +263,7 @@ class TestFromAC_ValidateAgentsIntegration:
             capture_output=True,
         )
         elapsed = time.monotonic() - start
-        assert elapsed < 1.0, (
-            f"validate_agents.py took {elapsed:.2f}s for {len(agent_files)} files "
-            f"(limit: 1.0s)"
-        )
+        assert elapsed < 1.0, f"validate_agents.py took {elapsed:.2f}s for {len(agent_files)} files (limit: 1.0s)"
 
 
 # ---------------------------------------------------------------------------
@@ -295,9 +278,7 @@ class TestFromAC_ValidateAgentsReadme:
     def test_readme_mentions_validate_agents_hook(self) -> None:
         """AC6: README references the validate-agents hook."""
         content = self._readme_text()
-        assert "validate-agents" in content, (
-            "README.md does not mention the validate-agents hook"
-        )
+        assert "validate-agents" in content, "README.md does not mention the validate-agents hook"
 
     def test_readme_mentions_auto_staging_trap(self) -> None:
         """AC6: README mentions the VS Code auto-staging trap."""
@@ -339,9 +320,7 @@ class TestFromAC_BanTodosToolCheck:
         errors = validate_agent(agent_file)
         assert errors, "Expected a non-empty error list"
         combined = " ".join(errors).lower()
-        assert "disabled" in combined, (
-            f"Expected error message to mention 'disabled'; got: {errors}"
-        )
+        assert "disabled" in combined, f"Expected error message to mention 'disabled'; got: {errors}"
 
     def test_todos_with_other_tools_still_errors(self, tmp_path: Path) -> None:
         """#193-AC1: tools: [todos, read/readFile] still produces an error."""
@@ -393,9 +372,7 @@ class TestFromAC_BanManageTodoListCheck:
         _write_agent(
             agent_file,
             _agent_content(
-                "name: mtl-fm\n"
-                "description: 'Calls manage_todo_list internally'\n"
-                "tools: [read/readFile]",
+                "name: mtl-fm\ndescription: 'Calls manage_todo_list internally'\ntools: [read/readFile]",
             ),
         )
         errors = validate_agent(agent_file)
@@ -414,9 +391,7 @@ class TestFromAC_BanManageTodoListCheck:
         errors = validate_agent(agent_file)
         assert errors, "Expected a non-empty error list"
         combined = " ".join(errors).lower()
-        assert "disabled" in combined, (
-            f"Expected error message to mention 'disabled'; got: {errors}"
-        )
+        assert "disabled" in combined, f"Expected error message to mention 'disabled'; got: {errors}"
 
 
 # ---------------------------------------------------------------------------
@@ -439,13 +414,9 @@ class TestFromAC_DeprecatedTodoMessage:
         errors = validate_agent(agent_file)
         assert errors, "Expected at least one error for bare 'todo' in tools:"
         combined = " ".join(errors).lower()
-        assert "should be" not in combined, (
-            f"Error message still says 'should be' (old phrasing); got: {errors}"
-        )
+        assert "should be" not in combined, f"Error message still says 'should be' (old phrasing); got: {errors}"
 
-    def test_bare_todo_error_message_says_disabled_for_subagents(
-        self, tmp_path: Path
-    ) -> None:
+    def test_bare_todo_error_message_says_disabled_for_subagents(self, tmp_path: Path) -> None:
         """#193-AC3: bare 'todo' error message states the tool is disabled for subagents."""
         agent_file = tmp_path / "bare-todo-msg.agent.md"
         _write_agent(
@@ -455,9 +426,7 @@ class TestFromAC_DeprecatedTodoMessage:
         errors = validate_agent(agent_file)
         assert errors, "Expected a non-empty error list"
         combined = " ".join(errors).lower()
-        assert "disabled" in combined, (
-            f"Expected error message to mention 'disabled'; got: {errors}"
-        )
+        assert "disabled" in combined, f"Expected error message to mention 'disabled'; got: {errors}"
 
 
 # ---------------------------------------------------------------------------
@@ -473,8 +442,7 @@ class TestFromAC_CopilotInstructionsCleanup:
         """#193-AC4: .github/copilot-instructions.md does not reference manage_todo_list."""
         content = _COPILOT_INSTRUCTIONS.read_text(encoding="utf-8")
         assert "manage_todo_list" not in content, (
-            "Found 'manage_todo_list' in .github/copilot-instructions.md — "
-            "the process-habit line must be removed"
+            "Found 'manage_todo_list' in .github/copilot-instructions.md — the process-habit line must be removed"
         )
 
 
@@ -492,17 +460,13 @@ class TestFromAC_KnownToolsConstants:
         """AC1: KNOWN_TOOLSETS can be imported from validate_agents and is a frozenset."""
         from validate_agents import KNOWN_TOOLSETS
 
-        assert isinstance(KNOWN_TOOLSETS, frozenset), (
-            f"KNOWN_TOOLSETS must be a frozenset, got {type(KNOWN_TOOLSETS)}"
-        )
+        assert isinstance(KNOWN_TOOLSETS, frozenset), f"KNOWN_TOOLSETS must be a frozenset, got {type(KNOWN_TOOLSETS)}"
 
     def test_known_toolsets_contains_all_8_prefixes(self) -> None:
         """AC1: KNOWN_TOOLSETS contains all 8 VS Code built-in toolset prefixes."""
         from validate_agents import KNOWN_TOOLSETS
 
-        expected = frozenset(
-            {"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"}
-        )
+        expected = frozenset({"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"})
         missing = expected - KNOWN_TOOLSETS
         assert not missing, f"KNOWN_TOOLSETS is missing prefixes: {missing}"
 
@@ -527,17 +491,13 @@ class TestFromAC_KnownToolsConstants:
         """AC2: 'newWorkspace' is in KNOWN_STANDALONE_TOOLS."""
         from validate_agents import KNOWN_STANDALONE_TOOLS
 
-        assert "newWorkspace" in KNOWN_STANDALONE_TOOLS, (
-            "'newWorkspace' missing from KNOWN_STANDALONE_TOOLS"
-        )
+        assert "newWorkspace" in KNOWN_STANDALONE_TOOLS, "'newWorkspace' missing from KNOWN_STANDALONE_TOOLS"
 
     def test_known_standalone_tools_contains_selection(self) -> None:
         """AC2: 'selection' is in KNOWN_STANDALONE_TOOLS."""
         from validate_agents import KNOWN_STANDALONE_TOOLS
 
-        assert "selection" in KNOWN_STANDALONE_TOOLS, (
-            "'selection' missing from KNOWN_STANDALONE_TOOLS"
-        )
+        assert "selection" in KNOWN_STANDALONE_TOOLS, "'selection' missing from KNOWN_STANDALONE_TOOLS"
 
 
 # ---------------------------------------------------------------------------
@@ -584,14 +544,10 @@ class TestFromAC_UnknownToolErrors:
         errors = validate_agent(agent_file)
         assert errors, "Expected error for typo tool name 'Seach/findFile'"
 
-    def test_mcp_path_without_wildcard_and_unknown_prefix_produces_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_mcp_path_without_wildcard_and_unknown_prefix_produces_error(self, tmp_path: Path) -> None:
         """AC5: 'someMCP/specificTool' (unknown prefix, no '/*') produces error."""
         agent_file = tmp_path / "no-wildcard.agent.md"
-        _write_agent(
-            agent_file, _agent_content("name: no-wildcard\ntools: [someMCP/specificTool]")
-        )
+        _write_agent(agent_file, _agent_content("name: no-wildcard\ntools: [someMCP/specificTool]"))
         errors = validate_agent(agent_file)
         assert errors, "Expected error for 'someMCP/specificTool' (not a valid pattern)"
 
@@ -603,9 +559,7 @@ class TestFromAC_UnknownToolErrors:
             _agent_content("name: two-bad\ntools: [ghost_tool, phantom_tool]"),
         )
         errors = validate_agent(agent_file)
-        assert len(errors) >= 2, (
-            f"Expected at least 2 errors for two unknown tools; got {len(errors)}: {errors}"
-        )
+        assert len(errors) >= 2, f"Expected at least 2 errors for two unknown tools; got {len(errors)}: {errors}"
 
 
 # ---------------------------------------------------------------------------
@@ -623,9 +577,7 @@ class TestFromAC_UnknownToolErrorMessage:
         errors = validate_agent(agent_file)
         assert errors, "Expected at least one error"
         combined = "\n".join(errors)
-        assert "bad-msg.agent.md" in combined, (
-            f"Error message should include filename; got: {errors}"
-        )
+        assert "bad-msg.agent.md" in combined, f"Error message should include filename; got: {errors}"
 
     def test_error_message_contains_unknown_tool_phrase(self, tmp_path: Path) -> None:
         """AC6: error message contains the phrase 'unknown tool'."""
@@ -634,9 +586,7 @@ class TestFromAC_UnknownToolErrorMessage:
         errors = validate_agent(agent_file)
         assert errors, "Expected at least one error"
         combined = "\n".join(errors)
-        assert "unknown tool" in combined, (
-            f"Error message should contain 'unknown tool'; got: {errors}"
-        )
+        assert "unknown tool" in combined, f"Error message should contain 'unknown tool'; got: {errors}"
 
     def test_error_message_includes_specific_tool_name(self, tmp_path: Path) -> None:
         """AC6: error message includes the specific unknown tool name."""
@@ -645,9 +595,7 @@ class TestFromAC_UnknownToolErrorMessage:
         errors = validate_agent(agent_file)
         assert errors, "Expected at least one error"
         combined = "\n".join(errors)
-        assert "phantom_tool" in combined, (
-            f"Error should include tool name 'phantom_tool'; got: {errors}"
-        )
+        assert "phantom_tool" in combined, f"Error should include tool name 'phantom_tool'; got: {errors}"
 
     def test_error_message_says_not_a_recognized_pattern(self, tmp_path: Path) -> None:
         """AC6: error message contains 'not a recognized VS Code built-in or MCP server pattern'."""
@@ -656,9 +604,7 @@ class TestFromAC_UnknownToolErrorMessage:
         errors = validate_agent(agent_file)
         assert errors, "Expected at least one error"
         combined = "\n".join(errors)
-        assert "not a recognized" in combined, (
-            f"Error should contain 'not a recognized'; got: {errors}"
-        )
+        assert "not a recognized" in combined, f"Error should contain 'not a recognized'; got: {errors}"
 
 
 # ---------------------------------------------------------------------------
@@ -690,17 +636,13 @@ class TestFromAC_NoBannedToolDoubleError:
         _write_agent(agent_file, _agent_content("name: todos-no-double\ntools: [todos]"))
         errors = validate_agent(agent_file)
         unknown_errors = [e for e in errors if "unknown tool" in e]
-        assert not unknown_errors, (
-            f"'todos' (banned) should not produce unknown-tool error; got: {unknown_errors}"
-        )
+        assert not unknown_errors, f"'todos' (banned) should not produce unknown-tool error; got: {unknown_errors}"
 
     def test_manage_todo_list_not_also_reported_as_unknown(self, tmp_path: Path) -> None:
         """AC7: 'manage_todo_list' (banned #193) should not produce an 'unknown tool' error."""
         self._require_registry()
         agent_file = tmp_path / "mtl-no-double.agent.md"
-        _write_agent(
-            agent_file, _agent_content("name: mtl-no-double\ntools: [manage_todo_list]")
-        )
+        _write_agent(agent_file, _agent_content("name: mtl-no-double\ntools: [manage_todo_list]"))
         errors = validate_agent(agent_file)
         unknown_errors = [e for e in errors if "unknown tool" in e]
         assert not unknown_errors, (
@@ -721,9 +663,7 @@ class TestFromAC_NoBannedToolDoubleError:
             f"'resolveMemoryFileUri' (banned) should not produce unknown-tool error; got: {unknown_errors}"
         )
 
-    def test_mixed_banned_and_unknown_only_unknown_gets_unknown_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_mixed_banned_and_unknown_only_unknown_gets_unknown_error(self, tmp_path: Path) -> None:
         """AC7 edge: file with banned + unknown tool — only the unknown gets an unknown-tool error."""
         self._require_registry()
         agent_file = tmp_path / "mixed-bad.agent.md"
@@ -735,12 +675,8 @@ class TestFromAC_NoBannedToolDoubleError:
         unknown_errors = [e for e in errors if "unknown tool" in e]
         ghost_flagged = any("ghost_tool" in e for e in unknown_errors)
         todos_flagged = any("todos" in e for e in unknown_errors)
-        assert ghost_flagged, (
-            f"Expected 'ghost_tool' to produce an unknown-tool error; got: {errors}"
-        )
-        assert not todos_flagged, (
-            f"'todos' (banned) should not produce unknown-tool error; got: {unknown_errors}"
-        )
+        assert ghost_flagged, f"Expected 'ghost_tool' to produce an unknown-tool error; got: {errors}"
+        assert not todos_flagged, f"'todos' (banned) should not produce unknown-tool error; got: {unknown_errors}"
 
 
 # ---------------------------------------------------------------------------
@@ -811,6 +747,4 @@ class TestFromAC_ValidToolPatterns:
     def test_each_agent_file_passes_validation(self, agent_file: Path) -> None:
         """AC5: validate_agent() returns [] for every current agents/*.agent.md file."""
         errors = validate_agent(agent_file)
-        assert errors == [], (
-            f"validate_agent({agent_file.name}) returned errors:\n" + "\n".join(errors)
-        )
+        assert errors == [], f"validate_agent({agent_file.name}) returned errors:\n" + "\n".join(errors)

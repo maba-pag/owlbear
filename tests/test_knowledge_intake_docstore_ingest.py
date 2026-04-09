@@ -337,9 +337,7 @@ class TestFromAC_DocumentStoreChunks:
         store = DocumentStore(conn, GraphStore(conn), MagicMock(), MagicMock())
         store.store_chunks("doc-002", [Chunk(text="chunk text", index=0)])
 
-        rows = conn.execute(
-            "SELECT id FROM chunks WHERE document_id = ?", ("doc-002",)
-        ).fetchall()
+        rows = conn.execute("SELECT id FROM chunks WHERE document_id = ?", ("doc-002",)).fetchall()
         assert len(rows) == 1
 
 
@@ -409,9 +407,7 @@ class TestFromAC_DocumentStoreExtractions:
             target_id=entity.id,
             relation=RelationType.RELATED_TO,
         )
-        entity_count, edge_count = store.store_extractions(
-            [ExtractionResult(entities=[entity], edges=[edge])]
-        )
+        entity_count, edge_count = store.store_extractions([ExtractionResult(entities=[entity], edges=[edge])])
         assert entity_count == 1
         assert edge_count == 1
 
@@ -532,9 +528,7 @@ class TestFromAC_DocumentStoreDelete:
         store.store_chunks("del-002", [Chunk(text="chunk text", index=0)])
         store.delete_document_data("del-002")
 
-        rows = conn.execute(
-            "SELECT id FROM chunks WHERE document_id = ?", ("del-002",)
-        ).fetchall()
+        rows = conn.execute("SELECT id FROM chunks WHERE document_id = ?", ("del-002",)).fetchall()
         assert rows == []
 
     def test_delete_document_data_removes_document_status_row(self) -> None:
@@ -547,9 +541,7 @@ class TestFromAC_DocumentStoreDelete:
         store.set_status("del-003", "ok", source="file://del.txt")
         store.delete_document_data("del-003")
 
-        row = conn.execute(
-            "SELECT document_id FROM document_status WHERE document_id = ?", ("del-003",)
-        ).fetchone()
+        row = conn.execute("SELECT document_id FROM document_status WHERE document_id = ?", ("del-003",)).fetchone()
         assert row is None
 
 
@@ -642,9 +634,7 @@ class TestFromAC_CheckContentChanged:
         store.set_status("doc-changed", "ok", source="file://changed.txt")
         store.update_content_hash("doc-changed", "original content")
 
-        changed, doc_id = store.check_content_changed(
-            "file://changed.txt", "completely new content"
-        )
+        changed, doc_id = store.check_content_changed("file://changed.txt", "completely new content")
         assert changed is True
         assert doc_id == "doc-changed"
 
@@ -751,9 +741,7 @@ class TestFromAC_IngestMethod:
             entity_extractor=EntityExtractor("stub"),
             text_chunker=TextChunker(),
         )
-        intake = IntakeResult(
-            content="text to ingest", source="test://src", metadata={"source_type": "text"}
-        )
+        intake = IntakeResult(content="text to ingest", source="test://src", metadata={"source_type": "text"})
         result = await pipeline.ingest(intake)
         assert isinstance(result, IngestResult)
         assert result.status == "ok"
@@ -776,9 +764,7 @@ class TestFromAC_IngestMethod:
         doc_store.store_extractions.return_value = (1, 1)
 
         mock_extractor = MagicMock(spec=EntityExtractor)
-        mock_extractor.extract = AsyncMock(
-            return_value=ExtractionResult(entities=[entity], edges=[edge])
-        )
+        mock_extractor.extract = AsyncMock(return_value=ExtractionResult(entities=[entity], edges=[edge]))
         pipeline = IngestPipeline(
             document_store=doc_store,
             entity_extractor=mock_extractor,
@@ -813,9 +799,7 @@ class TestFromAC_DeltaDetection:
             entity_extractor=EntityExtractor("stub"),
             text_chunker=TextChunker(),
         )
-        intake = IntakeResult(
-            content="same content", source="file://doc.txt", metadata={"source_type": "file"}
-        )
+        intake = IntakeResult(content="same content", source="file://doc.txt", metadata={"source_type": "file"})
         result = await pipeline.ingest(intake)
         assert result.status == "skipped"
 
@@ -900,9 +884,7 @@ class TestFromAC_ParallelOperations:
             entity_extractor=mock_extractor,
             text_chunker=TextChunker(target_tokens=10),
         )
-        intake = IntakeResult(
-            content="text with some words here", source="src://parallel", metadata={}
-        )
+        intake = IntakeResult(content="text with some words here", source="src://parallel", metadata={})
         await pipeline.ingest(intake)
 
         mock_extractor.extract.assert_called()
@@ -992,9 +974,7 @@ class TestFromAC_E2EIngest:
             relation=RelationType.RELATED_TO,
         )
         mock_extractor = MagicMock(spec=EntityExtractor)
-        mock_extractor.extract = AsyncMock(
-            return_value=ExtractionResult(entities=[entity_a, entity_b], edges=[edge])
-        )
+        mock_extractor.extract = AsyncMock(return_value=ExtractionResult(entities=[entity_a, entity_b], edges=[edge]))
 
         vector_store = MagicMock()
         embedder = MagicMock()
@@ -1032,9 +1012,7 @@ class TestFromAC_E2EIngest:
 
         entity = Entity(name="Gamma", entity_type=EntityType.CONCEPT, description="a gamma entity")
         mock_extractor = MagicMock(spec=EntityExtractor)
-        mock_extractor.extract = AsyncMock(
-            return_value=ExtractionResult(entities=[entity], edges=[])
-        )
+        mock_extractor.extract = AsyncMock(return_value=ExtractionResult(entities=[entity], edges=[]))
 
         vector_store = MagicMock()
         embedder = MagicMock()
@@ -1088,16 +1066,12 @@ class TestFromAC_DocumentStoreDeleteCascadeEntitiesEdges:
         graph.insert_entity(entity_b)
 
         # Precondition: entities exist
-        rows_before = conn.execute(
-            "SELECT id FROM entities WHERE document_id = ?", ("del-ent-001",)
-        ).fetchall()
+        rows_before = conn.execute("SELECT id FROM entities WHERE document_id = ?", ("del-ent-001",)).fetchall()
         assert len(rows_before) == 2
 
         store.delete_document_data("del-ent-001")
 
-        rows_after = conn.execute(
-            "SELECT id FROM entities WHERE document_id = ?", ("del-ent-001",)
-        ).fetchall()
+        rows_after = conn.execute("SELECT id FROM entities WHERE document_id = ?", ("del-ent-001",)).fetchall()
         assert rows_after == []
 
     def test_delete_document_data_removes_edges_for_document_entities(self) -> None:
@@ -1118,15 +1092,11 @@ class TestFromAC_DocumentStoreDeleteCascadeEntitiesEdges:
         graph.insert_entity(entity_a)
         graph.insert_entity(entity_b)
 
-        edge = Edge(
-            source_id=entity_a.id, target_id=entity_b.id, relation=RelationType.RELATED_TO
-        )
+        edge = Edge(source_id=entity_a.id, target_id=entity_b.id, relation=RelationType.RELATED_TO)
         graph.insert_edge(edge)
 
         # Precondition: edge exists
-        edge_row_before = conn.execute(
-            "SELECT id FROM edges WHERE source_id = ?", (entity_a.id,)
-        ).fetchone()
+        edge_row_before = conn.execute("SELECT id FROM edges WHERE source_id = ?", (entity_a.id,)).fetchone()
         assert edge_row_before is not None
 
         store.delete_document_data("del-ent-002")

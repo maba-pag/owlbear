@@ -1,4 +1,4 @@
-﻿"""TDD RED-phase tests for #522 -- Wire ErrorLogger adapter at AcpClient construction sites.
+"""TDD RED-phase tests for #522 -- Wire ErrorLogger adapter at AcpClient construction sites.
 
 Covers:
   AC#1: ErrorLoggerAdapter class in error_journal.py implements _ErrorLogger Protocol,
@@ -77,18 +77,14 @@ class TestFromAC_ErrorLoggerAdapter:  # noqa: N801
         """log_error() must call ErrorJournal.log() exactly once."""
         journal = _make_mock_journal()
         adapter = ErrorLoggerAdapter(journal)
-        adapter.log_error(
-            category=ErrorCategory.TRANSIENT, method="initialize", message="conn refused"
-        )
+        adapter.log_error(category=ErrorCategory.TRANSIENT, method="initialize", message="conn refused")
         journal.log.assert_called_once()
 
     def test_log_error_forwards_method(self) -> None:
         """log_error() must forward method= argument to ErrorJournal.log()."""
         journal = _make_mock_journal()
         adapter = ErrorLoggerAdapter(journal)
-        adapter.log_error(
-            category=ErrorCategory.TRANSIENT, method="new_session", message="timeout"
-        )
+        adapter.log_error(category=ErrorCategory.TRANSIENT, method="new_session", message="timeout")
         kwargs = journal.log.call_args.kwargs
         assert kwargs["method"] == "new_session"
 
@@ -96,9 +92,7 @@ class TestFromAC_ErrorLoggerAdapter:  # noqa: N801
         """log_error() must forward message= argument to ErrorJournal.log()."""
         journal = _make_mock_journal()
         adapter = ErrorLoggerAdapter(journal)
-        adapter.log_error(
-            category=ErrorCategory.PERMANENT, method="prompt", message="bad input error"
-        )
+        adapter.log_error(category=ErrorCategory.PERMANENT, method="prompt", message="bad input error")
         kwargs = journal.log.call_args.kwargs
         assert kwargs["message"] == "bad input error"
 
@@ -106,9 +100,7 @@ class TestFromAC_ErrorLoggerAdapter:  # noqa: N801
         """log_error() forwards category as a string matching ErrorCategory value."""
         journal = _make_mock_journal()
         adapter = ErrorLoggerAdapter(journal)
-        adapter.log_error(
-            category=ErrorCategory.AUTH, method="initialize", message="auth failure"
-        )
+        adapter.log_error(category=ErrorCategory.AUTH, method="initialize", message="auth failure")
         kwargs = journal.log.call_args.kwargs
         assert kwargs["category"] == "auth"
 
@@ -119,9 +111,7 @@ class TestFromAC_ErrorLoggerAdapter:  # noqa: N801
             adapter = ErrorLoggerAdapter(journal)
             adapter.log_error(category=cat, method="prompt", message="x")
             kwargs = journal.log.call_args.kwargs
-            assert kwargs["category"] == str(cat), (
-                f"category for {cat!r} not forwarded as expected string"
-            )
+            assert kwargs["category"] == str(cat), f"category for {cat!r} not forwarded as expected string"
 
     # ------------------------------------------------------------------
     # Edge: empty fields propagate unchanged
@@ -162,13 +152,9 @@ class TestFromAC_ErrorLoggerAdapter:  # noqa: N801
         journal = _make_mock_journal()
         adapter = ErrorLoggerAdapter(journal)
         for method in ("initialize", "new_session", "prompt"):
-            adapter.log_error(
-                category=ErrorCategory.TRANSIENT, method=method, message="err"
-            )
+            adapter.log_error(category=ErrorCategory.TRANSIENT, method=method, message="err")
         all_session_ids = [call.kwargs["session_id"] for call in journal.log.call_args_list]
-        assert len(set(all_session_ids)) == 1, (
-            "All log_error() calls must use the identical sentinel session_id"
-        )
+        assert len(set(all_session_ids)) == 1, "All log_error() calls must use the identical sentinel session_id"
 
     def test_sentinel_not_derived_from_instance_state(self) -> None:
         """Two separate adapter instances must use the same sentinel value (class constant)."""
@@ -180,9 +166,7 @@ class TestFromAC_ErrorLoggerAdapter:  # noqa: N801
         adapter2.log_error(category=ErrorCategory.TRANSIENT, method="m", message="e")
         sentinel1 = journal1.log.call_args.kwargs["session_id"]
         sentinel2 = journal2.log.call_args.kwargs["session_id"]
-        assert sentinel1 == sentinel2, (
-            "sentinel must be a class-level constant, not an instance attribute"
-        )
+        assert sentinel1 == sentinel2, "sentinel must be a class-level constant, not an instance attribute"
 
     # ------------------------------------------------------------------
     # Protocol conformance: keyword-only signature
@@ -196,17 +180,13 @@ class TestFromAC_ErrorLoggerAdapter:  # noqa: N801
         params = sig.parameters
         for name in ("category", "method", "message"):
             assert name in params, f"log_error() must have '{name}' parameter"
-            assert params[name].kind == inspect.Parameter.KEYWORD_ONLY, (
-                f"'{name}' must be keyword-only"
-            )
+            assert params[name].kind == inspect.Parameter.KEYWORD_ONLY, f"'{name}' must be keyword-only"
 
     def test_adapter_has_log_error_method(self) -> None:
         """ErrorLoggerAdapter must expose a callable log_error method."""
         journal = _make_mock_journal()
         adapter = ErrorLoggerAdapter(journal)
-        assert callable(getattr(adapter, "log_error", None)), (
-            "ErrorLoggerAdapter must have a callable log_error method"
-        )
+        assert callable(getattr(adapter, "log_error", None)), "ErrorLoggerAdapter must have a callable log_error method"
 
 
 # ---------------------------------------------------------------------------
@@ -224,18 +204,14 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
     def test_orchestrate_accepts_error_journal_parameter(self) -> None:
         """orchestrate() must declare error_journal as a parameter."""
         sig = inspect.signature(orchestrate)
-        assert "error_journal" in sig.parameters, (
-            "orchestrate() must accept error_journal= injection parameter"
-        )
+        assert "error_journal" in sig.parameters, "orchestrate() must accept error_journal= injection parameter"
 
     def test_orchestrate_error_journal_defaults_to_none(self) -> None:
         """error_journal parameter must default to None (optional injection)."""
         sig = inspect.signature(orchestrate)
         param = sig.parameters.get("error_journal")
         assert param is not None
-        assert param.default is None, (
-            "error_journal default must be None (follow AuditLog injection pattern)"
-        )
+        assert param.default is None, "error_journal default must be None (follow AuditLog injection pattern)"
 
     # ------------------------------------------------------------------
     # AC#3: AcpClient receives error_logger= adapter
@@ -265,9 +241,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
 
         mock_acp_client_cls.assert_called_once()
         call_kwargs = mock_acp_client_cls.call_args.kwargs
-        assert "error_logger" in call_kwargs, (
-            "AcpClient construction must include error_logger= keyword argument"
-        )
+        assert "error_logger" in call_kwargs, "AcpClient construction must include error_logger= keyword argument"
         assert call_kwargs["error_logger"] is not None, (
             "error_logger passed to AcpClient must not be None when error_journal is provided"
         )
@@ -338,4 +312,3 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
         assert Path(path_arg) == Path(".owlbear/error-journal.jsonl"), (
             f"Default ErrorJournal path must be .owlbear/error-journal.jsonl, got {path_arg!r}"
         )
-

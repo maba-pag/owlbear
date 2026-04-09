@@ -308,9 +308,7 @@ class TestFromAC_FilterByBlocked:
 
 
 class TestFromAC_FilterByUnclaimed:
-    def test_unclaimed_returns_only_tasks_without_claimed_by(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unclaimed_returns_only_tasks_without_claimed_by(self, tmp_path: Path) -> None:
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Claimed task", claimed_by="river-port")
         _add_task(kdir, 2, "Free task")
@@ -425,9 +423,7 @@ class TestFromAC_SortByField:
 
         statuses = [t.status for t in result]
         # research → todo → done (index order in config, not alphabetical)
-        assert [STATUS_RANK[s] for s in statuses] == sorted(
-            STATUS_RANK[s] for s in statuses
-        )
+        assert [STATUS_RANK[s] for s in statuses] == sorted(STATUS_RANK[s] for s in statuses)
 
     def test_sort_by_priority_uses_config_rank(self, tmp_path: Path) -> None:
         """Priority sort uses config.yml priorities rank, not alphabetical.
@@ -452,15 +448,9 @@ class TestFromAC_SortByField:
 
     def test_sort_by_created(self, tmp_path: Path) -> None:
         kdir = _make_kanban_dir(tmp_path)
-        _add_task(
-            kdir, 1, "Newest", created="2026-03-01T10:00:00.0000000+00:00"
-        )
-        _add_task(
-            kdir, 2, "Oldest", created="2026-01-01T10:00:00.0000000+00:00"
-        )
-        _add_task(
-            kdir, 3, "Middle", created="2026-02-01T10:00:00.0000000+00:00"
-        )
+        _add_task(kdir, 1, "Newest", created="2026-03-01T10:00:00.0000000+00:00")
+        _add_task(kdir, 2, "Oldest", created="2026-01-01T10:00:00.0000000+00:00")
+        _add_task(kdir, 3, "Middle", created="2026-02-01T10:00:00.0000000+00:00")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(sort="created")
@@ -469,15 +459,9 @@ class TestFromAC_SortByField:
 
     def test_sort_by_updated(self, tmp_path: Path) -> None:
         kdir = _make_kanban_dir(tmp_path)
-        _add_task(
-            kdir, 1, "Old update", updated="2026-01-05T10:00:00.0000000+00:00"
-        )
-        _add_task(
-            kdir, 2, "New update", updated="2026-03-05T10:00:00.0000000+00:00"
-        )
-        _add_task(
-            kdir, 3, "Mid update", updated="2026-02-05T10:00:00.0000000+00:00"
-        )
+        _add_task(kdir, 1, "Old update", updated="2026-01-05T10:00:00.0000000+00:00")
+        _add_task(kdir, 2, "New update", updated="2026-03-05T10:00:00.0000000+00:00")
+        _add_task(kdir, 3, "Mid update", updated="2026-02-05T10:00:00.0000000+00:00")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(sort="updated")
@@ -575,9 +559,7 @@ class TestFromAC_ArchivedTasks:
         assert len(result) == 1
         assert result[0].id == 1
 
-    def test_archived_true_returns_tasks_from_archive_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archived_true_returns_tasks_from_archive_dir(self, tmp_path: Path) -> None:
         """list_tasks(archived=True) reads tasks from v1-archive/ directory."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Live task", subdir="tasks")
@@ -590,9 +572,7 @@ class TestFromAC_ArchivedTasks:
         assert len(result) == 2
         assert all(t.id in {2, 3} for t in result)
 
-    def test_archived_true_does_not_include_live_tasks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archived_true_does_not_include_live_tasks(self, tmp_path: Path) -> None:
         """archived=True returns only archived tasks, not live tasks."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Live task", subdir="tasks")
@@ -605,9 +585,7 @@ class TestFromAC_ArchivedTasks:
         assert 1 not in ids
         assert 2 in ids
 
-    def test_archived_true_empty_archive_returns_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archived_true_empty_archive_returns_empty(self, tmp_path: Path) -> None:
         """archived=True returns [] when v1-archive/ is empty."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Live task", subdir="tasks")

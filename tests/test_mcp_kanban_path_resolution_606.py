@@ -49,8 +49,7 @@ class TestFromAC_KanbanPathResolution:
         """AC1 boundary: _DEFAULT_KANBAN_BIN must not start with 'kanban/'."""
         parts = Path(_DEFAULT_KANBAN_BIN).as_posix()
         assert not parts.startswith("kanban/"), (
-            f"_DEFAULT_KANBAN_BIN still uses old 'kanban/' prefix: '{parts}'; "
-            "expected prefix '.owlbear/kanban/'"
+            f"_DEFAULT_KANBAN_BIN still uses old 'kanban/' prefix: '{parts}'; expected prefix '.owlbear/kanban/'"
         )
 
     # AC1 — runtime: lifespan must yield AppContext with kanban_dir == new path
@@ -73,19 +72,24 @@ class TestFromAC_KanbanPathResolution:
     async def test_lifespan_error_message_names_new_path(self) -> None:
         """AC2 happy: FileNotFoundError message must contain '.owlbear/kanban/kanban-md.exe'."""
         mock_server = MagicMock()
-        with patch("owlbear_mcp_kanban.server.Path.exists", return_value=False), pytest.raises(FileNotFoundError) as exc_info:
+        with (
+            patch("owlbear_mcp_kanban.server.Path.exists", return_value=False),
+            pytest.raises(FileNotFoundError) as exc_info,
+        ):
             async with app_lifespan(mock_server) as _:
                 pass  # pragma: no cover
         assert ".owlbear/kanban/kanban-md.exe" in str(exc_info.value), (
-            "FileNotFoundError message must reference '.owlbear/kanban/kanban-md.exe'; "
-            "update L115-119 in server.py"
+            "FileNotFoundError message must reference '.owlbear/kanban/kanban-md.exe'; update L115-119 in server.py"
         )
 
     @pytest.mark.asyncio
     async def test_lifespan_error_message_not_old_bare_kanban_path(self) -> None:
         """AC2 boundary: error message must NOT contain the old 'place binary at kanban/kanban-md.exe' string."""
         mock_server = MagicMock()
-        with patch("owlbear_mcp_kanban.server.Path.exists", return_value=False), pytest.raises(FileNotFoundError) as exc_info:
+        with (
+            patch("owlbear_mcp_kanban.server.Path.exists", return_value=False),
+            pytest.raises(FileNotFoundError) as exc_info,
+        ):
             async with app_lifespan(mock_server) as _:
                 pass  # pragma: no cover
         msg = str(exc_info.value)

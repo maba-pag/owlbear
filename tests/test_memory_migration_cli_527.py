@@ -84,8 +84,10 @@ class TestFromAC_ModuleExistence:
     def test_module_invocable_as_main(self, source_dir: Path, db_path: Path) -> None:
         """python -m owlbear_mcp_memory.migrate --source-dir ... exits 0."""
         result = _run_migrate(
-            "--source-dir", str(source_dir),
-            "--db-path", str(db_path),
+            "--source-dir",
+            str(source_dir),
+            "--db-path",
+            str(db_path),
             "--dry-run",
         )
         assert result.returncode == 0, f"CLI crashed: {result.stderr}"
@@ -111,9 +113,7 @@ class TestFromAC_CLIInterface:
     def test_source_dir_required_stderr_mentions_source_dir(self, db_path: Path) -> None:
         """stderr must reference --source-dir / source_dir (argparse error, not ModuleNotFoundError)."""
         result = _run_migrate("--db-path", str(db_path))
-        assert "source" in result.stderr.lower(), (
-            f"Expected argparse error about --source-dir; got: {result.stderr!r}"
-        )
+        assert "source" in result.stderr.lower(), f"Expected argparse error about --source-dir; got: {result.stderr!r}"
 
     def test_db_path_uses_env_var(self, source_dir: Path, tmp_path: Path) -> None:
         """OWLBEAR_MEMORY_DB_PATH env var sets the DB path when --db-path is absent."""
@@ -130,13 +130,13 @@ class TestFromAC_CLIInterface:
         assert result.returncode == 0, f"CLI failed: {result.stderr}"
         assert (tmp_path / "store" / "memory" / "memory.db").exists()
 
-    def test_unknown_argument_rejected_with_specific_error(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_unknown_argument_rejected_with_specific_error(self, source_dir: Path, db_path: Path) -> None:
         """Unknown CLI args → non-zero exit with the unknown flag mentioned in stderr."""
         result = _run_migrate(
-            "--source-dir", str(source_dir),
-            "--db-path", str(db_path),
+            "--source-dir",
+            str(source_dir),
+            "--db-path",
+            str(db_path),
             "--nonexistent-flag-xyz",
         )
         assert result.returncode != 0
@@ -168,15 +168,11 @@ class TestFromAC_InboxParsing:
         result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         assert result.returncode == 0, result.stderr
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT * FROM memory_entries WHERE source LIKE 'migration:inbox/%'"
-        ).fetchall()
+        rows = conn.execute("SELECT * FROM memory_entries WHERE source LIKE 'migration:inbox/%'").fetchall()
         conn.close()
         assert len(rows) == 5
 
-    def test_heading_extracts_agent_name_as_scope_agent(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_heading_extracts_agent_name_as_scope_agent(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "agent.md").write_text(self.INBOX_CONTENT, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
@@ -189,9 +185,7 @@ class TestFromAC_InboxParsing:
         conn.close()
         assert "myagent" in agents
 
-    def test_heading_extracts_date_for_created_at(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_heading_extracts_date_for_created_at(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "dated.md").write_text(self.INBOX_CONTENT, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
@@ -208,39 +202,29 @@ class TestFromAC_InboxParsing:
         )
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT category FROM memory_entries WHERE source = 'migration:inbox/pf.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT category FROM memory_entries WHERE source = 'migration:inbox/pf.md'").fetchall()
         conn.close()
         assert rows == [("knowledge",)]
 
-    def test_workarounds_applied_maps_to_knowledge(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_workarounds_applied_maps_to_knowledge(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "wa.md").write_text(
             "# Lessons: #1 (a, 2026-01-01)\n\n- workarounds_applied: A workaround\n",
             encoding="utf-8",
         )
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT category FROM memory_entries WHERE source = 'migration:inbox/wa.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT category FROM memory_entries WHERE source = 'migration:inbox/wa.md'").fetchall()
         conn.close()
         assert rows == [("knowledge",)]
 
-    def test_patterns_discovered_maps_to_behavior(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_patterns_discovered_maps_to_behavior(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "pd.md").write_text(
             "# Lessons: #1 (a, 2026-01-01)\n\n- patterns_discovered: A pattern\n",
             encoding="utf-8",
         )
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT category FROM memory_entries WHERE source = 'migration:inbox/pd.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT category FROM memory_entries WHERE source = 'migration:inbox/pd.md'").fetchall()
         conn.close()
         assert rows == [("behavior",)]
 
@@ -251,9 +235,7 @@ class TestFromAC_InboxParsing:
         )
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT category FROM memory_entries WHERE source = 'migration:inbox/ts.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT category FROM memory_entries WHERE source = 'migration:inbox/ts.md'").fetchall()
         conn.close()
         assert rows == [("context",)]
 
@@ -264,30 +246,22 @@ class TestFromAC_InboxParsing:
         )
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT category FROM memory_entries WHERE source = 'migration:inbox/qg.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT category FROM memory_entries WHERE source = 'migration:inbox/qg.md'").fetchall()
         conn.close()
         assert rows == [("context",)]
 
-    def test_unrecognized_label_maps_to_knowledge(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_unrecognized_label_maps_to_knowledge(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "unk.md").write_text(
             "# Lessons: #1 (a, 2026-01-01)\n\n- weird_label: Some content\n",
             encoding="utf-8",
         )
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT category FROM memory_entries WHERE source = 'migration:inbox/unk.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT category FROM memory_entries WHERE source = 'migration:inbox/unk.md'").fetchall()
         conn.close()
         assert rows == [("knowledge",)]
 
-    def test_unrecognized_label_warns_to_stderr(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_unrecognized_label_warns_to_stderr(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "unkw.md").write_text(
             "# Lessons: #1 (a, 2026-01-01)\n\n- weird_label: Some content\n",
             encoding="utf-8",
@@ -305,15 +279,11 @@ class TestFromAC_InboxParsing:
         )
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT confidence FROM memory_entries WHERE source = 'migration:inbox/conf.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT confidence FROM memory_entries WHERE source = 'migration:inbox/conf.md'").fetchall()
         conn.close()
         assert rows == [(0.7,)]
 
-    def test_inbox_entry_approval_state_is_pending(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_inbox_entry_approval_state_is_pending(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "appr.md").write_text(
             "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: Content\n",
             encoding="utf-8",
@@ -326,9 +296,7 @@ class TestFromAC_InboxParsing:
         conn.close()
         assert rows == [("pending",)]
 
-    def test_inbox_entry_source_format_is_migration_inbox_filename(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_inbox_entry_source_format_is_migration_inbox_filename(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "mysrc.md").write_text(
             "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: Content\n",
             encoding="utf-8",
@@ -339,9 +307,7 @@ class TestFromAC_InboxParsing:
         conn.close()
         assert any(r[0] == "migration:inbox/mysrc.md" for r in rows)
 
-    def test_inbox_entry_scope_project_is_null(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_inbox_entry_scope_project_is_null(self, source_dir: Path, db_path: Path) -> None:
         (source_dir / "inbox" / "proj.md").write_text(
             "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: Content\n",
             encoding="utf-8",
@@ -368,17 +334,13 @@ class TestFromAC_EstablishedFileParsing:
         (source_dir / "tool-notes.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE 'migration:tool-notes.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE 'migration:tool-notes.md%'").fetchall()
         conn.close()
         sources = {r[0] for r in rows}
         assert "migration:tool-notes.md#usage-notes" in sources
         assert "migration:tool-notes.md#gotchas" in sources
 
-    def test_pre_heading_content_captured_as_separate_entry(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_pre_heading_content_captured_as_separate_entry(self, source_dir: Path, db_path: Path) -> None:
         """Content before the first ## heading is not silently dropped."""
         content = "# My Tool\n\nIntroductory paragraph.\n\n## Section1\n\nSection content.\n"
         (source_dir / "intro.md").write_text(content, encoding="utf-8")
@@ -390,60 +352,42 @@ class TestFromAC_EstablishedFileParsing:
         conn.close()
         # Should have an entry that contains the introductory text
         all_content = " ".join(r[1] for r in rows)
-        assert "Introductory paragraph" in all_content, (
-            f"Pre-heading content not captured. Entries: {rows}"
-        )
+        assert "Introductory paragraph" in all_content, f"Pre-heading content not captured. Entries: {rows}"
 
-    def test_file_with_no_hash_headings_produces_single_entry(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_file_with_no_hash_headings_produces_single_entry(self, source_dir: Path, db_path: Path) -> None:
         content = "# My Notes\n\nJust some flat notes without any sections.\n"
         (source_dir / "flat-notes.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE 'migration:flat-notes.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE 'migration:flat-notes.md%'").fetchall()
         conn.close()
         assert len(rows) == 1
         assert rows[0][0] == "migration:flat-notes.md"
 
-    def test_no_heading_entry_excludes_title_line(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_no_heading_entry_excludes_title_line(self, source_dir: Path, db_path: Path) -> None:
         """For no-## files, the # title line is excluded from the stored content."""
         content = "# My Notes\n\nActual content to store.\n"
         (source_dir / "notitle.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT content FROM memory_entries WHERE source = 'migration:notitle.md'"
-        ).fetchall()
+        rows = conn.execute("SELECT content FROM memory_entries WHERE source = 'migration:notitle.md'").fetchall()
         conn.close()
         assert rows
         assert "# My Notes" not in rows[0][0]
 
-    def test_inbox_subdir_not_parsed_as_established(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_inbox_subdir_not_parsed_as_established(self, source_dir: Path, db_path: Path) -> None:
         """inbox/ subdirectory files are not re-parsed as established top-level files."""
         inbox_content = "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: Content\n"
         (source_dir / "inbox" / "lessons.md").write_text(inbox_content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
         # All entries from inbox/lessons.md must use the inbox source format (prefix migration:inbox/)
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE '%lessons.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE '%lessons.md%'").fetchall()
         conn.close()
         for (src,) in rows:
-            assert src.startswith("migration:inbox/"), (
-                f"Inbox file was parsed as established: {src!r}"
-            )
+            assert src.startswith("migration:inbox/"), f"Inbox file was parsed as established: {src!r}"
 
-    def test_established_entry_approval_state_is_approved(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_established_entry_approval_state_is_approved(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## Section\n\nEstablished knowledge.\n"
         (source_dir / "est.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
@@ -455,37 +399,27 @@ class TestFromAC_EstablishedFileParsing:
         assert rows
         assert all(r[0] == "approved" for r in rows)
 
-    def test_established_entry_source_has_lowercased_section_slug(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_established_entry_source_has_lowercased_section_slug(self, source_dir: Path, db_path: Path) -> None:
         content = "# File\n\n## My Important Section\n\nContent.\n"
         (source_dir / "slugtest.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE 'migration:slugtest.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE 'migration:slugtest.md%'").fetchall()
         conn.close()
         sources = {r[0] for r in rows}
         assert "migration:slugtest.md#my-important-section" in sources
 
-    def test_established_entry_source_slug_uses_lowercase(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_established_entry_source_slug_uses_lowercase(self, source_dir: Path, db_path: Path) -> None:
         content = "# File\n\n## UPPERCASE HEADING\n\nContent.\n"
         (source_dir / "casetest.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE 'migration:casetest.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE 'migration:casetest.md%'").fetchall()
         conn.close()
         sources = {r[0] for r in rows}
         assert "migration:casetest.md#uppercase-heading" in sources
 
-    def test_established_entry_confidence_is_0_7(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_established_entry_confidence_is_0_7(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## Section\n\nContent.\n"
         (source_dir / "est_conf.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
@@ -497,9 +431,7 @@ class TestFromAC_EstablishedFileParsing:
         assert rows
         assert all(r[0] == 0.7 for r in rows)
 
-    def test_established_entry_scope_project_is_null(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_established_entry_scope_project_is_null(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## Section\n\nContent.\n"
         (source_dir / "est_scope.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
@@ -525,26 +457,20 @@ class TestFromAC_EntryMetadata:
         (source_dir / "uid_test.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT id FROM memory_entries WHERE source LIKE 'migration:uid_test.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT id FROM memory_entries WHERE source LIKE 'migration:uid_test.md%'").fetchall()
         conn.close()
         assert rows
         for (entry_id,) in rows:
             parsed = uuid.UUID(entry_id)
             assert parsed.version == 4
 
-    def test_create_table_ddl_creates_memory_entries_table(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_create_table_ddl_creates_memory_entries_table(self, source_dir: Path, db_path: Path) -> None:
         """DDL runs before insert — table exists after migration even on a fresh DB."""
         content = "# Notes\n\n## Section\n\nContent.\n"
         (source_dir / "ddl_test.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='memory_entries'"
-        ).fetchall()
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='memory_entries'").fetchall()
         conn.close()
         assert tables == [("memory_entries",)]
 
@@ -555,9 +481,7 @@ class TestFromAC_EntryMetadata:
         assert "from owlbear_mcp_memory import server" not in source
         assert "import server" not in source
 
-    def test_entry_updated_at_is_migration_timestamp(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_entry_updated_at_is_migration_timestamp(self, source_dir: Path, db_path: Path) -> None:
         """updated_at field reflects a valid ISO 8601 UTC timestamp set at migration time."""
         content = "# Notes\n\n## Section\n\nContent.\n"
         (source_dir / "ts_test.md").write_text(content, encoding="utf-8")
@@ -583,17 +507,13 @@ class TestFromAC_EntryMetadata:
 class TestFromAC_Idempotency:
     """Idempotency contract."""
 
-    def test_existing_source_not_duplicated_on_second_run(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_existing_source_not_duplicated_on_second_run(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## Section\n\nContent.\n"
         (source_dir / "idem.md").write_text(content, encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE 'migration:idem.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE 'migration:idem.md%'").fetchall()
         conn.close()
         assert len(rows) == 1, f"Expected 1 row; got {len(rows)} (duplicate inserted)"
 
@@ -608,9 +528,7 @@ class TestFromAC_Idempotency:
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
 
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE 'migration:second.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE 'migration:second.md%'").fetchall()
         conn.close()
         assert len(rows) == 1
 
@@ -626,37 +544,27 @@ class TestFromAC_DryRun:
     def test_dry_run_does_not_create_db_file(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## Section\n\nContent.\n"
         (source_dir / "drytest.md").write_text(content, encoding="utf-8")
-        result = _run_migrate(
-            "--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run"
-        )
+        result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run")
         assert result.returncode == 0, result.stderr
         assert not db_path.exists(), "DB must NOT be created when --dry-run is used"
 
     def test_dry_run_prints_source_field(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## My Section\n\nContent.\n"
         (source_dir / "dryfile.md").write_text(content, encoding="utf-8")
-        result = _run_migrate(
-            "--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run"
-        )
+        result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run")
         assert "dryfile.md" in result.stdout
 
     def test_dry_run_prints_category(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## Section\n\nContent.\n"
         (source_dir / "dry_cat.md").write_text(content, encoding="utf-8")
-        result = _run_migrate(
-            "--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run"
-        )
+        result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run")
         assert "knowledge" in result.stdout
 
-    def test_dry_run_content_preview_truncated_at_80_chars(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_dry_run_content_preview_truncated_at_80_chars(self, source_dir: Path, db_path: Path) -> None:
         long_content = "X" * 200
         content = f"# Notes\n\n## Section\n\n{long_content}\n"
         (source_dir / "dry_preview.md").write_text(content, encoding="utf-8")
-        result = _run_migrate(
-            "--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run"
-        )
+        result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run")
         lines = result.stdout.splitlines()
         # Find any line with the long content preview
         preview_parts = [part for line in lines for part in line.split() if "X" in part]
@@ -665,14 +573,10 @@ class TestFromAC_DryRun:
         max_x_run = max(len(p) for p in preview_parts if set(p) == {"X"})
         assert max_x_run <= 80, f"Preview exceeded 80 chars: {max_x_run}"
 
-    def test_dry_run_prints_summary_counts_by_category(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_dry_run_prints_summary_counts_by_category(self, source_dir: Path, db_path: Path) -> None:
         inbox = "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: C1\n- patterns_discovered: C2\n"
         (source_dir / "inbox" / "sum.md").write_text(inbox, encoding="utf-8")
-        result = _run_migrate(
-            "--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run"
-        )
+        result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path), "--dry-run")
         output = result.stdout
         # Summary must list both categories present in the input
         assert "knowledge" in output
@@ -687,18 +591,14 @@ class TestFromAC_DryRun:
 class TestFromAC_FileEncoding:
     """File encoding contract."""
 
-    def test_reads_utf8_bom_file_without_bom_artifact_in_content(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_reads_utf8_bom_file_without_bom_artifact_in_content(self, source_dir: Path, db_path: Path) -> None:
         content = "# Notes\n\n## Section\n\nContent with BOM marker.\n"
         # Write with BOM (utf-8-sig)
         (source_dir / "bom_test.md").write_bytes(content.encode("utf-8-sig"))
         result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         assert result.returncode == 0, result.stderr
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT content FROM memory_entries WHERE source LIKE 'migration:bom_test.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT content FROM memory_entries WHERE source LIKE 'migration:bom_test.md%'").fetchall()
         conn.close()
         assert rows
         for (content_val,) in rows:
@@ -713,9 +613,7 @@ class TestFromAC_FileEncoding:
 class TestFromAC_ErrorHandling:
     """Error handling contract."""
 
-    def test_unparseable_file_does_not_crash_migration(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_unparseable_file_does_not_crash_migration(self, source_dir: Path, db_path: Path) -> None:
         """A file with non-UTF-8 bytes does not abort the migration (exit 0)."""
         (source_dir / "bad_bytes.md").write_bytes(b"\xff\xfe\x00\x01bad binary content")
         result = _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
@@ -728,19 +626,13 @@ class TestFromAC_ErrorHandling:
         assert result.returncode == 0, "Migration must not crash on unparseable file"
         assert result.stderr, "Expected warning on stderr for unparseable file"
 
-    def test_unparseable_file_does_not_prevent_valid_files(
-        self, source_dir: Path, db_path: Path
-    ) -> None:
+    def test_unparseable_file_does_not_prevent_valid_files(self, source_dir: Path, db_path: Path) -> None:
         """Valid files are still imported even when a bad file is present."""
         (source_dir / "bad_bytes3.md").write_bytes(b"\xff\xfe\x00\x01bad binary content")
-        (source_dir / "good.md").write_text(
-            "# Notes\n\n## Good Section\n\nValid content.\n", encoding="utf-8"
-        )
+        (source_dir / "good.md").write_text("# Notes\n\n## Good Section\n\nValid content.\n", encoding="utf-8")
         _run_migrate("--source-dir", str(source_dir), "--db-path", str(db_path))
         conn = sqlite3.connect(str(db_path))
-        rows = conn.execute(
-            "SELECT source FROM memory_entries WHERE source LIKE 'migration:good.md%'"
-        ).fetchall()
+        rows = conn.execute("SELECT source FROM memory_entries WHERE source LIKE 'migration:good.md%'").fetchall()
         conn.close()
         assert len(rows) > 0, "Valid file was not imported after encountering bad file"
 
@@ -921,7 +813,8 @@ class TestBuilderDiscovered:
         inbox = tmp_path / "inbox"
         inbox.mkdir()
         (inbox / "i.md").write_text(
-            "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: X\n", encoding="utf-8",
+            "# Lessons: #1 (a, 2026-01-01)\n\n- problems_faced: X\n",
+            encoding="utf-8",
         )
         (tmp_path / "e.md").write_text("# Notes\n\n## Sec\n\nY.\n", encoding="utf-8")
         entries = _collect_entries(tmp_path, "now")

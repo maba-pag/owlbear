@@ -72,12 +72,8 @@ class TestFromAC_NullSafetyGuards:
             await list_sources(ctx)
 
         msg = str(exc_info.value)
-        assert not msg.startswith("error:"), (
-            f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
-        )
-        assert "source store not available" in msg, (
-            f"Expected 'source store not available' in message, got: {msg!r}"
-        )
+        assert not msg.startswith("error:"), f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
+        assert "source store not available" in msg, f"Expected 'source store not available' in message, got: {msg!r}"
 
     # -- list_entities: graph_store=None --------------------------------------
 
@@ -121,12 +117,8 @@ class TestFromAC_NullSafetyGuards:
             await get_stats(ctx)
 
         msg = str(exc_info.value)
-        assert not msg.startswith("error:"), (
-            f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
-        )
-        assert "graph store not available" in msg, (
-            f"Expected 'graph store not available' in message, got: {msg!r}"
-        )
+        assert not msg.startswith("error:"), f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
+        assert "graph store not available" in msg, f"Expected 'graph store not available' in message, got: {msg!r}"
 
     # -- ingest_document: ingest_pipeline=None --------------------------------
 
@@ -156,9 +148,7 @@ class TestFromAC_NullSafetyGuards:
 
         result = await ingest_document(ctx, text="any text")
 
-        assert not isinstance(result, str) or not result.startswith(
-            "error: ingestion failed:"
-        ), (
+        assert not isinstance(result, str) or not result.startswith("error: ingestion failed:"), (
             "ingest_document with None pipeline must not fall through to the generic "
             f"try/except handler; got: {result!r}"
         )

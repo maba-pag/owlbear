@@ -194,7 +194,9 @@ class TestFromAC_PromptConstants:
         """GRAPH_BUILDER_PROMPT is a non-empty module-level string in owlbear_knowledge.graph_builder."""
         import owlbear_knowledge.graph_builder as graph_builder_mod
 
-        assert hasattr(graph_builder_mod, "GRAPH_BUILDER_PROMPT"), "GRAPH_BUILDER_PROMPT missing from graph_builder module"
+        assert hasattr(graph_builder_mod, "GRAPH_BUILDER_PROMPT"), (
+            "GRAPH_BUILDER_PROMPT missing from graph_builder module"
+        )
         assert isinstance(graph_builder_mod.GRAPH_BUILDER_PROMPT, str)
         assert len(graph_builder_mod.GRAPH_BUILDER_PROMPT) > 0
 
@@ -202,7 +204,9 @@ class TestFromAC_PromptConstants:
         """INTER_DOC_PROMPT is a non-empty module-level string in owlbear_knowledge.inter_doc_graph_builder."""
         import owlbear_knowledge.inter_doc_graph_builder as inter_doc_mod
 
-        assert hasattr(inter_doc_mod, "INTER_DOC_PROMPT"), "INTER_DOC_PROMPT missing from inter_doc_graph_builder module"
+        assert hasattr(inter_doc_mod, "INTER_DOC_PROMPT"), (
+            "INTER_DOC_PROMPT missing from inter_doc_graph_builder module"
+        )
         assert isinstance(inter_doc_mod.INTER_DOC_PROMPT, str)
         assert len(inter_doc_mod.INTER_DOC_PROMPT) > 0
 

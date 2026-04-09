@@ -402,7 +402,9 @@ class TestFromAC_TaskSelector:
         """DECOMP override must not bleed into non-DECOMP tasks in the same batch."""
         normal = _make_task(task_id=1, title="Normal", status="todo", body="- [ ] item")
         decomp = _make_task(
-            task_id=2, title="Decomp", status="todo",
+            task_id=2,
+            title="Decomp",
+            status="todo",
             body="- [ ] item\nNeeds decomposition: too broad",
         )
         result = select_tasks([normal, decomp])
@@ -472,4 +474,3 @@ class TestFromAC_PlannerInit:
         from owlbear.planner import DISPATCH_CAP  # type: ignore[import]
 
         assert isinstance(DISPATCH_CAP, int)
-

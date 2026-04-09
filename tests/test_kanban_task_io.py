@@ -341,9 +341,7 @@ class TestFromAC_WriteTaskFile:
         content = task_file.read_text(encoding="utf-8")
         assert "---" in content  # at minimum frontmatter delimiters present
 
-    def test_write_dashes_in_body_do_not_appear_in_frontmatter_block(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_dashes_in_body_do_not_appear_in_frontmatter_block(self, tmp_path: Path) -> None:
         """write_task with --- in body: the --- markers appear only after closing delimiter."""
         task_file = tmp_path / "99-dashes-in-body.md"
         write_task(task_file, _RECORD_WITH_DASHES_IN_BODY)
@@ -669,9 +667,7 @@ class TestFromAC_FileNamingConvention:
     def test_filename_follows_id_dash_slug_dot_md_pattern(self) -> None:
         """make_task_filename returns a string matching '<int>-<slug>.md'."""
         filename = make_task_filename(42, "My Task Title")
-        assert re.fullmatch(r"\d+-[a-z0-9-]+\.md", filename), (
-            f"Filename {filename!r} does not match '<int>-<slug>.md'"
-        )
+        assert re.fullmatch(r"\d+-[a-z0-9-]+\.md", filename), f"Filename {filename!r} does not match '<int>-<slug>.md'"
 
     def test_filename_starts_with_task_id(self) -> None:
         """make_task_filename prefixes the filename with the task id."""
@@ -695,9 +691,7 @@ class TestFromAC_FileNamingConvention:
         """Slug portion of make_task_filename contains only [a-z0-9-] chars."""
         filename = make_task_filename(55, "Task: (with) [special] chars!")
         slug_part = filename[len("55-") : -len(".md")]
-        assert re.fullmatch(r"[a-z0-9-]+", slug_part), (
-            f"Slug portion {slug_part!r} contains illegal chars"
-        )
+        assert re.fullmatch(r"[a-z0-9-]+", slug_part), f"Slug portion {slug_part!r} contains illegal chars"
 
 
 # ===========================================================================
@@ -769,9 +763,7 @@ class TestFromAC_AtomicWrites:
             f"Temp file {observed_src[0]} is not in the same directory as {task_file}"
         )
 
-    def test_write_task_original_preserved_when_replace_fails(
-        self, tmp_path: Path
-    ) -> None:
+    def test_write_task_original_preserved_when_replace_fails(self, tmp_path: Path) -> None:
         """If os.replace fails, the original task file content must remain intact.
 
         Atomic guarantee: writing fails before touching the destination.
@@ -784,8 +776,9 @@ class TestFromAC_AtomicWrites:
         )
         task_file.write_text(original, encoding="utf-8")
 
-        with patch("os.replace", side_effect=OSError("simulated disk full")), pytest.raises(
-            OSError, match="simulated disk full"
+        with (
+            patch("os.replace", side_effect=OSError("simulated disk full")),
+            pytest.raises(OSError, match="simulated disk full"),
         ):
             write_task(task_file, _MINIMAL_RECORD)
 

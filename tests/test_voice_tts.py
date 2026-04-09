@@ -75,12 +75,14 @@ class TestFromAC_TTSBackendProtocol:
     def test_speak_signature_text_param(self) -> None:
         """AC1: speak(text: str) -> None — text parameter must be present."""
         import inspect
+
         sig = inspect.signature(TTSBackend.speak)
         assert "text" in sig.parameters
 
     def test_close_no_params(self) -> None:
         """AC1: close() -> None — no parameters beyond self."""
         import inspect
+
         sig = inspect.signature(TTSBackend.close)
         params = [p for p in sig.parameters if p != "self"]
         assert params == []
@@ -106,7 +108,9 @@ class TestFromAC_TTSBackendProtocol:
 class TestFromAC_KokoroTTSBackend:
     """KokoroTTSBackend must use lazy init, iterate generator, play via sounddevice."""
 
-    def _make_backend(self, mock_pipeline_cls: MagicMock, voice: str = "af_heart", speed: float = 1.0) -> KokoroTTSBackend:
+    def _make_backend(
+        self, mock_pipeline_cls: MagicMock, voice: str = "af_heart", speed: float = 1.0
+    ) -> KokoroTTSBackend:
         """Instantiate backend with injected mock KPipeline class."""
         return KokoroTTSBackend(voice=voice, speed=speed, pipeline_cls=mock_pipeline_cls)
 
@@ -279,6 +283,7 @@ class TestFromAC_ImportTimeFlag:
     def test_kokoro_available_is_module_level(self) -> None:
         """AC4: _kokoro_available must be accessible directly from owlbear_voice.tts."""
         import owlbear_voice.tts as tts_module
+
         assert hasattr(tts_module, "_kokoro_available")
 
     def test_kokoro_available_false_when_kokoro_not_installed(self) -> None:
@@ -291,6 +296,7 @@ class TestFromAC_ImportTimeFlag:
         sys.modules["kokoro"] = None  # type: ignore[assignment]  # block import
         try:
             import owlbear_voice.tts as tts_mod
+
             importlib.reload(tts_mod)
             assert tts_mod._kokoro_available is False
         finally:
@@ -360,9 +366,7 @@ class TestFromAC_Factory:
 
         assert isinstance(backend, Pyttsx3TTSBackend)
 
-    def test_factory_logs_warning_on_kokoro_init_failure(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_factory_logs_warning_on_kokoro_init_failure(self, caplog: pytest.LogCaptureFixture) -> None:
         """AC8: when Kokoro init fails, factory must emit a warning log."""
         with (
             patch("owlbear_voice.tts._kokoro_available", new=True),
@@ -374,14 +378,12 @@ class TestFromAC_Factory:
         ):
             create_tts_backend(voice="af_heart", speed=1.0)
 
-        assert any(
-            record.levelno >= logging.WARNING
-            for record in caplog.records
-        )
+        assert any(record.levelno >= logging.WARNING for record in caplog.records)
 
     def test_factory_accepts_voice_and_speed_params(self) -> None:
         """AC5: create_tts_backend(voice, speed) must accept both parameters."""
         import inspect
+
         sig = inspect.signature(create_tts_backend)
         assert "voice" in sig.parameters
         assert "speed" in sig.parameters

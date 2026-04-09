@@ -167,9 +167,7 @@ class TestFromAC_SearchKnowledgeScopes:
     async def test_scoped_search_returns_correct_result_format(self) -> None:
         """search_knowledge with scopes returns list of SearchResult dicts."""
         qs = AsyncMock()
-        qs.query = AsyncMock(
-            return_value=[_make_search_result(title="Doc A", score=0.88, snippet="relevant")]
-        )
+        qs.query = AsyncMock(return_value=[_make_search_result(title="Doc A", score=0.88, snippet="relevant")])
         ctx = _make_ctx(query_service=qs)
 
         result = await search_knowledge(ctx, query="q", scopes=["work"])

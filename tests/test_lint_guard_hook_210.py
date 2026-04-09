@@ -101,9 +101,7 @@ def _run_hook(stdin_data: dict, *, timeout: int = 30) -> tuple[int, dict]:
 def _extract_frontmatter(content: str) -> str:
     """Return the YAML text between the first --- ... --- block."""
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-    assert match is not None, (
-        "No valid YAML frontmatter (--- ... ---) found in builder.agent.md"
-    )
+    assert match is not None, "No valid YAML frontmatter (--- ... ---) found in builder.agent.md"
     return match.group(1)
 
 
@@ -118,18 +116,13 @@ class TestFromAC_ScriptExists:
     def test_lint_changed_ps1_exists(self) -> None:
         """AC1a: scripts/hooks/lint-changed.ps1 must exist on disk."""
         assert _SCRIPT_PATH.exists(), (
-            f"lint-changed.ps1 not found at {_SCRIPT_PATH}. "
-            "Builder must create scripts/hooks/lint-changed.ps1."
+            f"lint-changed.ps1 not found at {_SCRIPT_PATH}. Builder must create scripts/hooks/lint-changed.ps1."
         )
 
     def test_script_is_nonempty(self) -> None:
         """AC1b: script file must have content — an empty file is not a valid hook."""
-        assert _SCRIPT_PATH.exists(), (
-            f"lint-changed.ps1 not found at {_SCRIPT_PATH}."
-        )
-        assert _SCRIPT_PATH.stat().st_size > 0, (
-            "lint-changed.ps1 exists but is empty — builder must implement it."
-        )
+        assert _SCRIPT_PATH.exists(), f"lint-changed.ps1 not found at {_SCRIPT_PATH}."
+        assert _SCRIPT_PATH.stat().st_size > 0, "lint-changed.ps1 exists but is empty — builder must implement it."
 
 
 # ---------------------------------------------------------------------------
@@ -168,9 +161,7 @@ class TestFromAC_LintGuardBehavior:
         """AC3b: create_file with a ruff-clean file — must return {}."""
         clean_file = tmp_path / "clean1.py"
         clean_file.write_text(_CLEAN_CONTENT, encoding="utf-8")
-        _, output = _run_hook(
-            {"tool_name": "create_file", "tool_input": {"filePath": str(clean_file)}}
-        )
+        _, output = _run_hook({"tool_name": "create_file", "tool_input": {"filePath": str(clean_file)}})
         assert output == {}
 
     def test_replace_string_in_file_clean_returns_empty_json(self, tmp_path: Path) -> None:
@@ -203,17 +194,11 @@ class TestFromAC_LintGuardBehavior:
         """AC3a: create_file with ruff errors — must return {"systemMessage": "..."}."""
         bad_file = tmp_path / "bad1.py"
         bad_file.write_text(_LINT_ERROR_CONTENT, encoding="utf-8")
-        _, output = _run_hook(
-            {"tool_name": "create_file", "tool_input": {"filePath": str(bad_file)}}
-        )
-        assert "systemMessage" in output, (
-            f"Expected {{'systemMessage': '...'}}, got {output!r}"
-        )
+        _, output = _run_hook({"tool_name": "create_file", "tool_input": {"filePath": str(bad_file)}})
+        assert "systemMessage" in output, f"Expected {{'systemMessage': '...'}}, got {output!r}"
         assert output["systemMessage"], "systemMessage must be non-empty ruff output"
 
-    def test_replace_string_in_file_lint_errors_returns_system_message(
-        self, tmp_path: Path
-    ) -> None:
+    def test_replace_string_in_file_lint_errors_returns_system_message(self, tmp_path: Path) -> None:
         """AC3c: replace_string_in_file with ruff errors — must return {"systemMessage": "..."}."""
         bad_file = tmp_path / "bad2.py"
         bad_file.write_text(_LINT_ERROR_CONTENT, encoding="utf-8")
@@ -223,9 +208,7 @@ class TestFromAC_LintGuardBehavior:
                 "tool_input": {"filePath": str(bad_file)},
             }
         )
-        assert "systemMessage" in output, (
-            f"Expected {{'systemMessage': '...'}}, got {output!r}"
-        )
+        assert "systemMessage" in output, f"Expected {{'systemMessage': '...'}}, got {output!r}"
 
     def test_multi_replace_lint_errors_returns_system_message(self, tmp_path: Path) -> None:
         """AC3e: multi_replace_string_in_file with ruff errors — must return {"systemMessage": "..."}."""
@@ -237,9 +220,7 @@ class TestFromAC_LintGuardBehavior:
                 "tool_input": {"replacements": [{"filePath": str(bad_file)}]},
             }
         )
-        assert "systemMessage" in output, (
-            f"Expected {{'systemMessage': '...'}}, got {output!r}"
-        )
+        assert "systemMessage" in output, f"Expected {{'systemMessage': '...'}}, got {output!r}"
 
     # --- AC5: ruff failure (file missing) → {} ---
 
@@ -258,30 +239,20 @@ class TestFromAC_LintGuardBehavior:
         """AC6a: exit code must never be 2 — clean file path."""
         clean_file = tmp_path / "clean4.py"
         clean_file.write_text(_CLEAN_CONTENT, encoding="utf-8")
-        code, _ = _run_hook(
-            {"tool_name": "create_file", "tool_input": {"filePath": str(clean_file)}}
-        )
-        assert code != 2, (
-            f"Script must never exit with code 2 (non-blocking design), got {code}"
-        )
+        code, _ = _run_hook({"tool_name": "create_file", "tool_input": {"filePath": str(clean_file)}})
+        assert code != 2, f"Script must never exit with code 2 (non-blocking design), got {code}"
 
     def test_exit_code_never_2_for_lint_errors(self, tmp_path: Path) -> None:
         """AC6b: exit code must never be 2 — lint errors must use systemMessage, not exit 2."""
         bad_file = tmp_path / "bad4.py"
         bad_file.write_text(_LINT_ERROR_CONTENT, encoding="utf-8")
-        code, _ = _run_hook(
-            {"tool_name": "create_file", "tool_input": {"filePath": str(bad_file)}}
-        )
-        assert code != 2, (
-            f"Lint errors must not block builder via exit code 2 (non-blocking), got {code}"
-        )
+        code, _ = _run_hook({"tool_name": "create_file", "tool_input": {"filePath": str(bad_file)}})
+        assert code != 2, f"Lint errors must not block builder via exit code 2 (non-blocking), got {code}"
 
     def test_exit_code_never_2_for_non_edit_tool(self) -> None:
         """AC6c: exit code must never be 2 — non-edit tool path."""
         code, _ = _run_hook({"tool_name": "read_file", "tool_input": {}})
-        assert code != 2, (
-            f"Script must never exit with code 2 for non-edit tools, got {code}"
-        )
+        assert code != 2, f"Script must never exit with code 2 for non-edit tools, got {code}"
 
     def test_output_is_always_valid_json(self, tmp_path: Path) -> None:
         """AC6d: stdout must always be parseable JSON (empty {} or {"systemMessage": "..."})."""
@@ -295,9 +266,7 @@ class TestFromAC_LintGuardBehavior:
         # Invoke directly to check raw stdout without the _run_hook JSON fallback
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
-            input=json.dumps(
-                {"tool_name": "create_file", "tool_input": {"filePath": str(bad_file)}}
-            ),
+            input=json.dumps({"tool_name": "create_file", "tool_input": {"filePath": str(bad_file)}}),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -309,9 +278,7 @@ class TestFromAC_LintGuardBehavior:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON: {stdout!r}\nError: {exc}"
-            )
+            pytest.fail(f"Script stdout is not valid JSON: {stdout!r}\nError: {exc}")
         assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
 
@@ -331,32 +298,25 @@ class TestFromAC_BuilderAgentHooks:
         """AC7: builder.agent.md frontmatter must contain a hooks: key."""
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "builder.agent.md frontmatter is missing the 'hooks:' key. "
-            "Builder must add a PostToolUse hooks section."
+            "builder.agent.md frontmatter is missing the 'hooks:' key. Builder must add a PostToolUse hooks section."
         )
 
     def test_frontmatter_has_posttooluse_entry(self) -> None:
         """AC8a: hooks: section must contain a PostToolUse entry."""
         fm = self._frontmatter()
         # hooks: must be present and PostToolUse must appear somewhere after it
-        assert "PostToolUse" in fm, (
-            "builder.agent.md frontmatter hooks: section is missing a PostToolUse entry."
-        )
+        assert "PostToolUse" in fm, "builder.agent.md frontmatter hooks: section is missing a PostToolUse entry."
 
     def test_posttooluse_hook_type_is_command(self) -> None:
         """AC8b: PostToolUse hook must specify type: command."""
         fm = self._frontmatter()
         # 'type: command' must appear in the YAML (within hooks context)
-        assert re.search(r"type:\s*command", fm), (
-            "builder.agent.md PostToolUse hook must have 'type: command'"
-        )
+        assert re.search(r"type:\s*command", fm), "builder.agent.md PostToolUse hook must have 'type: command'"
 
     def test_posttooluse_hook_command_references_lint_changed(self) -> None:
         """AC8c: PostToolUse hook command: value must reference lint-changed.ps1."""
         fm = self._frontmatter()
-        assert "lint-changed.ps1" in fm, (
-            "builder.agent.md PostToolUse hook command must point to lint-changed.ps1"
-        )
+        assert "lint-changed.ps1" in fm, "builder.agent.md PostToolUse hook command must point to lint-changed.ps1"
 
     def test_frontmatter_no_duplicate_keys(self) -> None:
         """AC9: builder.agent.md frontmatter must have no duplicate YAML keys.
@@ -378,9 +338,7 @@ class TestFromAC_BuilderAgentHooks:
             if key in seen:
                 duplicates.append(key)
             seen.add(key)
-        assert not duplicates, (
-            f"Duplicate YAML keys found in builder.agent.md frontmatter: {duplicates}"
-        )
+        assert not duplicates, f"Duplicate YAML keys found in builder.agent.md frontmatter: {duplicates}"
 
     def test_frontmatter_is_parseable_yaml_with_posttooluse_hook(self) -> None:
         """AC10: builder.agent.md frontmatter must parse as valid YAML after hook addition.
@@ -394,12 +352,8 @@ class TestFromAC_BuilderAgentHooks:
         try:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
-            pytest.fail(
-                f"builder.agent.md frontmatter is not valid YAML: {exc}"
-            )
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+            pytest.fail(f"builder.agent.md frontmatter is not valid YAML: {exc}")
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         # Compound check: hooks must be present for AC10 to be meaningful
         assert "hooks" in parsed, (
             "Frontmatter parsed successfully but is missing 'hooks:' key — "
@@ -407,6 +361,5 @@ class TestFromAC_BuilderAgentHooks:
         )
         hooks = parsed["hooks"]
         assert "PostToolUse" in hooks, (
-            "hooks: section is missing a PostToolUse entry — "
-            "builder must add the PostToolUse lint guard hook."
+            "hooks: section is missing a PostToolUse entry — builder must add the PostToolUse lint guard hook."
         )

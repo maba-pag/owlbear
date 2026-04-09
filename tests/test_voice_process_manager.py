@@ -166,9 +166,7 @@ class TestFromAC_Spawn:  # noqa: N801
 
         sig = inspect.signature(VoiceProcessManager.__init__)
         param = sig.parameters["init_timeout"]
-        assert param.default == 30.0, (
-            f"init_timeout default must be 30.0 per AC; got {param.default!r}"
-        )
+        assert param.default == 30.0, f"init_timeout default must be 30.0 per AC; got {param.default!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -304,9 +302,11 @@ class TestFromAC_InitHandshake:  # noqa: N801
             recorded_timeouts.append(timeout)
             raise TimeoutError  # simulate timeout expiry
 
-        with _patch_spawn(proc), patch(
-            f"{_MODULE}.asyncio.wait_for", new=_timed_out_wait_for
-        ), pytest.raises(VoiceInitTimeout):
+        with (
+            _patch_spawn(proc),
+            patch(f"{_MODULE}.asyncio.wait_for", new=_timed_out_wait_for),
+            pytest.raises(VoiceInitTimeout),
+        ):
             async with VoiceProcessManager(_COMMAND, init_timeout=0.5):
                 pass
 
@@ -556,8 +556,9 @@ class TestFromAC_RestartBudget:  # noqa: N801
         # Proc completes init (ready), then crashes (EOF) → restart_count = 1 > 0
         proc = _make_proc(lines=[READY_LINE, EOF])
         spawn_mock = AsyncMock(side_effect=[proc, *[_make_proc() for _ in range(5)]])
-        with patch(f"{_MODULE}.asyncio.create_subprocess_exec", new=spawn_mock), pytest.raises(
-            VoiceRestartBudgetExhausted
+        with (
+            patch(f"{_MODULE}.asyncio.create_subprocess_exec", new=spawn_mock),
+            pytest.raises(VoiceRestartBudgetExhausted),
         ):
             async with VoiceProcessManager(_COMMAND, max_restarts=0):
                 await asyncio.sleep(0.2)
@@ -565,6 +566,7 @@ class TestFromAC_RestartBudget:  # noqa: N801
     @pytest.mark.asyncio(loop_scope="function")
     async def test_restart_counter_resets_after_successful_init(self) -> None:
         """Counter resets to 0 after each successful init; extends effective lifetime."""
+
         # max_restarts=1: without reset, would fail on 2nd crash.
         # With reset after each ready, should survive 3 restarts total.
         def _crash_proc() -> MagicMock:
@@ -576,7 +578,7 @@ class TestFromAC_RestartBudget:  # noqa: N801
                 _crash_proc(),  # initial: ok, crash → restart 1 (counter was 0 → resets after ok)
                 _crash_proc(),  # restart 1: ok, crash → restart 2 (counter resets again)
                 _crash_proc(),  # restart 2: ok, crash → restart 3 (ok resets)
-                stable_proc,    # restart 3: stays up
+                stable_proc,  # restart 3: stays up
             ]
         )
         with patch(f"{_MODULE}.asyncio.create_subprocess_exec", new=spawn_mock):

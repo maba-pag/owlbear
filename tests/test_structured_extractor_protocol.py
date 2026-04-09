@@ -103,18 +103,16 @@ class TestFromAC_AsyncStructuredExtractorProtocol:
 
     def test_extract_is_coroutine_function(self) -> None:
         """StructuredExtractor.extract() must be an async coroutine function."""
-        assert inspect.iscoroutinefunction(
-            StructuredExtractor.extract
-        ), "StructuredExtractor.extract() is not async — protocol must declare 'async def extract'"
+        assert inspect.iscoroutinefunction(StructuredExtractor.extract), (
+            "StructuredExtractor.extract() is not async — protocol must declare 'async def extract'"
+        )
 
     def test_extract_not_a_plain_synchronous_method(self) -> None:
         """extract() must NOT be a plain sync function — the protocol contract requires async."""
         is_plain_sync = inspect.isfunction(StructuredExtractor.extract) and not inspect.iscoroutinefunction(
             StructuredExtractor.extract
         )
-        assert not is_plain_sync, (
-            "StructuredExtractor.extract() is a plain sync function — must be declared async"
-        )
+        assert not is_plain_sync, "StructuredExtractor.extract() is a plain sync function — must be declared async"
 
     def test_asyncmock_spec_exposes_async_extract_when_protocol_is_async(self) -> None:
         """AsyncMock(spec=StructuredExtractor) must produce an AsyncMock for the extract attribute.

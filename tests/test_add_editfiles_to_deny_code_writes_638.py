@@ -1,4 +1,4 @@
-﻿"""Tests for task #638: Add editFiles to deny-code-writes.ps1 write-tool gate.
+"""Tests for task #638: Add editFiles to deny-code-writes.ps1 write-tool gate.
 
 Contract-level tests for:
 1. .owlbear/scratch/editfiles-schema-*.json  -- captured schema verification artifact (AC1)
@@ -134,13 +134,8 @@ class TestFromAC_EditFilesSchemaArtifact:
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Schema artifact {artifact.name} is not valid JSON: {exc}\n"
-                f"Content: {content!r}"
-            )
-        assert isinstance(parsed, dict), (
-            f"Schema artifact must be a JSON object, got: {type(parsed)}"
-        )
+            pytest.fail(f"Schema artifact {artifact.name} is not valid JSON: {exc}\nContent: {content!r}")
+        assert isinstance(parsed, dict), f"Schema artifact must be a JSON object, got: {type(parsed)}"
 
 
 # ---------------------------------------------------------------------------
@@ -156,10 +151,12 @@ class TestFromAC_EditFilesPathExtraction:
 
     def test_editfiles_string_element_serve_path_is_denied(self) -> None:
         """AC2-deny1: editFiles with files=["serve/..."] must be denied."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["serve/mcp-kanban/server.py"]},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["serve/mcp-kanban/server.py"]},
+            }
+        )
         assert _is_denied(output), (
             f"editFiles with serve/ path must be denied, got: {output!r}. "
             "Builder must add 'editFiles' to write-tools array and extract tool_input.files[*]."
@@ -169,71 +166,72 @@ class TestFromAC_EditFilesPathExtraction:
 
     def test_editfiles_string_element_tests_path_is_denied(self) -> None:
         """AC2-deny2: editFiles with files=["tests/..."] must be denied."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["tests/test_evil.py"]},
-        })
-        assert _is_denied(output), (
-            f"editFiles with tests/ path must be denied, got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["tests/test_evil.py"]},
+            }
         )
+        assert _is_denied(output), f"editFiles with tests/ path must be denied, got: {output!r}."
 
     # --- AC2-allow1: string element, allowed path (AC4 allow case) ---
 
     def test_editfiles_string_element_allowed_path_returns_empty(self) -> None:
         """AC2-allow1 / AC4 allow: editFiles with files=["README.md"] must return {}."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["README.md"]},
-        })
-        assert output == {}, (
-            f"editFiles with allowed path must return {{}}, got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["README.md"]},
+            }
         )
+        assert output == {}, f"editFiles with allowed path must return {{}}, got: {output!r}."
 
     # --- AC2-empty: empty files array ---
 
     def test_editfiles_empty_files_array_returns_empty(self) -> None:
         """AC2-empty: editFiles with files=[] has no paths to check -- must return {}."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": []},
-        })
-        assert output == {}, (
-            f"editFiles with empty files array must return {{}} (nothing to deny), "
-            f"got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": []},
+            }
         )
+        assert output == {}, f"editFiles with empty files array must return {{}} (nothing to deny), got: {output!r}."
 
     # --- AC2-multi-allow: multiple files, all allowed ---
 
     def test_editfiles_multiple_all_allowed_returns_empty(self) -> None:
         """AC2-multi-allow: editFiles with all allowed paths must return {}."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["README.md", "share/skills/h-pytest-and-linting/SKILL.md"]},
-        })
-        assert output == {}, (
-            f"editFiles with all allowed paths must return {{}}, got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["README.md", "share/skills/h-pytest-and-linting/SKILL.md"]},
+            }
         )
+        assert output == {}, f"editFiles with all allowed paths must return {{}}, got: {output!r}."
 
     # --- AC2-mixed: any denied path denies whole call ---
 
     def test_editfiles_mixed_files_any_denied_is_denied(self) -> None:
         """AC2-mixed: editFiles with one denied path in files[] must deny the whole call."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["README.md", "serve/mcp-kanban/server.py"]},
-        })
-        assert _is_denied(output), (
-            f"editFiles with any denied path must deny the whole call, got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["README.md", "serve/mcp-kanban/server.py"]},
+            }
         )
+        assert _is_denied(output), f"editFiles with any denied path must deny the whole call, got: {output!r}."
 
     # --- AC2-obj-deny: object element (defensive form), denied path ---
 
     def test_editfiles_object_element_denied_path_is_denied(self) -> None:
         """AC2-obj-deny: editFiles files=[{filePath:"serve/..."}] denied (defensive form)."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": [{"filePath": "serve/mcp-kanban/server.py"}]},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": [{"filePath": "serve/mcp-kanban/server.py"}]},
+            }
+        )
         assert _is_denied(output), (
             f"editFiles with object-element denied path must be denied, got: {output!r}. "
             "Builder must handle both string and object-with-filePath elements (AC2 defensive)."
@@ -243,34 +241,36 @@ class TestFromAC_EditFilesPathExtraction:
 
     def test_editfiles_object_element_allowed_path_returns_empty(self) -> None:
         """AC2-obj-allow: editFiles files=[{filePath:"README.md"}] -> {} (defensive form)."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": [{"filePath": "README.md"}]},
-        })
-        assert output == {}, (
-            f"editFiles with object-element allowed path must return {{}}, got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": [{"filePath": "README.md"}]},
+            }
         )
+        assert output == {}, f"editFiles with object-element allowed path must return {{}}, got: {output!r}."
 
     # --- AC2-no-files: missing 'files' key ---
 
     def test_editfiles_missing_files_key_returns_empty(self) -> None:
         """AC2-no-files: editFiles with no 'files' key in tool_input -> {} (pass-through)."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"content": "some content"},
-        })
-        assert output == {}, (
-            f"editFiles with no 'files' key must return {{}} (pass-through), got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"content": "some content"},
+            }
         )
+        assert output == {}, f"editFiles with no 'files' key must return {{}} (pass-through), got: {output!r}."
 
     # --- AC2-bslash: backslash path normalization ---
 
     def test_editfiles_backslash_path_normalized_and_denied(self) -> None:
         r"""AC2-bslash: editFiles files=["serve\foo.py"] normalized to serve/ -> denied."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["serve\\mcp-kanban\\server.py"]},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["serve\\mcp-kanban\\server.py"]},
+            }
+        )
         assert _is_denied(output), (
             r"editFiles with backslash serve\ path must be denied after normalization, "
             f"got: {output!r}."
@@ -280,22 +280,24 @@ class TestFromAC_EditFilesPathExtraction:
 
     def test_editfiles_dot_slash_path_stripped_and_denied(self) -> None:
         """AC2-dotslash: editFiles files=["./serve/foo.py"] stripped to serve/ -> denied."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["./serve/mcp-kanban/server.py"]},
-        })
-        assert _is_denied(output), (
-            f"editFiles with ./serve/ path must be denied after ./ stripping, got: {output!r}."
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["./serve/mcp-kanban/server.py"]},
+            }
         )
+        assert _is_denied(output), f"editFiles with ./serve/ path must be denied after ./ stripping, got: {output!r}."
 
     # --- AC2-camel: camelCase tool_name is gated ---
 
     def test_editfiles_camelcase_tool_name_is_gated(self) -> None:
         """AC2-camel: tool_name="editFiles" (camelCase) must trigger the path guard."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["serve/mcp-kanban/server.py"]},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["serve/mcp-kanban/server.py"]},
+            }
+        )
         assert _is_denied(output), (
             f"tool_name='editFiles' (camelCase) must be gated; got: {output!r}. "
             "Builder must use exact camelCase string 'editFiles' in the write-tools array."
@@ -305,13 +307,14 @@ class TestFromAC_EditFilesPathExtraction:
 
     def test_editfiles_lowercase_tool_name_not_gated(self) -> None:
         """AC2-lower: tool_name="editfiles" (lowercase) passes through -- exact match only."""
-        _, output = _run_hook({
-            "tool_name": "editfiles",
-            "tool_input": {"files": ["serve/mcp-kanban/server.py"]},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "editfiles",
+                "tool_input": {"files": ["serve/mcp-kanban/server.py"]},
+            }
+        )
         assert output == {}, (
-            f"tool_name='editfiles' (wrong case) must pass through (exact-match gate), "
-            f"got: {output!r}."
+            f"tool_name='editfiles' (wrong case) must pass through (exact-match gate), got: {output!r}."
         )
 
 
@@ -326,6 +329,7 @@ class TestFromAC_DocWriterEditFilesToolEntry:
     def _frontmatter(self) -> str:
         assert _AGENT_PATH.exists(), f"doc-writer.agent.md not found at {_AGENT_PATH}"
         import re  # noqa: PLC0415
+
         content = _AGENT_PATH.read_text(encoding="utf-8")
         match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
         assert match is not None, "No valid YAML frontmatter in doc-writer.agent.md"

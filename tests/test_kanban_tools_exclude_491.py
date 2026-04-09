@@ -30,6 +30,7 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_server() -> MagicMock:
     """Return a MagicMock mimicking a FastMCP server with remove_tool."""
     server = MagicMock()

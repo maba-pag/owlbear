@@ -1,4 +1,4 @@
-﻿"""Failing tests for task #618: import/export scope transfer for project-local knowledge.
+"""Failing tests for task #618: import/export scope transfer for project-local knowledge.
 
 Tests the contract for:
 - owlbear_knowledge.scope_transfer: import_scope / export_scope core functions
@@ -65,8 +65,7 @@ def _seed_source(
     edge_id = f"edge-{doc_id}"
 
     conn.execute(
-        "INSERT INTO documents (id, title, content, metadata, created_at, scope) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
         (doc_id, "Test Doc", content, "{}", _TIMESTAMP, scope),
     )
     conn.execute(
@@ -223,9 +222,7 @@ class TestFromAC_ImportScopeHappyPath:  # noqa: N801
         src = _make_source_file(tmp_path)
         dest = _make_dest_conn()
         import_scope(src, "owlbear", dest)
-        docs = dest.execute(
-            "SELECT scope FROM documents WHERE scope = 'project:owlbear'"
-        ).fetchall()
+        docs = dest.execute("SELECT scope FROM documents WHERE scope = 'project:owlbear'").fetchall()
         assert len(docs) >= 1
         assert all(row[0] == "project:owlbear" for row in docs)
 
@@ -238,9 +235,7 @@ class TestFromAC_ImportScopeHappyPath:  # noqa: N801
         dest = _make_dest_conn()
         import_scope(src, "proj", dest)
         dest_doc_ids = {row[0] for row in dest.execute("SELECT id FROM documents").fetchall()}
-        assert not dest_doc_ids & original_ids, (
-            "Original source IDs must not be reused in dest -- new UUIDs required"
-        )
+        assert not dest_doc_ids & original_ids, "Original source IDs must not be reused in dest -- new UUIDs required"
 
     def test_import_returns_string_result(self, tmp_path: Path) -> None:
         """import_scope returns a string (success message or summary)."""
@@ -289,9 +284,7 @@ class TestFromAC_ImportScopeDedup:  # noqa: N801
         count_first = _count_rows(dest, "documents", scope="project:proj")
         import_scope(src, "proj", dest)
         count_second = _count_rows(dest, "documents", scope="project:proj")
-        assert count_second == count_first, (
-            "Re-importing same source must not create duplicate documents"
-        )
+        assert count_second == count_first, "Re-importing same source must not create duplicate documents"
 
     def test_different_content_imported(self, tmp_path: Path) -> None:
         """A document with different content IS imported -- no false-positive dedup."""
@@ -336,9 +329,7 @@ class TestFromAC_ImportScopeDedup:  # noqa: N801
         import_scope(src1, "proj", dest)
         import_scope(src2, "proj", dest)
         count = _count_rows(dest, "documents", scope="project:proj")
-        assert count == 1, (
-            "Documents with identical content hash: second import must be skipped (dedup)"
-        )
+        assert count == 1, "Documents with identical content hash: second import must be skipped (dedup)"
 
     def test_dedup_skip_does_not_add_orphan_entities(self, tmp_path: Path) -> None:
         """When a document is deduped, its child entities are also not re-imported."""
@@ -350,9 +341,7 @@ class TestFromAC_ImportScopeDedup:  # noqa: N801
         count_first = _count_rows(dest, "entities", scope="project:proj")
         import_scope(src, "proj", dest)
         count_second = _count_rows(dest, "entities", scope="project:proj")
-        assert count_second == count_first, (
-            "Duplicate entity rows must not accumulate when parent document is deduped"
-        )
+        assert count_second == count_first, "Duplicate entity rows must not accumulate when parent document is deduped"
 
 
 # ===========================================================================
@@ -382,9 +371,7 @@ class TestFromAC_ExportScope:  # noqa: N801
         out = tmp_path / "export.db"
         export_scope("project:myapp", out, src_conn)
         exported = sqlite3.connect(str(out))
-        row = exported.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
-        ).fetchone()
+        row = exported.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'").fetchone()
         exported.close()
         assert row is not None, "Exported file must have schema_version table"
 
@@ -506,9 +493,7 @@ class TestFromAC_ImportScopeSandboxing:  # noqa: N801
         traversal = tmp_path / ".." / ".." / "etc" / "passwd"
         dest = _make_dest_conn()
         result = import_scope(traversal, "proj", dest, workspace_root=tmp_path)
-        assert result.startswith("error: "), (
-            f"Path traversal must return error: prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Path traversal must return error: prefix, got: {result!r}"
 
     def test_null_byte_in_path_returns_error_prefix(self, tmp_path: Path) -> None:
         """Paths containing null bytes are rejected with error: prefix."""
@@ -517,9 +502,7 @@ class TestFromAC_ImportScopeSandboxing:  # noqa: N801
         null_path = tmp_path / "evil\x00path.db"
         dest = _make_dest_conn()
         result = import_scope(null_path, "proj", dest, workspace_root=tmp_path)
-        assert result.startswith("error: "), (
-            f"Null-byte path must return error: prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Null-byte path must return error: prefix, got: {result!r}"
 
     def test_valid_path_within_workspace_root_is_accepted(self, tmp_path: Path) -> None:
         """A valid path inside workspace_root does NOT trigger sandbox rejection."""
@@ -528,9 +511,7 @@ class TestFromAC_ImportScopeSandboxing:  # noqa: N801
         src = _make_source_file(tmp_path)
         dest = _make_dest_conn()
         result = import_scope(src, "proj", dest, workspace_root=tmp_path)
-        assert not result.startswith("error: "), (
-            f"Valid path must not be sandboxed, got: {result!r}"
-        )
+        assert not result.startswith("error: "), f"Valid path must not be sandboxed, got: {result!r}"
 
 
 # ===========================================================================
@@ -555,9 +536,7 @@ class TestFromAC_ImportScopeAutoDetect:  # noqa: N801
 
         dest = _make_dest_conn()
         result = import_scope(None, "autoproject", dest, workspace_root=tmp_path)
-        assert not result.startswith("error: "), (
-            f"Auto-detect should find .owlbear/knowledge/knowledge.db: {result!r}"
-        )
+        assert not result.startswith("error: "), f"Auto-detect should find .owlbear/knowledge/knowledge.db: {result!r}"
         assert _count_rows(dest, "documents", scope="project:autoproject") >= 1
 
     def test_auto_detect_returns_error_when_no_path_and_no_file(self, tmp_path: Path) -> None:
@@ -566,13 +545,9 @@ class TestFromAC_ImportScopeAutoDetect:  # noqa: N801
 
         dest = _make_dest_conn()
         result = import_scope(None, "proj", dest, workspace_root=tmp_path)
-        assert result.startswith("error: "), (
-            f"Missing auto-detect file must return error: prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Missing auto-detect file must return error: prefix, got: {result!r}"
 
-    def test_env_var_overrides_auto_detect(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_var_overrides_auto_detect(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """OWLBEAR_LOCAL_KB_PATH env var takes precedence over auto-detect."""
         from owlbear_knowledge.scope_transfer import import_scope  # noqa: PLC0415
 
@@ -619,9 +594,7 @@ class TestFromAC_ImportScopeSchemaValidation:  # noqa: N801
         bad_file.write_bytes(b"this is not a sqlite file at all !!!!")
         dest = _make_dest_conn()
         result = import_scope(bad_file, "proj", dest, workspace_root=tmp_path)
-        assert result.startswith("error: "), (
-            f"Non-SQLite file must return error: prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Non-SQLite file must return error: prefix, got: {result!r}"
 
     def test_sqlite_without_schema_version_returns_error_prefix(self, tmp_path: Path) -> None:
         """A valid SQLite without schema_version table returns error: message."""
@@ -634,9 +607,7 @@ class TestFromAC_ImportScopeSchemaValidation:  # noqa: N801
         conn.close()
         dest = _make_dest_conn()
         result = import_scope(no_schema, "proj", dest, workspace_root=tmp_path)
-        assert result.startswith("error: "), (
-            f"SQLite without schema_version must return error: prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"SQLite without schema_version must return error: prefix, got: {result!r}"
 
     def test_file_not_found_returns_error_prefix(self, tmp_path: Path) -> None:
         """A path that does not exist returns error: message."""
@@ -645,9 +616,7 @@ class TestFromAC_ImportScopeSchemaValidation:  # noqa: N801
         missing = tmp_path / "does_not_exist.db"
         dest = _make_dest_conn()
         result = import_scope(missing, "proj", dest, workspace_root=tmp_path)
-        assert result.startswith("error: "), (
-            f"Missing file must return error: prefix, got: {result!r}"
-        )
+        assert result.startswith("error: "), f"Missing file must return error: prefix, got: {result!r}"
 
     def test_valid_sqlite_with_schema_version_does_not_error(self, tmp_path: Path) -> None:
         """A valid SQLite with schema_version does not produce an error: result."""
@@ -656,9 +625,7 @@ class TestFromAC_ImportScopeSchemaValidation:  # noqa: N801
         src = _make_source_file(tmp_path)
         dest = _make_dest_conn()
         result = import_scope(src, "proj", dest, workspace_root=tmp_path)
-        assert not result.startswith("error: "), (
-            f"Valid SQLite with schema_version must not error: {result!r}"
-        )
+        assert not result.startswith("error: "), f"Valid SQLite with schema_version must not error: {result!r}"
 
 
 # ===========================================================================
@@ -681,9 +648,7 @@ class TestFromAC_ImportScopeTransaction:  # noqa: N801
         result = import_scope(src, "proj", dest_bad, workspace_root=tmp_path)
         if not result.startswith("error: "):
             pytest.skip("Forced-failure scenario did not trigger on this DB state")
-        count = dest_bad.execute(
-            "SELECT count(*) FROM documents WHERE scope = 'project:proj'"
-        ).fetchone()[0]
+        count = dest_bad.execute("SELECT count(*) FROM documents WHERE scope = 'project:proj'").fetchone()[0]
         assert count == 0, "Partial state must not be committed on failed import (atomic txn)"
 
 
@@ -699,31 +664,23 @@ class TestFromAC_MCPToolWiring:  # noqa: N801
         """server.py exposes import_scope as a module-level callable (MCP tool)."""
         from owlbear_mcp_knowledge import server as server_mod  # noqa: PLC0415
 
-        assert hasattr(server_mod, "import_scope"), (
-            "import_scope MCP tool missing from mcp-knowledge server.py"
-        )
+        assert hasattr(server_mod, "import_scope"), "import_scope MCP tool missing from mcp-knowledge server.py"
 
     def test_export_scope_tool_registered_on_server(self) -> None:
         """server.py exposes export_scope as a module-level callable (MCP tool)."""
         from owlbear_mcp_knowledge import server as server_mod  # noqa: PLC0415
 
-        assert hasattr(server_mod, "export_scope"), (
-            "export_scope MCP tool missing from mcp-knowledge server.py"
-        )
+        assert hasattr(server_mod, "export_scope"), "export_scope MCP tool missing from mcp-knowledge server.py"
 
     def test_import_scope_tool_has_tool_annotations(self) -> None:
         """import_scope tool declares ToolAnnotations on the MCP instance."""
         annotations = _get_tool_annotations_from_server("import_scope")
-        assert annotations is not None, (
-            "import_scope must declare ToolAnnotations"
-        )
+        assert annotations is not None, "import_scope must declare ToolAnnotations"
 
     def test_export_scope_tool_has_tool_annotations(self) -> None:
         """export_scope tool declares ToolAnnotations on the MCP instance."""
         annotations = _get_tool_annotations_from_server("export_scope")
-        assert annotations is not None, (
-            "export_scope must declare ToolAnnotations"
-        )
+        assert annotations is not None, "export_scope must declare ToolAnnotations"
 
     def test_import_scope_is_not_read_only(self) -> None:
         """import_scope writes to dest KB -- readOnlyHint must not be True."""
@@ -755,6 +712,4 @@ class TestFromAC_MCPToolWiring:  # noqa: N801
 
         result = await mcp_import_scope(mock_ctx, path=None, project_name="testproject")
         assert isinstance(result, str)
-        assert result.startswith("error: "), (
-            f"MCP import_scope must return error: prefix when file missing: {result!r}"
-        )
+        assert result.startswith("error: "), f"MCP import_scope must return error: prefix when file missing: {result!r}"

@@ -195,9 +195,7 @@ class TestFromAC_ConsolidationService:  # noqa: N801
         await svc.consolidate()
         row = conn.execute("SELECT id FROM consolidations").fetchone()
         assert row is not None
-        uuid4_pattern = re.compile(
-            r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
-        )
+        uuid4_pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
         assert uuid4_pattern.match(row[0]), f"Not a valid UUID4: {row[0]!r}"
 
     @pytest.mark.asyncio(loop_scope="function")

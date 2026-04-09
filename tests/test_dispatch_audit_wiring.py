@@ -67,9 +67,7 @@ class TestFromAC_DispatchAuditWiring:  # noqa: N801
     def test_run_loop_accepts_audit_log_parameter(self) -> None:
         """run_loop must declare audit_log as a parameter, not create it internally."""
         sig = inspect.signature(run_loop)
-        assert "audit_log" in sig.parameters, (
-            "run_loop must accept audit_log as an injection parameter"
-        )
+        assert "audit_log" in sig.parameters, "run_loop must accept audit_log as an injection parameter"
 
     # ------------------------------------------------------------------
     # AC2: log_dispatch() called before prompt(), DispatchEvent fields
@@ -359,11 +357,7 @@ class TestFromAC_DispatchAuditWiring:  # noqa: N801
         session_file = tmp_path / "audit" / "sess-round-trip.jsonl"
         assert session_file.exists(), "session JSONL file must be created"
 
-        lines = [
-            json.loads(line)
-            for line in session_file.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        lines = [json.loads(line) for line in session_file.read_text(encoding="utf-8").splitlines() if line.strip()]
         assert len(lines) == 2, f"Expected 2 events (dispatch + completion), got {len(lines)}"
 
         event_types = {line["type"] for line in lines}
@@ -378,4 +372,3 @@ class TestFromAC_DispatchAuditWiring:  # noqa: N801
         assert completion_line["task_id"] == 42
         assert completion_line["agent"] == "builder"
         assert completion_line["outcome"] in ("success", "failure")
-

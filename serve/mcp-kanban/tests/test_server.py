@@ -42,6 +42,7 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_app_context(
     kanban_bin: Path = Path("/fake/kanban-md"),
     kanban_dir: Path = Path("/fake/kanban"),
@@ -65,9 +66,7 @@ def _mock_proc(stdout: str = "ok", stderr: str = "", returncode: int = 0) -> Asy
     return proc
 
 
-_DEFAULT_STATUSES: list[str] = [
-    "research", "backlog", "todo", "in-progress", "review", "docs", "done"
-]
+_DEFAULT_STATUSES: list[str] = ["research", "backlog", "todo", "in-progress", "review", "docs", "done"]
 
 
 def _make_app_context_with_statuses(
@@ -110,7 +109,10 @@ class TestFromAC_Lifespan:
     async def test_lifespan_raises_file_not_found_when_binary_missing(self) -> None:
         """app_lifespan raises FileNotFoundError with a descriptive message when binary is absent."""
         mock_server = MagicMock()
-        with patch("owlbear_mcp_kanban.server.Path.exists", return_value=False), pytest.raises(FileNotFoundError, match=r".+"):
+        with (
+            patch("owlbear_mcp_kanban.server.Path.exists", return_value=False),
+            pytest.raises(FileNotFoundError, match=r".+"),
+        ):
             async with app_lifespan(mock_server) as _ctx:
                 pass  # pragma: no cover
 
@@ -120,7 +122,10 @@ class TestFromAC_Lifespan:
         """When KANBAN_BIN is set, app_lifespan uses that path as kanban_bin."""
         mock_server = MagicMock()
         custom_bin = "/custom/path/kanban-md"
-        with patch.dict(os.environ, {"KANBAN_BIN": custom_bin}), patch("owlbear_mcp_kanban.server.Path.exists", return_value=True):
+        with (
+            patch.dict(os.environ, {"KANBAN_BIN": custom_bin}),
+            patch("owlbear_mcp_kanban.server.Path.exists", return_value=True),
+        ):
             async with app_lifespan(mock_server) as ctx:
                 assert str(ctx.kanban_bin) == custom_bin
 
@@ -179,24 +184,30 @@ class TestFromAC_RunKanban:
 
 _FAKE_STDOUT = "board output"
 _FAKE_STDERR = "something failed"
-_FAKE_TASK_JSON = json.dumps({
-    "id": 1,
-    "title": "Fake Task",
-    "status": "todo",
-    "priority": "important",
-    "created": "2026-01-01T00:00:00+00:00",
-    "updated": "2026-01-01T00:00:00+00:00",
-})
+_FAKE_TASK_JSON = json.dumps(
+    {
+        "id": 1,
+        "title": "Fake Task",
+        "status": "todo",
+        "priority": "important",
+        "created": "2026-01-01T00:00:00+00:00",
+        "updated": "2026-01-01T00:00:00+00:00",
+    }
+)
 # Valid JSON list returned by kanban-md --json; includes created/updated to verify stripping.
-_FAKE_LIST_JSON = json.dumps([{
-    "id": 1,
-    "title": "T",
-    "status": "todo",
-    "priority": "important",
-    "tags": [],
-    "created": "2026-01-01T00:00:00+00:00",
-    "updated": "2026-01-01T00:00:00+00:00",
-}])
+_FAKE_LIST_JSON = json.dumps(
+    [
+        {
+            "id": 1,
+            "title": "T",
+            "status": "todo",
+            "priority": "important",
+            "tags": [],
+            "created": "2026-01-01T00:00:00+00:00",
+            "updated": "2026-01-01T00:00:00+00:00",
+        }
+    ]
+)
 
 
 class TestFromAC_Tools:
@@ -576,28 +587,32 @@ class TestFromAC_Tools:
         ],
         ids=["create_task"],
     )
-    async def test_all_tools_raise_tool_error_on_non_zero_rc(
-        self, tool_fn: Any, kwargs: dict[str, Any]
-    ) -> None:
+    async def test_all_tools_raise_tool_error_on_non_zero_rc(self, tool_fn: Any, kwargs: dict[str, Any]) -> None:
         """create_task raises ToolError when rc != 0.
 
         Note: All tools now raise ToolError on failure.
         """
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", _FAKE_STDERR, 1)),
-        ), pytest.raises(ToolError):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=("", _FAKE_STDERR, 1)),
+            ),
+            pytest.raises(ToolError),
+        ):
             await tool_fn(mcp_ctx, **kwargs)
 
     @pytest.mark.asyncio
     async def test_list_tasks_raises_tool_error_on_non_zero_rc(self) -> None:
         """list_tasks raises ToolError when kanban-md returns non-zero exit code."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", _FAKE_STDERR, 1)),
-        ), pytest.raises(ToolError, match="error:"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=("", _FAKE_STDERR, 1)),
+            ),
+            pytest.raises(ToolError, match="error:"),
+        ):
             await list_tasks(mcp_ctx)
 
 
@@ -615,9 +630,9 @@ class TestFromAC_EditTaskAutoClaim:
         mcp_ctx = _make_mcp_ctx()
         claimed_err = 'task #42 is claimed by "auto-agent" (expires in 50m0s). If this is you, add: --claim auto-agent'
         call_results = [
-            ("", claimed_err, 1),        # 1st edit attempt → TASK_CLAIMED
-            ("auto-agent\n", "", 0),      # agent-name
-            (_FAKE_TASK_JSON, "", 0),     # 2nd edit attempt with --claim
+            ("", claimed_err, 1),  # 1st edit attempt → TASK_CLAIMED
+            ("auto-agent\n", "", 0),  # agent-name
+            (_FAKE_TASK_JSON, "", 0),  # 2nd edit attempt with --claim
         ]
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
@@ -636,15 +651,20 @@ class TestFromAC_EditTaskAutoClaim:
     async def test_auto_claim_propagates_error_when_agent_name_differs(self) -> None:
         """edit_task raises ToolError when the task is claimed by a different agent."""
         mcp_ctx = _make_mcp_ctx()
-        claimed_err = 'task #42 is claimed by "other-agent" (expires in 50m0s). If this is you, add: --claim other-agent'
+        claimed_err = (
+            'task #42 is claimed by "other-agent" (expires in 50m0s). If this is you, add: --claim other-agent'
+        )
         call_results = [
-            ("", claimed_err, 1),         # 1st edit → TASK_CLAIMED
-            ("my-agent\n", "", 0),        # agent-name (different from claim holder)
+            ("", claimed_err, 1),  # 1st edit → TASK_CLAIMED
+            ("my-agent\n", "", 0),  # agent-name (different from claim holder)
         ]
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(side_effect=call_results),
-        ), pytest.raises(ToolError, match="is claimed by"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(side_effect=call_results),
+            ),
+            pytest.raises(ToolError, match="is claimed by"),
+        ):
             await edit_task(mcp_ctx, task_id="42", append_body="notes")
 
     @pytest.mark.asyncio
@@ -653,23 +673,29 @@ class TestFromAC_EditTaskAutoClaim:
         mcp_ctx = _make_mcp_ctx()
         claimed_err = 'task #42 is claimed by "test" (expires in 50m0s). If this is you, add: --claim test'
         call_results = [
-            ("", claimed_err, 1),          # 1st edit → TASK_CLAIMED
+            ("", claimed_err, 1),  # 1st edit → TASK_CLAIMED
             ("", "agent-name failed", 1),  # agent-name fails
         ]
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(side_effect=call_results),
-        ), pytest.raises(ToolError, match="is claimed by"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(side_effect=call_results),
+            ),
+            pytest.raises(ToolError, match="is claimed by"),
+        ):
             await edit_task(mcp_ctx, task_id="42", append_body="notes")
 
     @pytest.mark.asyncio
     async def test_no_retry_on_non_claim_error(self) -> None:
         """edit_task does NOT retry when the error is not claim-related."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", "some other error", 1)),
-        ) as mock_run, pytest.raises(ToolError, match="some other error"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=("", "some other error", 1)),
+            ) as mock_run,
+            pytest.raises(ToolError, match="some other error"),
+        ):
             await edit_task(mcp_ctx, task_id="42", append_body="notes")
         # Only 1 call — no agent-name or retry
         assert mock_run.call_count == 1
@@ -746,9 +772,7 @@ class TestFromAC_EndWork:
 
     # ------------------------------------------------------------------ helpers
 
-    def _make_mcp_ctx_with_statuses(
-        self, statuses: list[str] | None = None
-    ) -> MagicMock:
+    def _make_mcp_ctx_with_statuses(self, statuses: list[str] | None = None) -> MagicMock:
         return _make_mcp_ctx(_make_app_context_with_statuses(statuses))
 
     def _show_json(
@@ -757,11 +781,17 @@ class TestFromAC_EndWork:
         claimed_by: str = "test-agent",
         task_id: int = 42,
     ) -> str:
-        return json.dumps({
-            "id": task_id, "title": "task", "status": status,
-            "priority": "important", "created": "2026-01-01T00:00:00+00:00",
-            "updated": "2026-01-01T00:00:00+00:00", "claimed_by": claimed_by,
-        })
+        return json.dumps(
+            {
+                "id": task_id,
+                "title": "task",
+                "status": status,
+                "priority": "important",
+                "created": "2026-01-01T00:00:00+00:00",
+                "updated": "2026-01-01T00:00:00+00:00",
+                "claimed_by": claimed_by,
+            }
+        )
 
     def _patch_run_seq(self, *responses: tuple[str, str, int]) -> Any:
         """Patch _run_kanban with sequential (stdout, stderr, rc) responses."""
@@ -797,7 +827,11 @@ class TestFromAC_EndWork:
         statuses = ["todo", "in-progress", "review", "docs", "done"]
         mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
         show_resp = (self._show_json(status="in-progress", claimed_by="builder"), "", 0)
-        edit_resp = ('{"id": 42, "title": "task", "status": "review", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}', "", 0)
+        edit_resp = (
+            '{"id": 42, "title": "task", "status": "review", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}',
+            "",
+            0,
+        )
 
         with self._patch_run_seq(show_resp, edit_resp) as mock_run:
             await end_work(mcp_ctx, task_id="42", note="done!", outcome="success")
@@ -836,11 +870,16 @@ class TestFromAC_EndWork:
         statuses = ["todo", "in-progress", "review"]
         mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
         show_resp = (self._show_json(status="in-progress"), "", 0)
-        final_json = json.dumps({
-            "id": 42, "title": "my task", "status": "review",
-            "priority": "important", "created": "2026-01-01T00:00:00+00:00",
-            "updated": "2026-01-01T00:00:00+00:00",
-        })
+        final_json = json.dumps(
+            {
+                "id": 42,
+                "title": "my task",
+                "status": "review",
+                "priority": "important",
+                "created": "2026-01-01T00:00:00+00:00",
+                "updated": "2026-01-01T00:00:00+00:00",
+            }
+        )
         edit_resp = (final_json, "", 0)
 
         with self._patch_run_seq(show_resp, edit_resp):
@@ -859,8 +898,16 @@ class TestFromAC_EndWork:
         statuses = ["todo", "in-progress", "done"]
         mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
         show_resp = (self._show_json(status="done", claimed_by="builder"), "", 0)
-        edit_resp = ('{"id": 42, "title": "task", "status": "done", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}', "", 0)
-        archive_resp = ('{"id": 42, "title": "task", "status": "archived", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}', "", 0)
+        edit_resp = (
+            '{"id": 42, "title": "task", "status": "done", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}',
+            "",
+            0,
+        )
+        archive_resp = (
+            '{"id": 42, "title": "task", "status": "archived", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}',
+            "",
+            0,
+        )
 
         with self._patch_run_seq(show_resp, edit_resp, archive_resp) as mock_run:
             await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
@@ -875,7 +922,11 @@ class TestFromAC_EndWork:
         statuses = ["todo", "done"]
         mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
         show_resp = (self._show_json(status="done"), "", 0)
-        edit_resp = ('{"id": 42, "title": "task", "status": "done", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}', "", 0)
+        edit_resp = (
+            '{"id": 42, "title": "task", "status": "done", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}',
+            "",
+            0,
+        )
         archive_fail = ("", "archive failed: permission denied", 1)
 
         with self._patch_run_seq(show_resp, edit_resp, archive_fail), pytest.raises(ToolError):
@@ -891,11 +942,20 @@ class TestFromAC_EndWork:
         custom_statuses = ["alpha", "beta", "gamma", "delta"]
         mcp_ctx = self._make_mcp_ctx_with_statuses(custom_statuses)
         show_resp = (self._show_json(status="beta"), "", 0)
-        edit_resp = (json.dumps({
-            "id": 42, "title": "task", "status": "gamma",
-            "priority": "important", "created": "2026-01-01T00:00:00+00:00",
-            "updated": "2026-01-01T00:00:00+00:00",
-        }), "", 0)
+        edit_resp = (
+            json.dumps(
+                {
+                    "id": 42,
+                    "title": "task",
+                    "status": "gamma",
+                    "priority": "important",
+                    "created": "2026-01-01T00:00:00+00:00",
+                    "updated": "2026-01-01T00:00:00+00:00",
+                }
+            ),
+            "",
+            0,
+        )
 
         with self._patch_run_seq(show_resp, edit_resp) as mock_run:
             await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
@@ -915,9 +975,7 @@ class TestFromAC_EndWork:
         mcp_ctx = self._make_mcp_ctx_with_statuses()
 
         with self._patch_run_always() as mock_run:
-            await end_work(
-                mcp_ctx, task_id="42", note="couldn't finish", outcome="fail"
-            )
+            await end_work(mcp_ctx, task_id="42", note="couldn't finish", outcome="fail")
 
         edit_calls = self._edit_calls(mock_run)
         assert edit_calls
@@ -932,9 +990,7 @@ class TestFromAC_EndWork:
         mcp_ctx = self._make_mcp_ctx_with_statuses()
 
         with self._patch_run_always() as mock_run:
-            await end_work(
-                mcp_ctx, task_id="42", note="context overflow", outcome="fail"
-            )
+            await end_work(mcp_ctx, task_id="42", note="context overflow", outcome="fail")
 
         edit_calls = self._edit_calls(mock_run)
         assert edit_calls
@@ -975,13 +1031,14 @@ class TestFromAC_EndWork:
         """outcome=block with empty block_reason: raises ToolError, zero CLI calls."""
         mcp_ctx = self._make_mcp_ctx_with_statuses()
 
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=(_FAKE_TASK_JSON, "", 0)),
-        ) as mock_run, pytest.raises(ToolError):
-            await end_work(
-                mcp_ctx, task_id="42", note="blocked", outcome="block", block_reason=""
-            )
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=(_FAKE_TASK_JSON, "", 0)),
+            ) as mock_run,
+            pytest.raises(ToolError),
+        ):
+            await end_work(mcp_ctx, task_id="42", note="blocked", outcome="block", block_reason="")
 
         mock_run.assert_not_called()
 
@@ -1016,9 +1073,7 @@ class TestFromAC_EndWork:
         mcp_ctx = self._make_mcp_ctx_with_statuses()
 
         with self._patch_run_always() as mock_run:
-            await end_work(
-                mcp_ctx, task_id="42", note="rejected", outcome="reject"
-            )
+            await end_work(mcp_ctx, task_id="42", note="rejected", outcome="reject")
 
         edit_calls = self._edit_calls(mock_run)
         assert edit_calls
@@ -1048,7 +1103,11 @@ class TestFromAC_EndWork:
         statuses = ["todo", "in-progress", "review"]
         mcp_ctx = self._make_mcp_ctx_with_statuses(statuses)
         show_resp = (self._show_json(status="in-progress", claimed_by="builder"), "", 0)
-        edit_resp = ('{"id": 42, "title": "task", "status": "review", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}', "", 0)
+        edit_resp = (
+            '{"id": 42, "title": "task", "status": "review", "priority": "important", "created": "2026-01-01T00:00:00+00:00", "updated": "2026-01-01T00:00:00+00:00"}',
+            "",
+            0,
+        )
 
         with self._patch_run_seq(show_resp, edit_resp) as mock_run:
             # outcome intentionally omitted — must default to "success" per AC
@@ -1072,9 +1131,7 @@ class TestFromAC_EndWork:
         edit_fail = ("", "permission denied: cannot edit task", 1)
 
         with self._patch_run_seq(show_resp, edit_fail), pytest.raises(ToolError):
-            await end_work(
-                mcp_ctx, task_id="42", note="done", outcome="success"
-            )
+            await end_work(mcp_ctx, task_id="42", note="done", outcome="success")
 
 
 # ---------------------------------------------------------------------------
@@ -1096,10 +1153,10 @@ class TestBuilderDiscovered:
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(
                 side_effect=[
-                    (show_json, "", 0),        # show (blocked guard)
-                    ("auto-agent\n", "", 0),   # agent-name
-                    ("ok", "", 0),              # edit --claim
-                    (show_json, "", 0),         # show --json (final)
+                    (show_json, "", 0),  # show (blocked guard)
+                    ("auto-agent\n", "", 0),  # agent-name
+                    ("ok", "", 0),  # edit --claim
+                    (show_json, "", 0),  # show --json (final)
                 ]
             ),
         ) as mock_run:
@@ -1114,48 +1171,57 @@ class TestBuilderDiscovered:
     async def test_start_work_agent_name_error_raises_tool_error(self) -> None:
         """start_work raises ToolError when agent-name subprocess fails."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(
-                side_effect=[
-                    (_FAKE_TASK_JSON, "", 0),     # show (blocked guard) ok
-                    ("", "agent-name failed", 1),  # agent-name fails
-                ]
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(
+                    side_effect=[
+                        (_FAKE_TASK_JSON, "", 0),  # show (blocked guard) ok
+                        ("", "agent-name failed", 1),  # agent-name fails
+                    ]
+                ),
             ),
-        ), pytest.raises(ToolError):
+            pytest.raises(ToolError),
+        ):
             await start_work(mcp_ctx, task_id="1")
 
     @pytest.mark.asyncio
     async def test_start_work_edit_error_raises_tool_error(self) -> None:
         """start_work raises ToolError when edit --claim subprocess fails."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(
-                side_effect=[
-                    (_FAKE_TASK_JSON, "", 0),  # show (blocked guard) ok
-                    ("agent\n", "", 0),        # agent-name ok
-                    ("", "edit failed", 1),    # edit fails
-                ]
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(
+                    side_effect=[
+                        (_FAKE_TASK_JSON, "", 0),  # show (blocked guard) ok
+                        ("agent\n", "", 0),  # agent-name ok
+                        ("", "edit failed", 1),  # edit fails
+                    ]
+                ),
             ),
-        ), pytest.raises(ToolError):
+            pytest.raises(ToolError),
+        ):
             await start_work(mcp_ctx, task_id="1")
 
     @pytest.mark.asyncio
     async def test_start_work_show_error_raises_tool_error(self) -> None:
         """start_work raises ToolError when final show subprocess fails after successful edit."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(
-                side_effect=[
-                    (_FAKE_TASK_JSON, "", 0),  # show (blocked guard) ok
-                    ("agent\n", "", 0),        # agent-name ok
-                    ("ok", "", 0),             # edit ok
-                    ("", "show failed", 1),    # show fails
-                ]
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(
+                    side_effect=[
+                        (_FAKE_TASK_JSON, "", 0),  # show (blocked guard) ok
+                        ("agent\n", "", 0),  # agent-name ok
+                        ("ok", "", 0),  # edit ok
+                        ("", "show failed", 1),  # show fails
+                    ]
+                ),
             ),
-        ), pytest.raises(ToolError):
+            pytest.raises(ToolError),
+        ):
             await start_work(mcp_ctx, task_id="1")
 
     # ------------------------------------------------------------------ end_work edge paths
@@ -1165,32 +1231,37 @@ class TestBuilderDiscovered:
         """end_work raises ToolError for unrecognized outcome value."""
         mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
         with pytest.raises(ToolError):
-            await end_work(
-                mcp_ctx, task_id="1", note="n", outcome="unknown"
-            )
+            await end_work(mcp_ctx, task_id="1", note="n", outcome="unknown")
 
     @pytest.mark.asyncio
     async def test_end_work_fail_edit_error_raises_tool_error(self) -> None:
         """end_work raises ToolError when edit subprocess fails for outcome=fail."""
         mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", "edit fail error", 1)),
-        ), pytest.raises(ToolError):
-            await end_work(
-                mcp_ctx, task_id="1", note="n", outcome="fail"
-            )
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=("", "edit fail error", 1)),
+            ),
+            pytest.raises(ToolError),
+        ):
+            await end_work(mcp_ctx, task_id="1", note="n", outcome="fail")
 
     @pytest.mark.asyncio
     async def test_end_work_block_edit_error_raises_tool_error(self) -> None:
         """end_work raises ToolError when edit subprocess fails for outcome=block."""
         mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", "block edit error", 1)),
-        ), pytest.raises(ToolError):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=("", "block edit error", 1)),
+            ),
+            pytest.raises(ToolError),
+        ):
             await end_work(
-                mcp_ctx, task_id="1", note="n", outcome="block",
+                mcp_ctx,
+                task_id="1",
+                note="n",
+                outcome="block",
                 block_reason="reason",
             )
 
@@ -1198,13 +1269,14 @@ class TestBuilderDiscovered:
     async def test_end_work_reject_edit_error_raises_tool_error(self) -> None:
         """end_work raises ToolError when edit subprocess fails for outcome=reject."""
         mcp_ctx = _make_mcp_ctx(_make_app_context_with_statuses())
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", "reject error", 1)),
-        ), pytest.raises(ToolError):
-            await end_work(
-                mcp_ctx, task_id="1", note="n", outcome="reject"
-            )
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=("", "reject error", 1)),
+            ),
+            pytest.raises(ToolError),
+        ):
+            await end_work(mcp_ctx, task_id="1", note="n", outcome="reject")
 
     # ------------------------------------------------------------------ list_tasks output_schema (AC2 #505)
 
@@ -1225,7 +1297,17 @@ class TestBuilderDiscovered:
         lean_fields = {"id", "title", "status", "priority", "tags"}
         for field in lean_fields:
             assert field in props, f"lean field {field!r} absent from items.properties"
-        for stripped in ("created", "updated", "class", "started", "completed", "assignee", "claimed_at", "due", "estimate"):
+        for stripped in (
+            "created",
+            "updated",
+            "class",
+            "started",
+            "completed",
+            "assignee",
+            "claimed_at",
+            "due",
+            "estimate",
+        ):
             assert stripped not in props, f"stripped field {stripped!r} present in items.properties"
 
     # ------------------------------------------------------------------ list_tasks edge cases (AC3/AC4 #505)
@@ -1247,18 +1329,24 @@ class TestBuilderDiscovered:
         """list_tasks raises ToolError when kanban-md output is non-JSON (AC4 #505)."""
         mcp_ctx = _make_mcp_ctx()
         plain_text = "kanban-md: no tasks found (plain output)"
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=(plain_text, "", 0)),
-        ), pytest.raises(ToolError, match="Invalid task JSON"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=(plain_text, "", 0)),
+            ),
+            pytest.raises(ToolError, match="Invalid task JSON"),
+        ):
             await list_tasks(mcp_ctx)
 
     @pytest.mark.asyncio
     async def test_list_tasks_raises_tool_error_on_non_zero_rc(self) -> None:
         """list_tasks raises ToolError when kanban-md exits with non-zero rc."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(return_value=("", "some error", 1)),
-        ), pytest.raises(ToolError, match="some error"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(return_value=("", "some error", 1)),
+            ),
+            pytest.raises(ToolError, match="some error"),
+        ):
             await list_tasks(mcp_ctx)

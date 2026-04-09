@@ -115,17 +115,13 @@ def _run_hook(stdin_data: dict, *, timeout: int = 30) -> tuple[int, dict]:
 
 def _is_denied(output: dict) -> bool:
     """Return True if the hook response contains a deny permissionDecision."""
-    return (
-        output.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
-    )
+    return output.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
 
 
 def _extract_frontmatter(content: str) -> str:
     """Return the YAML text between the first --- ... --- block."""
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-    assert match is not None, (
-        "No valid YAML frontmatter (--- ... ---) found in test-writer.agent.md"
-    )
+    assert match is not None, "No valid YAML frontmatter (--- ... ---) found in test-writer.agent.md"
     return match.group(1)
 
 
@@ -140,18 +136,13 @@ class TestFromAC_ScriptExists:
     def test_deny_src_writes_ps1_exists(self) -> None:
         """deny-src-writes.ps1 must exist on disk."""
         assert _SCRIPT_PATH.exists(), (
-            f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}. "
-            "Builder must create scripts/hooks/deny-src-writes.ps1."
+            f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}. Builder must create scripts/hooks/deny-src-writes.ps1."
         )
 
     def test_script_is_nonempty(self) -> None:
         """Script file must have content — an empty file cannot implement the guard."""
-        assert _SCRIPT_PATH.exists(), (
-            f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}."
-        )
-        assert _SCRIPT_PATH.stat().st_size > 0, (
-            "deny-src-writes.ps1 exists but is empty — builder must implement it."
-        )
+        assert _SCRIPT_PATH.exists(), f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}."
+        assert _SCRIPT_PATH.stat().st_size > 0, "deny-src-writes.ps1 exists but is empty — builder must implement it."
 
 
 # ---------------------------------------------------------------------------
@@ -167,143 +158,143 @@ class TestFromAC_PathGuardBehavior:
 
     def test_create_file_tests_path_is_allowed(self) -> None:
         """AC1b: create_file with a tests/ path must return {} (allowed)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "tests/test_foo.py"},
-        })
-        assert output == {}, (
-            f"create_file with tests/ path must return {{}} (allowed), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "tests/test_foo.py"},
+            }
         )
+        assert output == {}, f"create_file with tests/ path must return {{}} (allowed), got: {output!r}"
 
     def test_create_file_packages_path_is_denied(self) -> None:
         """AC1c: create_file with a packages/ path must be denied."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "packages/foo/bar.py"},
-        })
-        assert _is_denied(output), (
-            f"create_file with packages/ path must be denied (allow-list), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "packages/foo/bar.py"},
+            }
         )
+        assert _is_denied(output), f"create_file with packages/ path must be denied (allow-list), got: {output!r}"
 
     def test_create_file_src_path_is_denied(self) -> None:
         """AC1c boundary: create_file with src/ path must also be denied."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "src/module/impl.py"},
-        })
-        assert _is_denied(output), (
-            f"create_file with src/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "src/module/impl.py"},
+            }
         )
+        assert _is_denied(output), f"create_file with src/ path must be denied, got: {output!r}"
 
     # --- AC1a: backslash normalization ---
 
     def test_create_file_backslash_tests_path_is_allowed(self) -> None:
         """AC1a: backslash path tests\\foo.py must be normalized to tests/foo.py → allowed."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "tests\\test_bar.py"},
-        })
-        assert output == {}, (
-            f"Backslash tests\\ path should be normalized and allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "tests\\test_bar.py"},
+            }
         )
+        assert output == {}, f"Backslash tests\\ path should be normalized and allowed, got: {output!r}"
 
     def test_create_file_backslash_packages_path_is_denied(self) -> None:
         """AC1a boundary: backslash packages\\ path must be denied after normalization."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "packages\\foo\\bar.py"},
-        })
-        assert _is_denied(output), (
-            f"Backslash packages\\ path must be denied after normalization, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "packages\\foo\\bar.py"},
+            }
         )
+        assert _is_denied(output), f"Backslash packages\\ path must be denied after normalization, got: {output!r}"
 
     # --- AC1d/AC1e: replace_string_in_file path routing ---
 
     def test_replace_string_in_file_tests_path_is_allowed(self) -> None:
         """AC1d: replace_string_in_file with tests/ filePath must return {}."""
-        _, output = _run_hook({
-            "tool_name": "replace_string_in_file",
-            "tool_input": {"filePath": "tests/test_existing.py", "oldString": "x", "newString": "y"},
-        })
-        assert output == {}, (
-            f"replace_string_in_file with tests/ path must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "replace_string_in_file",
+                "tool_input": {"filePath": "tests/test_existing.py", "oldString": "x", "newString": "y"},
+            }
         )
+        assert output == {}, f"replace_string_in_file with tests/ path must be allowed, got: {output!r}"
 
     def test_replace_string_in_file_packages_path_is_denied(self) -> None:
         """AC1e: replace_string_in_file with packages/ filePath must be denied."""
-        _, output = _run_hook({
-            "tool_name": "replace_string_in_file",
-            "tool_input": {"filePath": "packages/foo/impl.py", "oldString": "x", "newString": "y"},
-        })
-        assert _is_denied(output), (
-            f"replace_string_in_file with packages/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "replace_string_in_file",
+                "tool_input": {"filePath": "packages/foo/impl.py", "oldString": "x", "newString": "y"},
+            }
         )
+        assert _is_denied(output), f"replace_string_in_file with packages/ path must be denied, got: {output!r}"
 
     # --- AC1f/AC1g: multi_replace_string_in_file — replacements array ---
 
     def test_multi_replace_all_tests_paths_is_allowed(self) -> None:
         """AC1f: all replacements pointing to tests/ must return {}."""
-        _, output = _run_hook({
-            "tool_name": "multi_replace_string_in_file",
-            "tool_input": {
-                "replacements": [
-                    {"filePath": "tests/test_a.py", "oldString": "a", "newString": "b"},
-                    {"filePath": "tests/test_b.py", "oldString": "c", "newString": "d"},
-                ],
-            },
-        })
-        assert output == {}, (
-            f"multi_replace with all tests/ paths must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "multi_replace_string_in_file",
+                "tool_input": {
+                    "replacements": [
+                        {"filePath": "tests/test_a.py", "oldString": "a", "newString": "b"},
+                        {"filePath": "tests/test_b.py", "oldString": "c", "newString": "d"},
+                    ],
+                },
+            }
         )
+        assert output == {}, f"multi_replace with all tests/ paths must be allowed, got: {output!r}"
 
     def test_multi_replace_any_non_tests_path_is_denied(self) -> None:
         """AC1g: any replacement targeting non-tests/ must deny the whole call."""
-        _, output = _run_hook({
-            "tool_name": "multi_replace_string_in_file",
-            "tool_input": {
-                "replacements": [
-                    {"filePath": "tests/test_a.py", "oldString": "a", "newString": "b"},
-                    {"filePath": "packages/foo/impl.py", "oldString": "c", "newString": "d"},
-                ],
-            },
-        })
-        assert _is_denied(output), (
-            f"multi_replace with any non-tests/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "multi_replace_string_in_file",
+                "tool_input": {
+                    "replacements": [
+                        {"filePath": "tests/test_a.py", "oldString": "a", "newString": "b"},
+                        {"filePath": "packages/foo/impl.py", "oldString": "c", "newString": "d"},
+                    ],
+                },
+            }
         )
+        assert _is_denied(output), f"multi_replace with any non-tests/ path must be denied, got: {output!r}"
 
     # --- AC1h/AC1i: create_directory dirPath routing ---
 
     def test_create_directory_tests_dirpath_is_allowed(self) -> None:
         """AC1h: create_directory with tests/ dirPath must return {}."""
-        _, output = _run_hook({
-            "tool_name": "create_directory",
-            "tool_input": {"dirPath": "tests/new_subdir"},
-        })
-        assert output == {}, (
-            f"create_directory with tests/ dirPath must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_directory",
+                "tool_input": {"dirPath": "tests/new_subdir"},
+            }
         )
+        assert output == {}, f"create_directory with tests/ dirPath must be allowed, got: {output!r}"
 
     def test_create_directory_packages_dirpath_is_denied(self) -> None:
         """AC1i: create_directory with packages/ dirPath must be denied."""
-        _, output = _run_hook({
-            "tool_name": "create_directory",
-            "tool_input": {"dirPath": "packages/new_module"},
-        })
-        assert _is_denied(output), (
-            f"create_directory with packages/ dirPath must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_directory",
+                "tool_input": {"dirPath": "packages/new_module"},
+            }
         )
+        assert _is_denied(output), f"create_directory with packages/ dirPath must be denied, got: {output!r}"
 
     # --- AC2e: apply_patch is NOT gated ---
 
     def test_apply_patch_is_not_gated_and_returns_empty_json(self) -> None:
         """AC2e: apply_patch is excluded from write-tools list — must return {} regardless of path."""
-        _, output = _run_hook({
-            "tool_name": "apply_patch",
-            "tool_input": {"filePath": "packages/evil.py"},
-        })
-        assert output == {}, (
-            f"apply_patch must not be gated (excluded per AC2) — must return {{}}, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "apply_patch",
+                "tool_input": {"filePath": "packages/evil.py"},
+            }
         )
+        assert output == {}, f"apply_patch must not be gated (excluded per AC2) — must return {{}}, got: {output!r}"
 
     # --- AC2f/AC2g/AC2h: non-write tool pass-through ---
 
@@ -327,9 +318,7 @@ class TestFromAC_PathGuardBehavior:
     def test_malformed_stdin_json_returns_empty_json(self) -> None:
         """AC5a: malformed stdin must not crash the script — returns {}."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
             input="not-valid-json{{{",
@@ -344,9 +333,7 @@ class TestFromAC_PathGuardBehavior:
             output = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError:
             output = {"_raw": stdout}
-        assert output == {}, (
-            f"Malformed JSON input must produce {{}} output, got: {output!r}"
-        )
+        assert output == {}, f"Malformed JSON input must produce {{}} output, got: {output!r}"
 
     def test_empty_tool_name_returns_empty_json(self) -> None:
         """AC5b: empty string tool_name is not gated — must return {}."""
@@ -360,43 +347,46 @@ class TestFromAC_PathGuardBehavior:
 
     def test_write_tool_with_no_paths_returns_empty_json(self) -> None:
         """AC5d: write tool with no path fields in tool_input → {} (nothing to deny)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"content": "hello"},
-        })
-        assert output == {}, (
-            f"create_file with no filePath must return {{}} (nothing to deny), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"content": "hello"},
+            }
         )
+        assert output == {}, f"create_file with no filePath must return {{}} (nothing to deny), got: {output!r}"
 
     def test_write_tool_with_empty_string_filepath_returns_empty_json(self) -> None:
         """AC5e: write tool with filePath='' — empty path → {} (pass-through)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ""},
-        })
-        assert output == {}, (
-            f"create_file with empty filePath must return {{}} (pass-through), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ""},
+            }
         )
+        assert output == {}, f"create_file with empty filePath must return {{}} (pass-through), got: {output!r}"
 
     # --- Boundary conditions ---
 
     def test_path_starting_with_tests_not_tests_slash_is_denied(self) -> None:
         """Boundary1: path 'testscripts/foo.py' starts with 'tests' but not 'tests/' → denied."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "testscripts/foo.py"},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "testscripts/foo.py"},
+            }
+        )
         assert _is_denied(output), (
-            f"Path 'testscripts/foo.py' must be denied (allow-list requires prefix 'tests/'). "
-            f"Got: {output!r}"
+            f"Path 'testscripts/foo.py' must be denied (allow-list requires prefix 'tests/'). Got: {output!r}"
         )
 
     def test_multi_replace_empty_replacements_returns_empty_json(self) -> None:
         """Boundary3: empty replacements array → no paths extracted → {} (pass-through)."""
-        _, output = _run_hook({
-            "tool_name": "multi_replace_string_in_file",
-            "tool_input": {"replacements": []},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "multi_replace_string_in_file",
+                "tool_input": {"replacements": []},
+            }
+        )
         assert output == {}, (
             f"multi_replace with empty replacements must return {{}} (no paths to check), got: {output!r}"
         )
@@ -405,31 +395,29 @@ class TestFromAC_PathGuardBehavior:
 
     def test_deny_response_has_hook_specific_output_key(self) -> None:
         """AC deny structure: response must nest under hookSpecificOutput."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "packages/evil.py"},
-        })
-        assert "hookSpecificOutput" in output, (
-            f"Deny response must contain 'hookSpecificOutput' key, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "packages/evil.py"},
+            }
         )
+        assert "hookSpecificOutput" in output, f"Deny response must contain 'hookSpecificOutput' key, got: {output!r}"
 
     def test_deny_reason_is_nonempty(self) -> None:
         """AC deny structure: permissionDecisionReason must be non-empty string."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "packages/evil.py"},
-        })
-        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
-        assert reason, (
-            f"permissionDecisionReason must be non-empty when denying a write, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "packages/evil.py"},
+            }
         )
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        assert reason, f"permissionDecisionReason must be non-empty when denying a write, got: {output!r}"
 
     def test_stdout_is_always_valid_json_for_allowed_call(self) -> None:
         """Contract: stdout must always be valid JSON — for allowed calls returns {}."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
             input=json.dumps({"tool_name": "create_file", "tool_input": {"filePath": "tests/foo.py"}}),
@@ -443,17 +431,13 @@ class TestFromAC_PathGuardBehavior:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON for allowed call: {stdout!r}\nError: {exc}"
-            )
+            pytest.fail(f"Script stdout is not valid JSON for allowed call: {stdout!r}\nError: {exc}")
         assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
     def test_stdout_is_always_valid_json_for_denied_call(self) -> None:
         """Contract: stdout must always be valid JSON — for denied calls returns deny object."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"deny-src-writes.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
             input=json.dumps({"tool_name": "create_file", "tool_input": {"filePath": "packages/bad.py"}}),
@@ -467,9 +451,7 @@ class TestFromAC_PathGuardBehavior:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON for denied call: {stdout!r}\nError: {exc}"
-            )
+            pytest.fail(f"Script stdout is not valid JSON for denied call: {stdout!r}\nError: {exc}")
         assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
 
@@ -494,23 +476,18 @@ class TestFromAC_TestWriterAgentHooks:
         """AC3a: test-writer.agent.md frontmatter must contain a hooks: key."""
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "test-writer.agent.md frontmatter is missing the 'hooks:' key. "
-            "Builder must add a PreToolUse hooks section."
+            "test-writer.agent.md frontmatter is missing the 'hooks:' key. Builder must add a PreToolUse hooks section."
         )
 
     def test_frontmatter_has_pretooluse_entry(self) -> None:
         """AC3b: hooks: section must contain a PreToolUse entry."""
         fm = self._frontmatter()
-        assert "PreToolUse" in fm, (
-            "test-writer.agent.md hooks: section is missing a PreToolUse entry."
-        )
+        assert "PreToolUse" in fm, "test-writer.agent.md hooks: section is missing a PreToolUse entry."
 
     def test_pretooluse_hook_type_is_command(self) -> None:
         """AC3c: PreToolUse hook must specify type: command."""
         fm = self._frontmatter()
-        assert re.search(r"type:\s*command", fm), (
-            "test-writer.agent.md PreToolUse hook must specify 'type: command'."
-        )
+        assert re.search(r"type:\s*command", fm), "test-writer.agent.md PreToolUse hook must specify 'type: command'."
 
     def test_pretooluse_hook_command_references_deny_src_writes(self) -> None:
         """AC3d: PreToolUse hook command must reference deny-src-writes.ps1."""
@@ -540,29 +517,21 @@ class TestFromAC_TestWriterAgentHooks:
         try:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
-            pytest.fail(
-                f"test-writer.agent.md frontmatter is not valid YAML: {exc}"
-            )
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+            pytest.fail(f"test-writer.agent.md frontmatter is not valid YAML: {exc}")
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         # Compound check: hooks must be present (causes RED-phase failure until builder acts)
         assert "hooks" in parsed, (
-            "Frontmatter parsed but missing 'hooks:' key — "
-            "builder must add the PreToolUse hooks section."
+            "Frontmatter parsed but missing 'hooks:' key — builder must add the PreToolUse hooks section."
         )
         hooks = parsed["hooks"]
-        assert "PreToolUse" in hooks, (
-            f"hooks section must contain PreToolUse key, got: {hooks!r}"
-        )
+        assert "PreToolUse" in hooks, f"hooks section must contain PreToolUse key, got: {hooks!r}"
 
     def test_frontmatter_no_duplicate_keys(self) -> None:
         """AC6 regression: frontmatter must not gain duplicate YAML keys after edit."""
         fm = self._frontmatter()
         # Fail pre-impl by checking hooks: is present first
         assert "hooks:" in fm, (
-            "Builder must add the hooks: section — no duplicate-key check is meaningful "
-            "before the hook is added."
+            "Builder must add the hooks: section — no duplicate-key check is meaningful before the hook is added."
         )
         top_level_keys = re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", fm, re.MULTILINE)
         seen: set[str] = set()
@@ -571,9 +540,7 @@ class TestFromAC_TestWriterAgentHooks:
             if key in seen:
                 duplicates.append(key)
             seen.add(key)
-        assert not duplicates, (
-            f"Duplicate YAML keys found in test-writer.agent.md frontmatter: {duplicates}"
-        )
+        assert not duplicates, f"Duplicate YAML keys found in test-writer.agent.md frontmatter: {duplicates}"
 
 
 # ---------------------------------------------------------------------------
@@ -592,22 +559,24 @@ class TestBuilderDiscovered:
 
     def test_packages_tests_subdir_path_is_denied(self) -> None:
         """packages/tests/evil.py must be denied — /tests/ sub-segment bypass removed."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "packages/tests/evil.py"},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "packages/tests/evil.py"},
+            }
+        )
         assert _is_denied(output), (
-            f"packages/tests/evil.py must be denied (allow-list: prefix 'tests/' only). "
-            f"Got: {output!r}"
+            f"packages/tests/evil.py must be denied (allow-list: prefix 'tests/' only). Got: {output!r}"
         )
 
     def test_src_lib_tests_subdir_path_is_denied(self) -> None:
         """src/lib/tests/backdoor.py must also be denied — /tests/ sub-segment bypass removed."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "src/lib/tests/backdoor.py"},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "src/lib/tests/backdoor.py"},
+            }
+        )
         assert _is_denied(output), (
-            f"src/lib/tests/backdoor.py must be denied (allow-list: prefix 'tests/' only). "
-            f"Got: {output!r}"
+            f"src/lib/tests/backdoor.py must be denied (allow-list: prefix 'tests/' only). Got: {output!r}"
         )

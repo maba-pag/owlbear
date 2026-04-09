@@ -122,9 +122,7 @@ class TestFromAC_DocumentStoreInsertDocumentSignature:
 
         conn = _make_db()
         store = DocumentStore(conn, GraphStore(conn), MagicMock(), MagicMock())
-        intake = IntakeResult(
-            content="hello", source="file://test.txt", metadata={"source_type": "file"}
-        )
+        intake = IntakeResult(content="hello", source="file://test.txt", metadata={"source_type": "file"})
         # AC signature: insert_document(document_id, intake, *, scope)
         store.insert_document("doc-insert-001", intake, scope="global")
 
@@ -161,9 +159,7 @@ class TestFromAC_DocumentStoreInsertDocumentSignature:
         )
         store.insert_document("doc-scope-001", intake, scope="workspace")
 
-        row = conn.execute(
-            "SELECT scope FROM documents WHERE id = ?", ("doc-scope-001",)
-        ).fetchone()
+        row = conn.execute("SELECT scope FROM documents WHERE id = ?", ("doc-scope-001",)).fetchone()
         assert row is not None
         assert row[0] == "workspace"
 
@@ -456,9 +452,7 @@ class TestFromAC_IngestScope:
         call = doc_store.insert_document.call_args
         _, kwargs = call[0], call[1]
         # scope must appear either as kwarg or as part of the call
-        actual_scope = kwargs.get("scope") or (
-            call[0][2] if len(call[0]) > 2 else None
-        )
+        actual_scope = kwargs.get("scope") or (call[0][2] if len(call[0]) > 2 else None)
         assert actual_scope == "custom-scope"
 
     @pytest.mark.asyncio
@@ -513,9 +507,7 @@ class TestFromAC_IngestUpdateContentHash:
             entity_extractor=EntityExtractor("stub"),
             text_chunker=TextChunker(),
         )
-        intake = IntakeResult(
-            content="hashable content", source="file://hash.txt", metadata={}
-        )
+        intake = IntakeResult(content="hashable content", source="file://hash.txt", metadata={})
         result = await pipeline.ingest(intake)
         assert result.status == "ok"
         doc_store.update_content_hash.assert_called()
@@ -598,9 +590,7 @@ class TestFromAC_PyprojectHttpxDep:
         intake_deps = data["project"]["optional-dependencies"].get("intake", [])
         httpx_entries = [d for d in intake_deps if "httpx" in d.lower()]
         assert httpx_entries, "intake dep group must include httpx>=0.27"
-        assert any("0.27" in d for d in httpx_entries), (
-            "httpx dep must specify >= 0.27"
-        )
+        assert any("0.27" in d for d in httpx_entries), "httpx dep must specify >= 0.27"
 
     def test_full_group_includes_httpx(self) -> None:
         """[optional-dependencies.full] includes httpx>=0.27 (or depends on intake)."""
@@ -610,9 +600,7 @@ class TestFromAC_PyprojectHttpxDep:
         # full group must include httpx directly or reference the intake group
         has_httpx = any("httpx" in d.lower() for d in full_deps)
         has_intake_ref = any("intake" in d.lower() for d in full_deps)
-        assert has_httpx or has_intake_ref, (
-            "full dep group must include httpx>=0.27 or reference the intake group"
-        )
+        assert has_httpx or has_intake_ref, "full dep group must include httpx>=0.27 or reference the intake group"
 
 
 # ---------------------------------------------------------------------------
@@ -737,11 +725,7 @@ class TestFromAC_HttpxOptionalImport:
         """Remove owlbear_knowledge + httpx from sys.modules; return saved snapshot."""
         import sys
 
-        saved = {
-            k: v
-            for k, v in sys.modules.items()
-            if k == "httpx" or k.startswith("owlbear_knowledge")
-        }
+        saved = {k: v for k, v in sys.modules.items() if k == "httpx" or k.startswith("owlbear_knowledge")}
         for k in saved:
             del sys.modules[k]
         sys.modules["httpx"] = None  # type: ignore[assignment]  # simulate absent httpx
@@ -770,9 +754,7 @@ class TestFromAC_HttpxOptionalImport:
             from owlbear_knowledge.intake import read_text  # noqa: PLC0415
 
             result = read_text("works without httpx")
-            assert result.content == "works without httpx", (
-                "read_text must return content even when httpx is absent"
-            )
+            assert result.content == "works without httpx", "read_text must return content even when httpx is absent"
         finally:
             self._restore_modules(saved)
 
@@ -834,9 +816,7 @@ class TestFromAC_IngestCheckContentChangedScope:
         doc_store.check_content_changed.assert_called_once()
         call = doc_store.check_content_changed.call_args
         # scope must be passed as 3rd positional arg or as keyword arg
-        called_scope = call.kwargs.get("scope") or (
-            call.args[2] if len(call.args) > 2 else None
-        )
+        called_scope = call.kwargs.get("scope") or (call.args[2] if len(call.args) > 2 else None)
         assert called_scope == "project-scope", (
             f"check_content_changed must be called with scope='project-scope', "
             f"got: args={call.args!r}, kwargs={call.kwargs!r}"

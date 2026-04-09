@@ -1,4 +1,4 @@
-﻿"""Tests for task #457: Remove execute/* tools from reviewer agent.
+"""Tests for task #457: Remove execute/* tools from reviewer agent.
 
 AC contract under test:
 1. reviewer.agent.md tools list contains no execute/* entries
@@ -89,8 +89,7 @@ class TestFromAC_ReviewerNoExecuteTools:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "execute/testFailure" not in tools, (
-            "reviewer.agent.md tools still contains execute/testFailure -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains execute/testFailure -- must be removed by #457."
         )
 
     def test_tools_contains_no_execute_get_terminal_output(self) -> None:
@@ -98,8 +97,7 @@ class TestFromAC_ReviewerNoExecuteTools:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "execute/getTerminalOutput" not in tools, (
-            "reviewer.agent.md tools still contains execute/getTerminalOutput -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains execute/getTerminalOutput -- must be removed by #457."
         )
 
     def test_tools_contains_no_execute_await_terminal(self) -> None:
@@ -107,8 +105,7 @@ class TestFromAC_ReviewerNoExecuteTools:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "execute/awaitTerminal" not in tools, (
-            "reviewer.agent.md tools still contains execute/awaitTerminal -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains execute/awaitTerminal -- must be removed by #457."
         )
 
     def test_tools_contains_no_execute_kill_terminal(self) -> None:
@@ -116,8 +113,7 @@ class TestFromAC_ReviewerNoExecuteTools:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "execute/killTerminal" not in tools, (
-            "reviewer.agent.md tools still contains execute/killTerminal -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains execute/killTerminal -- must be removed by #457."
         )
 
     def test_tools_contains_no_execute_execution_subagent(self) -> None:
@@ -125,8 +121,7 @@ class TestFromAC_ReviewerNoExecuteTools:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "execute/executionSubagent" not in tools, (
-            "reviewer.agent.md tools still contains execute/executionSubagent -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains execute/executionSubagent -- must be removed by #457."
         )
 
     def test_tools_contains_no_execute_run_in_terminal(self) -> None:
@@ -134,8 +129,7 @@ class TestFromAC_ReviewerNoExecuteTools:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "execute/runInTerminal" not in tools, (
-            "reviewer.agent.md tools still contains execute/runInTerminal -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains execute/runInTerminal -- must be removed by #457."
         )
 
     def test_tools_contains_no_execute_run_tests(self) -> None:
@@ -143,8 +137,7 @@ class TestFromAC_ReviewerNoExecuteTools:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "execute/runTests" not in tools, (
-            "reviewer.agent.md tools still contains execute/runTests -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains execute/runTests -- must be removed by #457."
         )
 
     def test_tools_contains_no_execute_wildcard_entries(self) -> None:
@@ -169,8 +162,7 @@ class TestFromAC_ReviewerNoTerminalLastCommand:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         assert "read/terminalLastCommand" not in tools, (
-            "reviewer.agent.md tools still contains read/terminalLastCommand -- "
-            "must be removed by #457."
+            "reviewer.agent.md tools still contains read/terminalLastCommand -- must be removed by #457."
         )
 
 
@@ -183,68 +175,49 @@ class TestFromAC_ReviewerRetainsRequiredTools:
     def test_tools_retains_vscode_memory(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "vscode/memory" in tools, (
-            "reviewer.agent.md tools missing required entry: vscode/memory."
-        )
+        assert "vscode/memory" in tools, "reviewer.agent.md tools missing required entry: vscode/memory."
 
     def test_tools_retains_read_problems(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "read/problems" in tools, (
-            "reviewer.agent.md tools missing required entry: read/problems."
-        )
+        assert "read/problems" in tools, "reviewer.agent.md tools missing required entry: read/problems."
 
     def test_tools_retains_read_read_file(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "read/readFile" in tools, (
-            "reviewer.agent.md tools missing required entry: read/readFile."
-        )
+        assert "read/readFile" in tools, "reviewer.agent.md tools missing required entry: read/readFile."
 
     def test_tools_retains_read_view_image(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "read/viewImage" in tools, (
-            "reviewer.agent.md tools missing required entry: read/viewImage."
-        )
+        assert "read/viewImage" in tools, "reviewer.agent.md tools missing required entry: read/viewImage."
 
     def test_tools_retains_agent(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "agent" in tools, (
-            "reviewer.agent.md tools missing required entry: agent."
-        )
+        assert "agent" in tools, "reviewer.agent.md tools missing required entry: agent."
 
     def test_tools_retains_search(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "search" in tools, (
-            "reviewer.agent.md tools missing required entry: search."
-        )
+        assert "search" in tools, "reviewer.agent.md tools missing required entry: search."
 
     def test_tools_retains_owlbear_kanban_wildcard(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "owlbear-kanban/*" in tools, (
-            "reviewer.agent.md tools missing required entry: owlbear-kanban/*."
-        )
+        assert "owlbear-kanban/*" in tools, "reviewer.agent.md tools missing required entry: owlbear-kanban/*."
 
     def test_tools_retains_owlbear_memory_wildcard(self) -> None:
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
-        assert "owlbear-memory/*" in tools, (
-            "reviewer.agent.md tools missing required entry: owlbear-memory/*."
-        )
+        assert "owlbear-memory/*" in tools, "reviewer.agent.md tools missing required entry: owlbear-memory/*."
 
     def test_all_8_required_tools_present(self) -> None:
         """Aggregate guard: all 8 required entries must be present simultaneously."""
         fm = _get_frontmatter(REVIEWER_AGENT)
         tools = _parse_yaml_inline_list(fm, "tools")
         missing = [t for t in REQUIRED_TOOLS if t not in tools]
-        assert not missing, (
-            f"reviewer.agent.md tools missing required entries: {missing}. "
-            f"Current tools: {tools}"
-        )
+        assert not missing, f"reviewer.agent.md tools missing required entries: {missing}. Current tools: {tools}"
 
 
 class TestFromAC_WCodeReviewSkillMcpKanbanTools:
@@ -280,7 +253,6 @@ class TestFromAC_SkillsNoKanbanMdExe:
 
     Regression guard -- PASSES throughout.
     """
-
 
     def test_w_code_review_skill_has_no_kanban_md_exe(self) -> None:
         content = W_CODE_REVIEW_SKILL.read_text(encoding="utf-8")
@@ -370,4 +342,3 @@ class TestFromAC_WCodeReviewFallbackBlockInstruction:
             "w-code-review/SKILL.md Step 4 fallback missing BLOCK instruction "
             '(end_work(outcome="block", ...)). #457 must add it.'
         )
-

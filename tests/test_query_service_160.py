@@ -24,9 +24,7 @@ from owlbear_knowledge.retrieval import RetrievalResult
 def _make_graph() -> MagicMock:
     graph = MagicMock()
     graph.get_document_id_for_chunk.return_value = "doc1"
-    graph.get_document.return_value = MagicMock(
-        title="Title", content="content " * 50, scope="global"
-    )
+    graph.get_document.return_value = MagicMock(title="Title", content="content " * 50, scope="global")
     graph.list_entities_for_document.return_value = []
     return graph
 
@@ -67,7 +65,6 @@ def _fake_retriever(chunks: list[tuple[str, float]] | None = None) -> MagicMock:
 
 
 class TestFromAC_SearchChunksDelegation:
-
     # ---------------------------------------------------------------- Happy
 
     def test_search_chunks_method_exists(self) -> None:
@@ -157,9 +154,7 @@ class TestFromAC_SearchChunksDelegation:
         retriever = _fake_retriever(chunks=[("chunk-x", 0.95), ("chunk-y", 0.7)])
         svc = _make_service(retriever=retriever)
         result = svc._search_chunks("q", 5)
-        assert result == [("chunk-x", 0.95), ("chunk-y", 0.7)], (
-            f"Expected retriever chunks, got: {result}"
-        )
+        assert result == [("chunk-x", 0.95), ("chunk-y", 0.7)], f"Expected retriever chunks, got: {result}"
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +163,6 @@ class TestFromAC_SearchChunksDelegation:
 
 
 class TestFromAC_QueryUsesSearchChunks:
-
     @pytest.mark.asyncio(loop_scope="function")
     async def test_query_with_retriever_calls_retrieve_not_embed(self) -> None:
         """query() must call retriever.retrieve when retriever is configured."""
@@ -202,7 +196,6 @@ class TestFromAC_QueryUsesSearchChunks:
 
 
 class TestFromAC_QueryForContextUsesSearchChunks:
-
     def test_query_for_context_forwards_top_k_to_retriever(self) -> None:
         """query_for_context(top_k=N) must forward N to retriever.retrieve."""
         retriever = _fake_retriever(chunks=[])
@@ -210,9 +203,7 @@ class TestFromAC_QueryForContextUsesSearchChunks:
         svc.query_for_context("question", top_k=9)
         call_args = retriever.retrieve.call_args
         all_values = list(call_args.args) + list(call_args.kwargs.values())
-        assert 9 in all_values, (
-            f"top_k=9 not found in retriever.retrieve call; got: {call_args}"
-        )
+        assert 9 in all_values, f"top_k=9 not found in retriever.retrieve call; got: {call_args}"
 
     def test_query_for_context_forwards_scopes_to_retriever(self) -> None:
         """query_for_context() must forward self._scopes to retriever.retrieve."""
@@ -232,15 +223,12 @@ class TestFromAC_QueryForContextUsesSearchChunks:
 
 
 class TestBuilderDiscovered:
-
     def test_search_chunks_no_retriever_with_scopes_passes_scopes_to_vector_store(self) -> None:
         """_search_chunks without retriever should forward scopes to search_similar."""
         svc = _make_service(scopes=["global"])
         svc._search_chunks("q", 5)
         call_kwargs = svc._vectors.search_similar.call_args.kwargs
-        assert call_kwargs.get("scopes") == ["global"], (
-            f"scopes not forwarded to search_similar: {call_kwargs}"
-        )
+        assert call_kwargs.get("scopes") == ["global"], f"scopes not forwarded to search_similar: {call_kwargs}"
 
     def test_search_chunks_no_retriever_empty_embeddings_returns_empty_list(self) -> None:
         """_search_chunks returns [] when embedder provides no vectors."""

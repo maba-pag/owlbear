@@ -88,9 +88,17 @@ def _insert_entry(
             scope_agent, scope_project, approval_state, deleted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            eid, "test content", "knowledge", 0.8,
-            "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "test-agent",
-            None, None, approval_state, deleted_at,
+            eid,
+            "test content",
+            "knowledge",
+            0.8,
+            "2026-01-01T00:00:00Z",
+            "2026-01-01T00:00:00Z",
+            "test-agent",
+            None,
+            None,
+            approval_state,
+            deleted_at,
         ),
     )
     conn.commit()
@@ -115,8 +123,7 @@ class TestFromAC_ListSourcesErrorPrefix:
 
         msg = str(exc_info.value)
         assert not msg.startswith("error:"), (
-            f"ToolError message must not carry 'error:' prefix — double-prefix anti-pattern; "
-            f"got: {msg!r}"
+            f"ToolError message must not carry 'error:' prefix — double-prefix anti-pattern; got: {msg!r}"
         )
 
     @pytest.mark.asyncio
@@ -128,9 +135,7 @@ class TestFromAC_ListSourcesErrorPrefix:
             await list_sources(ctx)
 
         msg = str(exc_info.value)
-        assert msg == "source store not available", (
-            f"Expected 'source store not available', got: {msg!r}"
-        )
+        assert msg == "source store not available", f"Expected 'source store not available', got: {msg!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -151,8 +156,7 @@ class TestFromAC_GetStatsErrorPrefix:
 
         msg = str(exc_info.value)
         assert not msg.startswith("error:"), (
-            f"ToolError message must not carry 'error:' prefix — double-prefix anti-pattern; "
-            f"got: {msg!r}"
+            f"ToolError message must not carry 'error:' prefix — double-prefix anti-pattern; got: {msg!r}"
         )
 
     @pytest.mark.asyncio
@@ -164,9 +168,7 @@ class TestFromAC_GetStatsErrorPrefix:
             await get_stats(ctx)
 
         msg = str(exc_info.value)
-        assert msg == "graph store not available", (
-            f"Expected 'graph store not available', got: {msg!r}"
-        )
+        assert msg == "graph store not available", f"Expected 'graph store not available', got: {msg!r}"
 
 
 # ---------------------------------------------------------------------------

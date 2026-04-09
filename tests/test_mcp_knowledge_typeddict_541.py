@@ -72,9 +72,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert search_result_cls is not None, "SearchResult not defined at module scope"
         hints = typing.get_type_hints(search_result_cls)
         assert "title" in hints, f"SearchResult missing 'title' field; fields: {list(hints)}"
-        assert hints["title"] is str, (
-            f"SearchResult.title expected str, got {hints['title']!r}"
-        )
+        assert hints["title"] is str, f"SearchResult.title expected str, got {hints['title']!r}"
 
     def test_search_result_score_is_float(self) -> None:
         """SearchResult.score field annotation must be float."""
@@ -82,9 +80,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert search_result_cls is not None, "SearchResult not defined at module scope"
         hints = typing.get_type_hints(search_result_cls)
         assert "score" in hints, f"SearchResult missing 'score' field; fields: {list(hints)}"
-        assert hints["score"] is float, (
-            f"SearchResult.score expected float, got {hints['score']!r}"
-        )
+        assert hints["score"] is float, f"SearchResult.score expected float, got {hints['score']!r}"
 
     def test_search_result_snippet_is_str(self) -> None:
         """SearchResult.snippet field annotation must be str."""
@@ -92,9 +88,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert search_result_cls is not None, "SearchResult not defined at module scope"
         hints = typing.get_type_hints(search_result_cls)
         assert "snippet" in hints, f"SearchResult missing 'snippet' field; fields: {list(hints)}"
-        assert hints["snippet"] is str, (
-            f"SearchResult.snippet expected str, got {hints['snippet']!r}"
-        )
+        assert hints["snippet"] is str, f"SearchResult.snippet expected str, got {hints['snippet']!r}"
 
     def test_search_result_has_exactly_three_fields(self) -> None:
         """SearchResult must have exactly the fields: title, score, snippet (no extras)."""
@@ -110,9 +104,7 @@ class TestFromAC_TypedDictFieldAnnotations:
     def test_source_info_is_typeddict(self) -> None:
         """SourceInfo must be a TypedDict at module scope."""
         source_info_cls = getattr(server_mod, "SourceInfo", None)
-        assert source_info_cls is not None, (
-            "SourceInfo not found at module scope in owlbear_mcp_knowledge.server."
-        )
+        assert source_info_cls is not None, "SourceInfo not found at module scope in owlbear_mcp_knowledge.server."
         assert typing.is_typeddict(source_info_cls), (
             f"SourceInfo must be defined with TypedDict(), got type: {type(source_info_cls)}"
         )
@@ -131,9 +123,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert source_info_cls is not None, "SourceInfo not defined at module scope"
         hints = typing.get_type_hints(source_info_cls)
         assert "source_type" in hints, f"SourceInfo missing 'source_type' field; fields: {list(hints)}"
-        assert hints["source_type"] is str, (
-            f"SourceInfo.source_type expected str, got {hints['source_type']!r}"
-        )
+        assert hints["source_type"] is str, f"SourceInfo.source_type expected str, got {hints['source_type']!r}"
 
     def test_source_info_scope_is_str(self) -> None:
         """SourceInfo.scope field annotation must be str."""
@@ -148,9 +138,7 @@ class TestFromAC_TypedDictFieldAnnotations:
     def test_entity_info_is_typeddict(self) -> None:
         """EntityInfo must be a TypedDict at module scope."""
         entity_info_cls = getattr(server_mod, "EntityInfo", None)
-        assert entity_info_cls is not None, (
-            "EntityInfo not found at module scope in owlbear_mcp_knowledge.server."
-        )
+        assert entity_info_cls is not None, "EntityInfo not found at module scope in owlbear_mcp_knowledge.server."
         assert typing.is_typeddict(entity_info_cls), (
             f"EntityInfo must be defined with TypedDict(), got type: {type(entity_info_cls)}"
         )
@@ -169,9 +157,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert entity_info_cls is not None, "EntityInfo not defined at module scope"
         hints = typing.get_type_hints(entity_info_cls)
         assert "entity_type" in hints, f"EntityInfo missing 'entity_type' field; fields: {list(hints)}"
-        assert hints["entity_type"] is str, (
-            f"EntityInfo.entity_type expected str, got {hints['entity_type']!r}"
-        )
+        assert hints["entity_type"] is str, f"EntityInfo.entity_type expected str, got {hints['entity_type']!r}"
 
     def test_entity_info_description_is_str(self) -> None:
         """EntityInfo.description field annotation must be str."""
@@ -179,18 +165,14 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert entity_info_cls is not None, "EntityInfo not defined at module scope"
         hints = typing.get_type_hints(entity_info_cls)
         assert "description" in hints, f"EntityInfo missing 'description' field; fields: {list(hints)}"
-        assert hints["description"] is str, (
-            f"EntityInfo.description expected str, got {hints['description']!r}"
-        )
+        assert hints["description"] is str, f"EntityInfo.description expected str, got {hints['description']!r}"
 
     # -- AC4: StatsResult(documents: int, entities: int, edges: int) ---------
 
     def test_stats_result_is_typeddict(self) -> None:
         """StatsResult must be a TypedDict at module scope."""
         stats_result_cls = getattr(server_mod, "StatsResult", None)
-        assert stats_result_cls is not None, (
-            "StatsResult not found at module scope in owlbear_mcp_knowledge.server."
-        )
+        assert stats_result_cls is not None, "StatsResult not found at module scope in owlbear_mcp_knowledge.server."
         assert typing.is_typeddict(stats_result_cls), (
             f"StatsResult must be defined with TypedDict(), got type: {type(stats_result_cls)}"
         )
@@ -201,9 +183,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert stats_result_cls is not None, "StatsResult not defined at module scope"
         hints = typing.get_type_hints(stats_result_cls)
         assert "documents" in hints, f"StatsResult missing 'documents' field; fields: {list(hints)}"
-        assert hints["documents"] is int, (
-            f"StatsResult.documents expected int, got {hints['documents']!r}"
-        )
+        assert hints["documents"] is int, f"StatsResult.documents expected int, got {hints['documents']!r}"
 
     def test_stats_result_entities_is_int(self) -> None:
         """StatsResult.entities field annotation must be int."""
@@ -211,9 +191,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert stats_result_cls is not None, "StatsResult not defined at module scope"
         hints = typing.get_type_hints(stats_result_cls)
         assert "entities" in hints, f"StatsResult missing 'entities' field; fields: {list(hints)}"
-        assert hints["entities"] is int, (
-            f"StatsResult.entities expected int, got {hints['entities']!r}"
-        )
+        assert hints["entities"] is int, f"StatsResult.entities expected int, got {hints['entities']!r}"
 
     def test_stats_result_edges_is_int(self) -> None:
         """StatsResult.edges field annotation must be int."""
@@ -221,9 +199,7 @@ class TestFromAC_TypedDictFieldAnnotations:
         assert stats_result_cls is not None, "StatsResult not defined at module scope"
         hints = typing.get_type_hints(stats_result_cls)
         assert "edges" in hints, f"StatsResult missing 'edges' field; fields: {list(hints)}"
-        assert hints["edges"] is int, (
-            f"StatsResult.edges expected int, got {hints['edges']!r}"
-        )
+        assert hints["edges"] is int, f"StatsResult.edges expected int, got {hints['edges']!r}"
 
 
 # ---------------------------------------------------------------------------

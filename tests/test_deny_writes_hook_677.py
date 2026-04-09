@@ -43,9 +43,7 @@ _CHALLENGER_AGENT = _REPO_ROOT / "share" / "agents" / "challenger.agent.md"
 def _extract_frontmatter(content: str, agent_path: str) -> str:
     """Return the YAML text between the first --- ... --- block."""
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-    assert match is not None, (
-        f"No valid YAML frontmatter (--- ... ---) found in {agent_path}"
-    )
+    assert match is not None, f"No valid YAML frontmatter (--- ... ---) found in {agent_path}"
     return match.group(1)
 
 
@@ -65,30 +63,23 @@ class TestFromAC_AuditorAgentHooks:
         """AC1: auditor.agent.md frontmatter must contain a hooks: key."""
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "auditor.agent.md frontmatter is missing the 'hooks:' key. "
-            "Builder must add a PreToolUse hooks section."
+            "auditor.agent.md frontmatter is missing the 'hooks:' key. Builder must add a PreToolUse hooks section."
         )
 
     def test_frontmatter_has_pretooluse_entry(self) -> None:
         """AC1: hooks: section must contain a PreToolUse entry."""
         fm = self._frontmatter()
-        assert "PreToolUse" in fm, (
-            "auditor.agent.md frontmatter hooks: section is missing a PreToolUse entry."
-        )
+        assert "PreToolUse" in fm, "auditor.agent.md frontmatter hooks: section is missing a PreToolUse entry."
 
     def test_pretooluse_hook_type_is_command(self) -> None:
         """AC1: PreToolUse hook must specify type: command."""
         fm = self._frontmatter()
-        assert re.search(r"type:\s*command", fm), (
-            "auditor.agent.md PreToolUse hook must specify 'type: command'."
-        )
+        assert re.search(r"type:\s*command", fm), "auditor.agent.md PreToolUse hook must specify 'type: command'."
 
     def test_pretooluse_hook_command_references_deny_writes(self) -> None:
         """AC1: PreToolUse hook command must reference deny-writes.ps1."""
         fm = self._frontmatter()
-        assert "deny-writes.ps1" in fm, (
-            "auditor.agent.md PreToolUse hook command must point to deny-writes.ps1."
-        )
+        assert "deny-writes.ps1" in fm, "auditor.agent.md PreToolUse hook command must point to deny-writes.ps1."
 
     def test_frontmatter_is_parseable_yaml_with_pretooluse_hook(self) -> None:
         """AC6: auditor.agent.md frontmatter must parse as valid YAML with hooks.PreToolUse."""
@@ -99,17 +90,13 @@ class TestFromAC_AuditorAgentHooks:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
             pytest.fail(f"auditor.agent.md frontmatter is not valid YAML: {exc}")
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         assert "hooks" in parsed, (
             "Frontmatter parsed successfully but is missing 'hooks:' key — "
             "builder must add the PreToolUse hooks section."
         )
         hooks = parsed["hooks"]
-        assert "PreToolUse" in hooks, (
-            f"hooks section must contain PreToolUse key, got: {hooks!r}"
-        )
+        assert "PreToolUse" in hooks, f"hooks section must contain PreToolUse key, got: {hooks!r}"
 
     def test_pretooluse_hook_references_owlbear_hooks_path(self) -> None:
         """AC1: hook command must reference the .owlbear/hooks/ path."""
@@ -136,30 +123,23 @@ class TestFromAC_CodeReaderAgentHooks:
         """AC2: code-reader.agent.md frontmatter must contain a hooks: key."""
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "code-reader.agent.md frontmatter is missing the 'hooks:' key. "
-            "Builder must add a PreToolUse hooks section."
+            "code-reader.agent.md frontmatter is missing the 'hooks:' key. Builder must add a PreToolUse hooks section."
         )
 
     def test_frontmatter_has_pretooluse_entry(self) -> None:
         """AC2: hooks: section must contain a PreToolUse entry."""
         fm = self._frontmatter()
-        assert "PreToolUse" in fm, (
-            "code-reader.agent.md frontmatter hooks: section is missing a PreToolUse entry."
-        )
+        assert "PreToolUse" in fm, "code-reader.agent.md frontmatter hooks: section is missing a PreToolUse entry."
 
     def test_pretooluse_hook_type_is_command(self) -> None:
         """AC2: PreToolUse hook must specify type: command."""
         fm = self._frontmatter()
-        assert re.search(r"type:\s*command", fm), (
-            "code-reader.agent.md PreToolUse hook must specify 'type: command'."
-        )
+        assert re.search(r"type:\s*command", fm), "code-reader.agent.md PreToolUse hook must specify 'type: command'."
 
     def test_pretooluse_hook_command_references_deny_writes(self) -> None:
         """AC2: PreToolUse hook command must reference deny-writes.ps1."""
         fm = self._frontmatter()
-        assert "deny-writes.ps1" in fm, (
-            "code-reader.agent.md PreToolUse hook command must point to deny-writes.ps1."
-        )
+        assert "deny-writes.ps1" in fm, "code-reader.agent.md PreToolUse hook command must point to deny-writes.ps1."
 
     def test_frontmatter_is_parseable_yaml_with_pretooluse_hook(self) -> None:
         """AC6: code-reader.agent.md frontmatter must parse as valid YAML with hooks.PreToolUse."""
@@ -170,17 +150,13 @@ class TestFromAC_CodeReaderAgentHooks:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
             pytest.fail(f"code-reader.agent.md frontmatter is not valid YAML: {exc}")
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         assert "hooks" in parsed, (
             "Frontmatter parsed successfully but is missing 'hooks:' key — "
             "builder must add the PreToolUse hooks section."
         )
         hooks = parsed["hooks"]
-        assert "PreToolUse" in hooks, (
-            f"hooks section must contain PreToolUse key, got: {hooks!r}"
-        )
+        assert "PreToolUse" in hooks, f"hooks section must contain PreToolUse key, got: {hooks!r}"
 
     def test_pretooluse_hook_references_owlbear_hooks_path(self) -> None:
         """AC2: hook command must reference the .owlbear/hooks/ path."""
@@ -207,30 +183,23 @@ class TestFromAC_ChallengerAgentHooks:
         """AC3: challenger.agent.md frontmatter must contain a hooks: key."""
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "challenger.agent.md frontmatter is missing the 'hooks:' key. "
-            "Builder must add a PreToolUse hooks section."
+            "challenger.agent.md frontmatter is missing the 'hooks:' key. Builder must add a PreToolUse hooks section."
         )
 
     def test_frontmatter_has_pretooluse_entry(self) -> None:
         """AC3: hooks: section must contain a PreToolUse entry."""
         fm = self._frontmatter()
-        assert "PreToolUse" in fm, (
-            "challenger.agent.md frontmatter hooks: section is missing a PreToolUse entry."
-        )
+        assert "PreToolUse" in fm, "challenger.agent.md frontmatter hooks: section is missing a PreToolUse entry."
 
     def test_pretooluse_hook_type_is_command(self) -> None:
         """AC3: PreToolUse hook must specify type: command."""
         fm = self._frontmatter()
-        assert re.search(r"type:\s*command", fm), (
-            "challenger.agent.md PreToolUse hook must specify 'type: command'."
-        )
+        assert re.search(r"type:\s*command", fm), "challenger.agent.md PreToolUse hook must specify 'type: command'."
 
     def test_pretooluse_hook_command_references_deny_writes(self) -> None:
         """AC3: PreToolUse hook command must reference deny-writes.ps1."""
         fm = self._frontmatter()
-        assert "deny-writes.ps1" in fm, (
-            "challenger.agent.md PreToolUse hook command must point to deny-writes.ps1."
-        )
+        assert "deny-writes.ps1" in fm, "challenger.agent.md PreToolUse hook command must point to deny-writes.ps1."
 
     def test_frontmatter_is_parseable_yaml_with_pretooluse_hook(self) -> None:
         """AC6: challenger.agent.md frontmatter must parse as valid YAML with hooks.PreToolUse."""
@@ -241,17 +210,13 @@ class TestFromAC_ChallengerAgentHooks:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
             pytest.fail(f"challenger.agent.md frontmatter is not valid YAML: {exc}")
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         assert "hooks" in parsed, (
             "Frontmatter parsed successfully but is missing 'hooks:' key — "
             "builder must add the PreToolUse hooks section."
         )
         hooks = parsed["hooks"]
-        assert "PreToolUse" in hooks, (
-            f"hooks section must contain PreToolUse key, got: {hooks!r}"
-        )
+        assert "PreToolUse" in hooks, f"hooks section must contain PreToolUse key, got: {hooks!r}"
 
     def test_pretooluse_hook_references_owlbear_hooks_path(self) -> None:
         """AC3: hook command must reference the .owlbear/hooks/ path."""
@@ -303,9 +268,7 @@ class TestFromAC_GeneralizedHookMessage:
         assert _SCRIPT_PATH.exists(), f"deny-writes.ps1 not found at {_SCRIPT_PATH}."
         content = _SCRIPT_PATH.read_text(encoding="utf-8")
         reason_match = re.search(r"permissionDecisionReason\s*=\s*['\"](.+?)['\"]", content)
-        assert reason_match is not None, (
-            "deny-writes.ps1 does not contain a permissionDecisionReason assignment."
-        )
+        assert reason_match is not None, "deny-writes.ps1 does not contain a permissionDecisionReason assignment."
         reason_text = reason_match.group(1)
         assert "read-only" in reason_text.lower() or "read only" in reason_text.lower(), (
             f"permissionDecisionReason must use generic 'read-only' phrasing, got: {reason_text!r}."
@@ -316,9 +279,7 @@ class TestFromAC_GeneralizedHookMessage:
 
     def test_seed_script_comment_does_not_reference_reviewer(self) -> None:
         """AC4d: seed/.owlbear/hooks/deny-writes.ps1 comment header must not say 'reviewer'."""
-        assert _SEED_SCRIPT_PATH.exists(), (
-            f"seed deny-writes.ps1 not found at {_SEED_SCRIPT_PATH}."
-        )
+        assert _SEED_SCRIPT_PATH.exists(), f"seed deny-writes.ps1 not found at {_SEED_SCRIPT_PATH}."
         content = _SEED_SCRIPT_PATH.read_text(encoding="utf-8")
         first_line = content.splitlines()[0]
         assert "reviewer" not in first_line.lower(), (
@@ -328,14 +289,10 @@ class TestFromAC_GeneralizedHookMessage:
 
     def test_seed_script_reason_does_not_contain_reviewer(self) -> None:
         """AC4f: seed/.owlbear/hooks/deny-writes.ps1 permissionDecisionReason must not say 'reviewer'."""
-        assert _SEED_SCRIPT_PATH.exists(), (
-            f"seed deny-writes.ps1 not found at {_SEED_SCRIPT_PATH}."
-        )
+        assert _SEED_SCRIPT_PATH.exists(), f"seed deny-writes.ps1 not found at {_SEED_SCRIPT_PATH}."
         content = _SEED_SCRIPT_PATH.read_text(encoding="utf-8")
         reason_match = re.search(r"permissionDecisionReason\s*=\s*['\"](.+?)['\"]", content)
-        assert reason_match is not None, (
-            "seed/deny-writes.ps1 does not contain a permissionDecisionReason assignment."
-        )
+        assert reason_match is not None, "seed/deny-writes.ps1 does not contain a permissionDecisionReason assignment."
         reason_text = reason_match.group(1)
         assert "reviewer" not in reason_text.lower(), (
             f"seed permissionDecisionReason still contains 'reviewer': {reason_text!r}. "
@@ -344,14 +301,10 @@ class TestFromAC_GeneralizedHookMessage:
 
     def test_seed_script_reason_contains_read_only_and_not_reviewer(self) -> None:
         """AC4e+AC4f compound: seed permissionDecisionReason must contain 'read-only' AND not 'reviewer'."""
-        assert _SEED_SCRIPT_PATH.exists(), (
-            f"seed deny-writes.ps1 not found at {_SEED_SCRIPT_PATH}."
-        )
+        assert _SEED_SCRIPT_PATH.exists(), f"seed deny-writes.ps1 not found at {_SEED_SCRIPT_PATH}."
         content = _SEED_SCRIPT_PATH.read_text(encoding="utf-8")
         reason_match = re.search(r"permissionDecisionReason\s*=\s*['\"](.+?)['\"]", content)
-        assert reason_match is not None, (
-            "seed/deny-writes.ps1 does not contain a permissionDecisionReason assignment."
-        )
+        assert reason_match is not None, "seed/deny-writes.ps1 does not contain a permissionDecisionReason assignment."
         reason_text = reason_match.group(1)
         assert "read-only" in reason_text.lower() or "read only" in reason_text.lower(), (
             f"seed permissionDecisionReason must use generic 'read-only' phrasing, got: {reason_text!r}."

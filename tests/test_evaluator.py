@@ -123,14 +123,10 @@ class TestFromAC_SourceEvaluator:  # noqa: N801
     @pytest.mark.asyncio(loop_scope="function")
     async def test_evaluate_valid_returns_llm_fn_result(self) -> None:
         """evaluate() returns the EvaluationResult produced by llm_fn."""
-        mock_result = EvaluationResult(
-            relevance_score=0.9, tags=["ai"], summary="relevant", worth_ingesting=True
-        )
+        mock_result = EvaluationResult(relevance_score=0.9, tags=["ai"], summary="relevant", worth_ingesting=True)
         llm_fn: AsyncMock = AsyncMock(return_value=mock_result)
         evaluator = SourceEvaluator(llm_fn=llm_fn)
-        result = await evaluator.evaluate(
-            content="some content", project_context={"name": "project"}
-        )
+        result = await evaluator.evaluate(content="some content", project_context={"name": "project"})
         assert result.relevance_score == 0.9
         assert result.summary == "relevant"
         assert result.worth_ingesting is True
@@ -242,32 +238,24 @@ class TestFromAC_EvaluationResult:  # noqa: N801
 
     def test_tags_is_list_of_str(self) -> None:
         """tags field accepts a list of strings."""
-        result = EvaluationResult(
-            relevance_score=0.5, tags=["a", "b"], summary="test"
-        )
+        result = EvaluationResult(relevance_score=0.5, tags=["a", "b"], summary="test")
         assert isinstance(result.tags, list)
         assert all(isinstance(t, str) for t in result.tags)
 
     def test_summary_is_str(self) -> None:
         """summary field accepts a string value."""
-        result = EvaluationResult(
-            relevance_score=0.5, tags=[], summary="A summary text."
-        )
+        result = EvaluationResult(relevance_score=0.5, tags=[], summary="A summary text.")
         assert isinstance(result.summary, str)
 
     def test_worth_ingesting_is_bool(self) -> None:
         """worth_ingesting field is a boolean."""
-        result = EvaluationResult(
-            relevance_score=0.9, tags=[], summary="", worth_ingesting=True
-        )
+        result = EvaluationResult(relevance_score=0.9, tags=[], summary="", worth_ingesting=True)
         assert isinstance(result.worth_ingesting, bool)
         assert result.worth_ingesting is True
 
     def test_is_frozen_cannot_mutate_relevance_score(self) -> None:
         """EvaluationResult is frozen — mutating relevance_score raises an error."""
-        result = EvaluationResult(
-            relevance_score=0.5, tags=[], summary="immutable"
-        )
+        result = EvaluationResult(relevance_score=0.5, tags=[], summary="immutable")
         with pytest.raises((TypeError, ValidationError)):
             result.relevance_score = 0.9  # type: ignore[misc]
 
@@ -401,9 +389,7 @@ class TestFromAC_BackwardCompatConstructor:  # noqa: N801
         mock_result = EvaluationResult(relevance_score=0.8, tags=[], summary="wired")
         llm_fn: AsyncMock = AsyncMock(return_value=mock_result)
         evaluator = SourceEvaluator(llm_fn=llm_fn)
-        result = await evaluator.evaluate(
-            content="valid content", project_context={"name": "proj"}
-        )
+        result = await evaluator.evaluate(content="valid content", project_context={"name": "proj"})
         llm_fn.assert_awaited_once()
         assert result.relevance_score == 0.8
 
@@ -413,44 +399,34 @@ class TestFromAC_BackwardCompatConstructor:  # noqa: N801
     async def test_ac3_model_string_evaluate_no_crash(self) -> None:
         """AC3: evaluate(valid_content, valid_context) with model-string instance does not raise."""
         evaluator = SourceEvaluator("gpt-4o-mini")
-        result = await evaluator.evaluate(
-            content="some content", project_context={"name": "proj"}
-        )
+        result = await evaluator.evaluate(content="some content", project_context={"name": "proj"})
         assert isinstance(result, EvaluationResult)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_ac3_model_string_evaluate_returns_default_relevance(self) -> None:
         """AC3: evaluate() with model-string instance returns relevance_score=0.5."""
         evaluator = SourceEvaluator("gpt-4o-mini")
-        result = await evaluator.evaluate(
-            content="some content", project_context={"name": "proj"}
-        )
+        result = await evaluator.evaluate(content="some content", project_context={"name": "proj"})
         assert result.relevance_score == 0.5
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_ac3_model_string_evaluate_returns_worth_ingesting_true(self) -> None:
         """AC3: evaluate() with model-string instance returns worth_ingesting=True."""
         evaluator = SourceEvaluator("gpt-4o-mini")
-        result = await evaluator.evaluate(
-            content="some content", project_context={"name": "proj"}
-        )
+        result = await evaluator.evaluate(content="some content", project_context={"name": "proj"})
         assert result.worth_ingesting is True
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_ac3_model_string_evaluate_default_summary(self) -> None:
         """AC3: evaluate() with model-string instance summary contains 'No project context available'."""
         evaluator = SourceEvaluator("gpt-4o-mini")
-        result = await evaluator.evaluate(
-            content="some content", project_context={"name": "proj"}
-        )
+        result = await evaluator.evaluate(content="some content", project_context={"name": "proj"})
         assert "No project context available" in result.summary
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_ac3_none_instance_evaluate_valid_context_returns_default(self) -> None:
         """AC3: SourceEvaluator(None).evaluate(content, context) returns _default_result()."""
         evaluator = SourceEvaluator(None)
-        result = await evaluator.evaluate(
-            content="relevant text", project_context={"name": "proj", "goals": "learn"}
-        )
+        result = await evaluator.evaluate(content="relevant text", project_context={"name": "proj", "goals": "learn"})
         assert result.relevance_score == 0.5
         assert result.worth_ingesting is True

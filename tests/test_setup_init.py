@@ -49,9 +49,7 @@ class TestFromAC_SeedSettingsTemplate:
     """AC1: seed/.vscode/settings.json must exist with all three chat.*Locations keys."""
 
     def test_seed_vscode_settings_json_exists(self) -> None:
-        assert (_SEED_DIR / ".vscode" / "settings.json").exists(), (
-            "seed/.vscode/settings.json does not exist"
-        )
+        assert (_SEED_DIR / ".vscode" / "settings.json").exists(), "seed/.vscode/settings.json does not exist"
 
     def test_seed_settings_has_agent_files_locations_key(self) -> None:
         data = json.loads((_SEED_DIR / ".vscode" / "settings.json").read_text(encoding="utf-8"))
@@ -96,17 +94,14 @@ class TestFromAC_SeedMcpTemplate:
         assert "github" in data["servers"], (
             f"'github' key missing from seed mcp.json servers: {list(data['servers'].keys())}"
         )
-        assert data["servers"]["github"].get("type") == "http", (
-            "github server must have type: http"
-        )
+        assert data["servers"]["github"].get("type") == "http", "github server must have type: http"
 
     def test_seed_mcp_has_all_four_owlbear_kebab_case_servers(self) -> None:
         data = json.loads((_SEED_DIR / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
         expected = {"owlbear-kanban", "owlbear-knowledge", "owlbear-memory", "owlbear-project"}
         missing = expected - set(data["servers"].keys())
         assert not missing, (
-            f"Seed mcp.json missing kebab-case server keys: {missing}. "
-            f"Found: {list(data['servers'].keys())}"
+            f"Seed mcp.json missing kebab-case server keys: {missing}. Found: {list(data['servers'].keys())}"
         )
 
     def test_seed_mcp_stdio_servers_include_project_flag(self) -> None:
@@ -115,9 +110,7 @@ class TestFromAC_SeedMcpTemplate:
         for name, entry in data["servers"].items():
             if entry.get("type") == "stdio":
                 args = entry.get("args", [])
-                assert "--project" in args, (
-                    f"stdio server '{name}' missing --project in args: {args}"
-                )
+                assert "--project" in args, f"stdio server '{name}' missing --project in args: {args}"
 
     def test_seed_mcp_stdio_servers_include_owlbear_path_placeholder(self) -> None:
         """AC2: stdio server args must include {{owlbear_path}} placeholder for replacement."""
@@ -145,17 +138,13 @@ class TestFromAC_SeedKanbanConfig:
 
     def test_seed_kanban_config_has_next_id_one(self) -> None:
         content = (_SEED_DIR / ".owlbear" / "kanban" / "config.yml").read_text(encoding="utf-8")
-        assert "next_id: 1" in content, (
-            f"seed kanban/config.yml must have 'next_id: 1' — got:\n{content}"
-        )
+        assert "next_id: 1" in content, f"seed kanban/config.yml must have 'next_id: 1' — got:\n{content}"
 
     def test_seed_kanban_config_has_standard_statuses(self) -> None:
         """Standard pipeline statuses must match the current board statuses."""
         content = (_SEED_DIR / ".owlbear" / "kanban" / "config.yml").read_text(encoding="utf-8")
         for status in ("todo", "in-progress", "done"):
-            assert status in content, (
-                f"Standard status '{status}' missing from seed kanban/config.yml"
-            )
+            assert status in content, f"Standard status '{status}' missing from seed kanban/config.yml"
 
 
 # ---------------------------------------------------------------------------
@@ -214,9 +203,7 @@ class TestFromAC_SeedOwlbearProjectJson:
     """AC7: seed/owlbear-project.json with {{name}}/{{type}} placeholders; schema_version hardcoded."""
 
     def test_seed_owlbear_project_json_exists(self) -> None:
-        assert (_SEED_DIR / "owlbear-project.json").exists(), (
-            "seed/owlbear-project.json does not exist"
-        )
+        assert (_SEED_DIR / "owlbear-project.json").exists(), "seed/owlbear-project.json does not exist"
 
     def test_seed_owlbear_project_json_has_name_placeholder(self) -> None:
         content = (_SEED_DIR / "owlbear-project.json").read_text(encoding="utf-8")
@@ -264,9 +251,7 @@ class TestFromAC_InitFunction:
         target = tmp_path / "target"
         target.mkdir()
         init(target, _OWLBEAR_DIR)
-        assert (target / ".vscode" / "settings.json").exists(), (
-            "init() did not create .vscode/settings.json"
-        )
+        assert (target / ".vscode" / "settings.json").exists(), "init() did not create .vscode/settings.json"
 
     def test_init_creates_mcp_json(self, tmp_path: Path) -> None:
         from init import init  # type: ignore[import]
@@ -306,13 +291,9 @@ class TestFromAC_InitFunction:
         target = tmp_path / "target"
         target.mkdir()
         init(target, _OWLBEAR_DIR)
-        assert (target / "owlbear-project.json").exists(), (
-            "init() did not create owlbear-project.json"
-        )
+        assert (target / "owlbear-project.json").exists(), "init() did not create owlbear-project.json"
 
-    def test_init_owlbear_project_json_name_defaults_to_target_dir_name(
-        self, tmp_path: Path
-    ) -> None:
+    def test_init_owlbear_project_json_name_defaults_to_target_dir_name(self, tmp_path: Path) -> None:
         from init import init  # type: ignore[import]
 
         target = tmp_path / "my-project-dir"
@@ -330,22 +311,16 @@ class TestFromAC_InitFunction:
         target.mkdir()
         init(target, _OWLBEAR_DIR, name="custom-project-name")
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
-        assert data["name"] == "custom-project-name", (
-            f"explicit name kwarg not respected, got {data['name']!r}"
-        )
+        assert data["name"] == "custom-project-name", f"explicit name kwarg not respected, got {data['name']!r}"
 
-    def test_init_owlbear_project_json_project_type_defaults_to_bare(
-        self, tmp_path: Path
-    ) -> None:
+    def test_init_owlbear_project_json_project_type_defaults_to_bare(self, tmp_path: Path) -> None:
         from init import init  # type: ignore[import]
 
         target = tmp_path / "target"
         target.mkdir()
         init(target, _OWLBEAR_DIR)
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
-        assert data["type"] == "bare", (
-            f"project_type should default to 'bare', got {data['type']!r}"
-        )
+        assert data["type"] == "bare", f"project_type should default to 'bare', got {data['type']!r}"
 
     def test_init_owlbear_project_json_project_type_accepts_kwarg(self, tmp_path: Path) -> None:
         from init import init  # type: ignore[import]
@@ -354,13 +329,9 @@ class TestFromAC_InitFunction:
         target.mkdir()
         init(target, _OWLBEAR_DIR, project_type="python-uv")
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
-        assert data["type"] == "python-uv", (
-            f"project_type kwarg not respected, got {data['type']!r}"
-        )
+        assert data["type"] == "python-uv", f"project_type kwarg not respected, got {data['type']!r}"
 
-    def test_init_owlbear_project_json_owlbear_path_is_relative_posix(
-        self, tmp_path: Path
-    ) -> None:
+    def test_init_owlbear_project_json_owlbear_path_is_relative_posix(self, tmp_path: Path) -> None:
         from init import init  # type: ignore[import]
 
         target = tmp_path / "target"
@@ -368,9 +339,7 @@ class TestFromAC_InitFunction:
         init(target, _OWLBEAR_DIR)
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
         owlbear_path = data["owlbear_path"]
-        assert "\\" not in owlbear_path, (
-            f"owlbear_path must use forward slashes (POSIX), got: {owlbear_path!r}"
-        )
+        assert "\\" not in owlbear_path, f"owlbear_path must use forward slashes (POSIX), got: {owlbear_path!r}"
         assert not Path(owlbear_path).is_absolute(), (
             f"owlbear_path must be relative (via os.path.relpath), got absolute: {owlbear_path!r}"
         )
@@ -411,9 +380,7 @@ class TestFromAC_InitFunction:
         (vscode_dir / "mcp.json").write_text('{"SENTINEL_MCP": true}', encoding="utf-8")
         init(target, _OWLBEAR_DIR)
         content = (target / ".vscode" / "mcp.json").read_text(encoding="utf-8")
-        assert "SENTINEL_MCP" in content, (
-            "mcp.json was overwritten despite already existing — idempotency broken"
-        )
+        assert "SENTINEL_MCP" in content, "mcp.json was overwritten despite already existing — idempotency broken"
 
     def test_init_idempotent_skips_owlbear_project_json_if_exists(self, tmp_path: Path) -> None:
         """owlbear-project.json must not be overwritten on second call."""
@@ -421,9 +388,7 @@ class TestFromAC_InitFunction:
 
         target = tmp_path / "target"
         target.mkdir()
-        (target / "owlbear-project.json").write_text(
-            '{"SENTINEL_PROJECT": true}', encoding="utf-8"
-        )
+        (target / "owlbear-project.json").write_text('{"SENTINEL_PROJECT": true}', encoding="utf-8")
         init(target, _OWLBEAR_DIR)
         content = (target / "owlbear-project.json").read_text(encoding="utf-8")
         assert "SENTINEL_PROJECT" in content, (
@@ -507,9 +472,7 @@ class TestFromAC_SettingsDeepMerge:
             ("chat.agentSkillsLocations", "user/skills"),
             ("chat.instructionsFilesLocations", "user/instructions"),
         ):
-            assert user_path in data[key], (
-                f"User path '{user_path}' in {key} was lost during deep merge"
-            )
+            assert user_path in data[key], f"User path '{user_path}' in {key} was lost during deep merge"
 
     def test_deep_merge_user_value_wins_on_same_path_conflict(self, tmp_path: Path) -> None:
         """When user and owlbear have the same path key, user's value (bool) takes priority."""
@@ -519,9 +482,7 @@ class TestFromAC_SettingsDeepMerge:
         probe = tmp_path / "probe"
         probe.mkdir()
         init(probe, _OWLBEAR_DIR)
-        probe_data = json.loads(
-            (probe / ".vscode" / "settings.json").read_text(encoding="utf-8")
-        )
+        probe_data = json.loads((probe / ".vscode" / "settings.json").read_text(encoding="utf-8"))
         agent_paths = list(probe_data.get("chat.agentFilesLocations", {}).keys())
         if not agent_paths:
             pytest.skip("No agentFilesLocations paths resolved — cannot test conflict")
@@ -563,9 +524,7 @@ class TestFromAC_SettingsDeepMerge:
             "editor.wordWrap was overwritten — user values must win in shallow merge"
         )
 
-    def test_deep_merge_adds_owlbear_paths_to_existing_chat_location_entries(
-        self, tmp_path: Path
-    ) -> None:
+    def test_deep_merge_adds_owlbear_paths_to_existing_chat_location_entries(self, tmp_path: Path) -> None:
         """After merge, chat.agentFilesLocations must contain more than just the user's single path."""
         from init import init  # type: ignore[import]
 
@@ -599,8 +558,7 @@ class TestFromAC_CliInterface:
         script = _SETUP_DIR / "init.py"
         content = script.read_text(encoding="utf-8")
         assert '__name__ == "__main__"' in content, (
-            "setup/init.py has no if __name__ == '__main__' guard — "
-            "running `python setup/init.py` would be a no-op"
+            "setup/init.py has no if __name__ == '__main__' guard — running `python setup/init.py` would be a no-op"
         )
 
     def test_cli_accepts_name_argument(self, tmp_path: Path) -> None:
@@ -615,9 +573,7 @@ class TestFromAC_CliInterface:
             text=True,
             timeout=30,
         )
-        assert result.returncode == 0, (
-            f"CLI exited non-zero ({result.returncode})\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"CLI exited non-zero ({result.returncode})\nstderr: {result.stderr}"
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["name"] == "cli-project-name", (
             f"--name kwarg not written to owlbear-project.json, got {data['name']!r}"
@@ -635,10 +591,6 @@ class TestFromAC_CliInterface:
             text=True,
             timeout=30,
         )
-        assert result.returncode == 0, (
-            f"CLI exited non-zero ({result.returncode})\nstderr: {result.stderr}"
-        )
+        assert result.returncode == 0, f"CLI exited non-zero ({result.returncode})\nstderr: {result.stderr}"
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
-        assert data["type"] == "python-uv", (
-            f"--type kwarg not written to owlbear-project.json, got {data['type']!r}"
-        )
+        assert data["type"] == "python-uv", f"--type kwarg not written to owlbear-project.json, got {data['type']!r}"

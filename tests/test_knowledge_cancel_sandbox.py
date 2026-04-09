@@ -258,9 +258,7 @@ class TestFromAC_SandboxPath:
         with pytest.raises(PermissionError):
             sandbox_path(tmp_path, "\x00")
 
-    def test_dotdot_traversal_outside_root_raises_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dotdot_traversal_outside_root_raises_permission_error(self, tmp_path: Path) -> None:
         """A `..` traversal that escapes root raises PermissionError."""
         from owlbear_knowledge._paths import sandbox_path
 
@@ -307,9 +305,7 @@ class TestFromAC_SandboxPath:
         result = sandbox_path(tmp_path, "subdir/../file.txt")
         assert result == (tmp_path / "file.txt").resolve()
 
-    def test_prefix_sibling_directory_raises_permission_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_prefix_sibling_directory_raises_permission_error(self, tmp_path: Path) -> None:
         """A path in a sibling whose name is a string prefix of root raises PermissionError.
 
         Security regression for CWE-22: str.startswith() allows escape when a sibling

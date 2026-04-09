@@ -103,15 +103,13 @@ class TestFromAC_KanbanTaskModelExists:
 
         mod = importlib.util.find_spec("owlbear_mcp_kanban.models")
         assert mod is not None, (
-            "owlbear_mcp_kanban.models not found; "
-            "create packages/mcp-kanban/src/owlbear_mcp_kanban/models.py"
+            "owlbear_mcp_kanban.models not found; create packages/mcp-kanban/src/owlbear_mcp_kanban/models.py"
         )
 
     def test_kanbantask_is_importable(self) -> None:
         """KanbanTask must be importable from owlbear_mcp_kanban.models."""
         assert _KanbanTask is not None, (
-            "KanbanTask is not importable from owlbear_mcp_kanban.models; "
-            "builder must create the model"
+            "KanbanTask is not importable from owlbear_mcp_kanban.models; builder must create the model"
         )
 
     def test_kanbantask_is_pydantic_basemodel(self) -> None:
@@ -136,8 +134,7 @@ class TestFromAC_KanbanTaskModelConfig:
         assert _KanbanTask is not None
         config = _KanbanTask.model_config
         assert config.get("populate_by_name") is True, (
-            "KanbanTask.model_config must set populate_by_name=True to allow field names "
-            "alongside aliases"
+            "KanbanTask.model_config must set populate_by_name=True to allow field names alongside aliases"
         )
 
     # AC: default extra=ignore (structuredContent matches outputSchema without extras)
@@ -327,9 +324,7 @@ class TestFromAC_ShowTaskReturnsKanbanTask:
         stdout = json.dumps(_FULL_TASK_JSON)
         with _patch_run(stdout=stdout, rc=0):
             result = await show_task(mcp_ctx, "495")
-        assert isinstance(result, _KanbanTask), (
-            f"show_task must return KanbanTask instance, got {type(result)}"
-        )
+        assert isinstance(result, _KanbanTask), f"show_task must return KanbanTask instance, got {type(result)}"
 
     # AC: show_task error path: raise ToolError(stderr.strip())
     @pytest.mark.asyncio
@@ -338,9 +333,7 @@ class TestFromAC_ShowTaskReturnsKanbanTask:
         mcp_ctx = _make_mcp_ctx()
         with _patch_run(stdout="", stderr="task not found", rc=1), pytest.raises(ToolError) as exc_info:
             await show_task(mcp_ctx, "9999")
-        assert "task not found" in str(exc_info.value), (
-            "ToolError message must contain the stderr text"
-        )
+        assert "task not found" in str(exc_info.value), "ToolError message must contain the stderr text"
 
     @pytest.mark.asyncio
     async def test_show_task_no_longer_returns_error_string(self) -> None:
@@ -379,9 +372,7 @@ class TestFromAC_MoveTaskReturnsKanbanTask:
         stdout = json.dumps({**_FULL_TASK_JSON, "status": "in-progress"})
         with _patch_run(stdout=stdout, rc=0):
             result = await move_task(mcp_ctx, "495", "in-progress")
-        assert isinstance(result, _KanbanTask), (
-            f"move_task must return KanbanTask instance, got {type(result)}"
-        )
+        assert isinstance(result, _KanbanTask), f"move_task must return KanbanTask instance, got {type(result)}"
 
     # AC: move_task error path: raise ToolError(stderr.strip())
     @pytest.mark.asyncio
@@ -412,6 +403,7 @@ class TestFromAC_OutputSchemaAnnotations:
 
     def _get_tool(self, name: str) -> Any:
         from owlbear_mcp_kanban.server import mcp
+
         tools = {t.name: t for t in mcp._tool_manager._tools.values()}  # type: ignore[union-attr]
         assert name in tools, f"'{name}' must be registered in FastMCP"
         return tools[name]
@@ -428,9 +420,7 @@ class TestFromAC_OutputSchemaAnnotations:
             "show_task outputSchema must include KanbanTask fields (id, title, ...); "
             f"currently has properties: {list(props.keys())} — change return type to KanbanTask"
         )
-        assert "title" in props, (
-            "show_task outputSchema must include 'title' field from KanbanTask"
-        )
+        assert "title" in props, "show_task outputSchema must include 'title' field from KanbanTask"
 
     # AC: outputSchema in tool listing for move_task — must have KanbanTask fields
     def test_move_task_has_kanbantask_output_schema(self) -> None:

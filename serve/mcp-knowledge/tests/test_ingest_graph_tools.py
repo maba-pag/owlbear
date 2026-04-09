@@ -129,10 +129,10 @@ class TestFromAC_IngestDocument:
             text="sample",
         )
 
-        assert "10" in output    # chunk_count
-        assert "4" in output     # entity_count
-        assert "2" in output     # edge_count
-        assert "ok" in output    # status
+        assert "10" in output  # chunk_count
+        assert "4" in output  # entity_count
+        assert "2" in output  # edge_count
+        assert "ok" in output  # status
 
     @pytest.mark.asyncio
     async def test_return_format_contains_chunks_entities_edges_status_keywords(self) -> None:
@@ -753,9 +753,7 @@ class TestFromAC_AppContextExtension:
         all_args = list(mock_extractor_cls.call_args.args or ()) + list(
             (mock_extractor_cls.call_args.kwargs or {}).values()
         )
-        assert "gpt-4o-mini" in all_args, (
-            f"Expected 'gpt-4o-mini' among EntityExtractor args: {all_args}"
-        )
+        assert "gpt-4o-mini" in all_args, f"Expected 'gpt-4o-mini' among EntityExtractor args: {all_args}"
 
     @pytest.mark.asyncio
     async def test_entity_extractor_receives_some_default_model_string(self) -> None:
@@ -789,10 +787,23 @@ class TestFromAC_AppContextExtension:
 # TestFromAC_ToolDescriptions
 # ---------------------------------------------------------------------------
 
-_VERB_FIRST_WORDS: frozenset[str] = frozenset({
-    "ingest", "list", "get", "search", "add", "create", "fetch",
-    "retrieve", "return", "show", "find", "compute", "query",
-})
+_VERB_FIRST_WORDS: frozenset[str] = frozenset(
+    {
+        "ingest",
+        "list",
+        "get",
+        "search",
+        "add",
+        "create",
+        "fetch",
+        "retrieve",
+        "return",
+        "show",
+        "find",
+        "compute",
+        "query",
+    }
+)
 
 
 def _get_tool_description(tool_name: str) -> str:
@@ -812,25 +823,19 @@ class TestFromAC_ToolDescriptions:
         """ingest_document tool description opens with an action verb."""
         desc = _get_tool_description("ingest_document")
         first_word = desc.strip().split()[0].lower().rstrip(".,") if desc.strip() else ""
-        assert first_word in _VERB_FIRST_WORDS, (
-            f"'ingest_document' description should start with a verb, got: {desc!r}"
-        )
+        assert first_word in _VERB_FIRST_WORDS, f"'ingest_document' description should start with a verb, got: {desc!r}"
 
     def test_list_entities_description_is_verb_first(self) -> None:
         """list_entities tool description opens with an action verb."""
         desc = _get_tool_description("list_entities")
         first_word = desc.strip().split()[0].lower().rstrip(".,") if desc.strip() else ""
-        assert first_word in _VERB_FIRST_WORDS, (
-            f"'list_entities' description should start with a verb, got: {desc!r}"
-        )
+        assert first_word in _VERB_FIRST_WORDS, f"'list_entities' description should start with a verb, got: {desc!r}"
 
     def test_get_stats_description_is_verb_first(self) -> None:
         """get_stats tool description opens with an action verb."""
         desc = _get_tool_description("get_stats")
         first_word = desc.strip().split()[0].lower().rstrip(".,") if desc.strip() else ""
-        assert first_word in _VERB_FIRST_WORDS, (
-            f"'get_stats' description should start with a verb, got: {desc!r}"
-        )
+        assert first_word in _VERB_FIRST_WORDS, f"'get_stats' description should start with a verb, got: {desc!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -853,9 +858,7 @@ class TestFromAC_ToolReadOnlyHints:
     def test_ingest_document_has_read_only_hint_false(self) -> None:
         """ingest_document must be registered with readOnlyHint=False (it writes to the KB)."""
         annotations = _get_tool_annotations("ingest_document")
-        assert annotations is not None, (
-            "ingest_document has no ToolAnnotations; readOnlyHint=False must be set"
-        )
+        assert annotations is not None, "ingest_document has no ToolAnnotations; readOnlyHint=False must be set"
         assert annotations.readOnlyHint is False, (  # type: ignore[union-attr]
             f"Expected readOnlyHint=False for ingest_document, got: {annotations.readOnlyHint!r}"
         )
@@ -863,9 +866,7 @@ class TestFromAC_ToolReadOnlyHints:
     def test_list_entities_has_read_only_hint_true(self) -> None:
         """list_entities must be registered with readOnlyHint=True (it only reads the KB)."""
         annotations = _get_tool_annotations("list_entities")
-        assert annotations is not None, (
-            "list_entities has no ToolAnnotations; readOnlyHint=True must be set"
-        )
+        assert annotations is not None, "list_entities has no ToolAnnotations; readOnlyHint=True must be set"
         assert annotations.readOnlyHint is True, (  # type: ignore[union-attr]
             f"Expected readOnlyHint=True for list_entities, got: {annotations.readOnlyHint!r}"
         )
@@ -873,9 +874,7 @@ class TestFromAC_ToolReadOnlyHints:
     def test_get_stats_has_read_only_hint_true(self) -> None:
         """get_stats must be registered with readOnlyHint=True (it only reads counts)."""
         annotations = _get_tool_annotations("get_stats")
-        assert annotations is not None, (
-            "get_stats has no ToolAnnotations; readOnlyHint=True must be set"
-        )
+        assert annotations is not None, "get_stats has no ToolAnnotations; readOnlyHint=True must be set"
         assert annotations.readOnlyHint is True, (  # type: ignore[union-attr]
             f"Expected readOnlyHint=True for get_stats, got: {annotations.readOnlyHint!r}"
         )

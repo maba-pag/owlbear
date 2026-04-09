@@ -397,9 +397,7 @@ class TestFromAC_GraphAugmentedRetrieverInterface:
         sig = inspect.signature(GraphAugmentedRetriever.__init__)
         param = sig.parameters.get("max_neighbors_per_entity")
         assert param is not None, "__init__ must have a max_neighbors_per_entity parameter"
-        assert param.default == 10, (
-            f"max_neighbors_per_entity default must be 10, got {param.default!r}"
-        )
+        assert param.default == 10, f"max_neighbors_per_entity default must be 10, got {param.default!r}"
 
     # -- max_expansion_tokens default = 2000 ----------------------------------
 
@@ -410,9 +408,7 @@ class TestFromAC_GraphAugmentedRetrieverInterface:
         sig = inspect.signature(GraphAugmentedRetriever.__init__)
         param = sig.parameters.get("max_expansion_tokens")
         assert param is not None, "__init__ must have a max_expansion_tokens parameter"
-        assert param.default == 2000, (
-            f"max_expansion_tokens default must be 2000, got {param.default!r}"
-        )
+        assert param.default == 2000, f"max_expansion_tokens default must be 2000, got {param.default!r}"
 
     # -- retrieve(query, top_k: int = 5, scopes) --------------------------------
 
@@ -468,9 +464,7 @@ class TestFromAC_GraphAugmentedRetrieverInterface:
             graph_store=MagicMock(),
             embedding_provider=MagicMock(),
         )
-        assert callable(getattr(r, "_embed", None)), (
-            "GraphAugmentedRetriever must have a callable _embed() method"
-        )
+        assert callable(getattr(r, "_embed", None)), "GraphAugmentedRetriever must have a callable _embed() method"
 
     def test_embed_prefers_embed_hybrid_when_available(self) -> None:
         """AC: _embed() calls embed_hybrid when the embedding provider supports it."""
@@ -613,12 +607,8 @@ class TestFromAC_MaxNeighborsPerEntity:
 
         lines_a = [ln for ln in result.expansion_text.splitlines() if "SeedA" in ln]
         lines_b = [ln for ln in result.expansion_text.splitlines() if "SeedB" in ln]
-        assert len(lines_a) <= 2, (
-            f"SeedA should have at most 2 expansion lines, got {len(lines_a)}"
-        )
-        assert len(lines_b) <= 2, (
-            f"SeedB should have at most 2 expansion lines, got {len(lines_b)}"
-        )
+        assert len(lines_a) <= 2, f"SeedA should have at most 2 expansion lines, got {len(lines_a)}"
+        assert len(lines_b) <= 2, f"SeedB should have at most 2 expansion lines, got {len(lines_b)}"
 
     # -- Boundary conditions -------------------------------------------------
 
@@ -651,9 +641,7 @@ class TestFromAC_MaxNeighborsPerEntity:
 
         result = retriever.retrieve("query")
 
-        assert result.expansion_text == "", (
-            "max_neighbors_per_entity=0 should produce empty expansion text"
-        )
+        assert result.expansion_text == "", "max_neighbors_per_entity=0 should produce empty expansion text"
 
     def test_default_ten_allows_up_to_ten_neighbors_per_entity(self) -> None:
         """AC: default max_neighbors_per_entity=10 allows up to 10 neighbors, not more."""

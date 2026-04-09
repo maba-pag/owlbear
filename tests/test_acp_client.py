@@ -172,7 +172,10 @@ class TestFromAC_Cancellation:  # noqa: N801
         """asyncio.TimeoutError during prompt → conn.cancel(session_id=...) is awaited."""
         conn = _make_conn()
         client = AcpClient(conn)
-        with patch(f"{_MODULE}.asyncio.wait_for", side_effect=asyncio.TimeoutError), pytest.raises((asyncio.TimeoutError, AcpClientError)):
+        with (
+            patch(f"{_MODULE}.asyncio.wait_for", side_effect=asyncio.TimeoutError),
+            pytest.raises((asyncio.TimeoutError, AcpClientError)),
+        ):
             await client.prompt(session_id=_SESSION_ID)
         conn.cancel.assert_awaited_once_with(session_id=_SESSION_ID)
 
@@ -427,13 +430,8 @@ class TestFromAC_ExplicitSignatureEnforcement:  # noqa: N801
         Architecture Review: no **kwargs pass-through — keep the wrapper typed.
         """
         params = inspect.signature(AcpClient.initialize).parameters
-        var_kw = [
-            name for name, p in params.items()
-            if p.kind == inspect.Parameter.VAR_KEYWORD
-        ]
-        assert var_kw == [], (
-            f"initialize() has **{var_kw} — Architecture Review requires explicit params, no **kwargs"
-        )
+        var_kw = [name for name, p in params.items() if p.kind == inspect.Parameter.VAR_KEYWORD]
+        assert var_kw == [], f"initialize() has **{var_kw} — Architecture Review requires explicit params, no **kwargs"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_initialize_requires_protocol_version_at_runtime(self) -> None:
@@ -452,9 +450,7 @@ class TestFromAC_ExplicitSignatureEnforcement:  # noqa: N801
     def test_new_session_signature_has_cwd(self) -> None:
         """new_session() must declare 'cwd' as an explicit named parameter."""
         params = inspect.signature(AcpClient.new_session).parameters
-        assert "cwd" in params, (
-            "new_session() must declare 'cwd' explicitly, not absorb via **kwargs"
-        )
+        assert "cwd" in params, "new_session() must declare 'cwd' explicitly, not absorb via **kwargs"
 
     def test_new_session_signature_cwd_is_required(self) -> None:
         """new_session() 'cwd' must be required — no default value.
@@ -475,12 +471,8 @@ class TestFromAC_ExplicitSignatureEnforcement:  # noqa: N801
         """
         params = inspect.signature(AcpClient.new_session).parameters
         mcp_param = params.get("mcp_servers")
-        assert mcp_param is not None, (
-            "new_session() must declare 'mcp_servers' explicitly (not via **kwargs)"
-        )
-        assert mcp_param.default is None, (
-            "new_session() 'mcp_servers' must default to None per AC"
-        )
+        assert mcp_param is not None, "new_session() must declare 'mcp_servers' explicitly (not via **kwargs)"
+        assert mcp_param.default is None, "new_session() 'mcp_servers' must default to None per AC"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_new_session_requires_cwd_at_runtime(self) -> None:

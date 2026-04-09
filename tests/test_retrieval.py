@@ -324,8 +324,7 @@ class TestFromAC_ExpandBudget:
 
         seed = _make_entity("e1", "Seed")
         neighbors_and_edges = [
-            (_make_entity(f"e{i}", f"Nbr{i}"), _make_edge(f"eg{i}", "e1", f"e{i}"))
-            for i in range(2, 6)
+            (_make_entity(f"e{i}", f"Nbr{i}"), _make_edge(f"eg{i}", "e1", f"e{i}")) for i in range(2, 6)
         ]
         graph_store.get_neighbors.return_value = neighbors_and_edges
 
@@ -385,4 +384,3 @@ class TestFromAC_WeightByImportance:
 
         # Original order must be preserved: FirstEntity before SecondEntity
         assert text.index("FirstEntity") < text.index("SecondEntity")
-

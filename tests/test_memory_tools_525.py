@@ -118,11 +118,7 @@ class TestFromAC_CrossCutting_525:
                 and node.func.value.id == "sqlite3"
             ):
                 for kw in node.keywords:
-                    if (
-                        kw.arg == "check_same_thread"
-                        and isinstance(kw.value, ast.Constant)
-                        and kw.value.value is False
-                    ):
+                    if kw.arg == "check_same_thread" and isinstance(kw.value, ast.Constant) and kw.value.value is False:
                         found = True
         assert found, (
             "server.py sqlite3.connect() is missing check_same_thread=False. "
@@ -165,22 +161,19 @@ class TestFromAC_CrossCutting_525:
         call then prunes them according to MEMORY_TOOLS_EXCLUDE before the server
         starts. Omitting this call means the env var has no effect.
         """
+
         def _has_module_level_exclusion_call(tree: ast.Module) -> bool:
             for node in tree.body:
                 if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
                     call = node.value
-                    if (
-                        isinstance(call.func, ast.Name)
-                        and call.func.id == "_apply_tool_exclusions"
-                    ):
+                    if isinstance(call.func, ast.Name) and call.func.id == "_apply_tool_exclusions":
                         return True
             return False
 
         server_tree = ast.parse(self._server_source())
         tools_tree = ast.parse(self._tools_source())
 
-        assert _has_module_level_exclusion_call(server_tree) or \
-               _has_module_level_exclusion_call(tools_tree), (
+        assert _has_module_level_exclusion_call(server_tree) or _has_module_level_exclusion_call(tools_tree), (
             "_apply_tool_exclusions(mcp) is never called at module level. "
             "Add a top-level call at the end of tools.py (or server.py) after all "
             "@mcp.tool decorators so MEMORY_TOOLS_EXCLUDE takes effect on import."
@@ -199,10 +192,7 @@ class TestFromAC_CrossCutting_525:
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Assign)
-                and any(
-                    isinstance(t, ast.Name) and t.id == "__all__"
-                    for t in node.targets
-                )
+                and any(isinstance(t, ast.Name) and t.id == "__all__" for t in node.targets)
                 and isinstance(node.value, ast.List)
             ):
                 for elt in node.value.elts:
@@ -256,9 +246,7 @@ class TestFromAC_ErrorMessages_525:
         )
 
         assert isinstance(result, str), f"Expected str, got {type(result).__name__}"
-        assert result.startswith("error:"), (
-            f"Expected a soft-error string, got {result!r}"
-        )
+        assert result.startswith("error:"), f"Expected a soft-error string, got {result!r}"
         assert "got 0.42" in result, (
             f"AC specifies format 'error: confidence must be >= 0.7, got {{value}}' "
             f"but 'got 0.42' is absent from {result!r}"
@@ -280,9 +268,7 @@ class TestFromAC_ErrorMessages_525:
         )
 
         assert isinstance(result, str)
-        assert "got 0.0" in result, (
-            f"Error for confidence=0.0 must say 'got 0.0', got {result!r}"
-        )
+        assert "got 0.0" in result, f"Error for confidence=0.0 must say 'got 0.0', got {result!r}"
 
     # AC-ERR2: invalid category error uses "Valid:" not "Valid categories:"
     @pytest.mark.asyncio
@@ -305,12 +291,9 @@ class TestFromAC_ErrorMessages_525:
         )
 
         assert isinstance(result, str), f"Expected str, got {type(result).__name__}"
-        assert result.startswith("error:"), (
-            f"Expected a soft-error string, got {result!r}"
-        )
+        assert result.startswith("error:"), f"Expected a soft-error string, got {result!r}"
         assert ". Valid:" in result, (
-            f"AC specifies '. Valid:' prefix for the category list "
-            f"(not '. Valid categories:') — got {result!r}"
+            f"AC specifies '. Valid:' prefix for the category list (not '. Valid categories:') — got {result!r}"
         )
 
     # AC-ERR2: category list must follow the AC-specified order
@@ -335,6 +318,4 @@ class TestFromAC_ErrorMessages_525:
 
         assert isinstance(result, str)
         expected_list = "preference, knowledge, context, behavior, goal"
-        assert expected_list in result, (
-            f"Category list must be '{expected_list}' per AC — got {result!r}"
-        )
+        assert expected_list in result, f"Category list must be '{expected_list}' per AC — got {result!r}"

@@ -61,9 +61,7 @@ class TestFromAC_ProjectInfoOutputSchema:
         tool = _get_tool_obj("project_info")
         assert tool is not None, "project_info tool not found in mcp._tool_manager._tools"
         schema = tool.fn_metadata.output_schema
-        assert "properties" in schema, (
-            f"project_info output_schema missing top-level 'properties'; got: {schema}"
-        )
+        assert "properties" in schema, f"project_info output_schema missing top-level 'properties'; got: {schema}"
         props = schema["properties"]
         # Must not be the generic FastMCP wrapper (only a single 'result' key)
         assert set(props.keys()) != {"result"}, (
@@ -78,9 +76,7 @@ class TestFromAC_ProjectInfoOutputSchema:
         schema = tool.fn_metadata.output_schema
         props = schema.get("properties", {})
         assert "name" in props, f"'name' missing from project_info properties; got: {list(props)}"
-        assert props["name"].get("type") == "string", (
-            f"'name' must be type string; got: {props['name']}"
-        )
+        assert props["name"].get("type") == "string", f"'name' must be type string; got: {props['name']}"
 
     def test_project_info_output_schema_has_type_property(self) -> None:
         """project_info output_schema has 'type' property of type string."""
@@ -89,9 +85,7 @@ class TestFromAC_ProjectInfoOutputSchema:
         schema = tool.fn_metadata.output_schema
         props = schema.get("properties", {})
         assert "type" in props, f"'type' missing from project_info properties; got: {list(props)}"
-        assert props["type"].get("type") == "string", (
-            f"'type' must be type string; got: {props['type']}"
-        )
+        assert props["type"].get("type") == "string", f"'type' must be type string; got: {props['type']}"
 
     def test_project_info_output_schema_has_project_path_property(self) -> None:
         """project_info output_schema has 'project_path' property of type string."""
@@ -99,9 +93,7 @@ class TestFromAC_ProjectInfoOutputSchema:
         assert tool is not None, "project_info tool not found"
         schema = tool.fn_metadata.output_schema
         props = schema.get("properties", {})
-        assert "project_path" in props, (
-            f"'project_path' missing from project_info properties; got: {list(props)}"
-        )
+        assert "project_path" in props, f"'project_path' missing from project_info properties; got: {list(props)}"
         assert props["project_path"].get("type") == "string", (
             f"'project_path' must be type string; got: {props['project_path']}"
         )
@@ -112,9 +104,7 @@ class TestFromAC_ProjectInfoOutputSchema:
         assert tool is not None, "project_info tool not found"
         schema = tool.fn_metadata.output_schema
         props = schema.get("properties", {})
-        assert "owlbear_path" in props, (
-            f"'owlbear_path' missing from project_info properties; got: {list(props)}"
-        )
+        assert "owlbear_path" in props, f"'owlbear_path' missing from project_info properties; got: {list(props)}"
         assert props["owlbear_path"].get("type") == "string", (
             f"'owlbear_path' must be type string; got: {props['owlbear_path']}"
         )
@@ -125,9 +115,7 @@ class TestFromAC_ProjectInfoOutputSchema:
         assert tool is not None, "project_info tool not found"
         schema = tool.fn_metadata.output_schema
         props = schema.get("properties", {})
-        assert "created_at" in props, (
-            f"'created_at' missing from project_info properties; got: {list(props)}"
-        )
+        assert "created_at" in props, f"'created_at' missing from project_info properties; got: {list(props)}"
         assert props["created_at"].get("type") == "string", (
             f"'created_at' must be type string; got: {props['created_at']}"
         )
@@ -140,9 +128,7 @@ class TestFromAC_ProjectInfoOutputSchema:
         props = schema.get("properties", {})
         required_keys = {"name", "type", "project_path", "owlbear_path", "created_at"}
         missing = required_keys - set(props)
-        assert not missing, (
-            f"project_info output_schema missing fields: {missing}; got: {list(props)}"
-        )
+        assert not missing, f"project_info output_schema missing fields: {missing}; got: {list(props)}"
 
 
 # ---------------------------------------------------------------------------
@@ -166,9 +152,7 @@ class TestFromAC_ProjectListOutputSchema:
             result_schema = schema["properties"]["result"]
             if "items" in result_schema:
                 return result_schema["items"]  # type: ignore[return-value]
-        pytest.fail(
-            f"Cannot locate 'items' in project_list output_schema; schema: {schema}"
-        )
+        pytest.fail(f"Cannot locate 'items' in project_list output_schema; schema: {schema}")
 
     def test_project_list_output_schema_has_items(self) -> None:
         """project_list output_schema has 'items' with typed properties (not empty dict).
@@ -190,49 +174,38 @@ class TestFromAC_ProjectListOutputSchema:
         ):
             items = schema["properties"]["result"]["items"]
 
-        assert items is not None, (
-            f"project_list output_schema has no 'items'; schema: {schema}"
-        )
+        assert items is not None, f"project_list output_schema has no 'items'; schema: {schema}"
         # Must have non-empty properties — generic dict produces {}
         props = items.get("properties", {}) if isinstance(items, dict) else {}
         assert props, (
-            "project_list items.properties is empty — TypedDict return type not yet "
-            f"implemented; items: {items}"
+            f"project_list items.properties is empty — TypedDict return type not yet implemented; items: {items}"
         )
 
     def test_project_list_items_schema_has_name_property(self) -> None:
         """project_list items schema has 'name' property (TypedDict field)."""
         items = self._get_items_schema()
         props = items.get("properties", {})
-        assert "name" in props, (
-            f"'name' missing from project_list items properties; got: {list(props)}"
-        )
+        assert "name" in props, f"'name' missing from project_list items properties; got: {list(props)}"
 
     def test_project_list_items_schema_has_path_property(self) -> None:
         """project_list items schema has 'path' property (TypedDict field)."""
         items = self._get_items_schema()
         props = items.get("properties", {})
-        assert "path" in props, (
-            f"'path' missing from project_list items properties; got: {list(props)}"
-        )
+        assert "path" in props, f"'path' missing from project_list items properties; got: {list(props)}"
 
     def test_project_list_items_schema_name_is_string_type(self) -> None:
         """project_list items 'name' property is type string."""
         items = self._get_items_schema()
         props = items.get("properties", {})
         assert "name" in props, "'name' missing from project_list items properties"
-        assert props["name"].get("type") == "string", (
-            f"'name' must be type string; got: {props['name']}"
-        )
+        assert props["name"].get("type") == "string", f"'name' must be type string; got: {props['name']}"
 
     def test_project_list_items_schema_path_is_string_type(self) -> None:
         """project_list items 'path' property is type string."""
         items = self._get_items_schema()
         props = items.get("properties", {})
         assert "path" in props, "'path' missing from project_list items properties"
-        assert props["path"].get("type") == "string", (
-            f"'path' must be type string; got: {props['path']}"
-        )
+        assert props["path"].get("type") == "string", f"'path' must be type string; got: {props['path']}"
 
 
 # ---------------------------------------------------------------------------
@@ -277,8 +250,7 @@ class TestFromAC_ProjectInfoToolError:
             pass
 
         assert not result_is_error_string, (
-            "project_info must raise ToolError, not return an error string, "
-            "when project_file is None"
+            "project_info must raise ToolError, not return an error string, when project_file is None"
         )
 
     @pytest.mark.asyncio

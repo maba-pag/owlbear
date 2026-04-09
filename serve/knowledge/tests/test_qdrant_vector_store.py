@@ -159,9 +159,7 @@ class TestFromAC_QdrantVectorStore:
 
     def test_importerror_when_qdrant_client_missing(self) -> None:
         """QdrantVectorStore raises ImportError with actionable message when qdrant-client absent."""
-        with patch("owlbear_knowledge.qdrant.QdrantClient", None), pytest.raises(
-            ImportError, match="qdrant-client"
-        ):
+        with patch("owlbear_knowledge.qdrant.QdrantClient", None), pytest.raises(ImportError, match="qdrant-client"):
             QdrantVectorStore()
 
     # --------------------------------------------------------------- Boundary
@@ -171,9 +169,7 @@ class TestFromAC_QdrantVectorStore:
         fresh_store = QdrantVectorStore(location=":memory:")
         assert fresh_store._initialized is False  # noqa: SLF001
 
-    def test_ensure_collection_initialized_after_store_embedding(
-        self, store: QdrantVectorStore
-    ) -> None:
+    def test_ensure_collection_initialized_after_store_embedding(self, store: QdrantVectorStore) -> None:
         """_initialized becomes True after the first store_embedding call."""
         store.store_embedding("doc1", _dense(), "document")
         assert store._initialized is True  # noqa: SLF001

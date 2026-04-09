@@ -94,8 +94,8 @@ class TestFromAC_AppLifespanRowFactory:
                     "2026-01-01T00:00:00Z",
                     "2026-01-01T00:00:00Z",
                     "builder",
-                    None,   # scope_agent — NULL → visible to any agent query
-                    None,   # scope_project — NULL
+                    None,  # scope_agent — NULL → visible to any agent query
+                    None,  # scope_project — NULL
                     "pending",
                     None,
                 ),

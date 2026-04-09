@@ -213,31 +213,35 @@ class TestFromAC_CycleIdModels:  # noqa: N801
 
     def test_audit_adapter_deserializes_legacy_dispatch_without_cycle_id(self) -> None:
         """audit_adapter must accept legacy JSONL without cycle_id; defaults to ''."""
-        raw = json.dumps({
-            "type": "dispatch",
-            "timestamp": "2026-03-30T10:00:00+00:00",
-            "task_id": 1,
-            "agent": "builder",
-            "prompt_summary": "do something",
-            "session_id": "sess-1",
-            # no cycle_id key
-        })
+        raw = json.dumps(
+            {
+                "type": "dispatch",
+                "timestamp": "2026-03-30T10:00:00+00:00",
+                "task_id": 1,
+                "agent": "builder",
+                "prompt_summary": "do something",
+                "session_id": "sess-1",
+                # no cycle_id key
+            }
+        )
         event = audit_adapter.validate_json(raw)
         assert isinstance(event, DispatchEvent)
         assert event.cycle_id == ""
 
     def test_audit_adapter_deserializes_legacy_completion_without_cycle_id(self) -> None:
         """audit_adapter must accept legacy JSONL without cycle_id on CompletionEvent."""
-        raw = json.dumps({
-            "type": "completion",
-            "timestamp": "2026-03-30T10:01:00+00:00",
-            "task_id": 1,
-            "agent": "builder",
-            "outcome": "success",
-            "duration_ms": 100,
-            "files_changed": [],
-            # no cycle_id key
-        })
+        raw = json.dumps(
+            {
+                "type": "completion",
+                "timestamp": "2026-03-30T10:01:00+00:00",
+                "task_id": 1,
+                "agent": "builder",
+                "outcome": "success",
+                "duration_ms": 100,
+                "files_changed": [],
+                # no cycle_id key
+            }
+        )
         event = audit_adapter.validate_json(raw)
         assert isinstance(event, CompletionEvent)
         assert event.cycle_id == ""
@@ -254,16 +258,12 @@ class TestFromAC_CycleIdSignatures:  # noqa: N801
     def test_dispatch_entry_accepts_cycle_id_kwarg(self) -> None:
         """dispatch_entry signature must declare cycle_id as a keyword-only parameter."""
         sig = inspect.signature(dispatch_entry)
-        assert "cycle_id" in sig.parameters, (
-            "dispatch_entry must accept cycle_id as a keyword parameter"
-        )
+        assert "cycle_id" in sig.parameters, "dispatch_entry must accept cycle_id as a keyword parameter"
 
     def test_dispatch_wave_accepts_cycle_id_kwarg(self) -> None:
         """dispatch_wave signature must declare cycle_id as a keyword-only parameter."""
         sig = inspect.signature(dispatch_wave)
-        assert "cycle_id" in sig.parameters, (
-            "dispatch_wave must accept cycle_id as a keyword parameter"
-        )
+        assert "cycle_id" in sig.parameters, "dispatch_wave must accept cycle_id as a keyword parameter"
 
 
 # ---------------------------------------------------------------------------
@@ -352,13 +352,9 @@ class TestFromAC_CycleIdDispatchEntry:  # noqa: N801
     ) -> None:
         """CompletionEvent must carry cycle_id when new_session() raises AcpClientError (AC4)."""
         client = MagicMock()
-        client.new_session = AsyncMock(
-            side_effect=AcpClientError("conn failed", category=ErrorCategory.TRANSIENT)
-        )
+        client.new_session = AsyncMock(side_effect=AcpClientError("conn failed", category=ErrorCategory.TRANSIENT))
 
-        result = await dispatch_entry(
-            entry, client, audit_log=mock_audit_log, cycle_id="error-sess-hexval"
-        )
+        result = await dispatch_entry(entry, client, audit_log=mock_audit_log, cycle_id="error-sess-hexval")
 
         assert result is False
         mock_audit_log.log_completion.assert_called_once()
@@ -378,13 +374,9 @@ class TestFromAC_CycleIdDispatchEntry:  # noqa: N801
         session_resp = MagicMock()
         session_resp.session_id = "prompt-fail-sess"
         client.new_session = AsyncMock(return_value=session_resp)
-        client.prompt = AsyncMock(
-            side_effect=AcpClientError("prompt failed", category=ErrorCategory.TRANSIENT)
-        )
+        client.prompt = AsyncMock(side_effect=AcpClientError("prompt failed", category=ErrorCategory.TRANSIENT))
 
-        result = await dispatch_entry(
-            entry, client, audit_log=mock_audit_log, cycle_id="error-prompt-hexval"
-        )
+        result = await dispatch_entry(entry, client, audit_log=mock_audit_log, cycle_id="error-prompt-hexval")
 
         assert result is False
         mock_audit_log.log_completion.assert_called_once()
@@ -422,9 +414,7 @@ class TestFromAC_CycleIdDispatchWave:  # noqa: N801
 
         assert mock_de.called
         call_kwargs = mock_de.call_args.kwargs
-        assert "cycle_id" in call_kwargs, (
-            "dispatch_wave must forward cycle_id to dispatch_entry as a keyword argument"
-        )
+        assert "cycle_id" in call_kwargs, "dispatch_wave must forward cycle_id to dispatch_entry as a keyword argument"
         assert call_kwargs["cycle_id"] == "forwarded123"
 
     @pytest.mark.asyncio(loop_scope="function")
@@ -483,7 +473,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
                 "owlbear.orchestrator.loop.select_tasks",
                 side_effect=[
                     MagicMock(entries=[wave_entry]),  # cycle 1: entries to dispatch
-                    MagicMock(entries=[]),            # cycle 2: empty → break
+                    MagicMock(entries=[]),  # cycle 2: empty → break
                 ],
             ),
             patch(
@@ -503,15 +493,11 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
 
         assert mock_dispatch_wave.called
         call_kwargs = mock_dispatch_wave.call_args.kwargs
-        assert "cycle_id" in call_kwargs, (
-            "run_loop must pass cycle_id to dispatch_wave as a keyword argument"
-        )
+        assert "cycle_id" in call_kwargs, "run_loop must pass cycle_id to dispatch_wave as a keyword argument"
         cycle_id = call_kwargs["cycle_id"]
         assert isinstance(cycle_id, str), "cycle_id must be a string"
         assert len(cycle_id) == 32, f"uuid4().hex is 32 chars; got {len(cycle_id)!r}"
-        assert all(c in "0123456789abcdef" for c in cycle_id), (
-            f"cycle_id must be lowercase hex; got {cycle_id!r}"
-        )
+        assert all(c in "0123456789abcdef" for c in cycle_id), f"cycle_id must be lowercase hex; got {cycle_id!r}"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_waves_within_one_cycle_share_the_same_cycle_id(
@@ -541,7 +527,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
                 "owlbear.orchestrator.loop.select_tasks",
                 side_effect=[
                     MagicMock(entries=entries),  # cycle 1: dispatch both entries
-                    MagicMock(entries=[]),        # cycle 2: empty → break
+                    MagicMock(entries=[]),  # cycle 2: empty → break
                 ],
             ),
             patch(
@@ -563,9 +549,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
         cycle_ids = [c.kwargs.get("cycle_id") for c in mock_dw.call_args_list]
         assert cycle_ids[0] is not None, "Wave 1 must receive a cycle_id"
         assert cycle_ids[1] is not None, "Wave 2 must receive a cycle_id"
-        assert cycle_ids[0] == cycle_ids[1], (
-            f"Waves in the same cycle must share cycle_id; got {cycle_ids}"
-        )
+        assert cycle_ids[0] == cycle_ids[1], f"Waves in the same cycle must share cycle_id; got {cycle_ids}"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_different_cycles_get_different_cycle_ids(
@@ -591,7 +575,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
                 side_effect=[
                     MagicMock(entries=[wave_entry1]),  # cycle 1
                     MagicMock(entries=[wave_entry2]),  # cycle 2
-                    MagicMock(entries=[]),             # cycle 3: empty → break
+                    MagicMock(entries=[]),  # cycle 3: empty → break
                 ],
             ),
             patch(
@@ -616,9 +600,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
         cycle_ids = [c.kwargs.get("cycle_id") for c in mock_dw.call_args_list]
         assert cycle_ids[0] is not None, "Cycle 1 must pass a cycle_id to dispatch_wave"
         assert cycle_ids[1] is not None, "Cycle 2 must pass a cycle_id to dispatch_wave"
-        assert cycle_ids[0] != cycle_ids[1], (
-            "Different cycle iterations must produce different cycle_ids"
-        )
+        assert cycle_ids[0] != cycle_ids[1], "Different cycle iterations must produce different cycle_ids"
 
 
 # ---------------------------------------------------------------------------
@@ -632,9 +614,7 @@ class TestFromAC_CycleIdAuditQuery:  # noqa: N801
     def test_query_accepts_cycle_id_parameter(self) -> None:
         """AuditLog.query() must declare cycle_id as a keyword parameter."""
         sig = inspect.signature(AuditLog.query)
-        assert "cycle_id" in sig.parameters, (
-            "AuditLog.query must accept an optional cycle_id filter parameter"
-        )
+        assert "cycle_id" in sig.parameters, "AuditLog.query must accept an optional cycle_id filter parameter"
 
     def test_query_cycle_id_default_is_none(self) -> None:
         """AuditLog.query()'s cycle_id parameter must default to None (no filter)."""
@@ -647,18 +627,18 @@ class TestFromAC_CycleIdAuditQuery:  # noqa: N801
         log._audit_dir.mkdir(parents=True, exist_ok=True)
 
         # write one legacy (no cycle_id) and one with cycle_id
-        legacy_line = json.dumps({
-            "type": "dispatch",
-            "timestamp": "2026-03-30T10:00:00+00:00",
-            "task_id": 1,
-            "agent": "builder",
-            "prompt_summary": "x",
-            "session_id": "s1",
-        })
-        new_line = json.dumps(_completion_dict(cycle_id="cycle-abc"))
-        (log._audit_dir / "session.jsonl").write_text(
-            legacy_line + "\n" + new_line + "\n", encoding="utf-8"
+        legacy_line = json.dumps(
+            {
+                "type": "dispatch",
+                "timestamp": "2026-03-30T10:00:00+00:00",
+                "task_id": 1,
+                "agent": "builder",
+                "prompt_summary": "x",
+                "session_id": "s1",
+            }
         )
+        new_line = json.dumps(_completion_dict(cycle_id="cycle-abc"))
+        (log._audit_dir / "session.jsonl").write_text(legacy_line + "\n" + new_line + "\n", encoding="utf-8")
 
         events = log.query(cycle_id=None)
         assert len(events) == 2
@@ -670,9 +650,7 @@ class TestFromAC_CycleIdAuditQuery:  # noqa: N801
 
         matching = json.dumps(_dispatch_dict(cycle_id="match-hex"))
         other = json.dumps(_dispatch_dict(cycle_id="other-hex", task_id=2))
-        (log._audit_dir / "sess.jsonl").write_text(
-            matching + "\n" + other + "\n", encoding="utf-8"
-        )
+        (log._audit_dir / "sess.jsonl").write_text(matching + "\n" + other + "\n", encoding="utf-8")
 
         events = log.query(cycle_id="match-hex")
         assert len(events) == 1
@@ -704,9 +682,7 @@ class TestFromAC_CycleIdAuditQuery:  # noqa: N801
 
         builder_event = json.dumps(_dispatch_dict(cycle_id="cycle-xyz", agent="builder", task_id=1))
         reviewer_event = json.dumps(_dispatch_dict(cycle_id="cycle-xyz", agent="reviewer", task_id=2))
-        (log._audit_dir / "sess.jsonl").write_text(
-            builder_event + "\n" + reviewer_event + "\n", encoding="utf-8"
-        )
+        (log._audit_dir / "sess.jsonl").write_text(builder_event + "\n" + reviewer_event + "\n", encoding="utf-8")
 
         events = log.query(cycle_id="cycle-xyz", agent="builder")
         assert len(events) == 1
@@ -718,20 +694,20 @@ class TestFromAC_CycleIdAuditQuery:  # noqa: N801
         log = AuditLog(tmp_path / "audit")
         log._audit_dir.mkdir(parents=True, exist_ok=True)
 
-        legacy = json.dumps({
-            "type": "dispatch",
-            "timestamp": "2026-03-30T10:00:00+00:00",
-            "task_id": 1,
-            "agent": "builder",
-            "prompt_summary": "x",
-            "session_id": "s1",
-            # no cycle_id → will default to ""
-        })
+        legacy = json.dumps(
+            {
+                "type": "dispatch",
+                "timestamp": "2026-03-30T10:00:00+00:00",
+                "task_id": 1,
+                "agent": "builder",
+                "prompt_summary": "x",
+                "session_id": "s1",
+                # no cycle_id → will default to ""
+            }
+        )
         new_event = json.dumps(_dispatch_dict(cycle_id="new-hex", task_id=2))
 
-        (log._audit_dir / "sess.jsonl").write_text(
-            legacy + "\n" + new_event + "\n", encoding="utf-8"
-        )
+        (log._audit_dir / "sess.jsonl").write_text(legacy + "\n" + new_event + "\n", encoding="utf-8")
 
         events = log.query(cycle_id="")
         assert len(events) == 1

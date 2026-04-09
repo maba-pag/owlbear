@@ -36,29 +36,33 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
 
 _SKILL_MD = Path(__file__).parent.parent / "share" / "skills" / "h-mcp-kanban" / "SKILL.md"
 
-_SAMPLE_TASK_JSON = json.dumps({
-    "id": "99",
-    "title": "Test task",
-    "status": "backlog",
-    "priority": "important",
-    "created": "2026-01-01T00:00:00Z",
-    "updated": "2026-01-01T00:00:00Z",
-    "parent": 0,
-    "class": "standard",
-    "file": "/kanban/tasks/99-test-task.md",
-})
+_SAMPLE_TASK_JSON = json.dumps(
+    {
+        "id": "99",
+        "title": "Test task",
+        "status": "backlog",
+        "priority": "important",
+        "created": "2026-01-01T00:00:00Z",
+        "updated": "2026-01-01T00:00:00Z",
+        "parent": 0,
+        "class": "standard",
+        "file": "/kanban/tasks/99-test-task.md",
+    }
+)
 
-_SAMPLE_TASK_WITH_PARENT_JSON = json.dumps({
-    "id": "100",
-    "title": "Child task",
-    "status": "todo",
-    "priority": "important",
-    "created": "2026-01-01T00:00:00Z",
-    "updated": "2026-01-01T00:00:00Z",
-    "parent": 42,
-    "class": "standard",
-    "file": "/kanban/tasks/100-child-task.md",
-})
+_SAMPLE_TASK_WITH_PARENT_JSON = json.dumps(
+    {
+        "id": "100",
+        "title": "Child task",
+        "status": "todo",
+        "priority": "important",
+        "created": "2026-01-01T00:00:00Z",
+        "updated": "2026-01-01T00:00:00Z",
+        "parent": 42,
+        "class": "standard",
+        "file": "/kanban/tasks/100-child-task.md",
+    }
+)
 
 
 def _make_app_ctx() -> AppContext:
@@ -205,13 +209,10 @@ class TestFromAC_CreateTaskReturn:
         with _patch_run(stdout=_SAMPLE_TASK_JSON) as mock_run:
             result = await create_task(_make_mcp_ctx(), title="T")
         call_args = mock_run.call_args[0]
-        assert "--json" in call_args, (
-            "create_task must pass --json to kanban-md to receive JSON output"
-        )
+        assert "--json" in call_args, "create_task must pass --json to kanban-md to receive JSON output"
         from owlbear_mcp_kanban.models import KanbanTask  # noqa: PLC0415
-        assert isinstance(result, KanbanTask), (
-            "create_task must return a KanbanTask, not raw JSON"
-        )
+
+        assert isinstance(result, KanbanTask), "create_task must return a KanbanTask, not raw JSON"
 
     # AC: KanbanTask must include expected fields
     @pytest.mark.asyncio
@@ -230,6 +231,7 @@ class TestFromAC_CreateTaskReturn:
     async def test_raises_tool_error_on_nonzero_rc(self) -> None:
         """When _run_kanban returns rc != 0, create_task must raise ToolError."""
         from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
+
         with _patch_run(stdout="", stderr="task file conflict", rc=1) as mock_run, pytest.raises(ToolError):
             await create_task(_make_mcp_ctx(), title="T")
         call_args = mock_run.call_args[0]
@@ -248,23 +250,23 @@ class TestFromAC_CreateTaskStatusIntegration:
     @pytest.mark.asyncio
     async def test_status_override_roundtrip_returns_correct_status(self) -> None:
         """create_task with status='backlog' must result in returned KanbanTask showing status='backlog'."""
-        expected_json = json.dumps({
-            "id": "55",
-            "title": "Status test",
-            "status": "backlog",
-            "priority": "important",
-            "created": "2026-01-01T00:00:00Z",
-            "updated": "2026-01-01T00:00:00Z",
-            "parent": 0,
-            "class": "standard",
-            "file": "/kanban/tasks/55-status-test.md",
-        })
+        expected_json = json.dumps(
+            {
+                "id": "55",
+                "title": "Status test",
+                "status": "backlog",
+                "priority": "important",
+                "created": "2026-01-01T00:00:00Z",
+                "updated": "2026-01-01T00:00:00Z",
+                "parent": 0,
+                "class": "standard",
+                "file": "/kanban/tasks/55-status-test.md",
+            }
+        )
         with _patch_run(stdout=expected_json):
             result = await create_task(_make_mcp_ctx(), title="Status test", status="backlog")
 
-        assert result.status == "backlog", (
-            "Roundtrip: returned KanbanTask must reflect the requested status='backlog'"
-        )
+        assert result.status == "backlog", "Roundtrip: returned KanbanTask must reflect the requested status='backlog'"
 
     # AC: Integration: create with parent + show roundtrip confirms parent field
     @pytest.mark.asyncio
@@ -273,9 +275,7 @@ class TestFromAC_CreateTaskStatusIntegration:
         with _patch_run(stdout=_SAMPLE_TASK_WITH_PARENT_JSON):
             result = await create_task(_make_mcp_ctx(), title="Child task", parent=42)
 
-        assert result.parent == 42, (
-            "Roundtrip: returned KanbanTask must reflect the requested parent=42"
-        )
+        assert result.parent == 42, "Roundtrip: returned KanbanTask must reflect the requested parent=42"
 
 
 # ---------------------------------------------------------------------------

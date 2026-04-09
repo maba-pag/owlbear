@@ -199,9 +199,7 @@ class TestFromAC_IngestToSearchCycle:
             f"expected entities_found > 0, got {result.entities_found}. "
             "Graph expansion requires entities to have chunk_id set by store_extractions."
         )
-        assert result.expansion_text != "", (
-            "expected non-empty expansion_text — graph expansion did not produce output"
-        )
+        assert result.expansion_text != "", "expected non-empty expansion_text — graph expansion did not produce output"
 
     # -- AC7 (implicit — verified by fixture construction) -------------------
 

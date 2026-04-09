@@ -346,9 +346,7 @@ class TestFromAC_ProcessEvaluation:  # noqa: N801
         evaluator = MagicMock()
         evaluator.evaluate = AsyncMock(return_value=_make_eval_result())
         web_read = AsyncMock(return_value="extracted content here")
-        pipeline = BookmarkPipeline(
-            bookmark_store=store, evaluator=evaluator, web_read_fn=web_read
-        )
+        pipeline = BookmarkPipeline(bookmark_store=store, evaluator=evaluator, web_read_fn=web_read)
         await pipeline.process("https://example.com")
         evaluator.evaluate.assert_called_once()
         call_args = evaluator.evaluate.call_args
@@ -364,9 +362,7 @@ class TestFromAC_ProcessEvaluation:  # noqa: N801
         evaluator = MagicMock()
         evaluator.evaluate = AsyncMock(return_value=_make_eval_result())
         web_read = AsyncMock(return_value="content")
-        pipeline = BookmarkPipeline(
-            bookmark_store=store, evaluator=evaluator, web_read_fn=web_read
-        )
+        pipeline = BookmarkPipeline(bookmark_store=store, evaluator=evaluator, web_read_fn=web_read)
         ctx = {"name": "OwlBear", "description": "AI dev system"}
         await pipeline.process("https://example.com", project_context=ctx)
         evaluator.evaluate.assert_called_once()
@@ -384,9 +380,7 @@ class TestFromAC_ProcessEvaluation:  # noqa: N801
         evaluator = MagicMock()
         evaluator.evaluate = AsyncMock(return_value=ev)
         web_read = AsyncMock(return_value="content")
-        pipeline = BookmarkPipeline(
-            bookmark_store=store, evaluator=evaluator, web_read_fn=web_read
-        )
+        pipeline = BookmarkPipeline(bookmark_store=store, evaluator=evaluator, web_read_fn=web_read)
         result = await pipeline.process("https://example.com")
         assert result.evaluation is ev
 
@@ -429,9 +423,7 @@ class TestFromAC_ProcessConditionalIngest:  # noqa: N801
 
         ingest_mock = MagicMock()
         ingest_mock.ingest_text = AsyncMock(
-            return_value=IngestResult(
-                document_id="doc-1", chunk_count=2, entity_count=1, edge_count=0, status="ok"
-            )
+            return_value=IngestResult(document_id="doc-1", chunk_count=2, entity_count=1, edge_count=0, status="ok")
         )
         pipeline = self._make_pipeline(
             eval_result=_make_eval_result(relevance_score=0.9, worth_ingesting=True),
@@ -483,9 +475,7 @@ class TestFromAC_ProcessConditionalIngest:  # noqa: N801
 
         ingest_mock = MagicMock()
         ingest_mock.ingest_text = AsyncMock(
-            return_value=IngestResult(
-                document_id="doc-2", chunk_count=1, entity_count=0, edge_count=0, status="ok"
-            )
+            return_value=IngestResult(document_id="doc-2", chunk_count=1, entity_count=0, edge_count=0, status="ok")
         )
         pipeline = self._make_pipeline(
             eval_result=_make_eval_result(relevance_score=0.7, worth_ingesting=True),
@@ -612,9 +602,7 @@ class TestFromAC_ProcessBookmarkCreation:  # noqa: N801
     async def test_document_id_from_ingest_result(self) -> None:
         from owlbear_knowledge.ingest import IngestResult  # noqa: PLC0415
 
-        ingest_res = IngestResult(
-            document_id="doc-abc", chunk_count=3, entity_count=1, edge_count=2, status="ok"
-        )
+        ingest_res = IngestResult(document_id="doc-abc", chunk_count=3, entity_count=1, edge_count=2, status="ok")
         ev = _make_eval_result(relevance_score=0.9, worth_ingesting=True)
         pipeline = self._make_pipeline_for_creation(eval_result=ev, ingest_result=ingest_res)
         result = await pipeline.process("https://example.com")
@@ -708,9 +696,7 @@ class TestFromAC_ProcessCancelSignal:  # noqa: N801
         evaluator = MagicMock()
         evaluator.evaluate = AsyncMock(return_value=_make_eval_result())
         web_read = AsyncMock(return_value="content")
-        pipeline = BookmarkPipeline(
-            bookmark_store=store, evaluator=evaluator, web_read_fn=web_read
-        )
+        pipeline = BookmarkPipeline(bookmark_store=store, evaluator=evaluator, web_read_fn=web_read)
         result = await pipeline.process("https://example.com")
         assert result.bookmark is not None
         assert result.evaluation is not None

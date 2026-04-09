@@ -29,9 +29,7 @@ class TestFromAC_SourceTypeCrawlRemoval:  # noqa: N801
         """CRAWL attribute must not exist on SourceType."""
         from owlbear_knowledge.models import SourceType
 
-        assert not hasattr(SourceType, "CRAWL"), (
-            "SourceType.CRAWL still exists — AC1 not satisfied"
-        )
+        assert not hasattr(SourceType, "CRAWL"), "SourceType.CRAWL still exists — AC1 not satisfied"
 
     def test_source_type_valid_values_only(self) -> None:
         """SourceType enum values must be exactly {url_list, file_glob} — crawl removed."""
@@ -39,9 +37,7 @@ class TestFromAC_SourceTypeCrawlRemoval:  # noqa: N801
 
         expected = {"url_list", "file_glob"}
         actual = {e.value for e in SourceType}
-        assert actual == expected, (
-            f"SourceType still contains unexpected values: {actual - expected}"
-        )
+        assert actual == expected, f"SourceType still contains unexpected values: {actual - expected}"
 
     def test_knowledge_source_rejects_crawl_source_type(self) -> None:
         """KnowledgeSource must reject source_type='crawl' after CRAWL is removed from enum."""
@@ -150,12 +146,9 @@ class TestFromAC_CrawlTestsRemoved:  # noqa: N801
         crawl_tests = [
             node.name
             for node in ast.walk(tree)
-            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
-            and "crawl" in node.name.lower()
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and "crawl" in node.name.lower()
         ]
-        assert crawl_tests == [], (
-            f"{test_file} still contains crawl test functions: {crawl_tests} — AC4 not satisfied"
-        )
+        assert crawl_tests == [], f"{test_file} still contains crawl test functions: {crawl_tests} — AC4 not satisfied"
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +171,5 @@ class TestFromAC_NoSourceCrawlRefs:  # noqa: N801
                 if pattern in text:
                     violations.append(f"{py_file}: contains '{pattern}'")
         assert violations == [], (
-            "Crawl references found in knowledge engine source:\n"
-            + "\n".join(violations)
-            + "\n— AC6 not satisfied"
+            "Crawl references found in knowledge engine source:\n" + "\n".join(violations) + "\n— AC6 not satisfied"
         )

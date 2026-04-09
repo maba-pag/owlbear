@@ -1,4 +1,4 @@
-﻿"""Retry tests for VoiceProcessManager — TDD RED phase (task #62, retry cycle).
+"""Retry tests for VoiceProcessManager — TDD RED phase (task #62, retry cycle).
 
 AC gap: 'Timeout: kill process and raise VoiceInitTimeout'.
 The existing tests verify the exception is raised but not that the process is
@@ -85,9 +85,11 @@ class TestFromAC_InitKill:  # noqa: N801
         async def _timed_out_wait_for(_coro: Any, *, timeout: float, **_kw: Any) -> Any:  # noqa: ASYNC109,ARG001
             raise TimeoutError
 
-        with _patch_spawn(proc), patch(
-            f"{_MODULE}.asyncio.wait_for", new=_timed_out_wait_for
-        ), pytest.raises(VoiceInitTimeout):
+        with (
+            _patch_spawn(proc),
+            patch(f"{_MODULE}.asyncio.wait_for", new=_timed_out_wait_for),
+            pytest.raises(VoiceInitTimeout),
+        ):
             async with VoiceProcessManager(_COMMAND, init_timeout=0.5):
                 pass
 

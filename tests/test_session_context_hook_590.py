@@ -116,9 +116,7 @@ def _run_context_hook(
 def _extract_frontmatter(content: str, agent_name: str = "agent") -> str:
     """Return the YAML text between the first --- ... --- block."""
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-    assert match is not None, (
-        f"No valid YAML frontmatter (--- ... ---) found in {agent_name}.agent.md"
-    )
+    assert match is not None, f"No valid YAML frontmatter (--- ... ---) found in {agent_name}.agent.md"
     return match.group(1)
 
 
@@ -146,18 +144,13 @@ class TestFromAC_ScriptExists:
     def test_session_context_ps1_exists(self) -> None:
         """AC1a: session-context.ps1 must exist at the expected path."""
         assert _SCRIPT_PATH.exists(), (
-            f"session-context.ps1 not found at {_SCRIPT_PATH}. "
-            "Builder must create scripts/hooks/session-context.ps1."
+            f"session-context.ps1 not found at {_SCRIPT_PATH}. Builder must create scripts/hooks/session-context.ps1."
         )
 
     def test_script_is_nonempty(self) -> None:
         """AC1b: script file must have content — an empty file cannot implement context injection."""
-        assert _SCRIPT_PATH.exists(), (
-            f"session-context.ps1 not found at {_SCRIPT_PATH}."
-        )
-        assert _SCRIPT_PATH.stat().st_size > 0, (
-            "session-context.ps1 exists but is empty — builder must implement it."
-        )
+        assert _SCRIPT_PATH.exists(), f"session-context.ps1 not found at {_SCRIPT_PATH}."
+        assert _SCRIPT_PATH.stat().st_size > 0, "session-context.ps1 exists but is empty — builder must implement it."
 
 
 # ---------------------------------------------------------------------------
@@ -172,9 +165,7 @@ class TestFromAC_OutputFormat:
     def test_output_has_hook_specific_output_key(self) -> None:
         """AC2a: happy-path output must contain a hookSpecificOutput key."""
         _, output = _run_context_hook({})
-        assert "hookSpecificOutput" in output, (
-            f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
-        )
+        assert "hookSpecificOutput" in output, f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
 
     def test_hook_event_name_is_session_start(self) -> None:
         """AC2b: hookSpecificOutput.hookEventName must be 'SessionStart'."""
@@ -188,26 +179,20 @@ class TestFromAC_OutputFormat:
         """AC2c: additionalContext must start with 'Branch: '."""
         _, output = _run_context_hook({})
         ctx = output.get("hookSpecificOutput", {}).get("additionalContext", "")
-        assert ctx.startswith("Branch: "), (
-            f"additionalContext must start with 'Branch: ', got: {ctx!r}"
-        )
+        assert ctx.startswith("Branch: "), f"additionalContext must start with 'Branch: ', got: {ctx!r}"
 
     def test_additional_context_has_commits_separator(self) -> None:
         """AC2d: additionalContext must contain ' | Commits: ' separator."""
         _, output = _run_context_hook({})
         ctx = output.get("hookSpecificOutput", {}).get("additionalContext", "")
-        assert " | Commits: " in ctx, (
-            f"additionalContext must contain ' | Commits: ' separator, got: {ctx!r}"
-        )
+        assert " | Commits: " in ctx, f"additionalContext must contain ' | Commits: ' separator, got: {ctx!r}"
 
     def test_commit_hashes_are_abbreviated(self) -> None:
         """AC2e/Boundary3: each commit hash must be abbreviated (not a full 40-char SHA)."""
         _, output = _run_context_hook({})
         ctx = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         commit_entries = _parse_commit_entries(ctx)
-        assert commit_entries, (
-            f"No commit entries found in additionalContext to check hashes: {ctx!r}"
-        )
+        assert commit_entries, f"No commit entries found in additionalContext to check hashes: {ctx!r}"
         for entry in commit_entries:
             parts = entry.split()
             if not parts:
@@ -232,20 +217,14 @@ class TestFromAC_OutputFormat:
         _, output = _run_context_hook({})
         ctx = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         commit_entries = _parse_commit_entries(ctx)
-        assert commit_entries, (
-            f"No commit entries parsed from additionalContext: {ctx!r}"
-        )
+        assert commit_entries, f"No commit entries parsed from additionalContext: {ctx!r}"
         for entry in commit_entries:
-            assert entry.strip(), (
-                f"Empty commit entry found when splitting by ' | ' from: {ctx!r}"
-            )
+            assert entry.strip(), f"Empty commit entry found when splitting by ' | ' from: {ctx!r}"
 
     def test_stdout_is_always_valid_json(self) -> None:
         """AC2h: stdout must always be a valid JSON object — no plaintext noise allowed."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"session-context.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"session-context.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
             input=json.dumps({}),
@@ -259,9 +238,7 @@ class TestFromAC_OutputFormat:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON: {stdout!r}\nError: {exc}"
-            )
+            pytest.fail(f"Script stdout is not valid JSON: {stdout!r}\nError: {exc}")
         assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
 
@@ -277,9 +254,7 @@ class TestFromAC_ErrorHandling:
     def test_malformed_stdin_json_returns_empty_json(self) -> None:
         """AC5a: malformed stdin JSON must not crash the script — returns {}."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"session-context.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"session-context.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
             input="not-valid-json{{{",
@@ -294,16 +269,12 @@ class TestFromAC_ErrorHandling:
             output = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError:
             output = {"_raw": stdout}
-        assert output == {}, (
-            f"Malformed stdin JSON must produce {{}} output (non-blocking, AC5), got: {output!r}"
-        )
+        assert output == {}, f"Malformed stdin JSON must produce {{}} output (non-blocking, AC5), got: {output!r}"
 
     def test_empty_stdin_returns_empty_json(self) -> None:
         """AC5b: empty stdin must not crash the script — returns {}."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"session-context.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"session-context.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
             input="",
@@ -318,16 +289,12 @@ class TestFromAC_ErrorHandling:
             output = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError:
             output = {"_raw": stdout}
-        assert output == {}, (
-            f"Empty stdin must produce {{}} output (non-blocking, AC5), got: {output!r}"
-        )
+        assert output == {}, f"Empty stdin must produce {{}} output (non-blocking, AC5), got: {output!r}"
 
     def test_non_git_directory_returns_empty_json(self, tmp_path: Path) -> None:
         """AC5c: script run from a non-git directory must return {} (git error, non-blocking)."""
         _, output = _run_context_hook({}, cwd=tmp_path)
-        assert output == {}, (
-            f"Non-git directory must produce {{}} output (non-blocking, AC5), got: {output!r}"
-        )
+        assert output == {}, f"Non-git directory must produce {{}} output (non-blocking, AC5), got: {output!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -342,9 +309,7 @@ class TestFromAC_Performance:
     def test_script_executes_under_five_seconds(self) -> None:
         """AC6: session-context.ps1 must complete within 5 seconds (expected ~30ms per research §3.4)."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"session-context.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"session-context.ps1 not found at {_SCRIPT_PATH}.")
         start = monotonic()
         subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
@@ -389,21 +354,16 @@ class TestFromAC_BuilderAgentHooks:
         """AC3b: builder.agent.md SessionStart command must reference session-context.ps1."""
         fm = self._frontmatter()
         assert "session-context.ps1" in fm, (
-            "builder.agent.md hooks: section must reference 'session-context.ps1' "
-            "in the SessionStart command."
+            "builder.agent.md hooks: section must reference 'session-context.ps1' in the SessionStart command."
         )
 
     def test_builder_session_start_hook_type_is_command(self) -> None:
         """AC3c: SessionStart hook must specify type: command."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "builder.agent.md is missing SessionStart — type: command check is premature."
-        )
+        assert "SessionStart" in fm, "builder.agent.md is missing SessionStart — type: command check is premature."
         # type: command must appear in the frontmatter (also satisfied by PostToolUse, but
         # the YAML validity test below confirms it is nested under SessionStart)
-        assert re.search(r"type:\s*command", fm), (
-            "builder.agent.md SessionStart entry must specify 'type: command'."
-        )
+        assert re.search(r"type:\s*command", fm), "builder.agent.md SessionStart entry must specify 'type: command'."
 
     def test_builder_hooks_section_has_both_events(self) -> None:
         """AC4a: hooks: must contain both SessionStart (new) and PostToolUse (must be preserved)."""
@@ -416,8 +376,7 @@ class TestFromAC_BuilderAgentHooks:
             pytest.fail(f"builder.agent.md frontmatter is not valid YAML: {exc}")
         hooks = parsed.get("hooks", {})
         assert "SessionStart" in hooks, (
-            f"hooks: section must contain SessionStart (AC3). "
-            f"Current hook events: {list(hooks.keys())!r}"
+            f"hooks: section must contain SessionStart (AC3). Current hook events: {list(hooks.keys())!r}"
         )
         assert "PostToolUse" in hooks, (
             f"hooks: section must still contain PostToolUse (AC4 — must not be replaced). "
@@ -433,21 +392,16 @@ class TestFromAC_BuilderAgentHooks:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
             pytest.fail(f"builder.agent.md frontmatter is not valid YAML: {exc}")
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         hooks = parsed.get("hooks", {})
         assert "SessionStart" in hooks, (
-            f"Frontmatter parsed but hooks: section missing SessionStart. "
-            f"Got hooks events: {list(hooks.keys())!r}"
+            f"Frontmatter parsed but hooks: section missing SessionStart. Got hooks events: {list(hooks.keys())!r}"
         )
 
     def test_builder_frontmatter_has_no_duplicate_keys(self) -> None:
         """AC7a regression: builder.agent.md frontmatter must not have duplicate YAML keys."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "Builder must add SessionStart first — duplicate-key check is premature."
-        )
+        assert "SessionStart" in fm, "Builder must add SessionStart first — duplicate-key check is premature."
         top_level_keys = re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", fm, re.MULTILINE)
         seen: set[str] = set()
         duplicates: list[str] = []
@@ -455,9 +409,7 @@ class TestFromAC_BuilderAgentHooks:
             if key in seen:
                 duplicates.append(key)
             seen.add(key)
-        assert not duplicates, (
-            f"Duplicate YAML keys found in builder.agent.md frontmatter: {duplicates}"
-        )
+        assert not duplicates, f"Duplicate YAML keys found in builder.agent.md frontmatter: {duplicates}"
 
 
 # ---------------------------------------------------------------------------
@@ -486,8 +438,7 @@ class TestFromAC_TestWriterAgentHooks:
             pytest.fail(f"test-writer.agent.md frontmatter is not valid YAML: {exc}")
         hooks = parsed.get("hooks", {})
         assert "SessionStart" in hooks, (
-            f"hooks: section must contain SessionStart (AC3d). "
-            f"Current hook events: {list(hooks.keys())!r}"
+            f"hooks: section must contain SessionStart (AC3d). Current hook events: {list(hooks.keys())!r}"
         )
         assert "PreToolUse" in hooks, (
             f"hooks: section must still contain PreToolUse (from #589, must not be replaced). "
@@ -497,9 +448,7 @@ class TestFromAC_TestWriterAgentHooks:
     def test_test_writer_has_session_start_hook(self) -> None:
         """AC3d: test-writer.agent.md hooks: section must contain SessionStart."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "test-writer.agent.md hooks: section is missing SessionStart."
-        )
+        assert "SessionStart" in fm, "test-writer.agent.md hooks: section is missing SessionStart."
 
     def test_test_writer_session_start_references_correct_script(self) -> None:
         """AC3e: test-writer.agent.md SessionStart command must reference session-context.ps1."""
@@ -511,12 +460,8 @@ class TestFromAC_TestWriterAgentHooks:
     def test_test_writer_session_start_hook_type_is_command(self) -> None:
         """AC3f: test-writer.agent.md SessionStart hook must specify type: command."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "test-writer.agent.md is missing SessionStart — type: command check is premature."
-        )
-        assert re.search(r"type:\s*command", fm), (
-            "test-writer.agent.md SessionStart hook must specify 'type: command'."
-        )
+        assert "SessionStart" in fm, "test-writer.agent.md is missing SessionStart — type: command check is premature."
+        assert re.search(r"type:\s*command", fm), "test-writer.agent.md SessionStart hook must specify 'type: command'."
 
     def test_test_writer_frontmatter_is_valid_yaml(self) -> None:
         """AC7b: test-writer.agent.md frontmatter must parse as valid YAML with SessionStart."""
@@ -527,21 +472,16 @@ class TestFromAC_TestWriterAgentHooks:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
             pytest.fail(f"test-writer.agent.md frontmatter is not valid YAML: {exc}")
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         hooks = parsed.get("hooks", {})
         assert "SessionStart" in hooks, (
-            f"Frontmatter parsed but hooks: section missing SessionStart. "
-            f"Got hooks events: {list(hooks.keys())!r}"
+            f"Frontmatter parsed but hooks: section missing SessionStart. Got hooks events: {list(hooks.keys())!r}"
         )
 
     def test_test_writer_frontmatter_has_no_duplicate_keys(self) -> None:
         """AC7b regression: test-writer.agent.md frontmatter must not have duplicate YAML keys."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "Builder must add SessionStart first — duplicate-key check is premature."
-        )
+        assert "SessionStart" in fm, "Builder must add SessionStart first — duplicate-key check is premature."
         top_level_keys = re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", fm, re.MULTILINE)
         seen: set[str] = set()
         duplicates: list[str] = []
@@ -549,9 +489,7 @@ class TestFromAC_TestWriterAgentHooks:
             if key in seen:
                 duplicates.append(key)
             seen.add(key)
-        assert not duplicates, (
-            f"Duplicate YAML keys found in test-writer.agent.md frontmatter: {duplicates}"
-        )
+        assert not duplicates, f"Duplicate YAML keys found in test-writer.agent.md frontmatter: {duplicates}"
 
 
 # ---------------------------------------------------------------------------
@@ -575,8 +513,7 @@ class TestFromAC_DocWriterAgentHooks:
 
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "doc-writer.agent.md is missing the 'hooks:' key. "
-            "Builder must add SessionStart to the hooks: section."
+            "doc-writer.agent.md is missing the 'hooks:' key. Builder must add SessionStart to the hooks: section."
         )
         try:
             parsed = yaml.safe_load(fm)
@@ -591,9 +528,7 @@ class TestFromAC_DocWriterAgentHooks:
     def test_doc_writer_has_session_start_hook(self) -> None:
         """AC3g: doc-writer.agent.md hooks: section must contain SessionStart."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "doc-writer.agent.md hooks: section is missing SessionStart."
-        )
+        assert "SessionStart" in fm, "doc-writer.agent.md hooks: section is missing SessionStart."
 
     def test_doc_writer_session_start_references_correct_script(self) -> None:
         """AC3h: doc-writer.agent.md SessionStart command must reference session-context.ps1."""
@@ -605,12 +540,8 @@ class TestFromAC_DocWriterAgentHooks:
     def test_doc_writer_session_start_hook_type_is_command(self) -> None:
         """AC3i: doc-writer.agent.md SessionStart hook must specify type: command."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "doc-writer.agent.md is missing SessionStart — type: command check is premature."
-        )
-        assert re.search(r"type:\s*command", fm), (
-            "doc-writer.agent.md SessionStart hook must specify 'type: command'."
-        )
+        assert "SessionStart" in fm, "doc-writer.agent.md is missing SessionStart — type: command check is premature."
+        assert re.search(r"type:\s*command", fm), "doc-writer.agent.md SessionStart hook must specify 'type: command'."
 
     def test_doc_writer_frontmatter_is_valid_yaml(self) -> None:
         """AC7c: doc-writer.agent.md frontmatter must parse as valid YAML with SessionStart."""
@@ -621,21 +552,16 @@ class TestFromAC_DocWriterAgentHooks:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
             pytest.fail(f"doc-writer.agent.md frontmatter is not valid YAML: {exc}")
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         hooks = parsed.get("hooks", {})
         assert "SessionStart" in hooks, (
-            f"Frontmatter parsed but hooks: section missing SessionStart. "
-            f"Got hooks events: {list(hooks.keys())!r}"
+            f"Frontmatter parsed but hooks: section missing SessionStart. Got hooks events: {list(hooks.keys())!r}"
         )
 
     def test_doc_writer_frontmatter_has_no_duplicate_keys(self) -> None:
         """AC7c regression: doc-writer.agent.md frontmatter must not have duplicate YAML keys."""
         fm = self._frontmatter()
-        assert "SessionStart" in fm, (
-            "Builder must add SessionStart first — duplicate-key check is premature."
-        )
+        assert "SessionStart" in fm, "Builder must add SessionStart first — duplicate-key check is premature."
         top_level_keys = re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", fm, re.MULTILINE)
         seen: set[str] = set()
         duplicates: list[str] = []
@@ -643,6 +569,4 @@ class TestFromAC_DocWriterAgentHooks:
             if key in seen:
                 duplicates.append(key)
             seen.add(key)
-        assert not duplicates, (
-            f"Duplicate YAML keys found in doc-writer.agent.md frontmatter: {duplicates}"
-        )
+        assert not duplicates, f"Duplicate YAML keys found in doc-writer.agent.md frontmatter: {duplicates}"

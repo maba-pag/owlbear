@@ -124,8 +124,17 @@ def _insert_entry(  # noqa: PLR0913
             scope_agent, scope_project, approval_state, deleted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            eid, content, category, confidence, created_at, updated_at, source,
-            scope_agent, scope_project, approval_state, deleted_at,
+            eid,
+            content,
+            category,
+            confidence,
+            created_at,
+            updated_at,
+            source,
+            scope_agent,
+            scope_project,
+            approval_state,
+            deleted_at,
         ),
     )
     conn.commit()
@@ -134,9 +143,7 @@ def _insert_entry(  # noqa: PLR0913
 
 def _fetch_entry(conn: sqlite3.Connection, entry_id: str) -> dict[str, Any] | None:
     """Fetch a single entry by id as a dict, or None if not found."""
-    row = conn.execute(
-        "SELECT * FROM memory_entries WHERE id = ?", (entry_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
     return dict(row) if row is not None else None
 
 
@@ -291,12 +298,8 @@ class TestFromAC_ErrorFormat:
             await set_approval_state(ctx, entry_id=eid, new_state="pending")
 
         msg = str(exc_info.value)
-        assert "transition from" in msg.lower(), (
-            f"Error message must contain 'transition from', got: {msg!r}"
-        )
-        assert "is not allowed" in msg.lower(), (
-            f"Error message must contain 'is not allowed', got: {msg!r}"
-        )
+        assert "transition from" in msg.lower(), f"Error message must contain 'transition from', got: {msg!r}"
+        assert "is not allowed" in msg.lower(), f"Error message must contain 'is not allowed', got: {msg!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -319,9 +322,7 @@ class TestFromAC_Timestamps:
 
         row = _fetch_entry(conn, eid)
         assert row is not None
-        assert row["updated_at"] != old_ts, (
-            f"updated_at must be refreshed on transition; still {row['updated_at']!r}"
-        )
+        assert row["updated_at"] != old_ts, f"updated_at must be refreshed on transition; still {row['updated_at']!r}"
 
     @pytest.mark.asyncio
     async def test_deleted_at_set_on_transition_to_deleted(self) -> None:
@@ -334,23 +335,15 @@ class TestFromAC_Timestamps:
 
         row = _fetch_entry(conn, eid)
         assert row is not None
-        assert row["deleted_at"] is not None, (
-            "deleted_at must be set to a UTC ISO timestamp after → deleted"
-        )
-        assert isinstance(row["deleted_at"], str), (
-            f"deleted_at must be a str, got {type(row['deleted_at'])!r}"
-        )
-        assert len(row["deleted_at"]) > 0, (
-            f"deleted_at must be non-empty, got {row['deleted_at']!r}"
-        )
+        assert row["deleted_at"] is not None, "deleted_at must be set to a UTC ISO timestamp after → deleted"
+        assert isinstance(row["deleted_at"], str), f"deleted_at must be a str, got {type(row['deleted_at'])!r}"
+        assert len(row["deleted_at"]) > 0, f"deleted_at must be non-empty, got {row['deleted_at']!r}"
 
     @pytest.mark.asyncio
     async def test_deleted_at_cleared_on_transition_from_deleted_to_pending(self) -> None:
         """AC-TS3: deleted_at must be NULL after deleted → pending transition."""
         conn = _make_conn()
-        eid = _insert_entry(
-            conn, approval_state="deleted", deleted_at="2026-01-01T00:00:00+00:00"
-        )
+        eid = _insert_entry(conn, approval_state="deleted", deleted_at="2026-01-01T00:00:00+00:00")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
         await set_approval_state(ctx, entry_id=eid, new_state="pending")
@@ -409,8 +402,7 @@ class TestFromAC_Errors:
         row = _fetch_entry(conn, eid)
         assert row is not None
         assert row["approval_state"] == "pending", (
-            f"DB approval_state must remain 'pending' after invalid transition, "
-            f"got {row['approval_state']!r}"
+            f"DB approval_state must remain 'pending' after invalid transition, got {row['approval_state']!r}"
         )
 
 
@@ -431,9 +423,7 @@ class TestFromAC_ReturnValue:
 
         result = await set_approval_state(ctx, entry_id=eid, new_state="approved")
 
-        assert isinstance(result, str), (
-            f"set_approval_state must return str on success, got {type(result)!r}"
-        )
+        assert isinstance(result, str), f"set_approval_state must return str on success, got {type(result)!r}"
         assert len(result) > 0, "set_approval_state must return a non-empty string on success"
 
 
@@ -449,7 +439,8 @@ class TestFromAC_ToolAnnotations:
         """AC-A1: set_approval_state must be discoverable via mcp._tool_manager.list_tools()."""
         assert hasattr(mcp, "_tool_manager"), "mcp must have a _tool_manager attribute"
         tool_names = [
-            getattr(t, "name", None) for t in mcp._tool_manager.list_tools()  # type: ignore[union-attr]
+            getattr(t, "name", None)
+            for t in mcp._tool_manager.list_tools()  # type: ignore[union-attr]
         ]
         assert "set_approval_state" in tool_names, (
             f"set_approval_state not found in registered tools; found: {tool_names}"
@@ -458,9 +449,7 @@ class TestFromAC_ToolAnnotations:
     def test_set_approval_state_annotations(self) -> None:
         """AC-A2: annotations must have readOnlyHint=False, idempotentHint=False, destructiveHint=True."""
         ann = _get_tool_annotations("set_approval_state")
-        assert ann is not None, (
-            "set_approval_state has no ToolAnnotations; add annotations=ToolAnnotations(...)"
-        )
+        assert ann is not None, "set_approval_state has no ToolAnnotations; add annotations=ToolAnnotations(...)"
         assert ann.readOnlyHint is False, (  # type: ignore[union-attr]
             f"Expected readOnlyHint=False, got {ann.readOnlyHint!r}"  # type: ignore[union-attr]
         )
@@ -482,18 +471,18 @@ class TestFromAC_ValidTransitionsConstant:
 
     def test_valid_transitions_is_frozenset_with_exactly_three_pairs(self) -> None:
         """AC-V1: _VALID_TRANSITIONS must be a frozenset of exactly the 3 allowed pairs."""
-        expected = frozenset({
-            ("pending", "approved"),
-            ("pending", "deleted"),
-            ("deleted", "pending"),
-        })
+        expected = frozenset(
+            {
+                ("pending", "approved"),
+                ("pending", "deleted"),
+                ("deleted", "pending"),
+            }
+        )
         assert isinstance(_VALID_TRANSITIONS, frozenset), (
             f"_VALID_TRANSITIONS must be a frozenset, got {type(_VALID_TRANSITIONS)!r}"
         )
         assert expected == _VALID_TRANSITIONS, (
-            f"_VALID_TRANSITIONS mismatch.\n"
-            f"  Expected: {expected}\n"
-            f"  Got:      {_VALID_TRANSITIONS}"
+            f"_VALID_TRANSITIONS mismatch.\n  Expected: {expected}\n  Got:      {_VALID_TRANSITIONS}"
         )
 
 
@@ -508,10 +497,10 @@ class TestFromAC_CrossCutting:
     def test_server_all_includes_set_approval_state(self) -> None:
         """AC-CC1: server.py __all__ must include 'set_approval_state'."""
         import owlbear_mcp_memory.server as srv  # type: ignore[import]
+
         assert hasattr(srv, "__all__"), "server.py must define __all__"
         assert "set_approval_state" in srv.__all__, (
-            "'set_approval_state' not found in server.__all__; "
-            "add it as a forwarded export (noqa: F822)"
+            "'set_approval_state' not found in server.__all__; add it as a forwarded export (noqa: F822)"
         )
 
 
@@ -541,21 +530,15 @@ class TestFromAC_CrossToolInteraction:
         # Now restore to pending via set_approval_state
         result = await set_approval_state(ctx, entry_id=eid, new_state="pending")
 
-        assert isinstance(result, str), (
-            f"set_approval_state must return str, got {type(result)!r}"
-        )
-        assert not result.startswith("error:"), (
-            f"deleted→pending via set_approval_state must succeed, got: {result!r}"
-        )
+        assert isinstance(result, str), f"set_approval_state must return str, got {type(result)!r}"
+        assert not result.startswith("error:"), f"deleted→pending via set_approval_state must succeed, got: {result!r}"
 
         row_after_restore = _fetch_entry(conn, eid)
         assert row_after_restore is not None
         assert row_after_restore["approval_state"] == "pending", (
             f"Entry must be pending after roundtrip, got {row_after_restore['approval_state']!r}"
         )
-        assert row_after_restore["deleted_at"] is None, (
-            "deleted_at must be NULL after deleted→pending restore"
-        )
+        assert row_after_restore["deleted_at"] is None, "deleted_at must be NULL after deleted→pending restore"
 
     @pytest.mark.asyncio
     async def test_set_approval_state_deleted_then_mark_for_deletion_is_idempotent(self) -> None:
@@ -576,6 +559,4 @@ class TestFromAC_CrossToolInteraction:
         try:
             await mark_for_deletion(ctx, entry_id=eid)
         except Exception as exc:  # noqa: BLE001
-            pytest.fail(
-                f"mark_for_deletion raised on already-deleted entry: {exc!r}"
-            )
+            pytest.fail(f"mark_for_deletion raised on already-deleted entry: {exc!r}")

@@ -40,16 +40,8 @@ try:
 except ImportError:
     _QDRANT_AVAILABLE = False
 
-_KNOWLEDGE_SRC = (
-    Path(__file__).parent.parent
-    / "serve"
-    / "knowledge"
-    / "src"
-    / "owlbear_knowledge"
-)
-_PYPROJECT = (
-    Path(__file__).parent.parent / "serve" / "knowledge" / "pyproject.toml"
-)
+_KNOWLEDGE_SRC = Path(__file__).parent.parent / "serve" / "knowledge" / "src" / "owlbear_knowledge"
+_PYPROJECT = Path(__file__).parent.parent / "serve" / "knowledge" / "pyproject.toml"
 
 _DENSE_DIM = 1024
 
@@ -113,7 +105,16 @@ class TestFromAC_ProtocolDefinitions:
         class _Stub:
             def store_embedding(self, entity_or_doc_id, embedding, embedding_type, scope="global") -> None: ...  # noqa: ANN001
             def get_embedding(self, entity_or_doc_id) -> list[float] | None: ...  # noqa: ANN001
-            def search_similar(self, query_embedding, top_k=5, embedding_type=None, *, scopes=None, recency_weight=0.0, decay_rate=0.001) -> list[tuple[str, float]]: ...  # noqa: ANN001, PLR0913
+            def search_similar(  # noqa: PLR0913
+                self,
+                query_embedding,
+                top_k=5,
+                embedding_type=None,
+                *,
+                scopes=None,
+                recency_weight=0.0,
+                decay_rate=0.001,
+            ) -> list[tuple[str, float]]: ...  # noqa: ANN001
             def delete_embedding(self, entity_or_doc_id) -> bool: ...  # noqa: ANN001
 
         assert isinstance(_Stub(), VectorStoreProtocol)
@@ -141,9 +142,7 @@ class TestFromAC_QdrantProtocolConformance:
         from owlbear_knowledge.qdrant import QdrantVectorStore  # noqa: PLC0415
 
         for method in ("store_embedding", "get_embedding", "search_similar", "delete_embedding"):
-            assert callable(getattr(QdrantVectorStore, method, None)), (
-                f"missing method: {method}"
-            )
+            assert callable(getattr(QdrantVectorStore, method, None)), f"missing method: {method}"
 
 
 # ===========================================================================
@@ -275,9 +274,7 @@ class TestFromAC_BgeM3IdleTimeout:
         assert BgeM3EmbeddingProvider(idle_timeout=120.0).idle_timeout == 120.0
         assert BgeM3EmbeddingProvider(idle_timeout=0.0).idle_timeout == 0.0
 
-    def test_idle_timeout_zero_no_timer_after_embed(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_idle_timeout_zero_no_timer_after_embed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """idle_timeout=0 means no auto-unload timer is ever scheduled."""
         from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider  # noqa: PLC0415
 
@@ -286,9 +283,7 @@ class TestFromAC_BgeM3IdleTimeout:
         provider.embed(["hello"])
         assert provider._timer is None  # noqa: SLF001
 
-    def test_idle_unload_fires_and_clears_model(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_idle_unload_fires_and_clears_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """After idle_timeout seconds, the model reference is cleared to None."""
         from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider  # noqa: PLC0415
 
@@ -369,9 +364,7 @@ class TestFromAC_OptionalDependencies:
     def test_qdrant_client_min_version(self) -> None:
         """qdrant-client>=1.9.0 is listed under the 'qdrant' optional-dep group."""
         deps = self._optional_deps().get("qdrant", [])
-        assert any("qdrant-client>=1.9.0" in dep for dep in deps), (
-            f"Expected 'qdrant-client>=1.9.0' in {deps}"
-        )
+        assert any("qdrant-client>=1.9.0" in dep for dep in deps), f"Expected 'qdrant-client>=1.9.0' in {deps}"
 
     def test_embedding_optional_dep_group_exists(self) -> None:
         """[project.optional-dependencies] has an 'embedding' key."""
@@ -380,6 +373,4 @@ class TestFromAC_OptionalDependencies:
     def test_flag_embedding_min_version(self) -> None:
         """FlagEmbedding>=1.2.0 is listed under the 'embedding' optional-dep group."""
         deps = self._optional_deps().get("embedding", [])
-        assert any("FlagEmbedding>=1.2.0" in dep for dep in deps), (
-            f"Expected 'FlagEmbedding>=1.2.0' in {deps}"
-        )
+        assert any("FlagEmbedding>=1.2.0" in dep for dep in deps), f"Expected 'FlagEmbedding>=1.2.0' in {deps}"

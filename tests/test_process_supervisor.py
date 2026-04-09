@@ -46,6 +46,7 @@ def _make_proc(*, running: bool = True) -> MagicMock:
 # Helpers for cleaner patch setup
 # ---------------------------------------------------------------------------
 
+
 def _patch_spawn(proc: MagicMock) -> Any:  # noqa: ANN401
     return patch(f"{_MODULE}.asyncio.create_subprocess_exec", new=AsyncMock(return_value=proc))
 

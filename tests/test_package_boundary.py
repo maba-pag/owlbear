@@ -26,6 +26,7 @@ subject to the same boundary rules as runtime imports. This is intentional:
 TYPE_CHECKING imports create a real dependency chain reflected in wheels and
 type checking tools even though they are not evaluated at runtime.
 """
+
 from __future__ import annotations
 
 import ast
@@ -113,8 +114,7 @@ class TestFromAC_ManifestGuard:
             )
         if extra_in_map:
             errors.append(
-                f"ALLOWED_IMPORTS contains unknown namespaces not found under "
-                f"packages/*/src/: {sorted(extra_in_map)}"
+                f"ALLOWED_IMPORTS contains unknown namespaces not found under packages/*/src/: {sorted(extra_in_map)}"
             )
         assert not errors, "\n".join(errors)
 
@@ -145,11 +145,6 @@ class TestFromAC_PackageBoundaries:
                         continue  # self-import — always allowed
                     if root not in allowed:
                         rel = py_file.relative_to(_PACKAGES_DIR)
-                        violations.append(
-                            f"{rel}: {ns_name!r} imports disallowed namespace {root!r}"
-                        )
+                        violations.append(f"{rel}: {ns_name!r} imports disallowed namespace {root!r}")
 
-        assert not violations, (
-            f"Package boundary violations found ({len(violations)}):\n"
-            + "\n".join(violations)
-        )
+        assert not violations, f"Package boundary violations found ({len(violations)}):\n" + "\n".join(violations)

@@ -155,9 +155,7 @@ class TestFromAC_MemoryEntry:
             "deleted_at",
         }
         actual = set(MemoryEntry.model_fields)
-        assert actual == expected, (
-            f"Field mismatch — extra: {actual - expected}, missing: {expected - actual}"
-        )
+        assert actual == expected, f"Field mismatch — extra: {actual - expected}, missing: {expected - actual}"
 
     def test_memory_entry_category_literal_values(self) -> None:
         import typing
@@ -167,9 +165,7 @@ class TestFromAC_MemoryEntry:
         annotation = MemoryEntry.model_fields["category"].annotation
         args = set(typing.get_args(annotation))
         expected = {"preference", "knowledge", "context", "behavior", "goal"}
-        assert args == expected, (
-            f"Expected category Literal{sorted(expected)}, got args={sorted(args)}"
-        )
+        assert args == expected, f"Expected category Literal{sorted(expected)}, got args={sorted(args)}"
 
     def test_memory_entry_approval_state_literal_values(self) -> None:
         import typing
@@ -179,9 +175,7 @@ class TestFromAC_MemoryEntry:
         annotation = MemoryEntry.model_fields["approval_state"].annotation
         args = set(typing.get_args(annotation))
         expected = {"pending", "approved", "deleted"}
-        assert args == expected, (
-            f"Expected approval_state Literal{sorted(expected)}, got args={sorted(args)}"
-        )
+        assert args == expected, f"Expected approval_state Literal{sorted(expected)}, got args={sorted(args)}"
 
     def test_memory_entry_confidence_is_float(self) -> None:
         from owlbear_mcp_memory.models import MemoryEntry
@@ -197,9 +191,7 @@ class TestFromAC_MemoryEntry:
         for field_name in ("scope_agent", "scope_project", "deleted_at"):
             annotation = MemoryEntry.model_fields[field_name].annotation
             args = typing.get_args(annotation)
-            assert type(None) in args, (
-                f"Expected {field_name} to be str | None, got {annotation}"
-            )
+            assert type(None) in args, f"Expected {field_name} to be str | None, got {annotation}"
 
     def test_memory_entry_valid_instance_accepted(self) -> None:
         from owlbear_mcp_memory.models import MemoryEntry
@@ -295,9 +287,7 @@ class TestFromAC_AppContext:
         from owlbear_mcp_memory.server import AppContext
 
         hints = typing.get_type_hints(AppContext)
-        assert hints.get("conn") is sqlite3.Connection, (
-            f"Expected conn: sqlite3.Connection, got {hints.get('conn')}"
-        )
+        assert hints.get("conn") is sqlite3.Connection, f"Expected conn: sqlite3.Connection, got {hints.get('conn')}"
 
     def test_app_context_project_name_allows_none(self) -> None:
         import typing
@@ -307,9 +297,7 @@ class TestFromAC_AppContext:
         hints = typing.get_type_hints(AppContext)
         annotation = hints.get("project_name")
         args = typing.get_args(annotation)
-        assert type(None) in args, (
-            f"Expected project_name: str | None, got {annotation}"
-        )
+        assert type(None) in args, f"Expected project_name: str | None, got {annotation}"
 
 
 # ===========================================================================
@@ -335,9 +323,7 @@ class TestFromAC_McpInstance:
     def test_mcp_name_is_owlbear_memory(self) -> None:
         from owlbear_mcp_memory.server import mcp
 
-        assert mcp.name == "owlbear-memory", (
-            f"Expected mcp.name == 'owlbear-memory', got {mcp.name!r}"
-        )
+        assert mcp.name == "owlbear-memory", f"Expected mcp.name == 'owlbear-memory', got {mcp.name!r}"
 
     def test_server_all_defined(self) -> None:
         from owlbear_mcp_memory import server
@@ -372,9 +358,7 @@ class TestFromAC_McpInstance:
                     dec_str = ast.unparse(decorator)
                     if "tool" in dec_str.lower() and "mcp" in dec_str.lower():
                         tool_defs.append(node.name)
-        assert not tool_defs, (
-            f"server.py must not have tool implementations, found: {tool_defs}"
-        )
+        assert not tool_defs, f"server.py must not have tool implementations, found: {tool_defs}"
 
     def test_no_cross_package_imports_in_server(self) -> None:
         """server.py must use stdlib json for project identity — no owlbear_* imports."""
@@ -483,9 +467,7 @@ class TestFromAC_Lifespan:
     ) -> None:
         """Step (e): project_name read from owlbear-project.json in CWD via stdlib json."""
         monkeypatch.setenv("OWLBEAR_MEMORY_DB_PATH", str(tmp_path / "proj.db"))
-        (tmp_path / "owlbear-project.json").write_text(
-            json.dumps({"name": "my-test-project"}), encoding="utf-8"
-        )
+        (tmp_path / "owlbear-project.json").write_text(json.dumps({"name": "my-test-project"}), encoding="utf-8")
         monkeypatch.chdir(tmp_path)
         from owlbear_mcp_memory.server import app_lifespan
 
@@ -609,13 +591,10 @@ class TestFromAC_SqliteDdl:
         # pragma rows: (cid, name, type, notnull, dflt_value, pk)
         col_map = {row[1]: row[2] for row in pragma}
         assert set(col_map) == set(expected), (
-            f"Column mismatch — extra: {set(col_map) - set(expected)}, "
-            f"missing: {set(expected) - set(col_map)}"
+            f"Column mismatch — extra: {set(col_map) - set(expected)}, missing: {set(expected) - set(col_map)}"
         )
         for col, col_type in expected.items():
-            assert col_map[col] == col_type, (
-                f"Column {col!r}: expected type {col_type!r}, got {col_map[col]!r}"
-            )
+            assert col_map[col] == col_type, f"Column {col!r}: expected type {col_type!r}, got {col_map[col]!r}"
 
     @pytest.mark.asyncio
     async def test_id_is_primary_key(
@@ -645,9 +624,7 @@ class TestFromAC_SqliteDdl:
         defaults = {row[1]: row[4] for row in pragma}
         raw = defaults.get("approval_state", "")
         # SQLite returns default with quotes: "'pending'"
-        assert raw in ("'pending'", "pending"), (
-            f"Expected approval_state DEFAULT 'pending', got {raw!r}"
-        )
+        assert raw in ("'pending'", "pending"), f"Expected approval_state DEFAULT 'pending', got {raw!r}"
 
     @pytest.mark.asyncio
     async def test_nullable_columns_allow_null(
@@ -663,9 +640,7 @@ class TestFromAC_SqliteDdl:
         # notnull=0 means nullable
         notnull = {row[1]: row[3] for row in pragma}
         for col in ("scope_agent", "scope_project", "deleted_at"):
-            assert notnull.get(col) == 0, (
-                f"Expected {col!r} to be nullable (notnull=0), got {notnull.get(col)}"
-            )
+            assert notnull.get(col) == 0, f"Expected {col!r} to be nullable (notnull=0), got {notnull.get(col)}"
 
     @pytest.mark.asyncio
     async def test_required_columns_are_not_null(
@@ -681,9 +656,7 @@ class TestFromAC_SqliteDdl:
             pragma = ctx.conn.execute("PRAGMA table_info(memory_entries)").fetchall()
         notnull = {row[1]: row[3] for row in pragma}
         for col in required:
-            assert notnull.get(col) == 1, (
-                f"Expected {col!r} NOT NULL (notnull=1), got {notnull.get(col)}"
-            )
+            assert notnull.get(col) == 1, f"Expected {col!r} NOT NULL (notnull=1), got {notnull.get(col)}"
 
     @pytest.mark.asyncio
     async def test_create_table_is_idempotent(
@@ -699,9 +672,7 @@ class TestFromAC_SqliteDdl:
             pass
         # Second invocation must not raise
         async with app_lifespan(MagicMock()) as ctx:
-            row = ctx.conn.execute(
-                "SELECT name FROM sqlite_master WHERE name='memory_entries'"
-            ).fetchone()
+            row = ctx.conn.execute("SELECT name FROM sqlite_master WHERE name='memory_entries'").fetchone()
         assert row is not None
 
 
@@ -736,9 +707,7 @@ class TestFromAC_SetupMcp:
         assert mcp_json.is_file(), "mcp.json was not created"
         config = json.loads(mcp_json.read_text(encoding="utf-8"))
         servers = config["servers"]
-        assert len(servers) == 5, (
-            f"Expected 5 server entries (github + 4 stdio), got {len(servers)}: {list(servers)}"
-        )
+        assert len(servers) == 5, f"Expected 5 server entries (github + 4 stdio), got {len(servers)}: {list(servers)}"
 
     def test_create_mcp_config_owlbear_memory_entry_shape(self, tmp_path: Path) -> None:
         """owlbear-memory entry has type=stdio, command=uv, -m owlbear_mcp_memory in args."""
@@ -759,14 +728,10 @@ class TestFromAC_SetupMcp:
         """create_mcp_config() docstring must mention five MCP server entries."""
         tree = ast.parse(self._setup_source())
         for node in ast.walk(tree):
-            if (
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name == "create_mcp_config"
-            ):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "create_mcp_config":
                 docstring = ast.get_docstring(node) or ""
                 assert "five" in docstring.lower(), (
-                    f"create_mcp_config docstring must say 'five' (was updated from four), "
-                    f"got: {docstring!r}"
+                    f"create_mcp_config docstring must say 'five' (was updated from four), got: {docstring!r}"
                 )
                 return
         pytest.fail("create_mcp_config function not found in setup/init.py")
@@ -775,10 +740,7 @@ class TestFromAC_SetupMcp:
         """create_mcp_config() docstring must mention four owlbear stdio servers (updated from three)."""
         tree = ast.parse(self._setup_source())
         for node in ast.walk(tree):
-            if (
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and node.name == "create_mcp_config"
-            ):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "create_mcp_config":
                 docstring = ast.get_docstring(node) or ""
                 # Post-update: "four owlbear stdio servers" (not "three owlbear stdio")
                 assert "four owlbear stdio" in docstring.lower(), (
@@ -798,9 +760,7 @@ class TestFromAC_PackageBoundary:
     """ALLOWED_IMPORTS in test_package_boundary.py includes owlbear_mcp_memory: set()."""
 
     def _boundary_source(self) -> str:
-        return (_REPO_ROOT / "tests" / "test_package_boundary.py").read_text(
-            encoding="utf-8"
-        )
+        return (_REPO_ROOT / "tests" / "test_package_boundary.py").read_text(encoding="utf-8")
 
     def test_boundary_source_has_mcp_memory_key(self) -> None:
         """ALLOWED_IMPORTS literal in test_package_boundary.py must include 'owlbear_mcp_memory'."""
@@ -821,9 +781,7 @@ class TestFromAC_PackageBoundary:
             ):
                 # Unparse and check for the entry
                 unparsed = ast.unparse(node.value)
-                assert "owlbear_mcp_memory" in unparsed, (
-                    "owlbear_mcp_memory not found in ALLOWED_IMPORTS dict"
-                )
+                assert "owlbear_mcp_memory" in unparsed, "owlbear_mcp_memory not found in ALLOWED_IMPORTS dict"
                 return
         pytest.fail("ALLOWED_IMPORTS assignment not found in test_package_boundary.py")
 
@@ -839,6 +797,4 @@ class TestFromAC_RuffSrcArray:
     def test_ruff_src_includes_mcp_memory(self) -> None:
         data = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         ruff_src = data["tool"]["ruff"]["src"]
-        assert "serve/mcp-memory/src" in ruff_src, (
-            f"'serve/mcp-memory/src' missing from tool.ruff.src, got: {ruff_src}"
-        )
+        assert "serve/mcp-memory/src" in ruff_src, f"'serve/mcp-memory/src' missing from tool.ruff.src, got: {ruff_src}"

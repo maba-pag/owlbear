@@ -130,8 +130,17 @@ def _insert_entry(  # noqa: PLR0913
             scope_agent, scope_project, approval_state, deleted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            eid, content, category, confidence, created_at, updated_at, source,
-            scope_agent, scope_project, approval_state, deleted_at,
+            eid,
+            content,
+            category,
+            confidence,
+            created_at,
+            updated_at,
+            source,
+            scope_agent,
+            scope_project,
+            approval_state,
+            deleted_at,
         ),
     )
     conn.commit()
@@ -196,9 +205,7 @@ class TestFromAC_GetKnowledge:
 
         contents = [r["content"] for r in result]
         assert "mine" in contents
-        assert "theirs" not in contents, (
-            "Entry scoped to another agent+project must not appear in results"
-        )
+        assert "theirs" not in contents, "Entry scoped to another agent+project must not appear in results"
 
     # AC1: within same scope tier, approved before pending
     @pytest.mark.asyncio
@@ -206,14 +213,20 @@ class TestFromAC_GetKnowledge:
         """AC1: approved entries come before pending entries within the same scope tier."""
         conn = _make_conn()
         _insert_entry(
-            conn, content="pending",
-            scope_agent=None, scope_project=None,
-            approval_state="pending", confidence=0.9,
+            conn,
+            content="pending",
+            scope_agent=None,
+            scope_project=None,
+            approval_state="pending",
+            confidence=0.9,
         )
         _insert_entry(
-            conn, content="approved",
-            scope_agent=None, scope_project=None,
-            approval_state="approved", confidence=0.9,
+            conn,
+            content="approved",
+            scope_agent=None,
+            scope_project=None,
+            approval_state="approved",
+            confidence=0.9,
         )
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
@@ -229,14 +242,20 @@ class TestFromAC_GetKnowledge:
         """AC1: entries with higher confidence appear first within same scope and state."""
         conn = _make_conn()
         _insert_entry(
-            conn, content="low",
-            scope_agent=None, scope_project=None,
-            approval_state="pending", confidence=0.75,
+            conn,
+            content="low",
+            scope_agent=None,
+            scope_project=None,
+            approval_state="pending",
+            confidence=0.75,
         )
         _insert_entry(
-            conn, content="high",
-            scope_agent=None, scope_project=None,
-            approval_state="pending", confidence=0.95,
+            conn,
+            content="high",
+            scope_agent=None,
+            scope_project=None,
+            approval_state="pending",
+            confidence=0.95,
         )
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
@@ -251,10 +270,8 @@ class TestFromAC_GetKnowledge:
     async def test_excludes_deleted_entries(self) -> None:
         """AC3: entries with approval_state='deleted' are never returned."""
         conn = _make_conn()
-        _insert_entry(conn, content="active", scope_agent=None, scope_project=None,
-                      approval_state="pending")
-        _insert_entry(conn, content="removed", scope_agent=None, scope_project=None,
-                      approval_state="deleted")
+        _insert_entry(conn, content="active", scope_agent=None, scope_project=None, approval_state="pending")
+        _insert_entry(conn, content="removed", scope_agent=None, scope_project=None, approval_state="deleted")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
         result = await get_knowledge(ctx, agent_id="any")
@@ -307,10 +324,8 @@ class TestFromAC_GetKnowledge:
     async def test_filter_by_single_category(self) -> None:
         """AC5: categories filter returns only entries matching the given category."""
         conn = _make_conn()
-        _insert_entry(conn, content="know", category="knowledge",
-                      scope_agent=None, scope_project=None)
-        _insert_entry(conn, content="pref", category="preference",
-                      scope_agent=None, scope_project=None)
+        _insert_entry(conn, content="know", category="knowledge", scope_agent=None, scope_project=None)
+        _insert_entry(conn, content="pref", category="preference", scope_agent=None, scope_project=None)
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
         result = await get_knowledge(ctx, agent_id="any", categories=["knowledge"])
@@ -324,16 +339,12 @@ class TestFromAC_GetKnowledge:
     async def test_filter_by_multiple_categories(self) -> None:
         """AC5: multiple categories returns entries matching any of them."""
         conn = _make_conn()
-        _insert_entry(conn, content="know", category="knowledge",
-                      scope_agent=None, scope_project=None)
-        _insert_entry(conn, content="pref", category="preference",
-                      scope_agent=None, scope_project=None)
-        _insert_entry(conn, content="ctx", category="context",
-                      scope_agent=None, scope_project=None)
+        _insert_entry(conn, content="know", category="knowledge", scope_agent=None, scope_project=None)
+        _insert_entry(conn, content="pref", category="preference", scope_agent=None, scope_project=None)
+        _insert_entry(conn, content="ctx", category="context", scope_agent=None, scope_project=None)
         mcp_ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await get_knowledge(mcp_ctx, agent_id="any",
-                                     categories=["knowledge", "preference"])
+        result = await get_knowledge(mcp_ctx, agent_id="any", categories=["knowledge", "preference"])
 
         contents = [r["content"] for r in result]
         assert "know" in contents
@@ -345,10 +356,8 @@ class TestFromAC_GetKnowledge:
     async def test_filter_by_min_confidence(self) -> None:
         """AC5: min_confidence filter excludes entries below the threshold."""
         conn = _make_conn()
-        _insert_entry(conn, content="above", confidence=0.90,
-                      scope_agent=None, scope_project=None)
-        _insert_entry(conn, content="below", confidence=0.75,
-                      scope_agent=None, scope_project=None)
+        _insert_entry(conn, content="above", confidence=0.90, scope_agent=None, scope_project=None)
+        _insert_entry(conn, content="below", confidence=0.75, scope_agent=None, scope_project=None)
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
         result = await get_knowledge(ctx, agent_id="any", min_confidence=0.85)
@@ -374,13 +383,15 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         result = await record_learning(
-            ctx, agent_id="agent1", content="test", category="knowledge", confidence=0.69,
+            ctx,
+            agent_id="agent1",
+            content="test",
+            category="knowledge",
+            confidence=0.69,
         )
 
         assert isinstance(result, str), "record_learning must return str for validation failure"
-        assert result.startswith("error:"), (
-            f"Expected soft error string starting with 'error:', got {result!r}"
-        )
+        assert result.startswith("error:"), f"Expected soft error string starting with 'error:', got {result!r}"
 
     # AC6: boundary — confidence=0.0 is also below threshold
     @pytest.mark.asyncio
@@ -390,13 +401,15 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         result = await record_learning(
-            ctx, agent_id="agent1", content="test", category="knowledge", confidence=0.0,
+            ctx,
+            agent_id="agent1",
+            content="test",
+            category="knowledge",
+            confidence=0.0,
         )
 
         assert isinstance(result, str), "confidence=0.0 rejection must return str"
-        assert result.startswith("error:"), (
-            f"confidence=0.0 must be rejected with soft error, got {result!r}"
-        )
+        assert result.startswith("error:"), f"confidence=0.0 must be rejected with soft error, got {result!r}"
 
     # AC6: boundary — confidence=0.7 is exactly at threshold, must be accepted
     @pytest.mark.asyncio
@@ -406,7 +419,11 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         result = await record_learning(
-            ctx, agent_id="agent1", content="test", category="knowledge", confidence=0.70,
+            ctx,
+            agent_id="agent1",
+            content="test",
+            category="knowledge",
+            confidence=0.70,
         )
 
         assert not (isinstance(result, str) and result.startswith("error:")), (
@@ -421,14 +438,15 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         result = await record_learning(
-            ctx, agent_id="agent1", content="test",
-            category="invalid_category", confidence=0.8,
+            ctx,
+            agent_id="agent1",
+            content="test",
+            category="invalid_category",
+            confidence=0.8,
         )
 
         assert isinstance(result, str)
-        assert result.startswith("error:"), (
-            f"Expected soft error string for invalid category, got {result!r}"
-        )
+        assert result.startswith("error:"), f"Expected soft error string for invalid category, got {result!r}"
 
     # AC7: all 5 valid categories are accepted
     @pytest.mark.asyncio
@@ -440,8 +458,11 @@ class TestFromAC_RecordLearning:
 
         for cat in valid_categories:
             result = await record_learning(
-                ctx, agent_id="agent1",
-                content=f"test-{cat}", category=cat, confidence=0.8,
+                ctx,
+                agent_id="agent1",
+                content=f"test-{cat}",
+                category=cat,
+                confidence=0.8,
             )
             assert not (isinstance(result, str) and result.startswith("error:")), (
                 f"Category '{cat}' must be valid, but got error: {result!r}"
@@ -455,7 +476,11 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         result = await record_learning(
-            ctx, agent_id="agent1", content="test", category="knowledge", confidence=0.8,
+            ctx,
+            agent_id="agent1",
+            content="test",
+            category="knowledge",
+            confidence=0.8,
         )
 
         assert isinstance(result, str), f"Expected str, got {type(result).__name__}"
@@ -475,13 +500,14 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         entry_id = await record_learning(
-            ctx, agent_id="agent1", content="stored test",
-            category="knowledge", confidence=0.8,
+            ctx,
+            agent_id="agent1",
+            content="stored test",
+            category="knowledge",
+            confidence=0.8,
         )
 
-        row = conn.execute(
-            "SELECT id FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None, f"Entry {entry_id!r} not found in database"
 
     # AC8: timestamps are set on the new entry
@@ -492,7 +518,11 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         entry_id = await record_learning(
-            ctx, agent_id="agent1", content="ts test", category="knowledge", confidence=0.8,
+            ctx,
+            agent_id="agent1",
+            content="ts test",
+            category="knowledge",
+            confidence=0.8,
         )
 
         row = conn.execute(
@@ -511,13 +541,14 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         entry_id = await record_learning(
-            ctx, agent_id="my-agent-007", content="src test",
-            category="knowledge", confidence=0.8,
+            ctx,
+            agent_id="my-agent-007",
+            content="src test",
+            category="knowledge",
+            confidence=0.8,
         )
 
-        row = conn.execute(
-            "SELECT source FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT source FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None
         assert row[0] == "my-agent-007", f"Expected source='my-agent-007', got {row[0]!r}"
 
@@ -529,13 +560,14 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="proj"))
 
         entry_id = await record_learning(
-            ctx, agent_id="agent1", content="state test",
-            category="knowledge", confidence=0.8,
+            ctx,
+            agent_id="agent1",
+            content="state test",
+            category="knowledge",
+            confidence=0.8,
         )
 
-        row = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None
         assert row[0] == "pending", f"Expected approval_state='pending', got {row[0]!r}"
 
@@ -547,18 +579,17 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="owlbear-default"))
 
         entry_id = await record_learning(
-            ctx, agent_id="agent1", content="proj test",
-            category="knowledge", confidence=0.8,
+            ctx,
+            agent_id="agent1",
+            content="proj test",
+            category="knowledge",
+            confidence=0.8,
             # scope_project intentionally omitted
         )
 
-        row = conn.execute(
-            "SELECT scope_project FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT scope_project FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None
-        assert row[0] == "owlbear-default", (
-            f"Expected scope_project='owlbear-default' from AppContext, got {row[0]!r}"
-        )
+        assert row[0] == "owlbear-default", f"Expected scope_project='owlbear-default' from AppContext, got {row[0]!r}"
 
     # AC9: explicit scope_project overrides AppContext.project_name
     @pytest.mark.asyncio
@@ -568,18 +599,17 @@ class TestFromAC_RecordLearning:
         ctx = _make_mcp_ctx(_make_app_ctx(conn, project_name="default-proj"))
 
         entry_id = await record_learning(
-            ctx, agent_id="agent1", content="override test",
-            category="knowledge", confidence=0.8,
+            ctx,
+            agent_id="agent1",
+            content="override test",
+            category="knowledge",
+            confidence=0.8,
             scope_project="override-proj",
         )
 
-        row = conn.execute(
-            "SELECT scope_project FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT scope_project FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None
-        assert row[0] == "override-proj", (
-            f"Expected scope_project='override-proj', got {row[0]!r}"
-        )
+        assert row[0] == "override-proj", f"Expected scope_project='override-proj', got {row[0]!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -641,16 +671,16 @@ class TestFromAC_ListEntries:
     async def test_combined_filters_are_and_conditions(self) -> None:
         """AC11: multiple filters are ANDed — only entries matching all criteria returned."""
         conn = _make_conn()
-        _insert_entry(conn, content="match", scope_agent="agent1",
-                      category="knowledge", approval_state="approved")
-        _insert_entry(conn, content="wrong-category", scope_agent="agent1",
-                      category="preference", approval_state="approved")
-        _insert_entry(conn, content="wrong-agent", scope_agent="agent2",
-                      category="knowledge", approval_state="approved")
+        _insert_entry(conn, content="match", scope_agent="agent1", category="knowledge", approval_state="approved")
+        _insert_entry(
+            conn, content="wrong-category", scope_agent="agent1", category="preference", approval_state="approved"
+        )
+        _insert_entry(
+            conn, content="wrong-agent", scope_agent="agent2", category="knowledge", approval_state="approved"
+        )
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await list_entries(ctx, agent_id="agent1",
-                                    category="knowledge", status="approved")
+        result = await list_entries(ctx, agent_id="agent1", category="knowledge", status="approved")
 
         contents = [r["content"] for r in result]
         assert "match" in contents
@@ -720,9 +750,7 @@ class TestFromAC_MarkForDeletion:
 
         await mark_for_deletion(ctx, entry_id=entry_id)
 
-        row = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None
         assert row[0] == "deleted", f"Expected approval_state='deleted', got {row[0]!r}"
 
@@ -736,9 +764,7 @@ class TestFromAC_MarkForDeletion:
 
         await mark_for_deletion(ctx, entry_id=entry_id)
 
-        row = conn.execute(
-            "SELECT deleted_at FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT deleted_at FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None
         assert row[0] not in (None, ""), "deleted_at must be set to a non-null timestamp"
 
@@ -747,19 +773,14 @@ class TestFromAC_MarkForDeletion:
     async def test_updates_updated_at_timestamp(self) -> None:
         """AC13: mark_for_deletion refreshes updated_at."""
         conn = _make_conn()
-        entry_id = _insert_entry(conn, content="update me",
-                                  updated_at="2026-01-01T00:00:00Z")
+        entry_id = _insert_entry(conn, content="update me", updated_at="2026-01-01T00:00:00Z")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
         await mark_for_deletion(ctx, entry_id=entry_id)
 
-        row = conn.execute(
-            "SELECT updated_at FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT updated_at FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row is not None
-        assert row[0] != "2026-01-01T00:00:00Z", (
-            "updated_at must be refreshed by mark_for_deletion"
-        )
+        assert row[0] != "2026-01-01T00:00:00Z", "updated_at must be refreshed by mark_for_deletion"
 
     # AC14: idempotent — no error on re-deletion
     @pytest.mark.asyncio
@@ -767,7 +788,8 @@ class TestFromAC_MarkForDeletion:
         """AC14: calling mark_for_deletion on an already-deleted entry does not raise."""
         conn = _make_conn()
         entry_id = _insert_entry(
-            conn, content="already gone",
+            conn,
+            content="already gone",
             approval_state="deleted",
             deleted_at="2026-01-01T00:00:00Z",
         )
@@ -776,9 +798,7 @@ class TestFromAC_MarkForDeletion:
         # Must not raise — second call is a no-op
         await mark_for_deletion(ctx, entry_id=entry_id)
 
-        row = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         assert row[0] == "deleted"
 
     # AC15: ToolError for nonexistent entry_id
@@ -866,9 +886,7 @@ class TestFromAC_ApplyToolExclusions:
         called = {c.args[0] for c in server.remove_tool.call_args_list}
         assert "get_knowledge" in called
         assert "record_learning" in called
-        assert not any(" " in n for n in called), (
-            "Tool names passed to remove_tool must have no surrounding whitespace"
-        )
+        assert not any(" " in n for n in called), "Tool names passed to remove_tool must have no surrounding whitespace"
 
     # AC16: valid + invalid names — valid ones still excluded
     def test_valid_names_still_excluded_when_mixed_with_invalid(self) -> None:

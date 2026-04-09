@@ -99,9 +99,7 @@ def _make_db(path: Path, entries: list[dict] | None = None) -> None:
 def _get_state(db: Path, entry_id: str) -> str | None:
     """Return the approval_state for an entry, or None if not found."""
     conn = sqlite3.connect(str(db))
-    row = conn.execute(
-        "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-    ).fetchone()
+    row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
     conn.close()
     return row[0] if row else None
 
@@ -149,8 +147,7 @@ class TestFromAC_MCPTransport:
         """AC-T: approve.py source imports from mcp.shared.memory."""
         source = _APPROVE_PY.read_text(encoding="utf-8")
         assert "mcp.shared.memory" in source, (
-            "approve.py must import from mcp.shared.memory to satisfy "
-            "the in-memory MCP transport AC requirement"
+            "approve.py must import from mcp.shared.memory to satisfy the in-memory MCP transport AC requirement"
         )
 
 
@@ -169,9 +166,7 @@ class TestFromAC_BatchConfirmation:
         _make_db(db, [{"id": eid, "content": "to approve"}])
         result = _run_approve("--approve", eid, db_path=db)
         assert result.returncode == 0, f"Unexpected non-zero exit: {result.stderr!r}"
-        assert result.stdout.strip() != "", (
-            "--approve must print a per-entry confirmation to stdout on success"
-        )
+        assert result.stdout.strip() != "", "--approve must print a per-entry confirmation to stdout on success"
 
     def test_batch_reject_prints_confirmation_to_stdout(self, tmp_path: Path) -> None:
         """AC-B: --reject prints a per-entry confirmation line to stdout."""
@@ -180,9 +175,7 @@ class TestFromAC_BatchConfirmation:
         _make_db(db, [{"id": eid, "content": "to reject"}])
         result = _run_approve("--reject", eid, db_path=db)
         assert result.returncode == 0, f"Unexpected non-zero exit: {result.stderr!r}"
-        assert result.stdout.strip() != "", (
-            "--reject must print a per-entry confirmation to stdout on success"
-        )
+        assert result.stdout.strip() != "", "--reject must print a per-entry confirmation to stdout on success"
 
     def test_batch_approve_confirmation_mentions_entry_id(self, tmp_path: Path) -> None:
         """AC-B: confirmation output contains the short entry ID (first 8 chars)."""
@@ -191,9 +184,7 @@ class TestFromAC_BatchConfirmation:
         _make_db(db, [{"id": eid, "content": "confirm me"}])
         result = _run_approve("--approve", eid, db_path=db)
         assert result.returncode == 0, f"Unexpected non-zero exit: {result.stderr!r}"
-        assert eid[:8] in result.stdout, (
-            "Per-entry confirmation must mention the entry ID (first 8 chars)"
-        )
+        assert eid[:8] in result.stdout, "Per-entry confirmation must mention the entry ID (first 8 chars)"
 
 
 # ===========================================================================
@@ -211,8 +202,7 @@ class TestFromAC_InteractiveEnterSkip:
         _make_db(db, [{"id": eid, "content": "skip me via enter key"}])
         result = _run_approve("--interactive", db_path=db, stdin="\n")
         assert result.returncode == 0, (
-            "Blank Enter (empty line) must be treated as skip, not raise EOFError; "
-            f"stderr: {result.stderr!r}"
+            f"Blank Enter (empty line) must be treated as skip, not raise EOFError; stderr: {result.stderr!r}"
         )
 
     def test_interactive_blank_enter_skips_entry_stays_pending(self, tmp_path: Path) -> None:
@@ -221,12 +211,8 @@ class TestFromAC_InteractiveEnterSkip:
         db = tmp_path / "test.db"
         _make_db(db, [{"id": eid, "content": "should stay pending"}])
         result = _run_approve("--interactive", db_path=db, stdin="\n")
-        assert result.returncode == 0, (
-            f"Exit code must be 0 after skip-via-Enter; stderr: {result.stderr!r}"
-        )
-        assert _get_state(db, eid) == "pending", (
-            "Entry must remain pending after blank-Enter skip"
-        )
+        assert result.returncode == 0, f"Exit code must be 0 after skip-via-Enter; stderr: {result.stderr!r}"
+        assert _get_state(db, eid) == "pending", "Entry must remain pending after blank-Enter skip"
 
 
 # ===========================================================================
@@ -246,14 +232,11 @@ class TestFromAC_CurationReportFormat:
         db = tmp_path / "data" / "memory" / "test.db"
         _make_db(db, [{"id": eid, "content": "array-format entry", "category": "knowledge"}])
         report_path = db.parent / "curation-report.json"
-        report = [
-            {"entry_id": eid, "recommendation": "approve", "reason": "high relevance"}
-        ]
+        report = [{"entry_id": eid, "recommendation": "approve", "reason": "high relevance"}]
         report_path.write_text(json.dumps(report), encoding="utf-8")
         result = _run_approve(db_path=db)
         assert result.returncode == 0, (
-            "Curation report as top-level JSON array must not crash the CLI; "
-            f"stderr: {result.stderr!r}"
+            f"Curation report as top-level JSON array must not crash the CLI; stderr: {result.stderr!r}"
         )
 
     def test_curation_report_entry_id_key_used_for_matching(self, tmp_path: Path) -> None:
@@ -263,15 +246,12 @@ class TestFromAC_CurationReportFormat:
         _make_db(db, [{"id": eid, "content": "rec lookup entry", "category": "knowledge"}])
         report_path = db.parent / "curation-report.json"
         # AC format: top-level array, entry_id key
-        report = [
-            {"entry_id": eid, "recommendation": "keep-this-visible", "reason": "test"}
-        ]
+        report = [{"entry_id": eid, "recommendation": "keep-this-visible", "reason": "test"}]
         report_path.write_text(json.dumps(report), encoding="utf-8")
         result = _run_approve(db_path=db)
         assert result.returncode == 0, f"Unexpected crash: {result.stderr!r}"
         assert "keep-this-visible" in result.stdout, (
-            "Recommendation from curation-report.json (matched via 'entry_id' key) "
-            "must appear in the table output"
+            "Recommendation from curation-report.json (matched via 'entry_id' key) must appear in the table output"
         )
 
     def test_malformed_curation_report_prints_warning_to_stderr(self, tmp_path: Path) -> None:
@@ -283,12 +263,9 @@ class TestFromAC_CurationReportFormat:
         report_path.write_text("{ not valid json }", encoding="utf-8")
         result = _run_approve(db_path=db)
         assert result.returncode == 0, (
-            "Malformed curation-report.json must not crash the CLI (exit 0); "
-            f"stderr: {result.stderr!r}"
+            f"Malformed curation-report.json must not crash the CLI (exit 0); stderr: {result.stderr!r}"
         )
-        assert result.stderr.strip() != "", (
-            "Malformed curation-report.json must produce a warning on stderr"
-        )
+        assert result.stderr.strip() != "", "Malformed curation-report.json must produce a warning on stderr"
 
     def test_malformed_curation_report_entries_still_shown(self, tmp_path: Path) -> None:
         """AC-MJ: pending entries are still listed when curation-report.json is malformed."""
@@ -299,9 +276,7 @@ class TestFromAC_CurationReportFormat:
         report_path.write_text("[ invalid }", encoding="utf-8")
         result = _run_approve(db_path=db)
         assert result.returncode == 0, f"Unexpected crash: {result.stderr!r}"
-        assert eid[:8] in result.stdout, (
-            "Entries must still be displayed when curation-report.json is malformed"
-        )
+        assert eid[:8] in result.stdout, "Entries must still be displayed when curation-report.json is malformed"
 
 
 # ===========================================================================

@@ -55,21 +55,15 @@ sources:
 
 
 def _make_ok_result() -> IngestResult:
-    return IngestResult(
-        document_id="abc", chunk_count=2, entity_count=1, edge_count=0, status="ok"
-    )
+    return IngestResult(document_id="abc", chunk_count=2, entity_count=1, edge_count=0, status="ok")
 
 
 def _make_skipped_result() -> IngestResult:
-    return IngestResult(
-        document_id="abc", chunk_count=0, entity_count=0, edge_count=0, status="skipped"
-    )
+    return IngestResult(document_id="abc", chunk_count=0, entity_count=0, edge_count=0, status="skipped")
 
 
 def _make_failed_result() -> IngestResult:
-    return IngestResult(
-        document_id="abc", chunk_count=0, entity_count=0, edge_count=0, status="failed"
-    )
+    return IngestResult(document_id="abc", chunk_count=0, entity_count=0, edge_count=0, status="failed")
 
 
 def _write_manifest(path: Path, content: str) -> Path:
@@ -239,9 +233,7 @@ class TestFromAC_GlobResolution:
         assert mock_pipeline.ingest.call_count == 0
 
     @pytest.mark.asyncio
-    async def test_empty_glob_logs_at_warning_level(
-        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    async def test_empty_glob_logs_at_warning_level(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         """An empty glob match emits at least one WARNING-level log."""
         manifest_file = _write_manifest(
             tmp_path,
@@ -455,9 +447,7 @@ class TestFromAC_IngestFlow:
         assert "unique marker 12345" in intake_arg.content
 
     @pytest.mark.asyncio
-    async def test_skipped_status_counted_as_skipped_not_ingested(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_skipped_status_counted_as_skipped_not_ingested(self, tmp_path: Path) -> None:
         """When ingest() returns status=skipped, summary.skipped increments, not ingested."""
         (tmp_path / "doc.md").write_text("unchanged content")
 
@@ -480,9 +470,7 @@ class TestFromAC_IngestFlow:
         assert summary.ingested == 0
 
     @pytest.mark.asyncio
-    async def test_per_file_failure_does_not_abort_remaining_files(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_per_file_failure_does_not_abort_remaining_files(self, tmp_path: Path) -> None:
         """If the first file fails, the loader still attempts the remaining files."""
         (tmp_path / "a.md").write_text("first")
         (tmp_path / "b.md").write_text("second")
@@ -493,9 +481,7 @@ class TestFromAC_IngestFlow:
             "sources:\n  - name: 'D'\n    type: file_glob\n    config:\n      glob: '*.md'\n",
         )
         mock_pipeline = MagicMock()
-        mock_pipeline.ingest = AsyncMock(
-            side_effect=[_make_failed_result(), _make_ok_result(), _make_ok_result()]
-        )
+        mock_pipeline.ingest = AsyncMock(side_effect=[_make_failed_result(), _make_ok_result(), _make_ok_result()])
         mock_source_store = MagicMock()
 
         summary = await load_manifest_file(
@@ -510,9 +496,7 @@ class TestFromAC_IngestFlow:
         assert summary.ingested == 2
 
     @pytest.mark.asyncio
-    async def test_summary_tracks_ingested_skipped_failed_counts(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_summary_tracks_ingested_skipped_failed_counts(self, tmp_path: Path) -> None:
         """LoadSummary correctly tracks ingested, skipped, and failed counters."""
         (tmp_path / "a.md").write_text("ok")
         (tmp_path / "b.md").write_text("skip")
@@ -523,9 +507,7 @@ class TestFromAC_IngestFlow:
             "sources:\n  - name: 'D'\n    type: file_glob\n    config:\n      glob: '*.md'\n",
         )
         mock_pipeline = MagicMock()
-        mock_pipeline.ingest = AsyncMock(
-            side_effect=[_make_ok_result(), _make_skipped_result(), _make_failed_result()]
-        )
+        mock_pipeline.ingest = AsyncMock(side_effect=[_make_ok_result(), _make_skipped_result(), _make_failed_result()])
         mock_source_store = MagicMock()
 
         summary = await load_manifest_file(
@@ -540,9 +522,7 @@ class TestFromAC_IngestFlow:
         assert summary.failed == 1
 
     @pytest.mark.asyncio
-    async def test_ingest_exception_does_not_abort_remaining_files(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_ingest_exception_does_not_abort_remaining_files(self, tmp_path: Path) -> None:
         """If ingest() raises an exception on one file, remaining files are still processed
         and summary.failed is incremented (covers exception handler at loader.py:193-196)."""
         (tmp_path / "a.md").write_text("first")
@@ -571,9 +551,7 @@ class TestFromAC_IngestFlow:
         assert summary.ingested == 2
 
     @pytest.mark.asyncio
-    async def test_all_source_ok_false_when_all_files_in_source_fail(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_all_source_ok_false_when_all_files_in_source_fail(self, tmp_path: Path) -> None:
         """When every file in a source fails, all_source_ok is set to False via the
         source_failed == source_total condition (loader.py:199) — tested without CLI mock."""
         (tmp_path / "a.md").write_text("fail1")
@@ -584,9 +562,7 @@ class TestFromAC_IngestFlow:
             "sources:\n  - name: 'D'\n    type: file_glob\n    config:\n      glob: '*.md'\n",
         )
         mock_pipeline = MagicMock()
-        mock_pipeline.ingest = AsyncMock(
-            side_effect=[_make_failed_result(), _make_failed_result()]
-        )
+        mock_pipeline.ingest = AsyncMock(side_effect=[_make_failed_result(), _make_failed_result()])
         mock_source_store = MagicMock()
 
         summary = await load_manifest_file(
@@ -616,9 +592,7 @@ class TestFromAC_CLI:
             main([])
         assert exc_info.value.code != 0
 
-    def test_manifest_flag_accepted_exits_zero_on_success(
-        self, tmp_path: Path
-    ) -> None:
+    def test_manifest_flag_accepted_exits_zero_on_success(self, tmp_path: Path) -> None:
         """--manifest flag is parsed and main() returns 0 on a successful run."""
         from unittest.mock import AsyncMock, patch
 
@@ -639,9 +613,7 @@ class TestFromAC_CLI:
 
         assert exit_code == 0
 
-    def test_root_defaults_to_cwd_when_omitted(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_root_defaults_to_cwd_when_omitted(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """When --root is not supplied, workspace_root defaults to the current directory."""
         from unittest.mock import AsyncMock, patch
 
@@ -665,9 +637,7 @@ class TestFromAC_CLI:
         workspace_root = kwargs.get("workspace_root") or mock_load.call_args.args[1]
         assert Path(workspace_root).resolve() == tmp_path.resolve()
 
-    def test_exit_code_zero_on_all_ok(
-        self, tmp_path: Path
-    ) -> None:
+    def test_exit_code_zero_on_all_ok(self, tmp_path: Path) -> None:
         """Exit code 0 when all files ingested successfully."""
         from unittest.mock import AsyncMock, patch
 
@@ -688,9 +658,7 @@ class TestFromAC_CLI:
 
         assert exit_code == 0
 
-    def test_exit_code_zero_when_some_files_are_skipped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_exit_code_zero_when_some_files_are_skipped(self, tmp_path: Path) -> None:
         """Exit code 0 when some files were delta-skipped (unchanged content)."""
         from unittest.mock import AsyncMock, patch
 
@@ -714,9 +682,7 @@ class TestFromAC_CLI:
 
         assert exit_code == 0
 
-    def test_exit_code_nonzero_when_all_files_in_any_source_fail(
-        self, tmp_path: Path
-    ) -> None:
+    def test_exit_code_nonzero_when_all_files_in_any_source_fail(self, tmp_path: Path) -> None:
         """Exit code non-zero when every file in at least one source failed to ingest."""
         from unittest.mock import AsyncMock, patch
 
@@ -739,4 +705,3 @@ class TestFromAC_CLI:
             exit_code = main(["--manifest", str(manifest_file), "--root", str(tmp_path)])
 
         assert exit_code != 0
-

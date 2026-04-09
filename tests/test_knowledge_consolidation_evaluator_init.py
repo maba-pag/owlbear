@@ -51,9 +51,7 @@ class TestFromAC_PackageInit:  # noqa: N801
             "EvaluationResult",
         }
         exported = set(getattr(owlbear_knowledge, "__all__", []))
-        assert required.issubset(exported), (
-            f"Missing from __all__: {required - exported}"
-        )
+        assert required.issubset(exported), f"Missing from __all__: {required - exported}"
 
 
 # ---------------------------------------------------------------------------

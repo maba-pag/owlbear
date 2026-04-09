@@ -107,9 +107,7 @@ class TestFromAC_PydanticAIFactory:  # noqa: N801
         call_args = mock_agent_cls.call_args
         assert call_args is not None, "pydantic_ai.Agent must be called inside make_pydantic_evaluate_fn"
         model_arg = call_args.args[0] if call_args.args else call_args.kwargs.get("model")
-        assert model_arg == "gpt-4o-mini", (
-            f"Agent must be constructed with model='gpt-4o-mini', got: {model_arg!r}"
-        )
+        assert model_arg == "gpt-4o-mini", f"Agent must be constructed with model='gpt-4o-mini', got: {model_arg!r}"
 
     def test_factory_constructs_agent_with_evaluation_result_output_type(self) -> None:
         """AC1: PydanticAI Agent must use output_type=EvaluationResult.
@@ -183,9 +181,7 @@ class TestFromAC_PydanticAIFactory:  # noqa: N801
         """
         from owlbear_knowledge.evaluator import make_pydantic_evaluate_fn  # type: ignore[attr-defined]  # noqa: PLC0415
 
-        expected_output = EvaluationResult(
-            relevance_score=0.9, worth_ingesting=True, summary="highly relevant"
-        )
+        expected_output = EvaluationResult(relevance_score=0.9, worth_ingesting=True, summary="highly relevant")
         mock_run_result = MagicMock()
         mock_run_result.output = expected_output
         mock_agent_instance = MagicMock()
@@ -230,9 +226,7 @@ class TestFromAC_ServerMakeEvaluateFnWiring:  # noqa: N801
         import owlbear_knowledge.evaluator as ev  # noqa: PLC0415
         from owlbear_mcp_knowledge import server  # noqa: PLC0415
 
-        sentinel_fn = AsyncMock(
-            return_value=EvaluationResult(relevance_score=0.7, worth_ingesting=True, summary="")
-        )
+        sentinel_fn = AsyncMock(return_value=EvaluationResult(relevance_score=0.7, worth_ingesting=True, summary=""))
         mock_factory = MagicMock(return_value=sentinel_fn)
 
         with patch.object(ev, "make_pydantic_evaluate_fn", mock_factory, create=True):

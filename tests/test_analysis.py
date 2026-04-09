@@ -194,10 +194,7 @@ class TestFromAC_HighErrorRateDetector:  # noqa: N801
         base: datetime | None = None,
     ) -> list[CompletionEvent]:
         t = base or NOW - timedelta(minutes=30)
-        return [
-            _completion_event(i, agent, o, 1000, t + timedelta(seconds=i))
-            for i, o in enumerate(outcomes)
-        ]
+        return [_completion_event(i, agent, o, 1000, t + timedelta(seconds=i)) for i, o in enumerate(outcomes)]
 
     def test_fires_at_60_percent_with_5_completions(self) -> None:
         events = self._completions("builder", ["failure", "failure", "failure", "success", "success"])
@@ -252,10 +249,7 @@ class TestFromAC_SlowAgentDetector:  # noqa: N801
         base: datetime | None = None,
     ) -> list[CompletionEvent]:
         t = base or NOW - timedelta(minutes=30)
-        return [
-            _completion_event(i, agent, "success", d, t + timedelta(seconds=i))
-            for i, d in enumerate(durations_ms)
-        ]
+        return [_completion_event(i, agent, "success", d, t + timedelta(seconds=i)) for i, d in enumerate(durations_ms)]
 
     def test_fires_when_agent_is_more_than_2x_global_avg(self) -> None:
         """agent-slow 3 at 100s, agent-fast 6 at 1s: global=(300+6)/9=34s; 100/34=2.94x > 2x."""
@@ -333,10 +327,7 @@ class TestFromAC_RepeatedFailureDetector:  # noqa: N801
 
     def test_fires_exactly_once_for_task_with_3_failures(self) -> None:
         base = NOW - timedelta(minutes=30)
-        events = [
-            _completion_event(99, "reviewer", "failure", 1000, base + timedelta(seconds=i))
-            for i in range(3)
-        ]
+        events = [_completion_event(99, "reviewer", "failure", 1000, base + timedelta(seconds=i)) for i in range(3)]
         proposals = repeated_failure_detector(events)
         assert len(proposals) == 1
         assert proposals[0].task_id == 99
@@ -417,10 +408,7 @@ class TestFromAC_AnalyzeEntrypoint:  # noqa: N801
 
     def test_reads_jsonl_and_returns_list(self, tmp_path: Path) -> None:
         base = NOW - timedelta(minutes=30)
-        events = [
-            _cd(i, "builder", "success", 1000, base + timedelta(seconds=i))
-            for i in range(3)
-        ]
+        events = [_cd(i, "builder", "success", 1000, base + timedelta(seconds=i)) for i in range(3)]
         _write_jsonl(tmp_path / "audit.jsonl", events)
         result = analyze(audit_dir=tmp_path, now=NOW)
         assert isinstance(result, list)
@@ -428,10 +416,7 @@ class TestFromAC_AnalyzeEntrypoint:  # noqa: N801
     def test_proposals_are_analysis_proposal_instances(self, tmp_path: Path) -> None:
         base = NOW - timedelta(minutes=30)
         # 2 failures on same task — triggers repeated_failure
-        events = [
-            _cd(200, "builder", "failure", 1000, base + timedelta(seconds=i))
-            for i in range(2)
-        ]
+        events = [_cd(200, "builder", "failure", 1000, base + timedelta(seconds=i)) for i in range(2)]
         _write_jsonl(tmp_path / "audit.jsonl", events)
         result = analyze(audit_dir=tmp_path, now=NOW)
         assert all(isinstance(p, AnalysisProposal) for p in result)
@@ -439,10 +424,7 @@ class TestFromAC_AnalyzeEntrypoint:  # noqa: N801
     def test_window_filter_excludes_old_events(self, tmp_path: Path) -> None:
         """Events older than the analysis window must be excluded."""
         old = NOW - timedelta(days=30)
-        events = [
-            _cd(300, "builder", "failure", 1000, old + timedelta(seconds=i))
-            for i in range(2)
-        ]
+        events = [_cd(300, "builder", "failure", 1000, old + timedelta(seconds=i)) for i in range(2)]
         _write_jsonl(tmp_path / "audit.jsonl", events)
         # Default window is much shorter than 30 days — old events filtered out
         result = analyze(audit_dir=tmp_path, now=NOW)
@@ -565,9 +547,6 @@ class TestFromAC_EmptyInput:  # noqa: N801
     def test_only_dispatch_events_within_1h_returns_empty(self, tmp_path: Path) -> None:
         """5 dispatch events < 1h old: no completions, no stale dispatches — no proposals."""
         base = NOW - timedelta(minutes=30)
-        events = [
-            _dispatch_dict(i, "builder", base + timedelta(seconds=i))
-            for i in range(5)
-        ]
+        events = [_dispatch_dict(i, "builder", base + timedelta(seconds=i)) for i in range(5)]
         _write_jsonl(tmp_path / "audit.jsonl", events)
         assert analyze(audit_dir=tmp_path, now=NOW) == []

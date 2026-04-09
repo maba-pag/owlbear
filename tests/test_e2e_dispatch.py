@@ -73,12 +73,18 @@ def _create_seed_task() -> int:
     Uses a UUID4 suffix in the title so multiple concurrent runs do not collide.
     """
     title = f"E2E-Test-{uuid.uuid4()}"
-    _run_kanban([
-        "create", title,
-        "--status", "todo",
-        "--tags", "e2e-test",
-        "--body", "Trivial AC for e2e test isolation",
-    ])
+    _run_kanban(
+        [
+            "create",
+            title,
+            "--status",
+            "todo",
+            "--tags",
+            "e2e-test",
+            "--body",
+            "Trivial AC for e2e test isolation",
+        ]
+    )
     # Resolve the integer ID by listing tasks in todo with the e2e-test tag.
     # The UUID4 title guarantees uniqueness even under concurrent test runs.
     result = _run_kanban(["list", "--json", "--tag", "e2e-test", "--status", "todo"])
@@ -161,9 +167,7 @@ class TestFromAC_E2EDispatch:
             cwd=str(_PROJECT_ROOT),
         )
         expected = f"Dispatched #{seed_task} to"
-        assert expected in result.stdout, (
-            f"Expected {expected!r} in stdout.\nActual stdout: {result.stdout!r}"
-        )
+        assert expected in result.stdout, f"Expected {expected!r} in stdout.\nActual stdout: {result.stdout!r}"
 
     def test_kanban_status_not_todo_after_dispatch(self, seed_task: int) -> None:
         """After dispatch, task status is no longer ``todo`` (agent advanced it)."""
@@ -178,8 +182,7 @@ class TestFromAC_E2EDispatch:
         show = _run_kanban(["show", str(seed_task), "--json"])
         task_data = json.loads(show.stdout)
         assert task_data["status"] != "todo", (
-            f"Task #{seed_task} status is still 'todo' after dispatch; "
-            "expected the agent to advance it forward."
+            f"Task #{seed_task} status is still 'todo' after dispatch; expected the agent to advance it forward."
         )
 
     def test_kanban_claimed_by_not_null_after_dispatch(self, seed_task: int) -> None:
@@ -209,9 +212,7 @@ class TestFromAC_E2EDispatch:
             check=True,
         )
         jsonl_files = list(_AUDIT_DIR.glob("*.jsonl"))
-        assert jsonl_files, (
-            f"No .jsonl files found under {_AUDIT_DIR} after dispatch."
-        )
+        assert jsonl_files, f"No .jsonl files found under {_AUDIT_DIR} after dispatch."
 
     def test_audit_log_contains_dispatch_event_for_seed(self, seed_task: int) -> None:
         """Audit log contains a JSON line with ``type='dispatch'`` and matching ``task_id``."""
@@ -235,9 +236,7 @@ class TestFromAC_E2EDispatch:
                     break
             if found:
                 break
-        assert found, (
-            f"No dispatch event with task_id={seed_task} found under {_AUDIT_DIR}."
-        )
+        assert found, f"No dispatch event with task_id={seed_task} found under {_AUDIT_DIR}."
 
 
 # ---------------------------------------------------------------------------
@@ -272,12 +271,10 @@ class TestFromAC_RepeatableExecution:
                 cwd=str(_PROJECT_ROOT),
             )
             assert result_a.returncode == 0, (
-                f"First dispatch (#{task_a}) failed.\n"
-                f"stdout: {result_a.stdout}\nstderr: {result_a.stderr}"
+                f"First dispatch (#{task_a}) failed.\nstdout: {result_a.stdout}\nstderr: {result_a.stderr}"
             )
             assert result_b.returncode == 0, (
-                f"Second dispatch (#{task_b}) failed.\n"
-                f"stdout: {result_b.stdout}\nstderr: {result_b.stderr}"
+                f"Second dispatch (#{task_b}) failed.\nstdout: {result_b.stdout}\nstderr: {result_b.stderr}"
             )
         finally:
             _delete_task(task_a)

@@ -69,9 +69,7 @@ class TestFromAC_ProjectReadmeErrorHandling:
                     f"must catch and return error: string; got exception: {exc}"
                 )
 
-        assert isinstance(result, str), (
-            f"project_readme must return str on read_text OSError; got: {type(result)}"
-        )
+        assert isinstance(result, str), f"project_readme must return str on read_text OSError; got: {type(result)}"
 
     @pytest.mark.asyncio
     async def test_read_text_oserror_returns_error_prefix(self, tmp_path: Path) -> None:
@@ -84,8 +82,7 @@ class TestFromAC_ProjectReadmeErrorHandling:
 
         assert isinstance(result, str)
         assert result.startswith("error:"), (
-            f"project_readme must return error:-prefixed string on read_text failure; "
-            f"got: {result!r}"
+            f"project_readme must return error:-prefixed string on read_text failure; got: {result!r}"
         )
 
     @pytest.mark.asyncio
@@ -99,8 +96,7 @@ class TestFromAC_ProjectReadmeErrorHandling:
 
         assert isinstance(result, str)
         assert result.startswith("error:"), (
-            f"project_readme must catch PermissionError and return error: string; "
-            f"got: {result!r}"
+            f"project_readme must catch PermissionError and return error: string; got: {result!r}"
         )
 
     @pytest.mark.asyncio
@@ -143,9 +139,7 @@ class TestFromAC_ProjectStructureErrorHandling:
                     f"must catch and return error: string; got: {exc}"
                 )
 
-        assert isinstance(result, str), (
-            f"project_structure must return str when build_tree raises; got: {type(result)}"
-        )
+        assert isinstance(result, str), f"project_structure must return str when build_tree raises; got: {type(result)}"
 
     @pytest.mark.asyncio
     async def test_build_tree_exception_returns_error_prefix(self, tmp_path: Path) -> None:
@@ -157,8 +151,7 @@ class TestFromAC_ProjectStructureErrorHandling:
 
         assert isinstance(result, str)
         assert result.startswith("error:"), (
-            f"project_structure must return error:-prefixed string on build_tree failure; "
-            f"got: {result!r}"
+            f"project_structure must return error:-prefixed string on build_tree failure; got: {result!r}"
         )
 
     @pytest.mark.asyncio
@@ -170,9 +163,7 @@ class TestFromAC_ProjectStructureErrorHandling:
         result = await project_structure(ctx)
 
         assert isinstance(result, str)
-        assert not result.startswith("error:"), (
-            f"project_structure must not return error: on success; got: {result!r}"
-        )
+        assert not result.startswith("error:"), f"project_structure must not return error: on success; got: {result!r}"
 
 
 # ---------------------------------------------------------------------------

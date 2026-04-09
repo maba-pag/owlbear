@@ -37,15 +37,17 @@ import owlbear_mcp_kanban.server as server_mod
 # Helpers (copied from packages/mcp-kanban/tests/test_server.py conventions)
 # ---------------------------------------------------------------------------
 
-_FAKE_TASK_JSON = json.dumps({
-    "id": 1,
-    "title": "Fake Task",
-    "status": "todo",
-    "priority": "important",
-    "created": "2026-01-01T00:00:00+00:00",
-    "updated": "2026-01-01T00:00:00+00:00",
-    "class": "standard",
-})
+_FAKE_TASK_JSON = json.dumps(
+    {
+        "id": 1,
+        "title": "Fake Task",
+        "status": "todo",
+        "priority": "important",
+        "created": "2026-01-01T00:00:00+00:00",
+        "updated": "2026-01-01T00:00:00+00:00",
+        "class": "standard",
+    }
+)
 
 
 def _make_app_ctx() -> AppContext:
@@ -86,8 +88,7 @@ class TestFromAC_DropBoardContext:
         """
         tool_names = _registered_tool_names()
         assert "board_context" not in tool_names, (
-            f"board_context is still registered as an MCP tool; "
-            f"registered tools: {tool_names!r}"
+            f"board_context is still registered as an MCP tool; registered tools: {tool_names!r}"
         )
 
     # AC: board_context removed from __all__
@@ -97,8 +98,7 @@ class TestFromAC_DropBoardContext:
         Currently FAILS because board_context IS in __all__.
         """
         assert "board_context" not in server_mod.__all__, (
-            "board_context is still listed in server.__all__; "
-            "it must be removed along with the function definition"
+            "board_context is still listed in server.__all__; it must be removed along with the function definition"
         )
 
     # AC: board_context function removed (no module-level attribute)
@@ -108,8 +108,7 @@ class TestFromAC_DropBoardContext:
         Currently FAILS because the function IS defined at module level.
         """
         assert not hasattr(server_mod, "board_context"), (
-            "server module still has a 'board_context' attribute; "
-            "the function definition must be removed"
+            "server module still has a 'board_context' attribute; the function definition must be removed"
         )
 
 
@@ -140,6 +139,4 @@ class TestFromAC_MovePickJsonOutput:
             await move_task(mcp_ctx, task_id="1", status="review")
 
         args_used: tuple = mock_run.call_args[0]
-        assert "--json" in args_used, (
-            f"move_task did not pass '--json' to _run_kanban; args: {args_used!r}"
-        )
+        assert "--json" in args_used, f"move_task did not pass '--json' to _run_kanban; args: {args_used!r}"

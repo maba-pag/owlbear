@@ -96,9 +96,7 @@ def _run_hook(stdin_data: dict, *, timeout: int = 30) -> tuple[int, dict]:
 def _extract_frontmatter(content: str) -> str:
     """Return the YAML text between the first --- ... --- block."""
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-    assert match is not None, (
-        "No valid YAML frontmatter (--- ... ---) found in reviewer.agent.md"
-    )
+    assert match is not None, "No valid YAML frontmatter (--- ... ---) found in reviewer.agent.md"
     return match.group(1)
 
 
@@ -113,16 +111,13 @@ class TestFromAC_ScriptExists:
     def test_deny_writes_ps1_exists(self) -> None:
         """AC2a: scripts/hooks/deny-writes.ps1 must exist on disk."""
         assert _SCRIPT_PATH.exists(), (
-            f"deny-writes.ps1 not found at {_SCRIPT_PATH}. "
-            "Builder must create scripts/hooks/deny-writes.ps1."
+            f"deny-writes.ps1 not found at {_SCRIPT_PATH}. Builder must create scripts/hooks/deny-writes.ps1."
         )
 
     def test_script_is_nonempty(self) -> None:
         """AC2b: script file must have content — an empty file is not a valid hook."""
         assert _SCRIPT_PATH.exists(), f"deny-writes.ps1 not found at {_SCRIPT_PATH}."
-        assert _SCRIPT_PATH.stat().st_size > 0, (
-            "deny-writes.ps1 exists but is empty — builder must implement it."
-        )
+        assert _SCRIPT_PATH.stat().st_size > 0, "deny-writes.ps1 exists but is empty — builder must implement it."
 
 
 # ---------------------------------------------------------------------------
@@ -166,70 +161,52 @@ class TestFromAC_DenyWritesBehavior:
     def test_create_file_returns_deny_decision(self) -> None:
         """AC2c + AC3a: create_file must be denied via hookSpecificOutput.permissionDecision."""
         _, output = _run_hook({"tool_name": "create_file", "tool_input": {}})
-        assert "hookSpecificOutput" in output, (
-            f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
-        )
+        assert "hookSpecificOutput" in output, f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
         assert output["hookSpecificOutput"].get("permissionDecision") == "deny", (
-            f"create_file must return permissionDecision='deny'. "
-            f"Got: {output['hookSpecificOutput']!r}"
+            f"create_file must return permissionDecision='deny'. Got: {output['hookSpecificOutput']!r}"
         )
 
     def test_replace_string_in_file_returns_deny_decision(self) -> None:
         """AC2d + AC3a: replace_string_in_file must be denied."""
         _, output = _run_hook({"tool_name": "replace_string_in_file", "tool_input": {}})
-        assert "hookSpecificOutput" in output, (
-            f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
-        )
+        assert "hookSpecificOutput" in output, f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
         assert output["hookSpecificOutput"].get("permissionDecision") == "deny", (
-            f"replace_string_in_file must return permissionDecision='deny'. "
-            f"Got: {output['hookSpecificOutput']!r}"
+            f"replace_string_in_file must return permissionDecision='deny'. Got: {output['hookSpecificOutput']!r}"
         )
 
     def test_multi_replace_string_in_file_returns_deny_decision(self) -> None:
         """AC2e + AC3a: multi_replace_string_in_file must be denied."""
         _, output = _run_hook({"tool_name": "multi_replace_string_in_file", "tool_input": {}})
-        assert "hookSpecificOutput" in output, (
-            f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
-        )
+        assert "hookSpecificOutput" in output, f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
         assert output["hookSpecificOutput"].get("permissionDecision") == "deny", (
-            f"multi_replace_string_in_file must return permissionDecision='deny'. "
-            f"Got: {output['hookSpecificOutput']!r}"
+            f"multi_replace_string_in_file must return permissionDecision='deny'. Got: {output['hookSpecificOutput']!r}"
         )
 
     def test_apply_patch_returns_deny_decision(self) -> None:
         """AC2f + AC3a: apply_patch must be denied."""
         _, output = _run_hook({"tool_name": "apply_patch", "tool_input": {}})
-        assert "hookSpecificOutput" in output, (
-            f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
-        )
+        assert "hookSpecificOutput" in output, f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
         assert output["hookSpecificOutput"].get("permissionDecision") == "deny", (
-            f"apply_patch must return permissionDecision='deny'. "
-            f"Got: {output['hookSpecificOutput']!r}"
+            f"apply_patch must return permissionDecision='deny'. Got: {output['hookSpecificOutput']!r}"
         )
 
     def test_create_directory_returns_deny_decision(self) -> None:
         """AC2g + AC3a: create_directory must be denied (tool_name extrapolated from convention)."""
         _, output = _run_hook({"tool_name": "create_directory", "tool_input": {}})
-        assert "hookSpecificOutput" in output, (
-            f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
-        )
+        assert "hookSpecificOutput" in output, f"Expected 'hookSpecificOutput' key in response, got: {output!r}"
         assert output["hookSpecificOutput"].get("permissionDecision") == "deny", (
-            f"create_directory must return permissionDecision='deny'. "
-            f"Got: {output['hookSpecificOutput']!r}"
+            f"create_directory must return permissionDecision='deny'. Got: {output['hookSpecificOutput']!r}"
         )
 
     def test_deny_reason_mentions_reviewer_or_read_only(self) -> None:
         """AC3b: permissionDecisionReason must explain the reviewer is read-only."""
         _, output = _run_hook({"tool_name": "create_file", "tool_input": {}})
-        assert "hookSpecificOutput" in output, (
-            f"Expected 'hookSpecificOutput' key, got: {output!r}"
-        )
+        assert "hookSpecificOutput" in output, f"Expected 'hookSpecificOutput' key, got: {output!r}"
         reason = output["hookSpecificOutput"].get("permissionDecisionReason", "")
         assert reason, "permissionDecisionReason must be non-empty"
         lower = reason.lower()
         assert "reviewer" in lower or "read-only" in lower or "read only" in lower, (
-            f"permissionDecisionReason must explain the reviewer is read-only. "
-            f"Got: {reason!r}"
+            f"permissionDecisionReason must explain the reviewer is read-only. Got: {reason!r}"
         )
 
     def test_deny_reason_is_nonempty_for_all_write_tools(self) -> None:
@@ -238,17 +215,13 @@ class TestFromAC_DenyWritesBehavior:
             _, output = _run_hook({"tool_name": tool, "tool_input": {}})
             hook_output = output.get("hookSpecificOutput", {})
             reason = hook_output.get("permissionDecisionReason", "")
-            assert reason, (
-                f"permissionDecisionReason must be non-empty for tool={tool!r}. "
-                f"Got: {output!r}"
-            )
+            assert reason, f"permissionDecisionReason must be non-empty for tool={tool!r}. Got: {output!r}"
 
     def test_stdout_is_valid_json_for_write_tool(self) -> None:
         """AC3: raw stdout must always be parseable JSON for a write tool call."""
         if not _SCRIPT_PATH.exists():
             pytest.fail(
-                f"deny-writes.ps1 not found at {_SCRIPT_PATH}. "
-                "Builder must create scripts/hooks/deny-writes.ps1."
+                f"deny-writes.ps1 not found at {_SCRIPT_PATH}. Builder must create scripts/hooks/deny-writes.ps1."
             )
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
@@ -263,19 +236,14 @@ class TestFromAC_DenyWritesBehavior:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON for write tool: {stdout!r}\nError: {exc}"
-            )
-        assert isinstance(parsed, dict), (
-            f"Output must be a JSON object, got: {parsed!r}"
-        )
+            pytest.fail(f"Script stdout is not valid JSON for write tool: {stdout!r}\nError: {exc}")
+        assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
     def test_stdout_is_valid_json_for_non_write_tool(self) -> None:
         """AC4: raw stdout must always be parseable JSON (empty {}) for non-write tool."""
         if not _SCRIPT_PATH.exists():
             pytest.fail(
-                f"deny-writes.ps1 not found at {_SCRIPT_PATH}. "
-                "Builder must create scripts/hooks/deny-writes.ps1."
+                f"deny-writes.ps1 not found at {_SCRIPT_PATH}. Builder must create scripts/hooks/deny-writes.ps1."
             )
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
@@ -290,12 +258,8 @@ class TestFromAC_DenyWritesBehavior:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON for non-write tool: {stdout!r}\nError: {exc}"
-            )
-        assert isinstance(parsed, dict), (
-            f"Output must be a JSON object, got: {parsed!r}"
-        )
+            pytest.fail(f"Script stdout is not valid JSON for non-write tool: {stdout!r}\nError: {exc}")
+        assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
     def test_empty_tool_name_returns_empty_json(self) -> None:
         """Edge: empty string tool_name is not a write tool — must return {}."""
@@ -324,30 +288,23 @@ class TestFromAC_ReviewerAgentHooks:
         """AC1a: reviewer.agent.md frontmatter must contain a hooks: key."""
         fm = self._frontmatter()
         assert re.search(r"^hooks:", fm, re.MULTILINE), (
-            "reviewer.agent.md frontmatter is missing the 'hooks:' key. "
-            "Builder must add a PreToolUse hooks section."
+            "reviewer.agent.md frontmatter is missing the 'hooks:' key. Builder must add a PreToolUse hooks section."
         )
 
     def test_frontmatter_has_pretooluse_entry(self) -> None:
         """AC1b: hooks: section must contain a PreToolUse entry."""
         fm = self._frontmatter()
-        assert "PreToolUse" in fm, (
-            "reviewer.agent.md frontmatter hooks: section is missing a PreToolUse entry."
-        )
+        assert "PreToolUse" in fm, "reviewer.agent.md frontmatter hooks: section is missing a PreToolUse entry."
 
     def test_pretooluse_hook_type_is_command(self) -> None:
         """AC1c: PreToolUse hook must specify type: command."""
         fm = self._frontmatter()
-        assert re.search(r"type:\s*command", fm), (
-            "reviewer.agent.md PreToolUse hook must specify 'type: command'."
-        )
+        assert re.search(r"type:\s*command", fm), "reviewer.agent.md PreToolUse hook must specify 'type: command'."
 
     def test_pretooluse_hook_command_references_deny_writes(self) -> None:
         """AC1d: PreToolUse hook command: value must reference deny-writes.ps1."""
         fm = self._frontmatter()
-        assert "deny-writes.ps1" in fm, (
-            "reviewer.agent.md PreToolUse hook command must point to deny-writes.ps1."
-        )
+        assert "deny-writes.ps1" in fm, "reviewer.agent.md PreToolUse hook command must point to deny-writes.ps1."
 
     def test_hooks_do_not_conflict_with_tools_list(self) -> None:
         """AC6: tools: list must have no write tools AND hooks section must be present.
@@ -361,9 +318,7 @@ class TestFromAC_ReviewerAgentHooks:
         parsed = yaml.safe_load(fm)
         assert isinstance(parsed, dict), "Frontmatter must be a dict"
         # Fail if hooks not present yet (ensures this test fails pre-impl)
-        assert "hooks" in parsed, (
-            "Builder must add the hooks: section before this AC6 assertion is meaningful."
-        )
+        assert "hooks" in parsed, "Builder must add the hooks: section before this AC6 assertion is meaningful."
         tools = parsed.get("tools", [])
         tools_str = str(tools).lower() if tools else ""
         found_write_tools = [t for t in _WRITE_TOOLS if t.lower() in tools_str]
@@ -381,8 +336,7 @@ class TestFromAC_ReviewerAgentHooks:
         fm = self._frontmatter()
         # Fail if hooks not present yet
         assert "hooks:" in fm, (
-            "Builder must add the hooks: section — no duplicate-key regression is meaningful "
-            "before the hook is added."
+            "Builder must add the hooks: section — no duplicate-key regression is meaningful before the hook is added."
         )
         top_level_keys = re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", fm, re.MULTILINE)
         seen: set[str] = set()
@@ -391,9 +345,7 @@ class TestFromAC_ReviewerAgentHooks:
             if key in seen:
                 duplicates.append(key)
             seen.add(key)
-        assert not duplicates, (
-            f"Duplicate YAML keys found in reviewer.agent.md frontmatter: {duplicates}"
-        )
+        assert not duplicates, f"Duplicate YAML keys found in reviewer.agent.md frontmatter: {duplicates}"
 
     def test_frontmatter_is_parseable_yaml_with_pretooluse_hook(self) -> None:
         """AC7: reviewer.agent.md frontmatter must parse as valid YAML after hook addition.
@@ -407,18 +359,12 @@ class TestFromAC_ReviewerAgentHooks:
         try:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
-            pytest.fail(
-                f"reviewer.agent.md frontmatter is not valid YAML: {exc}"
-            )
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+            pytest.fail(f"reviewer.agent.md frontmatter is not valid YAML: {exc}")
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         # Compound check: hooks must be present for AC7 to be meaningful
         assert "hooks" in parsed, (
             "Frontmatter parsed successfully but is missing 'hooks:' key — "
             "builder must add the PreToolUse hooks section."
         )
         hooks = parsed["hooks"]
-        assert "PreToolUse" in hooks, (
-            f"hooks section must contain PreToolUse key, got: {hooks!r}"
-        )
+        assert "PreToolUse" in hooks, f"hooks section must contain PreToolUse key, got: {hooks!r}"

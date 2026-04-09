@@ -168,5 +168,3 @@ class TestFromAC_ToolAnnotations:
         assert ann.destructiveHint is False, (  # type: ignore[union-attr]
             f"Expected destructiveHint=False for end_work, got: {ann.destructiveHint!r}"
         )
-
-

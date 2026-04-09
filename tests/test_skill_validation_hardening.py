@@ -115,19 +115,13 @@ class TestFromAC_DirectoryNamingConvention:
         skill_dir = tmp_path / "a"
         errors = validate_metadata(_meta(), skill_dir)
         # Must not produce a naming-convention error
-        assert not any(
-            "naming" in e.lower() or "convention" in e.lower() or "invalid" in e.lower()
-            for e in errors
-        )
+        assert not any("naming" in e.lower() or "convention" in e.lower() or "invalid" in e.lower() for e in errors)
 
     def test_dir_name_with_digits_and_hyphens_passes(self, tmp_path: Path) -> None:
         """Digits and hyphens combined with lowercase letters are valid."""
         skill_dir = tmp_path / "skill-v2"
         errors = validate_metadata(_meta(), skill_dir)
-        assert not any(
-            "naming" in e.lower() or "convention" in e.lower() or "invalid" in e.lower()
-            for e in errors
-        )
+        assert not any("naming" in e.lower() or "convention" in e.lower() or "invalid" in e.lower() for e in errors)
 
 
 # ---------------------------------------------------------------------------
@@ -293,14 +287,9 @@ class TestFromAC_DescriptionAngleBrackets:
         """Error message for angle bracket violation must be descriptive."""
         skill_dir = tmp_path / "my-skill"
         errors = validate_metadata({"description": "Has <injected> content"}, skill_dir)
-        assert any(
-            "<" in e or "angle" in e.lower() or "bracket" in e.lower() or "html" in e.lower()
-            for e in errors
-        )
+        assert any("<" in e or "angle" in e.lower() or "bracket" in e.lower() or "html" in e.lower() for e in errors)
 
-    def test_angle_bracket_error_includes_offending_description_fragment(
-        self, tmp_path: Path
-    ) -> None:
+    def test_angle_bracket_error_includes_offending_description_fragment(self, tmp_path: Path) -> None:
         """Error message must include some representation of the offending value."""
         skill_dir = tmp_path / "my-skill"
         desc = "Has <bad> content"
@@ -365,9 +354,7 @@ class TestFromAC_ErrorMessageDistinctness:
         # At least two distinct errors (one for naming, one for angle brackets)
         assert len(errors) >= 2
 
-    def test_direction_arrow_descriptions_not_confused_with_angle_brackets(
-        self, tmp_path: Path
-    ) -> None:
+    def test_direction_arrow_descriptions_not_confused_with_angle_brackets(self, tmp_path: Path) -> None:
         """'→' (unicode arrow) in description must not be treated as angle bracket."""
         skill_dir = tmp_path / "my-skill"
         errors = validate_metadata({"description": "step → result"}, skill_dir)
@@ -392,7 +379,6 @@ class TestFromAC_RegressionGuard:
         if not skill_dir.is_dir():
             pytest.skip(f"{skill_dir} is not a directory")
         errors = validate_skill(skill_dir)
-        assert errors == [], (
-            f"Skill '{skill_dir.name}' unexpectedly fails enhanced validation:\n"
-            + "\n".join(f"  - {e}" for e in errors)
+        assert errors == [], f"Skill '{skill_dir.name}' unexpectedly fails enhanced validation:\n" + "\n".join(
+            f"  - {e}" for e in errors
         )

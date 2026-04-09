@@ -49,9 +49,7 @@ def _make_entity(name: str = "test-entity", scope: str = "global", **kwargs: obj
 
 
 def _make_edge(source_id: str, target_id: str, scope: str = "global") -> Edge:
-    return Edge(
-        source_id=source_id, target_id=target_id, relation=RelationType.RELATED_TO, scope=scope
-    )
+    return Edge(source_id=source_id, target_id=target_id, relation=RelationType.RELATED_TO, scope=scope)
 
 
 def _make_document(title: str = "test-doc", scope: str = "global") -> Document:
@@ -80,9 +78,7 @@ class TestFromAC_InitDb:  # noqa: N801
         conn = sqlite3.connect(":memory:")
         init_db(conn)  # must not raise
         # Verify at least one core table exists
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='entities'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entities'").fetchone()
         assert row is not None
 
     def test_init_db_idempotent_no_error_on_second_call(self) -> None:
@@ -254,12 +250,8 @@ class TestFromAC_GraphStoreEdges:  # noqa: N801
         e2 = _make_entity("e2")
         store.insert_entity(e1)
         store.insert_entity(e2)
-        edge_global = Edge(
-            source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="global"
-        )
-        edge_local = Edge(
-            source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="local"
-        )
+        edge_global = Edge(source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="global")
+        edge_local = Edge(source_id=e1.id, target_id=e2.id, relation=RelationType.IMPORTS, scope="local")
         store.insert_edge(edge_global)
         store.insert_edge(edge_local)
         results = store.list_edges(scopes=["local"])
@@ -723,9 +715,7 @@ class TestFromAC_PackageManifest:  # noqa: N801
         data = self._load_pyproject()
         deps: list[str] = data.get("project", {}).get("dependencies", [])
         pydantic_deps = [d for d in deps if d.lower().startswith("pydantic")]
-        assert pydantic_deps, (
-            "pydantic not found in [project].dependencies of packages/knowledge/pyproject.toml"
-        )
+        assert pydantic_deps, "pydantic not found in [project].dependencies of packages/knowledge/pyproject.toml"
 
     def test_pydantic_version_constraint_gte_2_10_0(self) -> None:
         """Declared pydantic dependency must specify >=2.10.0."""
@@ -741,9 +731,7 @@ class TestFromAC_PackageManifest:  # noqa: N801
         """pydantic must be the ONLY entry in [project].dependencies."""
         data = self._load_pyproject()
         deps: list[str] = data.get("project", {}).get("dependencies", [])
-        assert len(deps) == 1, (
-            f"Expected exactly 1 runtime dependency (pydantic), found {len(deps)}: {deps}"
-        )
+        assert len(deps) == 1, f"Expected exactly 1 runtime dependency (pydantic), found {len(deps)}: {deps}"
 
 
 # ---------------------------------------------------------------------------
@@ -759,8 +747,7 @@ class TestBuilderDiscovered:
         conn = sqlite3.connect(":memory:")
         # Create a minimal v1 schema (no scope columns, no chunks/document_status)
         conn.execute(
-            "CREATE TABLE documents ("
-            "id TEXT PRIMARY KEY, title TEXT, content TEXT, metadata TEXT, created_at TEXT)"
+            "CREATE TABLE documents (id TEXT PRIMARY KEY, title TEXT, content TEXT, metadata TEXT, created_at TEXT)"
         )
         conn.execute(
             "CREATE TABLE entities ("
@@ -773,9 +760,7 @@ class TestBuilderDiscovered:
             " relation TEXT, weight REAL, metadata TEXT, created_at TEXT)"
         )
         conn.execute("CREATE TABLE schema_version (version INTEGER, applied_at TEXT)")
-        conn.execute(
-            "INSERT INTO schema_version (version, applied_at) VALUES (1, '2024-01-01T00:00:00+00:00')"
-        )
+        conn.execute("INSERT INTO schema_version (version, applied_at) VALUES (1, '2024-01-01T00:00:00+00:00')")
         conn.commit()
 
         init_db(conn)
@@ -785,10 +770,7 @@ class TestBuilderDiscovered:
         assert row[0] == 8
 
         # Verify that migration-added tables now exist
-        tables = {
-            r[0]
-            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-        }
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         assert "chunks" in tables
         assert "document_status" in tables
         assert "knowledge_sources" in tables

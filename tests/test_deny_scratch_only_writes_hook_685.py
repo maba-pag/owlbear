@@ -127,9 +127,7 @@ def _is_denied(output: dict) -> bool:
 def _extract_frontmatter(content: str) -> str:
     """Return the YAML text between the first --- ... --- block."""
     match = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
-    assert match is not None, (
-        "No valid YAML frontmatter (--- ... ---) found in quality-runner.agent.md"
-    )
+    assert match is not None, "No valid YAML frontmatter (--- ... ---) found in quality-runner.agent.md"
     return match.group(1)
 
 
@@ -150,9 +148,7 @@ class TestFromAC_ScriptExists:
 
     def test_script_is_nonempty(self) -> None:
         """AC1b: Script file must have content — an empty file cannot implement the guard."""
-        assert _SCRIPT_PATH.exists(), (
-            f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}."
-        )
+        assert _SCRIPT_PATH.exists(), f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}."
         assert _SCRIPT_PATH.stat().st_size > 0, (
             "deny-scratch-only-writes.ps1 exists but is empty — builder must implement it."
         )
@@ -171,23 +167,23 @@ class TestFromAC_ScratchPathGuardBehavior:
 
     def test_create_file_scratch_relative_path_is_allowed(self) -> None:
         """AC2a: create_file with relative .owlbear/scratch/ path must return {} (allowed)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/scratch/pytest-output-123.txt"},
-        })
-        assert output == {}, (
-            f"create_file with .owlbear/scratch/ path must return {{}} (allowed), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ".owlbear/scratch/pytest-output-123.txt"},
+            }
         )
+        assert output == {}, f"create_file with .owlbear/scratch/ path must return {{}} (allowed), got: {output!r}"
 
     def test_create_file_scratch_nested_file_is_allowed(self) -> None:
         """AC2a: create_file with nested .owlbear/scratch/ path must be allowed."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/scratch/sub/output.txt"},
-        })
-        assert output == {}, (
-            f"create_file with nested scratch path must return {{}} (allowed), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ".owlbear/scratch/sub/output.txt"},
+            }
         )
+        assert output == {}, f"create_file with nested scratch path must return {{}} (allowed), got: {output!r}"
 
     def test_create_file_absolute_scratch_path_is_allowed(self) -> None:
         """AC2b: create_file with absolute path containing .owlbear/scratch/ must be allowed.
@@ -197,251 +193,249 @@ class TestFromAC_ScratchPathGuardBehavior:
         regex (^|/)\\.owlbear/scratch/ matches via the / before .owlbear
         """
         abs_path = str(_REPO_ROOT / ".owlbear" / "scratch" / "pytest-output-42.txt")
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": abs_path},
-        })
-        assert output == {}, (
-            f"create_file with absolute scratch path must return {{}} (allowed), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": abs_path},
+            }
         )
+        assert output == {}, f"create_file with absolute scratch path must return {{}} (allowed), got: {output!r}"
 
     def test_create_file_backslash_scratch_path_is_allowed(self) -> None:
         """AC2c: backslash path .owlbear\\scratch\\file.txt must be normalized → allowed."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear\\scratch\\pytest-output-99.txt"},
-        })
-        assert output == {}, (
-            f"Backslash .owlbear\\\\scratch\\\\ path should be normalized and allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ".owlbear\\scratch\\pytest-output-99.txt"},
+            }
         )
+        assert output == {}, f"Backslash .owlbear\\\\scratch\\\\ path should be normalized and allowed, got: {output!r}"
 
     # --- AC3: non-scratch paths are denied ---
 
     def test_create_file_src_path_is_denied(self) -> None:
         """AC3a: create_file with src/ path must be denied."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "src/module/impl.py"},
-        })
-        assert _is_denied(output), (
-            f"create_file with src/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "src/module/impl.py"},
+            }
         )
+        assert _is_denied(output), f"create_file with src/ path must be denied, got: {output!r}"
 
     def test_create_file_tests_path_is_denied(self) -> None:
         """AC3b: create_file with tests/ path must be denied (not .owlbear/scratch/)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "tests/test_foo.py"},
-        })
-        assert _is_denied(output), (
-            f"create_file with tests/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "tests/test_foo.py"},
+            }
         )
+        assert _is_denied(output), f"create_file with tests/ path must be denied, got: {output!r}"
 
     def test_create_file_owlbear_hooks_path_is_denied(self) -> None:
         """AC3c: create_file targeting .owlbear/hooks/ must be denied (not scratch)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/hooks/evil.ps1"},
-        })
-        assert _is_denied(output), (
-            f"create_file with .owlbear/hooks/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ".owlbear/hooks/evil.ps1"},
+            }
         )
+        assert _is_denied(output), f"create_file with .owlbear/hooks/ path must be denied, got: {output!r}"
 
     def test_create_file_root_path_is_denied(self) -> None:
         """AC3: create_file with a project root path must be denied."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "README.md"},
-        })
-        assert _is_denied(output), (
-            f"create_file with root README.md path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "README.md"},
+            }
         )
+        assert _is_denied(output), f"create_file with root README.md path must be denied, got: {output!r}"
 
     def test_deny_response_has_hook_specific_output_key(self) -> None:
         """AC3e: deny response must nest under hookSpecificOutput key."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "src/evil.py"},
-        })
-        assert "hookSpecificOutput" in output, (
-            f"Deny response must contain 'hookSpecificOutput' key, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "src/evil.py"},
+            }
         )
+        assert "hookSpecificOutput" in output, f"Deny response must contain 'hookSpecificOutput' key, got: {output!r}"
 
     def test_deny_reason_is_nonempty(self) -> None:
         """AC3d: permissionDecisionReason must be non-empty string when denying."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "src/evil.py"},
-        })
-        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
-        assert reason, (
-            f"permissionDecisionReason must be non-empty when denying a write, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "src/evil.py"},
+            }
         )
+        reason = output.get("hookSpecificOutput", {}).get("permissionDecisionReason", "")
+        assert reason, f"permissionDecisionReason must be non-empty when denying a write, got: {output!r}"
 
     # --- AC4a: create_file is gated ---
 
     def test_create_file_non_scratch_is_gated(self) -> None:
         """AC4a: create_file is a gated write tool — non-scratch path must be denied."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": "packages/foo/bar.py"},
-        })
-        assert _is_denied(output), (
-            f"create_file is a gated write tool — packages/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": "packages/foo/bar.py"},
+            }
         )
+        assert _is_denied(output), f"create_file is a gated write tool — packages/ path must be denied, got: {output!r}"
 
     # --- AC4b: replace_string_in_file is gated ---
 
     def test_replace_string_in_file_scratch_path_is_allowed(self) -> None:
         """AC4b allow: replace_string_in_file with scratch filePath must return {}."""
-        _, output = _run_hook({
-            "tool_name": "replace_string_in_file",
-            "tool_input": {
-                "filePath": ".owlbear/scratch/output.txt",
-                "oldString": "old",
-                "newString": "new",
-            },
-        })
-        assert output == {}, (
-            f"replace_string_in_file with scratch path must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "replace_string_in_file",
+                "tool_input": {
+                    "filePath": ".owlbear/scratch/output.txt",
+                    "oldString": "old",
+                    "newString": "new",
+                },
+            }
         )
+        assert output == {}, f"replace_string_in_file with scratch path must be allowed, got: {output!r}"
 
     def test_replace_string_in_file_non_scratch_is_denied(self) -> None:
         """AC4b deny: replace_string_in_file with non-scratch filePath must be denied."""
-        _, output = _run_hook({
-            "tool_name": "replace_string_in_file",
-            "tool_input": {
-                "filePath": "src/module/impl.py",
-                "oldString": "x",
-                "newString": "y",
-            },
-        })
-        assert _is_denied(output), (
-            f"replace_string_in_file with src/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "replace_string_in_file",
+                "tool_input": {
+                    "filePath": "src/module/impl.py",
+                    "oldString": "x",
+                    "newString": "y",
+                },
+            }
         )
+        assert _is_denied(output), f"replace_string_in_file with src/ path must be denied, got: {output!r}"
 
     # --- AC4c: multi_replace_string_in_file is gated ---
 
     def test_multi_replace_all_scratch_paths_is_allowed(self) -> None:
         """AC4c allow: multi_replace with all .owlbear/scratch/ replacements must return {}."""
-        _, output = _run_hook({
-            "tool_name": "multi_replace_string_in_file",
-            "tool_input": {
-                "replacements": [
-                    {
-                        "filePath": ".owlbear/scratch/a.txt",
-                        "oldString": "a",
-                        "newString": "b",
-                    },
-                    {
-                        "filePath": ".owlbear/scratch/b.txt",
-                        "oldString": "c",
-                        "newString": "d",
-                    },
-                ],
-            },
-        })
-        assert output == {}, (
-            f"multi_replace with all scratch paths must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "multi_replace_string_in_file",
+                "tool_input": {
+                    "replacements": [
+                        {
+                            "filePath": ".owlbear/scratch/a.txt",
+                            "oldString": "a",
+                            "newString": "b",
+                        },
+                        {
+                            "filePath": ".owlbear/scratch/b.txt",
+                            "oldString": "c",
+                            "newString": "d",
+                        },
+                    ],
+                },
+            }
         )
+        assert output == {}, f"multi_replace with all scratch paths must be allowed, got: {output!r}"
 
     def test_multi_replace_any_non_scratch_path_is_denied(self) -> None:
         """AC4c deny: any replacement targeting non-scratch path must deny the whole call."""
-        _, output = _run_hook({
-            "tool_name": "multi_replace_string_in_file",
-            "tool_input": {
-                "replacements": [
-                    {
-                        "filePath": ".owlbear/scratch/a.txt",
-                        "oldString": "a",
-                        "newString": "b",
-                    },
-                    {
-                        "filePath": "src/module/impl.py",
-                        "oldString": "c",
-                        "newString": "d",
-                    },
-                ],
-            },
-        })
-        assert _is_denied(output), (
-            f"multi_replace with any non-scratch path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "multi_replace_string_in_file",
+                "tool_input": {
+                    "replacements": [
+                        {
+                            "filePath": ".owlbear/scratch/a.txt",
+                            "oldString": "a",
+                            "newString": "b",
+                        },
+                        {
+                            "filePath": "src/module/impl.py",
+                            "oldString": "c",
+                            "newString": "d",
+                        },
+                    ],
+                },
+            }
         )
+        assert _is_denied(output), f"multi_replace with any non-scratch path must be denied, got: {output!r}"
 
     # --- AC4d: apply_patch is gated ---
 
     def test_apply_patch_scratch_path_is_allowed(self) -> None:
         """AC4d allow: apply_patch to a scratch filePath must return {}."""
-        _, output = _run_hook({
-            "tool_name": "apply_patch",
-            "tool_input": {"filePath": ".owlbear/scratch/output.txt"},
-        })
-        assert output == {}, (
-            f"apply_patch to scratch/ path must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "apply_patch",
+                "tool_input": {"filePath": ".owlbear/scratch/output.txt"},
+            }
         )
+        assert output == {}, f"apply_patch to scratch/ path must be allowed, got: {output!r}"
 
     def test_apply_patch_non_scratch_is_denied(self) -> None:
         """AC4d deny: apply_patch to a non-scratch filePath must be denied."""
-        _, output = _run_hook({
-            "tool_name": "apply_patch",
-            "tool_input": {"filePath": "src/evil.py"},
-        })
-        assert _is_denied(output), (
-            f"apply_patch to src/ path must be denied (gated write tool), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "apply_patch",
+                "tool_input": {"filePath": "src/evil.py"},
+            }
         )
+        assert _is_denied(output), f"apply_patch to src/ path must be denied (gated write tool), got: {output!r}"
 
     # --- AC4e: create_directory is gated ---
 
     def test_create_directory_scratch_dirpath_is_allowed(self) -> None:
         """AC4e allow: create_directory with .owlbear/scratch/ dirPath must return {}."""
-        _, output = _run_hook({
-            "tool_name": "create_directory",
-            "tool_input": {"dirPath": ".owlbear/scratch/sub"},
-        })
-        assert output == {}, (
-            f"create_directory with scratch dirPath must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_directory",
+                "tool_input": {"dirPath": ".owlbear/scratch/sub"},
+            }
         )
+        assert output == {}, f"create_directory with scratch dirPath must be allowed, got: {output!r}"
 
     def test_create_directory_non_scratch_is_denied(self) -> None:
         """AC4e deny: create_directory with non-scratch dirPath must be denied."""
-        _, output = _run_hook({
-            "tool_name": "create_directory",
-            "tool_input": {"dirPath": "packages/new_module"},
-        })
-        assert _is_denied(output), (
-            f"create_directory with packages/ dirPath must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_directory",
+                "tool_input": {"dirPath": "packages/new_module"},
+            }
         )
+        assert _is_denied(output), f"create_directory with packages/ dirPath must be denied, got: {output!r}"
 
     # --- AC4f: editFiles is gated ---
 
     def test_edit_files_scratch_path_is_allowed(self) -> None:
         """AC4f allow: editFiles targeting a scratch path must return {}."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": [".owlbear/scratch/output.txt"]},
-        })
-        assert output == {}, (
-            f"editFiles with scratch path must be allowed, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": [".owlbear/scratch/output.txt"]},
+            }
         )
+        assert output == {}, f"editFiles with scratch path must be allowed, got: {output!r}"
 
     def test_edit_files_non_scratch_is_denied(self) -> None:
         """AC4f deny: editFiles targeting a non-scratch path must be denied."""
-        _, output = _run_hook({
-            "tool_name": "editFiles",
-            "tool_input": {"files": ["src/evil.py"]},
-        })
-        assert _is_denied(output), (
-            f"editFiles with src/ path must be denied, got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "editFiles",
+                "tool_input": {"files": ["src/evil.py"]},
+            }
         )
+        assert _is_denied(output), f"editFiles with src/ path must be denied, got: {output!r}"
 
     # --- AC5: safety edge cases and non-write pass-through ---
 
     def test_malformed_stdin_json_returns_empty_json(self) -> None:
         """AC5a: malformed stdin must not crash the script — returns {}."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
             input="not-valid-json{{{",
@@ -456,9 +450,7 @@ class TestFromAC_ScratchPathGuardBehavior:
             output = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError:
             output = {"_raw": stdout}
-        assert output == {}, (
-            f"Malformed JSON input must produce {{}} output, got: {output!r}"
-        )
+        assert output == {}, f"Malformed JSON input must produce {{}} output, got: {output!r}"
 
     def test_empty_tool_name_returns_empty_json(self) -> None:
         """AC5b: empty string tool_name is not gated — must return {}."""
@@ -472,23 +464,23 @@ class TestFromAC_ScratchPathGuardBehavior:
 
     def test_write_tool_with_no_paths_returns_empty_json(self) -> None:
         """AC5d: write tool with no path fields in tool_input → {} (nothing to deny)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"content": "hello"},
-        })
-        assert output == {}, (
-            f"create_file with no filePath must return {{}} (nothing to deny), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"content": "hello"},
+            }
         )
+        assert output == {}, f"create_file with no filePath must return {{}} (nothing to deny), got: {output!r}"
 
     def test_write_tool_with_empty_string_filepath_returns_empty_json(self) -> None:
         """AC5e: write tool with filePath='' — empty path → {} (pass-through)."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ""},
-        })
-        assert output == {}, (
-            f"create_file with empty filePath must return {{}} (pass-through), got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ""},
+            }
         )
+        assert output == {}, f"create_file with empty filePath must return {{}} (pass-through), got: {output!r}"
 
     def test_run_in_terminal_returns_empty_json(self) -> None:
         """AC5f: run_in_terminal is not a write tool — must return {}."""
@@ -510,15 +502,15 @@ class TestFromAC_ScratchPathGuardBehavior:
     def test_stdout_is_always_valid_json_for_allowed_call(self) -> None:
         """Contract: stdout must always be valid JSON — for allowed calls returns {}."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
-            input=json.dumps({
-                "tool_name": "create_file",
-                "tool_input": {"filePath": ".owlbear/scratch/output.txt"},
-            }),
+            input=json.dumps(
+                {
+                    "tool_name": "create_file",
+                    "tool_input": {"filePath": ".owlbear/scratch/output.txt"},
+                }
+            ),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -529,23 +521,21 @@ class TestFromAC_ScratchPathGuardBehavior:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON for allowed call: {stdout!r}\nError: {exc}"
-            )
+            pytest.fail(f"Script stdout is not valid JSON for allowed call: {stdout!r}\nError: {exc}")
         assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
     def test_stdout_is_always_valid_json_for_denied_call(self) -> None:
         """Contract: stdout must always be valid JSON — for denied calls returns deny object."""
         if not _SCRIPT_PATH.exists():
-            raise FileNotFoundError(
-                f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}."
-            )
+            raise FileNotFoundError(f"deny-scratch-only-writes.ps1 not found at {_SCRIPT_PATH}.")
         result = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-File", str(_SCRIPT_PATH)],
-            input=json.dumps({
-                "tool_name": "create_file",
-                "tool_input": {"filePath": "src/evil.py"},
-            }),
+            input=json.dumps(
+                {
+                    "tool_name": "create_file",
+                    "tool_input": {"filePath": "src/evil.py"},
+                }
+            ),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -556,9 +546,7 @@ class TestFromAC_ScratchPathGuardBehavior:
         try:
             parsed = json.loads(stdout) if stdout else {}
         except json.JSONDecodeError as exc:
-            pytest.fail(
-                f"Script stdout is not valid JSON for denied call: {stdout!r}\nError: {exc}"
-            )
+            pytest.fail(f"Script stdout is not valid JSON for denied call: {stdout!r}\nError: {exc}")
         assert isinstance(parsed, dict), f"Output must be a JSON object, got: {parsed!r}"
 
     # --- Boundary conditions ---
@@ -569,10 +557,12 @@ class TestFromAC_ScratchPathGuardBehavior:
         Regex (^|/)\\.owlbear/scratch/ requires the trailing slash — this is a boundary
         condition where the segment exists but the pattern does not match.
         """
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/scratch"},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ".owlbear/scratch"},
+            }
+        )
         assert _is_denied(output), (
             f"'.owlbear/scratch' without trailing slash must be denied "
             f"(regex requires slash after 'scratch'). Got: {output!r}"
@@ -580,46 +570,48 @@ class TestFromAC_ScratchPathGuardBehavior:
 
     def test_owlbear_scratchpad_path_is_denied(self) -> None:
         """Boundary2: '.owlbear/scratchpad/file.txt' must be denied — 'scratch/' not matched."""
-        _, output = _run_hook({
-            "tool_name": "create_file",
-            "tool_input": {"filePath": ".owlbear/scratchpad/file.txt"},
-        })
-        assert _is_denied(output), (
-            f"'.owlbear/scratchpad/' must be denied (not .owlbear/scratch/). Got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "create_file",
+                "tool_input": {"filePath": ".owlbear/scratchpad/file.txt"},
+            }
         )
+        assert _is_denied(output), f"'.owlbear/scratchpad/' must be denied (not .owlbear/scratch/). Got: {output!r}"
 
     def test_multi_replace_empty_replacements_returns_empty_json(self) -> None:
         """Boundary3: empty replacements array → no paths extracted → {} (pass-through)."""
-        _, output = _run_hook({
-            "tool_name": "multi_replace_string_in_file",
-            "tool_input": {"replacements": []},
-        })
+        _, output = _run_hook(
+            {
+                "tool_name": "multi_replace_string_in_file",
+                "tool_input": {"replacements": []},
+            }
+        )
         assert output == {}, (
             f"multi_replace with empty replacements must return {{}} (no paths to check), got: {output!r}"
         )
 
     def test_multi_replace_scratch_and_non_scratch_path_is_denied(self) -> None:
         """Boundary4: mixed scratch + non-scratch in multi_replace → whole call denied."""
-        _, output = _run_hook({
-            "tool_name": "multi_replace_string_in_file",
-            "tool_input": {
-                "replacements": [
-                    {
-                        "filePath": ".owlbear/scratch/output.txt",
-                        "oldString": "a",
-                        "newString": "b",
-                    },
-                    {
-                        "filePath": "src/module/impl.py",
-                        "oldString": "c",
-                        "newString": "d",
-                    },
-                ],
-            },
-        })
-        assert _is_denied(output), (
-            f"multi_replace mixing scratch and non-scratch paths must be denied. Got: {output!r}"
+        _, output = _run_hook(
+            {
+                "tool_name": "multi_replace_string_in_file",
+                "tool_input": {
+                    "replacements": [
+                        {
+                            "filePath": ".owlbear/scratch/output.txt",
+                            "oldString": "a",
+                            "newString": "b",
+                        },
+                        {
+                            "filePath": "src/module/impl.py",
+                            "oldString": "c",
+                            "newString": "d",
+                        },
+                    ],
+                },
+            }
         )
+        assert _is_denied(output), f"multi_replace mixing scratch and non-scratch paths must be denied. Got: {output!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -648,9 +640,7 @@ class TestFromAC_QualityRunnerAgentHooks:
     def test_frontmatter_has_pretooluse_entry(self) -> None:
         """AC6b: hooks: section must contain a PreToolUse entry."""
         fm = self._frontmatter()
-        assert "PreToolUse" in fm, (
-            "quality-runner.agent.md hooks: section is missing a PreToolUse entry."
-        )
+        assert "PreToolUse" in fm, "quality-runner.agent.md hooks: section is missing a PreToolUse entry."
 
     def test_pretooluse_hook_type_is_command(self) -> None:
         """AC6c: PreToolUse hook must specify type: command."""
@@ -674,28 +664,20 @@ class TestFromAC_QualityRunnerAgentHooks:
         try:
             parsed = yaml.safe_load(fm)
         except yaml.YAMLError as exc:
-            pytest.fail(
-                f"quality-runner.agent.md frontmatter is not valid YAML: {exc}"
-            )
-        assert isinstance(parsed, dict), (
-            f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
-        )
+            pytest.fail(f"quality-runner.agent.md frontmatter is not valid YAML: {exc}")
+        assert isinstance(parsed, dict), f"Parsed YAML frontmatter must be a dict, got: {type(parsed)}"
         assert "hooks" in parsed, (
-            "Frontmatter parsed but missing 'hooks:' key — "
-            "builder must add the PreToolUse hooks section."
+            "Frontmatter parsed but missing 'hooks:' key — builder must add the PreToolUse hooks section."
         )
         hooks = parsed["hooks"]
-        assert "PreToolUse" in hooks, (
-            f"hooks section must contain PreToolUse key, got: {hooks!r}"
-        )
+        assert "PreToolUse" in hooks, f"hooks section must contain PreToolUse key, got: {hooks!r}"
 
     def test_frontmatter_no_duplicate_keys(self) -> None:
         """AC6f: frontmatter must not gain duplicate YAML keys after edit."""
         fm = self._frontmatter()
         # Fail pre-impl by checking hooks: is present first
         assert "hooks:" in fm, (
-            "Builder must add the hooks: section — no duplicate-key check is meaningful "
-            "before the hook is added."
+            "Builder must add the hooks: section — no duplicate-key check is meaningful before the hook is added."
         )
         top_level_keys = re.findall(r"^([a-zA-Z][a-zA-Z0-9_-]*):", fm, re.MULTILINE)
         seen: set[str] = set()
@@ -704,6 +686,4 @@ class TestFromAC_QualityRunnerAgentHooks:
             if key in seen:
                 duplicates.append(key)
             seen.add(key)
-        assert not duplicates, (
-            f"Duplicate YAML keys found in quality-runner.agent.md frontmatter: {duplicates}"
-        )
+        assert not duplicates, f"Duplicate YAML keys found in quality-runner.agent.md frontmatter: {duplicates}"

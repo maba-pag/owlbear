@@ -117,7 +117,7 @@ class TestFromAC_ReviewerParallelFanOutDetailed:
         has_mapping = bool(
             re.search(r"steps?\s*6[-\u2013]7", section, re.IGNORECASE)
             or re.search(r"6\.\d[-\u2013]6\.\d", section)  # "6.0-6.6"
-            or re.search(r"7\.[1-4]", section)             # "7.1" through "7.4"
+            or re.search(r"7\.[1-4]", section)  # "7.1" through "7.4"
             or (
                 re.search(r"\bstep\s*6\b", section, re.IGNORECASE)
                 and re.search(r"\bstep\s*7\b", section, re.IGNORECASE)
@@ -154,9 +154,7 @@ class TestFromAC_ReviewerParallelFanOutDetailed:
         )
         required_cr_fields = ["ac_lines", "changed_files", "test_files"]
         missing = [f for f in required_cr_fields if f not in section]
-        assert not missing, (
-            f"Code-Reader dispatch in Step 2.5 missing contract fields: {missing}"
-        )
+        assert not missing, f"Code-Reader dispatch in Step 2.5 missing contract fields: {missing}"
 
     # --- AC 5: Step 8 synthesis references AC compliance table and cross-walk ---
 
@@ -216,9 +214,7 @@ class TestFromAC_ReviewerParallelFanOutDetailed:
         content = CODE_REVIEW_SKILL.read_text(encoding="utf-8")
         section = _get_step_section(content, "Step 2.5")
         lower = section.lower()
-        has_execution_error = "execution error" in lower or (
-            "crash" in lower and "timeout" in lower
-        )
+        has_execution_error = "execution error" in lower or ("crash" in lower and "timeout" in lower)
         assert has_execution_error, (
             "Step 2.5 fallback must trigger on execution error (crash, timeout, exception), "
             "not on 'unavailable'. "

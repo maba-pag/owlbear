@@ -89,9 +89,7 @@ class TestFromAC_AuditWiringWarnings:  # noqa: N801
         mock_client.prompt.assert_called_once()
 
         # A WARNING must be logged — AC7 says "logged as warning, never block dispatch loop"
-        warning_records = [
-            r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER
-        ]
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER]
         assert warning_records, (
             "Expected a WARNING log from owlbear.orchestrator.loop when log_dispatch() raises OSError"
         )
@@ -136,9 +134,7 @@ class TestFromAC_AuditWiringWarnings:  # noqa: N801
         assert result is True
 
         # WARNING must be logged
-        warning_records = [
-            r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER
-        ]
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER]
         assert warning_records, (
             "Expected a WARNING log from owlbear.orchestrator.loop when log_completion() raises OSError "
             "on the success path"
@@ -159,9 +155,7 @@ class TestFromAC_AuditWiringWarnings:  # noqa: N801
         """When log_completion() raises OSError on the failure path, the module logger emits a WARNING."""
         from owlbear_orchestrator.acp_client import AcpClientError, ErrorCategory
 
-        mock_client.prompt = AsyncMock(
-            side_effect=AcpClientError("timeout", category=ErrorCategory.TRANSIENT)
-        )
+        mock_client.prompt = AsyncMock(side_effect=AcpClientError("timeout", category=ErrorCategory.TRANSIENT))
         mock_audit_log.log_completion.side_effect = OSError("write error")
 
         with caplog.at_level(logging.WARNING, logger=_LOOP_LOGGER):
@@ -171,12 +165,8 @@ class TestFromAC_AuditWiringWarnings:  # noqa: N801
         assert result is False
 
         # WARNING must be logged for the audit I/O failure
-        warning_records = [
-            r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER
-        ]
-        assert warning_records, (
-            "Expected a WARNING log when log_completion() raises OSError on the failure path"
-        )
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER]
+        assert warning_records, "Expected a WARNING log when log_completion() raises OSError on the failure path"
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_log_completion_new_session_failure_io_error_emits_warning_log(
@@ -199,9 +189,7 @@ class TestFromAC_AuditWiringWarnings:  # noqa: N801
 
         assert result is False
 
-        warning_records = [
-            r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER
-        ]
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER]
         assert warning_records, (
             "Expected a WARNING log when log_completion() raises OSError after new_session() failure"
         )
@@ -228,10 +216,7 @@ class TestFromAC_AuditWiringWarnings:  # noqa: N801
         # Dispatch must still succeed
         assert result is True
 
-        warning_records = [
-            r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER
-        ]
+        warning_records = [r for r in caplog.records if r.levelno >= logging.WARNING and r.name == _LOOP_LOGGER]
         assert len(warning_records) >= 2, (
-            f"Expected ≥2 WARNING logs (one for log_dispatch, one for log_completion), "
-            f"got {len(warning_records)}"
+            f"Expected ≥2 WARNING logs (one for log_dispatch, one for log_completion), got {len(warning_records)}"
         )

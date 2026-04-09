@@ -77,8 +77,7 @@ class TestFromAC_MoveTaskArchived:
 
         positional_args: tuple[Any, ...] = mock_run.call_args[0]
         assert "archive" in positional_args, (
-            "move_task with status='archived' must call _run_kanban with 'archive' command; "
-            f"got: {positional_args!r}"
+            f"move_task with status='archived' must call _run_kanban with 'archive' command; got: {positional_args!r}"
         )
 
     @pytest.mark.asyncio
@@ -93,8 +92,7 @@ class TestFromAC_MoveTaskArchived:
 
         positional_args: tuple[Any, ...] = mock_run.call_args[0]
         assert "move" not in positional_args, (
-            "move_task with status='archived' must NOT call 'move' command; "
-            f"got: {positional_args!r}"
+            f"move_task with status='archived' must NOT call 'move' command; got: {positional_args!r}"
         )
 
     @pytest.mark.asyncio
@@ -120,20 +118,26 @@ class TestFromAC_MoveTaskArchived:
     async def test_archived_error_raises_tool_error(self) -> None:
         """When archive command returns rc!=0, move_task must raise ToolError."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(side_effect=_side_effect_archive_fails_move_succeeds),
-        ), pytest.raises(ToolError):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(side_effect=_side_effect_archive_fails_move_succeeds),
+            ),
+            pytest.raises(ToolError),
+        ):
             await move_task(mcp_ctx, task_id="42", status="archived")
 
     @pytest.mark.asyncio
     async def test_archived_error_message_from_stderr(self) -> None:
         """ToolError message must contain the stderr output from the failed archive command."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            new=AsyncMock(side_effect=_side_effect_archive_fails_move_succeeds),
-        ), pytest.raises(ToolError, match="archive operation failed"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                new=AsyncMock(side_effect=_side_effect_archive_fails_move_succeeds),
+            ),
+            pytest.raises(ToolError, match="archive operation failed"),
+        ):
             await move_task(mcp_ctx, task_id="42", status="archived")
 
     # AC: All other status values continue to use kanban-md move as before
@@ -148,7 +152,4 @@ class TestFromAC_MoveTaskArchived:
         assert tool is not None, "move_task tool not registered on mcp server"
         props = tool.parameters.get("properties", {})
         enum: list[str] = props.get("status", {}).get("enum", [])
-        assert "archived" in enum, (
-            f"move_task 'status' parameter enum must include 'archived'; "
-            f"current enum: {enum!r}"
-        )
+        assert "archived" in enum, f"move_task 'status' parameter enum must include 'archived'; current enum: {enum!r}"

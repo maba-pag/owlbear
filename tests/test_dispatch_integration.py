@@ -84,9 +84,7 @@ def real_kanban_bin() -> Path:
     if convention.exists():
         return convention
 
-    pytest.skip(
-        "kanban-md binary not found — run kanban/setup.ps1 or set KANBAN_BIN env var"
-    )
+    pytest.skip("kanban-md binary not found — run kanban/setup.ps1 or set KANBAN_BIN env var")
 
 
 @pytest.fixture
@@ -221,6 +219,6 @@ class TestFromAC_DispatchIntegration:
                 if data.get("type") == "dispatch":
                     dispatch_events.append(data)
 
-        assert any(
-            e["task_id"] == 1 for e in dispatch_events
-        ), f"No DispatchEvent for task_id=1 found; events: {dispatch_events}"
+        assert any(e["task_id"] == 1 for e in dispatch_events), (
+            f"No DispatchEvent for task_id=1 found; events: {dispatch_events}"
+        )

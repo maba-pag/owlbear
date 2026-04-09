@@ -71,7 +71,8 @@ class TestFromAC_BgeM3EmbeddingProvider:
         assert all(isinstance(v, float) for v in result[0])
 
     def test_embed_hybrid_returns_hybrid_embeddings_with_all_fields(
-        self, mock_flag: MagicMock  # noqa: ARG002
+        self,
+        mock_flag: MagicMock,  # noqa: ARG002
     ) -> None:
         """embed_hybrid() returns list[HybridEmbedding] with dense, sparse, and colbert."""
         provider = BgeM3EmbeddingProvider()

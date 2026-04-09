@@ -100,16 +100,17 @@ class TestFromAC_FileGlobPerFileSandboxValidation:  # noqa: N801
         store_mock = MagicMock()
         store_mock.update = MagicMock()
 
-        with patch(
-            "owlbear_knowledge.refresh.sandbox_path",
-            wraps=_real_sandbox_path,
-        ) as mock_sb, patch(
-            "owlbear_knowledge.intake.read_file",
-            new=AsyncMock(return_value=_make_intake_result()),
+        with (
+            patch(
+                "owlbear_knowledge.refresh.sandbox_path",
+                wraps=_real_sandbox_path,
+            ) as mock_sb,
+            patch(
+                "owlbear_knowledge.intake.read_file",
+                new=AsyncMock(return_value=_make_intake_result()),
+            ),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -121,12 +122,10 @@ class TestFromAC_FileGlobPerFileSandboxValidation:  # noqa: N801
         # Current implementation: only 1 call (base_dir only) — this FAILS
         file_paths_checked = {call[0][1] for call in mock_sb.call_args_list}
         assert (tmp_path / "a.txt") in file_paths_checked, (
-            "sandbox_path was not called for glob result a.txt; "
-            f"calls: {mock_sb.call_args_list}"
+            f"sandbox_path was not called for glob result a.txt; calls: {mock_sb.call_args_list}"
         )
         assert (tmp_path / "b.txt") in file_paths_checked, (
-            "sandbox_path was not called for glob result b.txt; "
-            f"calls: {mock_sb.call_args_list}"
+            f"sandbox_path was not called for glob result b.txt; calls: {mock_sb.call_args_list}"
         )
 
 
@@ -144,9 +143,7 @@ class TestFromAC_FileGlobScopeForwarding:  # noqa: N801
     """
 
     @pytest.mark.asyncio
-    async def test_file_glob_passes_source_scope_to_pipeline_ingest(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_file_glob_passes_source_scope_to_pipeline_ingest(self, tmp_path: Path) -> None:
         """pipeline.ingest must receive scope=source.scope in the file_glob handler."""
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
@@ -160,9 +157,7 @@ class TestFromAC_FileGlobScopeForwarding:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result()),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -244,4 +239,3 @@ class TestFromAC_UrlListScopeForwarding:  # noqa: N801
             assert kwargs.get("scope") == "team-wiki", (
                 f"pipeline.ingest call missing scope='team-wiki'; got kwargs={kwargs}"
             )
-

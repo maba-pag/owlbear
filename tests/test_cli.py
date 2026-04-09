@@ -452,9 +452,7 @@ class TestFromAC_ACPDispatchContract:  # noqa: N801
         task = _task(task_id=99, status="todo")
         plan = DispatchPlan(entries=[_entry(task_id=99, agent="builder")])
         mock_client = AsyncMock()
-        mock_client.new_session.side_effect = AcpClientError(
-            "session start failed", category=ErrorCategory.TRANSIENT
-        )
+        mock_client.new_session.side_effect = AcpClientError("session start failed", category=ErrorCategory.TRANSIENT)
         mock_instance = MagicMock()
         mock_instance.__aenter__ = AsyncMock(return_value=mock_client)
         mock_instance.__aexit__ = AsyncMock(return_value=False)
@@ -493,4 +491,3 @@ class TestBuilderDiscovered:
         assert result.exit_code == 1
         assert "55" in result.stderr
         assert "not found" in result.stderr.lower()
-

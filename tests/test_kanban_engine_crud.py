@@ -95,18 +95,14 @@ class TestFromAC_CreateTask:
         record = engine.create_task("Allocate me")
         assert record.id == 100
 
-    def test_create_task_creates_file_in_tasks_dir(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_creates_file_in_tasks_dir(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """A task file is created inside the tasks directory."""
         engine.create_task("File creation test")
         tasks_dir = kanban_dir / "tasks"
         files = list(tasks_dir.glob("*.md"))
         assert len(files) == 1
 
-    def test_create_task_filename_contains_id_and_slug(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_filename_contains_id_and_slug(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Task filename starts with the task id followed by a hyphen and slug."""
         engine.create_task("File Slug Test")
         tasks_dir = kanban_dir / "tasks"
@@ -115,47 +111,35 @@ class TestFromAC_CreateTask:
         assert filename.name.startswith("100-")
         assert "file-slug-test" in filename.name
 
-    def test_create_task_increments_next_id_in_config(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_increments_next_id_in_config(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """next_id in config.yml is incremented to 101 after one create."""
         engine.create_task("Increment me")
         config_text = (kanban_dir / "config.yml").read_text(encoding="utf-8")
         assert "next_id: 101" in config_text
 
-    def test_create_two_tasks_use_sequential_ids(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_two_tasks_use_sequential_ids(self, engine: KanbanEngine) -> None:
         """Two consecutive creates use 100 and 101."""
         first = engine.create_task("First task")
         second = engine.create_task("Second task")
         assert first.id == 100
         assert second.id == 101
 
-    def test_create_task_title_stored_on_record(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_title_stored_on_record(self, engine: KanbanEngine) -> None:
         """Returned record.title matches the supplied title."""
         record = engine.create_task("My precise title")
         assert record.title == "My precise title"
 
-    def test_create_task_default_status_is_research(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_default_status_is_research(self, engine: KanbanEngine) -> None:
         """Default status is 'research' (from config defaults)."""
         record = engine.create_task("Default status task")
         assert record.status == "research"
 
-    def test_create_task_default_priority_is_important(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_default_priority_is_important(self, engine: KanbanEngine) -> None:
         """Default priority is 'important' (from config defaults)."""
         record = engine.create_task("Default priority task")
         assert record.priority == "important"
 
-    def test_create_task_default_body_is_empty(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_default_body_is_empty(self, engine: KanbanEngine) -> None:
         """Body defaults to empty string when not supplied."""
         record = engine.create_task("Empty body")
         assert record.body == "" or record.body.strip() == ""
@@ -194,9 +178,7 @@ class TestFromAC_CreateTask:
         assert 10 in record.depends_on
         assert 20 in record.depends_on
 
-    def test_create_task_persisted_to_disk_and_readable(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_persisted_to_disk_and_readable(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Task file written to disk can be parsed back to a TaskRecord."""
         from owlbear_mcp_kanban.task_io import read_task  # type: ignore[import-not-found]
 
@@ -209,25 +191,19 @@ class TestFromAC_CreateTask:
 
     # --- Boundary conditions ------------------------------------------------
 
-    def test_create_task_next_id_after_two_creates_is_102(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_next_id_after_two_creates_is_102(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """After two creates, config.yml next_id is 102."""
         engine.create_task("First")
         engine.create_task("Second")
         config_text = (kanban_dir / "config.yml").read_text(encoding="utf-8")
         assert "next_id: 102" in config_text
 
-    def test_create_task_empty_depends_on_stored_as_empty_list(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_empty_depends_on_stored_as_empty_list(self, engine: KanbanEngine) -> None:
         """Omitting depends_on stores empty list, not None."""
         record = engine.create_task("No deps")
         assert record.depends_on == []
 
-    def test_create_task_empty_tags_stored_as_empty_list(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_empty_tags_stored_as_empty_list(self, engine: KanbanEngine) -> None:
         """Omitting tags stores empty list, not None."""
         record = engine.create_task("No tags")
         assert record.tags == []
@@ -295,13 +271,9 @@ class TestFromAC_EditTask:
         result = engine.edit_task(task_id, remove_tags=["original-tag"])
         assert "original-tag" not in result.tags
 
-    def test_edit_tags_add_and_remove_in_same_call(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_tags_add_and_remove_in_same_call(self, engine: KanbanEngine, task_id: str) -> None:
         """add_tags and remove_tags may be applied in a single edit call."""
-        result = engine.edit_task(
-            task_id, add_tags=["brand-new"], remove_tags=["original-tag"]
-        )
+        result = engine.edit_task(task_id, add_tags=["brand-new"], remove_tags=["original-tag"])
         assert "brand-new" in result.tags
         assert "original-tag" not in result.tags
 
@@ -323,9 +295,7 @@ class TestFromAC_EditTask:
 
     def test_edit_block_task(self, engine: KanbanEngine, task_id: str) -> None:
         """edit_task with blocked=True sets blocked field and stores reason."""
-        result = engine.edit_task(
-            task_id, blocked=True, block_reason="Waiting on dep 5"
-        )
+        result = engine.edit_task(task_id, blocked=True, block_reason="Waiting on dep 5")
         assert result.blocked is True
         assert result.block_reason == "Waiting on dep 5"
 
@@ -338,34 +308,22 @@ class TestFromAC_EditTask:
 
     # --- AC4: append_body with timestamp prefix -----------------------------
 
-    def test_append_body_adds_content_to_body(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_append_body_adds_content_to_body(self, engine: KanbanEngine, task_id: str) -> None:
         """append_body= appends text to the existing body."""
         result = engine.edit_task(task_id, append_body="## Appended section\nNew text")
         assert "## Appended section" in result.body
         assert "## Original" in result.body  # original body preserved
 
-    def test_append_body_timestamp_prefix_format(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_append_body_timestamp_prefix_format(self, engine: KanbanEngine, task_id: str) -> None:
         """append_body with timestamp=True prepends a [[YYYY-MM-DD]] date line."""
-        result = engine.edit_task(
-            task_id, append_body="Note added", timestamp=True
-        )
+        result = engine.edit_task(task_id, append_body="Note added", timestamp=True)
         # The brief specifies [[YYYY-MM-DD]] format prefix
         pattern = r"\[\[\d{4}-\d{2}-\d{2}\]\]"
-        assert re.search(pattern, result.body), (
-            f"Expected [[YYYY-MM-DD]] timestamp in body, got:\n{result.body}"
-        )
+        assert re.search(pattern, result.body), f"Expected [[YYYY-MM-DD]] timestamp in body, got:\n{result.body}"
 
-    def test_append_body_timestamp_appears_before_appended_text(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_append_body_timestamp_appears_before_appended_text(self, engine: KanbanEngine, task_id: str) -> None:
         """Timestamp prefix appears before the appended content in the body."""
-        result = engine.edit_task(
-            task_id, append_body="Appended note text", timestamp=True
-        )
+        result = engine.edit_task(task_id, append_body="Appended note text", timestamp=True)
         timestamp_match = re.search(r"\[\[\d{4}-\d{2}-\d{2}\]\]", result.body)
         assert timestamp_match is not None
         ts_pos = timestamp_match.start()
@@ -374,9 +332,7 @@ class TestFromAC_EditTask:
 
     # --- Persistence --------------------------------------------------------
 
-    def test_edit_persists_to_disk(
-        self, kanban_dir: Path, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_persists_to_disk(self, kanban_dir: Path, engine: KanbanEngine, task_id: str) -> None:
         """Changes made by edit_task survive a reload from disk."""
         from owlbear_mcp_kanban.task_io import read_task  # type: ignore[import-not-found]
 
@@ -389,9 +345,7 @@ class TestFromAC_EditTask:
 
     # --- Edge cases ---------------------------------------------------------
 
-    def test_edit_no_changes_returns_unchanged_record(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_no_changes_returns_unchanged_record(self, engine: KanbanEngine, task_id: str) -> None:
         """Calling edit_task with no change params returns the existing record."""
         before = engine.show_task(task_id)
         after = engine.edit_task(task_id)
@@ -416,23 +370,17 @@ class TestFromAC_MoveTask:
 
     # --- AC5: move to valid status ------------------------------------------
 
-    def test_move_task_to_todo(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_to_todo(self, engine: KanbanEngine, task_id: str) -> None:
         """move_task('todo') changes status to 'todo'."""
         result = engine.move_task(task_id, "todo")
         assert result.status == "todo"
 
-    def test_move_task_returns_task_record(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_returns_task_record(self, engine: KanbanEngine, task_id: str) -> None:
         """move_task returns a TaskRecord."""
         result = engine.move_task(task_id, "backlog")
         assert isinstance(result, TaskRecord)
 
-    def test_move_task_persists_status_change(
-        self, kanban_dir: Path, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_persists_status_change(self, kanban_dir: Path, engine: KanbanEngine, task_id: str) -> None:
         """Status change is written to disk and readable after move."""
         from owlbear_mcp_kanban.task_io import read_task  # type: ignore[import-not-found]
 
@@ -443,9 +391,7 @@ class TestFromAC_MoveTask:
         loaded = read_task(files[0])
         assert loaded.status == "in-progress"
 
-    def test_move_task_from_todo_to_in_progress(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_from_todo_to_in_progress(self, engine: KanbanEngine, task_id: str) -> None:
         """move_task advances status correctly from todo to in-progress."""
         engine.move_task(task_id, "todo")
         result = engine.move_task(task_id, "in-progress")
@@ -453,9 +399,7 @@ class TestFromAC_MoveTask:
 
     # --- AC6: move to archived ----------------------------------------------
 
-    def test_move_task_to_archived(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_to_archived(self, engine: KanbanEngine, task_id: str) -> None:
         """move_task('archived') succeeds — returns TaskRecord with archived marker."""
         result = engine.move_task(task_id, "archived")
         # Either status == "archived" or blocked-equivalent marker acceptable,
@@ -463,9 +407,7 @@ class TestFromAC_MoveTask:
         assert result is not None
         assert isinstance(result, TaskRecord)
 
-    def test_move_task_archived_not_in_active_tasks(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_archived_not_in_active_tasks(self, engine: KanbanEngine, task_id: str) -> None:
         """After archiving, the task does not appear in plain list_tasks()."""
         engine.move_task(task_id, "archived")
         active = engine.list_tasks()
@@ -474,39 +416,29 @@ class TestFromAC_MoveTask:
 
     # --- AC7: invalid status rejected --------------------------------------
 
-    def test_move_task_invalid_status_raises(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_invalid_status_raises(self, engine: KanbanEngine, task_id: str) -> None:
         """move_task with a status not in config.statuses and not 'archived' raises."""
         with pytest.raises((ValueError, KeyError, LookupError)):
             engine.move_task(task_id, "nonexistent-status")
 
-    def test_move_task_empty_string_status_raises(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_empty_string_status_raises(self, engine: KanbanEngine, task_id: str) -> None:
         """move_task with empty string status raises."""
         with pytest.raises((ValueError, KeyError, LookupError)):
             engine.move_task(task_id, "")
 
-    def test_move_task_garbage_status_raises(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_garbage_status_raises(self, engine: KanbanEngine, task_id: str) -> None:
         """move_task with completely arbitrary garbage string raises."""
         with pytest.raises((ValueError, KeyError, LookupError)):
             engine.move_task(task_id, "DEFINITELY_NOT_A_STATUS_🐻")
 
     # --- Boundary conditions ------------------------------------------------
 
-    def test_move_task_to_done_valid_status(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_to_done_valid_status(self, engine: KanbanEngine, task_id: str) -> None:
         """'done' is a valid status (last in the list) and should not raise."""
         result = engine.move_task(task_id, "done")
         assert result.status == "done"
 
-    def test_move_task_to_review_valid_status(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_move_task_to_review_valid_status(self, engine: KanbanEngine, task_id: str) -> None:
         """'review' is a valid status and should not raise."""
         result = engine.move_task(task_id, "review")
         assert result.status == "review"

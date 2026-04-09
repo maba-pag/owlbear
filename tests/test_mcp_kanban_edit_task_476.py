@@ -102,9 +102,7 @@ class TestFromAC_EditTaskReturnsKanbanTask:
         """edit_task must return a KanbanTask object, not a str."""
         with _patch_run(stdout=_VALID_TASK_JSON):
             result = await edit_task(_make_mcp_ctx(), task_id="42")
-        assert isinstance(result, KanbanTask), (
-            f"edit_task must return KanbanTask, got {type(result).__name__}"
-        )
+        assert isinstance(result, KanbanTask), f"edit_task must return KanbanTask, got {type(result).__name__}"
 
     # Happy: returned KanbanTask id matches task data
     @pytest.mark.asyncio
@@ -120,9 +118,7 @@ class TestFromAC_EditTaskReturnsKanbanTask:
         """KanbanTask returned by edit_task must have the title from kanban-md output."""
         with _patch_run(stdout=_VALID_TASK_JSON):
             result = await edit_task(_make_mcp_ctx(), task_id="42")
-        assert result.title == "Sample Task", (
-            f"KanbanTask.title must be 'Sample Task', got {result.title!r}"
-        )
+        assert result.title == "Sample Task", f"KanbanTask.title must be 'Sample Task', got {result.title!r}"
 
     # Happy: when title param renames task, returned KanbanTask has new title
     @pytest.mark.asyncio
@@ -131,9 +127,7 @@ class TestFromAC_EditTaskReturnsKanbanTask:
         with _patch_run(stdout=_VALID_TASK_RENAMED_JSON):
             result = await edit_task(_make_mcp_ctx(), task_id="42", title="Renamed Task")
         assert isinstance(result, KanbanTask), "edit_task must return KanbanTask even when title is set"
-        assert result.title == "Renamed Task", (
-            f"KanbanTask.title must be 'Renamed Task', got {result.title!r}"
-        )
+        assert result.title == "Renamed Task", f"KanbanTask.title must be 'Renamed Task', got {result.title!r}"
 
     # Happy: when parent param is set, returned KanbanTask has parent field
     @pytest.mark.asyncio
@@ -165,7 +159,10 @@ class TestFromAC_EditTaskRaisesToolError:
     @pytest.mark.asyncio
     async def test_tool_error_message_contains_stderr(self) -> None:
         """ToolError message must include the stderr text from kanban-md."""
-        with _patch_run(stdout="", stderr="task 999 not found", rc=1), pytest.raises(ToolError, match="task 999 not found"):
+        with (
+            _patch_run(stdout="", stderr="task 999 not found", rc=1),
+            pytest.raises(ToolError, match="task 999 not found"),
+        ):
             await edit_task(_make_mcp_ctx(), task_id="999")
 
     # Error: never returns an "error: ..." string (current wrong behavior)
@@ -265,9 +262,7 @@ class TestFromAC_EditTaskOutputSchema:
         assert schema is not None, "edit_task outputSchema must not be None"
         assert isinstance(schema, dict), "outputSchema must be a dict"
         props = schema.get("properties", {})
-        assert "class_" not in props, (
-            "outputSchema must not use Python field name 'class_'"
-        )
+        assert "class_" not in props, "outputSchema must not use Python field name 'class_'"
 
 
 # ---------------------------------------------------------------------------
@@ -284,32 +279,21 @@ class TestFromAC_EditTaskSkillMdErrorGroup:
         """SKILL.md must state that all tools raise ToolError."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         tool_error_line = next(
-            (
-                line
-                for line in content.splitlines()
-                if "ToolError" in line
-            ),
+            (line for line in content.splitlines() if "ToolError" in line),
             None,
         )
-        assert tool_error_line is not None, (
-            "SKILL.md must have an error-handling line mentioning ToolError"
-        )
+        assert tool_error_line is not None, "SKILL.md must have an error-handling line mentioning ToolError"
 
     # AC: No error-string return group should exist
     def test_skill_md_no_error_string_return_group(self) -> None:
         """SKILL.md must not have a separate 'error: string' return group."""
         content = _SKILL_MD.read_text(encoding="utf-8")
         error_string_line = next(
-            (
-                line
-                for line in content.splitlines()
-                if "error:" in line and "prefix" in line.lower()
-            ),
+            (line for line in content.splitlines() if "error:" in line and "prefix" in line.lower()),
             None,
         )
         assert error_string_line is None, (
-            "SKILL.md must NOT have an error-string return group. "
-            f"Found: {error_string_line!r}"
+            f"SKILL.md must NOT have an error-string return group. Found: {error_string_line!r}"
         )
 
     # AC: edit_task is listed in SKILL.md Tool Summary (params in MCP schema)
@@ -438,9 +422,7 @@ class TestFromAC_EditTaskFlagMapping:
         argv = mock_run.call_args[0]
         assert "--title" in argv, "--title must be present when title='New Title'"
         idx = list(argv).index("--title")
-        assert argv[idx + 1] == "New Title", (
-            f"--title value must be 'New Title', got {argv[idx + 1]!r}"
-        )
+        assert argv[idx + 1] == "New Title", f"--title value must be 'New Title', got {argv[idx + 1]!r}"
 
     # Boundary: --title NOT passed when title is empty string (default)
     @pytest.mark.asyncio
@@ -611,9 +593,7 @@ class TestFromAC_JsonFlagAlwaysPresent:
             await edit_task(_make_mcp_ctx(), task_id="42", status="done")
 
         argv = list(mock_run.call_args[0])
-        assert argv[-1] == "--json", (
-            f"--json must be the last element in args, got last element {argv[-1]!r}"
-        )
+        assert argv[-1] == "--json", f"--json must be the last element in args, got last element {argv[-1]!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -657,9 +637,7 @@ class TestFromAC_FakeTaskJsonFixture:
         """KanbanTask.model_validate_json must parse depends_on list correctly."""
         with _patch_run(stdout=_FAKE_TASK_JSON):
             result = await edit_task(_make_mcp_ctx(), task_id="99")
-        assert result.depends_on == [5, 7], (
-            f"depends_on must be [5, 7], got {result.depends_on!r}"
-        )
+        assert result.depends_on == [5, 7], f"depends_on must be [5, 7], got {result.depends_on!r}"
 
     # Happy: parent field is parsed correctly
     @pytest.mark.asyncio

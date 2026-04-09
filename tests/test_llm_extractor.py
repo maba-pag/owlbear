@@ -183,6 +183,4 @@ class TestFromAC_LLMExtractor:
             LLMExtractor("openai:gpt-4o")
         kwargs = mock_agent_cls.call_args[1]
         system_prompt = kwargs.get("system_prompt", "")
-        assert "class_" in system_prompt, (
-            "EntityType.CLASS_ value 'class_' not found in system prompt"
-        )
+        assert "class_" in system_prompt, "EntityType.CLASS_ value 'class_' not found in system prompt"

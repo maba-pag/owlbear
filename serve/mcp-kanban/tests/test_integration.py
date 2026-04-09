@@ -81,9 +81,7 @@ def real_kanban_bin() -> Path:
     if convention.exists():
         return convention
 
-    pytest.skip(
-        "kanban-md binary not found — run kanban/setup.ps1 or set KANBAN_BIN env var"
-    )
+    pytest.skip("kanban-md binary not found — run kanban/setup.ps1 or set KANBAN_BIN env var")
 
 
 @pytest.fixture
@@ -136,9 +134,7 @@ class TestFromAC_Integration:
     # AC: create task + list tasks roundtrip — created task appears in list output
     @pytest.mark.integration
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_create_list_roundtrip(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
+    async def test_create_list_roundtrip(self, board_dir: Path, real_kanban_bin: Path) -> None:
         """create_task followed by list_tasks returns the newly created task title."""
         server = _make_test_server(board_dir, real_kanban_bin)
         async with create_connected_server_and_client_session(server) as client:
@@ -150,9 +146,7 @@ class TestFromAC_Integration:
     # AC: create task + show by ID roundtrip — returned fields (title, status) match
     @pytest.mark.integration
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_create_show_roundtrip(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
+    async def test_create_show_roundtrip(self, board_dir: Path, real_kanban_bin: Path) -> None:
         """show_task returns a result containing the created task's title and default status."""
         server = _make_test_server(board_dir, real_kanban_bin)
         async with create_connected_server_and_client_session(server) as client:
@@ -166,9 +160,7 @@ class TestFromAC_Integration:
     # AC: create + move + show — status change persists after move
     @pytest.mark.integration
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_create_move_show(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
+    async def test_create_move_show(self, board_dir: Path, real_kanban_bin: Path) -> None:
         """move_task changes the task status; subsequent show_task reflects the new status."""
         server = _make_test_server(board_dir, real_kanban_bin)
         async with create_connected_server_and_client_session(server) as client:
@@ -181,9 +173,7 @@ class TestFromAC_Integration:
     # AC: create 2 tasks with distinct tags + filtered list — only matching task returned
     @pytest.mark.integration
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_filtered_list_by_tag(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
+    async def test_filtered_list_by_tag(self, board_dir: Path, real_kanban_bin: Path) -> None:
         """list_tasks with tag filter returns only tasks whose tags match the filter."""
         server = _make_test_server(board_dir, real_kanban_bin)
         async with create_connected_server_and_client_session(server) as client:
@@ -197,9 +187,7 @@ class TestFromAC_Integration:
     # AC: show nonexistent task ID returns error string in tool result, not exception
     @pytest.mark.integration
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_show_nonexistent_returns_error_not_exception(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
+    async def test_show_nonexistent_returns_error_not_exception(self, board_dir: Path, real_kanban_bin: Path) -> None:
         """show_task with a missing ID returns an error string — never raises an exception."""
         server = _make_test_server(board_dir, real_kanban_bin)
         async with create_connected_server_and_client_session(server) as client:
@@ -207,9 +195,7 @@ class TestFromAC_Integration:
             result = await client.call_tool("show_task", {"task_id": "99999"})
         assert result.content, "Tool result must have at least one content item"
         text = result.content[0].text
-        assert "error" in text.lower(), (
-            f"Expected error message in result, got: {text!r}"
-        )
+        assert "error" in text.lower(), f"Expected error message in result, got: {text!r}"
 
     # AC: show_task returns data containing the expected fields (title, status)
     @pytest.mark.integration
@@ -225,9 +211,7 @@ class TestFromAC_Integration:
         text = result.content[0].text
         assert "Field Check Task" in text, f"title not found in: {text!r}"
         # The status field must appear in the output in recognisable form
-        assert "Status:" in text or '"status"' in text, (
-            f"No status field found in: {text!r}"
-        )
+        assert "Status:" in text or '"status"' in text, f"No status field found in: {text!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -248,12 +232,7 @@ class TestFromAC_Configuration:
         assert pyproject_path.exists(), f"pyproject.toml not found at {pyproject_path}"
         with pyproject_path.open("rb") as fh:
             config = tomllib.load(fh)
-        markers: list[str] = (
-            config.get("tool", {})
-            .get("pytest", {})
-            .get("ini_options", {})
-            .get("markers", [])
-        )
+        markers: list[str] = config.get("tool", {}).get("pytest", {}).get("ini_options", {}).get("markers", [])
         integration_entries = [m for m in markers if m.startswith("integration:")]
         assert integration_entries, (
             "No 'integration:' marker found in [tool.pytest.ini_options].markers in pyproject.toml. "
@@ -278,9 +257,7 @@ class TestFromAC_StructuredContent:
     # AC: show_task structuredContent — non-None dict with id, title, status, class keys
     @pytest.mark.integration
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_show_task_structured_content(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
+    async def test_show_task_structured_content(self, board_dir: Path, real_kanban_bin: Path) -> None:
         """show_task CallToolResult.structuredContent is a non-None dict with required keys."""
         server = _make_test_server(board_dir, real_kanban_bin)
         async with create_connected_server_and_client_session(server) as client:
@@ -296,9 +273,7 @@ class TestFromAC_StructuredContent:
     # AC: move_task structuredContent — non-None dict with status matching target
     @pytest.mark.integration
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_move_task_structured_content(
-        self, board_dir: Path, real_kanban_bin: Path
-    ) -> None:
+    async def test_move_task_structured_content(self, board_dir: Path, real_kanban_bin: Path) -> None:
         """move_task CallToolResult.structuredContent contains the updated status."""
         server = _make_test_server(board_dir, real_kanban_bin)
         async with create_connected_server_and_client_session(server) as client:
@@ -310,5 +285,3 @@ class TestFromAC_StructuredContent:
         assert sc.get("status") == "backlog", (
             f"structuredContent['status'] must equal 'backlog', got: {sc.get('status')!r}"
         )
-
-

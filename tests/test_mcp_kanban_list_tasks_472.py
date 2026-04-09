@@ -33,8 +33,18 @@ from owlbear_mcp_kanban.server import (  # type: ignore[import]
 # Helpers
 # ---------------------------------------------------------------------------
 
-_LEAN_FIELDS = {"id", "title", "status", "priority", "tags", "depends_on", "class",
-                "blocked", "block_reason", "claimed_by"}
+_LEAN_FIELDS = {
+    "id",
+    "title",
+    "status",
+    "priority",
+    "tags",
+    "depends_on",
+    "class",
+    "blocked",
+    "block_reason",
+    "claimed_by",
+}
 _STRIPPED_FIELDS = {"body", "file", "created", "updated"}
 
 _SAMPLE_FULL_TASK = {
@@ -60,6 +70,7 @@ _SAMPLE_MULTI_JSON = json.dumps([_SAMPLE_FULL_TASK, {**_SAMPLE_FULL_TASK, "id": 
 
 def _make_app_ctx() -> AppContext:
     from pathlib import Path
+
     return AppContext(kanban_bin=Path("/fake/kanban-md"), kanban_dir=Path("/fake/kanban"))
 
 
@@ -283,9 +294,7 @@ class TestFromAC_ListTasksLeanJson:
         assert isinstance(tasks, list)
         task = tasks[0]
         for field in _STRIPPED_FIELDS:
-            assert field not in task, (
-                f"Field '{field}' must be stripped from list_tasks output but is present"
-            )
+            assert field not in task, f"Field '{field}' must be stripped from list_tasks output but is present"
 
     # Edge: Multiple tasks all stripped correctly
     @pytest.mark.asyncio
@@ -299,9 +308,7 @@ class TestFromAC_ListTasksLeanJson:
         assert len(tasks) == 2, "Both tasks must be present in the output"
         for task in tasks:
             for field in _STRIPPED_FIELDS:
-                assert field not in task, (
-                    f"Field '{field}' must be stripped from every task in output"
-                )
+                assert field not in task, f"Field '{field}' must be stripped from every task in output"
 
 
 # ---------------------------------------------------------------------------
@@ -331,9 +338,7 @@ class TestFromAC_ListTasksLeanJsonPresence:
         task = tasks[0]
         # _LEAN_FIELDS must ALL be present — mutation [{} for …] would break this
         for field in _LEAN_FIELDS:
-            assert field in task, (
-                f"Expected lean field '{field}' is absent — stripping removed too much"
-            )
+            assert field in task, f"Expected lean field '{field}' is absent — stripping removed too much"
 
     # Individual boundary: id is retained
     @pytest.mark.asyncio
@@ -403,6 +408,7 @@ class TestFromAC_ListTasksStructuredContent:
     def test_list_tasks_tool_has_output_schema(self) -> None:
         """list_tasks tool must have an outputSchema and it must describe an array type."""
         from owlbear_mcp_kanban.server import mcp  # type: ignore[import]
+
         tool_name = "list_tasks"
         tools = {t.name: t for t in mcp._tool_manager._tools.values()}  # type: ignore[union-attr]
         assert tool_name in tools, f"'{tool_name}' tool must be registered in FastMCP"
@@ -417,13 +423,12 @@ class TestFromAC_ListTasksStructuredContent:
     def test_output_schema_is_array_type(self) -> None:
         """list_tasks outputSchema must describe an array of lean task objects."""
         from owlbear_mcp_kanban.server import mcp  # type: ignore[import]
+
         tools = {t.name: t for t in mcp._tool_manager._tools.values()}  # type: ignore[union-attr]
         tool = tools["list_tasks"]
         schema = tool.output_schema
         # JSON Schema convention: top-level type is "array"
-        assert schema.get("type") == "array", (
-            "outputSchema must be an array type (list of lean task objects)"
-        )
+        assert schema.get("type") == "array", "outputSchema must be an array type (list of lean task objects)"
 
     # AC: Return structuredContent alongside text content — result is lean JSON array
     @pytest.mark.asyncio
@@ -437,6 +442,4 @@ class TestFromAC_ListTasksStructuredContent:
         assert isinstance(parsed, list), "list_tasks result must be a JSON array"
         task = parsed[0]
         for field in _STRIPPED_FIELDS:
-            assert field not in task, (
-                f"'{field}' must be absent from structuredContent-ready lean output"
-            )
+            assert field not in task, f"'{field}' must be absent from structuredContent-ready lean output"

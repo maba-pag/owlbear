@@ -182,9 +182,7 @@ class TestFromAC_BookmarkPipelineConstructor:  # noqa: N801
         """_default_web_read must NOT be extracted to v2 (v1-only HTTP dep)."""
         import owlbear_knowledge.bookmark_pipeline as bp_module  # noqa: PLC0415
 
-        assert not hasattr(bp_module, "_default_web_read"), (
-            "_default_web_read must not exist in v2 bookmark_pipeline"
-        )
+        assert not hasattr(bp_module, "_default_web_read"), "_default_web_read must not exist in v2 bookmark_pipeline"
 
     def test_ingest_threshold_defaults_to_0_7(self) -> None:
         from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline  # noqa: PLC0415
@@ -224,9 +222,7 @@ class TestFromAC_BookmarkPipelineProcess:  # noqa: N801
         store_mock.create.side_effect = lambda b: b
 
         evaluator_mock = MagicMock()
-        evaluator_mock.evaluate = AsyncMock(
-            return_value=eval_result or _make_eval_result()
-        )
+        evaluator_mock.evaluate = AsyncMock(return_value=eval_result or _make_eval_result())
 
         web_read_mock = AsyncMock(return_value=web_read_return)
 
@@ -440,9 +436,7 @@ class TestFromAC_RefreshOrchestratorRefresh:  # noqa: N801
 
         pipeline_mock = MagicMock()
         pipeline_mock.ingest = AsyncMock(
-            return_value=IngestResult(
-                document_id="d1", chunk_count=1, entity_count=0, edge_count=0, status="ok"
-            )
+            return_value=IngestResult(document_id="d1", chunk_count=1, entity_count=0, edge_count=0, status="ok")
         )
         store_mock = MagicMock()
         store_mock.update = MagicMock()
@@ -522,9 +516,7 @@ class TestFromAC_RefreshOrchestratorFileGlob:  # noqa: N801
 
         pipeline_mock = MagicMock()
         pipeline_mock.ingest = AsyncMock(
-            return_value=IngestResult(
-                document_id="d", chunk_count=1, entity_count=0, edge_count=0, status="ok"
-            )
+            return_value=IngestResult(document_id="d", chunk_count=1, entity_count=0, edge_count=0, status="ok")
         )
         store_mock = MagicMock()
         store_mock.update = MagicMock()
@@ -563,9 +555,7 @@ class TestFromAC_UpdateSourceRecord:  # noqa: N801
 
         pipeline_mock = MagicMock()
         pipeline_mock.ingest = AsyncMock(
-            return_value=IngestResult(
-                document_id="d", chunk_count=0, entity_count=0, edge_count=0, status="ok"
-            )
+            return_value=IngestResult(document_id="d", chunk_count=0, entity_count=0, edge_count=0, status="ok")
         )
 
         orch = RefreshOrchestrator(store=real_store, pipeline=pipeline_mock)
@@ -596,9 +586,7 @@ class TestFromAC_UpdateSourceRecord:  # noqa: N801
 
         pipeline_mock = MagicMock()
         pipeline_mock.ingest = AsyncMock(
-            return_value=IngestResult(
-                document_id="d", chunk_count=0, entity_count=0, edge_count=0, status="ok"
-            )
+            return_value=IngestResult(document_id="d", chunk_count=0, entity_count=0, edge_count=0, status="ok")
         )
         orch = RefreshOrchestrator(store=real_store, pipeline=pipeline_mock)
         await orch.refresh(source)
@@ -714,9 +702,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
         from owlbear_mcp_knowledge.server import bookmark_source  # noqa: PLC0415
 
         pipeline_mock = MagicMock()
-        pipeline_mock.process = AsyncMock(
-            return_value=BookmarkResult(url="https://example.com", skipped_reason="dup")
-        )
+        pipeline_mock.process = AsyncMock(return_value=BookmarkResult(url="https://example.com", skipped_reason="dup"))
         ctx = MagicMock()
         ctx.request_context.lifespan_context = MagicMock(
             bookmark_pipeline=pipeline_mock,
@@ -732,9 +718,7 @@ class TestFromAC_MCPBookmarkTools:  # noqa: N801
         from owlbear_mcp_knowledge.server import bookmark_source  # noqa: PLC0415
 
         pipeline_mock = MagicMock()
-        pipeline_mock.process = AsyncMock(
-            return_value=BookmarkResult(url="https://x.com")
-        )
+        pipeline_mock.process = AsyncMock(return_value=BookmarkResult(url="https://x.com"))
         ctx = MagicMock()
         ctx.request_context.lifespan_context = MagicMock(
             bookmark_pipeline=pipeline_mock,

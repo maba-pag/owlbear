@@ -164,9 +164,7 @@ class TestFromAC_RefreshOrchestratorConstructor:  # noqa: N801
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
         # workspace_root=None is valid; the implementation defaults to Path.cwd()
-        orch = RefreshOrchestrator(
-            store=MagicMock(), pipeline=MagicMock(), workspace_root=None
-        )
+        orch = RefreshOrchestrator(store=MagicMock(), pipeline=MagicMock(), workspace_root=None)
         assert orch is not None
 
 
@@ -233,9 +231,7 @@ class TestFromAC_RefreshDispatch:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result("file.txt")),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -452,9 +448,7 @@ class TestFromAC_FileGlobHandler:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result()),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.md"},
@@ -465,9 +459,7 @@ class TestFromAC_FileGlobHandler:  # noqa: N801
         assert result.refreshed == 2
 
     @pytest.mark.asyncio
-    async def test_sandbox_permission_error_counted_as_failed_not_raised(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_sandbox_permission_error_counted_as_failed_not_raised(self, tmp_path: Path) -> None:
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
         (tmp_path / "test.txt").write_text("content")
@@ -480,9 +472,7 @@ class TestFromAC_FileGlobHandler:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(side_effect=PermissionError("escape attempt")),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -508,9 +498,7 @@ class TestFromAC_FileGlobHandler:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result()),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt", "base_dir": str(subdir)},
@@ -793,9 +781,7 @@ class TestFromAC_SandboxPathPermissionError:  # noqa: N801
     """_handle_file_glob returns failed=1 when sandbox_path() itself raises PermissionError."""
 
     @pytest.mark.asyncio
-    async def test_sandbox_path_permission_error_counted_as_failed_not_raised(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_sandbox_path_permission_error_counted_as_failed_not_raised(self, tmp_path: Path) -> None:
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
         pipeline_mock = MagicMock()
@@ -807,9 +793,7 @@ class TestFromAC_SandboxPathPermissionError:  # noqa: N801
             "owlbear_knowledge.refresh.sandbox_path",
             side_effect=PermissionError("path escape attempt"),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -841,9 +825,7 @@ class TestFromAC_FileGlobPerFileHandling:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result()),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -868,9 +850,7 @@ class TestFromAC_FileGlobPerFileHandling:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result()),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -881,9 +861,7 @@ class TestFromAC_FileGlobPerFileHandling:  # noqa: N801
         assert result.refreshed == 0
 
     @pytest.mark.asyncio
-    async def test_file_glob_per_file_exception_counted_as_failed_not_raised(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_file_glob_per_file_exception_counted_as_failed_not_raised(self, tmp_path: Path) -> None:
         from owlbear_knowledge.refresh import RefreshOrchestrator  # noqa: PLC0415
 
         (tmp_path / "file.txt").write_text("content")
@@ -896,9 +874,7 @@ class TestFromAC_FileGlobPerFileHandling:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result()),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},
@@ -922,9 +898,7 @@ class TestFromAC_FileGlobPerFileHandling:  # noqa: N801
             "owlbear_knowledge.intake.read_file",
             new=AsyncMock(return_value=_make_intake_result()),
         ):
-            orch = RefreshOrchestrator(
-                store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path
-            )
+            orch = RefreshOrchestrator(store=store_mock, pipeline=pipeline_mock, workspace_root=tmp_path)
             source = _make_source(
                 source_type=SourceType.FILE_GLOB,
                 config={"pattern": "*.txt"},

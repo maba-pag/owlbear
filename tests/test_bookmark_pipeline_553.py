@@ -179,9 +179,7 @@ class TestFromAC_IngestKwargs:  # noqa: N801
     @pytest.mark.asyncio
     async def test_ingest_text_full_call_signature(self) -> None:
         """ingest_text(content, metadata={'url': url}, scope=scope) — all three."""
-        pipeline, ingest_mock, url = self._make_pipeline_with_ingest(
-            web_content="page content"
-        )
+        pipeline, ingest_mock, url = self._make_pipeline_with_ingest(web_content="page content")
         await pipeline.process(url, scope="project-x")
         ingest_mock.ingest_text.assert_called_once_with(
             "page content",
@@ -220,9 +218,7 @@ class TestFromAC_BookmarkDescription:  # noqa: N801
     @pytest.mark.asyncio
     async def test_bookmark_description_equals_evaluation_summary(self) -> None:
         """Bookmark.description must be set to evaluation.summary."""
-        pipeline, url = self._make_pipeline_for_bookmark(
-            summary="A useful reference for the project."
-        )
+        pipeline, url = self._make_pipeline_for_bookmark(summary="A useful reference for the project.")
         result = await pipeline.process(url)
         assert result.bookmark is not None
         assert result.bookmark.description == "A useful reference for the project."
@@ -274,6 +270,4 @@ class TestFromAC_CancelKeywordOnly:  # noqa: N801
         with pytest.raises(TypeError):
             # After fix: process(url, None, "global", None, signal) raises TypeError
             # because cancel is keyword-only; calling with 5 positional args fails.
-            await pipeline.process(
-                "https://example.com", None, "global", None, _ClearSignal()
-            )
+            await pipeline.process("https://example.com", None, "global", None, _ClearSignal())

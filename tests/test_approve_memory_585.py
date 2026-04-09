@@ -120,9 +120,7 @@ def _make_db(path: Path, entries: list[dict] | None = None) -> None:
 def _get_state(db: Path, entry_id: str) -> str | None:
     """Return the approval_state for an entry, or None if not found."""
     conn = sqlite3.connect(str(db))
-    row = conn.execute(
-        "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-    ).fetchone()
+    row = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
     conn.close()
     return row[0] if row else None
 
@@ -170,17 +168,13 @@ class TestFromAC_ModuleImport:
         """AC16: main accepts argv with default None."""
         sig = inspect.signature(main)
         assert "argv" in sig.parameters, "main must have an 'argv' parameter"
-        assert sig.parameters["argv"].default is None, (
-            "argv default must be None (None means read sys.argv)"
-        )
+        assert sig.parameters["argv"].default is None, "argv default must be None (None means read sys.argv)"
 
     def test_main_return_annotation_is_int(self) -> None:
         """AC16: main return annotation is int."""
         sig = inspect.signature(main)
         ret = sig.return_annotation
-        assert ret is int or ret == "int", (
-            f"main return annotation must be int, got {ret!r}"
-        )
+        assert ret is int or ret == "int", f"main return annotation must be int, got {ret!r}"
 
     def test_main_is_callable(self) -> None:
         """AC1: main is callable after import."""
@@ -201,9 +195,7 @@ class TestFromAC_CLIMutualExclusion:
         _make_db(db)
         eid = str(uuid.uuid4())
         result = _run_approve("--interactive", "--approve", eid, db_path=db)
-        assert result.returncode != 0, (
-            "--interactive and --approve together should exit non-zero (argparse error)"
-        )
+        assert result.returncode != 0, "--interactive and --approve together should exit non-zero (argparse error)"
 
     def test_interactive_and_reject_together_is_error(self, tmp_path: Path) -> None:
         """AC2: --interactive + --reject together causes argparse error (exit != 0)."""
@@ -211,9 +203,7 @@ class TestFromAC_CLIMutualExclusion:
         _make_db(db)
         eid = str(uuid.uuid4())
         result = _run_approve("--interactive", "--reject", eid, db_path=db)
-        assert result.returncode != 0, (
-            "--interactive and --reject together should exit non-zero (argparse error)"
-        )
+        assert result.returncode != 0, "--interactive and --reject together should exit non-zero (argparse error)"
 
     def test_approve_and_reject_together_is_error(self, tmp_path: Path) -> None:
         """AC2: --approve + --reject together causes argparse error (exit != 0)."""
@@ -221,9 +211,7 @@ class TestFromAC_CLIMutualExclusion:
         _make_db(db)
         eid = str(uuid.uuid4())
         result = _run_approve("--approve", eid, "--reject", eid, db_path=db)
-        assert result.returncode != 0, (
-            "--approve and --reject together should exit non-zero (argparse error)"
-        )
+        assert result.returncode != 0, "--approve and --reject together should exit non-zero (argparse error)"
 
     def test_mutual_exclusion_error_goes_to_stderr(self, tmp_path: Path) -> None:
         """AC2: argparse writes the mutual-exclusion error to stderr."""
@@ -231,9 +219,7 @@ class TestFromAC_CLIMutualExclusion:
         _make_db(db)
         eid = str(uuid.uuid4())
         result = _run_approve("--interactive", "--approve", eid, db_path=db)
-        assert result.stderr.strip() != "", (
-            "Mutual exclusion error must be printed to stderr"
-        )
+        assert result.stderr.strip() != "", "Mutual exclusion error must be printed to stderr"
 
 
 # ===========================================================================
@@ -258,9 +244,7 @@ class TestFromAC_DBPathResolution:
         assert result.returncode == 0
         # The CLI-arg DB has one entry, env DB is empty —
         # output should contain the cli-entry content
-        assert eid[:8] in result.stdout, (
-            "Bare invocation should display entry from --db-path, not env var DB"
-        )
+        assert eid[:8] in result.stdout, "Bare invocation should display entry from --db-path, not env var DB"
 
     def test_env_var_db_path_used_when_no_cli_arg(self, tmp_path: Path) -> None:
         """AC3: OWLBEAR_MEMORY_DB_PATH env var is used when --db-path is absent."""
@@ -271,9 +255,7 @@ class TestFromAC_DBPathResolution:
             env_overrides={"OWLBEAR_MEMORY_DB_PATH": str(env_db)},
         )
         assert result.returncode == 0
-        assert eid[:8] in result.stdout, (
-            "Bare invocation should use env DB when no --db-path is given"
-        )
+        assert eid[:8] in result.stdout, "Bare invocation should use env DB when no --db-path is given"
 
     def test_default_db_path_is_data_memory_memory_db(self, tmp_path: Path) -> None:
         """AC3: default DB path is data/memory/memory.db (relative to cwd)."""
@@ -284,9 +266,7 @@ class TestFromAC_DBPathResolution:
         # path resolves to tmp_path/data/memory/memory.db
         result = _run_approve(env_overrides={"OWLBEAR_MEMORY_DB_PATH": ""}, cwd=tmp_path)
         assert result.returncode == 0
-        assert eid[:8] in result.stdout, (
-            "Bare invocation should fall back to data/memory/memory.db default"
-        )
+        assert eid[:8] in result.stdout, "Bare invocation should fall back to data/memory/memory.db default"
 
 
 # ===========================================================================
@@ -311,9 +291,7 @@ class TestFromAC_BareInvocation:
         _make_db(db, [{"id": eid, "content": "some content here"}])
         result = _run_approve(db_path=db)
         assert result.returncode == 0
-        assert eid[:8] in result.stdout, (
-            f"First 8 chars of ID ({eid[:8]!r}) must appear in table output"
-        )
+        assert eid[:8] in result.stdout, f"First 8 chars of ID ({eid[:8]!r}) must appear in table output"
 
     def test_bare_invocation_shows_category(self, tmp_path: Path) -> None:
         """AC4: table row contains entry category."""
@@ -331,9 +309,7 @@ class TestFromAC_BareInvocation:
         result = _run_approve(db_path=db)
         assert result.returncode == 0
         preview = long_content[:80]
-        assert preview in result.stdout, (
-            "First 80 chars of content must appear in table output"
-        )
+        assert preview in result.stdout, "First 80 chars of content must appear in table output"
 
     def test_bare_invocation_content_truncated_at_80(self, tmp_path: Path) -> None:
         """AC4: content preview is truncated to 80 chars (full 120-char string absent)."""
@@ -360,16 +336,17 @@ class TestFromAC_BareInvocation:
         pending_eid = str(uuid.uuid4())
         approved_eid = str(uuid.uuid4())
         db = tmp_path / "test.db"
-        _make_db(db, [
-            {"id": pending_eid, "content": "pending entry", "approval_state": "pending"},
-            {"id": approved_eid, "content": "approved entry", "approval_state": "approved"},
-        ])
+        _make_db(
+            db,
+            [
+                {"id": pending_eid, "content": "pending entry", "approval_state": "pending"},
+                {"id": approved_eid, "content": "approved entry", "approval_state": "approved"},
+            ],
+        )
         result = _run_approve(db_path=db)
         assert result.returncode == 0
         assert pending_eid[:8] in result.stdout, "Pending entry must be shown"
-        assert approved_eid[:8] not in result.stdout, (
-            "Approved entry must NOT appear in bare invocation (only pending)"
-        )
+        assert approved_eid[:8] not in result.stdout, "Approved entry must NOT appear in bare invocation (only pending)"
 
 
 # ===========================================================================
@@ -387,9 +364,7 @@ class TestFromAC_InteractiveMode:
         _make_db(db, [{"id": eid, "content": "approve me"}])
         result = _run_approve("--interactive", db_path=db, stdin="a\n")
         assert result.returncode == 0, f"--interactive with approve should exit 0: {result.stderr}"
-        assert _get_state(db, eid) == "approved", (
-            "'a' choice must result in approval_state=approved in DB"
-        )
+        assert _get_state(db, eid) == "approved", "'a' choice must result in approval_state=approved in DB"
 
     def test_interactive_reject_choice_sets_deleted(self, tmp_path: Path) -> None:
         """AC5: 'r' input in interactive mode calls set_approval_state(new_state=deleted)."""
@@ -398,9 +373,7 @@ class TestFromAC_InteractiveMode:
         _make_db(db, [{"id": eid, "content": "reject me"}])
         result = _run_approve("--interactive", db_path=db, stdin="r\n")
         assert result.returncode == 0, f"--interactive with reject should exit 0: {result.stderr}"
-        assert _get_state(db, eid) == "deleted", (
-            "'r' choice must result in approval_state=deleted in DB"
-        )
+        assert _get_state(db, eid) == "deleted", "'r' choice must result in approval_state=deleted in DB"
 
     def test_interactive_skip_choice_leaves_pending(self, tmp_path: Path) -> None:
         """AC5: 's' input in interactive mode skips the entry (no state change)."""
@@ -409,9 +382,7 @@ class TestFromAC_InteractiveMode:
         _make_db(db, [{"id": eid, "content": "skip me"}])
         result = _run_approve("--interactive", db_path=db, stdin="s\n")
         assert result.returncode == 0
-        assert _get_state(db, eid) == "pending", (
-            "'s' choice must leave approval_state=pending (no change)"
-        )
+        assert _get_state(db, eid) == "pending", "'s' choice must leave approval_state=pending (no change)"
 
     def test_interactive_processes_all_entries_in_sequence(self, tmp_path: Path) -> None:
         """AC5: interactive mode processes each pending entry in sequence."""
@@ -463,9 +434,7 @@ class TestFromAC_InteractiveMode:
         result = _run_approve("--interactive", db_path=db, stdin="a\n")
         assert result.returncode == 0
         # Summary must appear in stdout
-        assert "approved" in result.stdout.lower(), (
-            "Summary must be present after all entries are processed"
-        )
+        assert "approved" in result.stdout.lower(), "Summary must be present after all entries are processed"
 
 
 # ===========================================================================
@@ -483,9 +452,7 @@ class TestFromAC_BatchMode:
         _make_db(db, [{"id": eid, "content": "to approve"}])
         result = _run_approve("--approve", eid, db_path=db)
         assert result.returncode == 0
-        assert _get_state(db, eid) == "approved", (
-            "--approve must set approval_state=approved"
-        )
+        assert _get_state(db, eid) == "approved", "--approve must set approval_state=approved"
 
     def test_batch_approve_multiple_ids(self, tmp_path: Path) -> None:
         """AC7: --approve accepts multiple IDs and approves each one."""
@@ -495,9 +462,7 @@ class TestFromAC_BatchMode:
         result = _run_approve("--approve", *eids, db_path=db)
         assert result.returncode == 0
         for eid in eids:
-            assert _get_state(db, eid) == "approved", (
-                f"Entry {eid[:8]} must be approved after --approve"
-            )
+            assert _get_state(db, eid) == "approved", f"Entry {eid[:8]} must be approved after --approve"
 
     def test_batch_reject_sets_deleted_state(self, tmp_path: Path) -> None:
         """AC8: --reject <id> sets approval_state=deleted in the DB."""
@@ -506,9 +471,7 @@ class TestFromAC_BatchMode:
         _make_db(db, [{"id": eid, "content": "to reject"}])
         result = _run_approve("--reject", eid, db_path=db)
         assert result.returncode == 0
-        assert _get_state(db, eid) == "deleted", (
-            "--reject must set approval_state=deleted"
-        )
+        assert _get_state(db, eid) == "deleted", "--reject must set approval_state=deleted"
 
     def test_batch_reject_multiple_ids(self, tmp_path: Path) -> None:
         """AC8: --reject accepts multiple IDs and deletes each one."""
@@ -518,9 +481,7 @@ class TestFromAC_BatchMode:
         result = _run_approve("--reject", *eids, db_path=db)
         assert result.returncode == 0
         for eid in eids:
-            assert _get_state(db, eid) == "deleted", (
-                f"Entry {eid[:8]} must be deleted after --reject"
-            )
+            assert _get_state(db, eid) == "deleted", f"Entry {eid[:8]} must be deleted after --reject"
 
 
 # ===========================================================================
@@ -537,9 +498,7 @@ class TestFromAC_ErrorHandling:
         db = tmp_path / "test.db"
         _make_db(db)  # empty DB — no entries
         result = _run_approve("--approve", nonexistent_id, db_path=db)
-        assert result.stderr.strip() != "", (
-            "ToolError on nonexistent entry must be printed to stderr"
-        )
+        assert result.stderr.strip() != "", "ToolError on nonexistent entry must be printed to stderr"
         # stderr should mention the entry ID or 'not found'
         assert nonexistent_id[:8] in result.stderr or "not found" in result.stderr.lower(), (
             "stderr must reference the nonexistent entry"
@@ -565,24 +524,21 @@ class TestFromAC_ErrorHandling:
         _make_db(db, [{"id": eid, "content": "already approved", "approval_state": "approved"}])
         # Trying to approve an already-approved entry is a disallowed transition
         result = _run_approve("--approve", eid, db_path=db)
-        assert result.stderr.strip() != "", (
-            "Disallowed transition error must be printed to stderr"
-        )
-        assert "error" in result.stderr.lower(), (
-            "stderr must contain 'error' for disallowed transition"
-        )
+        assert result.stderr.strip() != "", "Disallowed transition error must be printed to stderr"
+        assert "error" in result.stderr.lower(), "stderr must contain 'error' for disallowed transition"
 
-    def test_error_path_b_processing_continues_after_disallowed_transition(
-        self, tmp_path: Path
-    ) -> None:
+    def test_error_path_b_processing_continues_after_disallowed_transition(self, tmp_path: Path) -> None:
         """AC10: processing continues to next entry after a disallowed transition error."""
         already_approved_eid = str(uuid.uuid4())
         valid_pending_eid = str(uuid.uuid4())
         db = tmp_path / "test.db"
-        _make_db(db, [
-            {"id": already_approved_eid, "content": "already done", "approval_state": "approved"},
-            {"id": valid_pending_eid, "content": "still pending"},
-        ])
+        _make_db(
+            db,
+            [
+                {"id": already_approved_eid, "content": "already done", "approval_state": "approved"},
+                {"id": valid_pending_eid, "content": "still pending"},
+            ],
+        )
         # First ID causes disallowed transition; second should still be approved
         _run_approve("--approve", already_approved_eid, valid_pending_eid, db_path=db)
         assert _get_state(db, valid_pending_eid) == "approved", (
@@ -622,9 +578,7 @@ class TestFromAC_CurationReport:
         # Do NOT create curation-report.json
         result = _run_approve(db_path=db)
         assert result.returncode == 0
-        assert result.stderr.strip() != "", (
-            "A warning must be printed to stderr when curation-report.json is absent"
-        )
+        assert result.stderr.strip() != "", "A warning must be printed to stderr when curation-report.json is absent"
 
     def test_curation_report_absent_no_recommendation_column(self, tmp_path: Path) -> None:
         """AC12: when curation-report.json is absent, table renders without recommendation."""
@@ -643,12 +597,8 @@ class TestFromAC_CurationReport:
         db = tmp_path / "data" / "memory" / "test.db"
         _make_db(db, [{"id": eid, "content": "still works"}])
         result = _run_approve(db_path=db)
-        assert result.returncode == 0, (
-            "CLI must not crash when curation-report.json is absent"
-        )
-        assert eid[:8] in result.stdout, (
-            "Entry must still be displayed when curation-report.json is absent"
-        )
+        assert result.returncode == 0, "CLI must not crash when curation-report.json is absent"
+        assert eid[:8] in result.stdout, "Entry must still be displayed when curation-report.json is absent"
 
 
 # ===========================================================================
@@ -680,9 +630,15 @@ class TestFromAC_MCPIntegration:
                     source, scope_agent, scope_project, approval_state, deleted_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL)""",
                 (
-                    eid, "mcp-test content", "knowledge", 0.8,
-                    "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00+00:00",
-                    "test", None, None,
+                    eid,
+                    "mcp-test content",
+                    "knowledge",
+                    0.8,
+                    "2026-01-01T00:00:00+00:00",
+                    "2026-01-01T00:00:00+00:00",
+                    "test",
+                    None,
+                    None,
                 ),
             )
             conn.commit()
@@ -697,9 +653,7 @@ class TestFromAC_MCPIntegration:
             list_result = await client.call_tool("list_entries", {"status": "pending"})
 
         text = list_result.content[0].text
-        assert eid in text, (
-            "list_entries must return the pending entry by ID via in-memory MCP transport"
-        )
+        assert eid in text, "list_entries must return the pending entry by ID via in-memory MCP transport"
 
     @pytest.mark.asyncio
     async def test_set_approval_state_roundtrip_via_in_memory_transport(self) -> None:
@@ -720,9 +674,15 @@ class TestFromAC_MCPIntegration:
                     source, scope_agent, scope_project, approval_state, deleted_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL)""",
                 (
-                    eid, "to be approved", "knowledge", 0.8,
-                    "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00+00:00",
-                    "test", None, None,
+                    eid,
+                    "to be approved",
+                    "knowledge",
+                    0.8,
+                    "2026-01-01T00:00:00+00:00",
+                    "2026-01-01T00:00:00+00:00",
+                    "test",
+                    None,
+                    None,
                 ),
             )
             conn.commit()
@@ -740,13 +700,9 @@ class TestFromAC_MCPIntegration:
             pending_after = await client.call_tool("list_entries", {"status": "pending"})
 
         approve_text = approve_result.content[0].text
-        assert "approved" in approve_text.lower(), (
-            "set_approval_state must confirm the transition to approved"
-        )
+        assert "approved" in approve_text.lower(), "set_approval_state must confirm the transition to approved"
         pending_text = pending_after.content[0].text
-        assert eid not in pending_text, (
-            "After approval, entry must no longer appear in pending list_entries result"
-        )
+        assert eid not in pending_text, "After approval, entry must no longer appear in pending list_entries result"
 
     @pytest.mark.asyncio
     async def test_custom_lifespan_uses_row_factory(self) -> None:
@@ -772,8 +728,7 @@ class TestFromAC_MCPIntegration:
             await client.call_tool("list_entries", {})
 
         assert row_factory_set, (
-            "Custom test lifespan must set conn.row_factory = sqlite3.Row "
-            "(required per AC13 for dict-keyed row access)"
+            "Custom test lifespan must set conn.row_factory = sqlite3.Row (required per AC13 for dict-keyed row access)"
         )
 
 
@@ -790,9 +745,7 @@ class TestFromAC_ExitCodes:
         db = tmp_path / "test.db"
         _make_db(db)
         result = _run_approve(db_path=db)
-        assert result.returncode == 0, (
-            "Bare invocation on empty DB must exit 0"
-        )
+        assert result.returncode == 0, "Bare invocation on empty DB must exit 0"
 
     def test_exit_code_0_batch_approve_success(self, tmp_path: Path) -> None:
         """AC14: --approve with valid IDs exits 0."""
@@ -800,9 +753,7 @@ class TestFromAC_ExitCodes:
         db = tmp_path / "test.db"
         _make_db(db, [{"id": eid, "content": "entry to approve"}])
         result = _run_approve("--approve", eid, db_path=db)
-        assert result.returncode == 0, (
-            "--approve with valid IDs must exit 0"
-        )
+        assert result.returncode == 0, "--approve with valid IDs must exit 0"
 
     def test_exit_code_0_interactive_no_errors(self, tmp_path: Path) -> None:
         """AC14: --interactive with valid choices exits 0."""
@@ -818,9 +769,7 @@ class TestFromAC_ExitCodes:
         db = tmp_path / "test.db"
         _make_db(db)  # empty DB
         result = _run_approve("--approve", nonexistent_id, db_path=db)
-        assert result.returncode == 1, (
-            "Must exit 1 when any operation fails (ToolError for nonexistent ID)"
-        )
+        assert result.returncode == 1, "Must exit 1 when any operation fails (ToolError for nonexistent ID)"
 
     def test_exit_code_1_on_disallowed_transition(self, tmp_path: Path) -> None:
         """AC15: exit code 1 when any operation fails (disallowed transition)."""
@@ -829,6 +778,4 @@ class TestFromAC_ExitCodes:
         _make_db(db, [{"id": eid, "approval_state": "approved"}])
         # Trying to approve an already-approved entry is a disallowed transition
         result = _run_approve("--approve", eid, db_path=db)
-        assert result.returncode == 1, (
-            "Must exit 1 when any operation results in a disallowed transition error"
-        )
+        assert result.returncode == 1, "Must exit 1 when any operation results in a disallowed transition error"

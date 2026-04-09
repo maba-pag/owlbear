@@ -90,7 +90,10 @@ class TestFromAC_AnalysisCLI:
 
     # AC: test_format_markdown_flag — --format markdown calls format_markdown
     def test_format_markdown_flag(self, capsys: pytest.CaptureFixture[str]) -> None:
-        with patch(f"{_CLI}.analyze", return_value=[]), patch(f"{_CLI}.format_markdown", return_value="No analysis proposals.") as mock_fmt:
+        with (
+            patch(f"{_CLI}.analyze", return_value=[]),
+            patch(f"{_CLI}.format_markdown", return_value="No analysis proposals.") as mock_fmt,
+        ):
             main(["--format", "markdown"])
         mock_fmt.assert_called_once()
         assert "No analysis proposals." in capsys.readouterr().out

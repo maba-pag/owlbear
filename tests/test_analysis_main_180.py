@@ -34,9 +34,7 @@ class TestFromAC_MainEntrypoint:
             capture_output=True,
             text=True,
         )
-        assert result.returncode == 0, (
-            f"Expected exit 0, got {result.returncode}. stderr={result.stderr!r}"
-        )
+        assert result.returncode == 0, f"Expected exit 0, got {result.returncode}. stderr={result.stderr!r}"
 
     def test_module_run_no_proposals_json(self, tmp_path: Path) -> None:
         """AC: no proposals with json format prints []; __main__ delegates to _cli.main()."""
@@ -46,18 +44,19 @@ class TestFromAC_MainEntrypoint:
             text=True,
         )
         assert result.returncode == 0, f"Expected exit 0, got {result.returncode}"
-        assert result.stdout.strip() == "[]", (
-            f"Expected '[]' on stdout, got: {result.stdout!r}"
-        )
+        assert result.stdout.strip() == "[]", f"Expected '[]' on stdout, got: {result.stdout!r}"
 
     def test_module_run_no_proposals_markdown(self, tmp_path: Path) -> None:
         """AC: no proposals with markdown format prints 'No analysis proposals.'"""
         result = subprocess.run(
             [
                 sys.executable,
-                "-m", "owlbear_orchestrator.analysis",
-                "--audit-dir", str(tmp_path),
-                "--format", "markdown",
+                "-m",
+                "owlbear_orchestrator.analysis",
+                "--audit-dir",
+                str(tmp_path),
+                "--format",
+                "markdown",
             ],
             capture_output=True,
             text=True,
@@ -80,9 +79,7 @@ class TestFromAC_MainEntrypoint:
             text=True,
         )
         assert result.returncode == 1, f"Expected exit 1, got {result.returncode}"
-        assert "Error:" in result.stderr, (
-            f"Expected 'Error:' in stderr, got: {result.stderr!r}"
-        )
+        assert "Error:" in result.stderr, f"Expected 'Error:' in stderr, got: {result.stderr!r}"
         assert result.stdout == "", f"Expected empty stdout on error, got: {result.stdout!r}"
 
     def test_module_run_stdout_is_valid_json(self, tmp_path: Path) -> None:

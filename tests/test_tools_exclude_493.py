@@ -307,9 +307,7 @@ class TestFromAC_KnowledgeLifespanExclusion:
         with ExitStack() as stack:
             for p in _knowledge_patches():
                 stack.enter_context(p)
-            mock_apply = stack.enter_context(
-                patch("owlbear_mcp_knowledge.server._apply_tool_exclusions")
-            )
+            mock_apply = stack.enter_context(patch("owlbear_mcp_knowledge.server._apply_tool_exclusions"))
             async with knowledge_app_lifespan(mock_server):
                 mock_apply.assert_called_once()
 
@@ -320,9 +318,7 @@ class TestFromAC_KnowledgeLifespanExclusion:
         with ExitStack() as stack:
             for p in _knowledge_patches():
                 stack.enter_context(p)
-            mock_apply = stack.enter_context(
-                patch("owlbear_mcp_knowledge.server._apply_tool_exclusions")
-            )
+            mock_apply = stack.enter_context(patch("owlbear_mcp_knowledge.server._apply_tool_exclusions"))
             async with knowledge_app_lifespan(mock_server):
                 call_args = mock_apply.call_args
                 assert call_args is not None
@@ -348,9 +344,7 @@ class TestFromAC_KnowledgeLifespanExclusion:
         with ExitStack() as stack:
             for p in _knowledge_patches():
                 stack.enter_context(p)
-            stack.enter_context(
-                patch.dict(os.environ, {"KNOWLEDGE_TOOLS_EXCLUDE": "search_knowledge"})
-            )
+            stack.enter_context(patch.dict(os.environ, {"KNOWLEDGE_TOOLS_EXCLUDE": "search_knowledge"}))
             async with knowledge_app_lifespan(mock_server):
                 pass
         mock_server.remove_tool.assert_called_with("search_knowledge")

@@ -383,12 +383,8 @@ class TestFromAC_BookmarkStoreList:  # noqa: N801
 
     def test_list_all_three_filters_combined(self) -> None:
         store = BookmarkStore(_make_db())
-        match = _make_bookmark(
-            url="https://match.com", scope="project", tags=["ml"], relevance_score=0.8
-        )
-        low_score = _make_bookmark(
-            url="https://low.com", scope="project", tags=["ml"], relevance_score=0.2
-        )
+        match = _make_bookmark(url="https://match.com", scope="project", tags=["ml"], relevance_score=0.8)
+        low_score = _make_bookmark(url="https://low.com", scope="project", tags=["ml"], relevance_score=0.2)
         store.create(match)
         store.create(low_score)
         results = store.list(scope="project", tag="ml", min_score=0.7)

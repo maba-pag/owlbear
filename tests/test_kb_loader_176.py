@@ -180,9 +180,7 @@ class TestFromAC_DisabledSourceSkip:
     """Sources with enabled=false must not be registered or ingested."""
 
     @pytest.mark.asyncio
-    async def test_disabled_source_not_registered_in_source_store(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_disabled_source_not_registered_in_source_store(self, tmp_path: Path) -> None:
         """source_store.create() is NOT called for entries with enabled=false."""
         (tmp_path / "doc.md").write_text("content")
         manifest_file = _write_manifest(
@@ -238,9 +236,7 @@ sources:
         mock_pipeline.ingest.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_mix_enabled_disabled_only_enabled_processed(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_mix_enabled_disabled_only_enabled_processed(self, tmp_path: Path) -> None:
         """With one enabled and one disabled source, only the enabled one is processed."""
         (tmp_path / "a.md").write_text("enabled content")
         manifest_file = _write_manifest(
@@ -310,14 +306,10 @@ sources:
         )
 
         _, kwargs = mock_pipeline.ingest.call_args
-        assert kwargs.get("scope") == "research", (
-            "ingest() must be called with scope='research'"
-        )
+        assert kwargs.get("scope") == "research", "ingest() must be called with scope='research'"
 
     @pytest.mark.asyncio
-    async def test_default_scope_global_passed_to_ingest_when_omitted(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_default_scope_global_passed_to_ingest_when_omitted(self, tmp_path: Path) -> None:
         """When scope is absent from manifest, ingest() receives scope='global'."""
         (tmp_path / "doc.md").write_text("content")
         manifest_file = _write_manifest(
@@ -377,9 +369,7 @@ sources:
         )
 
         assert mock_pipeline.ingest.call_count == 2
-        scopes_used = [
-            c.kwargs.get("scope") for c in mock_pipeline.ingest.call_args_list
-        ]
+        scopes_used = [c.kwargs.get("scope") for c in mock_pipeline.ingest.call_args_list]
         assert "alpha" in scopes_used
         assert "beta" in scopes_used
 
@@ -412,9 +402,7 @@ sources:
 
         assert mock_pipeline.ingest.call_count == 2
         for c in mock_pipeline.ingest.call_args_list:
-            assert c.kwargs.get("scope") == "docs", (
-                "Every ingest() call must use scope='docs'"
-            )
+            assert c.kwargs.get("scope") == "docs", "Every ingest() call must use scope='docs'"
 
 
 # ---------------------------------------------------------------------------
@@ -429,9 +417,7 @@ class TestFromAC_InitialSourcesYaml:
 
     def test_initial_sources_yaml_exists(self) -> None:
         """data/knowledge/general/sources.yaml must exist in the repository."""
-        assert self._MANIFEST_PATH.exists(), (
-            f"Expected initial sources manifest at {self._MANIFEST_PATH}"
-        )
+        assert self._MANIFEST_PATH.exists(), f"Expected initial sources manifest at {self._MANIFEST_PATH}"
 
     def test_initial_sources_yaml_is_valid(self) -> None:
         """The initial sources.yaml must be parseable by parse_manifest without error."""
@@ -444,27 +430,21 @@ class TestFromAC_InitialSourcesYaml:
         content = self._MANIFEST_PATH.read_text(encoding="utf-8")
         entries = parse_manifest(content)
         globs = [e.config.get("glob", "") for e in entries]
-        assert any("docs/research" in g for g in globs), (
-            f"No glob for docs/research/*.md found in {globs}"
-        )
+        assert any("docs/research" in g for g in globs), f"No glob for docs/research/*.md found in {globs}"
 
     def test_initial_manifest_includes_skills_glob(self) -> None:
         """sources.yaml must include a source with glob matching skills/*/SKILL.md."""
         content = self._MANIFEST_PATH.read_text(encoding="utf-8")
         entries = parse_manifest(content)
         globs = [e.config.get("glob", "") for e in entries]
-        assert any("skills" in g and "SKILL" in g for g in globs), (
-            f"No glob for skills/*/SKILL.md found in {globs}"
-        )
+        assert any("skills" in g and "SKILL" in g for g in globs), f"No glob for skills/*/SKILL.md found in {globs}"
 
     def test_initial_manifest_includes_instructions_glob(self) -> None:
         """sources.yaml must include a source with glob matching instructions/*.md."""
         content = self._MANIFEST_PATH.read_text(encoding="utf-8")
         entries = parse_manifest(content)
         globs = [e.config.get("glob", "") for e in entries]
-        assert any("instructions" in g for g in globs), (
-            f"No glob for instructions/*.md found in {globs}"
-        )
+        assert any("instructions" in g for g in globs), f"No glob for instructions/*.md found in {globs}"
 
 
 # ---------------------------------------------------------------------------
@@ -509,9 +489,7 @@ class TestFromAC_ModuleInvocation:
             "got code 0 (likely missing __main__ guard)"
         )
 
-    def test_module_invocation_with_valid_manifest_exits_zero(
-        self, tmp_path: Path
-    ) -> None:
+    def test_module_invocation_with_valid_manifest_exits_zero(self, tmp_path: Path) -> None:
         """Running the module via runpy with --manifest must exit 0 on success.
 
         Simulates: python -m owlbear_knowledge.loader --manifest <path>
@@ -530,9 +508,7 @@ class TestFromAC_ModuleInvocation:
             pytest.raises(SystemExit) as exc_info,
         ):
             runpy.run_module("owlbear_knowledge.loader", run_name="__main__")
-        assert exc_info.value.code == 0, (
-            "python -m owlbear_knowledge.loader --manifest <path> must exit 0 on success"
-        )
+        assert exc_info.value.code == 0, "python -m owlbear_knowledge.loader --manifest <path> must exit 0 on success"
 
 
 # ---------------------------------------------------------------------------

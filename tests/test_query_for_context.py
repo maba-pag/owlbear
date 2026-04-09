@@ -135,9 +135,7 @@ class TestFromAC_QueryForContext:
     def test_returns_none_when_all_chunks_below_threshold(self) -> None:
         """AC: returns None when all chunk scores are below the similarity threshold."""
         retriever = _mock_retriever(chunks=[("doc1", 0.1), ("doc2", 0.05)])
-        graph_store = _mock_graph_store(
-            {"doc1": ("T1", "Content one"), "doc2": ("T2", "Content two")}
-        )
+        graph_store = _mock_graph_store({"doc1": ("T1", "Content one"), "doc2": ("T2", "Content two")})
 
         result = query_for_context(
             "irrelevant query",

@@ -81,9 +81,7 @@ class TestFromAC_LLMExtractorWiring:
         assert kwargs["extractor"] is mock_llm_instance
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_constructed_with_owlbear_model_env_var(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llm_extractor_constructed_with_owlbear_model_env_var(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLMExtractor is constructed using the OWLBEAR_MODEL environment variable value."""
         monkeypatch.setenv("OWLBEAR_MODEL", "gpt-4-turbo")
         mock_llm_cls = MagicMock()
@@ -290,9 +288,7 @@ class TestFromAC_SearchKnowledgeEntityType:
 
         assert isinstance(results, list)
         assert len(results) >= 1
-        assert "entity_type" in results[0], (
-            "search_knowledge result dicts must include 'entity_type' key"
-        )
+        assert "entity_type" in results[0], "search_knowledge result dicts must include 'entity_type' key"
 
     @pytest.mark.asyncio
     async def test_search_knowledge_entity_type_value_matches_source_result(self) -> None:
@@ -367,9 +363,7 @@ class TestFromAC_LLMExtractorImportError:
             async with app_lifespan(MagicMock()) as ctx:
                 ctx_yielded = ctx
 
-        assert ctx_yielded is not None, (
-            "app_lifespan must yield a valid AppContext even after LLMExtractor ImportError"
-        )
+        assert ctx_yielded is not None, "app_lifespan must yield a valid AppContext even after LLMExtractor ImportError"
 
     @pytest.mark.asyncio
     async def test_fallback_entity_extractor_constructed_without_extractor_kwarg(
@@ -419,8 +413,7 @@ class TestFromAC_PyprojectDependency:
             config = tomllib.load(f)
         deps: list[str] = config["project"]["dependencies"]
         assert any("owlbear-knowledge[llm]" in d for d in deps), (
-            "owlbear-mcp-knowledge must declare owlbear-knowledge[llm] as a dependency. "
-            f"Current dependencies: {deps}"
+            f"owlbear-mcp-knowledge must declare owlbear-knowledge[llm] as a dependency. Current dependencies: {deps}"
         )
 
 
@@ -486,6 +479,4 @@ class TestFromAC_GracefulDegradation:
             async with app_lifespan(MagicMock()) as ctx:
                 ctx_yielded = ctx
 
-        assert ctx_yielded is not None, (
-            "app_lifespan must yield a valid AppContext when OWLBEAR_MODEL is not set"
-        )
+        assert ctx_yielded is not None, "app_lifespan must yield a valid AppContext when OWLBEAR_MODEL is not set"

@@ -1,4 +1,4 @@
-﻿"""Tests for pick_tasks MCP tool: gate logic, output format, null-body safety, and tag passthrough.
+"""Tests for pick_tasks MCP tool: gate logic, output format, null-body safety, and tag passthrough.
 
 Consolidated from tasks #620, #621, #628.
 """
@@ -364,20 +364,26 @@ class TestFromAC_PickTasksEdgeCases:
     async def test_nonzero_rc_raises_tool_error(self) -> None:
         """When _run_kanban returns rc!=0, pick_tasks raises ToolError."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            AsyncMock(return_value=("", "kanban-md: board not found", 1)),
-        ), pytest.raises(ToolError):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                AsyncMock(return_value=("", "kanban-md: board not found", 1)),
+            ),
+            pytest.raises(ToolError),
+        ):
             await pick_tasks(mcp_ctx)
 
     @pytest.mark.asyncio
     async def test_malformed_json_raises_tool_error(self) -> None:
         """When _run_kanban returns invalid JSON, pick_tasks raises ToolError."""
         mcp_ctx = _make_mcp_ctx()
-        with patch(
-            "owlbear_mcp_kanban.server._run_kanban",
-            AsyncMock(return_value=("{not-valid-json", "", 0)),
-        ), pytest.raises(ToolError):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server._run_kanban",
+                AsyncMock(return_value=("{not-valid-json", "", 0)),
+            ),
+            pytest.raises(ToolError),
+        ):
             await pick_tasks(mcp_ctx)
 
 
