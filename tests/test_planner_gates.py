@@ -1,12 +1,6 @@
-"""Failing tests for task #207: planner gate checker functions (TDD RED).
+"""Tests for planner gate checker functions: atomicity, TDD, clarity, and composite gates.
 
-Covers the interface contract from AC:
-  - check_atomicity(): word-boundary 'and' detection in titles
-  - check_tdd(): in-progress task must have '## Test-Writer Notes' in body
-  - check_clarity(): bullet/numbered AC required (ideation/backlog exempt)
-  - check_gates(): composite gate — True iff all three pass
-
-All tests FAIL in RED phase — ImportError expected until builder implements #145.
+Consolidated from tasks #207, #630, #661.
 """
 
 from __future__ import annotations
@@ -189,3 +183,69 @@ class TestFromAC_CheckGates:
             body="Just prose, no acceptance criteria",
         )
         assert check_gates(task) is False
+
+
+# ---------------------------------------------------------------------------
+# Non-impl tag exemptions (from #630)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTDD_NonImplTagExemption:
+    """check_tdd() returns True for in-progress tasks with non-impl tags, even without TW notes."""
+
+    def test_quality_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["quality"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_research_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["research"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_docs_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["docs"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_agent_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["agent"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_type_test_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["type:test"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_type_config_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["type:config"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_type_docs_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["type:docs"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_test_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["test"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+    def test_mixed_tags_one_non_impl_passes(self) -> None:
+        task = _task(status="in-progress", tags=["quality", "scope:mcp", "phase-2"], body="## AC\n- do something")
+        assert check_tdd(task) is True
+
+
+# ---------------------------------------------------------------------------
+# User-action tag exemption (from #661)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckTDD_UserActionExemption:
+    """check_tdd() returns True for in-progress type:user-action tasks without TW notes."""
+
+    def test_user_action_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["type:user-action"], body="## AC\n- manually verify X")
+        assert check_tdd(task) is True
+
+    def test_user_action_combined_with_scope_tag_passes(self) -> None:
+        task = _task(status="in-progress", tags=["type:user-action", "scope:teams", "phase-3"], body="## AC\n- verify")
+        assert check_tdd(task) is True
+
+    def test_user_action_empty_body_passes(self) -> None:
+        task = _task(status="in-progress", tags=["type:user-action"], body="no structured content")
+        assert check_tdd(task) is True
