@@ -122,3 +122,63 @@ sources:
 """
         with pytest.raises(strictyaml.YAMLValidationError):
             parse_manifest(manifest_yaml)
+
+
+# ---------------------------------------------------------------------------
+# AC4 — All crawl-specific tests removed from the three key test files
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CrawlTestsRemoved:  # noqa: N801
+    """No crawl test functions or methods must remain in the three affected test files."""
+
+    @pytest.mark.parametrize(
+        "test_file",
+        [
+            "tests/test_bookmark_pipeline_136.py",
+            "tests/test_refresh_555.py",
+            "tests/test_refresh_orchestrator.py",
+        ],
+    )
+    def test_no_crawl_test_functions_remain(self, test_file: str) -> None:
+        """No function/method with 'crawl' in its name must remain in each file."""
+        import ast
+        from pathlib import Path
+
+        source = Path(test_file).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        crawl_tests = [
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+            and "crawl" in node.name.lower()
+        ]
+        assert crawl_tests == [], (
+            f"{test_file} still contains crawl test functions: {crawl_tests} — AC4 not satisfied"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC6 — No CRAWL / crawl_handler references remain in knowledge engine source
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_NoSourceCrawlRefs:  # noqa: N801
+    """Knowledge engine source must contain zero references to CRAWL or crawl_handler."""
+
+    def test_no_crawl_references_in_knowledge_source(self) -> None:
+        """serve/knowledge/src/ must not contain 'CRAWL' or 'crawl_handler'."""
+        from pathlib import Path
+
+        src_root = Path("serve/knowledge/src")
+        violations: list[str] = []
+        for py_file in src_root.rglob("*.py"):
+            text = py_file.read_text(encoding="utf-8")
+            for pattern in ("CRAWL", "crawl_handler"):
+                if pattern in text:
+                    violations.append(f"{py_file}: contains '{pattern}'")
+        assert violations == [], (
+            "Crawl references found in knowledge engine source:\n"
+            + "\n".join(violations)
+            + "\n— AC6 not satisfied"
+        )
