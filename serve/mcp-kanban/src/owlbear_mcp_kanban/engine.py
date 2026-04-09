@@ -11,6 +11,9 @@ Architecture:
   - create_task() allocates next_id, writes a new task file, increments config.
   - edit_task() modifies task fields in-place; slug/filename never changes.
   - move_task() changes status; "archived" moves file to v1-archive/.
+  - claim_task() marks a task as claimed by this engine's agent_name; rejects
+    blocked tasks and rival claims within the configured timeout window.
+  - release_task() clears claimed_by and claimed_at fields unconditionally.
 """
 
 from __future__ import annotations
