@@ -353,6 +353,39 @@ class TestFromAC_EditTask:
         assert after.title == before.title
         assert after.status == before.status
 
+    # --- AC: updated timestamp changes on edit ------------------------------
+
+    def test_edit_task_updated_timestamp_changes(self, engine: KanbanEngine, task_id: str) -> None:
+        """edit_task must write a new 'updated' timestamp — it must differ from before."""
+        import time
+
+        before_updated = engine.show_task(task_id).updated
+        time.sleep(0.01)  # ensure wall-clock advances before write
+        result = engine.edit_task(task_id, title="Timestamp change probe")
+        assert result.updated is not None
+        assert result.updated != before_updated, (
+            "edit_task must update the 'updated' field to a newer timestamp"
+        )
+
+    # --- AC: slug frozen at creation — filename unchanged after title edit --
+
+    def test_edit_title_does_not_rename_task_file(
+        self, kanban_dir: Path, engine: KanbanEngine
+    ) -> None:
+        """Slug frozen at creation: editing the title must not rename the task file."""
+        record = engine.create_task("Slug Freeze Original")
+        tasks_dir = kanban_dir / "tasks"
+        original_name = next(tasks_dir.glob("*.md")).name
+
+        engine.edit_task(str(record.id), title="Completely Different New Title")
+
+        remaining = list(tasks_dir.glob("*.md"))
+        assert len(remaining) == 1, "File count changed — edit_task must not create/delete files"
+        assert remaining[0].name == original_name, (
+            f"Slug frozen: filename must not change on title edit. "
+            f"Expected {original_name!r}, got {remaining[0].name!r}"
+        )
+
 
 # ===========================================================================
 # TestFromAC_MoveTask — AC5 + AC6 + AC7
