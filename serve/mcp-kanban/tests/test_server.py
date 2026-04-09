@@ -644,9 +644,8 @@ class TestFromAC_EditTaskAutoClaim:
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(side_effect=call_results),
-        ):
-            with pytest.raises(ToolError, match="is claimed by"):
-                await edit_task(mcp_ctx, task_id="42", append_body="notes")
+        ), pytest.raises(ToolError, match="is claimed by"):
+            await edit_task(mcp_ctx, task_id="42", append_body="notes")
 
     @pytest.mark.asyncio
     async def test_auto_claim_propagates_error_when_agent_name_fails(self) -> None:
@@ -660,9 +659,8 @@ class TestFromAC_EditTaskAutoClaim:
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(side_effect=call_results),
-        ):
-            with pytest.raises(ToolError, match="is claimed by"):
-                await edit_task(mcp_ctx, task_id="42", append_body="notes")
+        ), pytest.raises(ToolError, match="is claimed by"):
+            await edit_task(mcp_ctx, task_id="42", append_body="notes")
 
     @pytest.mark.asyncio
     async def test_no_retry_on_non_claim_error(self) -> None:
@@ -671,9 +669,8 @@ class TestFromAC_EditTaskAutoClaim:
         with patch(
             "owlbear_mcp_kanban.server._run_kanban",
             new=AsyncMock(return_value=("", "some other error", 1)),
-        ) as mock_run:
-            with pytest.raises(ToolError, match="some other error"):
-                await edit_task(mcp_ctx, task_id="42", append_body="notes")
+        ) as mock_run, pytest.raises(ToolError, match="some other error"):
+            await edit_task(mcp_ctx, task_id="42", append_body="notes")
         # Only 1 call — no agent-name or retry
         assert mock_run.call_count == 1
 
