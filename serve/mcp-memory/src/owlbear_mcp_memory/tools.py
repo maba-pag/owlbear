@@ -241,8 +241,8 @@ async def set_approval_state(
     """Transition a memory entry to a new approval_state.
 
     Allowed transitions: pending→approved, pending→deleted, deleted→pending.
-    Returns a success message string on success, or an 'error: ...' string
-    for disallowed transitions (including same-state and invalid states).
+    Returns a success message string on success.
+    Raises ToolError for disallowed transitions (including same-state and invalid states).
     Raises ToolError if the entry_id does not exist.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
@@ -261,9 +261,8 @@ async def set_approval_state(
         raise ToolError(msg)
 
     if (current_state, new_state) not in _VALID_TRANSITIONS:
-        return (
-            f"error: transition from '{current_state}' to '{new_state}' is not allowed"
-        )
+        msg = f"transition from '{current_state}' to '{new_state}' is not allowed"
+        raise ToolError(msg)
 
     now = _now_utc()
     deleted_at: str | None = now if new_state == "deleted" else None

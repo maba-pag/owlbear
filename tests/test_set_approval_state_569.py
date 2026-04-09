@@ -213,87 +213,63 @@ class TestFromAC_InvalidTransitions:
 
     @pytest.mark.asyncio
     async def test_approved_to_pending_returns_soft_error(self) -> None:
-        """AC-T4: approved → pending is not allowed; must return error: string."""
+        """AC-T4: approved → pending is not allowed; must raise ToolError."""
         conn = _make_conn()
         eid = _insert_entry(conn, approval_state="approved")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=eid, new_state="pending")
-
-        assert isinstance(result, str), "set_approval_state must return a str on soft error"
-        assert result.startswith("error:"), (
-            f"Expected soft error for approved→pending, got {result!r}"
-        )
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=eid, new_state="pending")
 
     @pytest.mark.asyncio
     async def test_approved_to_deleted_returns_soft_error(self) -> None:
-        """AC-T5: approved → deleted is not allowed; must return error: string."""
+        """AC-T5: approved → deleted is not allowed; must raise ToolError."""
         conn = _make_conn()
         eid = _insert_entry(conn, approval_state="approved")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=eid, new_state="deleted")
-
-        assert isinstance(result, str)
-        assert result.startswith("error:"), (
-            f"Expected soft error for approved→deleted, got {result!r}"
-        )
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=eid, new_state="deleted")
 
     @pytest.mark.asyncio
     async def test_deleted_to_approved_returns_soft_error(self) -> None:
-        """AC-T6: deleted → approved is not allowed; must return error: string."""
+        """AC-T6: deleted → approved is not allowed; must raise ToolError."""
         conn = _make_conn()
         eid = _insert_entry(conn, approval_state="deleted", deleted_at="2026-01-01T00:00:00Z")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=eid, new_state="approved")
-
-        assert isinstance(result, str)
-        assert result.startswith("error:"), (
-            f"Expected soft error for deleted→approved, got {result!r}"
-        )
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=eid, new_state="approved")
 
     @pytest.mark.asyncio
     async def test_pending_to_pending_returns_soft_error(self) -> None:
-        """AC-T7: pending → pending (same-state) is not allowed; must return error: string."""
+        """AC-T7: pending → pending (same-state) is not allowed; must raise ToolError."""
         conn = _make_conn()
         eid = _insert_entry(conn, approval_state="pending")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=eid, new_state="pending")
-
-        assert isinstance(result, str)
-        assert result.startswith("error:"), (
-            f"Expected soft error for pending→pending, got {result!r}"
-        )
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=eid, new_state="pending")
 
     @pytest.mark.asyncio
     async def test_approved_to_approved_returns_soft_error(self) -> None:
-        """AC-T8: approved → approved (same-state) is not allowed; must return error: string."""
+        """AC-T8: approved → approved (same-state) is not allowed; must raise ToolError."""
         conn = _make_conn()
         eid = _insert_entry(conn, approval_state="approved")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=eid, new_state="approved")
-
-        assert isinstance(result, str)
-        assert result.startswith("error:"), (
-            f"Expected soft error for approved→approved, got {result!r}"
-        )
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=eid, new_state="approved")
 
     @pytest.mark.asyncio
     async def test_deleted_to_deleted_returns_soft_error(self) -> None:
-        """AC-T9: deleted → deleted (same-state) is not allowed; must return error: string."""
+        """AC-T9: deleted → deleted (same-state) is not allowed; must raise ToolError."""
         conn = _make_conn()
         eid = _insert_entry(conn, approval_state="deleted", deleted_at="2026-01-01T00:00:00Z")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=eid, new_state="deleted")
-
-        assert isinstance(result, str)
-        assert result.startswith("error:"), (
-            f"Expected soft error for deleted→deleted, got {result!r}"
-        )
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=eid, new_state="deleted")
 
 
 # ---------------------------------------------------------------------------
@@ -306,19 +282,20 @@ class TestFromAC_ErrorFormat:
 
     @pytest.mark.asyncio
     async def test_invalid_transition_message_format(self) -> None:
-        """AC-T10: soft error must contain 'transition from' and 'is not allowed'."""
+        """AC-T10: ToolError message must contain 'transition from' and 'is not allowed'."""
         conn = _make_conn()
         eid = _insert_entry(conn, approval_state="approved")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=eid, new_state="pending")
+        with pytest.raises(ToolError) as exc_info:
+            await set_approval_state(ctx, entry_id=eid, new_state="pending")
 
-        assert isinstance(result, str)
-        assert "transition from" in result.lower(), (
-            f"Error message must contain 'transition from', got: {result!r}"
+        msg = str(exc_info.value)
+        assert "transition from" in msg.lower(), (
+            f"Error message must contain 'transition from', got: {msg!r}"
         )
-        assert "is not allowed" in result.lower(), (
-            f"Error message must contain 'is not allowed', got: {result!r}"
+        assert "is not allowed" in msg.lower(), (
+            f"Error message must contain 'is not allowed', got: {msg!r}"
         )
 
 

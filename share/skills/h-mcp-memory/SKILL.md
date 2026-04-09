@@ -89,7 +89,7 @@ Returns: `list[dict]` or `error: {msg}`.
 
 ## set_approval_state
 
-Transitions an entry's approval state. Raises `ToolError` if the entry does not exist. Returns `error: ...` string for disallowed or same-state transitions.
+Transitions an entry's approval state. Raises `ToolError` if the entry does not exist. Raises `ToolError` for disallowed or same-state transitions.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -98,7 +98,7 @@ Transitions an entry's approval state. Raises `ToolError` if the entry does not 
 
 **Allowed transitions:** `pending → approved`, `pending → deleted`, `deleted → pending`.
 
-Returns: success message string, or `error: {msg}` for disallowed transitions. Raises `ToolError` if entry not found.
+Returns: success message string. Raises `ToolError` for disallowed transitions or if entry not found.
 
 ## mark_for_deletion
 

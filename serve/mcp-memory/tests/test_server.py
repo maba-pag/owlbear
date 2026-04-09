@@ -161,40 +161,35 @@ class TestFromAC_ApprovalStateMachine:
 
     @pytest.mark.asyncio
     async def test_approved_to_pending_is_rejected(self) -> None:
-        """AC2: approved→pending is not a valid transition and returns error string."""
+        """AC2: approved→pending is not a valid transition and raises ToolError."""
         conn = _make_conn()
         entry_id = _insert_entry(conn, approval_state="approved")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=entry_id, new_state="pending")
+        with pytest.raises(ToolError) as exc_info:
+            await set_approval_state(ctx, entry_id=entry_id, new_state="pending")
 
-        assert isinstance(result, str)
-        assert result.startswith("error:")
-        assert "approved" in result
+        assert "approved" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_approved_to_deleted_is_rejected(self) -> None:
-        """AC2: approved→deleted is not a valid transition and returns error string."""
+        """AC2: approved→deleted is not a valid transition and raises ToolError."""
         conn = _make_conn()
         entry_id = _insert_entry(conn, approval_state="approved")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=entry_id, new_state="deleted")
-
-        assert isinstance(result, str)
-        assert result.startswith("error:")
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=entry_id, new_state="deleted")
 
     @pytest.mark.asyncio
     async def test_same_state_transition_is_rejected(self) -> None:
-        """AC2: pending→pending (same state) is not a valid transition."""
+        """AC2: pending→pending (same state) is not a valid transition and raises ToolError."""
         conn = _make_conn()
         entry_id = _insert_entry(conn, approval_state="pending")
         ctx = _make_mcp_ctx(_make_app_ctx(conn))
 
-        result = await set_approval_state(ctx, entry_id=entry_id, new_state="pending")
-
-        assert isinstance(result, str)
-        assert result.startswith("error:")
+        with pytest.raises(ToolError):
+            await set_approval_state(ctx, entry_id=entry_id, new_state="pending")
 
     @pytest.mark.asyncio
     async def test_nonexistent_entry_raises_tool_error(self) -> None:

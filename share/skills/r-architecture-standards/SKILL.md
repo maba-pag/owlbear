@@ -40,6 +40,20 @@ All custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memor
 - MCP tools catch specific exceptions, never bare `except Exception`.
 - Never expose raw tracebacks, tokens, or internal paths in tool responses.
 
+#### Anti-pattern: double-prefix
+
+**Never** pass an `"error: "` prefix in the message string to `ToolError`. The MCP transport already marks the response `isError: true` — the prefix is redundant and creates duplicate `"error: error: ..."` rendering in clients.
+
+```python
+# WRONG — double-prefix anti-pattern
+raise ToolError("error: source store not available")
+
+# CORRECT — bare message
+raise ToolError("source store not available")
+```
+
+This applies to all `ToolError` calls regardless of context. The same `"error: "` prefix rule still applies to soft-error *return strings* from `str`-return tools.
+
 ### Tool Annotations
 
 Every tool declares three annotation fields in its `ToolAnnotations`:

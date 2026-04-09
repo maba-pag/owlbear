@@ -15,6 +15,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 import owlbear_mcp_knowledge.server as _server_module
 from owlbear_mcp_knowledge.server import (
@@ -64,13 +65,18 @@ class TestFromAC_NullSafetyGuards:
 
     @pytest.mark.asyncio
     async def test_list_sources_returns_error_when_source_store_is_none(self) -> None:
-        """list_sources must return 'error: source store not available' when source_store is None."""
+        """list_sources must raise ToolError (no 'error: ' prefix) when source_store is None."""
         ctx = _make_ctx(source_store=None)
 
-        result = await list_sources(ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await list_sources(ctx)
 
-        assert result == "error: source store not available", (
-            f"Expected error string for None source_store, got: {result!r}"
+        msg = str(exc_info.value)
+        assert not msg.startswith("error:"), (
+            f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
+        )
+        assert "source store not available" in msg, (
+            f"Expected 'source store not available' in message, got: {msg!r}"
         )
 
     # -- list_entities: graph_store=None --------------------------------------
@@ -108,13 +114,18 @@ class TestFromAC_NullSafetyGuards:
 
     @pytest.mark.asyncio
     async def test_get_stats_returns_error_when_graph_store_is_none(self) -> None:
-        """get_stats must return 'error: graph store not available' when graph_store is None."""
+        """get_stats must raise ToolError (no 'error: ' prefix) when graph_store is None."""
         ctx = _make_ctx(graph_store=None)
 
-        result = await get_stats(ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await get_stats(ctx)
 
-        assert result == "error: graph store not available", (
-            f"Expected error string for None graph_store, got: {result!r}"
+        msg = str(exc_info.value)
+        assert not msg.startswith("error:"), (
+            f"ToolError message must not carry 'error:' prefix; got: {msg!r}"
+        )
+        assert "graph store not available" in msg, (
+            f"Expected 'graph store not available' in message, got: {msg!r}"
         )
 
     # -- ingest_document: ingest_pipeline=None --------------------------------
