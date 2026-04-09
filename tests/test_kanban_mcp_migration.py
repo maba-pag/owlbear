@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_mcp_kanban.engine import KanbanEngine
 from owlbear_mcp_kanban.engine_models import TaskRecord
@@ -712,3 +713,121 @@ class TestFromAC_TaskRecordConversion:
         assert result.blocked is True
         assert result.block_reason == "waiting for review"
         assert "kanban" in result.tags
+
+
+# ===========================================================================
+# TestBuilderDiscovered
+# ===========================================================================
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered edge cases to reach ≥90% coverage on server.py."""
+
+    # edit_task guards
+    @pytest.mark.asyncio
+    async def test_edit_task_depends_on_guard_raises_tool_error(self) -> None:
+        """edit_task raises ToolError when depends_on= is passed (guard present)."""
+        app_ctx = _make_engine_app_ctx(edit_task=_MINIMAL_TASK_RECORD)
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError, match="depends_on"):
+            await edit_task(mcp_ctx, task_id="1", depends_on="42")
+
+    @pytest.mark.asyncio
+    async def test_edit_task_tags_guard_raises_tool_error(self) -> None:
+        """edit_task raises ToolError when tags= is passed (guard present)."""
+        app_ctx = _make_engine_app_ctx(edit_task=_MINIMAL_TASK_RECORD)
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError, match="tags"):
+            await edit_task(mcp_ctx, task_id="1", tags="phase-3")
+
+    # edit_task optional param branches
+    @pytest.mark.asyncio
+    async def test_edit_task_optional_str_params_forwarded_to_engine(self) -> None:
+        """edit_task forwards body, title, priority, status, parent to engine.edit_task."""
+        app_ctx = _make_engine_app_ctx(edit_task=_MINIMAL_TASK_RECORD)
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        await edit_task(
+            mcp_ctx,
+            task_id="1",
+            body="new body",
+            title="New Title",
+            priority="critical",
+            status="todo",
+            parent=5,
+        )
+        call_kwargs = app_ctx.engine.edit_task.call_args[1]  # type: ignore[attr-defined]
+        assert call_kwargs.get("body") == "new body"
+        assert call_kwargs.get("title") == "New Title"
+        assert call_kwargs.get("priority") == "critical"
+        assert call_kwargs.get("status") == "todo"
+        assert call_kwargs.get("parent") == 5
+
+    @pytest.mark.asyncio
+    async def test_edit_task_file_not_found_raises_tool_error(self) -> None:
+        """edit_task raises ToolError when engine.edit_task raises FileNotFoundError."""
+        mock_engine = _make_mock_engine()
+        mock_engine.edit_task.side_effect = FileNotFoundError("Task not found")
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=Path("/fake"))  # type: ignore[call-arg]
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError):
+            await edit_task(mcp_ctx, task_id="99", append_body="note")
+
+    # move_task error path
+    @pytest.mark.asyncio
+    async def test_move_task_engine_error_raises_tool_error(self) -> None:
+        """move_task raises ToolError when engine raises ValueError."""
+        mock_engine = _make_mock_engine()
+        mock_engine.move_task.side_effect = ValueError("Invalid status")
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=Path("/fake"))  # type: ignore[call-arg]
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError):
+            await move_task(mcp_ctx, task_id="1", status="invalid-status")
+
+    # start_work FileNotFoundError path
+    @pytest.mark.asyncio
+    async def test_start_work_file_not_found_raises_tool_error(self) -> None:
+        """start_work raises ToolError when engine.start_work raises FileNotFoundError."""
+        mock_engine = _make_mock_engine()
+        mock_engine.start_work.side_effect = FileNotFoundError("Task not found")
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=Path("/fake"))  # type: ignore[call-arg]
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError):
+            await start_work(mcp_ctx, task_id="99")
+
+    # end_work FileNotFoundError path
+    @pytest.mark.asyncio
+    async def test_end_work_engine_error_raises_tool_error(self) -> None:
+        """end_work raises ToolError when engine.end_work raises FileNotFoundError."""
+        mock_engine = _make_mock_engine()
+        mock_engine.end_work.side_effect = FileNotFoundError("Task not found")
+        app_ctx = AppContext(engine=mock_engine, kanban_dir=Path("/fake"))  # type: ignore[call-arg]
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError):
+            await end_work(mcp_ctx, task_id="99", note="done")
+
+    # AppContext.__contains__
+    def test_app_context_contains_always_returns_false(self) -> None:
+        """AppContext.__contains__ returns False for any membership test."""
+        mock_engine = MagicMock(spec=KanbanEngine)
+        ctx = AppContext(engine=mock_engine, kanban_dir=Path("/fake"))  # type: ignore[call-arg]
+        assert "engine" not in ctx
+        assert "anything" not in ctx
+
+    # _check_pick_gates: in-progress TDD gate path
+    @pytest.mark.asyncio
+    async def test_pick_tasks_filters_in_progress_without_writer_notes(self) -> None:
+        """pick_tasks filters in-progress tasks without Test-Writer Notes (TDD gate)."""
+        in_progress_no_notes = TaskRecord(
+            id=5,
+            title="Ungated Task",
+            status="in-progress",
+            priority="critical",
+            created="2026-01-01T00:00:00+00:00",
+            updated="2026-01-01T00:00:00+00:00",
+            body="## Body\n- [ ] Something",
+            tags=["feature"],
+        )
+        app_ctx = _make_engine_app_ctx(list_tasks=[in_progress_no_notes])
+        mcp_ctx = _make_mcp_ctx(app_ctx)
+        result = await pick_tasks(mcp_ctx)
+        assert result["dispatch"] == []
