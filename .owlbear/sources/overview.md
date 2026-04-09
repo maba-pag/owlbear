@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Wire PydanticAI Evaluate Callable (Task #701)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PydanticAI docs — Agents (output_type, system_prompt, run) | <https://ai.pydantic.dev/agents/> | `Agent(model, output_type=EvaluationResult, system_prompt=...)`, `await agent.run(prompt)` → `result.output` — confirmed API for factory pattern | .owlbear/research/wire-pydanticai-evaluate-callable.md | 2026-04-09 |
+
 ## Async StructuredExtractor Protocol (Task #687)
 
 | Source | URL | What | Where Used | Date |
