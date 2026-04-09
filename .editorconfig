@@ -20,6 +20,10 @@ max_line_length = unset
 [.owlbear/kanban/tasks/**]
 max_line_length = unset
 
+# Kanban activity log — machine-generated JSONL, allow long lines
+[.owlbear/kanban/activity.jsonl]
+max_line_length = unset
+
 # Kanban v1 archive — frozen, do not lint
 [.owlbear/kanban/v1-archive/**]
 max_line_length = unset
