@@ -51,15 +51,19 @@ If `h-pytest-and-linting` does not auto-load in this subagent context, these 5 c
 3. **Use `isBackground=true` for full-suite runs.** Long-lived VS Code terminal sessions corrupt output from blocking commands. Always run full suite as a background terminal. With `backgroundNotifications` enabled, the agent is automatically notified when the command finishes — no need to poll with `execute/awaitTerminal`. Use `execute/getTerminalOutput` to retrieve the final output after notification. If a background terminal hangs or requires input, use `execute/sendToTerminal` to interact with it.
 
 4. **File-capture fallback for truncated output.** If terminal output is truncated (60 KB limit), use:
+
    ```powershell
    uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','serve/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output-{task_id}.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
    ```
+
    Then `read/readFile` on `.owlbear/scratch/pytest-output-{task_id}.txt`. Delete after reading.
 
 5. **WMI hang mitigation (Windows).** If pytest hangs, kill zombie processes:
+
    ```powershell
    Get-Process python*,pytest* -ErrorAction SilentlyContinue | Stop-Process -Force
    ```
+
    The `conftest.py` pre-populates the `platform.uname()` cache, but the fix only works within a single process.
 
 ## Input Contract
@@ -98,6 +102,7 @@ Timeout: 5 minutes for pytest, 1 minute for ruff. If exceeded, kill terminal and
 ### Retry logic
 
 On command failure (non-zero exit or no output captured):
+
 1. Check `read/terminalLastCommand` for the exact command that ran.
 2. Retry once with the same command.
 3. If second attempt fails, report fatal error. Do not retry a third time.

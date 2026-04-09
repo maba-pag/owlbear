@@ -59,6 +59,7 @@ Structured text with exactly 6 sections:
 ### 1. Challenges
 
 Each finding includes:
+
 - **category**: type of weakness (missing coverage, security gap, logic flaw, etc.)
 - **description**: precise description with evidence
 - **severity**: `critical` (verdict should change), `moderate` (reconsider), `minor` (proceed with awareness)

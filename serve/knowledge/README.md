@@ -35,6 +35,7 @@ The `BgeM3EmbeddingProvider` uses `BAAI/bge-m3` from Hugging Face. The model (~2
 Modules are grouped by concern. All 23 public modules are importable without optional deps.
 
 ### Data stores
+
 | Module | Classes / Functions |
 |--------|-------------------|
 | `document_store` | `DocumentStore` |
@@ -44,6 +45,7 @@ Modules are grouped by concern. All 23 public modules are importable without opt
 | `bookmark_store` | `Bookmark`, `BookmarkStore` |
 
 ### Schema / models
+
 | Module | Classes / Functions |
 |--------|-------------------|
 | `schema` | `init_db` |
@@ -51,6 +53,7 @@ Modules are grouped by concern. All 23 public modules are importable without opt
 | `protocol` | `VectorStoreProtocol`, `HybridEmbedding` |
 
 ### Ingestion pipeline
+
 | Module | Classes / Functions |
 |--------|-------------------|
 | `ingest` | `IngestPipeline`, `IngestResult` |
@@ -60,12 +63,14 @@ Modules are grouped by concern. All 23 public modules are importable without opt
 | `extractor` | entity extraction |
 
 ### Graph construction
+
 | Module | Classes / Functions |
 |--------|-------------------|
 | `graph_builder` | graph-building utilities |
 | `inter_doc_graph_builder` | `InterDocGraphBuilder` (canonical definition) |
 
 ### Retrieval and search
+
 | Module | Classes / Functions |
 |--------|-------------------|
 | `retrieval` | `GraphAugmentedRetriever`, `RetrievalResult` |
@@ -74,6 +79,7 @@ Modules are grouped by concern. All 23 public modules are importable without opt
 | `qdrant` | `QdrantVectorStore` (optional: qdrant-client) |
 
 ### Utilities
+
 | Module | Classes / Functions |
 |--------|-------------------|
 | `cancellation` | `CancelSignal`, `LinkedCancelSignal` |

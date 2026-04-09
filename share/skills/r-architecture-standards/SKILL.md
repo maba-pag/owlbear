@@ -33,7 +33,7 @@ All custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memor
 
 ### Error Handling
 
-- **`error: ` string prefix** (`isError=false`): use for `str`-return and union-return tools (`TypedDict | str`). Error strings start with `error: ` (e.g., `f"error: {stderr.strip()}"`).
+- **`error:` string prefix** (`isError=false`): use for `str`-return and union-return tools (`TypedDict | str`). Error strings start with `error:` (e.g., `f"error: {stderr.strip()}"`).
 - **`ToolError` exception** (`isError=true`): use when the return type is a pure model (TypedDict, BaseModel, or list thereof) and an error string cannot be embedded in the typed return.
 - Both approaches are MCP-spec-valid; the spec distinguishes protocol errors from tool execution errors.
 - Empty-result messages (e.g., "No sources found.") are informational — no prefix.

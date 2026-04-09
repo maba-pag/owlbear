@@ -35,7 +35,7 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 
   Confirm `failed: []` and `clean: true` from the Quality-Runner report. Unlike the reviewer (who scopes tests), the auditor runs the FULL suite to catch cross-task regressions. This is the auditor's primary unique value.
 
-  #### Fallback: Quality-Runner Unavailable
+  ### Fallback: Quality-Runner Unavailable
 
   If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 

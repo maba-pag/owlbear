@@ -80,7 +80,6 @@ If `pick_tasks` returns an empty array, report to user and stop.
 | ------- | ----------------- |
 | curator | Every 5th cycle (handled in Step 3) |
 
-
 **Stale detection:** Compare each pick_tasks result task against `last_dispatched`. If a task appears at the same status as its last_dispatched entry and is NOT in `stale_retried`:
 
 1. Call `show_task(task_id)` to read the task body.

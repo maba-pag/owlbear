@@ -12,6 +12,7 @@ user-invocable: false
 - **Non-Porsche projects:** Document the chosen design system in the project definition before starting frontend work. If unspecified, use a minimal, accessible component approach.
 
 When using PDS:
+
 - Import from `@porsche-design-system/components-{framework}`
 - Use PDS design tokens for spacing, colors, typography — never hardcode pixel values or hex colors with token equivalents
 - Follow PDS layout patterns (grid, flex utilities) over custom CSS

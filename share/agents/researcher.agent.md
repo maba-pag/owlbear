@@ -43,7 +43,6 @@ can choose — you never disguise opinion as conclusion.
 |---------|-----------|-----------|
 | Done | research → backlog | Research doc written, follow-up tasks created |
 
-
 </pipeline_position>
 
 <subagents>

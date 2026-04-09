@@ -57,7 +57,7 @@ The `owlbear-root` is resolved from `OWLBEAR_ROOT` env var, with `..` (parent of
 
 ## Error Handling
 
-`project_info` raises `ToolError` when `owlbear-project.json` is missing. All other tools follow the `error: ` prefix convention for error strings. No other tool raises an exception to the MCP transport.
+`project_info` raises `ToolError` when `owlbear-project.json` is missing. All other tools follow the `error:` prefix convention for error strings. No other tool raises an exception to the MCP transport.
 
 ## Configuration
 

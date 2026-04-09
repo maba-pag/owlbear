@@ -65,7 +65,7 @@ If the response is empty, output `{"dispatch":[]}` and stop.
 
 <!-- NON_IMPL_TAGS — authoritative list -->
 - `TW:MISSING` — status is `in-progress`, body lacks `## Test-Writer Notes` section, and task has none of the non-impl pass-through tags: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action`
-- `AC:MISSING` — status is `todo`, `in-progress`, `review`, `docs`, or `done`, and body contains no bullet lines (lines starting `- ` or `N. `)
+- `AC:MISSING` — status is `todo`, `in-progress`, `review`, `docs`, or `done`, and body contains no bullet lines (lines starting `-` or `N.`)
 - `DECOMP` — body contains `Needs decomposition:`
 - `ARCH:REVIEWED` — body contains `## Architecture Review`
 
