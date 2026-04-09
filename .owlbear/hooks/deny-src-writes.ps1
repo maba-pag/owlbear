@@ -73,7 +73,12 @@ foreach ($p in $paths) {
         $response = @{
             hookSpecificOutput = @{
                 permissionDecision       = 'deny'
-                permissionDecisionReason = "test-writer path guard: write target '$normalized' is outside the allowed directory (tests/). Only writes to tests/ are permitted."
+                permissionDecisionReason = (
+                    "test-writer path guard: write target " +
+                    "'$normalized' is outside the allowed " +
+                    "directory (tests/). Only writes to " +
+                    "tests/ are permitted."
+                )
             }
         }
         Write-Output ($response | ConvertTo-Json -Compress)

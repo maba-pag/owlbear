@@ -133,7 +133,13 @@ foreach ($p in $paths) {
         $response = @{
             hookSpecificOutput = @{
                 permissionDecision       = 'deny'
-                permissionDecisionReason = "doc-writer path guard: write target '$normalized' is in a denied directory. Doc-writer must not write to source code directories (deny-list: serve/, v1/, tests/, setup/, seed/, store/, share/agents/, .git/, .owlbear/hooks/, .owlbear/scripts/, conftest.py)."
+                permissionDecisionReason = (
+                    "doc-writer path guard: write target '$normalized' " +
+                    "is in a denied directory. Doc-writer must not write " +
+                    "to source code directories (deny-list: serve/, v1/, " +
+                    "tests/, setup/, seed/, store/, share/agents/, .git/, " +
+                    ".owlbear/hooks/, .owlbear/scripts/, conftest.py)."
+                )
             }
         }
         Write-Output ($response | ConvertTo-Json -Compress)
