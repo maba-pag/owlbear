@@ -2,6 +2,78 @@
 
 External repos and resources studied during OwlBear development.
 
+## Async StructuredExtractor Protocol (Task #687)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PEP 544 — Protocols: Structural subtyping | <https://peps.python.org/pep-0544/> | `@runtime_checkable` checks attribute existence only, not sync/async | .owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
+| Python docs — `typing.Protocol` | <https://docs.python.org/3/library/typing.html#typing.Protocol> | Protocols support `async def` methods since Python 3.8 | .owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
+| Python docs — `unittest.mock.AsyncMock` | <https://docs.python.org/3/library/unittest.mock.html#unittest.mock.AsyncMock> | Auto-promotes async spec methods; MagicMock does not | .owlbear/research/async-structuredextractor-protocol.md | 2026-04-09 |
+
+## ddgs MCP Integration (Task #686)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| ddgs v9.13 README | <https://github.com/deedy5/ddgs> | MCP server command (`ddgs mcp`), 6 available tools, stdio client config JSON example | .owlbear/research/ddgs-mcp-integration.md | 2026-04-09 |
+| ddgs PyPI v9.13 | <https://pypi.org/project/ddgs/> | Install command `pip install ddgs[mcp]`, release date Apr 6 2026, `[mcp]` extra definition | .owlbear/research/ddgs-mcp-integration.md | 2026-04-09 |
+
+## ddgs[mcp] Dependency Compatibility (Task #706)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PyPI JSON API — ddgs 9.13.0 | <https://pypi.org/pypi/ddgs/json> | `requires_dist` for `[mcp]` extra: `mcp>=1.26.0` — confirmed compatibility with workspace `mcp[cli]>=1.26` | .owlbear/research/ddgs-mcp-dependency-compat.md | 2026-04-09 |
+| PyPI JSON API — primp 1.2.2 | <https://pypi.org/pypi/primp/json> | Rust-based HTTP client, zero Python runtime deps — validated transitive dependency footprint | .owlbear/research/ddgs-mcp-dependency-compat.md | 2026-04-09 |
+
+## Native Kanban Engine (Task #712)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PyPI — ruamel.yaml 0.19.1 | <https://pypi.org/project/ruamel.yaml/> | Round-trip YAML parser, comment/order preservation, 0.5M daily downloads — confirmed as only viable option for lossless YAML round-trip | .owlbear/research/native-kanban-engine.md | 2026-04-09 |
+| GitHub — kanban-md v0.33.0 | <https://github.com/antopolskiy/kanban-md> | Current Go binary dependency — file format, CLI surface, behavioral contracts used as baseline | .owlbear/research/native-kanban-engine.md | 2026-04-09 |
+
+## Diagram Rendering Tool for v2 Agents (Task #683)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| VS Code built-in tools list | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features#_chat-tools> | N/A (docs) | Complete list of VS Code Copilot built-in tools — confirmed `renderMermaidDiagram` does NOT exist | `.owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
+| VS Code Mermaid in chat | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | N/A (docs) | `mermaid-chat.enabled` setting renders Mermaid diagrams inline in chat responses | `.owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
+
+## MCP Tool Error Signaling Research (Task #680)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| MCP Spec §6 Error Handling (2025-11-25) | <https://modelcontextprotocol.io/specification/2025-11-25/server/tools> | Open Spec | Tool execution errors vs protocol errors; `isError: true` for input validation, business logic, API failures | `.owlbear/research/mcp-tool-error-signaling-680.md` | 2026-04-08 |
+| MCP Spec §6 Error Handling (2025-06-18) | <https://modelcontextprotocol.io/specification/2025-06-18/server/tools> | Open Spec | Earlier spec version; same two error mechanisms documented | `.owlbear/research/mcp-tool-error-signaling-680.md` | 2026-04-08 |
+| bierner/markdown-mermaid | <https://github.com/mjbvz/vscode-markdown-mermaid> | MIT | Mermaid rendering in Markdown Preview panel, 906 stars, extension already installed in OwlBear profile | `.owlbear/research/diagram-rendering-tool-v2.md` | 2026-04-08 |
+
+## StructuredExtractor Knowledge Graph Wiring (Task #676)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PydanticAI docs — run_sync behavior | <https://ai.pydantic.dev/api/agent/#pydantic_ai.Agent.run_sync> | `run_sync()` uses `loop.run_until_complete()` — incompatible with running event loop | .owlbear/research/wire-structuredextractor-knowledge-graph.md | 2026-04-08 |
+
+## LLMExtractor PydanticAI Implementation (Task #689)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PydanticAI docs — Agents (output_type, system_prompt, run) | <https://pydantic.dev/docs/ai/core-concepts/agent/> | Agent constructor API: `output_type=`, `system_prompt=`, `await agent.run()` → `result.output` | .owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
+| PydanticAI docs — Structured Output | <https://pydantic.dev/docs/ai/core-concepts/output/> | `output_type=BaseModel` forces tool-based structured output with Pydantic validation | .owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
+| PydanticAI docs — Testing (TestModel, FunctionModel, override) | <https://pydantic.dev/docs/ai/guides/testing/> | `TestModel`, `agent.override(model=TestModel())`, `ALLOW_MODEL_REQUESTS = False` | .owlbear/research/llmextractor-pydanticai-implementation.md | 2026-04-09 |
+
+## Playwright Browser Integration for v2 (Task #684)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright PyPI | <https://pypi.org/project/playwright/> | v1.58.0 — install footprint, transitive deps (greenlet, pyee), browser binary size (~300-500 MB) | .owlbear/research/playwright-browser-integration-v2.md | 2026-04-08 |
+| Prior research #264 | `.owlbear/research/browser-automation.md` | Keep-custom decision (.90 confidence), OSS alternative evaluation, Edge CDP constraint analysis | .owlbear/research/playwright-browser-integration-v2.md | 2026-04-08 |
+
+## Analysis Detector Wiring (Task #682)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| v1 improvement_proposals.py | `v1/src/owlbear/core/improvement_proposals.py` | Prior art: descriptive-only proposals from EventStore metrics, never consumed automatically | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
+| #31 research: self-improvement analysis pipeline | `.owlbear/research/self-improvement-analysis-pipeline.md` | Original design: 4 detectors, AnalysisProposal schema, CLI entrypoint | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
+
 ## Voice Panel Handbook (Task #652)
 
 | Source | URL | What | Where Used | Date |
@@ -21,6 +93,15 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | VS Code Agent Hooks docs — PreToolUse input (4/1/2026) | <https://code.visualstudio.com/docs/copilot/customization/hooks> | `editFiles` tool_input schema: `{ "files": ["path"] }` — array of strings | .owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
 | VS Code Cheat Sheet — built-in tools | <https://code.visualstudio.com/docs/copilot/reference/copilot-vscode-features> | `#edit/editFiles` — "Apply edits to files in the workspace" confirms tool exists as built-in | .owlbear/research/editfiles-schema-verification-638.md | 2026-04-06 |
+
+## Web Search MCP Options (Task #681)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| ddgs (deedy5/ddgs) v9.13 | <https://github.com/deedy5/ddgs> | Metasearch library with built-in MCP server, 9 backends, extract(), MIT license | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
+| Brave Search MCP (official) | <https://github.com/brave/brave-search-mcp-server> | Official Brave MCP server, Node.js/TS, 6 tools, API key required, 880 stars | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
+| Tavily MCP | <https://github.com/tavily-ai/tavily-mcp> | Node.js MCP server, search+extract+map+crawl, API key required, 1.7k stars | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
+| MCP servers registry | <https://github.com/modelcontextprotocol/servers> | Reference and community MCP servers list, Brave Search archived to official repo | .owlbear/research/web-search-mcp-options.md | 2026-04-08 |
 
 ## Deny-Code-Writes AC Validation (Task #637)
 

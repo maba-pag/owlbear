@@ -49,7 +49,7 @@ Running `init.py` writes the following files into your project directory:
 | File / Directory | Purpose | Idempotency |
 |------------------|---------|-------------|
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
-| `.vscode/mcp.json` | Registers 5 MCP servers (GitHub remote + 4 owlbear stdio) | Skipped if file already exists |
+| `.vscode/mcp.json` | Registers 6 MCP servers (GitHub remote + 4 owlbear stdio + ddgs web search) | Skipped if file already exists |
 | `.owlbear/kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Always written |
 | `.owlbear/kanban/setup.ps1` | Script to download `kanban-md.exe` | Always written |
 | `.owlbear/hooks/deny-writes.ps1` | Reviewer write guard hook | Always written |

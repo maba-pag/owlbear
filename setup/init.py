@@ -93,11 +93,12 @@ def _write_project_json(
 
 
 def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
-    """Write .vscode/mcp.json with five MCP server entries.
+    """Write .vscode/mcp.json with six MCP server entries.
 
-    Generates five MCP server entries: github remote + four owlbear stdio
-    servers (kanban, knowledge, memory, project). Entries include owlbear-memory
-    (``-m owlbear_mcp_memory``) and its three siblings. Skips if already exists.
+    Generates six MCP server entries: github remote + four owlbear stdio
+    servers (kanban, knowledge, memory, project) + ddgs stdio server for web
+    search. Entries include owlbear-memory (``-m owlbear_mcp_memory``) and its
+    three siblings. Skips if already exists.
 
     Args:
         target_dir: Destination project directory.
