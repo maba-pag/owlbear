@@ -354,3 +354,103 @@ class TestFromAC_SourceEvaluatorModuleFunctions:  # noqa: N801
 
         result = _default_result()
         assert result.tags == []
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BackwardCompatConstructor (#700)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BackwardCompatConstructor:  # noqa: N801
+    """AC: SourceEvaluator backward-compat constructor for #700.
+
+    Covers AC1 (positional model-string accepted), AC2 (callable keyword arg
+    still wires fn), and AC3 (evaluate() returns _default_result() when
+    instantiated with a model string instead of a callable).
+    """
+
+    # -- AC1: positional model string instantiates without error --
+
+    def test_ac1_model_string_positional_instantiates(self) -> None:
+        """AC1: SourceEvaluator('gpt-4o-mini') instantiates without raising."""
+        evaluator = SourceEvaluator("gpt-4o-mini")
+        assert evaluator is not None
+
+    def test_ac1_arbitrary_string_positional_instantiates(self) -> None:
+        """AC1: Any string as positional arg does not raise during construction."""
+        evaluator = SourceEvaluator("some-other-model")
+        assert evaluator is not None
+
+    def test_ac1_none_positional_instantiates(self) -> None:
+        """AC1: SourceEvaluator(None) — explicit None — instantiates without raising."""
+        evaluator = SourceEvaluator(None)
+        assert evaluator is not None
+
+    # -- AC2: callable keyword arg still wires the fn --
+
+    def test_ac2_callable_keyword_still_instantiates(self) -> None:
+        """AC2: SourceEvaluator(llm_fn=callable) does not raise."""
+        mock_result = EvaluationResult(relevance_score=0.7, tags=[], summary="ok")
+        llm_fn: AsyncMock = AsyncMock(return_value=mock_result)
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        assert evaluator is not None
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ac2_callable_keyword_fn_is_invoked(self) -> None:
+        """AC2: evaluate() with a wired callable actually awaits it."""
+        mock_result = EvaluationResult(relevance_score=0.8, tags=[], summary="wired")
+        llm_fn: AsyncMock = AsyncMock(return_value=mock_result)
+        evaluator = SourceEvaluator(llm_fn=llm_fn)
+        result = await evaluator.evaluate(
+            content="valid content", project_context={"name": "proj"}
+        )
+        llm_fn.assert_awaited_once()
+        assert result.relevance_score == 0.8
+
+    # -- AC3: evaluate() returns _default_result() when model string was supplied --
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ac3_model_string_evaluate_no_crash(self) -> None:
+        """AC3: evaluate(valid_content, valid_context) with model-string instance does not raise."""
+        evaluator = SourceEvaluator("gpt-4o-mini")
+        result = await evaluator.evaluate(
+            content="some content", project_context={"name": "proj"}
+        )
+        assert isinstance(result, EvaluationResult)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ac3_model_string_evaluate_returns_default_relevance(self) -> None:
+        """AC3: evaluate() with model-string instance returns relevance_score=0.5."""
+        evaluator = SourceEvaluator("gpt-4o-mini")
+        result = await evaluator.evaluate(
+            content="some content", project_context={"name": "proj"}
+        )
+        assert result.relevance_score == 0.5
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ac3_model_string_evaluate_returns_worth_ingesting_true(self) -> None:
+        """AC3: evaluate() with model-string instance returns worth_ingesting=True."""
+        evaluator = SourceEvaluator("gpt-4o-mini")
+        result = await evaluator.evaluate(
+            content="some content", project_context={"name": "proj"}
+        )
+        assert result.worth_ingesting is True
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ac3_model_string_evaluate_default_summary(self) -> None:
+        """AC3: evaluate() with model-string instance summary contains 'No project context available'."""
+        evaluator = SourceEvaluator("gpt-4o-mini")
+        result = await evaluator.evaluate(
+            content="some content", project_context={"name": "proj"}
+        )
+        assert "No project context available" in result.summary
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ac3_none_instance_evaluate_valid_context_returns_default(self) -> None:
+        """AC3: SourceEvaluator(None).evaluate(content, context) returns _default_result()."""
+        evaluator = SourceEvaluator(None)
+        result = await evaluator.evaluate(
+            content="relevant text", project_context={"name": "proj", "goals": "learn"}
+        )
+        assert result.relevance_score == 0.5
+        assert result.worth_ingesting is True
