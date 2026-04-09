@@ -334,7 +334,7 @@ async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
-async def edit_task(  # noqa: PLR0912, PLR0913, C901
+async def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
     ctx: Context,
     *,
     task_id: StrId,
@@ -395,7 +395,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         errmsg = stderr.strip() or stdout.strip()
         # Auto-retry with --claim when the task is claimed by this agent
         if "TASK_CLAIMED" in errmsg or "is claimed by" in errmsg:
-            name_out, name_err, name_rc = await _run_kanban(app_ctx, "agent-name")
+            name_out, _name_err, name_rc = await _run_kanban(app_ctx, "agent-name")
             if name_rc == 0:
                 claim_name = name_out.strip()
                 if claim_name and claim_name in errmsg:
