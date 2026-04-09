@@ -70,4 +70,5 @@ GitHub-hosted Copilot Memory is disabled to preserve local-first operation.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands.
 - **Loop detection.** Tier 1: same call twice — change approach. Tier 2: two different approaches failed — consider skipping. Tier 3: 3+ attempts — stop, write what failed, hand off.
 - **Terminal.** `uv run` for all Python tools. Chain with `;` (never `&&` — PowerShell 5.1).
+- **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
 - **Commits.** Follow `r-project-standards` for format, types, and git discipline.
