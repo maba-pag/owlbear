@@ -1,10 +1,12 @@
 ---
 id: 699
 title: 'Tests: MCP knowledge graph wiring and integration'
-status: done
+status: archived
 priority: needed
 created: 2026-04-08T21:37:24.4459836+02:00
-updated: 2026-04-09T15:04:20.8944256+02:00
+updated: 2026-04-09T15:27:26.5169645+02:00
+started: 2026-04-09T15:27:26.5169645+02:00
+completed: 2026-04-09T15:27:26.5169645+02:00
 tags:
     - scope:mcp-knowledge
     - type:test
@@ -397,3 +399,31 @@ The prior cycle's structural defect (AC2 `sqlite3.ProgrammingError` before asser
 
 ### Scratch Files Cleaned
 - None found (`699-*` search returned no results)
+
+[[2026-04-09]] Thu 15:27
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: LLMExtractor wiring tests | TestFromAC_LLMExtractorWiring (3 tests), all FAIL with `AttributeError: no attr 'LLMExtractor'` — verified independently | PASS |
+| AC2: entity/edge count > 0 tests | TestFromAC_IngestWithLLMExtractor (1 test), FAILS with `AttributeError` (fixed from SQLite ProgrammingError in retry) — verified independently | PASS |
+| AC3a: GraphAugmentedRetriever wiring tests | TestFromAC_GraphAugmentedRetrieverWiring (3 tests), all FAIL with `AttributeError: no attr 'GraphAugmentedRetriever'` — verified independently | PASS |
+| AC3b: entity_type in search response tests | TestFromAC_SearchKnowledgeEntityType (3 tests), FAIL with `AssertionError`/`KeyError` on missing `entity_type` — verified independently | PASS |
+| AC4: ImportError degradation tests | TestFromAC_LLMExtractorImportError (2 tests), all FAIL with `AttributeError` — verified independently | PASS |
+| AC5: All tests FAIL (RED) | 12/12 FAIL confirmed — `uv run pytest -o "addopts=" -v --tb=line` on stashed (committed-only) tree | PASS |
+
+### Test Results
+- pytest (task-scoped): 12 collected, 12 FAILED — all correct RED failure modes
+- pytest (full suite): 3881 passed, 370 pre-existing failures, 8 pre-existing errors — no cross-task regressions from this test-only deliverable
+- ruff: clean ("All checks passed!")
+
+### Architect Quality: 4/5
+Original AC was adequate; architect substantially improved it by splitting AC3 into AC3a/AC3b (retriever wiring + entity_type) and correcting AC4 (ImportError not OWLBEAR_MODEL). Minor gap: AC2 wording didn't anticipate SQLite threading constraints, causing 1 retry cycle to fix test harness.
+
+### Deduction Breakdown
+- No deductions. All 6 AC lines have specific, independently verified evidence. Lint clean. AC quality 4/5 (above ≤3 threshold). Reviewer evidence section present and detailed. No task-scoped regressions.
+
+### Confidence: .98
+### Action: archive
+
+Note: Working tree has uncommitted modifications to `test_ingest_graph_wiring.py` from task #690 (TestFromAC_PyprojectDependency class appended). These are outside #699 scope and do not affect the committed deliverable at `580d27a`.

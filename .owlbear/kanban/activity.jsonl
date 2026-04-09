@@ -1,14 +1,3 @@
-{"timestamp":"2026-03-31T15:26:55.4615101+02:00","action":"release","task_id":470,"detail":"test-writer"}
-{"timestamp":"2026-03-31T15:28:18.4777914+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T15:28:18.4870367+02:00","action":"release","task_id":478,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:28:23.2499373+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T15:28:28.0792331+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T15:28:37.1496279+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T15:28:41.5908153+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
-{"timestamp":"2026-03-31T15:28:41.5989028+02:00","action":"claim","task_id":478,"detail":"reviewer"}
-{"timestamp":"2026-03-31T15:28:42.4458714+02:00","action":"edit","task_id":489,"detail":"Build: move/pick JSON output, drop board_context"}
-{"timestamp":"2026-03-31T15:28:42.4534441+02:00","action":"release","task_id":489,"detail":"test-writer"}
-{"timestamp":"2026-03-31T15:28:57.7578105+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
 {"timestamp":"2026-03-31T15:29:03.2174722+02:00","action":"edit","task_id":478,"detail":"RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)"}
 {"timestamp":"2026-03-31T15:29:03.2251863+02:00","action":"release","task_id":478,"detail":"reviewer"}
 {"timestamp":"2026-03-31T15:31:37.1622983+02:00","action":"edit","task_id":467,"detail":"Create challenger.agent.md (adversarial pre-decision review subagent)"}
@@ -9998,3 +9987,14 @@
 {"timestamp":"2026-04-09T15:04:20.9081296+02:00","action":"release","task_id":699,"detail":"fork-isle"}
 {"timestamp":"2026-04-09T15:07:52.0788218+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
 {"timestamp":"2026-04-09T15:07:52.1250363+02:00","action":"release","task_id":718,"detail":"orbit-lynx"}
+{"timestamp":"2026-04-09T15:09:04.4023241+02:00","action":"edit","task_id":690,"detail":"Wire LLMExtractor into MCP knowledge server app_lifespan"}
+{"timestamp":"2026-04-09T15:09:04.4683947+02:00","action":"claim","task_id":690,"detail":"zeal-quick"}
+{"timestamp":"2026-04-09T15:09:27.0356462+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T15:09:27.0728566+02:00","action":"claim","task_id":699,"detail":"horn-twig"}
+{"timestamp":"2026-04-09T15:09:31.4842759+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T15:09:31.5103941+02:00","action":"claim","task_id":718,"detail":"ivory-crisp"}
+{"timestamp":"2026-04-09T15:10:46.1558134+02:00","action":"edit","task_id":718,"detail":"P3-06: GREEN — task file I/O (YAML frontmatter + markdown body)"}
+{"timestamp":"2026-04-09T15:10:46.1905872+02:00","action":"release","task_id":718,"detail":"ivory-crisp"}
+{"timestamp":"2026-04-09T15:27:24.6857814+02:00","action":"edit","task_id":699,"detail":"Tests: MCP knowledge graph wiring and integration"}
+{"timestamp":"2026-04-09T15:27:24.7948607+02:00","action":"release","task_id":699,"detail":"horn-twig"}
+{"timestamp":"2026-04-09T15:27:26.5194971+02:00","action":"move","task_id":699,"detail":"done -\u003e archived"}
