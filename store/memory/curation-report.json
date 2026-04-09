@@ -1,5 +1,47 @@
 ﻿[
   {
+    "cycle": "2026-04-09T-periodic-9",
+    "note": "Periodic curation cycle 9. Channel A: MCP owlbearMemory DB empty (0 entries). Channel B: inbox empty. 5 entries processed (3 carried from cycle 8 + 2 new from task bodies #690/#721/#719). 0 promotions. 3 dropped: pre-shipped-red-green-cross-task (4th carry, no sighting, covered by process-patterns.md), test-writer-uncommitted-file (4th carry, no sighting), ruff-crlf-normalization (already in ruff-and-lint-discipline.md — RESOLVED). 1 new MEDIUM kept: weak-membership-check-mock-assertion from #690 reviewer (1st sighting). 1 security flag: _web_read SSRF cited twice by reviewer in #690 — no kanban task exists; needs new task.",
+    "entries_processed": 5,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "inline:#690-reviewer:weak-membership-check-mock-assertion",
+        "content_preview": "`in positional` assertions on mock call_args pass even with transposed positional args; use assert_called_once_with(a, b, c) for positional order",
+        "recommendation": "keep",
+        "reason": "MEDIUM (1st sighting) — specific, non-obvious, actionable. Single reviewer observation from #690. Keep for second sighting."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "recommendation": "reject",
+        "reason": "LOW — 4th carry, no second sighting. The general pre-existing state pattern is already in process-patterns.md lines 48-56. This specific cross-task variant is a one-off."
+      },
+      {
+        "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "recommendation": "reject",
+        "reason": "LOW — 4th carry, no second sighting in #719/#721 (both test-writers committed properly). Single occurrence too specific for catalog."
+      },
+      {
+        "entry_id": "ruff-and-lint-discipline.md:200-207:ruff-crlf-normalization",
+        "content_preview": "ruff check --fix normalizes CRLF→LF on Windows; makes git diff show full-file changes; --ignore-cr-at-eol separates CRLF noise from real changes",
+        "recommendation": "reject",
+        "reason": "RESOLVED — already written to ruff-and-lint-discipline.md lines 200-206. Knowledge captured. Carry tracking unnecessary."
+      }
+    ],
+    "flags": [
+      {
+        "type": "security-debt",
+        "source": "#690-reviewer (2 passes)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py: user-controlled URL with only http/https scheme check, no private IP range blocklist. SSRF risk.",
+        "action": "No kanban task exists. Reviewer recommended 'separate task' twice. User should create a security task."
+      }
+    ]
+  },
+  {
     "cycle": "2026-04-09T-periodic-8",
     "note": "Periodic curation cycle 8. Channel A: MCP owlbearMemory not accessible this session. Channel B: inbox empty. 4 entries processed (3 from cycle-7 carries, 1 new). 1 promotion: ruamel-yaml-timestamp-resolver (MEDIUM→HIGH via #716 corroboration → added to process-patterns.md). 2 kept MEDIUM (final 3rd carry): pre-shipped-red-green-cross-task, test-writer-uncommitted-file. 1 new MEDIUM (ruff CRLF→LF normalization, already in ruff-and-lint-discipline.md) — keep for corroboration. 0 pruned this cycle. 0 conflicts.",
     "entries_processed": 4,
