@@ -16,9 +16,11 @@ Architecture:
 from __future__ import annotations
 
 import contextlib
-from datetime import UTC, datetime
+import random
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from owlbear_mcp_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_mcp_kanban.config_loader import load_config, save_config
 from owlbear_mcp_kanban.engine_models import TaskRecord
 from owlbear_mcp_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
@@ -32,13 +34,30 @@ _ARCHIVE_DIR_NAME = "v1-archive"
 
 
 class KanbanEngine:
-    """Native kanban engine backed by filesystem task files."""
+    """Native kanban engine backed by filesystem task files.
 
-    def __init__(self, kanban_dir: Path) -> None:
+    Args:
+        kanban_dir:  Root directory of the kanban board.
+        agent_name:  Fixed agent identity for this instance.  Generated as
+                     ``{adjective}-{noun}`` from the ``agent_names`` pool if
+                     omitted; stable across all calls on the same instance.
+    """
+
+    def __init__(self, kanban_dir: Path, *, agent_name: str | None = None) -> None:
         self._kanban_dir = kanban_dir
         self._config: BoardConfig = load_config(kanban_dir)
         self._tasks_dir = kanban_dir / self._config.tasks_dir
         self._archive_dir = kanban_dir / _ARCHIVE_DIR_NAME
+        self._agent_name: str = (
+            agent_name
+            if agent_name is not None
+            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+        )
+
+    @property
+    def agent_name(self) -> str:
+        """Session-stable agent name generated once per engine instance."""
+        return self._agent_name
 
     # ------------------------------------------------------------------
     # Config-derived rank maps
@@ -324,9 +343,87 @@ class KanbanEngine:
 
         return record
 
+    def claim_task(self, task_id: str, *, now: datetime | None = None) -> TaskRecord:
+        """Claim a task for this engine's agent.
+
+        Args:
+            task_id: Numeric task ID as a string.
+            now:     Reference time for expiry calculation (injectable for tests).
+                     Defaults to ``datetime.now(UTC)``.
+
+        Returns:
+            Updated :class:`TaskRecord` with ``claimed_by`` and ``claimed_at`` set.
+
+        Raises:
+            FileNotFoundError: No task file matching ``{task_id}-*.md``.
+            ValueError: Task is blocked, or already claimed by a different agent
+                        whose claim has not expired.
+        """
+        task_path = self._find_task_path(task_id, self._tasks_dir)
+        record = read_task(task_path)
+
+        if record.blocked:
+            msg = f"Task {task_id!r} is blocked and cannot be claimed"
+            raise ValueError(msg)
+
+        effective_now = now if now is not None else datetime.now(tz=UTC)
+
+        if record.claimed_by is not None and record.claimed_by != self._agent_name:
+            # Reject unless the existing claim has expired.
+            timeout = self._parse_claim_timeout()
+            claimed_at_dt = datetime.fromisoformat(record.claimed_at)  # type: ignore[arg-type]
+            if effective_now < claimed_at_dt + timeout:
+                msg = f"Task {task_id!r} is already claimed by {record.claimed_by!r}"
+                raise ValueError(msg)
+
+        record.claimed_by = self._agent_name
+        record.claimed_at = effective_now.isoformat()
+        record.updated = effective_now.isoformat()
+        write_task(task_path, record)
+        return record
+
+    def release_task(self, task_id: str) -> TaskRecord:
+        """Release the claim on a task, clearing ``claimed_by`` and ``claimed_at``.
+
+        This operation is a no-op if the task is not currently claimed.
+
+        Args:
+            task_id: Numeric task ID as a string.
+
+        Returns:
+            Updated :class:`TaskRecord` with claim fields cleared.
+
+        Raises:
+            FileNotFoundError: No task file matching ``{task_id}-*.md``.
+        """
+        task_path = self._find_task_path(task_id, self._tasks_dir)
+        record = read_task(task_path)
+
+        record.claimed_by = None
+        record.claimed_at = None
+        record.updated = datetime.now(tz=UTC).isoformat()
+        write_task(task_path, record)
+        return record
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _parse_claim_timeout(self) -> timedelta:
+        """Parse the ``claim_timeout`` string from config into a :class:`timedelta`.
+
+        Supported suffixes: ``h`` (hours), ``m`` (minutes).
+
+        Raises:
+            ValueError: Unrecognised timeout format.
+        """
+        raw = self._config.claim_timeout
+        if raw.endswith("h"):
+            return timedelta(hours=int(raw[:-1]))
+        if raw.endswith("m"):
+            return timedelta(minutes=int(raw[:-1]))
+        msg = f"Unsupported claim_timeout format: {raw!r}"
+        raise ValueError(msg)
 
     def _find_task_path(self, task_id: str, search_dir: Path) -> Path:
         """Return the path of ``{task_id}-*.md`` in *search_dir*.
