@@ -1,14 +1,16 @@
 ---
 id: 734
 title: 'Archive redundant ddgs subtasks #707–#711'
-status: review
+status: done
 priority: needed
 created: 2026-04-09T07:53:35.6733643+02:00
-updated: 2026-04-09T09:20:22.2089747+02:00
+updated: 2026-04-09T11:33:26.7974771+02:00
 tags:
     - scope:kanban
     - ' type:cleanup'
 parent: 686
+claimed_by: hill-cloud
+claimed_at: 2026-04-09T11:33:26.7974771+02:00
 class: standard
 ---
 
@@ -109,3 +111,47 @@ Task produces no testable Python code. Tagged `type:cleanup` which is NOT a reco
 - Archival note appended to each task before archiving: "Redundant -- deliverables completed by parent #686 pipeline"
 - Files changed: 4 task files (707, 709, 710, 711) + activity.jsonl
 - Verification: all 4 show `status: archived` via `kanban-md show`
+
+[[2026-04-09]] Thu 10:55
+## Review Evidence
+
+**Type:** Non-implementation (kanban-only archival). No code, tests, lint, or coverage applicable. Quality-runner and code-reader subagents not dispatched.
+
+### Source Control
+Builder reported 4 task files + activity.jsonl changed. #708 excluded (prior cycle archival). Verified directly against filesystem.
+
+### AC Compliance
+
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1: #707 archived with prescribed note | status=archived ✓; line 154: "Archived: Redundant -- deliverables completed by parent #686 pipeline" ✓ | PASS |
+| AC1: #708 archived with prescribed note | status=archived ✓; note **ABSENT** — archived via full pipeline completion (auditor .95) in prior cycle, not via redundancy-archival | NOTE |
+| AC1: #709 archived with prescribed note | status=archived ✓; line 75: note present ✓ | PASS |
+| AC1: #710 archived with prescribed note | status=archived ✓; line 40: note present ✓ | PASS |
+| AC1: #711 archived with prescribed note | status=archived ✓; line 34: note present ✓ | PASS |
+| AC2: No orphaned dependencies remain | All dep refs to #707–#711 are internal to the archived group only. Verified via filesystem grep: no active task depends on any of #707–#711 | PASS |
+
+### #708 Note Gap Assessment
+The builder explicitly documented the deviation: "#708 was already archived (committed in prior cycle `chore(kanban): archive #708`)." Task #708 completed its own full pipeline (arch → test → build → review at .94 → docs → audit at .95) and was archived by the auditor on its own merits. Adding "Redundant — deliverables completed by parent #686 pipeline" would be inaccurate — the task was not merely discarded, it was verified and closed properly. The builder's judgment not to append a misleading note is architecturally sound.
+
+### Deductions
+- #708 missing the prescribed note text: -0.04 (literal AC gap, mitigated by documented deviation and superior archival path)
+- No other deductions
+
+**Confidence: .96 → PASS**
+
+[[2026-04-09]] Thu 11:02
+## Docs Gate
+
+| # | Item | Applies? | Status | Evidence |
+|---|------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Kanban-only archival — 0 Python files changed; Builder + Review both confirm "non-implementation" |
+| 2 | Module docstrings | No | N/A | Files affected: `.owlbear/kanban/tasks/707–711-*.md` only — no `.py` files |
+| 3 | External attribution | No | N/A | Prior research sources already attributed in #707 pipeline; no new external patterns used |
+| 4 | CLI changes | No | N/A | No CLI modifications |
+| 5 | Research doc | Yes | PASS | `.owlbear/research/redundant-ddgs-subtasks-707.md` exists; linked in task body; follow-up tasks: this task IS the follow-up |
+| 6 | Scratch files | — | PASS | No `.owlbear/scratch/734-*` files found — nothing to clean |
+
+**Files updated:** None  
+**Commit:** Not required  
+**Verdict:** No docs impact — all evidence verified, gate passed.
