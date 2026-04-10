@@ -359,7 +359,9 @@ class GraphStore:
     def insert_document(self, doc: Document) -> None:
         """Insert *doc* into the ``documents`` table."""
         self._conn.execute(
-            "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents"
+            " (id, title, content, metadata, created_at, scope, source_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 doc.id,
                 doc.title,
@@ -367,6 +369,7 @@ class GraphStore:
                 self._dump_meta(doc.metadata),
                 self._now(),
                 doc.scope,
+                doc.source_id,
             ),
         )
         self._conn.commit()
@@ -374,7 +377,7 @@ class GraphStore:
     def get_document(self, doc_id: str) -> Document | None:
         """Return the :class:`Document` with *doc_id*, or ``None``."""
         row = self._conn.execute(
-            "SELECT id, title, content, metadata, scope FROM documents WHERE id = ?",
+            "SELECT id, title, content, metadata, scope, source_id FROM documents WHERE id = ?",
             (doc_id,),
         ).fetchone()
         if row is None:
@@ -385,6 +388,7 @@ class GraphStore:
             content=row[2],
             metadata=self._load_meta(row[3]),
             scope=row[4],
+            source_id=row[5],
         )
 
     def list_documents(self, scopes: list[str] | None = None) -> list[Document]:
@@ -393,7 +397,7 @@ class GraphStore:
             return []
 
         params: list[str] = []
-        sql = "SELECT id, title, content, metadata, scope FROM documents"
+        sql = "SELECT id, title, content, metadata, scope, source_id FROM documents"
         if scopes is not None:
             placeholders = ", ".join("?" for _ in scopes)
             sql += f" WHERE scope IN ({placeholders})"
@@ -407,6 +411,7 @@ class GraphStore:
                 content=r[2],
                 metadata=self._load_meta(r[3]),
                 scope=r[4],
+                source_id=r[5],
             )
             for r in rows
         ]

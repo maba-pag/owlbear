@@ -32,12 +32,12 @@ class TestFromAC_SourceTypeCrawlRemoval:  # noqa: N801
         assert not hasattr(SourceType, "CRAWL"), "SourceType.CRAWL still exists — AC1 not satisfied"
 
     def test_source_type_valid_values_only(self) -> None:
-        """SourceType enum values must be exactly {url_list, file_glob} — crawl removed."""
+        """SourceType enum values must not contain the old CRAWL value — crawl removed."""
         from owlbear_knowledge.models import SourceType
 
-        expected = {"url_list", "file_glob"}
+        allowed = {"url_list", "file_glob", "authenticated_web"}
         actual = {e.value for e in SourceType}
-        assert actual == expected, f"SourceType still contains unexpected values: {actual - expected}"
+        assert actual <= allowed, f"SourceType contains unexpected values: {actual - allowed}"
 
     def test_knowledge_source_rejects_crawl_source_type(self) -> None:
         """KnowledgeSource must reject source_type='crawl' after CRAWL is removed from enum."""

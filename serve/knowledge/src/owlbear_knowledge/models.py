@@ -108,6 +108,29 @@ class Edge(BaseModel):
     scope: str = "global"
 
 
+class PageStatus(StrEnum):
+    """Status of a SourcePage in the crawl/approval lifecycle."""
+
+    DISCOVERED = "discovered"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    INGESTED = "ingested"
+    STALE = "stale"
+
+
+class SourcePage(BaseModel):
+    """A page belonging to an authenticated-web knowledge source."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=_uuid_hex)
+    source_id: str
+    url: str
+    status: PageStatus
+    extraction_hash: str | None = None
+    last_extracted: str | None = None
+
+
 class Document(BaseModel):
     """A text document stored in the knowledge graph."""
 
@@ -118,3 +141,4 @@ class Document(BaseModel):
     content: str
     metadata: dict[str, Any] = Field(default_factory=dict)
     scope: str = "global"
+    source_id: str | None = None

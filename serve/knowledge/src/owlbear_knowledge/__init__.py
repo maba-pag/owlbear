@@ -11,6 +11,7 @@ from owlbear_knowledge.evaluator import EvaluationResult, SourceEvaluator
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline, IngestResult
 from owlbear_knowledge.intake import IntakeResult
+from owlbear_knowledge.models import PageStatus, SourcePage
 from owlbear_knowledge.query_service import KnowledgeQueryService, StructuredSearchResult
 from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever, RetrievalResult
@@ -37,10 +38,12 @@ __all__ = [
     "KnowledgeQueryService",
     "KnowledgeSourceStore",
     "LinkedCancelSignal",
+    "PageStatus",
     "RefreshOrchestrator",
     "RefreshResult",
     "RetrievalResult",
     "SourceEvaluator",
+    "SourcePage",
     "StatusStore",
     "StructuredSearchResult",
     "compute_content_hash",
