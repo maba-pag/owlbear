@@ -98,5 +98,3 @@ These affect both MCP `append_body`/`body` parameters and CLI `-a` arguments, be
 - **`->` arrows** — parsed as CLI flag fragments. Use prose ("hands off to") instead.
 - **`--token` patterns** — parsed as flags. Never paste raw CLI output containing `--cov`, `--tb`, etc. Describe in prose.
 - **Pipe `|` characters** — safe through MCP (server handles escaping). Backtick-escape only when calling kanban-md CLI directly.
-
-## Known Gotchas

@@ -4,7 +4,6 @@ Covers:
   AC1  — seed/.vscode/settings.json: three chat.*Locations keys with {{owlbear_path}} placeholders
   AC2  — seed/.vscode/mcp.json: github + 4 owlbear kebab-case servers, --project placeholder in args
   AC3  — seed/.owlbear/kanban/config.yml: next_id: 1, standard statuses
-  AC4  — seed/.owlbear/kanban/setup.ps1: static file present
   AC5  — seed/.owlbear/hooks/deny-writes.ps1 and lint-changed.ps1: static files present
   AC6  — seed/.owlbear/knowledge/.gitkeep: empty directory marker
   AC7  — seed/owlbear-project.json: {{name}} / {{type}} placeholders, schema_version hardcoded,
