@@ -17,6 +17,7 @@ from mcp.types import ToolAnnotations
 from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
 from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
+from owlbear_knowledge.consolidation import ConsolidationService, TextCompletionFn
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
@@ -27,6 +28,7 @@ from owlbear_knowledge.llm_extractor import LLMExtractor
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
+from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
 from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
@@ -91,6 +93,8 @@ class AppContext:
     source_store: KnowledgeSourceStore | None
     bookmark_pipeline: BookmarkPipeline | None
     bookmark_store: BookmarkStore | None
+    refresh_orchestrator: RefreshOrchestrator | None = None
+    consolidation_service: ConsolidationService | None = None
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -112,6 +116,28 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
         except Exception:  # noqa: BLE001, S110
             pass
     return excluded
+
+
+def make_text_completion_fn(model: str) -> TextCompletionFn:
+    """Return a TextCompletionFn backed by a PydanticAI Agent with output_type=str.
+
+    Falls back to a no-op stub when pydantic-ai is absent.
+    """
+    try:
+        import pydantic_ai  # noqa: PLC0415
+
+        agent = pydantic_ai.Agent(model, output_type=str)
+
+        async def _complete(prompt: str) -> str:
+            result = await agent.run(prompt)
+            return result.output
+
+    except ImportError:
+
+        async def _complete(_prompt: str) -> str:  # type: ignore[misc]
+            return ""
+
+    return _complete
 
 
 def make_evaluate_fn(model: str) -> EvaluateFn:
@@ -184,6 +210,17 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             ingest_pipeline=pipeline,
             web_read_fn=_web_read,
         )
+        refresh_orchestrator = RefreshOrchestrator(
+            store=source_store,
+            pipeline=pipeline,
+            workspace_root=Path.cwd(),
+        )
+        try:
+            consolidation_service: ConsolidationService | None = ConsolidationService(
+                conn, make_text_completion_fn(model)
+            )
+        except Exception:  # noqa: BLE001
+            consolidation_service = None
         ctx = AppContext(
             conn=conn,
             query_service=qs,
@@ -192,6 +229,8 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             source_store=source_store,
             bookmark_pipeline=bookmark_pipeline,
             bookmark_store=bookmark_store,
+            refresh_orchestrator=refresh_orchestrator,
+            consolidation_service=consolidation_service,
         )
         _app_context = ctx
         _apply_tool_exclusions(_server)
@@ -208,6 +247,7 @@ __all__ = [
     "_apply_tool_exclusions",
     "app_lifespan",
     "bookmark_source",
+    "consolidate_knowledge",
     "export_scope",
     "get_stats",
     "import_scope",
@@ -217,7 +257,9 @@ __all__ = [
     "list_entities",
     "list_sources",
     "mcp",
+    "refresh_source",
     "search_knowledge",
+    "update_bookmark_tags",
 ]
 
 # Module-level context so zero-arg @mcp.resource handlers can access graph_store.
@@ -384,6 +426,27 @@ async def list_bookmarks(
     return [{"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags} for b in bookmarks]
 
 
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True))
+async def update_bookmark_tags(
+    ctx: Context,
+    url: str,
+    tags: list[str],
+    scope: str = "global",
+) -> BookmarkInfo:
+    """Update the tags on an existing bookmark."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.bookmark_store
+    if store is None:
+        msg = "bookmark store not available"
+        raise ToolError(msg)
+    bookmark = await asyncio.to_thread(store.get_by_url, url, scope)
+    if bookmark is None:
+        msg = f"bookmark not found for URL: {url}"
+        raise ToolError(msg)
+    await asyncio.to_thread(store.update_tags, bookmark.id, tags)
+    return {"url": bookmark.url, "title": bookmark.title, "relevance_score": bookmark.relevance_score, "tags": tags}
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
 async def import_scope(
     ctx: Context,
@@ -425,3 +488,52 @@ async def export_scope(
         Path(output_path),
         app_ctx.conn,
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def refresh_source(ctx: Context, source_id: str) -> dict | str:
+    """Trigger re-ingestion of a registered knowledge source by its ID.
+
+    Returns a dict with source_id, refreshed, skipped, and failed counts on
+    success.  Returns an error string for disabled sources or unavailable
+    orchestrator.  Raises ToolError if source_store is unavailable or the
+    source_id is not found.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.source_store
+    if store is None:
+        msg = "source store not available"
+        raise ToolError(msg)
+    source = store.get(source_id)
+    if source is None:
+        msg = f"Source '{source_id}' not found"
+        raise ToolError(msg)
+    orchestrator = app_ctx.refresh_orchestrator
+    if orchestrator is None:
+        return "error: refresh orchestrator not available"
+    try:
+        result = await orchestrator.refresh(source)
+    except ValueError as exc:
+        return f"error: {exc}"
+    return {
+        "source_id": result.source_id,
+        "refreshed": result.refreshed,
+        "skipped": result.skipped,
+        "failed": result.failed,
+    }
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def consolidate_knowledge(ctx: Context, batch_size: int = 50) -> str:
+    """Trigger cross-document insight synthesis for unconsolidated knowledge chunks.
+
+    Returns a human-readable summary of the consolidation result.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    svc = app_ctx.consolidation_service
+    if svc is None:
+        return "error: consolidation service not available"
+    result = await svc.consolidate(batch_size=batch_size)
+    if result == 0:
+        return "No unconsolidated chunks available"
+    return f"Consolidated: {result} insight created"
