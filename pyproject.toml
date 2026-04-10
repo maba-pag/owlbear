@@ -41,7 +41,6 @@ src = [
   "serve/mcp-kanban/src",
   "serve/mcp-knowledge/src",
   "serve/mcp-memory/src",
-  "serve/voice/src",
 ]
 
 [tool.ruff.lint]
@@ -134,5 +133,4 @@ source_pkgs = [
   "owlbear_mcp_kanban",
   "owlbear_mcp_knowledge",
   "owlbear_mcp_memory",
-  "owlbear_voice",
 ]
