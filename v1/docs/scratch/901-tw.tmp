@@ -1,4 +1,0 @@
-## Test-Writer Notes
-- Non-implementation task (tagged type:docs) - no tests applicable.
-- All AC lines modify .github/agents/researcher.agent.md and .github/skills/research-workflow/SKILL.md only; the final AC line explicitly forbids .py, src/, and tests/ changes.
-- Passing through to builder.

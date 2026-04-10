@@ -1,17 +1,0 @@
-## Docs Gate
-
-### Checklist
-| # | Check | Applies? | Status | Evidence |
-|---|-------|----------|--------|----------|
-| 1 | .github/copilot-instructions.md | Yes | Updated | Replaced stale #956 (retry) reference (a still-open todo about state reuse) with fact that make_retry_executor is wired in un_daemon via #992; removed redundant (#996) suffix. Commit 5dcf7b5. |
-| 2 | Docstrings complete | Yes | Pass | make_retry_executor at daemon.py:572 has accurate one-line docstring. _executor is private inner closure, no docstring needed. No other new public APIs. |
-| 3 | docs/sources/overview.md | No | N/A | No external patterns adopted; closure factory follows in-project pattern from _make_handler in hook_reaction_router.py. |
-| 4 | README.md | No | N/A | No CLI command changes. |
-| 5 | Research doc linked | Yes | Pass | docs/research/retry-executor-wiring.md exists (sections 3.4 and 4 referenced in task body). |
-
-### Files Updated
-- .github/copilot-instructions.md (stale task-reference fix)
-
-### Scratch Files Cleaned
-- docs/scratch/992-builder-notes.tmp — PENDING (Remove-Item blocked by policy; user must delete manually)
-- docs/scratch/992-research.tmp — PENDING (Remove-Item blocked by policy; user must delete manually)

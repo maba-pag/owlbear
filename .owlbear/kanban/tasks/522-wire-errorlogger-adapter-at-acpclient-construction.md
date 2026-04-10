@@ -4,9 +4,9 @@ title: Wire ErrorLogger adapter at AcpClient construction sites
 status: archived
 priority: nice-to-have
 created: 2026-04-01T15:15:04.1613975+02:00
-updated: 2026-04-06T07:08:31.3960612+02:00
+updated: 2026-04-10T02:14:58.2866513+02:00
 started: 2026-04-06T07:08:31.3960612+02:00
-completed: 2026-04-06T07:08:31.3960612+02:00
+completed: 2026-04-10T02:14:58.2866513+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -248,6 +248,43 @@ All 6 AC lines specific and testable. Concurrency constraint (AC#2) proactively 
 - Lint violations: 0 — no deduction
 - AC quality: 5/5 — no deduction
 - Reviewer evidence section: present, detailed, PASS at .95 — no deduction
+- Full-suite failures in task scope: 0 — no deduction
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 4b8826b | test | tests/test_errorlogger_adapter_wiring_522.py | #522 |
+| 23f0cc1 | feat | error_journal.py, loop.py | #522 |
+
+[[2026-04-10]] Fri 02:14
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC#1 — adapter in error_journal.py delegates to ErrorJournal.log() | error_journal.py L98-118: ErrorLoggerAdapter class with log_error() calling self._journal.log() | PASS |
+| AC#2 — immutable class-level sentinel 'pre-session' | error_journal.py L106: _SESSION_ID = "pre-session" (class constant) | PASS |
+| AC#3 — AcpClient(conn, error_logger=adapter) | loop.py L472: AcpClient(conn, error_logger=ErrorLoggerAdapter(error_journal)) | PASS |
+| AC#4 — orchestrate() error_journal param, None default, .owlbear/error-journal.jsonl | loop.py L428: error_journal: ErrorJournal or None = None; L469-470: default creation | PASS |
+| AC#5 — mock-based delegation tests with sentinel session_id | 17/17 tests pass in test_errorlogger_adapter_wiring_522.py | PASS |
+| AC#6 — no changes to acp_client.py | acp_client.py absent from #522 commits (last touch: f594bdd rename) | PASS |
+
+### Test Results
+- pytest (task): 17 passed, 0 failed
+- pytest (related modules): 69 passed (test_error_journal + test_acp_client)
+- pytest (full suite): 3054 passed, 277 failed, 18 skipped — all failures pre-existing (wave-assembly, mcp-kanban, planner, hooks); 0 failures in task scope
+- ruff: clean on all changed files
+
+### Architect Quality: 5/5
+All 6 AC lines specific and testable. Concurrency constraint (AC#2) proactively addressed. Dependency correctly updated. Zero builder improvisation needed.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 — no deduction
+- Lint violations: 0 — no deduction
+- AC quality: 5/5 — no deduction
+- Reviewer evidence: present, detailed, PASS at .95 — no deduction
 - Full-suite failures in task scope: 0 — no deduction
 
 ### Confidence: .98

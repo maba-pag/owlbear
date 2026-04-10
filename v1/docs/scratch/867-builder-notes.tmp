@@ -1,9 +1,0 @@
-## Builder Notes
-- Files changed: none.
-- Tests: scoped TestFromAC run reported 1 failed and 4 passed (failure in test_extract_called_with_url_forwarded).
-- Coverage: not rerun because task is blocked by contradictory TestFromAC call-signature expectations.
-- Lint: not rerun because no code changes were made.
-- Evidence: TestFromAC_DefaultWebReadExtractMarkdownSeam::test_happy_path_returns_raw_markdown_with_link_syntax asserts extract_markdown called without url keyword, while TestFromAC_DefaultWebReadExtractMarkdownSeam::test_extract_called_with_url_forwarded asserts the same seam call includes url keyword.
-- Fixes applied: none.
-- Block reason: No single implementation can satisfy both assertions simultaneously.
-- AC suggestion: align both TestFromAC assertions to the same extract_markdown call signature, preferably including url keyword forwarding consistently.

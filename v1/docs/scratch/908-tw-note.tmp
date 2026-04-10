@@ -1,5 +1,0 @@
-## Test-Writer Notes (pass-through)
-- Non-implementation task (tagged type:docs, phase-research).
-- AC line 1 explicitly states #908 is a parent tracker only; no test-writer work should be dispatched.
-- Correct RED task is #940, which must pass architect review before test-writer dispatch.
-- Passing through to in-progress.

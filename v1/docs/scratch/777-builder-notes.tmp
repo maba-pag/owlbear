@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: None.
-- Tests: 36 passed in tests/test_cli_decisions.py.
-- Coverage: src/bearclaw/commands/decisions.py at 94 percent in scoped coverage run.
-- Lint: ruff clean on src/bearclaw/commands/decisions.py, src/bearclaw/cli.py, tests/test_cli_decisions.py.
-- Evidence: Background scoped pytest completed with exit code 0; background scoped coverage completed with exit code 0; task files are clean in git status.
-- Fixes applied: None. Green-on-arrival re-entry, implementation already satisfies current TestFromAC suite.

@@ -4,9 +4,9 @@ title: 'Test: Wire ErrorJournal into AcpClient'
 status: archived
 priority: nice-to-have
 created: 2026-04-01T15:14:45.4318471+02:00
-updated: 2026-04-02T01:03:56.2579605+02:00
+updated: 2026-04-10T02:02:10.4346885+02:00
 started: 2026-04-02T01:03:55.8090895+02:00
-completed: 2026-04-02T01:03:55.8090895+02:00
+completed: 2026-04-10T02:02:10.4346885+02:00
 tags:
     - phase-2
     - scope:orchestrator
@@ -175,5 +175,48 @@ Confidence: .93
 AC was specific and complete. All 12 lines mapped 1:1 to tests with no builder improvisation needed.
 
 ### Deduction breakdown: none
+### Confidence: 1.0
+### Action: archive
+
+[[2026-04-10]] Fri 02:02
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| TestFromAC_ErrorLoggerWiring class | test_acp_client.py L505 (read verified) | PASS |
+| init+RequestError log_error | test L511 asserts PERMANENT, initialize, "Parse error" | PASS |
+| init+BrokenPipeError category=transient | test L525 asserts TRANSIENT, initialize | PASS |
+| new_session+RequestError log_error | test L538 asserts TRANSIENT, new_session, "Internal error" | PASS |
+| new_session+ConnectionError category=transient | test L553 asserts TRANSIENT, new_session | PASS |
+| prompt+RequestError log_error | test L566 asserts PERMANENT, prompt, "Method not found" | PASS |
+| prompt+BrokenPipeError category=transient | test L580 asserts TRANSIENT, prompt | PASS |
+| logger=None no crash | test L592 None passthrough, no AttributeError | PASS |
+| TimeoutError excluded | test L620 assert_not_called(); impl confirmed no log_error in TimeoutError handler | PASS |
+| All use MagicMock | MagicMock() in all 8 tests confirmed via code read | PASS |
+| All new tests FAIL (RED) | Test-writer notes: TypeError confirmed | PASS |
+| ruff clean | ruff check: All checks passed! | PASS |
+
+### Test Results
+- pytest test_acp_client.py: 42 passed, 0 failed, 6 warnings
+- Full suite: 3054 passed, 277 failed, 18 skipped, 2 errors — none in task scope
+- ruff: All checks passed!
+
+### Upstream Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 3027bf3 | test | tests/test_acp_client.py | #521 |
+| 8587257 | feat | acp_client.py | #521 |
+| f915fb1 | docs | acp_client.py (docstring) | #521 |
+
+### Architect Quality: 4/5
+12 AC lines, all specific and testable. 1:1 mapping to tests with no builder improvisation. Minor: title says "ErrorJournal" but AC body correctly specifies "_ErrorLogger Protocol" throughout.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (-.00)
+- Lint violations: 0 (-.00)
+- AC quality ≤ 3: no (-.00)
+- Missing reviewer evidence: no (-.00)
+- Full-suite failures in task scope: none (-.00)
+
 ### Confidence: 1.0
 ### Action: archive

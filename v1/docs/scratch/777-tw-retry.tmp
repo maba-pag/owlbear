@@ -1,6 +1,0 @@
-## Test-Writer Notes (retry)
-- Retry reason: reviewer FAIL - 'decisions list' with empty pending exits code 0, AC requires typer.Exit(code=1)
-- Added: 1 new failing test: TestFromAC_DecisionsErrors::test_list_empty_pending_exits_with_code_1
-- Preserved: 32 existing tests (all PASS)
-- ruff: clean
-- AC coverage gap closed: graceful errors must use typer.Exit(code=1) for no pending decisions

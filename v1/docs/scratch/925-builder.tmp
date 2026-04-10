@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: src/bearclaw/commands/board.py
-- Changes: Added _load_config() with OSError/YAMLError fallback; _read_status_order() takes config param; added _parse_duration_seconds(), _validated_style(), _parse_threshold_entry(), _read_age_thresholds(); _age_in_status() returns (str, float); added _apply_age_style(); board() creates per-call Console with force_terminal + color_system=256 when FORCE_COLOR env is set
-- Tests: 41 passed (test_cli_board.py), 11 TestFromAC tests RED->GREEN
-- Coverage: 94% on src/bearclaw/commands/board.py
-- Lint: ruff clean
-- Fixes applied: None (fresh implementation AC3/4/5)

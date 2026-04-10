@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: none
-- Tests: N/A (governance parent task)
-- Coverage: N/A
-- Lint: N/A
-- Evidence: Task #984 is archived and task #985 is archived, but successor task #992 remains todo. Source scan confirms make_retry_executor exists while run_daemon does not yet reference reaction_executors for retry wiring.
-- Fixes applied: None. Parent AC for mandate completion is still blocked by successor completion.

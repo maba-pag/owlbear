@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: tests/test_cli.py
-- Tests: tests/test_cli.py had 31 passed; tests/test_run_elimination.py had 108 passed; the 27 file AC pytest gate had 942 passed.
-- Coverage: bare coverage run on the same 27 file gate completed with exit code 0; TOTAL was 39 percent for the scoped run output.
-- Lint: ruff check passed on tests/test_cli.py and on the 27 file AC lint gate.
-- Evidence: reproduced pre change lint failure RUF100 at tests/test_cli.py line 572, then reran the gates and all passed.
-- Fixes applied: removed one stale noqa N801 directive from TestFromAC_RichTracebackCli class declaration.

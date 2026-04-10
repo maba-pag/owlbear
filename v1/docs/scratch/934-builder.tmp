@@ -1,6 +1,0 @@
-## Builder Notes
-- Files changed: .github/skills/frontend-design/NOTICE.md (1 line)
-- Tests: 48 passed (15 frontend-design + 33 test_skills), 0 failed
-- Lint: ruff clean
-- Evidence: 3 previously-failing TestFromAC_ForbiddenStrings tests now pass
-- Fixes applied: Rewrote NOTICE.md line 14 without forbidden strings

@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: src/owlbear/core/hooks.py; src/owlbear/bootstrap/hooks.py
-- Tests: 205 passed in targeted modules; TestFromAC_991 subset 6 passed
-- Coverage: src/owlbear/core/hooks.py 98%; src/owlbear/bootstrap/hooks.py 100%
-- Lint: task-scoped ruff passed for src/owlbear/core/hooks.py and src/owlbear/bootstrap/hooks.py; repo-wide ruff reports unrelated pre-existing RUF100 failures
-- Evidence: TestFromAC_991 subset moved from 6 failed in red phase to 6 passed in green phase. Full targeted run on tests/test_hooks.py and tests/test_bootstrap.py passed with coverage output.
-- Fixes applied: Added HookRegistry.reaction_executors default None and wired build_hooks to assign the same executors dict used by HookReactionRouter.

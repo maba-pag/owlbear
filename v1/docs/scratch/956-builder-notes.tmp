@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: none.
-- Tests: N/A (governance parent task; non-implementation).
-- Coverage: N/A.
-- Lint: N/A.
-- Evidence: Tasks #984, #985, #991, #992, and #993 are archived, satisfying the governance prerequisite chain for mandate completion.
-- Fixes applied: None. Parent task remains board-governance only with no src or tests edits.

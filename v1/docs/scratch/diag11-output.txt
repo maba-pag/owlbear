@@ -1,2 +1,0 @@
-[  0.000] start
-[  0.000] test A: import logfire._internal.config_params directly

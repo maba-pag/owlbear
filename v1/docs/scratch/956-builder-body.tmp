@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: none
-- Tests: N/A (governance parent task with no implementation scope)
-- Coverage: N/A
-- Lint: N/A
-- Evidence: Task 984 is archived and task 985 is archived, but split successors remain open. Task 992 is ideation and task 993 is review, so the retry delegation mandate is not yet fulfilled.
-- Fixes applied: None. No src or tests changes are allowed on this governance parent task.

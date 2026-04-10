@@ -1,2 +1,0 @@
-<class 'pydantic_ai.models.test.TestModel'>
-

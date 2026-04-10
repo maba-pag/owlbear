@@ -1,9 +1,0 @@
-## Research
-Validation of #877 findings against current HEAD. See docs/research/cancel-slot-validation.md.
-
-Key findings:
-- Dependency #870 archived (complete). CancelSignal + LinkedCancelSignal stable.
-- All pipeline methods accept cancel= param. Toolset methods do not yet pass it (the gap).
-- CancelSlot is ~10 LOC, maps to .NET CancellationTokenSource pattern. .90 confidence.
-- BootstrapResult is non-frozen dataclass, safe to extend.
-- No AC changes needed. Ready for architect gate.

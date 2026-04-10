@@ -1,7 +1,0 @@
-## Builder Notes
-- Files changed: src/owlbear/daemon.py; src/owlbear/core/hooks.py
-- Tests: 179 passed in daemon and hook suites; reconcile scope class set also validated (10 passed)
-- Coverage: src/owlbear/daemon.py 95%; src/owlbear/core/hooks.py 98%
-- Lint: ruff clean on changed files
-- Evidence: BudgetExceededError now maps to outcome budget_exceeded in reconcile task-complete emission with lazy import in the failure path; non-budget failure and success regressions remained green.
-- Fixes applied: Added lazy import and budget-aware outcome selection in reconcile_tasks; documented valid TaskCompleteData outcome values.

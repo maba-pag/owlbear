@@ -1,4 +1,0 @@
-## Audit
-AC1 PASS: __call__ schedules background work only. AC2 PASS: helpers run in background. AC3 PASS: regression tests pass. AC4 PASS: correct files.
-Full suite: 4238 passed, 36 failed (pre-existing). Task scoped: 58 passed. Ruff clean.
-Architect quality: 4/5. Confidence: .96. Action: archive.

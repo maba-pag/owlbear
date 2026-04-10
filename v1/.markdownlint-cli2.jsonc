@@ -1,9 +1,0 @@
-{
-    "ignores": [
-        "docs/research/**",
-        "docs/scratch/**",
-        ".github/**",
-        ".venv/**",
-        "node_modules/**"
-    ]
-}

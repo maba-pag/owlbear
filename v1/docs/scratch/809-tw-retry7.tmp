@@ -1,5 +1,0 @@
-## Test-Writer Notes (retry 7)
-- Retry reason: reviewer FAIL (confidence .96) was about lint quality -- RUF100 unused noqa at tests/test_cli.py:572 in builder-touched file -- not missing contract tests.
-- Contract suite tests/test_run_elimination.py: 108 tests, all PASS (verified previous cycle).
-- Ruff on 27 in-scope files: All checks passed (verified previous cycle).
-- Existing tests preserved. Builder to: remove the unused noqa directive at tests/test_cli.py:572 so ruff exits clean on the builder-touched file.

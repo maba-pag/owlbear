@@ -1,10 +1,12 @@
 ---
 id: 726
 title: 'P3-14: GREEN — compound ops (start_work, end_work)'
-status: done
+status: archived
 priority: critical
 created: 2026-04-09T03:27:37.7135664+02:00
-updated: 2026-04-09T23:17:32.4547552+02:00
+updated: 2026-04-09T23:25:20.4706984+02:00
+started: 2026-04-09T23:25:20.4706984+02:00
+completed: 2026-04-09T23:25:20.4706984+02:00
 tags:
     - kanban
     - phase-3
@@ -12,8 +14,6 @@ tags:
 parent: 712
 depends_on:
     - 725
-claimed_by: dove-crane
-claimed_at: 2026-04-09T23:17:32.4520307+02:00
 class: standard
 ---
 
@@ -188,3 +188,39 @@ GREEN phase for compound operations `start_work()` and `end_work()` on `KanbanEn
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/726-*` files exist)
+
+[[2026-04-09]] Thu 23:25
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `start_work(task_id)`: blocked guard, claim, return TaskRecord | engine.py:438-456 delegates to `claim_task` (blocked guard L395-398, claim L408-410) | PASS |
+| `end_work(task_id, note, outcome, ...)`: append timestamped note, advance/stay/block/reject, release claim | engine.py:458-520 handles all 4 outcomes via edit_task + release_task + move_task composition | PASS |
+| Status advancement: index current in config statuses, move to next; last status triggers archive | engine.py:493-501 — `statuses.index()`, `is_last` check, `move_task("archived")` | PASS |
+| block_reason required when outcome=block | engine.py:479-481 — ValueError guard before any mutation | PASS |
+| All #725 tests pass | 36/36 PASS in test_kanban_engine_compound.py | PASS |
+
+### Test Results
+- pytest (scoped): 36 passed, 0 failed
+- pytest (full suite): 3146 passed, 129 failed, 18 skipped — no failures in task scope; all 129 are pre-existing in unrelated domains (analysis, lint guard, orchestrator, bookmark, etc.)
+- ruff: clean (exit 0)
+
+### Architect Quality: 4/5
+Specific, verifiable AC lines. Slight redundancy: task existed for a GREEN phase but #725 builder already implemented; architect review correctly identified pre-satisfaction and marked pass-through. AC lines themselves were clear and testable.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (5/5 verified) → no deduction
+- Lint violations: 0 → no deduction
+- AC quality ≤ 3: no (4/5) → no deduction
+- Missing reviewer evidence: no (detailed, .97 PASS) → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 2b5be73 | feat | engine.py | #725 (pre-satisfied) |
+| c6f002f | test | test_kanban_engine_compound.py | #725 (pre-satisfied) |
+| 580f2f6 | chore | 726 task file | #726 |

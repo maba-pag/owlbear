@@ -1,9 +1,0 @@
-Research follow-on from #543. Current repo still has NumPy-style section headers outside the researched-file list carried by #863.
-
-## AC
-
-- [ ] Convert NumPy-style docstring section headers to Google-style in these files only: src/owlbear/heartbeat.py, src/owlbear/memory/knowledge/consolidation.py, src/owlbear/memory/knowledge/document_store.py, and src/owlbear/memory/knowledge/enrichment.py.
-- [ ] In the listed files, no docstring contains a NumPy-style section header block (Parameters, Returns, or Raises followed by underline separators); those sections use Google-style Args:, Returns:, or Raises: instead.
-- [ ] Changes are limited to docstring text and formatting; no executable logic, function signatures, imports, or data structures change.
-- [ ] `uv run ruff check src/owlbear/heartbeat.py src/owlbear/memory/knowledge/consolidation.py src/owlbear/memory/knowledge/document_store.py src/owlbear/memory/knowledge/enrichment.py` exits 0 (uses project config, which enforces D-rules at Google convention and ignores D1xx per pyproject.toml).
-- [ ] docs/research/docstring-style.md is cited as the convention source for this cleanup.

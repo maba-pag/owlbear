@@ -79,7 +79,6 @@
   ],
   "ignorePaths": [
     ".venv/**",
-    "v1/**",
     "__pycache__/**",
     "**/*.egg-info/**",
     "uv.lock",

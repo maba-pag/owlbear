@@ -1,8 +1,0 @@
-Source: #999 research (docs/research/ingestpipeline-cancel-threading-to-enricher.md).
-
-AC:
-1. _ingest_from_intake passes cancel=cancel to enricher.schedule_graph_enrichment (ingest.py:287).
-2. _ingest_from_intake passes cancel=cancel to enricher.schedule_inter_doc_enrichment (ingest.py:288).
-3. When cancel is set, enricher schedule calls create no background tasks.
-4. Callers that omit cancel continue to work unchanged.
-5. Integration test: ingest with cancel set verifies enricher receives the signal.

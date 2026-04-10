@@ -1,8 +1,0 @@
-## Test-Writer Notes (pass-through -- already GREEN)
-- RED contract: tests/test_agent_definitions.py (written by RED predecessor #885, archived)
-- Tests covering AC: test_skills_match[researcher], test_skills_match[curator]
-- Current state: BOTH TESTS PASS -- implementation was applied before this dispatch
-  - src/owlbear/agents/researcher.md skills: [kanban-md] confirmed
-  - src/owlbear/agents/curator.md skills: [kanban-md] confirmed
-- No new test file needed -- RED contract is fully in place from #885
-- Advancing to in-progress so builder can verify and forward to review

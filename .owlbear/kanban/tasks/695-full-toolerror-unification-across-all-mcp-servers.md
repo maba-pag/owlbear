@@ -1,16 +1,18 @@
 ---
 id: 695
 title: Full ToolError unification across all MCP servers (gated on evidence)
-status: backlog
+status: archived
 priority: someday
 created: 2026-04-08T21:24:23.792112+02:00
-updated: 2026-04-09T01:38:59.8150418+02:00
+updated: 2026-04-10T04:28:16.5225155+02:00
+started: 2026-04-10T04:28:16.5225155+02:00
+completed: 2026-04-10T04:28:16.5225155+02:00
 tags:
     - scope:mcp
     - ' type:refactor'
     - ' source:research'
 blocked: true
-block_reason: Gate condition (AC1) requires error journal telemetry that does not exist. Error journal (#522) is not deployed. Cannot reassess until telemetry infrastructure is live and accumulating data.
+block_reason: Gate condition (AC1) infeasible — .owlbear/error-journal.jsonl does not exist on disk. Zero empirical evidence of agent failures after 3 research passes and 4 architecture reviews. Unblock only when error journal accumulates runtime data showing agents mishandling isError:false responses.
 class: standard
 ---
 
@@ -199,3 +201,53 @@ Error journal (#522) deployed to production AND accumulating runtime data showin
 
 ### Action Taken
 Blocked with explicit unblock condition. Breaks the reject→research→backlog loop that has wasted 5 pipeline cycles.
+
+[[2026-04-10]] Fri 02:27
+## Architecture Review (4th pass — re-block)
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Coherent scope |
+| Interface clarity | N/A | Gate not met |
+| Dependency correctness | PASS | No deps |
+| Module layering | N/A | No implementation |
+| TDD compliance | N/A | Gate not met |
+| KISS/YAGNI | **FAIL** | YAGNI — zero evidence after 3 research passes, 3 prior validations (#496, #540, #680) |
+| Premise challenge | **FAIL** | Gate condition (AC1) infeasible — telemetry infrastructure exists (#522 archived) but has not generated data |
+| Pattern consistency | N/A | No implementation |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | scope:mcp only |
+
+### Challenge Results
+- Challenger: SKIP (BLOCK verdict — protocol exemption)
+
+### Infrastructure Check
+- #522 (ErrorLogger adapter wiring): archived/complete
+- `.owlbear/error-journal.jsonl`: does NOT exist on disk (Test-Path: False)
+- Orchestrator has not run in production to generate journal data
+- All prior evidence sources unchanged: zero memory entries, zero kanban failure reports, zero agent source files with dual-pattern handling
+
+### Loop History
+| Pass | Agent | Verdict | Confidence |
+|------|-------|---------|------------|
+| Research 1 | researcher | gate NOT met | .90 |
+| Arch Review 1 | architect | REJECT | — |
+| Research 2 | researcher | gate NOT met | .92 |
+| Arch Review 2 | architect | REJECT + Loop-Breaking Directive | — |
+| Research 3 | researcher | archival recommended | .92 |
+| Arch Review 3 | architect | BLOCK | — |
+| Arch Review 4 (this) | architect | RE-BLOCK | — |
+
+7 pipeline cycles, identical conclusion each time. This task was unblocked and returned to backlog after the 3rd-pass BLOCK without any change in gate status.
+
+### Verdict: BLOCK
+### Reason
+Re-blocking. Nothing has changed since the 3rd-pass BLOCK: error journal still doesn't exist on disk, zero empirical evidence across all sources. The task was unblocked without meeting its unblock condition.
+
+### Unblock Condition (unchanged)
+ALL of: (1) `.owlbear/error-journal.jsonl` exists on disk, (2) contains runtime data, (3) data shows agents mishandling `isError: false` tool responses. Only then can AC1 be assessed.
+
+### Action Taken
+Blocked with explicit unblock condition. Do NOT unblock or return to backlog until all 3 unblock criteria are met.

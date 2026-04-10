@@ -1,3 +1,0 @@
-[  0.000] start
-[  0.000] env vars set: LOGFIRE_SEND_TO_LOGFIRE=false, LOGFIRE_IGNORE_NO_CONFIG=1
-[  0.000] importing pydantic_settings...

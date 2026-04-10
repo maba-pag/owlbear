@@ -1,4 +1,0 @@
-## Test-Writer Notes
-- Non-implementation task (board cleanup only) - AC explicitly forbids src/, tests/, or kanban task modifications.
-- Architecture Review confirms: No TDD predecessor is required because the rewritten task forbids src/ and test changes.
-- Passing through to builder for closure note and archive.

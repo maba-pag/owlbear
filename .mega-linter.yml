@@ -28,11 +28,10 @@ MARKDOWN_SUMMARY_REPORTER: true
 SARIF_REPORTER: true
 
 # Exclude paths that are generated, archived, or third-party
-FILTER_REGEX_EXCLUDE: '(\.owlbear/kanban/(v1-archive|tasks)/|\.owlbear/research/|\.owlbear/scratch/|\.owlbear/decisions/|\.venv/|v1/|__pycache__/|\.egg-info/|uv\.lock$)'
+FILTER_REGEX_EXCLUDE: '(\.owlbear/kanban/(v1-archive|tasks)/|\.owlbear/research/|\.owlbear/scratch/|\.owlbear/decisions/|\.venv/|__pycache__/|\.egg-info/|uv\.lock$)'
 
 # Directory-level pre-filter (faster than regex, excluded at any depth)
 ADDITIONAL_EXCLUDED_DIRECTORIES:
-  - v1
   - store
   - .venv
   - __pycache__
@@ -44,10 +43,7 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
 
 # Ruff — uses pyproject.toml config (select=["ALL"] includes bandit S-rules)
 # Auto-discovers pyproject.toml from project root; no explicit config path needed.
-# --extend-exclude ensures v1/ is excluded even when MegaLinter's project-mode
-# bypasses file-level FILTER_REGEX_EXCLUDE.
 PYTHON_RUFF_CLI_LINT_MODE: project
-PYTHON_RUFF_ARGUMENTS: "--extend-exclude v1/"
 
 # Ruff format — uses pyproject.toml config
 PYTHON_DEFAULT_STYLE: ruff

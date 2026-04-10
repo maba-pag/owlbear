@@ -1,7 +1,0 @@
-## Builder Notes (retry)
-- Task type: research (non-implementation) -- no source code changes.
-- Docs/AC verified: docs/research/cooperative-cancellation.md exists and populated (AC1-AC3). Follow-up tasks #870 (backlog), #871, #872 linked (AC4).
-- Fixed pre-existing env failure: replaced pytest.approx() with direct float comparison in tests/test_bookmark_pipeline.py (4 assertions). Root cause: numpy stub lacks isscalar; pytest.approx internally calls np.isscalar. Fix is safe since mocks return exact float values.
-- Pytest (scoped): 25 passed, 0 failed (tests/test_bookmark_pipeline.py).
-- Lint (scoped): ruff check tests/test_bookmark_pipeline.py -- All checks passed.
-- Files changed: tests/test_bookmark_pipeline.py (4 assertion lines only).
