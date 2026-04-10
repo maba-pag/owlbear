@@ -74,7 +74,7 @@ REPOSITORY_GITLEAKS_ARGUMENTS: "--no-banner"
 REPOSITORY_DEVSKIM_DISABLE_ERRORS: false
 
 # Trivy — vulnerability + misconfiguration scanning
-REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv --skip-dirs v1"
+REPOSITORY_TRIVY_ARGUMENTS: "--scanners vuln,misconfig --skip-dirs .venv"
 
 # ──────────────────────────────────────────────
 # Performance & Display
