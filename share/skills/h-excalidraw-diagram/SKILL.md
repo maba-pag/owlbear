@@ -69,6 +69,91 @@ Vertical or horizontal timeline with events. Use for API call sequences, deploym
 - Horizontal rectangles branching from markers
 - Text labels with timestamps or step numbers
 
+### Tree (Hierarchy)
+
+Parent-child hierarchy via `line` elements. Use for org charts, file trees, taxonomies.
+
+- Vertical trunk `line` with horizontal branch `line`s at each depth level
+- Free-floating `text` labels — structure from lines, no shape containers
+
+### Convergence (Many-to-One)
+
+Multiple sources merging to a single output. Use for aggregation flows, funnel analysis, consensus steps.
+
+- Multiple input elements (`rectangle` or `ellipse`) on the left
+- Arrows converging to a single output element on the right
+
+### Spiral / Cycle
+
+Repeating loop of ordered steps. Use for iteration loops, recurring processes, agile cycles.
+
+- Elements arranged in a clockwise ring with arrows between each step
+- One return arrow from last element to first (feedback loop)
+
+### Cloud (Abstract State)
+
+Fuzzy or unstructured region. Use for cloud platforms, abstract contexts, environment boundaries.
+
+- Overlapping `ellipse` elements with varied sizes and low-opacity fill
+- Interior text label; no sharp boundary
+
+### Assembly Line (Transformation)
+
+Sequential input-to-output transformation. Use for data pipelines, build processes, ETL flows.
+
+- Left-to-right chain: `ellipse` input → `rectangle` process steps → `ellipse` output
+- Arrows between steps with short transformation label on each
+
+### Side-by-Side (Comparison)
+
+Two parallel structures. Use for before/after comparisons, option A vs. B, architecture alternatives.
+
+- Two symmetric columns, matching element types at each row
+- Contrasting fill colors per column; optional shared center axis line
+
+### Entity-Relationship (ER)
+
+Chen notation mapped to Excalidraw shapes. Use for data models, schema design, domain relationships.
+
+- `rectangle` → entity; `diamond` → relationship; `ellipse` → attribute
+- `line` elements connect entities to relationships; arrow labels carry cardinality (`1`, `N`, `M`)
+- Primary-key attribute: `ellipse` with underlined text label
+
+## Shape Meaning
+
+| Concept Type | Shape |
+|---|---|
+| Labels, descriptions | free-floating text |
+| Section titles | free-floating text |
+| Timeline markers | small `ellipse` (10–20 px) |
+| Start, trigger, input | `ellipse` |
+| End, output, result | `ellipse` |
+| Decision, condition | `diamond` |
+| Process, action, step | `rectangle` |
+| Abstract state, context | overlapping `ellipse` |
+| Hierarchy node | `line` + text (no boxes) |
+
+Rule: Default to no container. Add shapes only when they carry meaning. Target < 30% of text elements inside containers.
+
+## Container vs. Free-Floating Text
+
+| Use a Container When | Use Free-Floating Text When |
+|---|---|
+| Element is a focal point | Element is a label or description |
+| Arrows must connect to it | Describes something nearby |
+| Shape carries meaning (e.g., diamond) | Section title, subtitle, or annotation |
+| Represents a distinct system component | Typography alone creates hierarchy |
+
+## Large Diagram Strategy
+
+Build large diagrams section by section — never generate a complete diagram in a single pass (output token limits degrade quality).
+
+1. **Plan sections** around natural visual groupings before writing any JSON
+2. **Build one section at a time** — complete elements, verify locally, then continue
+3. **Descriptive IDs** — use `"trigger_rect"`, `"arrow_fan_left"` not numeric IDs; namespace by section (`s1_`, `s2_`)
+4. **Cross-section bindings** — after adding inter-section arrows, update `boundElements` on both endpoints
+5. **Final review** — after all sections, scan full JSON for broken bindings, spacing balance, and duplicate IDs
+
 ## Delivery
 
 1. **Write** — `create_file` to `.owlbear/scratch/{name}.excalidraw`
