@@ -49,6 +49,9 @@ class RefreshOrchestrator:
         store: KnowledgeSourceStore (or compatible) for CRUD operations.
         pipeline: IngestPipeline for ingesting intake results.
         workspace_root: Root directory for file sandbox; defaults to Path.cwd().
+        content_fetcher: Optional protocol object with an async ``fetch(url)``
+            method used to retrieve content for ``AUTHENTICATED_WEB`` sources.
+            When ``None``, authenticated web refresh is a no-op.
     """
 
     def __init__(

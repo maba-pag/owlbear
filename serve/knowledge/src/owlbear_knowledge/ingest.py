@@ -131,9 +131,12 @@ class IngestPipeline:
     async def ingest(self, intake: IntakeResult, *, scope: str = "global") -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
 
-        URL-sourced content (``source_type == "url"``) is wrapped in
+        Untrusted-source content (determined by
+        :func:`~owlbear_knowledge.content_safety.should_wrap`) is wrapped in
         ``<untrusted_web_content>`` sentinel tags before entity extraction to
-        prevent prompt injection from malicious web pages.
+        prevent prompt injection from malicious web pages.  Local/text sources
+        (``file``, ``file_glob``, ``text``) and absent source types are not
+        wrapped; all other source types are wrapped by default.
 
         Args:
             intake: Content to ingest, as produced by read_file/read_url/read_text.

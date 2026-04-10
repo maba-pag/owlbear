@@ -27,6 +27,36 @@ External repos and resources studied during OwlBear development.
 | markdownify (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown conversion — MIT license, BeautifulSoup-based, customizable | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
 | browser-use project | <https://github.com/browser-use/browser-use> | CDP automation prior art — 80K stars, DomService pattern, AX tree usage | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
 
+## Edge Launcher + CDP Implementation (Task #758)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local (v1.58+), 30s default timeout | .owlbear/research/edge-launcher-cdp-impl-758.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | `--remote-debugging-port` + `--user-data-dir` mandatory from Chrome/Edge 136+ | .owlbear/research/edge-launcher-cdp-impl-758.md | 2026-04-10 |
+
+## CDP Spike Implementation Validation (Task #776)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | API verification: is_local (v1.58+), 30s timeout, default context pattern | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Verification: `--user-data-dir` to non-default dir mandatory from Chrome 136+ | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+| Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/security.md | HR#4: CDP binds 127.0.0.1 only, no wildcard origins — identified gap in #752 design | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+
+## Phase 0 CDP Spike Research (Task #774)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Chrome 136 remote-debugging-port blog | <https://developer.chrome.com/blog/remote-debugging-port> | `--user-data-dir` mandatory for `--remote-debugging-port` from Chrome/Edge 136+ | .owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
+| trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) — benchmark on news/blog, NOT corporate intranet | .owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
+| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | extract() params: output_format, favor_precision, prune_xpath, include_links | .owlbear/research/774-edge-cdp-spike.md | 2026-04-10 |
+
+## Phase 1 Browser Package + Pipeline Quality + Schema (Task #775)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| trafilatura (PyPI) | <https://pypi.org/project/trafilatura/> | HTML content extraction library (Apache 2.0) — evaluated as dependency for owlbear_browser content extractor | .owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
+| Playwright CDP API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API patterns — is_local (v1.58+), 30s default timeout, default context access | .owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
+
 ## Edge Launcher + CDP Tests (Task #755)
 
 | Source | URL | What | Where Used | Date |
