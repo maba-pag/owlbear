@@ -323,6 +323,8 @@ class TestFromAC_SourcePageSchemaColumns:
         # A unified PageStatus design uses one column.  Separate approval_state /
         # extraction_status columns indicate an old design not matching this spec.
         assert "status" in cols
+        assert "approval_state" not in cols, "approval_state is a split-column remnant; only unified 'status' is valid"
+        assert "extraction_status" not in cols, "extraction_status is a split-column remnant; only unified 'status' is valid"
 
     def test_schema_version_is_9_after_v9_migration(self) -> None:
         """After init_db on a fresh connection, schema_version is 9."""
