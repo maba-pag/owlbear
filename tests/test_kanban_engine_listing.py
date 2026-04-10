@@ -76,11 +76,11 @@ next_id: 100
 
 
 def _make_kanban_dir(tmp: Path) -> Path:
-    """Return a kanban dir with config.yml, tasks/, and v1-archive/ directories."""
+    """Return a kanban dir with config.yml, tasks/, and archive/ directories."""
     kdir = tmp / "kanban"
     kdir.mkdir()
     (kdir / "tasks").mkdir()
-    (kdir / "v1-archive").mkdir()
+    (kdir / "archive").mkdir()
     (kdir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
     return kdir
 
@@ -548,10 +548,10 @@ class TestFromAC_LimitPagination:
 
 class TestFromAC_ArchivedTasks:
     def test_default_excludes_archive_dir_tasks(self, tmp_path: Path) -> None:
-        """list_tasks() default (archived=False) does not include v1-archive/ tasks."""
+        """list_tasks() default (archived=False) does not include archive/ tasks."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Live task", subdir="tasks")
-        _add_task(kdir, 2, "Archived task", subdir="v1-archive")
+        _add_task(kdir, 2, "Archived task", subdir="archive")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks()
@@ -560,11 +560,11 @@ class TestFromAC_ArchivedTasks:
         assert result[0].id == 1
 
     def test_archived_true_returns_tasks_from_archive_dir(self, tmp_path: Path) -> None:
-        """list_tasks(archived=True) reads tasks from v1-archive/ directory."""
+        """list_tasks(archived=True) reads tasks from archive/ directory."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Live task", subdir="tasks")
-        _add_task(kdir, 2, "Archived task A", subdir="v1-archive")
-        _add_task(kdir, 3, "Archived task B", subdir="v1-archive")
+        _add_task(kdir, 2, "Archived task A", subdir="archive")
+        _add_task(kdir, 3, "Archived task B", subdir="archive")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(archived=True)
@@ -576,7 +576,7 @@ class TestFromAC_ArchivedTasks:
         """archived=True returns only archived tasks, not live tasks."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Live task", subdir="tasks")
-        _add_task(kdir, 2, "Archived task", subdir="v1-archive")
+        _add_task(kdir, 2, "Archived task", subdir="archive")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(archived=True)
@@ -586,7 +586,7 @@ class TestFromAC_ArchivedTasks:
         assert 2 in ids
 
     def test_archived_true_empty_archive_returns_empty(self, tmp_path: Path) -> None:
-        """archived=True returns [] when v1-archive/ is empty."""
+        """archived=True returns [] when archive/ is empty."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Live task", subdir="tasks")
 

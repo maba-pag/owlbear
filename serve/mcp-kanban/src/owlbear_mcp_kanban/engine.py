@@ -10,7 +10,7 @@ Architecture:
   - show_task() finds a single task file by ID and returns its TaskRecord.
   - create_task() allocates next_id, writes a new task file, increments config.
   - edit_task() modifies task fields in-place; slug/filename never changes.
-  - move_task() changes status; "archived" moves file to v1-archive/.
+  - move_task() changes status; "archived" moves file to archive/.
   - claim_task() marks a task as claimed by this engine's agent_name; rejects
     blocked tasks and rival claims within the configured timeout window.
   - release_task() clears claimed_by and claimed_at fields unconditionally.
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
     from owlbear_mcp_kanban.engine_models import BoardConfig
 
-_ARCHIVE_DIR_NAME = "v1-archive"
+_ARCHIVE_DIR_NAME = "archive"
 
 
 class KanbanEngine:
@@ -104,7 +104,7 @@ class KanbanEngine:
             search:    Case-insensitive substring match on title and body.
             sort:      Field to sort by: id, title, status, priority, created, updated.
             unclaimed: When True, only tasks with no claimed_by value.
-            archived:  When True, read from v1-archive/ instead of tasks_dir.
+            archived:  When True, read from archive/ instead of tasks_dir.
             limit:     Cap on results (0 = unlimited).
             reverse:   When True, reverse the sort order.
             blocked:   True = only blocked; False = only unblocked; None = all.
@@ -336,7 +336,7 @@ class KanbanEngine:
         return record
 
     def move_task(self, task_id: str, status: str) -> TaskRecord:
-        """Change the status of a task; "archived" moves the file to v1-archive/.
+        """Change the status of a task; "archived" moves the file to archive/.
 
         Args:
             task_id: Numeric task ID as a string.

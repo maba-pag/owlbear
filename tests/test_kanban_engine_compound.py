@@ -227,11 +227,11 @@ class TestFromAC_EndWorkSuccessLastStatus:
     def test_end_work_last_status_creates_file_in_archive_dir(
         self, engine: KanbanEngine, kanban_dir: Path
     ) -> None:
-        """end_work(success) on 'done' creates the task file in v1-archive/."""
+        """end_work(success) on 'done' creates the task file in archive/."""
         task = engine.create_task("Find in archive", status="done")
         engine.start_work(str(task.id))
         engine.end_work(str(task.id), note="Archived note", outcome="success")
-        archive_dir = kanban_dir / "v1-archive"
+        archive_dir = kanban_dir / "archive"
         archive_files = list(archive_dir.glob(f"{task.id}-*.md"))
         assert len(archive_files) == 1
 
@@ -242,7 +242,7 @@ class TestFromAC_EndWorkSuccessLastStatus:
         task = engine.create_task("Note in archive", status="done")
         engine.start_work(str(task.id))
         engine.end_work(str(task.id), note="Final note text", outcome="success")
-        archive_dir = kanban_dir / "v1-archive"
+        archive_dir = kanban_dir / "archive"
         archive_files = list(archive_dir.glob(f"{task.id}-*.md"))
         assert archive_files
         content = archive_files[0].read_text(encoding="utf-8")

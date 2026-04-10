@@ -127,7 +127,7 @@
   "scm.graph.pageOnScroll": false,
   "search.exclude": {
     ".owlbear/kanban/activity.jsonl": true,
-    ".owlbear/kanban/v1-archive/**": true,
+    ".owlbear/kanban/archive/**": true,
     ".owlbear/scratch/**": true,
     ".venv": true,
     "**/__pycache__": true,

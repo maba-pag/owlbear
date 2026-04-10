@@ -82,7 +82,7 @@
     "__pycache__/**",
     "**/*.egg-info/**",
     "uv.lock",
-    ".owlbear/kanban/v1-archive/**",
+    ".owlbear/kanban/archive/**",
     ".owlbear/scratch/**",
     "node_modules/**"
   ]

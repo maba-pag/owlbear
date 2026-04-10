@@ -24,8 +24,8 @@ max_line_length = unset
 [.owlbear/kanban/activity.jsonl]
 max_line_length = unset
 
-# Kanban v1 archive — frozen, do not lint
-[.owlbear/kanban/v1-archive/**]
+# Kanban archive — frozen, do not lint
+[.owlbear/kanban/archive/**]
 max_line_length = unset
 
 # Keep data files minified — do not reformat

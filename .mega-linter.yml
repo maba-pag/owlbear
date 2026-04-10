@@ -28,7 +28,7 @@ MARKDOWN_SUMMARY_REPORTER: true
 SARIF_REPORTER: true
 
 # Exclude paths that are generated, archived, or third-party
-FILTER_REGEX_EXCLUDE: '(\.owlbear/kanban/(v1-archive|tasks)/|\.owlbear/research/|\.owlbear/scratch/|\.owlbear/decisions/|\.venv/|__pycache__/|\.egg-info/|uv\.lock$)'
+FILTER_REGEX_EXCLUDE: '(\.owlbear/kanban/(archive|tasks)/|\.owlbear/research/|\.owlbear/scratch/|\.owlbear/decisions/|\.venv/|__pycache__/|\.egg-info/|uv\.lock$)'
 
 # Directory-level pre-filter (faster than regex, excluded at any depth)
 ADDITIONAL_EXCLUDED_DIRECTORIES:
