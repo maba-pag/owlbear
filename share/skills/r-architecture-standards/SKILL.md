@@ -19,7 +19,6 @@ agents/*.agent.md            (agent definitions — pure markdown, no Python)
     use tools from
 serve/mcp-kanban/         (MCP server: kanban board operations)
 serve/mcp-knowledge/      (MCP server: knowledge base operations)
-serve/mcp-project/        (MCP server: project metadata)
 serve/mcp-memory/         (MCP server: persistent agent memory)
     import from
 serve/knowledge/          (core library: graph, vector, ingest, query)
@@ -29,7 +28,7 @@ Each MCP server is a standalone FastMCP application. Core libraries live in sepa
 
 ## MCP Server Conventions
 
-All custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) follow these conventions:
+All custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-memory`) follow these conventions:
 
 ### Error Handling
 
@@ -99,7 +98,6 @@ Each server reads a `*_TOOLS_EXCLUDE` env var at startup:
 |--------|---------|
 | mcp-kanban | `KANBAN_TOOLS_EXCLUDE` |
 | mcp-knowledge | `KNOWLEDGE_TOOLS_EXCLUDE` |
-| mcp-project | `PROJECT_TOOLS_EXCLUDE` |
 | mcp-memory | `MEMORY_TOOLS_EXCLUDE` |
 
 Comma-separated tool names are removed via `server.remove_tool()`. Unknown names are silently ignored. Default (unset) = all tools registered.
@@ -120,7 +118,7 @@ Cross-namespace imports are enforced by `tests/test_package_boundary.py`. The `A
 
 ## Configuration
 
-- MCP servers read configuration from environment variables at startup (see each server's handbook skill for the variable list: `h-mcp-kanban`, `h-mcp-project`, `h-knowledge-ops`).
+- MCP servers read configuration from environment variables at startup (see each server's handbook skill for the variable list: `h-mcp-kanban`, `h-knowledge-ops`).
 - Core library settings use `pydantic-settings` fields. Never read `os.environ` directly in library code — surface it through the MCP server's `AppContext`.
 - Feature flags use `bool` fields with `default=False` (opt-in).
 
@@ -134,7 +132,6 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
 | mcp-kanban | `serve/mcp-kanban/` |
 | mcp-knowledge | `serve/mcp-knowledge/` |
-| mcp-project | `serve/mcp-project/` |
 | mcp-memory | `serve/mcp-memory/` |
 | voice | `serve/voice/` |
 | agent-config | `agents/`, `skills/`, `instructions/`, `.github/copilot-instructions.md` |

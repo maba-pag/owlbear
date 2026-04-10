@@ -35,7 +35,6 @@ Open VS Code with `code .`.
 | `serve/knowledge/`        | Knowledge engine (graph + vector)                      |
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
-| `serve/mcp-project/`      | MCP server for project metadata and lifecycle          |
 | `serve/mcp-memory/`       | MCP server for persistent agent memory (SQLite-backed) |
 | `serve/voice/`            | Voice addon (speech recognition + TTS)                 |
 | `share/agents/`           | Agent definitions (`.agent.md`)                        |
@@ -57,8 +56,8 @@ stage (research → architect → test-writer → builder → reviewer → write
 **Skills** in `share/skills/` auto-load by relevance, carrying domain knowledge and
 reusable workflows for each agent role.
 
-**MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-project`, `mcp-memory`) expose the kanban
-board, knowledge base, project metadata, and persistent agent memory as tools inside VS Code.
+**MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-memory`) expose the kanban
+board, knowledge base, and persistent agent memory as tools inside VS Code.
 
 **Orchestrator** dispatches work via ACP over Copilot CLI, coordinating agents
 through a shared kanban board in `.owlbear/kanban/`.

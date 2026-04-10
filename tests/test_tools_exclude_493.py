@@ -26,10 +26,6 @@ from owlbear_mcp_knowledge.server import (  # type: ignore[import]
     _apply_tool_exclusions as knowledge_apply_exclusions,
     app_lifespan as knowledge_app_lifespan,
 )
-from owlbear_mcp_project.server import (  # type: ignore[import]
-    _apply_tool_exclusions as project_apply_exclusions,
-    app_lifespan as project_app_lifespan,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -177,122 +173,6 @@ class TestFromAC_KnowledgeToolExclusions:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_ProjectToolExclusions
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ProjectToolExclusions:
-    """Contract tests for _apply_tool_exclusions in mcp-project server (#493 AC)."""
-
-    # AC: reads PROJECT_TOOLS_EXCLUDE env var, calls remove_tool per tool name
-    def test_exclude_single_tool_calls_remove_tool_once(self) -> None:
-        """Excluding one tool name causes remove_tool to be called exactly once with that name."""
-        server = _make_mock_server()
-        with patch.dict(os.environ, {"PROJECT_TOOLS_EXCLUDE": "project_info"}):
-            project_apply_exclusions(server)
-        server.remove_tool.assert_called_once_with("project_info")
-
-    # AC: comma-separated list → each name gets a remove_tool call
-    def test_exclude_multiple_tools_calls_remove_tool_for_each(self) -> None:
-        """Excluding multiple comma-separated tools calls remove_tool for each name."""
-        server = _make_mock_server()
-        with patch.dict(
-            os.environ,
-            {"PROJECT_TOOLS_EXCLUDE": "project_info,project_list,project_readme"},
-        ):
-            project_apply_exclusions(server)
-        assert server.remove_tool.call_count == 3
-        called_names = {call.args[0] for call in server.remove_tool.call_args_list}
-        assert called_names == {"project_info", "project_list", "project_readme"}
-
-    # AC: Default (no env var): backward-compatible — remove_tool never called
-    def test_no_env_var_remove_tool_never_called(self) -> None:
-        """When PROJECT_TOOLS_EXCLUDE is not set, remove_tool is never called."""
-        server = _make_mock_server()
-        env_without = {k: v for k, v in os.environ.items() if k != "PROJECT_TOOLS_EXCLUDE"}
-        with patch.dict(os.environ, env_without, clear=True):
-            project_apply_exclusions(server)
-        server.remove_tool.assert_not_called()
-
-    # AC: invalid/unknown tool names silently ignored
-    def test_invalid_tool_name_does_not_raise(self) -> None:
-        """An unknown tool name causes remove_tool to raise, but the exception is swallowed."""
-        server = _make_mock_server()
-        server.remove_tool.side_effect = Exception("unknown tool: no_such_tool")
-        with patch.dict(os.environ, {"PROJECT_TOOLS_EXCLUDE": "no_such_tool"}):
-            project_apply_exclusions(server)  # must not raise
-
-    # Edge: empty env var → no removals (backward-compatible)
-    def test_empty_env_var_no_removals(self) -> None:
-        """When PROJECT_TOOLS_EXCLUDE is empty, remove_tool is never called."""
-        server = _make_mock_server()
-        with patch.dict(os.environ, {"PROJECT_TOOLS_EXCLUDE": ""}):
-            project_apply_exclusions(server)
-        server.remove_tool.assert_not_called()
-
-    # Edge: whitespace stripped from each tool name
-    def test_whitespace_stripped_from_tool_names(self) -> None:
-        """Leading/trailing whitespace around each tool name is stripped before calling remove_tool."""
-        server = _make_mock_server()
-        with patch.dict(
-            os.environ,
-            {"PROJECT_TOOLS_EXCLUDE": " project_info , project_list "},
-        ):
-            project_apply_exclusions(server)
-        called_names = {call.args[0] for call in server.remove_tool.call_args_list}
-        assert "project_info" in called_names
-        assert "project_list" in called_names
-        assert not any(" " in name for name in called_names)
-
-    # Edge: trailing comma does not produce an empty-string tool call
-    def test_trailing_comma_ignored(self) -> None:
-        """A trailing comma does not call remove_tool with an empty string."""
-        server = _make_mock_server()
-        with patch.dict(os.environ, {"PROJECT_TOOLS_EXCLUDE": "project_info,"}):
-            project_apply_exclusions(server)
-        called_names = [call.args[0] for call in server.remove_tool.call_args_list]
-        assert "" not in called_names
-
-    # Error: invalid name in list does not prevent valid names from being excluded
-    def test_invalid_mixed_with_valid_still_excludes_valid(self) -> None:
-        """When the list mixes valid and invalid names, valid names are still excluded."""
-        call_log: list[str] = []
-
-        def _selective_remove(name: str) -> None:
-            if name == "no_such_tool":
-                msg = "unknown tool"
-                raise ValueError(msg)
-            call_log.append(name)
-
-        server = _make_mock_server()
-        server.remove_tool.side_effect = _selective_remove
-        with patch.dict(
-            os.environ,
-            {"PROJECT_TOOLS_EXCLUDE": "project_info,no_such_tool,project_list"},
-        ):
-            project_apply_exclusions(server)
-        assert "project_info" in call_log
-        assert "project_list" in call_log
-
-    # Boundary: function returns a set type
-    def test_returns_set_type(self) -> None:
-        """_apply_tool_exclusions returns a set (set[str])."""
-        server = _make_mock_server()
-        with patch.dict(os.environ, {"PROJECT_TOOLS_EXCLUDE": "project_info"}):
-            result = project_apply_exclusions(server)
-        assert isinstance(result, set)
-
-    # Boundary: returns empty set when no env var set
-    def test_returns_empty_set_when_no_env_var(self) -> None:
-        """_apply_tool_exclusions returns an empty set when no env var is set."""
-        server = _make_mock_server()
-        env_without = {k: v for k, v in os.environ.items() if k != "PROJECT_TOOLS_EXCLUDE"}
-        with patch.dict(os.environ, env_without, clear=True):
-            result = project_apply_exclusions(server)
-        assert result == set()
-
-
-# ---------------------------------------------------------------------------
 # TestFromAC_KnowledgeLifespanExclusion
 # ---------------------------------------------------------------------------
 
@@ -351,52 +231,6 @@ class TestFromAC_KnowledgeLifespanExclusion:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_ProjectLifespanExclusion
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ProjectLifespanExclusion:
-    """Contract tests: app_lifespan calls _apply_tool_exclusions (mcp-project)."""
-
-    @pytest.mark.asyncio
-    async def test_lifespan_calls_apply_tool_exclusions(self) -> None:
-        """app_lifespan calls _apply_tool_exclusions during startup (before yield)."""
-        mock_server = _make_mock_server()
-        with patch("owlbear_mcp_project.server._apply_tool_exclusions") as mock_apply:
-            async with project_app_lifespan(mock_server):
-                mock_apply.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_lifespan_passes_server_to_apply_tool_exclusions(self) -> None:
-        """app_lifespan passes the MCP server object as the argument to _apply_tool_exclusions."""
-        mock_server = _make_mock_server()
-        with patch("owlbear_mcp_project.server._apply_tool_exclusions") as mock_apply:
-            async with project_app_lifespan(mock_server):
-                call_args = mock_apply.call_args
-                assert call_args is not None
-                assert call_args.args[0] is mock_server
-
-    @pytest.mark.asyncio
-    async def test_lifespan_default_no_tool_removals(self) -> None:
-        """With no PROJECT_TOOLS_EXCLUDE set, no tools are removed during lifespan startup."""
-        mock_server = _make_mock_server()
-        env_without = {k: v for k, v in os.environ.items() if k != "PROJECT_TOOLS_EXCLUDE"}
-        with patch.dict(os.environ, env_without, clear=True):
-            async with project_app_lifespan(mock_server):
-                pass
-        mock_server.remove_tool.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_lifespan_removes_tool_when_env_var_set(self) -> None:
-        """app_lifespan removes tools specified in PROJECT_TOOLS_EXCLUDE during startup."""
-        mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"PROJECT_TOOLS_EXCLUDE": "project_info"}):
-            async with project_app_lifespan(mock_server):
-                pass
-        mock_server.remove_tool.assert_called_with("project_info")
-
-
-# ---------------------------------------------------------------------------
 # TestFromAC_AllExports
 # ---------------------------------------------------------------------------
 
@@ -407,11 +241,5 @@ class TestFromAC_AllExports:
     def test_knowledge_all_includes_apply_tool_exclusions(self) -> None:
         """owlbear_mcp_knowledge.server.__all__ must export _apply_tool_exclusions."""
         import owlbear_mcp_knowledge.server as mod
-
-        assert "_apply_tool_exclusions" in mod.__all__
-
-    def test_project_all_includes_apply_tool_exclusions(self) -> None:
-        """owlbear_mcp_project.server.__all__ must export _apply_tool_exclusions."""
-        import owlbear_mcp_project.server as mod
 
         assert "_apply_tool_exclusions" in mod.__all__

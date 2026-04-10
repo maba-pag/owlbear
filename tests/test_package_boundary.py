@@ -9,7 +9,6 @@ Dependency rules
 owlbear_knowledge     no owlbear-namespace deps (foundation layer)
 owlbear_mcp_kanban    no owlbear-namespace deps (standalone MCP server)
 owlbear_mcp_knowledge may import owlbear_knowledge only
-owlbear_mcp_project   no owlbear-namespace deps (standalone MCP server)
 owlbear               may import owlbear_orchestrator only (co-shipped wheel)
 owlbear_orchestrator  may import owlbear only (co-shipped wheel)
 owlbear_voice         no owlbear-namespace deps (standalone addon)
@@ -43,7 +42,6 @@ ALLOWED_IMPORTS = {
     "owlbear_mcp_kanban": set(),
     "owlbear_mcp_knowledge": {"owlbear_knowledge"},
     "owlbear_mcp_memory": set(),
-    "owlbear_mcp_project": set(),
     "owlbear": {"owlbear_orchestrator"},
     "owlbear_orchestrator": {"owlbear"},
     "owlbear_voice": set(),

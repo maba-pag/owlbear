@@ -80,16 +80,6 @@ class TestFromAC_PackageStructure:
         """serve/mcp-knowledge/src/owlbear_mcp_knowledge/__init__.py stub must exist."""
         assert (ROOT / "serve" / "mcp-knowledge" / "src" / "owlbear_mcp_knowledge" / "__init__.py").exists()
 
-    # -- serve/mcp-project --
-
-    def test_mcp_project_pyproject_exists(self) -> None:
-        """serve/mcp-project/pyproject.toml must exist."""
-        assert (ROOT / "serve" / "mcp-project" / "pyproject.toml").exists()
-
-    def test_mcp_project_init_stub_exists(self) -> None:
-        """serve/mcp-project/src/owlbear_mcp_project/__init__.py stub must exist."""
-        assert (ROOT / "serve" / "mcp-project" / "src" / "owlbear_mcp_project" / "__init__.py").exists()
-
 
 # ---------------------------------------------------------------------------
 # AC: Directory structure
@@ -151,7 +141,6 @@ class TestFromAC_BuildVerification:
             "owlbear_knowledge",
             "owlbear_mcp_kanban",
             "owlbear_mcp_knowledge",
-            "owlbear_mcp_project",
         ],
     )
     def test_package_importable(self, module: str) -> None:

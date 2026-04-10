@@ -1,52 +1,44 @@
 {
-  "servers": {
-    "microsoft/markitdown": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": [
-        "markitdown-mcp@0.0.1a4"
-      ]
-    },
-    "owlbear-kanban": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "python",
-        "-m",
-        "owlbear_mcp_kanban"
-      ]
-    },
-    "owlbear-knowledge": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "python",
-        "-m",
-        "owlbear_mcp_knowledge"
-      ]
-    },
-    "owlbear-project": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "python",
-        "-m",
-        "owlbear_mcp_project"
-      ]
-    },
-    "owlbear-memory": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "python",
-        "-m",
-        "owlbear_mcp_memory"
-      ]
-    }
-  },
-  "inputs": []
+    "servers":  {
+                    "microsoft/markitdown":  {
+                                                 "type":  "stdio",
+                                                 "command":  "uvx",
+                                                 "args":  [
+                                                              "markitdown-mcp@0.0.1a4"
+                                                          ]
+                                             },
+                    "owlbear-kanban":  {
+                                           "type":  "stdio",
+                                           "command":  "uv",
+                                           "args":  [
+                                                        "run",
+                                                        "python",
+                                                        "-m",
+                                                        "owlbear_mcp_kanban"
+                                                    ]
+                                       },
+                    "owlbear-knowledge":  {
+                                              "type":  "stdio",
+                                              "command":  "uv",
+                                              "args":  [
+                                                           "run",
+                                                           "python",
+                                                           "-m",
+                                                           "owlbear_mcp_knowledge"
+                                                       ]
+                                          },
+                    "owlbear-memory":  {
+                                           "type":  "stdio",
+                                           "command":  "uv",
+                                           "args":  [
+                                                        "run",
+                                                        "python",
+                                                        "-m",
+                                                        "owlbear_mcp_memory"
+                                                    ]
+                                       }
+                },
+    "inputs":  [
+
+               ]
 }

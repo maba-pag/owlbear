@@ -15,7 +15,6 @@ prefix and the __all__ export.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -26,11 +25,6 @@ from owlbear_mcp_knowledge.server import (
     ingest_document,
     list_entities,
     search_knowledge,
-)
-from owlbear_mcp_project.server import (
-    AppContext as ProjectAppContext,
-    project_info,
-    project_readme,
 )
 
 
@@ -50,22 +44,6 @@ def _make_kn_ctx(
     app_ctx.query_service = query_service
     app_ctx.ingest_pipeline = ingest_pipeline if ingest_pipeline is not None else MagicMock()
     app_ctx.graph_store = graph_store if graph_store is not None else MagicMock()
-    ctx = MagicMock()
-    ctx.request_context.lifespan_context = app_ctx
-    return ctx
-
-
-def _make_proj_ctx(
-    project_file: Any = None,
-    project_root: Path = Path("/nonexistent-fake-root-506"),
-    owlbear_root: Path = Path("/nonexistent-fake-owlbear-506"),
-) -> MagicMock:
-    """Return a FastMCP Context mock whose lifespan_context has mcp-project fields."""
-    app_ctx = ProjectAppContext(
-        project_file=project_file,
-        project_root=project_root,
-        owlbear_root=owlbear_root,
-    )
     ctx = MagicMock()
     ctx.request_context.lifespan_context = app_ctx
     return ctx
@@ -134,61 +112,6 @@ class TestFromAC_ErrorPrefixKnowledge:
         ctx = _make_kn_ctx()
         result = await list_entities(ctx, entity_type="BOGUS_ENTITY_TYPE_XYZ")
         assert result.startswith("error: "), f"Expected 'error: ' prefix, got: {result!r}"
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_ErrorPrefixProject
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ErrorPrefixProject:
-    """Contract tests for AC4-AC5: error-prefix standardization in mcp-project."""
-
-    # -- AC4: project_info — no config ----------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_project_info_no_config_returns_error_prefix(self) -> None:
-        """project_info raises ToolError when project_file is None."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-
-        ctx = _make_proj_ctx(project_file=None)
-        with pytest.raises(ToolError):
-            await project_info(ctx)
-
-    @pytest.mark.asyncio
-    async def test_project_info_no_config_exact_error_string(self) -> None:
-        """project_info ToolError message describes the missing config file."""
-        from mcp.server.fastmcp.exceptions import ToolError  # noqa: PLC0415
-
-        ctx = _make_proj_ctx(project_file=None)
-        with pytest.raises(ToolError) as exc_info:
-            await project_info(ctx)
-        assert "owlbear-project.json" in str(exc_info.value).lower() or "project" in str(exc_info.value).lower(), (
-            f"Expected config-describing message, got: {exc_info.value!r}"
-        )
-
-    # -- AC5: project_readme — no README.md -----------------------------------
-
-    @pytest.mark.asyncio
-    async def test_project_readme_no_readme_returns_error_prefix(
-        self,
-        tmp_path: Path,
-    ) -> None:
-        """project_readme returns string starting with 'error: ' when README.md is absent."""
-        # tmp_path is a real empty temp dir — no README.md present
-        ctx = _make_proj_ctx(project_root=tmp_path)
-        result = await project_readme(ctx)
-        assert result.startswith("error: "), f"Expected 'error: ' prefix, got: {result!r}"
-
-    @pytest.mark.asyncio
-    async def test_project_readme_no_readme_exact_error_string(
-        self,
-        tmp_path: Path,
-    ) -> None:
-        """project_readme returns exact message 'error: No README.md found in project root.'."""
-        ctx = _make_proj_ctx(project_root=tmp_path)
-        result = await project_readme(ctx)
-        assert result == "error: No README.md found in project root.", f"Expected exact string, got: {result!r}"
 
 
 # ---------------------------------------------------------------------------

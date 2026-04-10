@@ -5,7 +5,7 @@ argument-hint: "Ideate: {idea, problem, or feature -- drop reference files in .o
 user-invocable: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, vscode/askQuestions, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/list_tasks, owlbear-kanban/show_task, 'owlbear-project/*', 'ddgs/search_text']
+  [vscode/memory, vscode/askQuestions, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/list_tasks, owlbear-kanban/show_task, 'ddgs/search_text']
 agents:
   - critic-voice
   - pragmatist-voice

@@ -177,32 +177,6 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | `OWLBEAR_MODEL` | Override the LLM model used by the entity extractor |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | Comma-separated tool names to hide (e.g. for query-only access) |
 
-### Configuring the project MCP server
-
-The `owlbearProject` server supports environment variables to customise its behaviour.
-Set these in `.vscode/mcp.json` under the server's `env` key:
-
-```json
-{
-  "servers": {
-    "owlbearProject": {
-      "type": "stdio",
-      "command": "uv",
-      "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_project"],
-      "env": {
-        "OWLBEAR_ROOT": "/path/to/owlbear",
-        "PROJECT_TOOLS_EXCLUDE": "project_list,project_structure"
-      }
-    }
-  }
-}
-```
-
-| Variable | Description |
-|----------|-------------|
-| `OWLBEAR_ROOT` | Override the path to the owlbear installation root |
-| `PROJECT_TOOLS_EXCLUDE` | Comma-separated tool names to hide |
-
 ---
 
 ## Troubleshooting
