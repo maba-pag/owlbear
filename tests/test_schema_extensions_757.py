@@ -426,7 +426,7 @@ class TestFromAC_DeleteSourceCascade:
         # source_pages row
         conn.execute(
             "INSERT INTO source_pages (id, source_id, url, status) VALUES (?, ?, ?, ?)",
-            ("page-001", source_id, "https://example.com/page", "discovered"),
+            (f"page-{source_id}", source_id, "https://example.com/page", "discovered"),
         )
 
         # document row linked by source_id
