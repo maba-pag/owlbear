@@ -10272,3 +10272,327 @@
 {"timestamp": "2026-04-10T12:01:18.795745+00:00", "action": "edit", "task_id": 752, "detail": "append_body"}
 {"timestamp": "2026-04-10T12:01:18.817473+00:00", "action": "release", "task_id": 752, "detail": "full-jay"}
 {"timestamp": "2026-04-10T12:01:18.835781+00:00", "action": "move", "task_id": 752, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T12:05:08.389420+00:00", "action": "edit", "task_id": 747, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:05:08.403993+00:00", "action": "release", "task_id": 747, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:05:08.412592+00:00", "action": "move", "task_id": 747, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T12:05:42.624480+00:00", "action": "claim", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:06:02.032655+00:00", "action": "claim", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:06:04.983331+00:00", "action": "claim", "task_id": 758, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:06:06.720087+00:00", "action": "claim", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:08:06.796988+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:08:06.809463+00:00", "action": "release", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:08:06.819934+00:00", "action": "move", "task_id": 757, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T12:08:48.608721+00:00", "action": "edit", "task_id": 755, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:08:48.620905+00:00", "action": "release", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:08:48.628249+00:00", "action": "move", "task_id": 755, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T12:10:16.810170+00:00", "action": "edit", "task_id": 758, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:10:16.824531+00:00", "action": "release", "task_id": 758, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:10:16.835594+00:00", "action": "move", "task_id": 758, "detail": "research -> backlog"}
+{"timestamp": "2026-04-10T12:10:28.451695+00:00", "action": "edit", "task_id": 750, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:10:28.461228+00:00", "action": "release", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:10:28.469586+00:00", "action": "move", "task_id": 750, "detail": "in-progress -> todo"}
+{"timestamp": "2026-04-10T12:10:59.277966+00:00", "action": "claim", "task_id": 776, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:10:59.454325+00:00", "action": "claim", "task_id": 775, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:11:05.395373+00:00", "action": "claim", "task_id": 774, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:15:11.395366+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:15:11.409040+00:00", "action": "release", "task_id": 776, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:15:11.419776+00:00", "action": "move", "task_id": 776, "detail": "research -> backlog"}
+{"timestamp": "2026-04-10T12:16:53.988186+00:00", "action": "create", "task_id": 777, "detail": "Expand cdp-spike.py (#776) with trafilatura extraction quality test"}
+{"timestamp": "2026-04-10T12:16:54.025188+00:00", "action": "create", "task_id": 778, "detail": "Add hash stability validation protocol to CDP spike execution (#753)"}
+{"timestamp": "2026-04-10T12:16:56.842762+00:00", "action": "edit", "task_id": 775, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:16:56.859059+00:00", "action": "release", "task_id": 775, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:16:56.874016+00:00", "action": "move", "task_id": 775, "detail": "research -> backlog"}
+{"timestamp": "2026-04-10T12:17:23.495598+00:00", "action": "edit", "task_id": 774, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:17:23.510039+00:00", "action": "release", "task_id": 774, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:17:23.521415+00:00", "action": "move", "task_id": 774, "detail": "research -> backlog"}
+{"timestamp": "2026-04-10T12:18:46.560936+00:00", "action": "claim", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:18:57.854546+00:00", "action": "claim", "task_id": 758, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:18:57.907327+00:00", "action": "claim", "task_id": 774, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:18:59.386991+00:00", "action": "claim", "task_id": 747, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:21:16.118716+00:00", "action": "edit", "task_id": 747, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:21:16.137386+00:00", "action": "release", "task_id": 747, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:21:16.153579+00:00", "action": "move", "task_id": 747, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T12:21:30.611703+00:00", "action": "edit", "task_id": 774, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:21:30.637428+00:00", "action": "release", "task_id": 774, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:21:30.654569+00:00", "action": "move", "task_id": 774, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T12:22:50.645611+00:00", "action": "edit", "task_id": 758, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:22:50.660495+00:00", "action": "release", "task_id": 758, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:22:50.672692+00:00", "action": "move", "task_id": 758, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T12:25:06.565799+00:00", "action": "edit", "task_id": 750, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:25:06.575257+00:00", "action": "release", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:25:06.585637+00:00", "action": "move", "task_id": 750, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T12:25:34.366221+00:00", "action": "claim", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:25:43.271781+00:00", "action": "claim", "task_id": 776, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:25:44.615644+00:00", "action": "claim", "task_id": 775, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:25:49.493534+00:00", "action": "edit", "task_id": 752, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:25:49.506229+00:00", "action": "release", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:25:49.517194+00:00", "action": "move", "task_id": 752, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T12:26:40.837964+00:00", "action": "claim", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:30:00.964158+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:30:00.976534+00:00", "action": "release", "task_id": 776, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:30:00.984022+00:00", "action": "move", "task_id": 776, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T12:30:43.954688+00:00", "action": "create", "task_id": 779, "detail": "Tests \u2014 Corporate entity and relation type extensions"}
+{"timestamp": "2026-04-10T12:30:43.979942+00:00", "action": "create", "task_id": 780, "detail": "Tests \u2014 Schema v9 migration (source_pages, source_id FK)"}
+{"timestamp": "2026-04-10T12:30:44.005131+00:00", "action": "create", "task_id": 781, "detail": "Tests \u2014 Content safety predicate inversion"}
+{"timestamp": "2026-04-10T12:30:44.030888+00:00", "action": "create", "task_id": 782, "detail": "Tests \u2014 owlbear_browser package scaffold and CDP launcher"}
+{"timestamp": "2026-04-10T12:30:44.057530+00:00", "action": "create", "task_id": 783, "detail": "Tests \u2014 owlbear_browser content extractor and HTML-to-MD cleaner"}
+{"timestamp": "2026-04-10T12:31:05.173668+00:00", "action": "create", "task_id": 784, "detail": "Corporate entity and relation type extensions"}
+{"timestamp": "2026-04-10T12:31:05.201605+00:00", "action": "create", "task_id": 785, "detail": "Schema v9 migration (source_pages, source_id FK)"}
+{"timestamp": "2026-04-10T12:31:05.233538+00:00", "action": "create", "task_id": 786, "detail": "Content safety predicate inversion"}
+{"timestamp": "2026-04-10T12:31:05.262104+00:00", "action": "create", "task_id": 787, "detail": "owlbear_browser package scaffold and CDP launcher"}
+{"timestamp": "2026-04-10T12:31:12.703245+00:00", "action": "create", "task_id": 788, "detail": "owlbear_browser content extractor and HTML-to-MD cleaner"}
+{"timestamp": "2026-04-10T12:31:33.671331+00:00", "action": "create", "task_id": 789, "detail": "Tests \u2014 LLM extraction prompt corporate entity examples"}
+{"timestamp": "2026-04-10T12:31:33.700489+00:00", "action": "create", "task_id": 790, "detail": "Tests \u2014 owlbear_mcp_browser MCP server and domain allowlist"}
+{"timestamp": "2026-04-10T12:31:33.729179+00:00", "action": "create", "task_id": 791, "detail": "Tests \u2014 Replace-on-change refresh semantics"}
+{"timestamp": "2026-04-10T12:31:33.759047+00:00", "action": "create", "task_id": 792, "detail": "Tests \u2014 AUTHENTICATED_WEB source type and ContentFetcher protocol"}
+{"timestamp": "2026-04-10T12:31:51.874842+00:00", "action": "create", "task_id": 793, "detail": "LLM extraction prompt corporate entity examples"}
+{"timestamp": "2026-04-10T12:31:51.904446+00:00", "action": "create", "task_id": 794, "detail": "owlbear_mcp_browser MCP server and domain allowlist"}
+{"timestamp": "2026-04-10T12:31:51.934843+00:00", "action": "create", "task_id": 795, "detail": "Replace-on-change refresh semantics"}
+{"timestamp": "2026-04-10T12:31:51.962511+00:00", "action": "create", "task_id": 796, "detail": "AUTHENTICATED_WEB source type and ContentFetcher protocol"}
+{"timestamp": "2026-04-10T12:31:55.744469+00:00", "action": "create", "task_id": 797, "detail": "Unify task output model at engine level"}
+{"timestamp": "2026-04-10T12:32:06.777407+00:00", "action": "create", "task_id": 798, "detail": "Extract dispatch gating to dispatch_policy module"}
+{"timestamp": "2026-04-10T12:32:17.102923+00:00", "action": "create", "task_id": 799, "detail": "Reload config on mutating engine operations"}
+{"timestamp": "2026-04-10T12:32:17.128550+00:00", "action": "edit", "task_id": 775, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:32:17.145036+00:00", "action": "release", "task_id": 775, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:32:17.156368+00:00", "action": "move", "task_id": 775, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T12:32:27.738983+00:00", "action": "create", "task_id": 800, "detail": "Isolate FastMCP schema patches in utility function"}
+{"timestamp": "2026-04-10T12:32:37.520495+00:00", "action": "create", "task_id": 801, "detail": "Add delete_task operation with archive-first safety"}
+{"timestamp": "2026-04-10T12:32:45.829909+00:00", "action": "create", "task_id": 802, "detail": "Add KANBAN_DIR env var override for kanban directory"}
+{"timestamp": "2026-04-10T12:32:57.961067+00:00", "action": "create", "task_id": 803, "detail": "Standardize MCP tool descriptions to single-line"}
+{"timestamp": "2026-04-10T12:33:06.333722+00:00", "action": "create", "task_id": 804, "detail": "Validate status and priority on create_task"}
+{"timestamp": "2026-04-10T12:38:48.657567+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:38:48.670243+00:00", "action": "release", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:38:48.678457+00:00", "action": "move", "task_id": 751, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T12:39:15.731822+00:00", "action": "claim", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:39:17.511706+00:00", "action": "claim", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:39:34.248830+00:00", "action": "claim", "task_id": 754, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:43:50.030091+00:00", "action": "edit", "task_id": 755, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:43:50.043335+00:00", "action": "release", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:43:50.051703+00:00", "action": "move", "task_id": 755, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T12:50:37.704330+00:00", "action": "edit", "task_id": 754, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:50:37.715118+00:00", "action": "release", "task_id": 754, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:50:37.723541+00:00", "action": "move", "task_id": 754, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T12:54:07.632479+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:54:07.643352+00:00", "action": "release", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:54:07.653396+00:00", "action": "move", "task_id": 757, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T12:55:29.380239+00:00", "action": "claim", "task_id": 787, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:55:30.539248+00:00", "action": "claim", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:55:44.939673+00:00", "action": "claim", "task_id": 747, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:56:48.041699+00:00", "action": "edit", "task_id": 747, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:56:48.067182+00:00", "action": "release", "task_id": 747, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:56:48.086278+00:00", "action": "move", "task_id": 747, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T12:57:14.186024+00:00", "action": "claim", "task_id": 758, "detail": "full-jay"}
+{"timestamp": "2026-04-10T12:59:33.578787+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-10T12:59:33.600158+00:00", "action": "release", "task_id": 787, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:05:02.670292+00:00", "action": "edit", "task_id": 750, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:05:02.686820+00:00", "action": "release", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:05:02.699043+00:00", "action": "move", "task_id": 750, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T13:08:00.387420+00:00", "action": "edit", "task_id": 758, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:08:00.401638+00:00", "action": "release", "task_id": 758, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:08:00.411801+00:00", "action": "move", "task_id": 758, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T13:08:42.401664+00:00", "action": "claim", "task_id": 774, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:08:44.608829+00:00", "action": "claim", "task_id": 776, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:08:50.424642+00:00", "action": "claim", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:10:20.813472+00:00", "action": "claim", "task_id": 775, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:10:35.064299+00:00", "action": "edit", "task_id": 774, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:10:35.079201+00:00", "action": "release", "task_id": 774, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:10:35.091527+00:00", "action": "move", "task_id": 774, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T13:21:06.926256+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:21:06.939817+00:00", "action": "release", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:21:06.951920+00:00", "action": "move", "task_id": 751, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T13:24:18.853901+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:24:18.869172+00:00", "action": "release", "task_id": 776, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:24:18.881335+00:00", "action": "move", "task_id": 776, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T13:27:44.220838+00:00", "action": "edit", "task_id": 775, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:27:44.233519+00:00", "action": "release", "task_id": 775, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:27:44.241401+00:00", "action": "move", "task_id": 775, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T13:29:13.036092+00:00", "action": "claim", "task_id": 747, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:29:15.619852+00:00", "action": "claim", "task_id": 787, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:32:43.402555+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:32:43.414284+00:00", "action": "release", "task_id": 787, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:32:43.423995+00:00", "action": "move", "task_id": 787, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T13:43:34.204066+00:00", "action": "edit", "task_id": 747, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:43:34.215587+00:00", "action": "release", "task_id": 747, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:43:34.222183+00:00", "action": "move", "task_id": 747, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T13:43:54.498010+00:00", "action": "claim", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:44:13.460486+00:00", "action": "claim", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:44:13.858551+00:00", "action": "edit", "task_id": 752, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:44:13.873002+00:00", "action": "release", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:44:13.883969+00:00", "action": "move", "task_id": 752, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T13:44:15.196433+00:00", "action": "claim", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:47:17.960639+00:00", "action": "edit", "task_id": 750, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:47:17.970684+00:00", "action": "release", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:47:17.979261+00:00", "action": "move", "task_id": 750, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T13:53:23.716721+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:53:23.725481+00:00", "action": "release", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:53:23.736501+00:00", "action": "move", "task_id": 751, "detail": "review -> todo"}
+{"timestamp": "2026-04-10T13:53:42.350272+00:00", "action": "claim", "task_id": 754, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:57:53.372532+00:00", "action": "edit", "task_id": 754, "detail": "append_body"}
+{"timestamp": "2026-04-10T13:57:53.393177+00:00", "action": "release", "task_id": 754, "detail": "full-jay"}
+{"timestamp": "2026-04-10T13:57:53.410971+00:00", "action": "move", "task_id": 754, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T13:59:59.784235+00:00", "action": "claim", "task_id": 754, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:00:08.506327+00:00", "action": "claim", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:00:41.388737+00:00", "action": "claim", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:01:30.916111+00:00", "action": "claim", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:01:35.622369+00:00", "action": "edit", "task_id": 750, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:01:35.636453+00:00", "action": "release", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:01:35.653143+00:00", "action": "move", "task_id": 750, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T14:02:33.090533+00:00", "action": "edit", "task_id": 752, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:02:33.106245+00:00", "action": "release", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:02:33.118021+00:00", "action": "move", "task_id": 752, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T14:07:47.194063+00:00", "action": "edit", "task_id": 754, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:07:47.205898+00:00", "action": "block", "task_id": 754, "detail": "Quality-Runner unavailable \u2014 cannot run tests independently. Additionally: DDL column conflict identified (see Review Evidence below) \u2014 test_authenticated_content_pipeline_751.py tests for column names (approval_state, extraction_status) that the #754 builder removed from schema.py. Pre-block code analysis suggests #754 implementation is logically correct, but independent test execution is required to confirm, and the cross-task DDL conflict must be resolved before this task can advance."}
+{"timestamp": "2026-04-10T14:07:47.218036+00:00", "action": "release", "task_id": 754, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:10:45.032274+00:00", "action": "edit", "task_id": 755, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:10:45.043422+00:00", "action": "release", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:10:45.052472+00:00", "action": "move", "task_id": 755, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T14:11:14.575655+00:00", "action": "claim", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:11:28.386216+00:00", "action": "claim", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:12:23.115674+00:00", "action": "claim", "task_id": 787, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:20:32.717536+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:20:32.731826+00:00", "action": "release", "task_id": 787, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:20:32.742974+00:00", "action": "move", "task_id": 787, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T14:21:30.285660+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:21:30.298490+00:00", "action": "release", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:21:30.310481+00:00", "action": "move", "task_id": 757, "detail": "in-progress -> todo"}
+{"timestamp": "2026-04-10T14:25:16.777294+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:25:16.792662+00:00", "action": "release", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:25:16.803543+00:00", "action": "move", "task_id": 751, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T14:26:50.189588+00:00", "action": "claim", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:26:54.100322+00:00", "action": "claim", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:27:27.466661+00:00", "action": "edit", "task_id": 752, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:27:27.479721+00:00", "action": "release", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:27:27.491632+00:00", "action": "move", "task_id": 752, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T14:35:58.117468+00:00", "action": "edit", "task_id": 750, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:35:58.133003+00:00", "action": "release", "task_id": 750, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:35:58.133003+00:00", "action": "move", "task_id": 750, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T14:36:15.222548+00:00", "action": "claim", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:36:39.653106+00:00", "action": "claim", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:36:48.045393+00:00", "action": "claim", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:40:01.666799+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:40:01.679000+00:00", "action": "release", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:40:01.688180+00:00", "action": "move", "task_id": 751, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T14:40:15.059039+00:00", "action": "edit", "task_id": 755, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:40:15.072552+00:00", "action": "release", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:40:15.082515+00:00", "action": "move", "task_id": 755, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T14:43:51.981677+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:43:51.995399+00:00", "action": "release", "task_id": 757, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:43:52.005975+00:00", "action": "move", "task_id": 757, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T14:45:06.520919+00:00", "action": "claim", "task_id": 752, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:45:13.823951+00:00", "action": "claim", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:45:14.549336+00:00", "action": "claim", "task_id": 751, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:46:35.637697+00:00", "action": "edit", "task_id": 755, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:46:35.651076+00:00", "action": "release", "task_id": 755, "detail": "full-jay"}
+{"timestamp": "2026-04-10T14:46:35.662177+00:00", "action": "move", "task_id": 755, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T14:53:45.691176+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-10T14:53:45.702856+00:00", "action": "block", "task_id": 751, "detail": "Quality-Runner fatal \u2014 pytest hangs with KeyboardInterrupt during startup on this Windows environment. Skill requires independent test execution; self-reports cannot substitute. Code-reader analysis is otherwise clean (all AC verified, test integrity preserved, schema fix confirmed). To unblock: run `uv run pytest tests/test_authenticated_content_pipeline_751.py -v` manually and confirm 42 passed, 0 failed."}
+{"timestamp": "2026-04-10T14:53:45.716106+00:00", "action": "release", "task_id": 751, "detail": "sage-otter"}
+{"timestamp": "2026-04-10T15:02:32.977952+00:00", "action": "edit", "task_id": 752, "detail": "append_body"}
+{"timestamp": "2026-04-10T15:02:33.002174+00:00", "action": "release", "task_id": 752, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T15:02:33.018179+00:00", "action": "move", "task_id": 752, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T15:02:51.056871+00:00", "action": "claim", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T15:21:29.618661+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T15:21:29.630744+00:00", "action": "release", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T15:21:29.640150+00:00", "action": "move", "task_id": 757, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T15:22:45.691629+00:00", "action": "claim", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T15:22:48.751965+00:00", "action": "claim", "task_id": 755, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T15:31:19.985678+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T15:31:19.996095+00:00", "action": "release", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T15:31:20.007372+00:00", "action": "move", "task_id": 757, "detail": "review -> backlog"}
+{"timestamp": "2026-04-10T16:01:03.049805+00:00", "action": "edit", "task_id": 755, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:01:03.063894+00:00", "action": "release", "task_id": 755, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:01:03.073781+00:00", "action": "move", "task_id": 755, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T16:02:12.434056+00:00", "action": "claim", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:02:28.135120+00:00", "action": "claim", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:05:19.865057+00:00", "action": "create", "task_id": 797, "detail": "Fix #751 tests: replace split-column assertions with unified status column"}
+{"timestamp": "2026-04-10T16:05:54.818945+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:05:54.832919+00:00", "action": "release", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:05:54.842741+00:00", "action": "move", "task_id": 757, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-10T16:13:52.907094+00:00", "action": "edit", "task_id": 758, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:13:52.918163+00:00", "action": "release", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:13:52.928199+00:00", "action": "move", "task_id": 758, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T16:14:46.892587+00:00", "action": "claim", "task_id": 774, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:14:54.655285+00:00", "action": "edit", "task_id": 774, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:14:54.670807+00:00", "action": "release", "task_id": 774, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:14:54.682626+00:00", "action": "move", "task_id": 774, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T16:15:09.000020+00:00", "action": "claim", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:15:11.044992+00:00", "action": "claim", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:17:02.084669+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:17:02.103982+00:00", "action": "release", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:17:02.118786+00:00", "action": "move", "task_id": 757, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-10T16:19:43.102639+00:00", "action": "edit", "task_id": 758, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:19:43.117062+00:00", "action": "release", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:19:43.127005+00:00", "action": "move", "task_id": 758, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T16:20:34.180639+00:00", "action": "claim", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:21:14.251072+00:00", "action": "claim", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:22:21.170742+00:00", "action": "edit", "task_id": 758, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:22:21.187306+00:00", "action": "release", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:22:21.200339+00:00", "action": "move", "task_id": 758, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T16:22:37.407530+00:00", "action": "claim", "task_id": 774, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:23:01.172253+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:23:01.186760+00:00", "action": "release", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:23:01.198353+00:00", "action": "move", "task_id": 757, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T16:23:15.698448+00:00", "action": "edit", "task_id": 774, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:23:15.713294+00:00", "action": "release", "task_id": 774, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:23:15.725625+00:00", "action": "move", "task_id": 774, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T16:24:19.725865+00:00", "action": "claim", "task_id": 774, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:24:26.156292+00:00", "action": "claim", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:24:35.633506+00:00", "action": "claim", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:25:40.052136+00:00", "action": "edit", "task_id": 774, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:25:40.078924+00:00", "action": "release", "task_id": 774, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:25:40.097664+00:00", "action": "move", "task_id": 774, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T16:30:16.112614+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:30:16.127103+00:00", "action": "release", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:30:16.139273+00:00", "action": "move", "task_id": 757, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T16:42:09.846778+00:00", "action": "edit", "task_id": 758, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:42:09.875706+00:00", "action": "release", "task_id": 758, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:42:09.895873+00:00", "action": "move", "task_id": 758, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T16:43:34.262541+00:00", "action": "claim", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:43:38.580609+00:00", "action": "claim", "task_id": 774, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:45:15.195377+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T16:45:15.225809+00:00", "action": "release", "task_id": 757, "detail": "gold-pine"}
+{"timestamp": "2026-04-10T16:45:15.249523+00:00", "action": "move", "task_id": 757, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T17:07:44.080705+00:00", "action": "claim", "task_id": 757, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T17:39:21.580554+00:00", "action": "edit", "task_id": 757, "detail": "append_body"}
+{"timestamp": "2026-04-10T17:39:21.595929+00:00", "action": "release", "task_id": 757, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T17:39:21.607166+00:00", "action": "move", "task_id": 757, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T17:39:43.643873+00:00", "action": "claim", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:09:40.210632+00:00", "action": "edit", "task_id": 775, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:09:40.223854+00:00", "action": "release", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:09:40.233968+00:00", "action": "move", "task_id": 775, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T18:11:34.184113+00:00", "action": "claim", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:14:12.857661+00:00", "action": "claim", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:16:34.498013+00:00", "action": "edit", "task_id": 775, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:16:34.512331+00:00", "action": "release", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:16:34.524159+00:00", "action": "move", "task_id": 775, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T18:19:00.105922+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:19:00.121594+00:00", "action": "release", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:19:00.132556+00:00", "action": "move", "task_id": 776, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T18:20:07.138430+00:00", "action": "claim", "task_id": 787, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:20:12.106168+00:00", "action": "claim", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:20:21.104960+00:00", "action": "claim", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:22:25.192024+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:22:25.207164+00:00", "action": "release", "task_id": 787, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:22:25.220367+00:00", "action": "move", "task_id": 787, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-10T18:24:44.924601+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:24:44.937490+00:00", "action": "release", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:24:44.947574+00:00", "action": "move", "task_id": 776, "detail": "review -> docs"}
+{"timestamp": "2026-04-10T18:24:50.596656+00:00", "action": "edit", "task_id": 775, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:24:50.611192+00:00", "action": "release", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:24:50.622067+00:00", "action": "move", "task_id": 775, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T18:26:11.050704+00:00", "action": "claim", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:26:13.371848+00:00", "action": "claim", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:27:21.277228+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:27:21.304607+00:00", "action": "release", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:27:21.324995+00:00", "action": "move", "task_id": 776, "detail": "docs -> done"}
+{"timestamp": "2026-04-10T18:50:29.189409+00:00", "action": "edit", "task_id": 775, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:50:29.201028+00:00", "action": "release", "task_id": 775, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:50:29.210644+00:00", "action": "move", "task_id": 775, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T18:51:02.550526+00:00", "action": "claim", "task_id": 787, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:55:39.426673+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-10T18:55:39.439833+00:00", "action": "block", "task_id": 787, "detail": "Quality-Runner unavailable \u2014 cannot run tests independently. file evidence strongly supports PASS (see Review Evidence), but per w-code-review protocol, test execution is required before a verdict can be issued."}
+{"timestamp": "2026-04-10T18:55:39.454241+00:00", "action": "release", "task_id": 787, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T18:56:55.867310+00:00", "action": "claim", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T19:04:35.701030+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
+{"timestamp": "2026-04-10T19:04:35.722457+00:00", "action": "release", "task_id": 776, "detail": "free-leaf"}
+{"timestamp": "2026-04-10T19:04:35.735568+00:00", "action": "move", "task_id": 776, "detail": "done -> archived"}
