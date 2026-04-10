@@ -16,7 +16,9 @@ resolution-markers = [
 [manifest]
 members = [
     "owlbear",
+    "owlbear-browser",
     "owlbear-knowledge",
+    "owlbear-mcp-browser",
     "owlbear-mcp-kanban",
     "owlbear-mcp-knowledge",
     "owlbear-mcp-memory",
@@ -2552,6 +2554,11 @@ requires-dist = [
 ]
 
 [[package]]
+name = "owlbear-browser"
+version = "0.1.0"
+source = { editable = "serve/browser" }
+
+[[package]]
 name = "owlbear-knowledge"
 version = "0.1.0"
 source = { editable = "serve/knowledge" }
@@ -2594,6 +2601,17 @@ requires-dist = [
     { name = "strictyaml", specifier = ">=1.7" },
 ]
 provides-extras = ["qdrant", "embedding", "intake", "llm", "full"]
+
+[[package]]
+name = "owlbear-mcp-browser"
+version = "0.1.0"
+source = { editable = "serve/mcp-browser" }
+dependencies = [
+    { name = "owlbear-browser" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "owlbear-browser", editable = "serve/browser" }]
 
 [[package]]
 name = "owlbear-mcp-kanban"
