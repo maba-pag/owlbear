@@ -2,6 +2,31 @@
 
 External repos and resources studied during OwlBear development.
 
+## Excalidraw Skill Expansion (Task #743)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| coleam00/excalidraw-diagram-skill SKILL.md | <https://github.com/coleam00/excalidraw-diagram-skill> | Visual Pattern Library (9 patterns), Shape Meaning table, Large Diagram Strategy, Container vs Text rules, ID conventions | .owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
+| Wikipedia: Entity-relationship model | <https://en.wikipedia.org/wiki/Entity-relationship_model> | Chen notation conventions: rectangles=entities, diamonds=relationships, ellipses=attributes | .owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
+
+## Excalidraw Reference Files (Task #742)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| coleam00 element-templates.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/element-templates.md> | JSON templates for 6 element types (rectangle, text×2, arrow, line, dot) — validated for adaptation | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+| coleam00 json-schema.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/json-schema.md> | Element types table, common/text/arrow properties, binding format | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+| coleam00 color-palette.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/color-palette.md> | Semantic fill/stroke pairs, text hierarchy, evidence artifact colors | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+| Excalidraw API updateScene docs | <https://docs.excalidraw.com/docs/@excalidraw/excalidraw/api/props/excalidraw-api#elements> | Element structure confirmation (type, version, versionNonce, seed fields) | .owlbear/research/excalidraw-reference-files.md | 2026-04-10 |
+
+## Excalidraw Skill Reliability (Task #736)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| coleam00/excalidraw-diagram-skill SKILL.md | <https://github.com/coleam00/excalidraw-diagram-skill> | 450-line skill with design process, 9 visual patterns, mandatory render loop — compared vs OwlBear's 106-line adaptation | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+| coleam00 element-templates.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/element-templates.md> | JSON templates for rectangle, text, arrow (with bindings), line, dot — all required fields shown | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+| coleam00 json-schema.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/json-schema.md> | Element types, common properties, text-specific, arrow-specific, binding format | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+| coleam00 color-palette.md | <https://github.com/coleam00/excalidraw-diagram-skill/blob/main/references/color-palette.md> | Semantic fill/stroke pairs, text hierarchy, evidence artifact colors | .owlbear/research/excalidraw-skill-reliability.md | 2026-04-10 |
+
 ## Wire PydanticAI Evaluate Callable (Task #701)
 
 | Source | URL | What | Where Used | Date |
@@ -3337,11 +3362,11 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Injection pattern list and `ScanContent` function ported to Python (`ContentInjectionGuard`, `CheckResult`, strict/warn/off modes) | `src/owlbear/tools/browser/content_guard.py` | 2026-03-11 |
 
-## Untrusted Content Wrapping (Tasks #725/#730)
+## Untrusted Content Wrapping (Tasks #725/#730/#735)
 
 | Source | URL | License | What we studied | Where Used | Date |
 |--------|-----|---------|-----------------|------------|------|
-| PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Content wrapping pattern with sentinel tags and advisory preamble | `src/owlbear/core/content_safety.py` | 2026-03-10 |
+| PinchTab `internal/idpi/content.go` | <https://github.com/pinchtab/pinchtab/blob/main/internal/idpi/content.go> | MIT | Content wrapping pattern with sentinel tags and advisory preamble | `src/owlbear/core/content_safety.py`, `serve/knowledge/src/owlbear_knowledge/content_safety.py` | 2026-03-10 |
 | Willison, "Delimiters won't save you" (2023) | <https://simonwillison.net/2023/May/11/delimiters-wont-save-you/> | Blog | Established limits of delimiter approach — informed defense-in-depth framing | `docs/research/untrusted-content-wrapping.md` | 2026-03-10 |
 | Greshake et al., "Indirect Prompt Injection" (2023) | <https://arxiv.org/abs/2302.12173> | CC-BY-4.0 | Threat model taxonomy for LLM-integrated apps, IDPI attack vectors | `docs/research/untrusted-content-wrapping.md` | 2026-03-10 |
 

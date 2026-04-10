@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_knowledge.content_safety import wrap_untrusted_content
+
 if TYPE_CHECKING:
     from owlbear_knowledge.chunker import TextChunker
     from owlbear_knowledge.extractor import EntityExtractor
@@ -129,6 +131,10 @@ class IngestPipeline:
     async def ingest(self, intake: IntakeResult, *, scope: str = "global") -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
 
+        URL-sourced content (``source_type == "url"``) is wrapped in
+        ``<untrusted_web_content>`` sentinel tags before entity extraction to
+        prevent prompt injection from malicious web pages.
+
         Args:
             intake: Content to ingest, as produced by read_file/read_url/read_text.
             scope: Scope tag applied to all stored objects.  Defaults to ``'global'``.
@@ -173,7 +179,15 @@ class IngestPipeline:
                 chunk_ids,
                 chunk_texts,  # type: ignore[union-attr]
             )
-            extract_coros = [self._extractor.extract(c.text) for c in chunks]
+            _is_url = _meta.get("source_type") == "url"
+            extract_coros = [
+                self._extractor.extract(
+                    wrap_untrusted_content(c.text, source_url=str(intake.source))
+                    if _is_url
+                    else c.text
+                )
+                for c in chunks
+            ]
 
             all_results = await asyncio.gather(embed_coro, *extract_coros, return_exceptions=True)
             extraction_results = [r for r in all_results[1:] if not isinstance(r, BaseException)]
