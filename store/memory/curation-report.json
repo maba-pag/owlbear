@@ -1,5 +1,125 @@
 ﻿[
   {
+    "cycle": "2026-04-10T-periodic-20",
+    "note": "Periodic curation cycle 20. Channel A: MCP DB queried via sqlite — 0 pending entries (table empty; 0 total). Channel B: inbox empty. Task body scan: #758 (P1-04: Edge launcher + CDP connection manager, arch + test-writer notes) and #787 (owlbear_browser package scaffold, arch pass 1+2 + test-writer notes) are new since cycle 19. No tasks in range #777–#797 have builder/reviewer notes. Two new MEDIUM findings: (1) edit_task-unavailable pattern — architect agents flagged depends_on corrections in #758 and #787 but could not call edit_task; stale metadata proceeds uncorrected (co-related occurrence, keep one more cycle); (2) TDD test task scope overlap between sibling parent pipelines — #782 (parent #775) duplicated scope of #755 (parent #751), caught by architect on pass 1 (single occurrence, keep). One MEDIUM carry pruned: UnicodeDecodeError-as-ValueError silently suppressed (#731, cycle 18 carry) — 3 cycles, no second occurrence, prune. Four MEDIUM carries retained from cycle 19: sys.modules pre-stubbing, self-referential test glob, too-broad import scan, edit_task-unavailability (new). SECURITY-URGENT (14th carry): _web_read SSRF (CWE-918) still unaddressed — 14 curation cycles, no kanban task. USER ACTION REQUIRED.",
+    "entries_processed": 4,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "carry:cycle19:sys-modules-pre-stub-uninstalled-deps",
+        "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py — enables per-function errors instead of collection-time ModuleNotFoundError",
+        "recommendation": "keep",
+        "reason": "MEDIUM — carry from cycle 19. No second occurrence in #777–#797. Keep one more cycle; promote if recurs."
+      },
+      {
+        "entry_id": "carry:cycle19:self-referential-scan-glob",
+        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself — could never pass",
+        "recommendation": "keep",
+        "reason": "MEDIUM — carry from cycle 19. No second occurrence in #777–#797. Keep one more cycle."
+      },
+      {
+        "entry_id": "carry:cycle19:too-broad-import-scan-pattern",
+        "content_preview": "re.compile(r'owlbear[._]voice') too broad — matched function names, docstrings, not just import statements; fixed with anchored pattern",
+        "recommendation": "keep",
+        "reason": "MEDIUM — carry from cycle 19. No second occurrence in #777–#797. Keep one more cycle."
+      },
+      {
+        "entry_id": "inline:#758+#787-architect:edit_task-unavailable-stale-depends_on",
+        "content_preview": "Architect flagged depends_on corrections (#758: [] → [755]; #787: [782] → [755]) but edit_task not available — stale metadata proceeds uncorrected",
+        "recommendation": "keep",
+        "reason": "MEDIUM — two co-related occurrences (same pipeline cluster, same day). Actionable if recurs independently across different pipelines. Keep one cycle; promote if seen again in a separate pipeline context."
+      },
+      {
+        "entry_id": "inline:#787-architect:tdd-test-task-scope-overlap-sibling-parents",
+        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module — caught by architect pass 1",
+        "recommendation": "keep",
+        "reason": "MEDIUM — actionable (orchestrator or planner should check for existing test files targeting the same module before creating a new TDD test task), non-obvious (parent lineage diverges long before the overlap is visible), single occurrence. Keep one cycle."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "carry:cycle18:UnicodeDecodeError-is-ValueError-subclass",
+        "content_preview": "contextlib.suppress(ValueError, KeyError) in list_tasks() silently swallowed UnicodeDecodeError from cp1252 files",
+        "recommendation": "reject",
+        "reason": "MEDIUM carry from cycle 18 — now 3 cycles with no second occurrence. Demoting to noise. Single occurrence of a bug fix is insufficient for a promoted rule."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-14TH-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (2026-03-xx)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 14 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
+    "cycle": "2026-04-10T-periodic-19",
+    "note": "Periodic curation cycle 19. Channel A: MCP DB queried directly — 0 pending entries (table empty). Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: tasks #733–#776 (first dispatch since cycle 18 covered only #731–#732). Seven inline findings extracted across tasks #750, #751, #775, #776, #758. Three MEDIUM (kept for next cycle): self-referential cleanup test glob, too-broad import scan regex, sys.modules pre-stubbing for uninstalled deps. Three LOW pruned (module-filename drift, schema complexity extraction, ghost-document bug — all task-specific or covered by existing rules). One DEDUP pruned (repeated dep-fix-not-acted-upon pattern — already in 'Stale AC: fix it, don't just flag it'). Carry from cycle 18: UnicodeDecodeError MEDIUM — no second occurrence, keep another cycle. No promotions this cycle. SECURITY-URGENT (13th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py L165–183 still unaddressed — 13 curation cycles, no kanban task created. USER ACTION REQUIRED: create security task (see flags).",
+    "entries_processed": 7,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "carry:cycle18:UnicodeDecodeError-is-ValueError-subclass",
+        "content_preview": "contextlib.suppress(ValueError, KeyError) in list_tasks() silently swallowed UnicodeDecodeError from cp1252 files",
+        "recommendation": "keep",
+        "reason": "MEDIUM — carry from cycle 18. No second occurrence in tasks #733–#776. Keep one more cycle."
+      },
+      {
+        "entry_id": "inline:#750-test-writer:self-referential-scan-glob",
+        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself (test_voice_removal_clean_build_750.py) — could never pass",
+        "recommendation": "keep",
+        "reason": "MEDIUM — actionable (rename test file so it does not match its own scan pattern), non-obvious (easy to overlook when naming a verification file), single occurrence. Keep for next cycle; promote if recurs."
+      },
+      {
+        "entry_id": "inline:#750-test-writer:too-broad-import-scan-pattern",
+        "content_preview": "re.compile(r'owlbear[._]voice') too broad — matched function names, docstrings, string literals in tests, not just import statements; fixed with anchored ^\\s*(?:from pkg|import pkg) pattern",
+        "recommendation": "keep",
+        "reason": "MEDIUM — actionable (use line-anchored import regex; exclude the scanning file itself via _THIS_FILE), non-obvious (the broad regex looks correct at a glance), single occurrence. Keep for next cycle."
+      },
+      {
+        "entry_id": "inline:#776-test-writer:sys-modules-pre-stub-uninstalled-deps",
+        "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py, enabling per-function AttributeError failures instead of collection-time ModuleNotFoundError",
+        "recommendation": "keep",
+        "reason": "MEDIUM — actionable (concrete technique for RED-phase tests against scripts with uninstalled dependencies), non-obvious (sys.modules pre-stubbing before importlib is not widely documented), single occurrence. Keep for next cycle."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "inline:#758-architect:module-filename-drift-body-vs-research",
+        "content_preview": "Task body said cdp_manager.py but research spec and RED tests used cdp.py; architect caught inconsistency and issued correction",
+        "recommendation": "reject",
+        "reason": "LOW — covered by existing 'Stale AC: fix it, don't just flag it' rule and general AC-accuracy discipline. Single occurrence, no independent transferable rule."
+      },
+      {
+        "entry_id": "inline:#751-builder:extract-migrations-helper-c901",
+        "content_preview": "_apply_migrations() helper extracted to keep init_db() within C901 cognitive complexity limit",
+        "recommendation": "reject",
+        "reason": "LOW — the obvious solution when a C901 error appears is to extract a helper. Single observation, not a new transferable principle."
+      },
+      {
+        "entry_id": "inline:#775-researcher:ghost-document-ingest-bug",
+        "content_preview": "ingest.py inserts new doc on content change but never deletes the old one — existing_id unused in changed branch; delete_document_data() already exists for cascade",
+        "recommendation": "reject",
+        "reason": "LOW — task-specific bug fix (scope item SC10). Not a transferable rule across agents."
+      },
+      {
+        "entry_id": "inline:#751-#775-dep-fix-flagged-not-fixed",
+        "content_preview": "#775 depends_on [752] should be [774]; flagged in #751 research, #751 arch review, and #775 research body without anyone fixing it",
+        "recommendation": "reject",
+        "reason": "DEDUP — exact pattern covered by existing process-patterns.md rule 'Stale AC: fix it, don't just flag it'. Three agents flagging without fixing is an instance of that rule."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-13TH-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (2026-03-xx)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 13 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
     "cycle": "2026-04-10T-periodic-18",
     "note": "Periodic curation cycle 18. Channel A: MCP DB tools not available in this session — treated as 0 pending entries. Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #731 (done) and #732 (docs) are the new tasks since cycle 17. Four inline findings extracted. One MEDIUM (UnicodeDecodeError-as-ValueError silently suppressed by contextlib.suppress — actionable, non-obvious, single occurrence → kept for next cycle). Three LOW findings pruned: test-via-low-level-API, orphaned-section-header, stale-module-docstring (all common-sense or project-specific). No promotions. SECURITY-URGENT (12th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed — 12 curation cycles, no kanban task. USER ACTION REQUIRED: create security task (see flags).",
     "entries_processed": 4,
