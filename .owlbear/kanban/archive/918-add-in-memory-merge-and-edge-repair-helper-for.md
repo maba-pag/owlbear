@@ -1,7 +1,7 @@
 ---
 id: 918
 title: Add in-memory merge and edge repair helper for EntityExtractor gleaning
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:57:48.1146702+01:00
 updated: 2026-03-21T15:57:48.1146702+01:00

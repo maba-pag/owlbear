@@ -1,7 +1,7 @@
 ---
 id: 858
 title: Tests for ContextInjectionHook removal from bootstrap hooks (TDD RED)
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-03-19T14:56:53.2011844+01:00
 updated: 2026-03-26T16:23:31.0470429+01:00

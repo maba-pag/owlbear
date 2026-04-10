@@ -1,7 +1,7 @@
 ---
 id: 906
 title: Build EntityExtractor code-corpus recall benchmark harness
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:13:40.795193+01:00
 updated: 2026-03-23T23:06:27.9433484+01:00

@@ -1,7 +1,7 @@
 ---
 id: 916
 title: Publish EntityExtractor gleaning results and rollout recommendation
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:56:10.2656872+01:00
 updated: 2026-03-21T15:56:10.2656872+01:00

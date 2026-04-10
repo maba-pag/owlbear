@@ -1,7 +1,7 @@
 ---
 id: 894
 title: Implement self-improvement proposal pipeline from observability metrics
-status: in-progress
+status: archived
 priority: someday
 created: 2026-03-21T13:19:26.8073909+01:00
 updated: 2026-03-26T14:59:51.9779723+01:00

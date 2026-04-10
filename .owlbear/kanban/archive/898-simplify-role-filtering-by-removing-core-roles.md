@@ -1,7 +1,7 @@
 ---
 id: 898
 title: Simplify role filtering by removing core.roles
-status: todo
+status: archived
 priority: someday
 created: 2026-03-21T13:50:03.9551599+01:00
 updated: 2026-03-21T13:50:03.9551599+01:00

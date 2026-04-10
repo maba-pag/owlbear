@@ -1,7 +1,7 @@
 ---
 id: 1001
 title: Add CancelSlot and wire tool-invoked cancellation to daemon shutdown
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-25T04:41:37.5048227+01:00
 updated: 2026-03-25T06:37:17.3284782+01:00

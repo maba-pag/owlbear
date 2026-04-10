@@ -1,7 +1,7 @@
 ---
 id: 1003
 title: 'Test: Track LLM usage in daemon poll_tick builder dispatch'
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-25T13:52:00.3682716+01:00
 updated: 2026-03-25T14:31:32.551114+01:00

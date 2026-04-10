@@ -1,7 +1,7 @@
 ---
 id: 951
 title: Inject runtime task and workspace context into dispatched agent prompts
-status: backlog
+status: archived
 priority: important
 created: 2026-03-23T01:43:14.0612922+01:00
 updated: 2026-03-23T04:17:19.813144+01:00

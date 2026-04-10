@@ -11,9 +11,6 @@ tags:
 - scope:browser
 parent: 751
 depends_on: []
-blocked: true
-block_reason: 'Blocked on #776 (implement cdp-spike.py) — script does not exist yet.
-  #776 is at research status. Unblock when #776 delivers .owlbear/scratch/cdp-spike.py.'
 claimed_by: null
 claimed_at: null
 ---

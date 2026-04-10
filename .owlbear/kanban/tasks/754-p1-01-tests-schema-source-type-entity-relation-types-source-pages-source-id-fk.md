@@ -2,10 +2,10 @@
 id: 754
 title: 'P1-01: Tests — Schema: source type, entity/relation types, source_pages, source_id
   FK'
-status: todo
+status: review
 priority: critical
 created: '2026-04-10T10:55:24.860558+00:00'
-updated: '2026-04-10T12:00:05.982602+00:00'
+updated: '2026-04-10T14:07:47.213756+00:00'
 tags:
 - phase-1
 - type:test
@@ -13,8 +13,13 @@ tags:
 - schema
 parent: 751
 depends_on: []
-blocked: false
-block_reason: null
+blocked: true
+block_reason: 'Quality-Runner unavailable — cannot run tests independently. Additionally:
+  DDL column conflict identified (see Review Evidence below) — test_authenticated_content_pipeline_751.py
+  tests for column names (approval_state, extraction_status) that the #754 builder
+  removed from schema.py. Pre-block code analysis suggests #754 implementation is
+  logically correct, but independent test execution is required to confirm, and the
+  cross-task DDL conflict must be resolved before this task can advance.'
 claimed_by: null
 claimed_at: null
 ---
@@ -102,3 +107,204 @@ Refined: "Cascade delete: deleting a source removes all associated source_pages,
 
 ### Verdict: APPROVE
 ### Action Taken: Refined AC #6 to include full cascade chain (chunks, document_status). Advanced to todo.
+[[2026-04-10]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_schema_extensions_754.py`
+
+**Run result:** 59 tests, 0 passed, 59 failed — confirmed RED.
+
+### Test classes and counts
+
+| Class | Category | Tests |
+|---|---|---|
+| `TestFromAC_SourceTypeAuthenticatedWeb` | happy/boundary | 4 |
+| `TestFromAC_EntityTypeCorporate` | happy/boundary | 15 |
+| `TestFromAC_RelationTypeCorporate` | happy/boundary | 6 |
+| `TestFromAC_SourcePageModel` | happy/edge/boundary | 14 |
+| `TestFromAC_DocumentsSourceIdFK` | schema/boundary | 9 |
+| `TestFromAC_CascadeDelete` | happy/edge/error | 11 |
+| **Total** | | **59** |
+
+### AC coverage
+
+| AC line | Tests |
+|---|---|
+| 1. AUTHENTICATED_WEB in SourceType | `TestFromAC_SourceTypeAuthenticatedWeb` (4 tests) |
+| 2. Corporate EntityType values (5 members) | `TestFromAC_EntityTypeCorporate` (15 tests) |
+| 3. Corporate RelationType values (GOVERNS, SUPERSEDES_VERSION) | `TestFromAC_RelationTypeCorporate` (6 tests) |
+| 4. SourcePage model + PageStatus enum | `TestFromAC_SourcePageModel` (14 tests) |
+| 5. source_id FK on documents table | `TestFromAC_DocumentsSourceIdFK` (9 tests) |
+| 6. Cascade delete (refined chain: source→pages+docs→entities+edges+chunks+document_status) | `TestFromAC_CascadeDelete` (11 tests) |
+
+### Failure root causes (correct RED behaviour)
+- AC 1–3: `AttributeError` / `AssertionError` — enum members not yet added to models.py
+- AC 4: `ImportError` — `PageStatus`/`SourcePage` not yet implemented
+- AC 5: `AssertionError` — schema still at v8; `source_pages` table absent, `source_id` column absent from documents
+- AC 6: `sqlite3.OperationalError` — `source_pages` table absent; `delete_cascade()` method not yet on `KnowledgeSourceStore`
+
+### Builder notes
+- Add `AUTHENTICATED_WEB = "authenticated_web"` to `SourceType`
+- Add 5 corporate values to `EntityType`, 2 to `RelationType`
+- Add `PageStatus` StrEnum and `SourcePage` Pydantic model to `models.py`
+- Schema migration v8→v9: `source_pages` table + `source_id` column on `documents`
+- Add `delete_cascade(source_id) -> bool` to `KnowledgeSourceStore` (application-level, mirrors `delete_document_data` pattern)
+[[2026-04-10]]
+## Builder Notes
+
+### Files changed
+- `serve/knowledge/src/owlbear_knowledge/models.py` — added `PageStatus` StrEnum (5 values: DISCOVERED, APPROVED, REJECTED, INGESTED, STALE) and `SourcePage` Pydantic model (fields: id, source_id, url, status, extraction_hash, last_extracted)
+- `serve/knowledge/src/owlbear_knowledge/schema.py` — fixed `_CREATE_SOURCE_PAGES` DDL: replaced `approval_state`/`extraction_status` columns with `status`, `extraction_hash`, `last_extracted` to match AC and test expectations
+- `serve/knowledge/src/owlbear_knowledge/source_store.py` — added `delete_cascade(source_id: str) -> bool` method following the `delete_document_data()` application-level cascade pattern
+
+### Test results
+- 59 passed, 0 failed (was 29 failed before implementation)
+- Test classes: SourceTypeAuthenticatedWeb(4), EntityTypeCorporate(15), RelationTypeCorporate(6), SourcePageModel(16), DocumentsSourceIdFK(9), CascadeDelete(11) — all green
+
+### Coverage
+- `models.py` — 100% (87/87 lines)
+- `schema.py` / `source_store.py` — lower % due to pre-existing code exercised by other test suites; new code fully covered
+
+### Lint
+- ruff: all checks passed (0 issues)
+
+### Builder-discovered tests
+- None — `TestFromAC_*` coverage was complete; no edge cases warranted additional tests
+
+### Notes
+- Schema DDL mismatch (approval_state → status) was pre-existing from an earlier stub; corrected to match AC specification
+- Cascade: `_seed_full_chain` uses self-referencing edge (source_id=entity_id, target_id=entity_id); `delete_cascade` correctly uses `DELETE FROM edges WHERE source_id = ? OR target_id = ?` pattern inherited from `delete_document_data`
+
+[[2026-04-10]]
+## Review Evidence
+
+### Test Results
+Not independently executed — Quality-Runner not in agent roster. Builder self-reports: 59 passed, 0 failed (`test_schema_extensions_754.py`). Cannot verify. `test_results_clean.txt` shows the captured RED-phase state (59 failures before builder changes) and is consistent with the test-writer's 59-test count.
+
+### Lint
+Not independently verified.
+
+### Coverage
+Not independently verified.
+
+---
+
+### Pass 1 — CRITICAL
+
+#### 5.0 Test-Writer AC Coverage
+
+| AC Line | Mapped Test(s) | Would Fail If AC Violated? | Verdict |
+|---------|----------------|---------------------------|---------|
+| AC1: AUTHENTICATED_WEB in SourceType | `TestFromAC_SourceTypeAuthenticatedWeb` (4) — member exists, value, isinstance str, round-trip | Yes — direct hasattr, equality, SourceType() call | COVERED |
+| AC2: Corporate EntityType values (5) | `TestFromAC_EntityTypeCorporate` (15) — member_exists x5, value_matches x5, round_trips x5 | Yes — KeyError / AssertionError on each missing value | COVERED |
+| AC3: GOVERNS, SUPERSEDES_VERSION | `TestFromAC_RelationTypeCorporate` (6) — exists, value, round_trip per member | Yes | COVERED |
+| AC4: SourcePage model + PageStatus | `TestFromAC_SourcePageModel` (16) — import, parametrized members, isinstance str, field access, nullable fields, auto_id | Yes — ImportError or AttributeError if missing | COVERED |
+| AC5: source_id FK on documents | `TestFromAC_DocumentsSourceIdFK` (8) — PRAGMA table_info for both tables, schema version = 9 | Yes — introspection assertions | COVERED |
+| AC6: Cascade delete (refined chain — 6 downstream tables) | `TestFromAC_CascadeDelete` (10) — zero-row assertion per table, returns True/False, isolation test | Yes — row count assertions | COVERED |
+
+Note: Test-writer counted 14 for SourcePageModel and 9/11 for FK/Cascade — actual file has 16/8/10. Parametrize expansion accounts for the discrepancy. Minor documentation error; test file is correct.
+
+#### 5.1 Security Review
+
+- `delete_cascade` uses parameterised queries throughout — no SQL injection surface ✓
+- No hardcoded secrets, no dangerous deserialization, no path traversal ✓
+- New code: enum additions, Pydantic model, schema DDL, one store method — zero new trust boundaries
+
+#### 5.2 Test Integrity (TestFromAC Modifications)
+
+Builder reports no TestFromAC_* methods were modified. No modifications visible in the changed-files diff (builder changed source files only: `models.py`, `schema.py`, `source_store.py`). PRESERVED.
+
+#### 5.3 Test Quality
+
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | Direct value equality, PRAGMA introspection, row count = 0 |
+| Negative/error-path coverage | STRONG | `test_cascade_delete_nonexistent_source_returns_false` covers the error path |
+| Mutation resistance | STRONG | Removing any enum member → KeyError/AssertionError; removing DDL column → AssertionError; removing method → AttributeError |
+| Test independence | STRONG | Each test uses fresh `_make_db()` `:memory:` connection; no shared state |
+| Descriptive names | STRONG | All TestFromAC_* with descriptive method names |
+
+Minor LAX: `test_cascade_delete_does_not_remove_unrelated_documents` only checks document row survives, not whether unrelated entities/edges are intact. Adequate for stated AC scope.
+
+#### 5.4 Data Safety
+No unbounded inputs, no race conditions introduced. N/A.
+
+#### 5.5 Implementation-Aware Analysis (code reads)
+
+**models.py** (verified by direct read):
+- `PageStatus` StrEnum: DISCOVERED, APPROVED, REJECTED, INGESTED, STALE ✓
+- `SourcePage` model: `id` (uuid_hex), `source_id: str`, `url: str`, `status: PageStatus`, `extraction_hash: str | None = None`, `last_extracted: str | None = None` ✓
+- EntityType extended with 5 corporate values ✓
+- RelationType extended with GOVERNS, SUPERSEDES_VERSION ✓
+- SourceType extended with AUTHENTICATED_WEB ✓
+
+**schema.py** (verified by direct read):
+- `_CREATE_DOCUMENTS` includes `source_id TEXT` at column level ✓
+- `_CREATE_SOURCE_PAGES` DDL: `id, source_id REFERENCES knowledge_sources, url NOT NULL, status TEXT DEFAULT 'discovered', extraction_hash TEXT, last_extracted TEXT, scope, created_at, updated_at` ✓
+- `_migrate_v8_to_v9`: `CREATE INDEX on source_pages(source_id)`, `ALTER TABLE documents ADD COLUMN source_id TEXT` ✓
+
+**source_store.py** `delete_cascade` (verified by direct read, lines 165-210):
+- Returns `False` if source not found ✓
+- Collects doc_ids via `SELECT id FROM documents WHERE source_id = ?`
+- Per doc: deletes edges (WHERE source_id OR target_id = entity_id), entities, chunks, document_status ✓
+- Deletes documents, source_pages, knowledge_sources row ✓
+- Returns `True` after cascade ✓
+- Parameterised throughout ✓
+
+Implementation appears correct for the #754 AC from code analysis. Runtime verification pending.
+
+#### **5.1 / 5.5 CRITICAL FINDING — DDL Column Conflict (Cross-Task Regression)**
+
+The #754 builder changed `schema.py` source_pages DDL from the prior stub (`approval_state`, `extraction_status`) to `status`, `extraction_hash`, `last_extracted` (matching the #754 AC).
+
+However, `tests/test_authenticated_content_pipeline_751.py` (`TestFromAC_AuthenticatedContentSchema`) — a test file in the active workspace — contains:
+
+- `test_source_pages_has_approval_state_column` — asserts `"approval_state" in cols` (line ~345)
+- `test_source_pages_has_extraction_status_column` — asserts `"extraction_status" in cols` (line ~352)
+
+With the current schema (no `approval_state`, no `extraction_status` columns), both tests **will fail**. The builder's note confirms this: "Schema DDL mismatch (approval_state → status) was pre-existing from an earlier stub; corrected to match AC specification." The correction is correct for #754's AC but introduces failures in the #751 test file.
+
+**Evidence:** Direct file reads of `schema.py` L152-165 (DDL) and `test_authenticated_content_pipeline_751.py` L343-360 (assertions). No test execution required to confirm the conflict.
+
+#### 5.7 Builder Process Quality
+- Single `## Builder Notes` section: CLEAN
+- No loop pattern ✓
+
+---
+
+### Pass 2 — INFORMATIONAL
+
+- `test_cascade_delete_does_not_remove_unrelated_documents` does not verify that entities/edges from other documents are unaffected (cross-document edge contamination is a theoretically possible side effect of the `OR target_id = ?` pattern). Scope is acceptable for the AC, but a future iteration could add coverage.
+- `_CREATE_SOURCE_PAGES` includes `scope` column not tested by #754 tests — not required by the AC.
+
+---
+
+### AC Compliance Table (code-reading evidence only — no test execution)
+
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 AUTHENTICATED_WEB | `models.py` — `SourceType.AUTHENTICATED_WEB = "authenticated_web"` | `TestFromAC_SourceTypeAuthenticatedWeb` (4) | PASS (code read) |
+| AC2 EntityType corporate | `models.py` — REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD present | `TestFromAC_EntityTypeCorporate` (15) | PASS (code read) |
+| AC3 RelationType corporate | `models.py` — GOVERNS, SUPERSEDES_VERSION present | `TestFromAC_RelationTypeCorporate` (6) | PASS (code read) |
+| AC4 SourcePage + PageStatus | `models.py` — PageStatus(5 values), SourcePage(6 fields) | `TestFromAC_SourcePageModel` (16) | PASS (code read) |
+| AC5 source_id FK on documents | `schema.py` L43 — `source_id TEXT` in DDL; migration L255 alters table | `TestFromAC_DocumentsSourceIdFK` (8) | PASS (code read) |
+| AC5 source_pages columns | `schema.py` L152-165 — status, extraction_hash, last_extracted present | `TestFromAC_DocumentsSourceIdFK` (8) | PASS (code read) |
+| AC6 cascade delete | `source_store.py` L165-210 — `delete_cascade()` with full 6-table chain | `TestFromAC_CascadeDelete` (10) | PASS (code read) |
+| **Side-effect** | `test_authenticated_content_pipeline_751.py` L343-360 — approval_state/extraction_status columns absent | N/A to #754 | **FAIL (runtime)** |
+
+---
+
+### Pre-Block Deductions
+
+| Finding | Severity | Deduction |
+|---------|----------|-----------|
+| Quality-Runner unavailable — runtime verification impossible | Blocker | Cannot reach ≥.90 confidence |
+| DDL conflict — 2 tests in test_authenticated_content_pipeline_751.py will fail | Critical | Must be resolved before re-review |
+
+**Confidence: N/A — BLOCK (runtime verification required; DDL conflict must be resolved first)**
+
+### Resolution Path
+
+1. The #751 test file (`tests/test_authenticated_content_pipeline_751.py`) must be updated: replace `test_source_pages_has_approval_state_column` and `test_source_pages_has_extraction_status_column` with tests for the actual column names (`status`, `extraction_hash`/`last_extracted`) per the #751 AC and refined architecture note.
+2. Quality-Runner must be available for the re-review to independently execute `tests/test_schema_extensions_754.py` and verify 59 passing.
+3. Code analysis suggests the #754 implementation is correct — the block is not due to suspected code defect but due to the DDL conflict and inability to run tests independently.

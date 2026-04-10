@@ -1,7 +1,7 @@
 ---
 id: 873
 title: Migrate context_hydration.py to use web_extract.extract_markdown
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-03-20T14:48:10.8062795+01:00
 updated: 2026-03-26T16:14:45.1709313+01:00

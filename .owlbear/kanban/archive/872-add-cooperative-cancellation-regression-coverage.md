@@ -1,7 +1,7 @@
 ---
 id: 872
 title: Add cooperative cancellation regression coverage for knowledge pipelines
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-20T14:01:01.7596195+01:00
 updated: 2026-03-26T16:16:10.1525523+01:00

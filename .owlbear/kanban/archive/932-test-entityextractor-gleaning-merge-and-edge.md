@@ -1,7 +1,7 @@
 ---
 id: 932
 title: Test EntityExtractor gleaning merge and edge repair semantics
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-21T23:58:42.8795366+01:00
 updated: 2026-03-21T23:58:42.8795366+01:00

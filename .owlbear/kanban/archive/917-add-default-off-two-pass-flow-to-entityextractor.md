@@ -1,7 +1,7 @@
 ---
 id: 917
 title: Add default-off two-pass flow to EntityExtractor
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:57:47.4958911+01:00
 updated: 2026-03-21T15:57:47.4958911+01:00

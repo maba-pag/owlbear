@@ -281,7 +281,7 @@ All #847 deliverables committed by upstream agents:
 - ce07053 fix: wire bootstrap security audit sink (#847, builder)
 - 7fe20a2 docs: add SecurityAuditLog to safety tech stack (#847, writer)
 
-Note: uncommitted worktree files (audit_log.py, command_guard.py, gate.py, terminal.py) belong to parent #525 (status: todo), not #847.
+Note: uncommitted worktree files (audit_log.py, command_guard.py, gate.py, terminal.py) belong to parent #525 (status: archived), not #847.
 
 ### Confidence: .96
 ### Action: archive

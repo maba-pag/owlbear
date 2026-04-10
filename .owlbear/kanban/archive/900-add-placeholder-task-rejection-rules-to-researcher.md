@@ -1,7 +1,7 @@
 ---
 id: 900
 title: Add placeholder-task rejection rules to researcher and architect guidance
-status: backlog
+status: archived
 priority: important
 created: 2026-03-21T14:35:51.7705537+01:00
 updated: 2026-03-21T15:23:23.4321898+01:00

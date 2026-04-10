@@ -1,7 +1,7 @@
 ---
 id: 931
 title: Test default-off two-pass EntityExtractor gleaning flow
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-21T23:58:38.5118938+01:00
 updated: 2026-03-21T23:58:38.5118938+01:00

@@ -1,7 +1,7 @@
 ---
 id: 919
 title: Expose per-pass EntityExtractor usage records for gleaning benchmarks
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:57:48.7311696+01:00
 updated: 2026-03-21T15:57:48.7311696+01:00

@@ -1,7 +1,7 @@
 ---
 id: 977
 title: Add two-tier priority notification config to OwlBearSettings
-status: todo
+status: archived
 priority: important
 created: 2026-03-24T03:05:22.4059729+01:00
 updated: 2026-03-24T04:30:47.5524091+01:00

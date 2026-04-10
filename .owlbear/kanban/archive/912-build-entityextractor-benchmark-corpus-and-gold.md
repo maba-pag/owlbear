@@ -1,7 +1,7 @@
 ---
 id: 912
 title: Build EntityExtractor benchmark corpus and gold schema
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:52:52.1302631+01:00
 updated: 2026-03-26T16:02:35.9418703+01:00

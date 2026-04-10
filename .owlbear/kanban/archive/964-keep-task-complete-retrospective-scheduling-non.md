@@ -28,6 +28,6 @@ See docs/research/hook-triggered-background-worker-supervision.md section 5. AC:
 
 - Recommendation (.85): Move eligibility checks (_count_rejections + _get_priority) into the background task, keeping __call__ instant. Approach A from the analysis.
 
-- Follow-up task created: #981 - Move RetrospectiveHook eligibility checks behind supervisor handoff (status: ideation, priority: needed)
+- Follow-up task created: #981 - Move RetrospectiveHook eligibility checks behind supervisor handoff (status: archived, priority: needed)
 
 - Sources logged in docs/sources/overview.md

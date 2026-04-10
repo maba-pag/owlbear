@@ -1,7 +1,7 @@
 ---
 id: 986
 title: 'Test: Two-tier priority notification config (TDD RED)'
-status: review
+status: archived
 priority: important
 created: 2026-03-24T04:26:04.845651+01:00
 updated: 2026-03-26T15:53:44.2521144+01:00

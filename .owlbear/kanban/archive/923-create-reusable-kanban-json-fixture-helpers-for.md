@@ -1,7 +1,7 @@
 ---
 id: 923
 title: Create reusable kanban JSON fixture helpers for BearClaw CLI board tests
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-21T16:56:29.2134882+01:00
 updated: 2026-03-26T16:07:48.6881365+01:00

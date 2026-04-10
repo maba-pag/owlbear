@@ -1,7 +1,7 @@
 ---
 id: 848
 title: Add auth success-failure events to dedicated security audit log
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-18T00:04:39.805024+01:00
 updated: 2026-03-26T12:41:36.2266168+01:00

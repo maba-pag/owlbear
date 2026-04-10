@@ -1,7 +1,7 @@
 ---
 id: 963
 title: Deduplicate notify delivery between NotificationHook and HookReactionRouter
-status: review
+status: archived
 priority: important
 created: 2026-03-23T04:16:01.8423826+01:00
 updated: 2026-03-26T16:05:20.8907785+01:00

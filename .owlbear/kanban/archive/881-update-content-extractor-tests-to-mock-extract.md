@@ -1,7 +1,7 @@
 ---
 id: 881
 title: Update content_extractor tests to mock extract_markdown delegation
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-03-20T16:31:20.6860073+01:00
 updated: 2026-03-26T16:09:10.1927848+01:00

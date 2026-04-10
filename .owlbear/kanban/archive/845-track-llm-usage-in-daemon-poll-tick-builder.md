@@ -1,7 +1,7 @@
 ---
 id: 845
 title: Track LLM usage in daemon poll_tick builder dispatch
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-03-17T17:41:27.1244234+01:00
 updated: 2026-03-25T19:56:30.5836008+01:00

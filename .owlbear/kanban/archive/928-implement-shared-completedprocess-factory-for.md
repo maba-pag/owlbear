@@ -1,7 +1,7 @@
 ---
 id: 928
 title: Implement shared CompletedProcess factory for BearClaw CLI tests
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-21T23:37:10.4516472+01:00
 updated: 2026-03-26T15:56:26.7946183+01:00

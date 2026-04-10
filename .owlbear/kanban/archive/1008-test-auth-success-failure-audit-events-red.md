@@ -1,7 +1,7 @@
 ---
 id: 1008
 title: 'Test: auth success-failure audit events (RED)'
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-03-26T12:40:41.0745669+01:00
 updated: 2026-03-26T13:37:09.5922955+01:00

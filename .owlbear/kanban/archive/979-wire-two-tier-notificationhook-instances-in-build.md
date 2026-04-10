@@ -1,7 +1,7 @@
 ---
 id: 979
 title: Wire two-tier NotificationHook instances in build_hooks
-status: backlog
+status: archived
 priority: important
 created: 2026-03-24T03:05:32.5411145+01:00
 updated: 2026-03-26T03:06:01.6174276+01:00

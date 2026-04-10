@@ -1,7 +1,7 @@
 ---
 id: 891
 title: 'Research: EntityExtractor gleaning prototype and recall benchmark'
-status: backlog
+status: archived
 priority: someday
 created: 2026-03-21T13:05:37.8389698+01:00
 updated: 2026-03-21T23:41:56.4029461+01:00

@@ -10596,3 +10596,32 @@
 {"timestamp": "2026-04-10T19:04:35.701030+00:00", "action": "edit", "task_id": 776, "detail": "append_body"}
 {"timestamp": "2026-04-10T19:04:35.722457+00:00", "action": "release", "task_id": 776, "detail": "free-leaf"}
 {"timestamp": "2026-04-10T19:04:35.735568+00:00", "action": "move", "task_id": 776, "detail": "done -> archived"}
+{"timestamp": "2026-04-10T21:10:19.897387+00:00", "action": "create", "task_id": 798, "detail": "Kanban Engine Restructuring \u2014 Multi-Consumer Foundation"}
+{"timestamp": "2026-04-10T21:20:28.178534+00:00", "action": "create", "task_id": 799, "detail": "Tests \u2014 Rename TaskRecord \u2192 Task"}
+{"timestamp": "2026-04-10T21:20:34.468760+00:00", "action": "create", "task_id": 800, "detail": "Rename TaskRecord \u2192 Task with compat alias"}
+{"timestamp": "2026-04-10T21:20:41.812758+00:00", "action": "create", "task_id": 801, "detail": "Tests \u2014 TaskSummary model"}
+{"timestamp": "2026-04-10T21:20:49.695515+00:00", "action": "create", "task_id": 802, "detail": "Add TaskSummary model + server integration"}
+{"timestamp": "2026-04-10T21:20:57.307525+00:00", "action": "create", "task_id": 803, "detail": "Tests \u2014 refresh_config + config staleness fix"}
+{"timestamp": "2026-04-10T21:21:04.284928+00:00", "action": "create", "task_id": 804, "detail": "Add refresh_config + fix config staleness"}
+{"timestamp": "2026-04-10T21:21:09.520350+00:00", "action": "create", "task_id": 805, "detail": "Tests \u2014 board_config"}
+{"timestamp": "2026-04-10T21:21:14.313076+00:00", "action": "create", "task_id": 806, "detail": "Add board_config()"}
+{"timestamp": "2026-04-10T21:21:18.824196+00:00", "action": "create", "task_id": 807, "detail": "Tests \u2014 valid_transitions"}
+{"timestamp": "2026-04-10T21:21:23.807312+00:00", "action": "create", "task_id": 808, "detail": "Add valid_transitions(status)"}
+{"timestamp": "2026-04-10T21:21:30.624595+00:00", "action": "create", "task_id": 809, "detail": "Tests \u2014 revision counter"}
+{"timestamp": "2026-04-10T21:21:35.847219+00:00", "action": "create", "task_id": 810, "detail": "Add revision counter"}
+{"timestamp": "2026-04-10T21:21:41.936992+00:00", "action": "create", "task_id": 811, "detail": "Tests \u2014 actor field in activity log"}
+{"timestamp": "2026-04-10T21:21:49.314327+00:00", "action": "create", "task_id": 812, "detail": "Add actor field to activity log"}
+{"timestamp": "2026-04-10T21:21:54.995849+00:00", "action": "create", "task_id": 813, "detail": "Tests \u2014 status/priority validation"}
+{"timestamp": "2026-04-10T21:22:01.288112+00:00", "action": "create", "task_id": 814, "detail": "Add status/priority validation"}
+{"timestamp": "2026-04-10T21:22:07.001306+00:00", "action": "create", "task_id": 815, "detail": "Tests \u2014 timestamp sort fix"}
+{"timestamp": "2026-04-10T21:22:13.172994+00:00", "action": "create", "task_id": 816, "detail": "Fix timestamp sort"}
+{"timestamp": "2026-04-10T21:22:21.056376+00:00", "action": "create", "task_id": 817, "detail": "Tests \u2014 Engine package boundary + public API"}
+{"timestamp": "2026-04-10T21:22:28.693770+00:00", "action": "create", "task_id": 818, "detail": "Extract engine to serve/kanban/ + workspace config"}
+{"timestamp": "2026-04-10T21:22:34.492131+00:00", "action": "create", "task_id": 819, "detail": "Tests \u2014 MCP adapter slimming regression"}
+{"timestamp": "2026-04-10T21:22:41.406593+00:00", "action": "create", "task_id": 820, "detail": "Slim mcp-kanban adapter"}
+{"timestamp": "2026-04-10T21:22:46.885468+00:00", "action": "create", "task_id": 821, "detail": "Tests \u2014 Compat alias removal + import migration"}
+{"timestamp": "2026-04-10T21:22:52.825893+00:00", "action": "create", "task_id": 822, "detail": "Remove compat alias + migrate all workspace imports"}
+{"timestamp": "2026-04-10T21:23:01.631234+00:00", "action": "create", "task_id": 823, "detail": "Tests \u2014 pick_dispatchable()"}
+{"timestamp": "2026-04-10T21:23:09.145293+00:00", "action": "create", "task_id": 824, "detail": "Create dispatch.py with pick_dispatchable()"}
+{"timestamp": "2026-04-10T21:23:15.057086+00:00", "action": "create", "task_id": 825, "detail": "Tests \u2014 Server pick_tasks thin wrapper"}
+{"timestamp": "2026-04-10T21:23:21.126887+00:00", "action": "create", "task_id": 826, "detail": "Slim server pick_tasks to thin wrapper"}

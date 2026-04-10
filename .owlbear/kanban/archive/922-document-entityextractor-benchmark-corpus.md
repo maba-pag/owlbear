@@ -1,7 +1,7 @@
 ---
 id: 922
 title: Document EntityExtractor benchmark corpus authoring contract
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-21T16:45:45.9513568+01:00
 updated: 2026-03-21T16:45:45.9513568+01:00

@@ -1,7 +1,7 @@
 ---
 id: 907
 title: Prototype feature-flagged EntityExtractor gleaning
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:14:48.2581991+01:00
 updated: 2026-03-23T18:28:52.910711+01:00

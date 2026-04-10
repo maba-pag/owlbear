@@ -132,8 +132,8 @@ See docs/research/hook-reaction-retry-delegation.md for the full design (Option 
 
 | AC Line | Evidence | Status |
 | --- | --- | --- |
-| AC1: `#984` is archived | `kanban\kanban-md.exe show 984` reports `Status: in-progress` and `Claimed by: builder` | FAIL |
-| AC2: `#985` is archived | `kanban\kanban-md.exe show 985` reports `Status: ideation` | FAIL |
+| AC1: `#984` is archived | `kanban\kanban-md.exe show 984` reports `status: archived` and `Claimed by: builder` | FAIL |
+| AC2: `#985` is archived | `kanban\kanban-md.exe show 985` reports `status: archived` | FAIL |
 | AC3: original retry-delegation mandate is fulfilled together | First half is present: `src/owlbear/daemon.py:506` defines `schedule_task_retry`, `src/owlbear/daemon.py:615` shows `reconcile_tasks()` delegates to it, and `tests/test_schedule_task_retry.py` passes 30/30. Second half is not done: `src/owlbear/bootstrap/hooks.py:65` still wires `executors={notify: _noop, retry: _noop, escalate: _noop}`, and a workspace search found no `make_retry_executor` symbol under `src/owlbear/**/*.py`. The current bootstrap test `tests/test_955_hook_reaction_schema_bootstrap.py::TestFromAC_955_BuildHooksReturnContract::test_build_hooks_noop_executors_do_not_raise_on_emit` still passes against noop behavior. | FAIL |
 | AC4: no `src/` or `tests/` changes from this governance task itself | `kanban\kanban-md.exe show 956` -> Builder Notes: `Non-implementation task - no code changes needed.` No direct #956-owned code/test changes were presented in review. | PASS |
 

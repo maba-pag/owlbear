@@ -162,7 +162,7 @@ Correct dispatch target: #940 (RED task for EntityExtractor baseline-vs-gleaning
 
 - Non-testable parent tracker. AC line 1 forbids test-writer dispatch directly on this card.
 
-- Correct RED task is #940 (backlog, status: backlog - not yet architect-approved for test-writer).
+- Correct RED task is #940 (backlog, status: archived - not yet architect-approved for test-writer).
 
 - No tests written. Passing through to in-progress.
 

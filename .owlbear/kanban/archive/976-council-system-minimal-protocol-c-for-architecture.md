@@ -1,7 +1,7 @@
 ---
 id: 976
 title: Council system — minimal Protocol C for architecture decisions
-status: ideation
+status: archived
 priority: someday
 created: 2026-03-24T03:03:35.9686875+01:00
 updated: 2026-03-25T03:04:35.1144702+01:00

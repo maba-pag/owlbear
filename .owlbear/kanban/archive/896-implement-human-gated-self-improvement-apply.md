@@ -1,7 +1,7 @@
 ---
 id: 896
 title: Implement human-gated self-improvement apply workflow for agent definitions
-status: todo
+status: archived
 priority: someday
 created: 2026-03-21T13:19:37.5344372+01:00
 updated: 2026-03-21T13:19:37.5344372+01:00

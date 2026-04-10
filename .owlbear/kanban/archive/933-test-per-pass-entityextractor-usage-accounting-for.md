@@ -1,7 +1,7 @@
 ---
 id: 933
 title: Test per-pass EntityExtractor usage accounting for gleaning benchmarks
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-21T23:58:47.291406+01:00
 updated: 2026-03-21T23:58:47.291406+01:00

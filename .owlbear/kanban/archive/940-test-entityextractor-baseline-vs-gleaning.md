@@ -1,7 +1,7 @@
 ---
 id: 940
 title: Test EntityExtractor baseline-vs-gleaning benchmark runner
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-22T17:07:35.5756273+01:00
 updated: 2026-03-22T17:07:35.5756273+01:00

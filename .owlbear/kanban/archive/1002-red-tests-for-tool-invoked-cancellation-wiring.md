@@ -1,7 +1,7 @@
 ---
 id: 1002
 title: RED tests for tool-invoked cancellation wiring
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-25T04:41:44.0812204+01:00
 updated: 2026-03-25T06:12:34.16749+01:00

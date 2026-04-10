@@ -1,7 +1,7 @@
 ---
 id: 828
 title: Tests for ErrorJournal dedup_key (RED)
-status: backlog
+status: archived
 priority: someday
 created: 2026-03-15T12:48:37.4790518+01:00
 updated: 2026-03-15T12:48:37.4790518+01:00

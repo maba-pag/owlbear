@@ -1,7 +1,7 @@
 ---
 id: 915
 title: Build EntityExtractor baseline-vs-gleaning benchmark runner
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:56:03.1848729+01:00
 updated: 2026-03-21T15:56:03.1848729+01:00

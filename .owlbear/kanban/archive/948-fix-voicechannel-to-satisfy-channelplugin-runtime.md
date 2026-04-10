@@ -1,7 +1,7 @@
 ---
 id: 948
 title: Fix VoiceChannel to satisfy ChannelPlugin @runtime_checkable Protocol
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-03-23T01:04:09.9951816+01:00
 updated: 2026-03-26T15:59:43.8717144+01:00

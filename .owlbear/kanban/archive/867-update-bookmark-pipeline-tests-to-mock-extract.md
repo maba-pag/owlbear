@@ -1,7 +1,7 @@
 ---
 id: 867
 title: Update bookmark_pipeline tests to mock extract_markdown instead of trafilatura
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-03-20T13:53:02.4325589+01:00
 updated: 2026-03-26T16:25:37.2264839+01:00

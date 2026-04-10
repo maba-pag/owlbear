@@ -1,7 +1,7 @@
 ---
 id: 913
 title: Test EntityExtractor recall harness and reporting (RED)
-status: ideation
+status: archived
 priority: nice-to-have
 created: 2026-03-21T15:52:58.6702439+01:00
 updated: 2026-03-21T15:52:58.6702439+01:00

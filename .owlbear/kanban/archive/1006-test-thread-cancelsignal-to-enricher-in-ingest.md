@@ -1,7 +1,7 @@
 ---
 id: 1006
 title: 'Test: Thread CancelSignal to enricher in _ingest_from_intake'
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-03-26T05:11:10.7075828+01:00
 updated: 2026-03-26T06:01:26.0992839+01:00
