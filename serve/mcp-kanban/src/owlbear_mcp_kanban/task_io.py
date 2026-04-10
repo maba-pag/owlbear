@@ -161,7 +161,10 @@ def read_task(path: Path) -> TaskRecord:
         FileNotFoundError: *path* does not exist.
         ValueError:        File is missing YAML frontmatter delimiters.
     """
-    content = path.read_text(encoding="utf-8")
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        content = path.read_text(encoding="cp1252")
 
     if not content.startswith("---"):
         msg = f"Task file has no YAML frontmatter (missing opening '---'): {path}"
