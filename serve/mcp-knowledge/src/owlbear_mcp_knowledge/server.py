@@ -132,7 +132,7 @@ def make_text_completion_fn(model: str) -> TextCompletionFn:
             result = await agent.run(prompt)
             return result.output
 
-    except ImportError:
+    except Exception:  # noqa: BLE001
 
         async def _complete(_prompt: str) -> str:  # type: ignore[misc]
             return ""
@@ -150,7 +150,7 @@ def make_evaluate_fn(model: str) -> EvaluateFn:
         from owlbear_knowledge.evaluator import make_pydantic_evaluate_fn  # noqa: PLC0415
 
         return make_pydantic_evaluate_fn(model)
-    except ImportError:
+    except Exception:  # noqa: BLE001
 
         async def _evaluate(_prompt: str) -> EvaluationResult:
             return EvaluationResult(

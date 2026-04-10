@@ -2,12 +2,37 @@
 
 External repos and resources studied during OwlBear development.
 
+## Edge CDP Validation Spike (Task #752)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local param, default context access | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Critical: `--remote-debugging-port` requires `--user-data-dir` to non-default dir from Chrome 136+ | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+| Playwright `launch_persistent_context` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context> | Alternative approach: Playwright-managed Edge lifecycle with channel="msedge" | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+| Playwright Chrome Extensions docs | <https://playwright.dev/python/docs/chrome-extensions> | Confirms Edge removed `--load-extension` flags; `--remote-debugging-port` still usable | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+
 ## Excalidraw Skill Expansion (Task #743)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | coleam00/excalidraw-diagram-skill SKILL.md | <https://github.com/coleam00/excalidraw-diagram-skill> | Visual Pattern Library (9 patterns), Shape Meaning table, Large Diagram Strategy, Container vs Text rules, ID conventions | .owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
 | Wikipedia: Entity-relationship model | <https://en.wikipedia.org/wiki/Entity-relationship_model> | Chen notation conventions: rectangles=entities, diamonds=relationships, ellipses=attributes | .owlbear/research/excalidraw-skill-expansion.md | 2026-04-10 |
+
+## Authenticated Content Pipeline (Task #751)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright connect_over_cdp docs | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API, is_local flag, Edge support confirmation | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+| trafilatura (PyPI) | <https://pypi.org/project/trafilatura/> | HTML content extraction library — Apache 2.0, benchmark-proven, markdown output | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+| markdownify (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown conversion — MIT license, BeautifulSoup-based, customizable | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+| browser-use project | <https://github.com/browser-use/browser-use> | CDP automation prior art — 80K stars, DomService pattern, AX tree usage | .owlbear/research/751-authenticated-content-pipeline.md | 2026-04-10 |
+
+## Edge Launcher + CDP Tests (Task #755)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local, timeout, default context access | .owlbear/research/edge-launcher-cdp-tests-755.md | 2026-04-10 |
+| Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | `--remote-debugging-port` requires `--user-data-dir` to non-default dir from Chrome 136+ | .owlbear/research/edge-launcher-cdp-tests-755.md | 2026-04-10 |
 
 ## Excalidraw Reference Files (Task #742)
 

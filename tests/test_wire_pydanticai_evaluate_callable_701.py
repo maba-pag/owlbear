@@ -241,16 +241,17 @@ class TestFromAC_ServerMakeEvaluateFnWiring:  # noqa: N801
     # AC4 — ImportError fallback
     # -------------------------------------------------------------------------
 
-    def test_make_evaluate_fn_source_contains_import_error_handler(self) -> None:
-        """AC4: make_evaluate_fn must contain an ImportError handler for graceful degradation.
+    def test_make_evaluate_fn_source_contains_exception_handler(self) -> None:
+        """AC4: make_evaluate_fn must contain an exception handler for graceful degradation.
 
-        FAILS now: current stub has no ImportError try/except.
+        Catches broad Exception so both ImportError (missing pydantic-ai) and
+        provider configuration errors (e.g. missing API key) degrade gracefully.
         """
         from owlbear_mcp_knowledge import server  # noqa: PLC0415
 
         src = inspect.getsource(server.make_evaluate_fn)
-        assert "ImportError" in src, (
-            "make_evaluate_fn must handle ImportError to degrade gracefully when pydantic-ai absent"
+        assert "except" in src, (
+            "make_evaluate_fn must handle exceptions to degrade gracefully"
         )
 
     @pytest.mark.asyncio(loop_scope="function")

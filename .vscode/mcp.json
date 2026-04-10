@@ -1,44 +1,42 @@
 {
-    "servers":  {
-                    "microsoft/markitdown":  {
-                                                 "type":  "stdio",
-                                                 "command":  "uvx",
-                                                 "args":  [
-                                                              "markitdown-mcp@0.0.1a4"
-                                                          ]
-                                             },
-                    "owlbear-kanban":  {
-                                           "type":  "stdio",
-                                           "command":  "uv",
-                                           "args":  [
-                                                        "run",
-                                                        "python",
-                                                        "-m",
-                                                        "owlbear_mcp_kanban"
-                                                    ]
-                                       },
-                    "owlbear-knowledge":  {
-                                              "type":  "stdio",
-                                              "command":  "uv",
-                                              "args":  [
-                                                           "run",
-                                                           "python",
-                                                           "-m",
-                                                           "owlbear_mcp_knowledge"
-                                                       ]
-                                          },
-                    "owlbear-memory":  {
-                                           "type":  "stdio",
-                                           "command":  "uv",
-                                           "args":  [
-                                                        "run",
-                                                        "python",
-                                                        "-m",
-                                                        "owlbear_mcp_memory"
-                                                    ]
-                                       }
-                },
-    "inputs":  [
-
-               ]
+  "inputs": [],
+  "servers": {
+    "microsoft/markitdown": {
+      "args": [
+        "markitdown-mcp@0.0.1a4"
+      ],
+      "command": "uvx",
+      "type": "stdio"
+    },
+    "owlbear-kanban": {
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_kanban"
+      ],
+      "command": "uv",
+      "type": "stdio"
+    },
+    "owlbear-knowledge": {
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_knowledge"
+      ],
+      "command": "uv",
+      "type": "stdio"
+    },
+    "owlbear-memory": {
+      "args": [
+        "run",
+        "python",
+        "-m",
+        "owlbear_mcp_memory"
+      ],
+      "command": "uv",
+      "type": "stdio"
+    }
+  }
 }
