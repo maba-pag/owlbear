@@ -2,7 +2,7 @@
 
 Covers:
   AC1  — seed/.vscode/settings.json: three chat.*Locations keys with {{owlbear_path}} placeholders
-  AC2  — seed/.vscode/mcp.json: github + 4 owlbear kebab-case servers, --project placeholder in args
+  AC2  — seed/.vscode/mcp.json: github + 3 owlbear kebab-case servers + ddgs, --project placeholder in owlbear args
   AC3  — seed/.owlbear/kanban/config.yml: next_id: 1, standard statuses
   AC5  — seed/.owlbear/hooks/deny-writes.ps1 and lint-changed.ps1: static files present
   AC6  — seed/.owlbear/knowledge/.gitkeep: empty directory marker
@@ -83,7 +83,7 @@ class TestFromAC_SeedSettingsTemplate:
 
 
 class TestFromAC_SeedMcpTemplate:
-    """AC2: seed/.vscode/mcp.json with github + 4 kebab-case owlbear servers; --project placeholder."""
+    """AC2: seed/.vscode/mcp.json with github + 3 kebab-case owlbear servers + ddgs; --project placeholder."""
 
     def test_seed_mcp_json_exists(self) -> None:
         assert (_SEED_DIR / ".vscode" / "mcp.json").exists(), "seed/.vscode/mcp.json does not exist"
@@ -95,27 +95,27 @@ class TestFromAC_SeedMcpTemplate:
         )
         assert data["servers"]["github"].get("type") == "http", "github server must have type: http"
 
-    def test_seed_mcp_has_all_four_owlbear_kebab_case_servers(self) -> None:
+    def test_seed_mcp_has_all_owlbear_kebab_case_servers(self) -> None:
         data = json.loads((_SEED_DIR / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
-        expected = {"owlbear-kanban", "owlbear-knowledge", "owlbear-memory", "owlbear-project"}
+        expected = {"owlbear-kanban", "owlbear-knowledge", "owlbear-memory"}
         missing = expected - set(data["servers"].keys())
         assert not missing, (
             f"Seed mcp.json missing kebab-case server keys: {missing}. Found: {list(data['servers'].keys())}"
         )
 
-    def test_seed_mcp_stdio_servers_include_project_flag(self) -> None:
-        """AC2: stdio servers must have --project in args array."""
+    def test_seed_mcp_owlbear_stdio_servers_include_project_flag(self) -> None:
+        """AC2: owlbear stdio servers must have --project in args array."""
         data = json.loads((_SEED_DIR / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
         for name, entry in data["servers"].items():
-            if entry.get("type") == "stdio":
+            if entry.get("type") == "stdio" and name.startswith("owlbear-"):
                 args = entry.get("args", [])
                 assert "--project" in args, f"stdio server '{name}' missing --project in args: {args}"
 
-    def test_seed_mcp_stdio_servers_include_owlbear_path_placeholder(self) -> None:
-        """AC2: stdio server args must include {{owlbear_path}} placeholder for replacement."""
+    def test_seed_mcp_owlbear_stdio_servers_include_owlbear_path_placeholder(self) -> None:
+        """AC2: owlbear stdio server args must include {{owlbear_path}} placeholder for replacement."""
         data = json.loads((_SEED_DIR / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
         for name, entry in data["servers"].items():
-            if entry.get("type") == "stdio":
+            if entry.get("type") == "stdio" and name.startswith("owlbear-"):
                 args = entry.get("args", [])
                 assert "{{owlbear_path}}" in args, (
                     f"stdio server '{name}' missing {{{{owlbear_path}}}} placeholder in args: {args}"
@@ -354,18 +354,27 @@ class TestFromAC_InitFunction:
             "scratch-pad.txt was copied to target — init() must exclude it"
         )
 
-    def test_init_idempotent_skips_mcp_json_if_exists(self, tmp_path: Path) -> None:
-        """mcp.json must not be overwritten on second call."""
+    def test_init_idempotent_merges_mcp_json_preserving_user_servers(self, tmp_path: Path) -> None:
+        """Pre-existing user servers in mcp.json must survive the merge."""
         from init import init  # type: ignore[import]
 
         target = tmp_path / "target"
         target.mkdir()
         vscode_dir = target / ".vscode"
         vscode_dir.mkdir(parents=True)
-        (vscode_dir / "mcp.json").write_text('{"SENTINEL_MCP": true}', encoding="utf-8")
+        (vscode_dir / "mcp.json").write_text(
+            json.dumps({"servers": {"my-custom-server": {"type": "stdio", "command": "echo"}}}),
+            encoding="utf-8",
+        )
         init(target, _OWLBEAR_DIR)
-        content = (target / ".vscode" / "mcp.json").read_text(encoding="utf-8")
-        assert "SENTINEL_MCP" in content, "mcp.json was overwritten despite already existing — idempotency broken"
+        data = json.loads((target / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
+        assert "my-custom-server" in data["servers"], (
+            "User server 'my-custom-server' was lost during mcp.json merge"
+        )
+        # Owlbear servers should also be present
+        assert "owlbear-kanban" in data["servers"], (
+            "Owlbear server 'owlbear-kanban' was not added during mcp.json merge"
+        )
 
     def test_init_idempotent_skips_owlbear_project_json_if_exists(self, tmp_path: Path) -> None:
         """owlbear-project.json must not be overwritten on second call."""
@@ -579,3 +588,113 @@ class TestFromAC_CliInterface:
         assert result.returncode == 0, f"CLI exited non-zero ({result.returncode})\nstderr: {result.stderr}"
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["type"] == "python-uv", f"--type kwarg not written to owlbear-project.json, got {data['type']!r}"
+
+
+# ---------------------------------------------------------------------------
+# JSONC comment handling in settings.json
+# ---------------------------------------------------------------------------
+
+
+class TestSettingsJsoncMerge:
+    """settings.json with JSONC comments must be parsed and merged, not overwritten."""
+
+    def test_jsonc_comments_are_stripped_and_settings_merged(self, tmp_path: Path) -> None:
+        """Existing settings.json with // comments must be parsed correctly."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        vscode = target / ".vscode"
+        vscode.mkdir(parents=True)
+        (vscode / "settings.json").write_text(
+            '{\n  "editor.fontSize": 16, // my preferred size\n  "editor.tabSize": 4\n}\n',
+            encoding="utf-8",
+        )
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "settings.json").read_text(encoding="utf-8"))
+        assert data.get("editor.fontSize") == 16, "User setting lost during JSONC merge"
+        assert data.get("editor.tabSize") == 4, "User setting lost during JSONC merge"
+        assert "chat.agentFilesLocations" in data, "Owlbear settings not added during merge"
+
+    def test_jsonc_trailing_comments_after_booleans(self, tmp_path: Path) -> None:
+        """Common pattern: `true, // false` trailing comments must not break parsing."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        vscode = target / ".vscode"
+        vscode.mkdir(parents=True)
+        (vscode / "settings.json").write_text(
+            '{\n  "editor.wordWrap": "on", // off\n  "chat.agent.maxRequests": 250\n}\n',
+            encoding="utf-8",
+        )
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "settings.json").read_text(encoding="utf-8"))
+        assert data.get("editor.wordWrap") == "on", "JSONC trailing comment broke parsing"
+        assert data.get("chat.agent.maxRequests") == 250, "User setting lost during JSONC merge"
+
+
+# ---------------------------------------------------------------------------
+# mcp.json merge logic
+# ---------------------------------------------------------------------------
+
+
+class TestMcpJsonMerge:
+    """mcp.json must be merged, not skipped or overwritten."""
+
+    def test_mcp_merge_adds_owlbear_servers_to_existing(self, tmp_path: Path) -> None:
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        vscode = target / ".vscode"
+        vscode.mkdir(parents=True)
+        (vscode / "mcp.json").write_text(
+            json.dumps({"servers": {"my-server": {"type": "stdio", "command": "echo"}}}),
+            encoding="utf-8",
+        )
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
+        assert "my-server" in data["servers"], "User server lost"
+        assert "owlbear-kanban" in data["servers"], "Owlbear server not added"
+        assert "owlbear-memory" in data["servers"], "Owlbear server not added"
+
+    def test_mcp_merge_user_server_wins_on_key_conflict(self, tmp_path: Path) -> None:
+        """If user has an owlbear-kanban entry already, user's version wins."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        vscode = target / ".vscode"
+        vscode.mkdir(parents=True)
+        user_entry = {"type": "stdio", "command": "my-custom-kanban"}
+        (vscode / "mcp.json").write_text(
+            json.dumps({"servers": {"owlbear-kanban": user_entry}}),
+            encoding="utf-8",
+        )
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
+        assert data["servers"]["owlbear-kanban"]["command"] == "my-custom-kanban", (
+            "User's owlbear-kanban entry should win on conflict"
+        )
+
+    def test_mcp_merge_fresh_project_gets_all_servers(self, tmp_path: Path) -> None:
+        """Fresh project with no existing mcp.json gets all owlbear servers."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
+        for expected in ("github", "owlbear-kanban", "owlbear-knowledge", "owlbear-memory", "ddgs"):
+            assert expected in data["servers"], f"Server '{expected}' missing from fresh mcp.json"
+
+    def test_mcp_merge_no_raw_placeholders_remain(self, tmp_path: Path) -> None:
+        """After merge, no {{owlbear_path}} placeholders should remain."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        init(target, _OWLBEAR_DIR)
+        content = (target / ".vscode" / "mcp.json").read_text(encoding="utf-8")
+        assert "{{owlbear_path}}" not in content, "mcp.json still contains raw placeholder"

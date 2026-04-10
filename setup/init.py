@@ -9,9 +9,9 @@ the location of this script.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,7 +29,17 @@ _LOCATION_KEYS = frozenset(
 )
 
 _SKIP_NAMES = frozenset({"scratch-pad.txt"})
-_SKIP_IF_EXISTS_REL = frozenset({".vscode/mcp.json", "owlbear-project.json"})
+_SKIP_IF_EXISTS_REL = frozenset({"owlbear-project.json"})
+
+# Regex: match // line-comments outside of strings.  Handles the common JSONC
+# patterns VS Code uses (trailing comments like `true, // old value`).  Does
+# NOT attempt to handle every edge case — just enough for settings.json files.
+_JSONC_LINE_COMMENT_RE = re.compile(r'(?<!:)//.*$', re.MULTILINE)
+
+
+def _strip_jsonc_comments(text: str) -> str:
+    """Strip ``//``-style line comments so stdlib ``json.loads`` can parse JSONC."""
+    return _JSONC_LINE_COMMENT_RE.sub('', text)
 
 
 def _merge_settings(owlbear: dict, existing: dict) -> dict:
@@ -67,8 +77,19 @@ def _write_settings(src: Path, dest: Path, owlbear_path: str) -> None:
 
     existing: dict = {}
     if dest.exists():
-        with contextlib.suppress(json.JSONDecodeError):
-            existing = json.loads(dest.read_text(encoding="utf-8"))
+        raw = dest.read_text(encoding="utf-8")
+        try:
+            existing = json.loads(_strip_jsonc_comments(raw))
+        except json.JSONDecodeError:
+            # Unparseable even after stripping comments — treat as empty but
+            # warn so the user notices rather than silently losing settings.
+            import warnings
+
+            warnings.warn(
+                f"Could not parse existing {dest} as JSON(C); "
+                f"owlbear settings will be written without merging.",
+                stacklevel=2,
+            )
 
     merged = _merge_settings(owlbear_settings, existing)
     dest.write_text(json.dumps(merged, indent=2), encoding="utf-8")
@@ -92,27 +113,49 @@ def _write_project_json(
     dest.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
-    """Write .vscode/mcp.json with six MCP server entries.
+def _write_mcp(src: Path, dest: Path, owlbear_path: str) -> None:
+    """Write .vscode/mcp.json, merging with existing file if present.
 
-    Generates six MCP server entries: github remote + four owlbear stdio
-    servers (kanban, knowledge, memory, project) + ddgs stdio server for web
-    search. Entries include owlbear-memory (``-m owlbear_mcp_memory``) and its
-    three siblings. Skips if already exists.
+    Owlbear servers are added as defaults; existing user entries are preserved
+    and win on key conflict (same logic as settings merge for non-Location
+    keys).
+    """
+    template = src.read_text(encoding="utf-8")
+    template = _replace_placeholders(template, {"owlbear_path": owlbear_path})
+    owlbear_mcp: dict = json.loads(template)
+
+    existing: dict = {}
+    if dest.exists():
+        raw = dest.read_text(encoding="utf-8")
+        try:
+            existing = json.loads(_strip_jsonc_comments(raw))
+        except json.JSONDecodeError:
+            pass  # treat as empty — owlbear entries will be written fresh
+
+    # Merge servers: owlbear defaults first, user entries override on conflict
+    owlbear_servers = owlbear_mcp.get("servers", {})
+    user_servers = existing.get("servers", {})
+    merged_servers = {**owlbear_servers, **user_servers}
+
+    result = {**owlbear_mcp, **existing, "servers": merged_servers}
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(result, indent=2), encoding="utf-8")
+
+
+def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
+    """Write .vscode/mcp.json, merging owlbear servers with existing entries.
+
+    Standalone entry point for callers that only need the MCP config written.
+    Delegates to ``_write_mcp``.
 
     Args:
         target_dir: Destination project directory.
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
     """
     mcp_dest = target_dir / ".vscode" / "mcp.json"
-    if mcp_dest.exists():
-        return
     mcp_src = owlbear_dir / "seed" / ".vscode" / "mcp.json"
     owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
-    content = mcp_src.read_text(encoding="utf-8")
-    content = _replace_placeholders(content, {"owlbear_path": owlbear_path})
-    mcp_dest.parent.mkdir(parents=True, exist_ok=True)
-    mcp_dest.write_text(content, encoding="utf-8")
+    _write_mcp(mcp_src, mcp_dest, owlbear_path)
 
 
 # ---------------------------------------------------------------------------
@@ -134,8 +177,8 @@ def init(
     Computed fields (owlbear_path, created_at) are generated here rather than
     stored as template placeholders.
 
-    Idempotent: ``.vscode/mcp.json`` and ``owlbear-project.json`` are skipped
-    when they already exist.  ``settings.json`` is deep-merged per AC12.
+    Idempotent: ``owlbear-project.json`` is skipped when it already exists.
+    ``settings.json`` and ``mcp.json`` are deep-merged with existing files.
 
     Args:
         target_dir: Destination project directory.
@@ -164,6 +207,10 @@ def init(
 
         if rel_posix == ".vscode/settings.json":
             _write_settings(src, dest, owlbear_path)
+            continue
+
+        if rel_posix == ".vscode/mcp.json":
+            _write_mcp(src, dest, owlbear_path)
             continue
 
         if rel_posix == "owlbear-project.json":
