@@ -57,10 +57,12 @@ class RefreshOrchestrator:
         store: KnowledgeSourceStore | object,
         pipeline: IngestPipeline | object,
         workspace_root: Path | None = None,
+        content_fetcher: object | None = None,
     ) -> None:
         self._store = store
         self._pipeline = pipeline
         self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
+        self._content_fetcher = content_fetcher
 
     async def refresh(
         self,
@@ -87,6 +89,8 @@ class RefreshOrchestrator:
             result = await self._handle_url_list(source, cancel=cancel)
         elif source.source_type == SourceType.FILE_GLOB:
             result = await self._handle_file_glob(source, cancel=cancel)
+        elif source.source_type == SourceType.AUTHENTICATED_WEB:
+            result = await self._handle_authenticated_web(source, cancel=cancel)
         else:
             msg = f"Unsupported source type: {source.source_type}"
             raise ValueError(msg)
@@ -209,8 +213,58 @@ class RefreshOrchestrator:
             errors=errors,
         )
 
-    def _update_source_record(
+    async def _handle_authenticated_web(
         self,
+        source: KnowledgeSource,
+        cancel: CancelSignal | None = None,
+    ) -> RefreshResult:
+        """Refresh an AUTHENTICATED_WEB source via the injected content_fetcher.
+
+        For each URL in ``source.config["urls"]``, calls
+        ``self._content_fetcher.fetch(url)`` to retrieve page content and
+        ingests it through the pipeline.
+
+        Args:
+            source: The knowledge source to refresh.
+            cancel: Optional CancelSignal; checked between URLs.
+
+        Returns:
+            RefreshResult with per-status counters.
+        """
+        urls: list[str] = source.config.get("urls", [])
+        refreshed = skipped = failed = 0
+        errors: list[str] = []
+
+        for url in urls:
+            if cancel is not None and cancel.is_set():
+                break
+            try:
+                content: str = await self._content_fetcher.fetch(url)  # type: ignore[union-attr]
+                intake_result = _intake.IntakeResult(
+                    content=content,
+                    source=url,
+                    metadata={"source_type": "authenticated_web"},
+                )
+                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
+                if ingest_result.status == "ok":
+                    refreshed += 1
+                elif ingest_result.status == "skipped":
+                    skipped += 1
+                else:
+                    failed += 1
+            except Exception as exc:  # noqa: BLE001
+                failed += 1
+                errors.append(str(exc))
+
+        return RefreshResult(
+            source_id=str(source.id),
+            refreshed=refreshed,
+            skipped=skipped,
+            failed=failed,
+            errors=errors,
+        )
+
+    def _update_source_record(        self,
         source: KnowledgeSource,
         result: RefreshResult,
     ) -> None:

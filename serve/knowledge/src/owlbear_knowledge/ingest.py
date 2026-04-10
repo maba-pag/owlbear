@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
-from owlbear_knowledge.content_safety import wrap_untrusted_content
+from owlbear_knowledge.content_safety import should_wrap, wrap_untrusted_content
 
 if TYPE_CHECKING:
     from owlbear_knowledge.chunker import TextChunker
@@ -169,6 +169,9 @@ class IngestPipeline:
             chunks = await asyncio.to_thread(self._chunker.chunk, intake.content, metadata=_meta)
             chunk_count = len(chunks)
 
+            if existing_id is not None:
+                self._docs.delete_document_data(existing_id)  # type: ignore[union-attr]
+
             self._docs.insert_document(doc_id, intake, scope=scope)  # type: ignore[union-attr]
 
             chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
@@ -179,11 +182,11 @@ class IngestPipeline:
                 chunk_ids,
                 chunk_texts,  # type: ignore[union-attr]
             )
-            _is_url = _meta.get("source_type") in {"url", "authenticated_web"}
+            _should_wrap = should_wrap(_meta.get("source_type"))  # type: ignore[arg-type]
             extract_coros = [
                 self._extractor.extract(
                     wrap_untrusted_content(c.text, source_url=str(intake.source))
-                    if _is_url
+                    if _should_wrap
                     else c.text
                 )
                 for c in chunks
