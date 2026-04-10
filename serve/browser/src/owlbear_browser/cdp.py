@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+import contextlib
+import subprocess
+from typing import TYPE_CHECKING, Any, Self
+
+from owlbear_browser._errors import AuthenticationRequired, CDPConnectionError
+
+if TYPE_CHECKING:
+    import types
 
 _DEFAULT_PORT = 9222
 
@@ -12,14 +19,6 @@ _IDP_DOMAINS: tuple[str, ...] = (
     "login.okta.com",
     "login.windows.net",
 )
-
-
-class AuthenticationRequired(Exception):
-    """Raised when an SSO redirect or login form is detected on a page."""
-
-
-class CDPConnectionError(Exception):
-    """Raised when a CDP connection attempt fails."""
 
 
 async def playwright_connect_over_cdp(endpoint_url: str) -> Any:  # noqa: ANN401
@@ -50,10 +49,19 @@ class CDPConnectionManager:
         await manager.connect()
         # ... interact with browser ...
         await manager.disconnect()
+
+        # Or with a subprocess handle (returned by launch_edge):
+        async with manager:
+            pass  # subprocess is terminated on exit
     """
 
-    def __init__(self, port: int = _DEFAULT_PORT) -> None:
+    def __init__(
+        self,
+        port: int = _DEFAULT_PORT,
+        process: subprocess.Popen[bytes] | None = None,
+    ) -> None:
         self._port = port
+        self._process: subprocess.Popen[bytes] | None = process
         self._browser: Any = None
         self._is_connected: bool = False
 
@@ -61,6 +69,28 @@ class CDPConnectionManager:
     def is_connected(self) -> bool:
         """``True`` when a browser connection is currently active."""
         return self._is_connected
+
+    async def __aenter__(self) -> Self:
+        """Connect on entry."""
+        await self.connect()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        """Disconnect and terminate the Edge subprocess on exit."""
+        await self.disconnect()
+        if self._process is not None:
+            with contextlib.suppress(OSError):
+                self._process.terminate()
+            try:
+                self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(OSError):
+                    self._process.kill()
 
     async def connect(self) -> None:
         """Connect to Edge over CDP on 127.0.0.1.

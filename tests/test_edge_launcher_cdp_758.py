@@ -446,3 +446,33 @@ class TestFromAC_WorkspaceConfig:  # noqa: N801
         assert ALLOWED_IMPORTS.get("owlbear_browser") == set(), (
             "owlbear_browser must have an empty set() in ALLOWED_IMPORTS (foundation package)"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered — edge cases not covered by AC tests
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered edge cases (RED → GREEN verified)."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_aexit_kills_subprocess_when_wait_times_out(self) -> None:
+        """kill() is invoked when wait() raises TimeoutExpired (slow-exit Edge)."""
+        import subprocess  # noqa: PLC0415
+
+        from owlbear_browser.launcher import launch_edge  # noqa: PLC0415
+
+        proc = _make_mock_process()
+        proc.wait = MagicMock(side_effect=subprocess.TimeoutExpired(cmd="msedge", timeout=5))
+        browser = _make_mock_browser()
+        with (
+            patch(f"{_LAUNCHER_MODULE}.find_edge_binary", return_value=Path(r"C:\edge\msedge.exe")),
+            patch(f"{_LAUNCHER_MODULE}.build_launch_args", return_value=["--arg"]),
+            patch(f"{_LAUNCHER_MODULE}.subprocess.Popen", return_value=proc),
+            _patch_connect_over_cdp(browser),
+        ):
+            manager = launch_edge(port=_DEFAULT_PORT, user_data_dir=_USER_DATA_DIR)
+            async with manager:
+                pass
+        assert proc.kill.called, "kill() must be called when wait() times out"

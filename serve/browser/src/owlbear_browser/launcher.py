@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
+
+from owlbear_browser._errors import CDPConnectionError, EdgeNotFoundError
+from owlbear_browser.cdp import CDPConnectionManager
 
 _EDGE_X86_PATH = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 _EDGE_PF_PATH = r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"
 _DEFAULT_PORT = 9222
 
-
-class EdgeNotFoundError(RuntimeError):
-    """Raised when the Edge binary cannot be located."""
+__all__ = [
+    "CDPConnectionError",
+    "EdgeNotFoundError",
+    "build_launch_args",
+    "find_edge_binary",
+    "launch_edge",
+]
 
 
 def find_edge_binary() -> Path:
@@ -58,3 +66,31 @@ def build_launch_args(port: int = _DEFAULT_PORT, user_data_dir: str = "") -> lis
         f"--remote-allow-origins=http://127.0.0.1:{port}",
         f"--user-data-dir={user_data_dir}",
     ]
+
+
+def launch_edge(port: int = _DEFAULT_PORT, user_data_dir: str = "") -> CDPConnectionManager:
+    """Launch Edge with CDP enabled and return a CDPConnectionManager bound to it.
+
+    Finds the Edge binary, assembles launch arguments, spawns the process, and
+    returns a ``CDPConnectionManager`` that takes ownership of the subprocess.
+
+    Args:
+        port: Remote debugging port (default 9222).
+        user_data_dir: Path to a dedicated Edge user-data directory.
+
+    Returns:
+        A ``CDPConnectionManager`` with the spawned subprocess attached.
+
+    Raises:
+        EdgeNotFoundError: When the Edge binary cannot be located.
+        CDPConnectionError: When Edge fails to start (e.g. permission denied).
+    """
+    binary = find_edge_binary()
+    args = build_launch_args(port=port, user_data_dir=user_data_dir)
+    cmd = [str(binary), *args]
+    try:
+        proc = subprocess.Popen(cmd)  # noqa: S603
+    except OSError as exc:
+        msg = f"Failed to launch Edge: {exc}"
+        raise CDPConnectionError(msg) from exc
+    return CDPConnectionManager(port=port, process=proc)
