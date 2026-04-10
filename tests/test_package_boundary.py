@@ -45,6 +45,8 @@ ALLOWED_IMPORTS = {
     "owlbear": {"owlbear_orchestrator"},
     "owlbear_orchestrator": {"owlbear"},
     "owlbear_voice": set(),
+    "owlbear_browser": set(),
+    "owlbear_mcp_browser": {"owlbear_browser"},
 }
 
 # Derived set of all known owlbear namespaces (for import filtering).

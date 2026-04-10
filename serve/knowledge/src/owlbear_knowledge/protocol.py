@@ -92,3 +92,14 @@ class StructuredExtractor(Protocol):
     """
 
     async def extract(self, prompt: str) -> ExtractionResult: ...
+
+
+@runtime_checkable
+class ContentFetcher(Protocol):
+    """Protocol for browser-based authenticated content fetching.
+
+    Any object with an ``async fetch(url: str) -> str`` method satisfies this
+    protocol.  Checked at runtime via :func:`isinstance`.
+    """
+
+    async def fetch(self, url: str) -> str: ...

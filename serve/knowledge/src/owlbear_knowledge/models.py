@@ -20,6 +20,11 @@ class EntityType(StrEnum):
     DECISION = "decision"
     PATTERN = "pattern"
     CONCEPT = "concept"
+    REQUIREMENT = "requirement"
+    SOLUTION = "solution"
+    PROCEDURE = "procedure"
+    POLICY = "policy"
+    STANDARD = "standard"
 
 
 class RelationType(StrEnum):
@@ -32,6 +37,8 @@ class RelationType(StrEnum):
     IMPLEMENTS = "implements"
     DOCUMENTS = "documents"
     GOVERNED_BY = "governed_by"
+    GOVERNS = "governs"
+    SUPERSEDES_VERSION = "supersedes_version"
 
 
 class SourceType(StrEnum):
@@ -39,6 +46,7 @@ class SourceType(StrEnum):
 
     URL_LIST = "url_list"
     FILE_GLOB = "file_glob"
+    AUTHENTICATED_WEB = "authenticated_web"
 
 
 # -- Helpers -----------------------------------------------------------------

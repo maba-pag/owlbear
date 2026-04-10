@@ -179,7 +179,7 @@ class IngestPipeline:
                 chunk_ids,
                 chunk_texts,  # type: ignore[union-attr]
             )
-            _is_url = _meta.get("source_type") == "url"
+            _is_url = _meta.get("source_type") in {"url", "authenticated_web"}
             extract_coros = [
                 self._extractor.extract(
                     wrap_untrusted_content(c.text, source_url=str(intake.source))
