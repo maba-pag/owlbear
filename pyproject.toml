@@ -41,6 +41,7 @@ src = [
   "serve/mcp-kanban/src",
   "serve/mcp-knowledge/src",
   "serve/mcp-memory/src",
+  "serve/browser/src",
 ]
 
 [tool.ruff.lint]
