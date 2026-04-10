@@ -24,7 +24,23 @@ _LOCATION_KEYS = frozenset(
     {
         "chat.agentFilesLocations",
         "chat.agentSkillsLocations",
+        "chat.hookFilesLocations",
         "chat.instructionsFilesLocations",
+        "chat.promptFilesLocations",
+    }
+)
+
+# Keys whose values are dicts that should be union-merged (owlbear defaults
+# first, user values win on conflict) rather than replaced wholesale.
+_DICT_MERGE_KEYS = _LOCATION_KEYS | frozenset(
+    {
+        "chat.tools.edits.autoApprove",
+        "chat.tools.terminal.autoApprove",
+        "chat.tools.urls.autoApprove",
+        "extensions.experimental.affinity",
+        "files.exclude",
+        "github.copilot.enable",
+        "search.exclude",
     }
 )
 
@@ -43,21 +59,22 @@ def _strip_jsonc_comments(text: str) -> str:
 
 
 def _merge_settings(owlbear: dict, existing: dict) -> dict:
-    """Merge owlbear defaults with existing user settings per AC12.
+    """Merge owlbear defaults with existing user settings.
 
-    - chat.*Locations keys: union of inner path dicts; user value wins on conflict.
+    - Dict-valued keys (chat.*Locations, *.autoApprove, files.exclude, etc.):
+      union of inner dicts; user value wins on conflict.
+    - Language-scoped keys (e.g. ``[json]``, ``[yaml]``): same dict-union logic.
     - All other keys: owlbear value as default; existing user value overrides.
     """
     all_keys = set(owlbear) | set(existing)
     merged: dict = {}
     for key in all_keys:
-        if key in _LOCATION_KEYS:
+        is_dict_key = key in _DICT_MERGE_KEYS or (key.startswith("[") and key.endswith("]"))
+        if is_dict_key:
             owlbear_inner = owlbear.get(key, {})
             user_inner = existing.get(key, {})
-            # owlbear paths first, user paths override (user value wins on conflict)
             merged[key] = {**owlbear_inner, **user_inner}
         else:
-            # Shallow: existing user value takes priority
             merged[key] = existing[key] if key in existing else owlbear[key]
     return merged
 

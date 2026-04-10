@@ -180,6 +180,41 @@ class TestFromAC_SeedKnowledgeGitkeep:
 
 
 # ---------------------------------------------------------------------------
+# Store directories for MCP servers
+# ---------------------------------------------------------------------------
+
+
+class TestSeedStoreDirs:
+    """MCP servers need store/ directories for their SQLite databases."""
+
+    def test_seed_store_knowledge_gitkeep_exists(self) -> None:
+        assert (_SEED_DIR / "store" / "knowledge" / ".gitkeep").exists(), (
+            "seed/store/knowledge/.gitkeep does not exist — knowledge MCP server needs this directory"
+        )
+
+    def test_seed_store_memory_gitkeep_exists(self) -> None:
+        assert (_SEED_DIR / "store" / "memory" / ".gitkeep").exists(), (
+            "seed/store/memory/.gitkeep does not exist — memory MCP server needs this directory"
+        )
+
+    def test_init_creates_store_knowledge_dir(self, tmp_path: Path) -> None:
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        init(target, _OWLBEAR_DIR)
+        assert (target / "store" / "knowledge" / ".gitkeep").exists()
+
+    def test_init_creates_store_memory_dir(self, tmp_path: Path) -> None:
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        init(target, _OWLBEAR_DIR)
+        assert (target / "store" / "memory" / ".gitkeep").exists()
+
+
+# ---------------------------------------------------------------------------
 # AC7 — seed/owlbear-project.json template
 # ---------------------------------------------------------------------------
 
@@ -698,3 +733,66 @@ class TestMcpJsonMerge:
         init(target, _OWLBEAR_DIR)
         content = (target / ".vscode" / "mcp.json").read_text(encoding="utf-8")
         assert "{{owlbear_path}}" not in content, "mcp.json still contains raw placeholder"
+
+
+# ---------------------------------------------------------------------------
+# Dict-merge for non-Location dict keys (files.exclude, autoApprove, etc.)
+# ---------------------------------------------------------------------------
+
+
+class TestDictKeyMerge:
+    """Dict-valued settings like files.exclude must be union-merged, not replaced."""
+
+    def test_files_exclude_union_merged(self, tmp_path: Path) -> None:
+        """User's files.exclude entries survive alongside owlbear defaults."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        vscode = target / ".vscode"
+        vscode.mkdir(parents=True)
+        (vscode / "settings.json").write_text(
+            json.dumps({"files.exclude": {"dist": True, "build": True}}),
+            encoding="utf-8",
+        )
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "settings.json").read_text(encoding="utf-8"))
+        fe = data.get("files.exclude", {})
+        assert "dist" in fe, "User files.exclude entry 'dist' lost during merge"
+        assert ".venv" in fe, "Owlbear files.exclude entry '.venv' not added"
+
+    def test_terminal_auto_approve_union_merged(self, tmp_path: Path) -> None:
+        """User's terminal auto-approve patterns coexist with owlbear defaults."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        vscode = target / ".vscode"
+        vscode.mkdir(parents=True)
+        (vscode / "settings.json").write_text(
+            json.dumps({"chat.tools.terminal.autoApprove": {"npm test": True}}),
+            encoding="utf-8",
+        )
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "settings.json").read_text(encoding="utf-8"))
+        ta = data.get("chat.tools.terminal.autoApprove", {})
+        assert "npm test" in ta, "User auto-approve pattern lost"
+        assert "uv run pytest" in ta, "Owlbear auto-approve pattern not added"
+
+    def test_language_scoped_keys_union_merged(self, tmp_path: Path) -> None:
+        """Language-scoped keys like [json] must be dict-merged."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        vscode = target / ".vscode"
+        vscode.mkdir(parents=True)
+        (vscode / "settings.json").write_text(
+            json.dumps({"[json]": {"editor.tabSize": 2}}),
+            encoding="utf-8",
+        )
+        init(target, _OWLBEAR_DIR)
+        data = json.loads((target / ".vscode" / "settings.json").read_text(encoding="utf-8"))
+        json_settings = data.get("[json]", {})
+        assert json_settings.get("editor.tabSize") == 2, "User [json] setting lost"
+        assert "editor.formatOnSave" in json_settings, "Owlbear [json] setting not added"
