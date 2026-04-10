@@ -6,7 +6,7 @@ user-invocable: false
 
 # MCP Kanban Tool Reference
 
-The `owlbear-kanban` MCP server exposes `kanban-md` board operations as MCP tools over stdio transport. Registered in `.vscode/mcp.json` as `owlbear-kanban`.
+The `owlbear-kanban` MCP server exposes the native kanban engine operations as MCP tools over stdio transport. Registered in `.vscode/mcp.json` as `owlbear-kanban`.
 
 For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
@@ -89,7 +89,6 @@ All tools raise `ToolError` (MCP `isError: true`) on failure.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `KANBAN_BIN` | `.owlbear/kanban/kanban-md.exe` | Path to the `kanban-md` binary |
 | `KANBAN_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
 
 ## Body Content Gotchas
@@ -101,5 +100,3 @@ These affect both MCP `append_body`/`body` parameters and CLI `-a` arguments, be
 - **Pipe `|` characters** — safe through MCP (server handles escaping). Backtick-escape only when calling kanban-md CLI directly.
 
 ## Known Gotchas
-
-- **Binary discovery:** The server resolves `kanban-md.exe` via `KANBAN_BIN` env var, then falls back to `.owlbear/kanban/kanban-md.exe`. If not found, server fails to start with `FileNotFoundError`.

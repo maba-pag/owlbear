@@ -38,10 +38,7 @@ git clone https://github.com/your-org/my-project.git C:\Dev\my-project
 cd C:\Dev\my-project
 python ..\owlbear\setup\init.py
 
-# 4. Download kanban-md (Windows only)
-.\.owlbear\kanban\setup.ps1
-
-# 5. Open the project in VS Code
+# 4. Open the project in VS Code
 code .
 ```
 
@@ -119,5 +116,4 @@ organization agent registry as a complement to the local installation.
 | `ValueError` during `setup.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `setup.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
-| `kanban-md.exe` missing | Run `.\kanban\setup.ps1` (Windows only; PowerShell required) |
 | Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `setup.py` to update |

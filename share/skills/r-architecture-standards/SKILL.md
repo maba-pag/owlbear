@@ -81,13 +81,14 @@ Server startup uses an `AppContext` dataclass and an `asynccontextmanager` lifes
 ```python
 @dataclass
 class AppContext:
-    kanban_bin: Path
+    engine: KanbanEngine
+    kanban_dir: Path
     # ... server-specific fields
 
 @asynccontextmanager
 async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
-    ctx = AppContext(kanban_bin=resolve_binary())
-    yield ctx
+    engine = KanbanEngine(kanban_dir)
+    yield AppContext(engine=engine, kanban_dir=kanban_dir)
 ```
 
 ### Tool Exclusion

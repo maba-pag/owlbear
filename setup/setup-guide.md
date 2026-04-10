@@ -33,10 +33,7 @@ mkdir my-project
 cd my-project
 python ..\owlbear\setup\init.py
 
-# 4. Download kanban-md (Windows only)
-.\.owlbear\kanban\setup.ps1
-
-# 5. Open the project in VS Code
+# 4. Open the project in VS Code
 code .
 ```
 
@@ -51,13 +48,10 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 6 MCP servers (GitHub remote + 4 owlbear stdio + ddgs web search) | Skipped if file already exists |
 | `.owlbear/kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Always written |
-| `.owlbear/kanban/setup.ps1` | Script to download `kanban-md.exe` | Always written |
 | `.owlbear/hooks/deny-writes.ps1` | Reviewer write guard hook | Always written |
 | `.owlbear/hooks/lint-changed.ps1` | Builder lint feedback hook | Always written |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Created if missing |
 | `owlbear-project.json` | Project metadata (name, type, owlbear path) | Skipped if file already exists |
-
-After running `.owlbear/kanban/setup.ps1`, a `kanban-md.exe` binary is also downloaded.
 
 ---
 
@@ -145,7 +139,6 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
       "command": "uv",
       "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_kanban"],
       "env": {
-        "KANBAN_BIN": "/path/to/custom/kanban-md",
         "KANBAN_TOOLS_EXCLUDE": "create_task,move_task,edit_task"
       }
     }
@@ -155,7 +148,6 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 
 | Variable | Description |
 |----------|-------------|
-| `KANBAN_BIN` | Override the path to the `kanban-md` binary |
 | `KANBAN_TOOLS_EXCLUDE` | Comma-separated tool names to hide (e.g. for read-only access) |
 
 ### Configuring the knowledge MCP server
@@ -223,7 +215,6 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |
-| `kanban-md.exe` missing | `.owlbear/kanban/setup.ps1` not run yet | Run `.\.owlbear\kanban\setup.ps1` from your project directory |
 
 For deeper debugging, use **"Show Chat Debug View"** (Chat view ellipsis `…` menu) to inspect
 raw LLM request/response payloads.

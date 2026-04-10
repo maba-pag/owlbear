@@ -25,7 +25,7 @@ uv sync
 
 > **Branches:** `dev` is the working branch (full workspace). `main` is the consumer-facing branch — auto-synced product subset, never committed to directly.
 
-Run `.owlbear\kanban\setup.ps1` to download the kanban-md binary, then open VS Code with `code .`.
+Open VS Code with `code .`.
 
 ## Directory Layout
 

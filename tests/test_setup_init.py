@@ -148,20 +148,6 @@ class TestFromAC_SeedKanbanConfig:
 
 
 # ---------------------------------------------------------------------------
-# AC4 — seed/.owlbear/kanban/setup.ps1
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_SeedSetupPs1:
-    """AC4: seed/.owlbear/kanban/setup.ps1 static file must be present."""
-
-    def test_seed_kanban_setup_ps1_exists(self) -> None:
-        assert (_SEED_DIR / ".owlbear" / "kanban" / "setup.ps1").exists(), (
-            "seed/.owlbear/kanban/setup.ps1 does not exist"
-        )
-
-
-# ---------------------------------------------------------------------------
 # AC5 — seed/.owlbear/hooks/deny-writes.ps1 and lint-changed.ps1
 # ---------------------------------------------------------------------------
 
