@@ -1,1 +1,0 @@
-"""OwlBear voice subpackage."""

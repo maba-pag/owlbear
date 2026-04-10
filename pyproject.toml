@@ -6,6 +6,9 @@ members = ["serve/*"]
 
 [dependency-groups]
 dev = [
+  "ddgs[mcp]>=9.13,<10",
+  "fastapi>=0.135.1",
+  "pydantic-ai>=0.1",
   "pytest>=9.0",
   "pytest-asyncio>=0.25",
   "pytest-cov>=6.0",
@@ -21,7 +24,6 @@ validation = [
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile"
-norecursedirs = ["v1"]
 asyncio_mode = "strict"
 markers = [
   "api: tests that require API integrations or network services",
@@ -32,15 +34,14 @@ markers = [
 
 [tool.ruff]
 target-version = "py312"
-line-length = 100
+line-length = 120
 src = [
   "serve/orchestrator/src",
   "serve/knowledge/src",
   "serve/mcp-kanban/src",
   "serve/mcp-knowledge/src",
   "serve/mcp-memory/src",
-  "serve/mcp-project/src",
-  "serve/voice/src",
+  "serve/browser/src",
 ]
 
 [tool.ruff.lint]
@@ -50,6 +51,7 @@ ignore = [
   "COM812", # trailing comma — conflicts with formatter
   "ISC001", # implicit string concatenation — conflicts with formatter
   "S101",   # assert used — needed in tests
+  "SIM108", # ternary suggestion — if-else is often more readable
   "N818",   # exception naming — pre-existing API names used in TestFromAC_* tests
 ]
 
@@ -57,6 +59,12 @@ ignore = [
 ".owlbear/scripts/*.py" = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
+]
+".owlbear/scratch/*.py" = [
+  "ANN401", # Any is appropriate for spike scripts interfacing with browser objects
+  "INP001", # .owlbear/scratch/ is not a package — spike scripts are direct-run files
+  "S603",   # subprocess with trusted paths — edge binary validated by _find_edge()
+  "T201",   # print() is intentional in CLI spike scripts
 ]
 "setup/*.py" = [
   "INP001", # setup/ is not a package — direct-run scripts are expected here
@@ -132,6 +140,5 @@ source_pkgs = [
   "owlbear_mcp_kanban",
   "owlbear_mcp_knowledge",
   "owlbear_mcp_memory",
-  "owlbear_mcp_project",
-  "owlbear_voice",
+  "owlbear_browser",
 ]

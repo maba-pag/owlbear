@@ -80,7 +80,6 @@ If `pick_tasks` returns an empty array, report to user and stop.
 | ------- | ----------------- |
 | curator | Every 5th cycle (handled in Step 3) |
 
-
 **Stale detection:** Compare each pick_tasks result task against `last_dispatched`. If a task appears at the same status as its last_dispatched entry and is NOT in `stale_retried`:
 
 1. Call `show_task(task_id)` to read the task body.
@@ -189,6 +188,25 @@ Session complete:
   Failed: #112 (crashed twice)
   Cycles: 2
 ```
+
+## Post-Session Diagnostics
+
+After a session completes, run the analysis CLI as an optional health check to surface pipeline patterns:
+
+```
+python -m owlbear_orchestrator.analysis --format markdown
+```
+
+This scans `store/audit/` and reports any detected anomalies. Results are informational — no automated action is taken (Phase 1 manual-first strategy per research #682).
+
+| Detector | Pattern | Fires When |
+|----------|---------|------------|
+| `high_error_rate_detector` | `high_error_rate` | Agent ≥ 40% failure rate over 3+ completions |
+| `slow_agent_detector` | `slow_agent` | Agent avg duration > 2× other-agents avg (3+ completions) |
+| `repeated_failure_detector` | `repeated_failure` | Same task fails 2+ times |
+| `stale_dispatch_detector` | `stale_dispatch` | Dispatch > 1h old with no matching completion |
+
+Use `--window HOURS` to limit the scan window, or `--audit-dir PATH` to target a non-default audit directory.
 
 ## Verification Checklist
 

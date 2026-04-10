@@ -101,19 +101,21 @@ def _parse_inbox_file(filepath: Path, now: str) -> list[dict[str, object]]:
             )
             category = "knowledge"
 
-        entries.append({
-            "id": str(uuid.uuid4()),
-            "content": content,
-            "category": category,
-            "confidence": 0.7,
-            "created_at": created_at,
-            "updated_at": now,
-            "source": f"migration:inbox/{filename}",
-            "scope_agent": agent_name,
-            "scope_project": None,
-            "approval_state": "pending",
-            "deleted_at": None,
-        })
+        entries.append(
+            {
+                "id": str(uuid.uuid4()),
+                "content": content,
+                "category": category,
+                "confidence": 0.7,
+                "created_at": created_at,
+                "updated_at": now,
+                "source": f"migration:inbox/{filename}",
+                "scope_agent": agent_name,
+                "scope_project": None,
+                "approval_state": "pending",
+                "deleted_at": None,
+            }
+        )
 
     return entries
 
@@ -175,9 +177,14 @@ def _split_into_sections(
                 pre = [ln for ln in pre_content_lines if not ln.startswith("# ")]
                 content = "\n".join(pre).strip()
                 if content:
-                    entries.append(_make_established_entry(
-                        content, f"migration:{filename}", created_at, now,
-                    ))
+                    entries.append(
+                        _make_established_entry(
+                            content,
+                            f"migration:{filename}",
+                            created_at,
+                            now,
+                        )
+                    )
             current_heading = line
             current_lines = []
         elif current_heading is None:
@@ -258,9 +265,16 @@ def _insert_entry(conn: sqlite3.Connection, entry: dict[str, object]) -> None:
             scope_agent, scope_project, approval_state, deleted_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            model.id, model.content, model.category, model.confidence,
-            model.created_at, model.updated_at, model.source,
-            model.scope_agent, model.scope_project, model.approval_state,
+            model.id,
+            model.content,
+            model.category,
+            model.confidence,
+            model.created_at,
+            model.updated_at,
+            model.source,
+            model.scope_agent,
+            model.scope_project,
+            model.approval_state,
             model.deleted_at,
         ),
     )
@@ -272,11 +286,15 @@ def main(argv: list[str] | None = None) -> int:
         description="Bulk import /memories/repo/ files into memory.db",
     )
     parser.add_argument(
-        "--source-dir", required=True, help="Path to Copilot repo memory directory",
+        "--source-dir",
+        required=True,
+        help="Path to Copilot repo memory directory",
     )
     parser.add_argument("--db-path", default=None, help="SQLite DB path")
     parser.add_argument(
-        "--dry-run", action="store_true", help="Print entries without writing to DB",
+        "--dry-run",
+        action="store_true",
+        help="Print entries without writing to DB",
     )
 
     args = parser.parse_args(argv)
@@ -284,7 +302,8 @@ def main(argv: list[str] | None = None) -> int:
     source_dir = Path(args.source_dir)
     if not source_dir.is_dir():
         print(  # noqa: T201
-            f"ERROR: --source-dir {source_dir!r} is not a directory", file=sys.stderr,
+            f"ERROR: --source-dir {source_dir!r} is not a directory",
+            file=sys.stderr,
         )
         return 1
 
@@ -303,9 +322,7 @@ def main(argv: list[str] | None = None) -> int:
         conn.execute(_DDL)
         # Pre-load existing sources so all entries from the same inbox file are
         # inserted on the first run (same source) but skipped on subsequent runs.
-        existing: set[str] = {
-            r[0] for r in conn.execute("SELECT source FROM memory_entries").fetchall()
-        }
+        existing: set[str] = {r[0] for r in conn.execute("SELECT source FROM memory_entries").fetchall()}
         inserted = 0
         skipped = 0
         for entry in all_entries:
@@ -318,7 +335,8 @@ def main(argv: list[str] | None = None) -> int:
                 inserted += 1
             except Exception as exc:  # noqa: BLE001
                 print(  # noqa: T201
-                    f"WARNING: Failed to insert {src!r}: {exc}", file=sys.stderr,
+                    f"WARNING: Failed to insert {src!r}: {exc}",
+                    file=sys.stderr,
                 )
         conn.commit()
     finally:

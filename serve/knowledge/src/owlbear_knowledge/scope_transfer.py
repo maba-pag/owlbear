@@ -36,9 +36,7 @@ def _validate_source(src_path: Path) -> str | None:
         return f"error: source file not found: {src_path}"
     try:
         conn = sqlite3.connect(str(src_path))
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'").fetchone()
         conn.close()
     except sqlite3.DatabaseError as exc:
         return f"error: source is not a valid SQLite database: {exc}"
@@ -64,10 +62,8 @@ def _insert_documents(
         if old_id in skipped_doc_ids:
             continue
         dest_conn.execute(
-            "INSERT INTO documents (id, title, content, metadata, created_at, scope) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (doc_id_map[old_id], doc["title"], doc["content"],
-             doc["metadata"], doc["created_at"], target_scope),
+            "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
+            (doc_id_map[old_id], doc["title"], doc["content"], doc["metadata"], doc["created_at"], target_scope),
         )
 
 
@@ -88,8 +84,15 @@ def _insert_document_statuses(
             "INSERT INTO document_status "
             "(document_id, status, source, scope, created_at, updated_at, content_hash) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (new_doc_id, status["status"], status["source"], target_scope,
-             status["created_at"], status["updated_at"], status["content_hash"]),
+            (
+                new_doc_id,
+                status["status"],
+                status["source"],
+                target_scope,
+                status["created_at"],
+                status["updated_at"],
+                status["content_hash"],
+            ),
         )
 
 
@@ -112,8 +115,15 @@ def _insert_chunks(  # noqa: PLR0913
             "INSERT INTO chunks "
             "(id, document_id, chunk_index, content, metadata, created_at, scope) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (new_id, new_doc_id, chunk["chunk_index"], chunk["content"],
-             chunk["metadata"], chunk["created_at"], target_scope),
+            (
+                new_id,
+                new_doc_id,
+                chunk["chunk_index"],
+                chunk["content"],
+                chunk["metadata"],
+                chunk["created_at"],
+                target_scope,
+            ),
         )
 
 
@@ -140,8 +150,17 @@ def _insert_entities(  # noqa: PLR0913
             "(id, name, entity_type, description, metadata, created_at, "
             " scope, document_id, chunk_id) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (new_id, entity["name"], entity["entity_type"], entity["description"],
-             entity["metadata"], entity["created_at"], target_scope, new_doc_id, new_chunk_id),
+            (
+                new_id,
+                entity["name"],
+                entity["entity_type"],
+                entity["description"],
+                entity["metadata"],
+                entity["created_at"],
+                target_scope,
+                new_doc_id,
+                new_chunk_id,
+            ),
         )
 
 
@@ -160,8 +179,16 @@ def _insert_edges(
             "INSERT INTO edges "
             "(id, source_id, target_id, relation, weight, metadata, created_at, scope) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (str(uuid.uuid4()), new_src, new_tgt, edge["relation"],
-             edge["weight"], edge["metadata"], edge["created_at"], target_scope),
+            (
+                str(uuid.uuid4()),
+                new_src,
+                new_tgt,
+                edge["relation"],
+                edge["weight"],
+                edge["metadata"],
+                edge["created_at"],
+                target_scope,
+            ),
         )
 
 
@@ -184,8 +211,7 @@ def _do_import(
     existing_hashes: set[str] = {
         row[0]
         for row in dest_conn.execute(
-            "SELECT content_hash FROM document_status "
-            "WHERE scope = ? AND content_hash IS NOT NULL",
+            "SELECT content_hash FROM document_status WHERE scope = ? AND content_hash IS NOT NULL",
             (target_scope,),
         )
     }
@@ -194,8 +220,7 @@ def _do_import(
     src_conn.row_factory = sqlite3.Row
     docs = src_conn.execute("SELECT * FROM documents").fetchall()
     doc_statuses: dict[str, sqlite3.Row] = {
-        row["document_id"]: row
-        for row in src_conn.execute("SELECT * FROM document_status").fetchall()
+        row["document_id"]: row for row in src_conn.execute("SELECT * FROM document_status").fetchall()
     }
     chunks = src_conn.execute("SELECT * FROM chunks").fetchall()
     entities = src_conn.execute("SELECT * FROM entities").fetchall()
@@ -218,28 +243,25 @@ def _do_import(
 
     # Build ID maps for child rows (only for non-skipped documents)
     chunk_id_map: dict[str, str] = {
-        chunk["id"]: str(uuid.uuid4())
-        for chunk in chunks
-        if chunk["document_id"] not in skipped_doc_ids
+        chunk["id"]: str(uuid.uuid4()) for chunk in chunks if chunk["document_id"] not in skipped_doc_ids
     }
     entity_id_map: dict[str, str] = {
-        entity["id"]: str(uuid.uuid4())
-        for entity in entities
-        if entity["document_id"] not in skipped_doc_ids
+        entity["id"]: str(uuid.uuid4()) for entity in entities if entity["document_id"] not in skipped_doc_ids
     }
 
     try:
         with dest_conn:
             _insert_documents(dest_conn, docs, skipped_doc_ids, doc_id_map, target_scope)
-            _insert_document_statuses(
-                dest_conn, doc_statuses, skipped_doc_ids, doc_id_map, target_scope
-            )
-            _insert_chunks(
-                dest_conn, chunks, skipped_doc_ids, doc_id_map, chunk_id_map, target_scope
-            )
+            _insert_document_statuses(dest_conn, doc_statuses, skipped_doc_ids, doc_id_map, target_scope)
+            _insert_chunks(dest_conn, chunks, skipped_doc_ids, doc_id_map, chunk_id_map, target_scope)
             _insert_entities(
-                dest_conn, entities, skipped_doc_ids, doc_id_map,
-                chunk_id_map, entity_id_map, target_scope,
+                dest_conn,
+                entities,
+                skipped_doc_ids,
+                doc_id_map,
+                chunk_id_map,
+                entity_id_map,
+                target_scope,
             )
             _insert_edges(dest_conn, edges, entity_id_map, target_scope)
     except sqlite3.Error as exc:
@@ -285,10 +307,7 @@ def import_scope(
             if auto.exists():
                 resolved_path = auto
             else:
-                return (
-                    "error: no source path given and "
-                    ".owlbear/knowledge/knowledge.db not found"
-                )
+                return "error: no source path given and .owlbear/knowledge/knowledge.db not found"
         else:
             return "error: no source path given and no workspace root for auto-detect"
 
@@ -366,7 +385,5 @@ def export_scope(
     except Exception as exc:  # noqa: BLE001
         return f"error: export failed: {exc}"
 
-    doc_count = source_conn.execute(
-        "SELECT count(*) FROM documents WHERE scope = ?", (scope,)
-    ).fetchone()[0]
+    doc_count = source_conn.execute("SELECT count(*) FROM documents WHERE scope = ?", (scope,)).fetchone()[0]
     return f"Exported {doc_count} documents from scope {scope!r} to {out}"

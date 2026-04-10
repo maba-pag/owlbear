@@ -60,9 +60,7 @@ class ConsolidationService:
         if not rows:
             return 0
 
-        prompt = "\n\n".join(
-            f"Chunk {idx + 1}: {content}" for idx, (_, content) in enumerate(rows)
-        )
+        prompt = "\n\n".join(f"Chunk {idx + 1}: {content}" for idx, (_, content) in enumerate(rows))
 
         try:
             insight_text = await self._llm_fn(prompt)
@@ -75,8 +73,7 @@ class ConsolidationService:
         created_at = datetime.now(UTC).isoformat()
 
         self._conn.execute(
-            "INSERT INTO consolidations (id, source_ids, insight, created_at)"
-            " VALUES (?, ?, ?, ?)",
+            "INSERT INTO consolidations (id, source_ids, insight, created_at) VALUES (?, ?, ?, ?)",
             (consolidation_id, source_ids, insight_text, created_at),
         )
         chunk_ids = [row[0] for row in rows]

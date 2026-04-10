@@ -30,11 +30,13 @@ __all__ = [
 
 _VALID_CATEGORIES = ("preference", "knowledge", "context", "behavior", "goal")
 _MIN_CONFIDENCE: float = 0.7
-_VALID_TRANSITIONS: frozenset[tuple[str, str]] = frozenset({
-    ("pending", "approved"),
-    ("pending", "deleted"),
-    ("deleted", "pending"),
-})
+_VALID_TRANSITIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("pending", "approved"),
+        ("pending", "deleted"),
+        ("deleted", "pending"),
+    }
+)
 
 
 def _now_utc() -> str:
@@ -61,16 +63,10 @@ async def get_knowledge(
     # --- Scope WHERE clause ---
     scope_params: list[Any] = [agent_id]
     if project_name is not None:
-        scope_where = (
-            "(scope_agent IS NULL OR scope_agent = ?) "
-            "AND (scope_project IS NULL OR scope_project = ?)"
-        )
+        scope_where = "(scope_agent IS NULL OR scope_agent = ?) AND (scope_project IS NULL OR scope_project = ?)"
         scope_params.append(project_name)
     else:
-        scope_where = (
-            "(scope_agent IS NULL OR scope_agent = ?) "
-            "AND scope_project IS NULL"
-        )
+        scope_where = "(scope_agent IS NULL OR scope_agent = ?) AND scope_project IS NULL"
 
     # --- Extra conditions ---
     extra_conditions: list[str] = ["approval_state != 'deleted'"]
@@ -156,8 +152,15 @@ async def record_learning(  # noqa: PLR0913
     entry_id = str(uuid.uuid4())
     now = _now_utc()
     insert_params = (
-        entry_id, content, category, confidence, now, now, agent_id,
-        scope_agent, scope_project,
+        entry_id,
+        content,
+        category,
+        confidence,
+        now,
+        now,
+        agent_id,
+        scope_agent,
+        scope_project,
     )
 
     def _run_insert() -> None:
@@ -230,9 +233,7 @@ WHERE {where}
     return results or "[]"
 
 
-@mcp.tool(annotations=ToolAnnotations(
-    readOnlyHint=False, idempotentHint=False, destructiveHint=True
-))
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=True))
 async def set_approval_state(
     ctx: Context,
     entry_id: str,
@@ -241,17 +242,15 @@ async def set_approval_state(
     """Transition a memory entry to a new approval_state.
 
     Allowed transitions: pending→approved, pending→deleted, deleted→pending.
-    Returns a success message string on success, or an 'error: ...' string
-    for disallowed transitions (including same-state and invalid states).
+    Returns a success message string on success.
+    Raises ToolError for disallowed transitions (including same-state and invalid states).
     Raises ToolError if the entry_id does not exist.
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
     conn = app_ctx.conn
 
     def _get_state() -> str | None:
-        r = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        r = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         return r[0] if r is not None else None
 
     current_state = await asyncio.to_thread(_get_state)
@@ -261,9 +260,8 @@ async def set_approval_state(
         raise ToolError(msg)
 
     if (current_state, new_state) not in _VALID_TRANSITIONS:
-        return (
-            f"error: transition from '{current_state}' to '{new_state}' is not allowed"
-        )
+        msg = f"transition from '{current_state}' to '{new_state}' is not allowed"
+        raise ToolError(msg)
 
     now = _now_utc()
     deleted_at: str | None = now if new_state == "deleted" else None
@@ -292,9 +290,7 @@ async def mark_for_deletion(ctx: Context, entry_id: str) -> str:
     conn = app_ctx.conn
 
     def _get_state() -> str | None:
-        r = conn.execute(
-            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        r = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
         return r[0] if r is not None else None
 
     state = await asyncio.to_thread(_get_state)

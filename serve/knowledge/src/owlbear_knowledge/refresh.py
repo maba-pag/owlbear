@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -12,22 +11,14 @@ from pydantic import BaseModel, ConfigDict
 
 import owlbear_knowledge.intake as _intake
 from owlbear_knowledge._paths import sandbox_path
-from owlbear_knowledge.ingest import IngestResult
 from owlbear_knowledge.models import KnowledgeSource, SourceType
 
 if TYPE_CHECKING:
     from owlbear_knowledge.cancellation import CancelSignal
-    from owlbear_knowledge.ingest import IngestPipeline
+    from owlbear_knowledge.ingest import IngestPipeline, IngestResult
     from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Types
-# ---------------------------------------------------------------------------
-
-CrawlHandler = Callable[..., Awaitable[list[IngestResult]]]
-
 
 # ---------------------------------------------------------------------------
 # Models
@@ -57,8 +48,10 @@ class RefreshOrchestrator:
     Args:
         store: KnowledgeSourceStore (or compatible) for CRUD operations.
         pipeline: IngestPipeline for ingesting intake results.
-        crawl_handler: Optional async callable for CRAWL-type sources.
         workspace_root: Root directory for file sandbox; defaults to Path.cwd().
+        content_fetcher: Optional protocol object with an async ``fetch(url)``
+            method used to retrieve content for ``AUTHENTICATED_WEB`` sources.
+            When ``None``, authenticated web refresh is a no-op.
     """
 
     def __init__(
@@ -66,13 +59,13 @@ class RefreshOrchestrator:
         *,
         store: KnowledgeSourceStore | object,
         pipeline: IngestPipeline | object,
-        crawl_handler: CrawlHandler | None = None,
         workspace_root: Path | None = None,
+        content_fetcher: object | None = None,
     ) -> None:
         self._store = store
         self._pipeline = pipeline
-        self._crawl_handler = crawl_handler
         self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
+        self._content_fetcher = content_fetcher
 
     async def refresh(
         self,
@@ -89,7 +82,7 @@ class RefreshOrchestrator:
             RefreshResult with per-status counters.
 
         Raises:
-            ValueError: If the source is disabled or (for CRAWL) no handler is set.
+            ValueError: If the source is disabled.
         """
         if not source.enabled:
             msg = f"Source {source.id!r} is disabled"
@@ -97,10 +90,10 @@ class RefreshOrchestrator:
 
         if source.source_type == SourceType.URL_LIST:
             result = await self._handle_url_list(source, cancel=cancel)
-        elif source.source_type == SourceType.CRAWL:
-            result = await self._handle_crawl(source)
         elif source.source_type == SourceType.FILE_GLOB:
             result = await self._handle_file_glob(source, cancel=cancel)
+        elif source.source_type == SourceType.AUTHENTICATED_WEB:
+            result = await self._handle_authenticated_web(source, cancel=cancel)
         else:
             msg = f"Unsupported source type: {source.source_type}"
             raise ValueError(msg)
@@ -155,9 +148,7 @@ class RefreshOrchestrator:
                 break
             try:
                 intake_result = await _intake.read_url(url)
-                ingest_result: IngestResult = await self._pipeline.ingest(
-                    intake_result, scope=source.scope
-                )
+                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":
                     refreshed += 1
                 elif ingest_result.status == "skipped":
@@ -167,31 +158,6 @@ class RefreshOrchestrator:
             except Exception as exc:  # noqa: BLE001
                 failed += 1
                 errors.append(str(exc))
-
-        return RefreshResult(
-            source_id=source.id,
-            refreshed=refreshed,
-            skipped=skipped,
-            failed=failed,
-            errors=errors,
-        )
-
-    async def _handle_crawl(self, source: KnowledgeSource) -> RefreshResult:
-        if self._crawl_handler is None:
-            msg = "crawl_handler is required for CRAWL sources but was not provided"
-            raise ValueError(msg)
-
-        ingest_results: list[IngestResult] = await self._crawl_handler(source.config)
-        refreshed = skipped = failed = 0
-        errors: list[str] = []
-
-        for result in ingest_results:
-            if result.status == "ok":
-                refreshed += 1
-            elif result.status == "skipped":
-                skipped += 1
-            else:
-                failed += 1
 
         return RefreshResult(
             source_id=source.id,
@@ -230,12 +196,8 @@ class RefreshOrchestrator:
                 break
             try:
                 safe_path = sandbox_path(self._workspace_root, file_path)
-                intake_result = await _intake.read_file(
-                    safe_path, workspace_root=self._workspace_root
-                )
-                ingest_result: IngestResult = await self._pipeline.ingest(
-                    intake_result, scope=source.scope
-                )
+                intake_result = await _intake.read_file(safe_path, workspace_root=self._workspace_root)
+                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":
                     refreshed += 1
                 elif ingest_result.status == "skipped":
@@ -254,8 +216,58 @@ class RefreshOrchestrator:
             errors=errors,
         )
 
-    def _update_source_record(
+    async def _handle_authenticated_web(
         self,
+        source: KnowledgeSource,
+        cancel: CancelSignal | None = None,
+    ) -> RefreshResult:
+        """Refresh an AUTHENTICATED_WEB source via the injected content_fetcher.
+
+        For each URL in ``source.config["urls"]``, calls
+        ``self._content_fetcher.fetch(url)`` to retrieve page content and
+        ingests it through the pipeline.
+
+        Args:
+            source: The knowledge source to refresh.
+            cancel: Optional CancelSignal; checked between URLs.
+
+        Returns:
+            RefreshResult with per-status counters.
+        """
+        urls: list[str] = source.config.get("urls", [])
+        refreshed = skipped = failed = 0
+        errors: list[str] = []
+
+        for url in urls:
+            if cancel is not None and cancel.is_set():
+                break
+            try:
+                content: str = await self._content_fetcher.fetch(url)  # type: ignore[union-attr]
+                intake_result = _intake.IntakeResult(
+                    content=content,
+                    source=url,
+                    metadata={"source_type": "authenticated_web"},
+                )
+                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
+                if ingest_result.status == "ok":
+                    refreshed += 1
+                elif ingest_result.status == "skipped":
+                    skipped += 1
+                else:
+                    failed += 1
+            except Exception as exc:  # noqa: BLE001
+                failed += 1
+                errors.append(str(exc))
+
+        return RefreshResult(
+            source_id=str(source.id),
+            refreshed=refreshed,
+            skipped=skipped,
+            failed=failed,
+            errors=errors,
+        )
+
+    def _update_source_record(        self,
         source: KnowledgeSource,
         result: RefreshResult,
     ) -> None:

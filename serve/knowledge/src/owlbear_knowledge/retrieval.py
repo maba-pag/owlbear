@@ -174,9 +174,7 @@ class GraphAugmentedRetriever:
                 neighbors = sorted(neighbors, key=lambda pair: pair[0].importance, reverse=True)
 
             for neighbor, edge in neighbors:
-                line = (
-                    f"{seed.name} --[{edge.relation}]--> {neighbor.name}: {neighbor.description}"
-                )
+                line = f"{seed.name} --[{edge.relation}]--> {neighbor.name}: {neighbor.description}"
                 line_words = len(line.split())
                 if words_used + line_words > self._max_expansion_tokens:
                     budget_exhausted = True
@@ -216,9 +214,7 @@ def query_for_context(
     try:
         result = retriever.retrieve(query)
 
-        qualified = [
-            (cid, score) for cid, score in result.chunks if score >= similarity_threshold
-        ]
+        qualified = [(cid, score) for cid, score in result.chunks if score >= similarity_threshold]
         if not qualified:
             return None
 

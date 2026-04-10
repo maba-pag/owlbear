@@ -37,10 +37,7 @@ def high_error_rate_detector(events: list[CompletionEvent]) -> list[AnalysisProp
                     target_agent=agent,
                     category="reliability",
                     pattern="high_error_rate",
-                    rationale=(
-                        f"Agent {agent!r} has {rate:.0%} failure rate"
-                        f" over {len(completions)} completions"
-                    ),
+                    rationale=(f"Agent {agent!r} has {rate:.0%} failure rate over {len(completions)} completions"),
                     evidence={
                         "failure_rate": rate,
                         "total": len(completions),
@@ -123,9 +120,7 @@ def stale_dispatch_detector(
 ) -> list[AnalysisProposal]:
     """Fire for dispatches > 1h old with no matching completion (task_id + agent)."""
     dispatches = [e for e in events if isinstance(e, DispatchEvent)]
-    completed_keys = {
-        (e.task_id, e.agent) for e in events if isinstance(e, CompletionEvent)
-    }
+    completed_keys = {(e.task_id, e.agent) for e in events if isinstance(e, CompletionEvent)}
 
     proposals: list[AnalysisProposal] = []
     for d in dispatches:
@@ -139,10 +134,7 @@ def stale_dispatch_detector(
                     target_agent=d.agent,
                     category="stability",
                     pattern="stale_dispatch",
-                    rationale=(
-                        f"Dispatch for task {d.task_id} via {d.agent!r}"
-                        " has been pending for over 1h"
-                    ),
+                    rationale=(f"Dispatch for task {d.task_id} via {d.agent!r} has been pending for over 1h"),
                     evidence={
                         "age_seconds": age.total_seconds(),
                         "dispatched_at": d.timestamp,

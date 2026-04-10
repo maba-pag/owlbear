@@ -1,6 +1,7 @@
+---
 name: MegaLinter
 
-on:
+"on":
   workflow_dispatch:
 
 concurrency:
@@ -35,7 +36,7 @@ jobs:
 
       - name: Upload MegaLinter reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: megalinter-reports
           path: megalinter-reports
@@ -50,7 +51,8 @@ jobs:
           if [ "${{ steps.megalinter.outcome }}" = "success" ]; then
             echo "All linters passed." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "Some linters reported issues. See the [megalinter-reports artifact](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details." >> "$GITHUB_STEP_SUMMARY"
+            ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "Some linters reported issues. See the [megalinter-reports artifact](${ARTIFACT_URL}) for details." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Fail if lint failed

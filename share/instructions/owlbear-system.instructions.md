@@ -21,7 +21,7 @@ description: "OwlBear system instructions — decision heuristics, system awaren
 |-----------|-----------|-------|
 | Language | Python 3.12+ | `uv` package manager, never bare `pip` |
 | Agents | VS Code / Copilot custom agents | `.agent.md` files, subagent delegation |
-| MCP servers | 5 (4 custom stdio + 1 GitHub remote) | mcp-kanban, mcp-knowledge, mcp-project, mcp-memory, github |
+| MCP servers | 4 (3 custom stdio + 1 GitHub remote) | mcp-kanban, mcp-knowledge, mcp-memory, github |
 | Task board | kanban-md v0.33 (via MCP) | `.owlbear/kanban/config.yml`, `.owlbear/kanban/tasks/*.md` |
 | Safety | Git safety net + audit log | Review/revert as operational safety |
 | Distribution | Clone = install | `setup/init.py` wires workspace config |
@@ -70,4 +70,5 @@ GitHub-hosted Copilot Memory is disabled to preserve local-first operation.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands.
 - **Loop detection.** Tier 1: same call twice — change approach. Tier 2: two different approaches failed — consider skipping. Tier 3: 3+ attempts — stop, write what failed, hand off.
 - **Terminal.** `uv run` for all Python tools. Chain with `;` (never `&&` — PowerShell 5.1).
+- **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
 - **Commits.** Follow `r-project-standards` for format, types, and git discipline.

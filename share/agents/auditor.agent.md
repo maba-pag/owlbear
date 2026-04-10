@@ -6,8 +6,12 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/awaitTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [scribe, Explore, quality-runner]
+hooks:
+  PreToolUse:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-writes.ps1
 ---
 
 <persona>

@@ -174,7 +174,7 @@ class TestFromAC_ListSourcesStructuredReturn:
     async def test_each_dict_has_name_source_type_scope_keys(self) -> None:
         """Each dict in the returned list has 'name', 'source_type', and 'scope' keys."""
         store = MagicMock()
-        store.list_all.return_value = [_make_source(name="n", source_type="crawl", scope="work")]
+        store.list_all.return_value = [_make_source(name="n", source_type="url_list", scope="work")]
         ctx = _make_ctx(source_store=store)
 
         result = await list_sources(ctx)

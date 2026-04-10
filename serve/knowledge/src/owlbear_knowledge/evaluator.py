@@ -50,6 +50,31 @@ class EvaluationResult(BaseModel):
 EvaluateFn = Callable[[str], Awaitable[EvaluationResult]]
 
 
+def make_pydantic_evaluate_fn(model: str) -> EvaluateFn:
+    """Return an async EvaluateFn backed by a PydanticAI Agent.
+
+    Constructs ``pydantic_ai.Agent(model, output_type=EvaluationResult,
+    system_prompt=EVALUATION_PROMPT)`` and returns a coroutine callable that
+    forwards the prompt to ``agent.run()`` and returns ``result.output``.
+
+    Raises:
+        ImportError: when pydantic-ai is not installed.
+    """
+    import pydantic_ai  # noqa: PLC0415
+
+    agent = pydantic_ai.Agent(
+        model,
+        output_type=EvaluationResult,
+        system_prompt=EVALUATION_PROMPT,
+    )
+
+    async def _evaluate(prompt: str) -> EvaluationResult:
+        result = await agent.run(prompt)
+        return result.output
+
+    return _evaluate
+
+
 def _default_result() -> EvaluationResult:
     """Return a neutral EvaluationResult when no project context is available."""
     return EvaluationResult(
@@ -79,11 +104,13 @@ class SourceEvaluator:
 
     Args:
         llm_fn: Async callable that accepts a prompt string and returns
-            an EvaluationResult.
+            an EvaluationResult. If None or a non-callable is supplied
+            (backward-compat with model-string wiring), evaluate() returns
+            _default_result() instead of crashing.
     """
 
-    def __init__(self, llm_fn: EvaluateFn) -> None:
-        self._llm_fn = llm_fn
+    def __init__(self, llm_fn: EvaluateFn | None = None, **_kwargs: object) -> None:
+        self._llm_fn: EvaluateFn | None = llm_fn if callable(llm_fn) else None
 
     async def evaluate(
         self,
@@ -105,7 +132,7 @@ class SourceEvaluator:
                 worth_ingesting=False,
             )
 
-        if project_context is None:
+        if project_context is None or self._llm_fn is None:
             return _default_result()
 
         prompt = _build_prompt(content, project_context)

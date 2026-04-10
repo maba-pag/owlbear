@@ -17,15 +17,19 @@ from mcp.types import ToolAnnotations
 from owlbear_knowledge.bookmark_pipeline import BookmarkPipeline
 from owlbear_knowledge.bookmark_store import BookmarkStore
 from owlbear_knowledge.chunker import TextChunker
+from owlbear_knowledge.consolidation import ConsolidationService, TextCompletionFn
 from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
-from owlbear_knowledge.evaluator import SourceEvaluator
+from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
+from owlbear_knowledge.llm_extractor import LLMExtractor
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
+from owlbear_knowledge.refresh import RefreshOrchestrator
+from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
 from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
 from owlbear_knowledge.scope_transfer import import_scope as _core_import_scope
@@ -44,6 +48,7 @@ class SearchResult(TypedDict):
     title: str
     score: float
     snippet: str
+    entity_type: str | None
 
 
 class SourceInfo(TypedDict):
@@ -88,6 +93,8 @@ class AppContext:
     source_store: KnowledgeSourceStore | None
     bookmark_pipeline: BookmarkPipeline | None
     bookmark_store: BookmarkStore | None
+    refresh_orchestrator: RefreshOrchestrator | None = None
+    consolidation_service: ConsolidationService | None = None
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -109,6 +116,50 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
         except Exception:  # noqa: BLE001, S110
             pass
     return excluded
+
+
+def make_text_completion_fn(model: str) -> TextCompletionFn:
+    """Return a TextCompletionFn backed by a PydanticAI Agent with output_type=str.
+
+    Falls back to a no-op stub when pydantic-ai is absent.
+    """
+    try:
+        import pydantic_ai  # noqa: PLC0415
+
+        agent = pydantic_ai.Agent(model, output_type=str)
+
+        async def _complete(prompt: str) -> str:
+            result = await agent.run(prompt)
+            return result.output
+
+    except Exception:  # noqa: BLE001
+
+        async def _complete(_prompt: str) -> str:  # type: ignore[misc]
+            return ""
+
+    return _complete
+
+
+def make_evaluate_fn(model: str) -> EvaluateFn:
+    """Return an EvaluateFn callable for the given model name.
+
+    Delegates to ``make_pydantic_evaluate_fn`` when pydantic-ai is installed.
+    Falls back to a neutral no-op stub when pydantic-ai is absent.
+    """
+    try:
+        from owlbear_knowledge.evaluator import make_pydantic_evaluate_fn  # noqa: PLC0415
+
+        return make_pydantic_evaluate_fn(model)
+    except Exception:  # noqa: BLE001
+
+        async def _evaluate(_prompt: str) -> EvaluationResult:
+            return EvaluationResult(
+                relevance_score=0.5,
+                summary="No project context available -- neutral evaluation.",
+                worth_ingesting=True,
+            )
+
+        return _evaluate
 
 
 async def _web_read(url: str) -> str | None:
@@ -138,15 +189,20 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         gs = GraphStore(conn)
         vs = QdrantVectorStore()
         emb = BgeM3EmbeddingProvider()
-        qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb)
-        doc_store = DocumentStore(conn, gs, vs, emb)
         model = os.environ.get("OWLBEAR_MODEL", _DEFAULT_MODEL)
-        extractor = EntityExtractor(model)
+        try:
+            llm_extractor = LLMExtractor(model)
+            extractor = EntityExtractor(model, extractor=llm_extractor)
+        except Exception:  # noqa: BLE001
+            extractor = EntityExtractor(model)
+        gar = GraphAugmentedRetriever(vs, gs, emb)
+        qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
+        doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
         pipeline = IngestPipeline(doc_store, extractor, chunker)
         source_store = KnowledgeSourceStore(conn)
         bookmark_store = BookmarkStore(conn)
-        evaluator = SourceEvaluator(model)
+        evaluator = SourceEvaluator(llm_fn=make_evaluate_fn(model))
 
         bookmark_pipeline = BookmarkPipeline(
             bookmark_store=bookmark_store,
@@ -154,6 +210,17 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             ingest_pipeline=pipeline,
             web_read_fn=_web_read,
         )
+        refresh_orchestrator = RefreshOrchestrator(
+            store=source_store,
+            pipeline=pipeline,
+            workspace_root=Path.cwd(),
+        )
+        try:
+            consolidation_service: ConsolidationService | None = ConsolidationService(
+                conn, make_text_completion_fn(model)
+            )
+        except Exception:  # noqa: BLE001
+            consolidation_service = None
         ctx = AppContext(
             conn=conn,
             query_service=qs,
@@ -162,6 +229,8 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             source_store=source_store,
             bookmark_pipeline=bookmark_pipeline,
             bookmark_store=bookmark_store,
+            refresh_orchestrator=refresh_orchestrator,
+            consolidation_service=consolidation_service,
         )
         _app_context = ctx
         _apply_tool_exclusions(_server)
@@ -178,6 +247,7 @@ __all__ = [
     "_apply_tool_exclusions",
     "app_lifespan",
     "bookmark_source",
+    "consolidate_knowledge",
     "export_scope",
     "get_stats",
     "import_scope",
@@ -187,7 +257,9 @@ __all__ = [
     "list_entities",
     "list_sources",
     "mcp",
+    "refresh_source",
     "search_knowledge",
+    "update_bookmark_tags",
 ]
 
 # Module-level context so zero-arg @mcp.resource handlers can access graph_store.
@@ -207,7 +279,7 @@ async def search_knowledge(
     if qs is None:
         return "error: Knowledge service not available."
     results = await qs.query(query, top_k=limit, scopes=scopes)
-    return [{"title": r.title, "score": r.score, "snippet": r.snippet} for r in results]
+    return [{"title": r.title, "score": r.score, "snippet": r.snippet, "entity_type": r.entity_type} for r in results]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -216,7 +288,7 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
     app_ctx: AppContext = ctx.request_context.lifespan_context
     store = app_ctx.source_store
     if store is None:
-        msg = "error: source store not available"
+        msg = "source store not available"
         raise ToolError(msg)
     sources = await asyncio.to_thread(store.list_all, scope=scope)
     return [{"name": s.name, "source_type": s.source_type, "scope": s.scope} for s in sources]
@@ -271,10 +343,7 @@ async def list_entities(
         entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
-    return [
-        {"name": e.name, "entity_type": e.entity_type, "description": e.description}
-        for e in page
-    ]
+    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -283,7 +352,7 @@ async def get_stats(ctx: Context) -> StatsResult:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
     if gs is None:
-        msg = "error: graph store not available"
+        msg = "graph store not available"
         raise ToolError(msg)
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
     return {"documents": doc_count, "entities": entity_count, "edges": edge_count}
@@ -294,10 +363,7 @@ async def knowledge_stats(ctx: Context) -> str:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     gs = app_ctx.graph_store
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
-    return (
-        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
-        f"{edge_count} edges"
-    )
+    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
 @mcp.resource("knowledge://stats")
@@ -307,10 +373,7 @@ async def _knowledge_stats_bridge() -> str:
         return "Knowledge base: 0 documents, 0 entities, 0 edges"
     gs = _app_context.graph_store
     doc_count, entity_count, edge_count = await asyncio.to_thread(gs.get_counts)
-    return (
-        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
-        f"{edge_count} edges"
-    )
+    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
 async def knowledge_stats_resource(ctx: Context | None = None) -> str:
@@ -322,10 +385,7 @@ async def knowledge_stats_resource(ctx: Context | None = None) -> str:
     else:
         counts_fn = lambda: (0, 0, 0)  # noqa: E731
     doc_count, entity_count, edge_count = await asyncio.to_thread(counts_fn)
-    return (
-        f"Knowledge base: {doc_count} documents, {entity_count} entities, "
-        f"{edge_count} edges"
-    )
+    return f"Knowledge base: {doc_count} documents, {entity_count} entities, {edge_count} edges"
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -363,10 +423,28 @@ async def list_bookmarks(
     if store is None:
         return []
     bookmarks = await asyncio.to_thread(store.list, tag=tag, min_score=min_score)
-    return [
-        {"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags}
-        for b in bookmarks
-    ]
+    return [{"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags} for b in bookmarks]
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True))
+async def update_bookmark_tags(
+    ctx: Context,
+    url: str,
+    tags: list[str],
+    scope: str = "global",
+) -> BookmarkInfo:
+    """Update the tags on an existing bookmark."""
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.bookmark_store
+    if store is None:
+        msg = "bookmark store not available"
+        raise ToolError(msg)
+    bookmark = await asyncio.to_thread(store.get_by_url, url, scope)
+    if bookmark is None:
+        msg = f"bookmark not found for URL: {url}"
+        raise ToolError(msg)
+    await asyncio.to_thread(store.update_tags, bookmark.id, tags)
+    return {"url": bookmark.url, "title": bookmark.title, "relevance_score": bookmark.relevance_score, "tags": tags}
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -410,3 +488,52 @@ async def export_scope(
         Path(output_path),
         app_ctx.conn,
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def refresh_source(ctx: Context, source_id: str) -> dict | str:
+    """Trigger re-ingestion of a registered knowledge source by its ID.
+
+    Returns a dict with source_id, refreshed, skipped, and failed counts on
+    success.  Returns an error string for disabled sources or unavailable
+    orchestrator.  Raises ToolError if source_store is unavailable or the
+    source_id is not found.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    store = app_ctx.source_store
+    if store is None:
+        msg = "source store not available"
+        raise ToolError(msg)
+    source = store.get(source_id)
+    if source is None:
+        msg = f"Source '{source_id}' not found"
+        raise ToolError(msg)
+    orchestrator = app_ctx.refresh_orchestrator
+    if orchestrator is None:
+        return "error: refresh orchestrator not available"
+    try:
+        result = await orchestrator.refresh(source)
+    except ValueError as exc:
+        return f"error: {exc}"
+    return {
+        "source_id": result.source_id,
+        "refreshed": result.refreshed,
+        "skipped": result.skipped,
+        "failed": result.failed,
+    }
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def consolidate_knowledge(ctx: Context, batch_size: int = 50) -> str:
+    """Trigger cross-document insight synthesis for unconsolidated knowledge chunks.
+
+    Returns a human-readable summary of the consolidation result.
+    """
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    svc = app_ctx.consolidation_service
+    if svc is None:
+        return "error: consolidation service not available"
+    result = await svc.consolidate(batch_size=batch_size)
+    if result == 0:
+        return "No unconsolidated chunks available"
+    return f"Consolidated: {result} insight created"

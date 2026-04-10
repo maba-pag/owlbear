@@ -60,7 +60,7 @@ prompt: |
 
 Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, investigate before implementing.
 
-#### Fallback: Quality-Runner Unavailable
+### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
@@ -95,7 +95,7 @@ prompt: |
 
 All tests must pass (`failed: []`), zero failures.
 
-#### Fallback: Quality-Runner Unavailable
+### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
@@ -141,7 +141,7 @@ prompt: |
 
 All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
 
-#### Fallback: Quality-Runner Unavailable
+### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 

@@ -20,6 +20,11 @@ class EntityType(StrEnum):
     DECISION = "decision"
     PATTERN = "pattern"
     CONCEPT = "concept"
+    REQUIREMENT = "requirement"
+    SOLUTION = "solution"
+    PROCEDURE = "procedure"
+    POLICY = "policy"
+    STANDARD = "standard"
 
 
 class RelationType(StrEnum):
@@ -32,14 +37,16 @@ class RelationType(StrEnum):
     IMPLEMENTS = "implements"
     DOCUMENTS = "documents"
     GOVERNED_BY = "governed_by"
+    GOVERNS = "governs"
+    SUPERSEDES_VERSION = "supersedes_version"
 
 
 class SourceType(StrEnum):
     """Classification of knowledge sources."""
 
     URL_LIST = "url_list"
-    CRAWL = "crawl"
     FILE_GLOB = "file_glob"
+    AUTHENTICATED_WEB = "authenticated_web"
 
 
 # -- Helpers -----------------------------------------------------------------
@@ -101,6 +108,29 @@ class Edge(BaseModel):
     scope: str = "global"
 
 
+class PageStatus(StrEnum):
+    """Status of a SourcePage in the crawl/approval lifecycle."""
+
+    DISCOVERED = "discovered"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    INGESTED = "ingested"
+    STALE = "stale"
+
+
+class SourcePage(BaseModel):
+    """A page belonging to an authenticated-web knowledge source."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(default_factory=_uuid_hex)
+    source_id: str
+    url: str
+    status: PageStatus
+    extraction_hash: str | None = None
+    last_extracted: str | None = None
+
+
 class Document(BaseModel):
     """A text document stored in the knowledge graph."""
 
@@ -111,3 +141,4 @@ class Document(BaseModel):
     content: str
     metadata: dict[str, Any] = Field(default_factory=dict)
     scope: str = "global"
+    source_id: str | None = None

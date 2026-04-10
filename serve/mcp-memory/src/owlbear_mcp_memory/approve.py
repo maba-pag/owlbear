@@ -92,8 +92,7 @@ def _load_curation_report(db_path: Path) -> dict[str, str] | None:
         return None
     except json.JSONDecodeError as exc:
         print(  # noqa: T201
-            f"WARNING: curation-report.json is malformed ({exc});"
-            " recommendation column unavailable",
+            f"WARNING: curation-report.json is malformed ({exc}); recommendation column unavailable",
             file=sys.stderr,
         )
         return None
@@ -126,10 +125,7 @@ def _print_table(entries: list[dict], recommendations: dict[str, str] | None) ->
     has_rec = recommendations is not None
     col_width = _CONTENT_PREVIEW_LEN + 3  # content + "..."
     if has_rec:
-        header = (
-            f"{'#':>3}  {'ID':8}  {'Category':<12}"
-            f"  {'Content Preview':<{col_width}}  Recommendation"
-        )
+        header = f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}  Recommendation"
         print(header)  # noqa: T201
         print("-" * len(header))  # noqa: T201
     else:
@@ -272,8 +268,7 @@ async def _async_main(argv: list[str] | None = None) -> int:
                     report_path = db_path.parent / "curation-report.json"
                     if not report_path.exists():
                         print(  # noqa: T201
-                            "WARNING: curation-report.json not found;"
-                            " recommendation column unavailable",
+                            "WARNING: curation-report.json not found; recommendation column unavailable",
                             file=sys.stderr,
                         )
                 _print_table(entries, recommendations)

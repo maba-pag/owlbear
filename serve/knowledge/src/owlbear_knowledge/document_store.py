@@ -52,20 +52,21 @@ class DocumentStore:
         intake: IntakeResult | None = None,
         *,
         scope: str = "global",
+        source_id: str | None = None,
     ) -> None:
         """Persist a document to the documents table.
 
         Supports two calling conventions:
 
-        - New API: ``insert_document(document_id, intake, *, scope)``
+        - New API: ``insert_document(document_id, intake, *, scope, source_id)``
         - Legacy API: ``insert_document(doc)``  — accepts a Document object.
         """
         if isinstance(document_id_or_doc, str):
             now = datetime.now(tz=UTC).isoformat()
             self._conn.execute(
                 "INSERT OR REPLACE INTO documents"
-                " (id, title, content, metadata, created_at, scope)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
+                " (id, title, content, metadata, created_at, scope, source_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     document_id_or_doc,
                     intake.source if intake else "",
@@ -73,6 +74,7 @@ class DocumentStore:
                     json.dumps(dict(intake.metadata)) if intake else "{}",
                     now,
                     scope,
+                    source_id,
                 ),
             )
             self._conn.commit()
@@ -82,9 +84,7 @@ class DocumentStore:
 
     # ── Chunks ────────────────────────────────────────────────────────────
 
-    def store_chunks(
-        self, document_id: str, chunks: list[Chunk], *, scope: str = "global"
-    ) -> list[str]:
+    def store_chunks(self, document_id: str, chunks: list[Chunk], *, scope: str = "global") -> list[str]:
         """Insert chunk rows for *document_id* and return their IDs.
 
         Args:
@@ -98,8 +98,7 @@ class DocumentStore:
         now = datetime.now(tz=UTC).isoformat()
         # Ensure a minimal document row exists to satisfy FK constraint.
         self._conn.execute(
-            "INSERT OR IGNORE INTO documents (id, title, content, metadata, created_at)"
-            " VALUES (?, '', '', '{}', ?)",
+            "INSERT OR IGNORE INTO documents (id, title, content, metadata, created_at) VALUES (?, '', '', '{}', ?)",
             (document_id, now),
         )
         chunk_ids: list[str] = []
@@ -131,7 +130,7 @@ class DocumentStore:
         chunks_or_texts: list[Chunk] | list[str],
         embeddings: list[HybridEmbedding] | None = None,
         *,
-scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store routing
+        scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store routing
     ) -> None:
         """Store embeddings for document chunks.
 
@@ -226,12 +225,14 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
         for i, result in enumerate(results):
             assigned_chunk_id = chunk_ids[i] if chunk_ids and i < len(chunk_ids) else None
             for entity in result.entities:  # type: ignore[union-attr]
-                stamped = entity.model_copy(update={
-                    "scope": scope,
-                    "document_id": document_id,
-                    "chunk_id": assigned_chunk_id,
-                    "metadata": {**entity.metadata, "pipeline_name": pipeline_name},
-                })
+                stamped = entity.model_copy(
+                    update={
+                        "scope": scope,
+                        "document_id": document_id,
+                        "chunk_id": assigned_chunk_id,
+                        "metadata": {**entity.metadata, "pipeline_name": pipeline_name},
+                    }
+                )
                 self._graph.insert_entity(stamped)
                 entity_count += 1
             for edge in result.edges:  # type: ignore[union-attr]
@@ -250,22 +251,35 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
             document_id: The document to delete.
         """
         # Delete entities and their edges for this document
-        entity_rows = self._conn.execute(
-            "SELECT id FROM entities WHERE document_id = ?", (document_id,)
-        ).fetchall()
+        entity_rows = self._conn.execute("SELECT id FROM entities WHERE document_id = ?", (document_id,)).fetchall()
         for (eid,) in entity_rows:
-            self._conn.execute(
-                "DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid)
-            )
+            self._conn.execute("DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid))
         self._conn.execute("DELETE FROM entities WHERE document_id = ?", (document_id,))
         # Delete chunks
         self._conn.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
         # Delete document status
-        self._conn.execute(
-            "DELETE FROM document_status WHERE document_id = ?", (document_id,)
-        )
+        self._conn.execute("DELETE FROM document_status WHERE document_id = ?", (document_id,))
         # Delete document
         self._conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+        self._conn.commit()
+
+    def delete_source_cascade(self, source_id: str) -> None:
+        """Cascade-delete all data associated with *source_id*.
+
+        Removes rows from: source_pages, documents (and their downstream
+        entities, edges, chunks, document_status) for the given source_id.
+
+        Args:
+            source_id: The knowledge source ID to delete.
+        """
+        doc_rows = self._conn.execute(
+            "SELECT id FROM documents WHERE source_id = ?", (source_id,)
+        ).fetchall()
+        for (doc_id,) in doc_rows:
+            self.delete_document_data(doc_id)
+        self._conn.execute(
+            "DELETE FROM source_pages WHERE source_id = ?", (source_id,)
+        )
         self._conn.commit()
 
     # ── Status ────────────────────────────────────────────────────────────
@@ -282,15 +296,11 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
         """Insert or update the document_status row for *document_id*."""
         self._status.set_status(document_id, status, source=source, error=error, scope=scope)
 
-    def find_status_by_source(
-        self, source: str, scope: str = "global"
-    ) -> DocumentStatus | None:
+    def find_status_by_source(self, source: str, scope: str = "global") -> DocumentStatus | None:
         """Look up a previously-ingested document by source URI."""
         return self._status.find_status_by_source(source, scope)
 
-    def check_content_changed(
-        self, source: str, content: str, scope: str = "global"
-    ) -> tuple[bool, str | None]:
+    def check_content_changed(self, source: str, content: str, scope: str = "global") -> tuple[bool, str | None]:
         """Check whether *content* differs from the previously-ingested version.
 
         Returns:
@@ -301,5 +311,3 @@ scope: str = "global",  # noqa: ARG002 - reserved for future scoped vector store
     def update_content_hash(self, document_id: str, content: str) -> None:
         """Store the content hash for *document_id* to enable future delta checks."""
         self._status.update_content_hash(document_id, content)
-
-

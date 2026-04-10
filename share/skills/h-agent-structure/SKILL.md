@@ -35,10 +35,10 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 
 | Tier | Agents | Pipeline protocol needed? |
 |------|--------|--------------------------|
-| T1 — Orchestrator | orchestrator | From agent critical_rules |
-| T2 — Pipeline | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor | Yes — critical_rules reference |
+| T1 — Orchestrator | orchestrator, ideator | From agent critical_rules |
+| T2 — Pipeline | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor, dispatcher (DEPRECATED — see #619/#621) | Yes — critical_rules reference |
 | T3 — Support | scribe, planner, curator | If applicable — from critical_rules |
-| T4 — Tools | challenger, code-reader, Explore | Not needed |
+| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, architect-voice, critic-voice, data-voice, enduser-voice, pragmatist-voice, security-voice | Not needed |
 
 ## Principles
 

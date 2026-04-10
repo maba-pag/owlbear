@@ -1,0 +1,65 @@
+# Python bytecode and cache
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+*.egg-info
+
+# Virtual environments
+.venv/
+.Python
+lib/
+lib64/
+var/
+
+# Build artifacts
+build/
+_cache
+dist/
+sdist/
+wheels/
+parts/
+downloads/
+.installed.cfg
+MANIFEST
+artifacts/
+
+# Testing and coverage
+.*cache
+.coverage
+coverage.json
+coverage.xml
+htmlcov/
+.hypothesis/
+.benchmarks/
+
+# IDE and editor
+.vscode/*
+!.vscode/mcp.json
+!.vscode/settings.json
+.claude/
+.serena/
+
+# Secrets - NEVER commit
+.env
+.env.*
+!.env.example
+*.secret
+*.local.toml
+
+# Logs
+*.log
+
+# --- OwlBear managed paths ---
+
+# Scratch / ad-hoc workspace
+.owlbear/scratch/*
+!.owlbear/scratch/.gitkeep
+!.owlbear/scratch/.instructions.md
+
+# Brief drafts (transient template directory)
+.owlbear/briefs/draft-new/
+
+# Knowledge and memory databases
+.owlbear/knowledge/*.db
+.owlbear/memory/*.db

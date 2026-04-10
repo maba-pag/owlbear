@@ -148,10 +148,7 @@ class TestFromAC_GraphStoreGetCounts:
     def test_get_counts_takes_no_filter_parameters(self, empty_graph: GraphStore) -> None:
         """get_counts() is O(1) — accepts no filter parameters (no entity_type, scope, etc)."""
         sig = inspect.signature(empty_graph.get_counts)
-        non_self_params = [
-            p for p in sig.parameters.values() if p.name != "self"
-        ]
+        non_self_params = [p for p in sig.parameters.values() if p.name != "self"]
         assert len(non_self_params) == 0, (
-            f"get_counts() should take no params (SQL COUNT is O(1)), "
-            f"got: {[p.name for p in non_self_params]}"
+            f"get_counts() should take no params (SQL COUNT is O(1)), got: {[p.name for p in non_self_params]}"
         )

@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/awaitTerminal, execute/killTerminal, execute/createAndRunTask, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, 'microsoft/markitdown/*', 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
+  [vscode/memory, execute/getTerminalOutput, execute/sendToTerminal, execute/awaitTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, web, 'microsoft/markitdown/*', 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*', 'ddgs/search_text', 'ddgs/extract_content']
 agents: [Explore, challenger, scribe]
 ---
 
@@ -42,7 +42,6 @@ can choose — you never disguise opinion as conclusion.
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
 | Done | research → backlog | Research doc written, follow-up tasks created |
-
 
 </pipeline_position>
 

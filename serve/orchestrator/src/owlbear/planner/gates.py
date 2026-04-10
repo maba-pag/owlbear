@@ -23,8 +23,15 @@ _AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
 _CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
 _NON_IMPL_TAGS = frozenset(
     {
-        "research", "docs", "type:config", "type:docs",
-        "test", "type:test", "agent", "quality", "type:user-action",
+        "research",
+        "docs",
+        "type:config",
+        "type:docs",
+        "test",
+        "type:test",
+        "agent",
+        "quality",
+        "type:user-action",
     }
 )
 

@@ -16,12 +16,12 @@ On agent start:
 
 1. Check for existing Working Directory at `.owlbear/briefs/draft-{project-name}/`:
    - **None found:** Create `.owlbear/briefs/draft-new/` with `input/`, empty `context.md`, empty `decisions.md`.
-   - **`draft-new/` found:** Ask user to continue or start fresh.
+   - **`draft-new/` found:** Use askQuestions to let the user choose between continuing the existing draft or starting fresh.
    - **Named draft found:** Re-entry path — see Re-Entry Protocol section below.
 2. Tell user: "Drop any reference files (spreadsheets, screenshots, docs) in the `input/` folder and I'll review them."
 3. Read `input/*` for any pre-placed materials.
 4. Check `owlbear-project.json` and `.owlbear/briefs/` for existing projects.
-5. Determine: new project vs. feature change to existing? If uncertain, ask.
+5. Determine: new project vs. feature change to existing? If uncertain, use askQuestions with options for each.
 6. After M1 (once project is named): rename `draft-new/` → `draft-{project-name}/`.
 
 **Entry criteria:** User has invoked the ideator agent.
@@ -42,7 +42,7 @@ The Mediator is in **Investigator mode** for Moments 1–3 — restates what it 
 7. Invoke `critic-voice` standalone: "Here's the stated problem. Is this the real problem?"
 8. If Critic surfaces a material issue, loop back with the user.
 
-**Investment Tier Check (between M1 and M2):** Propose a tier (Scratch / Tool / Shared / Production). State why. User confirms or adjusts. Record in `decisions.md`. The tier calibrates depth for all moments that follow.
+**Investment Tier Check (between M1 and M2):** Propose a tier (Scratch / Tool / Shared / Production) with rationale, then use askQuestions with the four tiers as options and your recommendation marked. Record confirmed tier in `decisions.md`. The tier calibrates depth for all moments that follow.
 
 **Entry criteria:** User has stated an idea or problem.
 **Exit criteria:** Problem Statement written to `context.md`; Investment Tier set; Critic check passed.
@@ -94,7 +94,7 @@ The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting sy
    - Each option: what it is, effort/complexity, what it buys, what it gives up
    - Voice perspectives attributed: `[architect-voice] favors A because…`
    - Points of convergence and disagreement highlighted
-3. **User decides.** Capture not just "Option A" but "Option A because [reasoning]" in `decisions.md`.
+3. **User decides.** Present approaches as askQuestions options with your confidence and recommendation per option. Capture the chosen approach with rationale in `decisions.md`.
 4. Invoke `critic-voice` standalone: "Here's the chosen approach. What will fail?"
 5. If Critic surfaces significant concerns, be transparent with the user. They decide whether to re-invoke voices with updated context.
    On loop-back: voices are stateless — they read updated `context.md` + `decisions.md` and form fresh positions.
@@ -110,7 +110,7 @@ The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting sy
 2. Optionally open with a success narrative: "A month from now, you run one command and…"
 3. Invoke `critic-voice` standalone: "Here's the Brief. What are we sweeping under the rug?"
 4. Address any Critic findings with the user.
-5. User reviews, adjusts, approves. The Brief is the **contract** between thinking and building.
+5. Use askQuestions for Brief approval (approve / adjust / rework options). The Brief is the **contract** between thinking and building.
 6. Write approved Brief to `brief.md`.
 
 **Entry criteria:** `decisions.md` has chosen approach + rationale.
@@ -151,7 +151,7 @@ Voice agents: `architect-voice`, `data-voice`, `enduser-voice`, `security-voice`
 
 ### Deliberation Steps
 
-1. Tell the user which voices are being consulted and why. Give them a lightweight veto.
+1. Tell the user which voices are being consulted and why. Use askQuestions for a lightweight veto before proceeding.
 2. Invoke all relevant domain voices in **parallel** (concurrent subagent calls). Each voice:
    a. Reads `context.md` + `decisions.md` (+ optionally `research-notes.md` for deep context).
    b. Forms an initial position.
@@ -281,7 +281,7 @@ The Mediator **always tells the user** how it is calibrating depth: "This feels 
 | **Shared** | "Others will use this" | Full depth. Security voice added. More approach options explored. |
 | **Production** | "Real environment, real stakes" | Full depth. All applicable voices. Extended research. |
 
-The system proposes a tier based on conversational signals between M1 and M2. User confirms or adjusts.
+The system proposes a tier based on conversational signals between M1 and M2. Use askQuestions with tier options for confirmation.
 
 ---
 
@@ -291,7 +291,7 @@ When the user returns to an existing Working Directory (mid-execution modificati
 
 1. **Load existing Working Directory:** read `context.md`, `decisions.md`, and `synthesis.md` (if present) from `.owlbear/briefs/draft-{project-name}/`.
 2. **Load current board state:** check `.owlbear/kanban/` for existing tasks — show the user what is built, what is in progress, and what is planned.
-3. **Determine scope of change:** narrow (re-enter at M4 for implementation pivots) or broad (re-enter at M1 for problem reframing).
+3. **Determine scope of change:** use askQuestions with options — narrow (re-enter at M4 for implementation pivots) or broad (re-enter at M1 for problem reframing).
 4. **Enter at the relevant moment:** re-enter at M1 for significant problem/outcome changes; re-enter at M4 for approach/scope pivots.
 5. On re-deliberation: **update** `decisions.md` with the new direction. Archive obsolete tasks from the kanban board. Create new tasks for the changed direction.
 6. Voices are **stateless** on re-entry — they read updated `context.md` + `decisions.md` and form fresh positions without anchoring to prior stance.

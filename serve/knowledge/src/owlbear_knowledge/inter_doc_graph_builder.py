@@ -53,9 +53,7 @@ entities list empty — only return edges.
 
 def _stamp_inter_edge(edge: Edge) -> Edge:
     """Return a copy of *edge* stamped with inter-doc weight and source."""
-    return edge.model_copy(
-        update={"weight": _INTER_WEIGHT, "metadata": {**edge.metadata, "source": _INTER_SOURCE}}
-    )
+    return edge.model_copy(update={"weight": _INTER_WEIGHT, "metadata": {**edge.metadata, "source": _INTER_SOURCE}})
 
 
 def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:
@@ -151,7 +149,7 @@ class InterDocGraphBuilder:
         for i in range(0, len(candidate_pairs), _INTER_BATCH_SIZE):
             batch = candidate_pairs[i : i + _INTER_BATCH_SIZE]
             prompt = _build_inter_prompt(batch, scope)
-            result = self._extractor.extract(prompt)
+            result = await self._extractor.extract(prompt)
             all_edges.extend(result.edges)
 
         stamped = [_stamp_inter_edge(e) for e in all_edges]

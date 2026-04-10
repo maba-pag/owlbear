@@ -1,4 +1,4 @@
-# deny-writes.ps1 — PreToolUse hook for the reviewer agent.
+# deny-writes.ps1 — PreToolUse hook for read-only agents.
 # Reads VS Code hooks stdin JSON, denies write tool calls, passes through all others.
 # Usage: invoked automatically by VS Code as a PreToolUse hook.
 
@@ -17,14 +17,15 @@ $write_tools = @(
     'replace_string_in_file',
     'multi_replace_string_in_file',
     'apply_patch',
-    'create_directory'
+    'create_directory',
+    'editFiles'
 )
 
 if ($tool_name -and ($write_tools -contains $tool_name)) {
     $response = @{
         hookSpecificOutput = @{
             permissionDecision       = 'deny'
-            permissionDecisionReason = 'The reviewer agent is read-only. File writes are not permitted during review.'
+            permissionDecisionReason = 'This agent is read-only. File writes are not permitted.'
         }
     }
     Write-Output ($response | ConvertTo-Json -Compress)

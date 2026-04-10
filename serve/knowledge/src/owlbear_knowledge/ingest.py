@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
+from owlbear_knowledge.content_safety import should_wrap, wrap_untrusted_content
+
 if TYPE_CHECKING:
     from owlbear_knowledge.chunker import TextChunker
     from owlbear_knowledge.extractor import EntityExtractor
@@ -90,20 +92,22 @@ class IngestPipeline:
             await asyncio.to_thread(self._docs.insert_document, doc)  # type: ignore[union-attr]
 
             chunk_ids: list[str] = await asyncio.to_thread(
-                self._docs.store_chunks, doc_id, chunks  # type: ignore[union-attr]
+                self._docs.store_chunks,
+                doc_id,
+                chunks,  # type: ignore[union-attr]
             )
             chunk_texts = [c.text for c in chunks]
             await asyncio.to_thread(
-                self._docs.store_embeddings, chunk_ids, chunk_texts  # type: ignore[union-attr]
+                self._docs.store_embeddings,
+                chunk_ids,
+                chunk_texts,  # type: ignore[union-attr]
             )
 
             extraction_results = await asyncio.gather(
                 *(self._extractor.extract(chunk.text) for chunk in chunks),
                 return_exceptions=True,
             )
-            valid_extractions = [
-                r for r in extraction_results if not isinstance(r, BaseException)
-            ]
+            valid_extractions = [r for r in extraction_results if not isinstance(r, BaseException)]
             entity_count, edge_count = self._docs.store_extractions(valid_extractions)  # type: ignore[union-attr]
 
         except Exception:  # catch-all for unexpected ingest failures
@@ -126,6 +130,13 @@ class IngestPipeline:
 
     async def ingest(self, intake: IntakeResult, *, scope: str = "global") -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
+
+        Untrusted-source content (determined by
+        :func:`~owlbear_knowledge.content_safety.should_wrap`) is wrapped in
+        ``<untrusted_web_content>`` sentinel tags before entity extraction to
+        prevent prompt injection from malicious web pages.  Local/text sources
+        (``file``, ``file_glob``, ``text``) and absent source types are not
+        wrapped; all other source types are wrapped by default.
 
         Args:
             intake: Content to ingest, as produced by read_file/read_url/read_text.
@@ -161,15 +172,28 @@ class IngestPipeline:
             chunks = await asyncio.to_thread(self._chunker.chunk, intake.content, metadata=_meta)
             chunk_count = len(chunks)
 
+            if existing_id is not None:
+                self._docs.delete_document_data(existing_id)  # type: ignore[union-attr]
+
             self._docs.insert_document(doc_id, intake, scope=scope)  # type: ignore[union-attr]
 
             chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
             chunk_texts = [c.text for c in chunks]
 
             embed_coro = asyncio.to_thread(
-                self._docs.store_embeddings, chunk_ids, chunk_texts  # type: ignore[union-attr]
+                self._docs.store_embeddings,
+                chunk_ids,
+                chunk_texts,  # type: ignore[union-attr]
             )
-            extract_coros = [self._extractor.extract(c.text) for c in chunks]
+            _should_wrap = should_wrap(_meta.get("source_type"))  # type: ignore[arg-type]
+            extract_coros = [
+                self._extractor.extract(
+                    wrap_untrusted_content(c.text, source_url=str(intake.source))
+                    if _should_wrap
+                    else c.text
+                )
+                for c in chunks
+            ]
 
             all_results = await asyncio.gather(embed_coro, *extract_coros, return_exceptions=True)
             extraction_results = [r for r in all_results[1:] if not isinstance(r, BaseException)]
@@ -198,4 +222,3 @@ class IngestPipeline:
             edge_count=edge_count,
             status="ok",
         )
-

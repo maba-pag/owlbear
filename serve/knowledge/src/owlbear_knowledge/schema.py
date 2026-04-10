@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 # Constants
 # ---------------------------------------------------------------------------
 
-_SCHEMA_VERSION: int = 8
+_SCHEMA_VERSION: int = 9
 """Current schema version written to the ``schema_version`` table."""
 
 _SCOPE_TABLES: tuple[str, ...] = (
@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS documents (
     content    TEXT,
     metadata   TEXT,
     created_at TEXT,
-    scope      TEXT DEFAULT 'global'
+    scope      TEXT DEFAULT 'global',
+    source_id  TEXT
 )
 """
 
@@ -148,6 +149,20 @@ CREATE TABLE IF NOT EXISTS schema_version (
 )
 """
 
+_CREATE_SOURCE_PAGES = """\
+CREATE TABLE IF NOT EXISTS source_pages (
+    id                TEXT PRIMARY KEY,
+    source_id         TEXT,
+    url               TEXT NOT NULL,
+    status            TEXT DEFAULT 'discovered',
+    extraction_hash   TEXT,
+    last_extracted    TEXT,
+    scope             TEXT DEFAULT 'global',
+    created_at        TEXT,
+    updated_at        TEXT
+)
+"""
+
 # ---------------------------------------------------------------------------
 # Migration helpers
 # ---------------------------------------------------------------------------
@@ -200,13 +215,8 @@ def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
 def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     """Migrate a v5 database to v6 — adds knowledge_sources table."""
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope "
-        "ON knowledge_sources(name, scope)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (6, datetime.now(tz=UTC).isoformat()),
@@ -216,9 +226,7 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
 def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
     """Migrate a v6 database to v7 — adds bookmarks table."""
     conn.execute(_CREATE_BOOKMARKS)
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
@@ -239,6 +247,38 @@ def _migrate_v7_to_v8(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v8_to_v9(conn: sqlite3.Connection) -> None:
+    """Migrate a v8 database to v9 — adds source_pages table and source_id FK on documents."""
+    conn.execute(_CREATE_SOURCE_PAGES)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
+    with contextlib.suppress(sqlite3.OperationalError):
+        conn.execute("ALTER TABLE documents ADD COLUMN source_id TEXT")
+    conn.execute(
+        "UPDATE schema_version SET version = ?, applied_at = ?",
+        (9, datetime.now(tz=UTC).isoformat()),
+    )
+
+
+def _apply_migrations(conn: sqlite3.Connection, current: int) -> None:
+    """Apply all pending schema migrations starting from *current* version."""
+    if current < 2:  # noqa: PLR2004
+        _migrate_v1_to_v2(conn)
+    if current < 3:  # noqa: PLR2004
+        _migrate_v2_to_v3(conn)
+    if current < 4:  # noqa: PLR2004
+        _migrate_v3_to_v4(conn)
+    if current < 5:  # noqa: PLR2004
+        _migrate_v4_to_v5(conn)
+    if current < 6:  # noqa: PLR2004
+        _migrate_v5_to_v6(conn)
+    if current < 7:  # noqa: PLR2004
+        _migrate_v6_to_v7(conn)
+    if current < 8:  # noqa: PLR2004
+        _migrate_v7_to_v8(conn)
+    if current < 9:  # noqa: PLR2004
+        _migrate_v8_to_v9(conn)
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -251,7 +291,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     connection is safe and will not duplicate data or raise errors.
 
     If the database contains an older schema, it is automatically migrated
-    through v2-v8.
+    through v2-v9.
 
     Args:
         conn (sqlite3.Connection): An open :class:`sqlite3.Connection`.  Works with both
@@ -267,6 +307,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
     conn.execute(_CREATE_BOOKMARKS)
     conn.execute(_CREATE_CONSOLIDATIONS)
+    conn.execute(_CREATE_SOURCE_PAGES)
     conn.execute(_CREATE_SCHEMA_VERSION)
 
     row = conn.execute("SELECT count(*) FROM schema_version").fetchone()
@@ -278,34 +319,14 @@ def init_db(conn: sqlite3.Connection) -> None:
     else:
         ver_row = conn.execute("SELECT version FROM schema_version").fetchone()
         current = ver_row[0] if ver_row else 0
-        if current < 2:  # noqa: PLR2004
-            _migrate_v1_to_v2(conn)
-        if current < 3:  # noqa: PLR2004
-            _migrate_v2_to_v3(conn)
-        if current < 4:  # noqa: PLR2004
-            _migrate_v3_to_v4(conn)
-        if current < 5:  # noqa: PLR2004
-            _migrate_v4_to_v5(conn)
-        if current < 6:  # noqa: PLR2004
-            _migrate_v5_to_v6(conn)
-        if current < 7:  # noqa: PLR2004
-            _migrate_v6_to_v7(conn)
-        if current < 8:  # noqa: PLR2004
-            _migrate_v7_to_v8(conn)
+        _apply_migrations(conn, current)
 
     for table in _SCOPE_TABLES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_scope ON {table}(scope)")
 
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope "
-        "ON knowledge_sources(name, scope)"
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
-    )
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
-    )
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
 
     conn.commit()

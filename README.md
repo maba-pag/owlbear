@@ -63,7 +63,6 @@ For more detail on what each file does and how to customise see
 | `share/instructions/` | Shared instruction files (`*.instructions.md`) |
 | `serve/mcp-kanban/` | MCP server for kanban board operations |
 | `serve/mcp-memory/` | MCP server for persistent agent memory (SQLite-backed) |
-| `serve/mcp-project/` | MCP server for project metadata |
 | `serve/mcp-knowledge/` | MCP server exposing the knowledge base |
 | `seed/` | Template files copied to new projects during `setup/init.py` |
 | `setup/` | Workspace initialiser (`init.py`), setup guide, and sharing guide |

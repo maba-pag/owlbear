@@ -39,7 +39,7 @@ prompt: |
 
 Record: passed/failed counts from the `## Tests` section of the Quality-Runner report.
 
-#### Fallback: Quality-Runner Unavailable
+### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
@@ -89,7 +89,7 @@ prompt: |
 
 Record: `clean: true/false` and any `violations` from the `## Lint` section.
 
-#### Fallback: Quality-Runner Unavailable
+### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
@@ -113,7 +113,7 @@ prompt: |
 
 Verify touched modules have 90% coverage or higher from the `## Coverage` section.
 
-#### Fallback: Quality-Runner Unavailable
+### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
@@ -227,10 +227,13 @@ Read the full task body via `show_task`. Check builder notes for loop patterns:
 
 Findings noted but do NOT block a PASS verdict.
 
-### 6.1 Code Reading — style, type hints, patterns, naming, dead code.
-### 6.2 Documentation — missing/stale docstrings, contradictory comments.
-### 6.3 Minor Test Improvements — tighter assertions, simplified setup.
-### 6.4 Code Structure — flat-vs-nested, function length, extraction opportunities.
+### 6.1 Code Reading — style, type hints, patterns, naming, dead code
+
+### 6.2 Documentation — missing/stale docstrings, contradictory comments
+
+### 6.3 Minor Test Improvements — tighter assertions, simplified setup
+
+### 6.4 Code Structure — flat-vs-nested, function length, extraction opportunities
 
 ### Suppressions
 

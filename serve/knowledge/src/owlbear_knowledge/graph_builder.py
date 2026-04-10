@@ -51,9 +51,7 @@ entities list empty — only return edges.
 
 def _stamp_intra_edge(edge: Edge) -> Edge:
     """Return a copy of *edge* stamped with intra-doc weight and source."""
-    return edge.model_copy(
-        update={"weight": _INTRA_WEIGHT, "metadata": {**edge.metadata, "source": _INTRA_SOURCE}}
-    )
+    return edge.model_copy(update={"weight": _INTRA_WEIGHT, "metadata": {**edge.metadata, "source": _INTRA_SOURCE}})
 
 
 def _build_intra_prompt(entities: list[Entity], scope: str, document_id: str) -> str:
@@ -110,8 +108,7 @@ class IntraDocGraphBuilder:
             return GraphBuildResult()
         if self._extractor is None:
             logger.debug(
-                "IntraDocGraphBuilder.build called — returning empty result (no-op), "
-                "document_id=%s",
+                "IntraDocGraphBuilder.build called — returning empty result (no-op), document_id=%s",
                 document_id,
             )
             return GraphBuildResult()
@@ -119,7 +116,7 @@ class IntraDocGraphBuilder:
         all_edges: list[Edge] = []
         if len(entities) <= _INTRA_BATCH_THRESHOLD:
             prompt = _build_intra_prompt(entities, scope, document_id)
-            result = self._extractor.extract(prompt)
+            result = await self._extractor.extract(prompt)
             all_edges.extend(result.edges)
         else:
             by_type: dict[str, list[Entity]] = defaultdict(list)
@@ -127,7 +124,7 @@ class IntraDocGraphBuilder:
                 by_type[ent.entity_type].append(ent)
             for etype_entities in by_type.values():
                 prompt = _build_intra_prompt(etype_entities, scope, document_id)
-                result = self._extractor.extract(prompt)
+                result = await self._extractor.extract(prompt)
                 all_edges.extend(result.edges)
 
         stamped = [_stamp_intra_edge(e) for e in all_edges]

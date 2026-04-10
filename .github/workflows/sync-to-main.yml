@@ -1,6 +1,7 @@
+---
 name: Sync dev to main
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       dry_run:
@@ -153,7 +154,8 @@ jobs:
           {
             echo "## Sync Failed"
             echo ""
-            echo "Failed for actor **${{ github.actor }}** at SHA \`${{ env.SHORT_SHA || 'unknown' }}\` on ${{ env.DATE || 'unknown' }}."
+            echo "Failed for actor **${{ github.actor }}**"
+            echo "at SHA \`${{ env.SHORT_SHA || 'unknown' }}\` on ${{ env.DATE || 'unknown' }}."
             echo ""
             echo "Check the step logs above for details."
           } >> "$GITHUB_STEP_SUMMARY"

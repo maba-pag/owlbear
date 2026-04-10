@@ -150,7 +150,7 @@ unnecessary filing. The attorney gets the ruling without re-asking the judge.
 
 <good_example why="New concern creates properly formatted DR and blocks task">
 Agent requests a DR for task #500 about library selection. Scribe scans both
-pending/500-* and resolved/500-* — nothing found. Creates the DR file with
+pending/500-\* and resolved/500-\* — nothing found. Creates the DR file with
 proper YAML frontmatter, blocks the task with a reference to the pending file.
 Clean filing, clean blocking, clear paper trail.
 </good_example>

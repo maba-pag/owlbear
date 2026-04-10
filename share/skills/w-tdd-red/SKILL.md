@@ -102,7 +102,7 @@ prompt: |
 
 Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runner report.
 
-#### Fallback: Quality-Runner Unavailable
+### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 

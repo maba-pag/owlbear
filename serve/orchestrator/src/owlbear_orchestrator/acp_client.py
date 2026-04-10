@@ -46,12 +46,12 @@ class _ErrorLogger(Protocol):
 
 
 _ACP_ERROR_CODES: dict[int, ErrorCategory] = {
-    -32700: ErrorCategory.PERMANENT,   # Parse error
-    -32600: ErrorCategory.PERMANENT,   # Invalid request
-    -32601: ErrorCategory.PERMANENT,   # Method not found
-    -32602: ErrorCategory.PERMANENT,   # Invalid params
-    -32603: ErrorCategory.TRANSIENT,   # Internal error
-    -32000: ErrorCategory.AUTH,        # Auth required
+    -32700: ErrorCategory.PERMANENT,  # Parse error
+    -32600: ErrorCategory.PERMANENT,  # Invalid request
+    -32601: ErrorCategory.PERMANENT,  # Method not found
+    -32602: ErrorCategory.PERMANENT,  # Invalid params
+    -32603: ErrorCategory.TRANSIENT,  # Internal error
+    -32000: ErrorCategory.AUTH,  # Auth required
     -32002: ErrorCategory.TOOL_SEMANTIC,  # Resource not found
 }
 
@@ -112,21 +112,15 @@ class AcpClient:
     async def initialize(self, protocol_version: int) -> InitializeResponse:
         """Call conn.initialize() with a 30 s timeout, forwarding protocol_version to the SDK."""
         try:
-            return await asyncio.wait_for(
-                self._conn.initialize(protocol_version=protocol_version), timeout=30
-            )
+            return await asyncio.wait_for(self._conn.initialize(protocol_version=protocol_version), timeout=30)
         except RequestError as exc:
             category = _classify_request_error(exc)
             if self._error_logger is not None:
-                self._error_logger.log_error(
-                    category=category, method="initialize", message=str(exc)
-                )
+                self._error_logger.log_error(category=category, method="initialize", message=str(exc))
             raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             if self._error_logger is not None:
-                self._error_logger.log_error(
-                    category=ErrorCategory.TRANSIENT, method="initialize", message=str(exc)
-                )
+                self._error_logger.log_error(category=ErrorCategory.TRANSIENT, method="initialize", message=str(exc))
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
     async def new_session(self, cwd: str, mcp_servers: list | None = None) -> NewSessionResponse:
@@ -139,15 +133,11 @@ class AcpClient:
         except RequestError as exc:
             category = _classify_request_error(exc)
             if self._error_logger is not None:
-                self._error_logger.log_error(
-                    category=category, method="new_session", message=str(exc)
-                )
+                self._error_logger.log_error(category=category, method="new_session", message=str(exc))
             raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             if self._error_logger is not None:
-                self._error_logger.log_error(
-                    category=ErrorCategory.TRANSIENT, method="new_session", message=str(exc)
-                )
+                self._error_logger.log_error(category=ErrorCategory.TRANSIENT, method="new_session", message=str(exc))
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
     async def prompt(
@@ -174,13 +164,9 @@ class AcpClient:
         except RequestError as exc:
             category = _classify_request_error(exc)
             if self._error_logger is not None:
-                self._error_logger.log_error(
-                    category=category, method="prompt", message=str(exc)
-                )
+                self._error_logger.log_error(category=category, method="prompt", message=str(exc))
             raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             if self._error_logger is not None:
-                self._error_logger.log_error(
-                    category=ErrorCategory.TRANSIENT, method="prompt", message=str(exc)
-                )
+                self._error_logger.log_error(category=ErrorCategory.TRANSIENT, method="prompt", message=str(exc))
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
