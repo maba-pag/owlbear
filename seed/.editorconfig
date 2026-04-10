@@ -1,0 +1,40 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+max_line_length = 120
+trim_trailing_whitespace = true
+
+[*.py]
+indent_size = 4
+
+[*.md]
+indent_size = unset
+max_line_length = unset
+
+# Kanban task files — machine-managed YAML+markdown, allow long lines
+[.owlbear/kanban/tasks/**]
+max_line_length = unset
+
+# Kanban activity log — machine-generated JSONL, allow long lines
+[.owlbear/kanban/activity.jsonl]
+max_line_length = unset
+
+# Kanban archive — frozen, do not lint
+[.owlbear/kanban/archive/**]
+max_line_length = unset
+
+# Keep data files minified — do not reformat
+[store/**]
+indent_size = unset
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+# VS Code profile export — auto-generated, do not lint
+[*.code-profile]
+max_line_length = unset
+indent_size = unset

@@ -796,3 +796,73 @@ class TestDictKeyMerge:
         json_settings = data.get("[json]", {})
         assert json_settings.get("editor.tabSize") == 2, "User [json] setting lost"
         assert "editor.formatOnSave" in json_settings, "Owlbear [json] setting not added"
+
+
+# ---------------------------------------------------------------------------
+# Dotfile seeding
+# ---------------------------------------------------------------------------
+
+
+class TestSeedDotfiles:
+    """Dotfiles must exist in seed and be handled correctly by init()."""
+
+    @pytest.mark.parametrize(
+        "filename",
+        [".editorconfig", ".gitattributes", ".gitignore", ".markdownlint.json",
+         ".markdownlint-cli2.jsonc", ".markdownlintignore"],
+    )
+    def test_seed_dotfile_exists(self, filename: str) -> None:
+        assert (_SEED_DIR / filename).exists(), f"seed/{filename} does not exist"
+
+    @pytest.mark.parametrize(
+        "filename",
+        [".editorconfig", ".gitattributes", ".markdownlint.json",
+         ".markdownlint-cli2.jsonc", ".markdownlintignore"],
+    )
+    def test_skip_if_exists_dotfiles_not_overwritten(self, filename: str, tmp_path: Path) -> None:
+        """Dotfiles in _SKIP_IF_EXISTS_REL must not be overwritten."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        (target / filename).write_text("SENTINEL", encoding="utf-8")
+        init(target, _OWLBEAR_DIR)
+        assert (target / filename).read_text(encoding="utf-8") == "SENTINEL", (
+            f"{filename} was overwritten despite already existing"
+        )
+
+    def test_fresh_project_gets_gitignore(self, tmp_path: Path) -> None:
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        init(target, _OWLBEAR_DIR)
+        assert (target / ".gitignore").exists(), ".gitignore not created for fresh project"
+        content = (target / ".gitignore").read_text(encoding="utf-8")
+        assert "# --- OwlBear managed paths ---" in content
+
+    def test_gitignore_appends_owlbear_section_to_existing(self, tmp_path: Path) -> None:
+        """If .gitignore exists without the owlbear marker, the owlbear section is appended."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        (target / ".gitignore").write_text("node_modules/\n*.log\n", encoding="utf-8")
+        init(target, _OWLBEAR_DIR)
+        content = (target / ".gitignore").read_text(encoding="utf-8")
+        assert "node_modules/" in content, "Original .gitignore content lost"
+        assert "# --- OwlBear managed paths ---" in content, "OwlBear section not appended"
+        assert ".owlbear/scratch/*" in content, "OwlBear scratch pattern not appended"
+
+    def test_gitignore_idempotent_with_marker(self, tmp_path: Path) -> None:
+        """If the owlbear marker is already present, nothing is appended."""
+        from init import init  # type: ignore[import]
+
+        target = tmp_path / "target"
+        target.mkdir()
+        original = "*.log\n# --- OwlBear managed paths ---\n.owlbear/scratch/*\n"
+        (target / ".gitignore").write_text(original, encoding="utf-8")
+        init(target, _OWLBEAR_DIR)
+        assert (target / ".gitignore").read_text(encoding="utf-8") == original, (
+            ".gitignore was modified despite already having the owlbear marker"
+        )

@@ -45,7 +45,18 @@ _DICT_MERGE_KEYS = _LOCATION_KEYS | frozenset(
 )
 
 _SKIP_NAMES = frozenset({"scratch-pad.txt"})
-_SKIP_IF_EXISTS_REL = frozenset({"owlbear-project.json"})
+_SKIP_IF_EXISTS_REL = frozenset(
+    {
+        ".editorconfig",
+        ".gitattributes",
+        ".markdownlint-cli2.jsonc",
+        ".markdownlint.json",
+        ".markdownlintignore",
+        "owlbear-project.json",
+    }
+)
+
+_OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
@@ -84,6 +95,34 @@ def _replace_placeholders(content: str, replacements: dict[str, str]) -> str:
     for key, value in replacements.items():
         content = content.replace("{{" + key + "}}", value)
     return content
+
+
+def _write_gitignore(src: Path, dest: Path) -> None:
+    """Write .gitignore, appending owlbear-managed section to existing file.
+
+    If the destination file does not exist, copies the full seed .gitignore.
+    If it exists but has no owlbear marker, appends the owlbear-managed section.
+    If the marker is already present, does nothing (idempotent).
+    """
+    seed_content = src.read_text(encoding="utf-8")
+
+    if not dest.exists():
+        dest.write_text(seed_content, encoding="utf-8")
+        return
+
+    existing = dest.read_text(encoding="utf-8")
+    if _OWLBEAR_GITIGNORE_MARKER in existing:
+        return  # already has the owlbear section
+
+    # Extract the owlbear-managed section from the seed
+    marker_pos = seed_content.find(_OWLBEAR_GITIGNORE_MARKER)
+    if marker_pos < 0:
+        return  # seed has no marker — nothing to append
+    owlbear_section = seed_content[marker_pos:]
+
+    # Append with a blank line separator
+    separator = "" if existing.endswith("\n") else "\n"
+    dest.write_text(existing + separator + "\n" + owlbear_section, encoding="utf-8")
 
 
 def _write_settings(src: Path, dest: Path, owlbear_path: str) -> None:
@@ -228,6 +267,10 @@ def init(
 
         if rel_posix == ".vscode/mcp.json":
             _write_mcp(src, dest, owlbear_path)
+            continue
+
+        if rel_posix == ".gitignore":
+            _write_gitignore(src, dest)
             continue
 
         if rel_posix == "owlbear-project.json":
