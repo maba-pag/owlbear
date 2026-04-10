@@ -152,10 +152,12 @@ CREATE TABLE IF NOT EXISTS schema_version (
 _CREATE_SOURCE_PAGES = """\
 CREATE TABLE IF NOT EXISTS source_pages (
     id                TEXT PRIMARY KEY,
-    source_id         TEXT REFERENCES knowledge_sources(id),
+    source_id         TEXT,
     url               TEXT NOT NULL,
     approval_state    TEXT DEFAULT 'discovered',
     extraction_status TEXT DEFAULT 'pending',
+    extraction_hash   TEXT,
+    last_extracted    TEXT,
     scope             TEXT DEFAULT 'global',
     created_at        TEXT,
     updated_at        TEXT
