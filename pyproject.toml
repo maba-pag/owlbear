@@ -60,6 +60,12 @@ ignore = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
 ]
+".owlbear/scratch/*.py" = [
+  "ANN401", # Any is appropriate for spike scripts interfacing with browser objects
+  "INP001", # .owlbear/scratch/ is not a package — spike scripts are direct-run files
+  "S603",   # subprocess with trusted paths — edge binary validated by _find_edge()
+  "T201",   # print() is intentional in CLI spike scripts
+]
 "setup/*.py" = [
   "INP001", # setup/ is not a package — direct-run scripts are expected here
   "T201",   # print() is intentional in CLI scripts
