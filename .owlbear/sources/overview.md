@@ -11,6 +11,12 @@ External repos and resources studied during OwlBear development.
 | Playwright `launch_persistent_context` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context> | Alternative approach: Playwright-managed Edge lifecycle with channel="msedge" | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
 | Playwright Chrome Extensions docs | <https://playwright.dev/python/docs/chrome-extensions> | Confirms Edge removed `--load-extension` flags; `--remote-debugging-port` still usable | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
 
+## MCP Browser Server Research (Task #771)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | ToolAnnotations API, Context access, error handling patterns, tool decorator args | .owlbear/research/771-mcp-browser-server.md | 2026-04-11 |
+
 ## Excalidraw Skill Expansion (Task #743)
 
 | Source | URL | What | Where Used | Date |
@@ -56,6 +62,14 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | trafilatura (PyPI) | <https://pypi.org/project/trafilatura/> | HTML content extraction library (Apache 2.0) — evaluated as dependency for owlbear_browser content extractor | .owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
 | Playwright CDP API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API patterns — is_local (v1.58+), 30s default timeout, default context access | .owlbear/research/775-phase1-browser-pipeline-schema.md | 2026-04-10 |
+
+## HTML→Markdown Cleaner (Task #759)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | extract() params: output_format, favor_precision, prune_xpath, include_links — evaluated as primary implementation approach (superseded by lxml custom) | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
+| trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) on news/blog; corporate intranet quality predicted .65 — informed decision to use lxml custom converter instead | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
+| markdownify 1.2.2 (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown converter (MIT, BeautifulSoup-based) — evaluated as alternative; rejected: 3-4x more LOC vs trafilatura, no general boilerplate removal | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
 
 ## Edge Launcher + CDP Tests (Task #755)
 
