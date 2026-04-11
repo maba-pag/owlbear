@@ -325,6 +325,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     for table in _SCOPE_TABLES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_scope ON {table}(scope)")
 
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
