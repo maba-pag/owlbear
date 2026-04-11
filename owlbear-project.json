@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "owlbear",
+  "type": "bare",
+  "owlbear_path": "../owlbear",
+  "created_at": "2026-04-10T23:29:27.140184+00:00"
+}
