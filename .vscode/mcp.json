@@ -1,11 +1,19 @@
 {
+  "inputs": [],
   "servers": {
+    "microsoft/markitdown": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "markitdown-mcp"
+      ]
+    },
     "owlbear-kanban": {
       "type": "stdio",
       "command": "uv",
       "args": [
         "--project",
-        "{{owlbear_path}}",
+        "../owlbear",
         "run",
         "python",
         "-m",
@@ -17,11 +25,22 @@
       "command": "uv",
       "args": [
         "--project",
-        "{{owlbear_path}}",
+        "../owlbear",
         "run",
         "python",
         "-m",
         "owlbear_mcp_knowledge"
+      ],
+    },
+    "ddgs": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "--project",
+        "../owlbear",
+        "run",
+        "ddgs",
+        "mcp"
       ]
     },
     "owlbear-memory": {
@@ -29,28 +48,12 @@
       "command": "uv",
       "args": [
         "--project",
-        "{{owlbear_path}}",
+        "../owlbear",
         "run",
         "python",
         "-m",
         "owlbear_mcp_memory"
-      ]
-    },
-    "ddgs": {
-      "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run",
-        "ddgs",
-        "mcp"
-      ]
-    },
-    "microsoft/markitdown": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": [
-        "markitdown-mcp"
-      ]
+      ],
     }
   }
 }
