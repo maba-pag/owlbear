@@ -17,7 +17,7 @@ import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
 from owlbear_mcp_kanban.engine import KanbanEngine
-from owlbear_mcp_kanban.engine_models import TaskRecord
+from owlbear_kanban.models import TaskRecord
 from owlbear_mcp_kanban.models import KanbanTask
 from owlbear_mcp_kanban.server import (
     AppContext,

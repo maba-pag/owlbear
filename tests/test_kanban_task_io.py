@@ -23,7 +23,7 @@ from unittest.mock import patch
 
 import pytest
 
-from owlbear_mcp_kanban.engine_models import TaskRecord  # type: ignore[import-not-found]
+from owlbear_kanban.models import TaskRecord
 from owlbear_mcp_kanban.task_io import (  # type: ignore[import-not-found]
     generate_slug,
     make_task_filename,

@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban.engine import KanbanEngine
-from owlbear_mcp_kanban.engine_models import Task, TaskRecord
+from owlbear_kanban.models import Task, TaskRecord
 
 # ---------------------------------------------------------------------------
 # Shared config — mirrors _BASE_CONFIG_YAML from test_kanban_engine_crud.py
