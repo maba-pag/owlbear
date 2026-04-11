@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from owlbear_kanban import KanbanEngine
 from pydantic import BeforeValidator
 
-from owlbear_mcp_kanban.engine import KanbanEngine
 from owlbear_mcp_kanban.models import KanbanTask
 
 if TYPE_CHECKING:

@@ -17,6 +17,7 @@ resolution-markers = [
 members = [
     "owlbear",
     "owlbear-browser",
+    "owlbear-kanban",
     "owlbear-knowledge",
     "owlbear-mcp-browser",
     "owlbear-mcp-kanban",
@@ -2696,6 +2697,23 @@ dependencies = [
 requires-dist = [
     { name = "playwright", specifier = ">=1.40" },
     { name = "trafilatura", specifier = ">=1.6" },
+]
+
+[[package]]
+name = "owlbear-kanban"
+version = "0.1.0"
+source = { editable = "serve/kanban" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pyyaml" },
+    { name = "ruamel-yaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "ruamel-yaml", specifier = ">=0.18" },
 ]
 
 [[package]]
