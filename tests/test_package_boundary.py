@@ -39,7 +39,8 @@ _PACKAGES_DIR = Path(__file__).parent.parent / "serve"
 # excluded from the check before consulting this map.
 ALLOWED_IMPORTS = {
     "owlbear_knowledge": set(),
-    "owlbear_mcp_kanban": set(),
+    "owlbear_kanban": set(),
+    "owlbear_mcp_kanban": {"owlbear_kanban"},
     "owlbear_mcp_knowledge": {"owlbear_knowledge"},
     "owlbear_mcp_memory": set(),
     "owlbear": {"owlbear_orchestrator"},
