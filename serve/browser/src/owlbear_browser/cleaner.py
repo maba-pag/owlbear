@@ -1,13 +1,15 @@
 """HTML noise stripper and markdown converter for owlbear_browser.
 
 Provides three public functions:
-  - strip_noise(html)      → HTML string with nav, footer, script, style, cookie banners removed
+  - strip_noise(html)      → HTML string with nav, header, footer, aside, script, style,
+                             cookie banners, and SharePoint boilerplate removed
   - html_to_markdown(html) → Markdown string preserving headings, lists, tables, links
-  - clean(html)            → strip_noise + html_to_markdown combined
+  - clean(html)            → strip_noise + html_to_markdown + whitespace normalization
 """
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from lxml import html as lxml_html
@@ -17,17 +19,28 @@ if TYPE_CHECKING:
 
     from lxml.html import HtmlElement
 
-_NOISE_TAGS: frozenset[str] = frozenset({"nav", "footer", "script", "style"})
+_NOISE_TAGS: frozenset[str] = frozenset({"nav", "header", "footer", "aside", "script", "style"})
 _NOISE_CLASSES: frozenset[str] = frozenset({
+    # Cookie notices
     "cookie-banner",
     "cookie-notice",
     "cookie-popup",
     "cookie-bar",
+    # SharePoint boilerplate
+    "ms-header",
+    "ms-commandBar",
+    "ms-commandbar",
+    "ms-pageEditBar",
 })
 _NOISE_IDS: frozenset[str] = frozenset({
+    # Cookie consent
     "cookie-consent",
     "cookie-banner",
+    # SharePoint boilerplate
+    "SuiteNavWrapper",
+    "ms-site-actions",
 })
+_NOISE_ROLES: frozenset[str] = frozenset({"complementary"})
 _HEADING_TAGS: frozenset[str] = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
 
@@ -46,7 +59,7 @@ def _remove_noise_tags(doc: HtmlElement, tags: frozenset[str]) -> None:
 
 
 def _remove_cookie_elements(doc: HtmlElement) -> None:
-    """Remove elements identified as cookie banners by class or id."""
+    """Remove elements identified as noise by class, id, or ARIA role."""
     for el in list(doc.iter()):
         if not isinstance(el.tag, str):
             continue
@@ -57,6 +70,11 @@ def _remove_cookie_elements(doc: HtmlElement) -> None:
                 parent.remove(el)
             continue
         if (el.get("id") or "") in _NOISE_IDS:
+            parent = el.getparent()
+            if parent is not None:
+                parent.remove(el)
+            continue
+        if (el.get("role") or "") in _NOISE_ROLES:
             parent = el.getparent()
             if parent is not None:
                 parent.remove(el)
@@ -180,9 +198,29 @@ def html_to_markdown(html_str: str) -> str:
     return _elem_to_md(root).strip()  # type: ignore[arg-type]
 
 
+def _normalize_content(text: str) -> str:
+    """Normalize whitespace in the markdown output.
+
+    - Converts non-breaking spaces (U+00A0) to regular spaces.
+    - Collapses multiple consecutive spaces within a line to a single space.
+    - Collapses more than one consecutive blank line to a single blank line.
+    """
+    text = text.replace("\u00a0", " ")
+    lines = [re.sub(r" {2,}", " ", line.rstrip()) for line in text.split("\n")]
+    result: list[str] = []
+    prev_blank = False
+    for line in lines:
+        is_blank = line == ""
+        if is_blank and prev_blank:
+            continue
+        result.append(line)
+        prev_blank = is_blank
+    return "\n".join(result).strip()
+
+
 def clean(html_str: str) -> str:
-    """Strip noise from HTML then convert the remaining content to markdown."""
+    """Strip noise from HTML then convert the remaining content to normalized markdown."""
     if not html_str or not html_str.strip():
         return ""
-    return html_to_markdown(strip_noise(html_str))
+    return _normalize_content(html_to_markdown(strip_noise(html_str)))
 
