@@ -27,7 +27,8 @@
   "[yaml]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "chat.agent.maxRequests": 250,
+  "accessibility.chat.showCheckmarks": true,
+  "chat.agent.maxRequests": 99999,
   "chat.agentFilesLocations": {
     "{{owlbear_path}}/share/agents": true
   },
@@ -36,10 +37,18 @@
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
+  "chat.hookFilesLocations": {
+    "{{owlbear_path}}/share/hooks": true
+  },
   "chat.instructionsFilesLocations": {
     "{{owlbear_path}}/share/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
+  "chat.notifyWindowOnConfirmation": "always",
+  "chat.notifyWindowOnResponseReceived": "always",
+  "chat.promptFilesLocations": {
+    "{{owlbear_path}}/share/prompts": true
+  },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.terminal.autoApprove": {
     "Test-Path": true,
@@ -51,6 +60,7 @@
   "chat.tools.terminal.backgroundNotifications": true,
   "chat.tools.terminal.blockDetectedFileWrites": "never",
   "chat.useCustomAgentHooks": true,
+  "chat.viewSessions.orientation": "stacked",
   "diffEditor.hideUnchangedRegions.enabled": false,
   "editor.defaultFormatter": "charliermarsh.ruff",
   "editor.formatOnPaste": false,
@@ -71,10 +81,14 @@
   "git.autorefresh": false,
   "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
-  "github.copilot.chat.anthropic.thinking.budgetTokens": 16000,
+  "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
+  "github.copilot.chat.cli.forkSessions.enabled": true,
+  "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.copilotMemory.enabled": false,
   "github.copilot.chat.executionSubagent.enabled": true,
   "github.copilot.chat.executionSubagent.toolCallLimit": 50,
+  "github.copilot.chat.githubMcpServer.enabled": true,
+  "github.copilot.chat.newWorkspaceCreation.enabled": false,
   "github.copilot.chat.searchSubagent.enabled": true,
   "github.copilot.chat.searchSubagent.toolCallLimit": 50,
   "github.copilot.chat.tools.memory.enabled": true,
@@ -86,7 +100,6 @@
   },
   "github.copilot.nextEditSuggestions.enabled": true,
   "github.copilot.nextEditSuggestions.extendedRange": true,
-  "mermaid-chat.enabled": true,
   "MS-CST-E.vscode-devskim.rules.enableBestPracticeSeverityRules": true,
   "MS-CST-E.vscode-devskim.rules.enableManualReviewSeverityRules": true,
   "python.analysis.aiCodeActions": {
@@ -103,7 +116,10 @@
   "python.analysis.typeCheckingMode": "standard",
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
+  "redhat.telemetry.enabled": false,
   "ruff.importStrategy": "useBundled",
+  "scm.defaultViewMode": "tree",
+  "scm.graph.pageOnScroll": false,
   "search.exclude": {
     ".owlbear/kanban/activity.jsonl": true,
     ".owlbear/kanban/archive/**": true,
@@ -114,8 +130,24 @@
     "**/.ruff_cache": true,
     "**/*.egg-info": true
   },
+  "sortJSON.contextMenu": {
+    "sortJSON": false,
+    "sortJSONAlphaNum": true,
+    "sortJSONAlphaNumReverse": false,
+    "sortJSONKeyLength": false,
+    "sortJSONKeyLengthReverse": false,
+    "sortJSONReverse": false,
+    "sortJSONType": false,
+    "sortJSONTypeReverse": false,
+    "sortJSONValues": false,
+    "sortJSONValuesReverse": false
+  },
   "task.problemMatchers.neverPrompt": true,
+  "telemetry.editStats.enabled": false,
+  "telemetry.feedback.enabled": false,
   "terminal.integrated.defaultProfile.windows": "PowerShell",
   "terminal.integrated.enableFileLinks": "off",
-  "terminal.integrated.wordSeparators": ""
+  "terminal.integrated.wordSeparators": "",
+  "workbench.settings.alwaysShowAdvancedSettings": true,
+  "workbench.startupEditor": "none"
 }
