@@ -83,3 +83,17 @@ store/knowledge/*.db
 
 # Audit log data
 store/audit/
+
+# --- OwlBear managed paths ---
+
+# Scratch / ad-hoc workspace
+.owlbear/scratch/*
+!.owlbear/scratch/.gitkeep
+!.owlbear/scratch/.instructions.md
+
+# Brief drafts (transient template directory)
+.owlbear/briefs/draft-new/
+
+# Knowledge and memory databases
+.owlbear/knowledge/*.db
+.owlbear/memory/*.db
