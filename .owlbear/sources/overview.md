@@ -71,6 +71,12 @@ External repos and resources studied during OwlBear development.
 | trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) on news/blog; corporate intranet quality predicted .65 — informed decision to use lxml custom converter instead | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
 | markdownify 1.2.2 (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown converter (MIT, BeautifulSoup-based) — evaluated as alternative; rejected: 3-4x more LOC vs trafilatura, no general boilerplate removal | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
 
+## board_config() Implementation (Task #806)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Pydantic v2 docs — Models | <https://docs.pydantic.dev/latest/concepts/models/> | `model_copy()` returns "a copy (by default, shallow copy)" — confirms deep=True needed for isolation | .owlbear/research/board-config-impl-806.md | 2026-04-11 |
+
 ## Edge Launcher + CDP Tests (Task #755)
 
 | Source | URL | What | Where Used | Date |
