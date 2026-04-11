@@ -695,3 +695,56 @@ class TestFromAC_HtmlToMarkdown:  # noqa: N801
         from owlbear_browser.cleaner import html_to_markdown  # type: ignore[import-not-found]
 
         assert html_to_markdown("   \n\t  ") == ""
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered edge cases (coverage gaps found during GREEN phase)
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Edge cases discovered during builder coverage analysis — coverage gaps in cleaner.py."""
+
+    def test_strip_noise_removes_role_complementary(self) -> None:
+        """strip_noise removes elements with role="complementary" (ARIA noise role)."""
+        from owlbear_browser.cleaner import strip_noise  # type: ignore[import-not-found]
+
+        html = "<html><body><p>Keep this</p><div role='complementary'>Sidebar</div></body></html>"
+        result = strip_noise(html)
+        assert "Sidebar" not in result
+        assert "Keep this" in result
+
+    def test_strip_noise_handles_html_comment(self) -> None:
+        """strip_noise handles HTML comments (non-string tags) without error."""
+        from owlbear_browser.cleaner import strip_noise  # type: ignore[import-not-found]
+
+        html = "<html><body><!-- hidden comment --><p>Visible</p></body></html>"
+        result = strip_noise(html)
+        assert "Visible" in result
+
+    def test_html_to_markdown_empty_table(self) -> None:
+        """html_to_markdown returns empty string for a <table> with no rows."""
+        from owlbear_browser.cleaner import html_to_markdown  # type: ignore[import-not-found]
+
+        result = html_to_markdown("<table></table>")
+        assert result == ""
+
+    def test_html_to_markdown_handles_comment_node(self) -> None:
+        """html_to_markdown processes HTML containing a comment node without error."""
+        from owlbear_browser.cleaner import html_to_markdown  # type: ignore[import-not-found]
+
+        html = "<p>Text</p><!-- a comment --><p>More</p>"
+        result = html_to_markdown(html)
+        assert "Text" in result
+        assert "More" in result
+
+    def test_clean_collapses_consecutive_blank_lines(self) -> None:
+        """_normalize_content() reduces consecutive blank lines to a single blank line."""
+        from owlbear_browser.cleaner import _normalize_content  # type: ignore[import-not-found]
+
+        text = "line1\n\n\nline2\n\n\n\nline3"
+        result = _normalize_content(text)
+        assert "\n\n\n" not in result
+        assert "line1" in result
+        assert "line2" in result
+        assert "line3" in result
