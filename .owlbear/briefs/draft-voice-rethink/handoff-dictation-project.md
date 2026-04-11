@@ -131,3 +131,22 @@ These are product-level questions the new project's ideation should resolve:
 This project is **not** an OwlBear feature. It's a standalone tool that may consume OwlBear services (MCP servers, knowledge base) in the future, but has no dependency on OwlBear.
 
 OwlBear's voice code (`serve/voice/`, orchestrator voice modules) will be removed as part of a separate cleanup task. Research docs from the voice development may be archived as reference for this project.
+
+## Research Archive
+
+The following OwlBear voice I/O research documents have been archived to `research-archive/` for reference by the new dictation project (moved from `.owlbear/research/`, task #746):
+
+| File | Content |
+|------|---------|
+| `voice-addon-architecture.md` | Voice addon architecture design |
+| `voice-addon-stt-moonshine.md` | Moonshine STT integration for voice addon |
+| `voice-channel-import.md` | Voice channel import/adapter patterns |
+| `voice-io.md` | Voice I/O subsystem overview |
+| `voice-panel-handbook.md` | Voice panel integration handbook |
+| `voice-process-manager.md` | Voice process manager design |
+| `voice-protocol-models.md` | Voice protocol data models |
+| `voice-stdio-protocol.md` | Voice stdio protocol specification |
+| `voice-tts-kokoro-pyttsx3.md` | TTS evaluation: Kokoro and pyttsx3 |
+| `moonshine-streaming.md` | Moonshine streaming transcription research |
+| `moonshine-vs-whisper.md` | Moonshine vs Whisper comparison |
+| `voicechannel-adapter.md` | VoiceChannel adapter design research (task #63) |
