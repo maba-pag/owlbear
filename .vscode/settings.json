@@ -1,4 +1,4 @@
-﻿{
+{
   "[chatagent]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
@@ -30,24 +30,24 @@
   "accessibility.chat.showCheckmarks": true,
   "chat.agent.maxRequests": 99999,
   "chat.agentFilesLocations": {
-    "share/agents": true
+    "../owlbear-main/share/agents": true
   },
   "chat.agentSkillsLocations": {
-    "share/skills": true
+    "../owlbear-main/share/skills": true
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
   "chat.hookFilesLocations": {
-    "share/hooks": true
+    "../owlbear-main/share/hooks": true
   },
   "chat.instructionsFilesLocations": {
-    "share/instructions": true
+    "../owlbear-main/share/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
   "chat.promptFilesLocations": {
-    "share/prompts": true
+    "../owlbear-main/share/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.terminal.autoApprove": {
@@ -79,7 +79,7 @@
     "**/__pycache__": true,
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,
-    "**/*.egg-info": true,
+    "**/*.egg-info": true
   },
   "git.autorefresh": false,
   "github.copilot.chat.agent.autoFix": false,
@@ -122,7 +122,6 @@
   "python.testing.pytestEnabled": true,
   "redhat.telemetry.enabled": false,
   "ruff.importStrategy": "useBundled",
-  "scm.countBadge": "off",
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
   "search.exclude": {
@@ -133,7 +132,7 @@
     "**/__pycache__": true,
     "**/.pytest_cache": true,
     "**/.ruff_cache": true,
-    "**/*.egg-info": true,
+    "**/*.egg-info": true
   },
   "sortJSON.contextMenu": {
     "sortJSON": false,
