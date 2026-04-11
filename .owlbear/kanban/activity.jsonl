@@ -10672,3 +10672,313 @@
 {"timestamp": "2026-04-11T10:54:25.270474+00:00", "action": "edit", "task_id": 799, "detail": "append_body"}
 {"timestamp": "2026-04-11T10:54:25.286142+00:00", "action": "release", "task_id": 799, "detail": "keen-glade"}
 {"timestamp": "2026-04-11T10:54:25.286142+00:00", "action": "move", "task_id": 799, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T11:07:34.031073+00:00", "action": "edit", "task_id": 763, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:07:34.045059+00:00", "action": "release", "task_id": 763, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:07:34.045059+00:00", "action": "move", "task_id": 763, "detail": "done -> archived"}
+{"timestamp": "2026-04-11T11:08:18.851811+00:00", "action": "claim", "task_id": 781, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:08:19.740166+00:00", "action": "claim", "task_id": 779, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:08:21.089744+00:00", "action": "claim", "task_id": 780, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:08:21.992993+00:00", "action": "claim", "task_id": 761, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:09:51.567247+00:00", "action": "edit", "task_id": 779, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:09:51.567247+00:00", "action": "release", "task_id": 779, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:09:51.583332+00:00", "action": "move", "task_id": 779, "detail": "backlog -> research"}
+{"timestamp": "2026-04-11T11:10:14.157798+00:00", "action": "edit", "task_id": 761, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:10:14.171598+00:00", "action": "release", "task_id": 761, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:10:14.179349+00:00", "action": "move", "task_id": 761, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:11:05.988513+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:11:05.988513+00:00", "action": "release", "task_id": 781, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:11:06.004632+00:00", "action": "move", "task_id": 781, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:12:11.855876+00:00", "action": "edit", "task_id": 780, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:12:11.874699+00:00", "action": "release", "task_id": 780, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:12:11.882216+00:00", "action": "move", "task_id": 780, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:12:45.704353+00:00", "action": "claim", "task_id": 782, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:12:47.042958+00:00", "action": "claim", "task_id": 783, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:12:48.385237+00:00", "action": "claim", "task_id": 784, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:12:53.300109+00:00", "action": "claim", "task_id": 785, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:13:19.530739+00:00", "action": "edit", "task_id": 784, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:13:19.545021+00:00", "action": "release", "task_id": 784, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:13:19.559861+00:00", "action": "move", "task_id": 784, "detail": "backlog -> research"}
+{"timestamp": "2026-04-11T11:15:46.526021+00:00", "action": "edit", "task_id": 782, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:15:46.540700+00:00", "action": "release", "task_id": 782, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:15:46.552357+00:00", "action": "move", "task_id": 782, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:16:22.067140+00:00", "action": "edit", "task_id": 783, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:16:22.079322+00:00", "action": "release", "task_id": 783, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:16:22.090482+00:00", "action": "move", "task_id": 783, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:19:55.300566+00:00", "action": "edit", "task_id": 785, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:19:55.311729+00:00", "action": "release", "task_id": 785, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:19:55.321749+00:00", "action": "move", "task_id": 785, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:20:31.996802+00:00", "action": "claim", "task_id": 788, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:20:33.392658+00:00", "action": "claim", "task_id": 791, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:20:33.434772+00:00", "action": "claim", "task_id": 789, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:20:33.871467+00:00", "action": "claim", "task_id": 792, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:22:41.407099+00:00", "action": "edit", "task_id": 789, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:22:41.419284+00:00", "action": "release", "task_id": 789, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:22:41.430444+00:00", "action": "move", "task_id": 789, "detail": "backlog -> research"}
+{"timestamp": "2026-04-11T11:23:16.945589+00:00", "action": "edit", "task_id": 788, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:23:16.961769+00:00", "action": "release", "task_id": 788, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:23:16.973973+00:00", "action": "move", "task_id": 788, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:23:55.636300+00:00", "action": "edit", "task_id": 792, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:23:55.648305+00:00", "action": "release", "task_id": 792, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:23:55.657455+00:00", "action": "move", "task_id": 792, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:25:28.606138+00:00", "action": "edit", "task_id": 791, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:25:28.625340+00:00", "action": "release", "task_id": 791, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:25:28.642569+00:00", "action": "move", "task_id": 791, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:26:04.371560+00:00", "action": "claim", "task_id": 797, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:26:08.223363+00:00", "action": "claim", "task_id": 798, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:26:14.109060+00:00", "action": "claim", "task_id": 818, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:26:25.667146+00:00", "action": "claim", "task_id": 817, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:30:20.289251+00:00", "action": "edit", "task_id": 817, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:30:20.302410+00:00", "action": "release", "task_id": 817, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:30:20.313596+00:00", "action": "move", "task_id": 817, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T11:30:54.658099+00:00", "action": "edit", "task_id": 797, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:30:54.676321+00:00", "action": "release", "task_id": 797, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:30:54.692541+00:00", "action": "move", "task_id": 797, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:31:12.867523+00:00", "action": "edit", "task_id": 818, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:31:12.877527+00:00", "action": "release", "task_id": 818, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:31:12.886211+00:00", "action": "move", "task_id": 818, "detail": "review -> in-progress"}
+{"timestamp": "2026-04-11T11:40:50.793257+00:00", "action": "create", "task_id": 827, "detail": "Tests \u2014 Config staleness fix in create_task"}
+{"timestamp": "2026-04-11T11:40:50.820920+00:00", "action": "create", "task_id": 828, "detail": "Impl \u2014 Config staleness fix in create_task"}
+{"timestamp": "2026-04-11T11:41:03.151407+00:00", "action": "create", "task_id": 829, "detail": "Tests \u2014 TaskSummary adoption in server.py list_tasks"}
+{"timestamp": "2026-04-11T11:41:03.179706+00:00", "action": "create", "task_id": 830, "detail": "Impl \u2014 TaskSummary adoption in server.py list_tasks"}
+{"timestamp": "2026-04-11T11:41:14.170519+00:00", "action": "create", "task_id": 831, "detail": "Tests \u2014 Remove legacy engine_models.py from mcp-kanban"}
+{"timestamp": "2026-04-11T11:41:14.278057+00:00", "action": "create", "task_id": 832, "detail": "Impl \u2014 Remove legacy engine_models.py from mcp-kanban"}
+{"timestamp": "2026-04-11T11:41:58.385758+00:00", "action": "edit", "task_id": 798, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:41:58.395765+00:00", "action": "release", "task_id": 798, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:41:58.404433+00:00", "action": "move", "task_id": 798, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:42:43.684509+00:00", "action": "claim", "task_id": 756, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:42:51.594241+00:00", "action": "claim", "task_id": 748, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:43:03.473363+00:00", "action": "claim", "task_id": 746, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:43:09.799008+00:00", "action": "claim", "task_id": 745, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T11:44:31.082958+00:00", "action": "edit", "task_id": 745, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:44:31.093954+00:00", "action": "release", "task_id": 745, "detail": "thin-goat"}
+{"timestamp": "2026-04-11T11:44:31.103122+00:00", "action": "move", "task_id": 745, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T11:49:21.350923+00:00", "action": "edit", "task_id": 756, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:49:21.359923+00:00", "action": "block", "task_id": 756, "detail": "Quality-Runner execution failed \u2014 WMI/logfire deadlock (known environment issue). Cannot independently verify test execution. Per w-code-review fallback: block until QR is available."}
+{"timestamp": "2026-04-11T11:49:21.369094+00:00", "action": "release", "task_id": 756, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:50:09.129021+00:00", "action": "edit", "task_id": 748, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:50:09.141181+00:00", "action": "release", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:50:09.152328+00:00", "action": "move", "task_id": 748, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T11:52:33.787332+00:00", "action": "edit", "task_id": 746, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:52:33.797501+00:00", "action": "release", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:52:33.808506+00:00", "action": "move", "task_id": 746, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T11:54:29.614791+00:00", "action": "claim", "task_id": 745, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:54:49.719204+00:00", "action": "claim", "task_id": 799, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:55:07.560185+00:00", "action": "claim", "task_id": 753, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:55:18.002160+00:00", "action": "claim", "task_id": 817, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:17.598044+00:00", "action": "edit", "task_id": 753, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:56:17.613265+00:00", "action": "block", "task_id": 753, "detail": "User-action required: physically execute CDP spike script on corporate laptop, observe EDR/DLP reactions, record go/no-go decision. Add `## Action Completed` section to task body when done."}
+{"timestamp": "2026-04-11T11:56:17.626967+00:00", "action": "release", "task_id": 753, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:19.453880+00:00", "action": "claim", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:23.979034+00:00", "action": "edit", "task_id": 746, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:56:23.997256+00:00", "action": "release", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:24.012260+00:00", "action": "move", "task_id": 746, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T11:56:28.701443+00:00", "action": "claim", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:28.718598+00:00", "action": "claim", "task_id": 749, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:48.701655+00:00", "action": "edit", "task_id": 748, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:56:48.710785+00:00", "action": "release", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:48.719784+00:00", "action": "move", "task_id": 748, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T11:56:53.384802+00:00", "action": "edit", "task_id": 749, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:56:53.397002+00:00", "action": "release", "task_id": 749, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:56:53.408002+00:00", "action": "move", "task_id": 749, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T11:57:08.308768+00:00", "action": "claim", "task_id": 749, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:57:11.908933+00:00", "action": "edit", "task_id": 749, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:57:11.919934+00:00", "action": "release", "task_id": 749, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:57:11.932126+00:00", "action": "move", "task_id": 749, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T11:57:18.454927+00:00", "action": "edit", "task_id": 745, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:57:18.471107+00:00", "action": "release", "task_id": 745, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:57:18.480107+00:00", "action": "move", "task_id": 745, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T11:57:33.780493+00:00", "action": "edit", "task_id": 817, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:57:33.791662+00:00", "action": "release", "task_id": 817, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:57:33.800363+00:00", "action": "move", "task_id": 817, "detail": "docs -> done"}
+{"timestamp": "2026-04-11T11:59:12.226711+00:00", "action": "edit", "task_id": 799, "detail": "append_body"}
+{"timestamp": "2026-04-11T11:59:12.235712+00:00", "action": "release", "task_id": 799, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:59:12.243950+00:00", "action": "move", "task_id": 799, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T11:59:32.044683+00:00", "action": "claim", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:59:46.513675+00:00", "action": "claim", "task_id": 828, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T11:59:47.433881+00:00", "action": "claim", "task_id": 759, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:00:17.075160+00:00", "action": "edit", "task_id": 746, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:00:17.088677+00:00", "action": "release", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:00:17.100378+00:00", "action": "move", "task_id": 746, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T12:02:15.339049+00:00", "action": "edit", "task_id": 759, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:02:15.350049+00:00", "action": "release", "task_id": 759, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:02:15.360725+00:00", "action": "move", "task_id": 759, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T12:05:15.763421+00:00", "action": "edit", "task_id": 828, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:05:15.772420+00:00", "action": "release", "task_id": 828, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:05:15.780596+00:00", "action": "move", "task_id": 828, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T12:05:34.981316+00:00", "action": "claim", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:05:51.974994+00:00", "action": "claim", "task_id": 831, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:06:33.727419+00:00", "action": "edit", "task_id": 748, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:06:33.738420+00:00", "action": "release", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:06:33.748582+00:00", "action": "move", "task_id": 748, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T12:10:20.552651+00:00", "action": "edit", "task_id": 831, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:10:20.568815+00:00", "action": "release", "task_id": 831, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:10:20.581816+00:00", "action": "move", "task_id": 831, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T12:10:52.232138+00:00", "action": "claim", "task_id": 781, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:11:05.088968+00:00", "action": "claim", "task_id": 832, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:11:10.275800+00:00", "action": "claim", "task_id": 761, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:11:23.033484+00:00", "action": "edit", "task_id": 761, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:11:23.046664+00:00", "action": "release", "task_id": 761, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:11:23.058665+00:00", "action": "move", "task_id": 761, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:11:42.331653+00:00", "action": "claim", "task_id": 780, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:11:48.188061+00:00", "action": "edit", "task_id": 780, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:11:48.197271+00:00", "action": "release", "task_id": 780, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:11:48.206271+00:00", "action": "move", "task_id": 780, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:14:43.383298+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:14:43.392320+00:00", "action": "release", "task_id": 781, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:14:43.399454+00:00", "action": "move", "task_id": 781, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:14:59.005771+00:00", "action": "edit", "task_id": 832, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:14:59.014940+00:00", "action": "release", "task_id": 832, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:14:59.022520+00:00", "action": "move", "task_id": 832, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T12:15:18.206853+00:00", "action": "claim", "task_id": 783, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:15:18.971312+00:00", "action": "claim", "task_id": 785, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:15:19.542840+00:00", "action": "claim", "task_id": 782, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:15:20.057188+00:00", "action": "claim", "task_id": 788, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:17:58.394082+00:00", "action": "edit", "task_id": 783, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:17:58.405224+00:00", "action": "release", "task_id": 783, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:17:58.415387+00:00", "action": "move", "task_id": 783, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:18:23.439612+00:00", "action": "edit", "task_id": 788, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:18:23.447631+00:00", "action": "release", "task_id": 788, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:18:23.457383+00:00", "action": "move", "task_id": 788, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:25:22.769820+00:00", "action": "edit", "task_id": 785, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:25:22.781996+00:00", "action": "release", "task_id": 785, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:25:22.793150+00:00", "action": "move", "task_id": 785, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:26:35.911749+00:00", "action": "edit", "task_id": 782, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:26:35.922411+00:00", "action": "release", "task_id": 782, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:26:35.930565+00:00", "action": "move", "task_id": 782, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:27:00.443184+00:00", "action": "claim", "task_id": 792, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:27:00.508938+00:00", "action": "claim", "task_id": 791, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:27:02.957887+00:00", "action": "claim", "task_id": 797, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:29:30.936489+00:00", "action": "edit", "task_id": 791, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:29:30.945488+00:00", "action": "release", "task_id": 791, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:29:30.953641+00:00", "action": "move", "task_id": 791, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:29:35.072161+00:00", "action": "edit", "task_id": 792, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:29:35.084838+00:00", "action": "release", "task_id": 792, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:29:35.093998+00:00", "action": "move", "task_id": 792, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:30:12.396179+00:00", "action": "edit", "task_id": 797, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:30:12.408345+00:00", "action": "release", "task_id": 797, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:30:12.418366+00:00", "action": "move", "task_id": 797, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:30:58.438631+00:00", "action": "claim", "task_id": 790, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:31:08.585561+00:00", "action": "edit", "task_id": 790, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:31:08.594718+00:00", "action": "release", "task_id": 790, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:31:08.603711+00:00", "action": "move", "task_id": 790, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:33:24.326213+00:00", "action": "claim", "task_id": 760, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:33:28.440825+00:00", "action": "claim", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:33:36.264412+00:00", "action": "claim", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:33:41.443711+00:00", "action": "claim", "task_id": 817, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:33:52.994989+00:00", "action": "edit", "task_id": 748, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:33:53.003130+00:00", "action": "release", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:33:53.013129+00:00", "action": "move", "task_id": 748, "detail": "docs -> review"}
+{"timestamp": "2026-04-11T12:33:57.350183+00:00", "action": "edit", "task_id": 746, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:33:57.365421+00:00", "action": "release", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:33:57.381422+00:00", "action": "move", "task_id": 746, "detail": "docs -> review"}
+{"timestamp": "2026-04-11T12:35:44.037434+00:00", "action": "edit", "task_id": 760, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:35:44.061645+00:00", "action": "release", "task_id": 760, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:35:44.078370+00:00", "action": "move", "task_id": 760, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T12:42:39.974627+00:00", "action": "edit", "task_id": 817, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:42:39.984770+00:00", "action": "release", "task_id": 817, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:42:39.992769+00:00", "action": "move", "task_id": 817, "detail": "done -> archived"}
+{"timestamp": "2026-04-11T12:43:51.208679+00:00", "action": "claim", "task_id": 761, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:44:03.886234+00:00", "action": "edit", "task_id": 761, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:44:03.899419+00:00", "action": "release", "task_id": 761, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:44:03.910418+00:00", "action": "move", "task_id": 761, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T12:44:26.908356+00:00", "action": "claim", "task_id": 799, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:44:27.454442+00:00", "action": "claim", "task_id": 759, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:44:36.186657+00:00", "action": "claim", "task_id": 780, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:45:05.374904+00:00", "action": "claim", "task_id": 745, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:45:19.611587+00:00", "action": "edit", "task_id": 780, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:45:19.628750+00:00", "action": "release", "task_id": 780, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:45:19.641749+00:00", "action": "move", "task_id": 780, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T12:46:09.575772+00:00", "action": "edit", "task_id": 759, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:46:09.588939+00:00", "action": "release", "task_id": 759, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:46:09.602107+00:00", "action": "move", "task_id": 759, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:49:45.680772+00:00", "action": "edit", "task_id": 745, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:49:45.691776+00:00", "action": "release", "task_id": 745, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:49:45.700897+00:00", "action": "move", "task_id": 745, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T12:50:23.950847+00:00", "action": "edit", "task_id": 799, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:50:23.959023+00:00", "action": "release", "task_id": 799, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:50:23.969023+00:00", "action": "move", "task_id": 799, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:50:46.099064+00:00", "action": "claim", "task_id": 781, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:50:49.231132+00:00", "action": "claim", "task_id": 828, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:50:50.791628+00:00", "action": "claim", "task_id": 831, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:51:22.181503+00:00", "action": "claim", "task_id": 798, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:51:23.681707+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:51:23.695887+00:00", "action": "release", "task_id": 781, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:51:23.708176+00:00", "action": "move", "task_id": 781, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T12:51:49.584194+00:00", "action": "edit", "task_id": 798, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:51:49.597418+00:00", "action": "release", "task_id": 798, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:51:49.609421+00:00", "action": "move", "task_id": 798, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T12:57:43.354138+00:00", "action": "edit", "task_id": 828, "detail": "append_body"}
+{"timestamp": "2026-04-11T12:57:43.371340+00:00", "action": "release", "task_id": 828, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T12:57:43.385555+00:00", "action": "move", "task_id": 828, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T13:03:38.661774+00:00", "action": "edit", "task_id": 831, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:03:38.679971+00:00", "action": "release", "task_id": 831, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:03:38.694179+00:00", "action": "move", "task_id": 831, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T13:03:57.405337+00:00", "action": "claim", "task_id": 782, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:03:59.762225+00:00", "action": "claim", "task_id": 832, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:05:01.139896+00:00", "action": "edit", "task_id": 782, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:05:01.153412+00:00", "action": "release", "task_id": 782, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:05:01.163588+00:00", "action": "move", "task_id": 782, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T13:15:17.325621+00:00", "action": "edit", "task_id": 832, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:15:17.334783+00:00", "action": "release", "task_id": 832, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:15:17.343782+00:00", "action": "move", "task_id": 832, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-11T13:16:18.452026+00:00", "action": "claim", "task_id": 760, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:16:19.482715+00:00", "action": "claim", "task_id": 762, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:16:32.110784+00:00", "action": "claim", "task_id": 745, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:17:58.539962+00:00", "action": "edit", "task_id": 745, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:17:58.552119+00:00", "action": "release", "task_id": 745, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:17:58.561202+00:00", "action": "move", "task_id": 745, "detail": "docs -> done"}
+{"timestamp": "2026-04-11T13:18:37.806059+00:00", "action": "edit", "task_id": 760, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:18:37.815061+00:00", "action": "release", "task_id": 760, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:18:37.823234+00:00", "action": "move", "task_id": 760, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T13:19:06.667661+00:00", "action": "claim", "task_id": 799, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:19:15.118724+00:00", "action": "edit", "task_id": 762, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:19:15.133383+00:00", "action": "release", "task_id": 762, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:19:15.143519+00:00", "action": "move", "task_id": 762, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T13:19:31.214955+00:00", "action": "edit", "task_id": 799, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:19:31.223968+00:00", "action": "release", "task_id": 799, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:19:31.230148+00:00", "action": "move", "task_id": 799, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T13:19:47.274549+00:00", "action": "claim", "task_id": 759, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:20:07.196657+00:00", "action": "edit", "task_id": 759, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:20:07.208659+00:00", "action": "release", "task_id": 759, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:20:07.216815+00:00", "action": "move", "task_id": 759, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T13:20:31.643054+00:00", "action": "claim", "task_id": 783, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:20:47.552153+00:00", "action": "claim", "task_id": 761, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:20:57.066465+00:00", "action": "claim", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:22:21.628641+00:00", "action": "edit", "task_id": 761, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:22:21.643842+00:00", "action": "release", "task_id": 761, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:22:21.655036+00:00", "action": "move", "task_id": 761, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T13:22:27.212330+00:00", "action": "claim", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:22:45.376802+00:00", "action": "edit", "task_id": 746, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:22:45.386801+00:00", "action": "release", "task_id": 746, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:22:45.396935+00:00", "action": "move", "task_id": 746, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T13:22:47.512466+00:00", "action": "edit", "task_id": 748, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:22:47.521623+00:00", "action": "release", "task_id": 748, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:22:47.531138+00:00", "action": "move", "task_id": 748, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T13:24:26.743791+00:00", "action": "edit", "task_id": 783, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:24:26.752302+00:00", "action": "release", "task_id": 783, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:24:26.761426+00:00", "action": "move", "task_id": 783, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T13:24:52.566467+00:00", "action": "claim", "task_id": 781, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:24:55.566404+00:00", "action": "claim", "task_id": 785, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:24:57.292774+00:00", "action": "claim", "task_id": 782, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:25:03.914277+00:00", "action": "claim", "task_id": 780, "detail": "iron-hind"}
+{"timestamp": "2026-04-11T13:28:14.227021+00:00", "action": "edit", "task_id": 782, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:28:14.236205+00:00", "action": "block", "task_id": 782, "detail": "Quality-Runner pytest infrastructure failure \u2014 cannot verify tests independently"}
+{"timestamp": "2026-04-11T13:28:14.244204+00:00", "action": "release", "task_id": 782, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:28:36.262063+00:00", "action": "edit", "task_id": 785, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:28:36.271574+00:00", "action": "release", "task_id": 785, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:28:36.279726+00:00", "action": "move", "task_id": 785, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-11T13:28:45.481254+00:00", "action": "edit", "task_id": 780, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:28:45.494424+00:00", "action": "release", "task_id": 780, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:28:45.502423+00:00", "action": "move", "task_id": 780, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T13:30:03.837457+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:30:03.848616+00:00", "action": "release", "task_id": 781, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:30:03.857609+00:00", "action": "move", "task_id": 781, "detail": "review -> docs"}
+{"timestamp": "2026-04-11T13:31:17.833685+00:00", "action": "claim", "task_id": 764, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:31:34.835240+00:00", "action": "claim", "task_id": 745, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:31:40.861666+00:00", "action": "claim", "task_id": 762, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:32:30.630816+00:00", "action": "edit", "task_id": 762, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:32:30.647548+00:00", "action": "release", "task_id": 762, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:32:30.661274+00:00", "action": "move", "task_id": 762, "detail": "backlog -> research"}
+{"timestamp": "2026-04-11T13:34:39.606853+00:00", "action": "edit", "task_id": 764, "detail": "append_body"}
+{"timestamp": "2026-04-11T13:34:39.617037+00:00", "action": "release", "task_id": 764, "detail": "rough-rock"}
+{"timestamp": "2026-04-11T13:34:39.624039+00:00", "action": "move", "task_id": 764, "detail": "research -> backlog"}

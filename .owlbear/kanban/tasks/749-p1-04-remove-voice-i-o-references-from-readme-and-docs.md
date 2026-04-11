@@ -1,10 +1,10 @@
 ---
 id: 749
 title: 'P1-04: Remove voice I/O references from README and docs'
-status: todo
+status: review
 priority: important
 created: '2026-04-10T10:36:47.149977+00:00'
-updated: '2026-04-10T10:36:47.149977+00:00'
+updated: '2026-04-11T11:57:11.927132+00:00'
 tags:
 - phase-1
 - type:docs
@@ -32,3 +32,14 @@ The README.md directory layout table includes a `serve/voice/` row that must be 
 ## Files
 - Edit: `README.md`
 - Check: `README-consumer.md`
+
+[[2026-04-11]]
+## Builder Notes
+- Non-impl pass-through — all AC already satisfied by #747 builder
+- AC1: `serve/voice/` row absent from README.md (confirmed — zero matches for "serve/voice")
+- AC2: No other voice I/O references in README.md (confirmed — zero matches for "voice")
+- AC3: README-consumer.md has zero voice references (confirmed)
+- AC4: Ideation domain voices untouched (only `share/agents/` and `share/skills/` contain those, never edited)
+- No files changed
+[[2026-04-11]]
+Verification pass — all AC satisfied (already noted in Builder Notes above).
