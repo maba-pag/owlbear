@@ -2,7 +2,7 @@
 
 Creates all relational tables required by the knowledge graph: documents,
 entities, edges, chunks, document_status, knowledge_sources, bookmarks,
-consolidations, and a schema version tracker.
+consolidations, source_pages, and a schema version tracker.
 Calling ``init_db`` multiple times is safe (idempotent).
 """
 
