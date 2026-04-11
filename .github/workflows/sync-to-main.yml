@@ -37,10 +37,12 @@ jobs:
         run: |
           failed=0
           for p in \
-            share serve seed setup \
-            pyproject.toml uv.lock .python-version .gitignore SECURITY.md \
-            README-consumer.md \
-            .github .mega-linter.yml .editorconfig .markdownlint.json; do
+            .github .vscode seed serve setup share .editorconfig \
+            .gitattributes .gitignore .gitleaks.toml .gitleaksignore \
+            .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
+            .mega-linter.yml .pre-commit-config.yaml .python-version \
+            Owlbear.code-profile pyproject.toml SECURITY.md uv.lock \
+            README-consumer.md; do
             if [ ! -e "$p" ]; then
               echo "MISSING: $p"
               failed=1
@@ -77,11 +79,12 @@ jobs:
           git rm -rf . --quiet || true
           # Restore include-list files from dev
           git checkout dev -- \
-            share serve seed setup \
-            pyproject.toml uv.lock .python-version .gitignore SECURITY.md \
-            .github .mega-linter.yml .editorconfig .markdownlint.json
-          # README-consumer.md on dev becomes README.md on main
-          git checkout dev -- README-consumer.md
+            .github .vscode seed serve setup share .editorconfig \
+            .gitattributes .gitignore .gitleaks.toml .gitleaksignore \
+            .markdownlint-cli2.jsonc .markdownlint.json .markdownlintignore \
+            .mega-linter.yml .pre-commit-config.yaml .python-version \
+            Owlbear.code-profile pyproject.toml SECURITY.md uv.lock \
+            README-consumer.md
           git mv README-consumer.md README.md
 
       - name: Detect changes
