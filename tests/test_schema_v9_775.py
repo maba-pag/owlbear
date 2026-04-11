@@ -6,14 +6,13 @@ by the fresh-init tests in #754 and #757.
 AC mapping:
   AC1  - Migration runs without error on a v8 baseline database
   AC2  - source_pages table has all required columns after migration
-         (also verifies idx_source_pages_scope index - FAILS until #785)
+         (also verifies idx_source_pages_scope index)
   AC3  - documents gains source_id column; legacy rows have NULL
   AC4  - schema_version reports version = 9 after migration
 
 Note: The _migrate_v8_to_v9() implementation pre-exists this test task.
-      All AC-derived migration-path tests pass (regression coverage) EXCEPT
-      test_source_pages_scope_index_exists_after_migration, which fails because
-      source_pages is not yet in _SCOPE_TABLES (the sole remaining change in #785).
+      All AC-derived migration-path tests pass (regression coverage).
+      idx_source_pages_scope passes because #785 landed source_pages in _SCOPE_TABLES.
 """
 
 from __future__ import annotations
@@ -154,17 +153,14 @@ class TestFromAC_SourcePagesAfterMigration:
         assert row is not None
 
     def test_source_pages_scope_index_exists_after_migration(self) -> None:
-        """idx_source_pages_scope exists after migration (requires source_pages in _SCOPE_TABLES).
-
-        FAILS until #785 adds source_pages to _SCOPE_TABLES.
-        """
+        """idx_source_pages_scope exists after migration (source_pages in _SCOPE_TABLES since #785)."""
         conn = _make_v8_db()
         init_db(conn)
         row = conn.execute(
             "SELECT name FROM sqlite_master"
             " WHERE type='index' AND name='idx_source_pages_scope'"
         ).fetchone()
-        assert row is not None  # fails: source_pages not yet in _SCOPE_TABLES
+        assert row is not None
 
 
 # ===========================================================================
