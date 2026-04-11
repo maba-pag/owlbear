@@ -24,6 +24,10 @@ downloads/
 MANIFEST
 artifacts/
 
+# Databases
+*.db-shm
+*.db-wal
+
 # Testing and coverage
 .*cache
 .coverage
