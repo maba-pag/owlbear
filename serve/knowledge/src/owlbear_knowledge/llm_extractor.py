@@ -27,6 +27,26 @@ Entity types (entity_type): {_ENTITY_VALUES}
 
 Relation types (relation): {_RELATION_VALUES}
 
+Corporate entity classification guidance — for content extracted from corporate documents,
+policies, and specifications, prefer specific types over the generic CONCEPT type:
+- **requirement**: Specifies what must be done or satisfied — distinct from a concept (which
+  defines a general idea); use requirement rather than concept for mandated behaviors,
+  compliance items, or stated obligations.
+- **solution**: A technical or process-level response to a specific requirement or problem —
+  not a generic concept but an actionable, problem-scoped answer.
+- **procedure**: Step-by-step operational instructions for performing a task — prescriptive,
+  not conceptual; use procedure for how-to guides and runbooks.
+- **policy**: An organizational rule or governance directive — use policy rather than concept
+  when the text enforces normative behavior or sets organizational expectations.
+- **standard**: A normative specification or compliance baseline — unlike a concept, a
+  standard is authoritative, often versioned, and establishes acceptance criteria.
+
+Corporate relation type guidance:
+- **governs**: Use when a policy or standard entity governs (controls or constrains) another
+  entity — e.g., a security policy governs a procedure.
+- **supersedes_version**: Use when a document or standard supersedes_version a prior version
+  of itself — e.g., Policy v2.0 supersedes_version Policy v1.0.
+
 Return your findings as JSON matching the ExtractionResult schema.
 
 Each entity needs:
