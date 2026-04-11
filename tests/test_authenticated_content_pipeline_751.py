@@ -441,23 +441,14 @@ class TestFromAC_AuthenticatedContentSchema:
         }
         assert "url" in cols
 
-    def test_source_pages_has_approval_state_column(self) -> None:
-        """source_pages table tracks approval_state (discovered/approved/rejected)."""
+    def test_source_pages_has_status_column(self) -> None:
+        """source_pages table has a unified status column."""
         conn = self._make_conn()
         cols = {
             row[1]
             for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()
         }
-        assert "approval_state" in cols
-
-    def test_source_pages_has_extraction_status_column(self) -> None:
-        """source_pages table tracks extraction_status (pending/ingested/stale)."""
-        conn = self._make_conn()
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()
-        }
-        assert "extraction_status" in cols
+        assert "status" in cols
 
     def test_documents_table_has_source_id_column(self) -> None:
         """documents table gains a source_id column in v9 (enables cascade delete)."""
