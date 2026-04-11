@@ -12,6 +12,8 @@ from pydantic import BaseModel, ConfigDict
 from owlbear_knowledge.content_safety import should_wrap, wrap_untrusted_content
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from owlbear_knowledge.chunker import TextChunker
     from owlbear_knowledge.extractor import EntityExtractor
     from owlbear_knowledge.intake import IntakeResult
@@ -128,7 +130,13 @@ class IngestPipeline:
             status="ok",
         )
 
-    async def ingest(self, intake: IntakeResult, *, scope: str = "global") -> IngestResult:
+    async def ingest(
+        self,
+        intake: IntakeResult,
+        *,
+        scope: str = "global",
+        content_cleaner: Callable[[str], str] | None = None,
+    ) -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
 
         Untrusted-source content (determined by
@@ -141,6 +149,10 @@ class IngestPipeline:
         Args:
             intake: Content to ingest, as produced by read_file/read_url/read_text.
             scope: Scope tag applied to all stored objects.  Defaults to ``'global'``.
+            content_cleaner: Optional callable applied to raw content before hashing.
+                When provided, delta detection compares hashes of the *cleaned* output
+                rather than the raw content, so cosmetic HTML changes do not trigger
+                unnecessary re-ingestion.
 
         Returns:
             IngestResult with status: ok | skipped | cancelled | failed.
@@ -156,8 +168,9 @@ class IngestPipeline:
                     status="cancelled",
                 )
 
+            content_for_hash = content_cleaner(intake.content) if content_cleaner is not None else intake.content
             changed, existing_id = self._docs.check_content_changed(  # type: ignore[union-attr]
-                intake.source, intake.content, scope
+                intake.source, content_for_hash, scope
             )
             if not changed:
                 return IngestResult(
@@ -203,7 +216,8 @@ class IngestPipeline:
                 document_id=doc_id,
                 chunk_ids=chunk_ids,
             )
-            self._docs.update_content_hash(doc_id, intake.content)  # type: ignore[union-attr]
+            self._docs.set_status(doc_id, "ok", source=intake.source, scope=scope)  # type: ignore[union-attr]
+            self._docs.update_content_hash(doc_id, content_for_hash)  # type: ignore[union-attr]
 
         except Exception:
             logger.exception("ingest failed for doc_id=%s", doc_id)

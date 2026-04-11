@@ -37,16 +37,20 @@ class DocumentStatus(BaseModel):
 
 
 def compute_content_hash(content: str) -> str:
-    """Return the SHA-256 hex digest of *content* after stripping whitespace.
+    """Return the SHA-256 hex digest of *content* after normalizing whitespace.
+
+    Leading/trailing whitespace is stripped and internal runs of whitespace are
+    collapsed to a single space so cosmetic differences do not produce false
+    positives in delta detection.
 
     Args:
-        content: Raw document text. Leading/trailing whitespace is stripped
-            before hashing so cosmetic differences do not produce false positives.
+        content: Raw document text.
 
     Returns:
         str: 64-character lowercase hex digest.
     """
-    return hashlib.sha256(content.strip().encode()).hexdigest()
+    normalized = " ".join(content.split())
+    return hashlib.sha256(normalized.encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------
