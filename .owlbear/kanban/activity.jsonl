@@ -10625,3 +10625,50 @@
 {"timestamp": "2026-04-10T21:23:09.145293+00:00", "action": "create", "task_id": 824, "detail": "Create dispatch.py with pick_dispatchable()"}
 {"timestamp": "2026-04-10T21:23:15.057086+00:00", "action": "create", "task_id": 825, "detail": "Tests \u2014 Server pick_tasks thin wrapper"}
 {"timestamp": "2026-04-10T21:23:21.126887+00:00", "action": "create", "task_id": 826, "detail": "Slim server pick_tasks to thin wrapper"}
+{"timestamp": "2026-04-11T04:07:45.960572+00:00", "action": "edit", "task_id": 817, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:07:45.969761+00:00", "action": "release", "task_id": 817, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:07:45.978746+00:00", "action": "move", "task_id": 817, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T04:08:01.878486+00:00", "action": "claim", "task_id": 817, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:08:05.821910+00:00", "action": "edit", "task_id": 817, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:08:05.833145+00:00", "action": "release", "task_id": 817, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:08:05.840145+00:00", "action": "move", "task_id": 817, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T04:08:19.669274+00:00", "action": "move", "task_id": 817, "detail": "todo -> review"}
+{"timestamp": "2026-04-11T04:08:49.574345+00:00", "action": "claim", "task_id": 818, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:08:52.534141+00:00", "action": "claim", "task_id": 785, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:09:32.589870+00:00", "action": "claim", "task_id": 790, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:12:54.357489+00:00", "action": "edit", "task_id": 790, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:12:54.371668+00:00", "action": "release", "task_id": 790, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:12:54.386880+00:00", "action": "move", "task_id": 790, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-11T04:15:16.373786+00:00", "action": "edit", "task_id": 785, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:15:16.383785+00:00", "action": "release", "task_id": 785, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:15:16.392920+00:00", "action": "move", "task_id": 785, "detail": "backlog -> backlog"}
+{"timestamp": "2026-04-11T04:30:08.724845+00:00", "action": "edit", "task_id": 818, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:30:08.776108+00:00", "action": "release", "task_id": 818, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:30:08.788274+00:00", "action": "move", "task_id": 818, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T04:30:33.267665+00:00", "action": "move", "task_id": 818, "detail": "backlog -> review"}
+{"timestamp": "2026-04-11T04:30:57.994565+00:00", "action": "claim", "task_id": 756, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:31:14.916224+00:00", "action": "claim", "task_id": 763, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:31:19.344190+00:00", "action": "claim", "task_id": 761, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:32:25.858315+00:00", "action": "edit", "task_id": 761, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:32:25.867480+00:00", "action": "release", "task_id": 761, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:32:25.875481+00:00", "action": "move", "task_id": 761, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T04:33:20.341359+00:00", "action": "edit", "task_id": 763, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:33:20.352358+00:00", "action": "release", "task_id": 763, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:33:20.363556+00:00", "action": "move", "task_id": 763, "detail": "research -> done"}
+{"timestamp": "2026-04-11T04:50:05.850794+00:00", "action": "edit", "task_id": 756, "detail": "append_body"}
+{"timestamp": "2026-04-11T04:50:05.859794+00:00", "action": "release", "task_id": 756, "detail": "odd-twig"}
+{"timestamp": "2026-04-11T04:50:05.865971+00:00", "action": "move", "task_id": 756, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T04:50:17.130442+00:00", "action": "move", "task_id": 756, "detail": "backlog -> review"}
+{"timestamp": "2026-04-11T10:49:18.925915+00:00", "action": "claim", "task_id": 753, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T10:49:37.014213+00:00", "action": "claim", "task_id": 759, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T10:49:37.045503+00:00", "action": "claim", "task_id": 799, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T10:49:46.135199+00:00", "action": "claim", "task_id": 763, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T10:53:11.275292+00:00", "action": "edit", "task_id": 753, "detail": "append_body"}
+{"timestamp": "2026-04-11T10:53:11.289567+00:00", "action": "release", "task_id": 753, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T10:53:11.300381+00:00", "action": "move", "task_id": 753, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T10:53:58.074933+00:00", "action": "edit", "task_id": 759, "detail": "append_body"}
+{"timestamp": "2026-04-11T10:53:58.074933+00:00", "action": "release", "task_id": 759, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T10:53:58.090783+00:00", "action": "move", "task_id": 759, "detail": "research -> backlog"}
+{"timestamp": "2026-04-11T10:54:25.270474+00:00", "action": "edit", "task_id": 799, "detail": "append_body"}
+{"timestamp": "2026-04-11T10:54:25.286142+00:00", "action": "release", "task_id": 799, "detail": "keen-glade"}
+{"timestamp": "2026-04-11T10:54:25.286142+00:00", "action": "move", "task_id": 799, "detail": "research -> backlog"}
