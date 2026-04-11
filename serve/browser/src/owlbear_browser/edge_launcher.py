@@ -84,6 +84,10 @@ class EdgeCDPLauncher:
         if self._process is not None:
             with contextlib.suppress(OSError):
                 self._process.terminate()
-            with contextlib.suppress(subprocess.TimeoutExpired, OSError):
+            try:
                 self._process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+            except OSError:
+                pass
             self._process = None
