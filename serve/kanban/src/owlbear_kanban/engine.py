@@ -278,6 +278,9 @@ class KanbanEngine:
 
         config.next_id = task_id + 1
         save_config(self._kanban_dir, config)
+        self._config = config
+        self._tasks_dir = self._kanban_dir / self._config.tasks_dir
+        self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME
 
         log_activity(self._activity_log_path, "create", record.id, record.title)
         self._revision += 1
