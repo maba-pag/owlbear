@@ -1,7 +1,8 @@
 """Engine-internal Pydantic models for the native kanban engine.
 
 BoardConfig — schema for .owlbear/kanban/config.yml
-TaskRecord  — schema for task file frontmatter + markdown body
+Task        — schema for task file frontmatter + markdown body
+TaskRecord  — backward-compatibility alias for Task
 
 These are distinct from the MCP-boundary KanbanTask in models.py.
 Timestamps are stored as plain strings to avoid Go nanosecond → Python
@@ -55,7 +56,7 @@ class BoardConfig(BaseModel):
     claim_timeout: str
 
 
-class TaskRecord(BaseModel):
+class Task(BaseModel):
     """Schema for a kanban task file — frontmatter fields plus markdown body.
 
     Timestamp fields (created, updated, claimed_at) are stored as ``str``
@@ -84,3 +85,7 @@ class TaskRecord(BaseModel):
     block_reason: str | None = None
     claimed_by: str | None = None
     claimed_at: str | None = None
+
+
+# Backward-compatibility alias — consumers importing TaskRecord continue to work.
+TaskRecord = Task
