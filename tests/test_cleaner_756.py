@@ -244,3 +244,198 @@ class TestFromAC_IdempotentOutput:
             f"  html_a → {clean(html_a)!r}\n"
             f"  html_b → {clean(html_b)!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC1 (gap): html_to_markdown() conversion — headings, links, lists, tables
+# covered by the public API contract  (requested by review #759)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MarkdownConversion:
+    """AC1: html_to_markdown() converts headings, links, lists, and tables to markdown."""
+
+    # --- headings -----------------------------------------------------------
+
+    def test_html_to_markdown_h1(self) -> None:
+        """<h1> is converted to a level-1 markdown heading (# ...)."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<h1>Top-level Heading</h1>")
+        assert "# Top-level Heading" in result
+
+    def test_html_to_markdown_h2(self) -> None:
+        """<h2> is converted to a level-2 markdown heading (## ...)."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<h2>Section Heading</h2>")
+        assert "## Section Heading" in result
+
+    def test_html_to_markdown_h3_through_h6(self) -> None:
+        """<h3>-<h6> each produce the correct number of # markers."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        for level in range(3, 7):
+            html = f"<h{level}>Heading {level}</h{level}>"
+            result = html_to_markdown(html)
+            marker = "#" * level
+            assert f"{marker} Heading {level}" in result, (
+                f"Expected '{marker} Heading {level}' in html_to_markdown output; got: {result!r}"
+            )
+
+    def test_html_to_markdown_all_six_heading_levels_in_document(self) -> None:
+        """A document containing h1-h6 renders all six distinct # depths."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        html = (
+            "<html><body>"
+            "<h1>H1</h1><h2>H2</h2><h3>H3</h3>"
+            "<h4>H4</h4><h5>H5</h5><h6>H6</h6>"
+            "</body></html>"
+        )
+        result = html_to_markdown(html)
+        for level in range(1, 7):
+            marker = "#" * level
+            assert f"{marker} H{level}" in result, (
+                f"Expected '{marker} H{level}' in result; got:\n{result!r}"
+            )
+
+    # --- links --------------------------------------------------------------
+
+    def test_html_to_markdown_anchor_with_href(self) -> None:
+        """<a href="url">text</a> is converted to [text](url) markdown syntax."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown('<p><a href="https://example.com">Click here</a></p>')
+        assert "[Click here](https://example.com)" in result
+
+    def test_html_to_markdown_anchor_without_href(self) -> None:
+        """<a> without href attribute uses empty string for the URL part."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<p><a>Bare link text</a></p>")
+        assert "[Bare link text]()" in result
+
+    # --- lists --------------------------------------------------------------
+
+    def test_html_to_markdown_unordered_list_items(self) -> None:
+        """<ul><li> items are converted to '- item' bullet syntax."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<ul><li>Alpha</li><li>Beta</li><li>Gamma</li></ul>")
+        assert "- Alpha" in result
+        assert "- Beta" in result
+        assert "- Gamma" in result
+
+    def test_html_to_markdown_ordered_list_numbering(self) -> None:
+        """<ol><li> items are converted to '1. ... 2. ...' numbered syntax."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<ol><li>First</li><li>Second</li><li>Third</li></ol>")
+        assert "1. First" in result
+        assert "2. Second" in result
+        assert "3. Third" in result
+
+    # --- table --------------------------------------------------------------
+
+    def test_html_to_markdown_table_gfm_header_separator(self) -> None:
+        """<table> with a header row produces a GFM table with '---' separator after row 0."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        html = (
+            "<table>"
+            "<tr><th>Name</th><th>Role</th></tr>"
+            "<tr><td>Alice</td><td>Engineer</td></tr>"
+            "</table>"
+        )
+        result = html_to_markdown(html)
+        assert "| Name | Role |" in result
+        assert "| --- | --- |" in result
+        assert "| Alice | Engineer |" in result
+
+    def test_html_to_markdown_empty_table_returns_empty(self) -> None:
+        """A <table> element with no rows produces no markdown table output."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<table></table>")
+        assert "|" not in result
+
+    # --- public API contract ------------------------------------------------
+
+    def test_html_to_markdown_empty_string_returns_empty(self) -> None:
+        """html_to_markdown('') returns an empty string (not None or whitespace)."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        assert html_to_markdown("") == ""
+
+    def test_html_to_markdown_whitespace_only_returns_empty(self) -> None:
+        """html_to_markdown with only whitespace returns an empty string."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        assert html_to_markdown("   \n\t  ") == ""
+
+    def test_html_to_markdown_returns_str_type(self) -> None:
+        """html_to_markdown() always returns a str, never None or bytes."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<p>Some content</p>")
+        assert isinstance(result, str)
+
+    def test_html_to_markdown_paragraph_text_preserved(self) -> None:
+        """Plain text inside <p> is present in the markdown output."""
+        from owlbear_browser.cleaner import html_to_markdown
+
+        result = html_to_markdown("<p>Plain paragraph content</p>")
+        assert "Plain paragraph content" in result
+
+    # --- untested _NOISE_TAGS: nav, footer, script, style via clean() -------
+
+    def test_clean_strips_nav_element(self) -> None:
+        """Text inside <nav> is absent from clean() output."""
+        from owlbear_browser.cleaner import clean
+
+        html = "<nav>Navigation Menu Links Home About</nav><p>Article body</p>"
+        result = clean(html)
+        assert "Navigation Menu Links" not in result
+        assert "Article body" in result
+
+    def test_clean_strips_footer_element(self) -> None:
+        """Text inside <footer> is absent from clean() output."""
+        from owlbear_browser.cleaner import clean
+
+        html = "<p>Page content</p><footer>Footer Copyright 2026</footer>"
+        result = clean(html)
+        assert "Footer Copyright 2026" not in result
+        assert "Page content" in result
+
+    def test_clean_strips_script_element(self) -> None:
+        """JavaScript inside <script> is absent from clean() output."""
+        from owlbear_browser.cleaner import clean
+
+        html = '<script>var trackingCode = "secret";</script><p>Visible content</p>'
+        result = clean(html)
+        assert "trackingCode" not in result
+        assert "Visible content" in result
+
+    def test_clean_strips_style_element(self) -> None:
+        """CSS inside <style> is absent from clean() output."""
+        from owlbear_browser.cleaner import clean
+
+        html = "<style>.hidden { display: none; }</style><p>Body text here</p>"
+        result = clean(html)
+        assert ".hidden" not in result
+        assert "Body text here" in result
+
+    # --- untested _NOISE_IDS: ms-site-actions via clean() -------------------
+
+    def test_clean_strips_ms_site_actions_by_id(self) -> None:
+        """Element with id='ms-site-actions' (SharePoint actions bar) is stripped."""
+        from owlbear_browser.cleaner import clean
+
+        html = (
+            '<div id="ms-site-actions">Like Follow Subscribe Share</div>'
+            "<p>Document body content</p>"
+        )
+        result = clean(html)
+        assert "Like Follow Subscribe Share" not in result
+        assert "Document body content" in result
