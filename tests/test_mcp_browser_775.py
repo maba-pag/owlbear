@@ -55,6 +55,13 @@ class TestFromAC_MCPServerLifespan:
         # lifespan is set only after #794 wires app_lifespan into the FastMCP constructor
         assert _mcp.settings.lifespan is not None
 
+    def test_six_tools_registered_by_name(self) -> None:
+        """All 6 expected tool names are present in mcp_app.list_tools() (AC1)."""
+        from owlbear_mcp_browser.server import mcp_app  # type: ignore[attr-defined]
+
+        tool_names = {t.name for t in mcp_app.list_tools()}
+        assert {"navigate", "click", "type", "select", "read_text", "snapshot"} <= tool_names
+
 
 # ===========================================================================
 # TestFromAC_DomainAllowlistEnvVar — AC2: BROWSER_ALLOWED_DOMAINS via app_lifespan
