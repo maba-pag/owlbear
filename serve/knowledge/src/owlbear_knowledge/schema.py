@@ -25,6 +25,7 @@ _SCOPE_TABLES: tuple[str, ...] = (
     "edges",
     "chunks",
     "document_status",
+    "source_pages",
 )
 """Tables that carry a ``scope`` column (added in v3)."""
 
