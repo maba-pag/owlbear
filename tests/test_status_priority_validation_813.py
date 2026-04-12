@@ -146,6 +146,12 @@ class TestFromAC_CreateTaskValidation:
         record = engine.create_task("Hyphen good", status="in-progress")
         assert record.status == "in-progress"
 
+    def test_create_task_valid_priority_critical_accepted(self, engine: KanbanEngine) -> None:
+        """create_task with a valid priority 'critical' stores it without raising.
+        AC4 priority dimension: valid values must be accepted without change."""
+        record = engine.create_task("Valid priority task", priority="critical")
+        assert record.priority == "critical"
+
 
 # ===========================================================================
 # TestFromAC_EditTaskValidation — AC3, AC4, AC5
@@ -199,6 +205,12 @@ class TestFromAC_EditTaskValidation:
         # GREEN phase: typo raises; valid 'done' must also be accepted
         record = engine.edit_task(task_id, status="done")
         assert record.status == "done"
+
+    def test_edit_task_valid_priority_someday_accepted(self, engine: KanbanEngine, task_id: str) -> None:
+        """edit_task with a valid priority 'someday' stores it without raising.
+        AC4 priority dimension: valid values must be accepted without change."""
+        record = engine.edit_task(task_id, priority="someday")
+        assert record.priority == "someday"
 
 
 # ===========================================================================
