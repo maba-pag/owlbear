@@ -255,6 +255,16 @@ class KanbanEngine:
             The newly created :class:`Task`.
         """
         config: BoardConfig = load_config(self._kanban_dir)
+
+        if status:
+            valid_statuses = {s["name"] for s in config.statuses}
+            if status not in valid_statuses:
+                msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
+                raise ValueError(msg)
+        if priority and priority not in config.priorities:
+            msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
+            raise ValueError(msg)
+
         task_id = config.next_id
         now = datetime.now(tz=UTC).isoformat()
 
@@ -282,11 +292,11 @@ class KanbanEngine:
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
         self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME
 
-        log_activity(self._activity_log_path, "create", record.id, record.title)
+        log_activity(self._activity_log_path, "create", record.id, record.title, actor=self._agent_name)
         self._revision += 1
         return record
 
-    def edit_task(  # noqa: PLR0912, PLR0913, C901
+    def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
         self,
         task_id: str,
         *,
@@ -328,6 +338,15 @@ class KanbanEngine:
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
         """
+        if status is not None:
+            valid_statuses = {s["name"] for s in self._config.statuses}
+            if status not in valid_statuses:
+                msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
+                raise ValueError(msg)
+        if priority is not None and priority not in self._config.priorities:
+            msg = f"Invalid priority {priority!r}. Valid options: {self._config.priorities}"
+            raise ValueError(msg)
+
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
         old_blocked = record.blocked
@@ -377,9 +396,9 @@ class KanbanEngine:
 
         if blocked is not None and old_blocked != record.blocked:
             if record.blocked:
-                log_activity(self._activity_log_path, "block", record.id, block_reason or "")
+                log_activity(self._activity_log_path, "block", record.id, block_reason or "", actor=self._agent_name)
             else:
-                log_activity(self._activity_log_path, "unblock", record.id, "")
+                log_activity(self._activity_log_path, "unblock", record.id, "", actor=self._agent_name)
         else:
             changed = [name for name, val in [
                 ("title", title), ("body", body), ("priority", priority),
@@ -388,7 +407,10 @@ class KanbanEngine:
                 ("remove_deps", remove_deps), ("blocked", blocked),
                 ("block_reason", block_reason), ("append_body", append_body),
             ] if val is not None]
-            log_activity(self._activity_log_path, "edit", record.id, ", ".join(changed) or "updated")
+            log_activity(
+                self._activity_log_path, "edit", record.id,
+                ", ".join(changed) or "updated", actor=self._agent_name,
+            )
 
         self._revision += 1
         return record
@@ -426,7 +448,10 @@ class KanbanEngine:
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(task_path, record)
 
-        log_activity(self._activity_log_path, "move", record.id, f"{old_status} -> {record.status}")
+        log_activity(
+            self._activity_log_path, "move", record.id,
+            f"{old_status} -> {record.status}", actor=self._agent_name,
+        )
         self._revision += 1
         return record
 
@@ -467,7 +492,7 @@ class KanbanEngine:
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
         write_task(task_path, record)
-        log_activity(self._activity_log_path, "claim", record.id, self._agent_name)
+        log_activity(self._activity_log_path, "claim", record.id, self._agent_name, actor=self._agent_name)
         self._revision += 1
         return record
 
@@ -492,7 +517,7 @@ class KanbanEngine:
         record.claimed_at = None
         record.updated = datetime.now(tz=UTC).isoformat()
         write_task(task_path, record)
-        log_activity(self._activity_log_path, "release", record.id, self._agent_name)
+        log_activity(self._activity_log_path, "release", record.id, self._agent_name, actor=self._agent_name)
         self._revision += 1
         return record
 

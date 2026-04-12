@@ -189,15 +189,18 @@ async def create_task(  # noqa: PLR0913
     app_ctx: AppContext = ctx.request_context.lifespan_context
     tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
     deps_list = [int(d.strip()) for d in depends_on.split(",") if d.strip()] if depends_on else []
-    record = app_ctx.engine.create_task(
-        title,
-        body=body,
-        tags=tags_list or None,
-        priority=priority,
-        status=status,
-        parent=parent if parent > 0 else None,
-        depends_on=deps_list or None,
-    )
+    try:
+        record = app_ctx.engine.create_task(
+            title,
+            body=body,
+            tags=tags_list or None,
+            priority=priority,
+            status=status,
+            parent=parent if parent > 0 else None,
+            depends_on=deps_list or None,
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
     return _record_to_task(record)
 
 
@@ -272,7 +275,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["parent"] = parent
     try:
         record = app_ctx.engine.edit_task(task_id, **kwargs)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
     return _record_to_task(record)
