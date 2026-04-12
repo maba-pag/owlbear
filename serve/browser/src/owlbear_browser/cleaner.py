@@ -31,6 +31,10 @@ _NOISE_CLASSES: frozenset[str] = frozenset({
     "ms-commandBar",
     "ms-commandbar",
     "ms-pageEditBar",
+    "ms-Breadcrumb",
+    "ms-Persona",
+    "ms-LivePersona",
+    "ms-DateTimeField",
 })
 _NOISE_IDS: frozenset[str] = frozenset({
     # Cookie consent
@@ -39,6 +43,9 @@ _NOISE_IDS: frozenset[str] = frozenset({
     # SharePoint boilerplate
     "SuiteNavWrapper",
     "ms-site-actions",
+    "SuiteNavPlaceHolder",
+    "O365_NavHeader",
+    "s4-ribbonrow",
 })
 _NOISE_ROLES: frozenset[str] = frozenset({"complementary"})
 _HEADING_TAGS: frozenset[str] = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
@@ -201,10 +208,14 @@ def html_to_markdown(html_str: str) -> str:
 def _normalize_content(text: str) -> str:
     """Normalize whitespace in the markdown output.
 
+    - Removes zero-width Unicode characters (U+200B, U+200C, U+200D, U+FEFF).
+    - Removes carriage returns (U+000D).
     - Converts non-breaking spaces (U+00A0) to regular spaces.
     - Collapses multiple consecutive spaces within a line to a single space.
     - Collapses more than one consecutive blank line to a single blank line.
     """
+    text = text.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
+    text = text.replace("\r", "")
     text = text.replace("\u00a0", " ")
     lines = [re.sub(r" {2,}", " ", line.rstrip()) for line in text.split("\n")]
     result: list[str] = []
