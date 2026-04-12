@@ -370,3 +370,30 @@ class TestFromAC_HttpxContentFetcher:
             await fetcher.fetch("")
 
         mock_client.get.assert_awaited_once_with("")
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered — SSRF scheme allowlist (found during review remediation)
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """SSRF remediation: HttpxContentFetcher rejects non-http/https URL schemes."""
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_file_scheme_raises_value_error(self) -> None:
+        """SSRF guard: file:// scheme raises ValueError before any httpx call."""
+        from owlbear_knowledge.fetcher import HttpxContentFetcher  # type: ignore[import]
+
+        fetcher = HttpxContentFetcher()
+        with pytest.raises(ValueError, match="scheme not allowed"):
+            await fetcher.fetch("file:///etc/passwd")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_ftp_scheme_raises_value_error(self) -> None:
+        """SSRF guard: ftp:// scheme raises ValueError before any httpx call."""
+        from owlbear_knowledge.fetcher import HttpxContentFetcher  # type: ignore[import]
+
+        fetcher = HttpxContentFetcher()
+        with pytest.raises(ValueError, match="scheme not allowed"):
+            await fetcher.fetch("ftp://internal-server/resource")
