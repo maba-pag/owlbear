@@ -92,8 +92,8 @@ class KanbanEngine:
     def board_config(self) -> BoardConfig:
         """Return a defensive copy of the current cached :class:`BoardConfig`.
 
-        The returned object is a ``model_copy()`` — mutating it does not
-        affect engine state.
+        The returned object is a deep ``model_copy(deep=True)`` — mutating it
+        (including nested lists and dicts) does not affect engine state.
         """
         return self._config.model_copy(deep=True)
 
