@@ -90,7 +90,9 @@ def _remove_cookie_elements(doc: HtmlElement) -> None:
 def strip_noise(html_str: str) -> str:
     """Remove noise elements from HTML, returning a cleaned HTML string.
 
-    Noise elements: nav, footer, script, style tags plus cookie-banner/consent divs.
+    Noise elements: nav, header, footer, aside, script, style tags; cookie-banner/consent
+    divs; and SharePoint boilerplate (breadcrumbs, web-part chrome, timestamp fields,
+    user avatar containers identified by ms-* Fluent UI classes and SharePoint IDs).
     """
     if not html_str or not html_str.strip():
         return ""
