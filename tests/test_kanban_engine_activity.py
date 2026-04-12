@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.activity_log import log_activity  # type: ignore[import-not-found]
+from owlbear_kanban.activity_log import log_activity
 
 
 # ---------------------------------------------------------------------------
@@ -53,12 +53,12 @@ class TestFromAC_LogEntryFormat:
         assert len(lines) == 1
         json.loads(lines[0])  # must not raise
 
-    def test_entry_has_exactly_four_keys(self, tmp_path: Path) -> None:
-        """Log entry contains exactly: timestamp, action, task_id, detail — no extra keys."""
+    def test_entry_has_exactly_five_keys(self, tmp_path: Path) -> None:
+        """Log entry contains exactly: timestamp, action, task_id, detail, actor — no extra keys."""
         log_path = tmp_path / "activity.jsonl"
         log_activity(log_path, "create", 1, "detail")
         entry = _read_entries(log_path)[0]
-        assert set(entry.keys()) == {"timestamp", "action", "task_id", "detail"}
+        assert set(entry.keys()) == {"timestamp", "action", "task_id", "detail", "actor"}
 
     def test_entry_timestamp_key_present(self, tmp_path: Path) -> None:
         """Log entry contains 'timestamp' key."""
