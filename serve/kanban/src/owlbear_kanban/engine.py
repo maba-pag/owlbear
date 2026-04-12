@@ -6,7 +6,7 @@ reading, and writing kanban task files without invoking the kanban-md CLI.
 Architecture:
   - Constructor loads BoardConfig via config_loader.load_config().
   - list_tasks() scans tasks_dir (or archive dir), applies filters,
-    sorts by config-ranked field, and returns list[TaskRecord].
+    sorts by config-ranked field, and returns list[Task].
   - show_task() finds a single task file by ID and returns its TaskRecord.
   - create_task() allocates next_id, writes a new task file, increments config.
   - edit_task() modifies task fields in-place; slug/filename never changes.
@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING
 from owlbear_kanban.activity_log import log_activity
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.config_loader import load_config, save_config
-from owlbear_kanban.models import BoardConfig, TaskRecord
+from owlbear_kanban.models import BoardConfig, Task, TaskSummary
 from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
 
 if TYPE_CHECKING:
@@ -143,7 +143,7 @@ class KanbanEngine:
         limit: int = 0,
         reverse: bool = False,
         blocked: bool | None = None,
-    ) -> list[TaskRecord]:
+    ) -> list[TaskSummary]:
         """Return tasks matching the given filters.
 
         Args:
@@ -159,10 +159,10 @@ class KanbanEngine:
             blocked:   True = only blocked; False = only unblocked; None = all.
 
         Returns:
-            Filtered, sorted list of :class:`TaskRecord` objects.
+            Filtered, sorted list of :class:`TaskSummary` objects.
         """
         source_dir = self._archive_dir if archived else self._tasks_dir
-        tasks: list[TaskRecord] = []
+        tasks: list[Task] = []
         for path in source_dir.glob("*.md"):
             with contextlib.suppress(ValueError, KeyError):
                 tasks.append(read_task(path))
@@ -208,9 +208,9 @@ class KanbanEngine:
         if limit > 0:
             tasks = tasks[:limit]
 
-        return tasks
+        return [TaskSummary.model_validate(t.model_dump()) for t in tasks]
 
-    def show_task(self, task_id: str) -> TaskRecord:
+    def show_task(self, task_id: str) -> Task:
         """Return the :class:`TaskRecord` for a single task by its string ID.
 
         Args:
@@ -239,7 +239,7 @@ class KanbanEngine:
         status: str = "",
         parent: int | None = None,
         depends_on: list[int] | None = None,
-    ) -> TaskRecord:
+    ) -> Task:
         """Allocate next_id, write a new task file, and increment config next_id.
 
         Args:
@@ -258,7 +258,7 @@ class KanbanEngine:
         task_id = config.next_id
         now = datetime.now(tz=UTC).isoformat()
 
-        record = TaskRecord(
+        record = Task(
             id=task_id,
             title=title,
             status=status or config.defaults.status,
@@ -303,7 +303,7 @@ class KanbanEngine:
         block_reason: str | None = None,
         append_body: str | None = None,
         timestamp: bool = False,
-    ) -> TaskRecord:
+    ) -> Task:
         """Modify fields on a task in-place; filename (slug) is never changed.
 
         Args:
@@ -393,7 +393,7 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def move_task(self, task_id: str, status: str) -> TaskRecord:
+    def move_task(self, task_id: str, status: str) -> Task:
         """Change the status of a task; "archived" moves the file to archive/.
 
         Args:
@@ -430,7 +430,7 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def claim_task(self, task_id: str, *, now: datetime | None = None) -> TaskRecord:
+    def claim_task(self, task_id: str, *, now: datetime | None = None) -> Task:
         """Claim a task for this engine's agent.
 
         Args:
@@ -471,7 +471,7 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def release_task(self, task_id: str) -> TaskRecord:
+    def release_task(self, task_id: str) -> Task:
         """Release the claim on a task, clearing ``claimed_by`` and ``claimed_at``.
 
         This operation is a no-op if the task is not currently claimed.
@@ -496,7 +496,7 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def start_work(self, task_id: str, *, now: datetime | None = None) -> TaskRecord:
+    def start_work(self, task_id: str, *, now: datetime | None = None) -> Task:
         """Claim a task and return its full record (compound start-of-work operation).
 
         Delegates to :meth:`claim_task`, inheriting its blocked guard and rival-claim
@@ -523,7 +523,7 @@ class KanbanEngine:
         outcome: str = "success",
         block_reason: str = "",
         move_to: str = "research",
-    ) -> TaskRecord:
+    ) -> Task:
         """Finalise a work session: append note, update task state, release claim.
 
         Args:

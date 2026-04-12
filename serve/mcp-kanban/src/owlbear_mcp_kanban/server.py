@@ -12,15 +12,16 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from owlbear_kanban import KanbanEngine
 from pydantic import BeforeValidator
 
+from owlbear_kanban import KanbanEngine
+from owlbear_kanban.models import TaskSummary
 from owlbear_mcp_kanban.models import KanbanTask
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_mcp_kanban.engine_models import TaskRecord
+    from owlbear_kanban.models import TaskRecord
 
 
 def _coerce_to_str(v: str | int) -> str:
@@ -114,7 +115,7 @@ async def list_tasks(  # noqa: PLR0913
     limit: int = 0,
     reverse: bool = False,
     blocked: bool | None = None,
-) -> list[dict]:
+) -> list[TaskSummary]:
     """List kanban tasks with optional filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     records = app_ctx.engine.list_tasks(
@@ -129,27 +130,7 @@ async def list_tasks(  # noqa: PLR0913
         reverse=reverse,
         blocked=blocked,
     )
-    _strip = {
-        "body",
-        "file",
-        "created",
-        "updated",
-        "class",
-        "started",
-        "completed",
-        "assignee",
-        "claimed_by",
-        "claimed_at",
-        "due",
-        "estimate",
-    }
-    lean = []
-    for record in records:
-        raw = record.model_dump()
-        row = {k: v for k, v in raw.items() if k not in _strip}
-        row["claimed"] = record.claimed_by is not None
-        lean.append(row)
-    return lean
+    return [TaskSummary.model_validate(record.model_dump()) for record in records]
 
 
 # Set outputSchema for list_tasks (lean task array)
@@ -163,21 +144,7 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {
     "properties": {
         "result": {
             "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "integer"},
-                    "title": {"type": "string"},
-                    "status": {"type": "string"},
-                    "priority": {"type": "string"},
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                    "blocked": {"type": "boolean"},
-                    "block_reason": {"type": ["string", "null"]},
-                    "claimed": {"type": "boolean"},
-                    "parent": {"type": ["integer", "null"]},
-                    "depends_on": {"type": "array", "items": {"type": "integer"}},
-                },
-            },
+            "items": TaskSummary.model_json_schema(),
         },
     },
     "required": ["result"],
