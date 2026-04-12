@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_knowledge.chunker import TextChunker
+    from owlbear_knowledge.content_guard import ContentInjectionGuard
     from owlbear_knowledge.extractor import EntityExtractor
     from owlbear_knowledge.intake import IntakeResult
 
@@ -34,7 +35,7 @@ class IngestResult(BaseModel):
     chunk_count: int
     entity_count: int
     edge_count: int
-    status: Literal["ok", "failed", "skipped", "cancelled"]
+    status: Literal["ok", "failed", "skipped", "cancelled", "blocked"]
 
 
 # ---------------------------------------------------------------------------
@@ -52,17 +53,21 @@ class IngestPipeline:
         cancel_signal: Optional threading.Event; if set, ingest returns cancelled.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         document_store: object,
         entity_extractor: EntityExtractor,
         text_chunker: TextChunker,
         cancel_signal: object | None = None,
+        content_guard: ContentInjectionGuard | None = None,
+        injection_mode: Literal["strict", "warn"] = "warn",
     ) -> None:
         self._docs = document_store
         self._extractor = entity_extractor
         self._chunker = text_chunker
         self._cancel_signal = cancel_signal
+        self._content_guard = content_guard
+        self._injection_mode = injection_mode
 
     async def ingest_text(
         self,
@@ -193,12 +198,26 @@ class IngestPipeline:
             chunk_ids: list[str] = self._docs.store_chunks(doc_id, chunks, scope=scope)  # type: ignore[union-attr]
             chunk_texts = [c.text for c in chunks]
 
-            embed_coro = asyncio.to_thread(
-                self._docs.store_embeddings,
-                chunk_ids,
-                chunk_texts,  # type: ignore[union-attr]
-            )
             _should_wrap = should_wrap(_meta.get("source_type"))  # type: ignore[arg-type]
+
+            if self._content_guard is not None and _should_wrap:
+                for _chunk in chunks:
+                    _check = self._content_guard.scan(_chunk.text)
+                    if _check.blocked:
+                        return IngestResult(
+                            document_id=doc_id,
+                            chunk_count=chunk_count,
+                            entity_count=0,
+                            edge_count=0,
+                            status="blocked",
+                        )
+                    if _check.threat:
+                        logger.warning(
+                            "Content injection detected in content from %s: %s",
+                            intake.source,
+                            _check.reason,
+                        )
+
             extract_coros = [
                 self._extractor.extract(
                     wrap_untrusted_content(c.text, source_url=str(intake.source))
@@ -208,6 +227,11 @@ class IngestPipeline:
                 for c in chunks
             ]
 
+            embed_coro = asyncio.to_thread(
+                self._docs.store_embeddings,
+                chunk_ids,
+                chunk_texts,  # type: ignore[union-attr]
+            )
             all_results = await asyncio.gather(embed_coro, *extract_coros, return_exceptions=True)
             extraction_results = [r for r in all_results[1:] if not isinstance(r, BaseException)]
             entity_count, edge_count = self._docs.store_extractions(  # type: ignore[union-attr]
