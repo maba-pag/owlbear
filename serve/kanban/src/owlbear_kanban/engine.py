@@ -7,7 +7,7 @@ Architecture:
   - Constructor loads BoardConfig via config_loader.load_config().
   - list_tasks() scans tasks_dir (or archive dir), applies filters,
     sorts by config-ranked field, and returns list[Task].
-  - show_task() finds a single task file by ID and returns its TaskRecord.
+  - show_task() finds a single task file by ID and returns its Task.
   - create_task() allocates next_id, writes a new task file, increments config.
   - edit_task() modifies task fields in-place; slug/filename never changes.
   - move_task() changes status; "archived" moves file to archive/.
@@ -211,7 +211,7 @@ class KanbanEngine:
         return [TaskSummary.model_validate(t.model_dump()) for t in tasks]
 
     def show_task(self, task_id: str) -> Task:
-        """Return the :class:`TaskRecord` for a single task by its string ID.
+        """Return the :class:`Task` for a single task by its string ID.
 
         Args:
             task_id: The numeric task ID as a string (e.g. ``"42"``).
@@ -252,7 +252,7 @@ class KanbanEngine:
             depends_on: Optional list of dependency task IDs.
 
         Returns:
-            The newly created :class:`TaskRecord`.
+            The newly created :class:`Task`.
         """
         config: BoardConfig = load_config(self._kanban_dir)
         task_id = config.next_id
@@ -323,7 +323,7 @@ class KanbanEngine:
             timestamp:   When True, prepend ``[[YYYY-MM-DD]]`` to append_body.
 
         Returns:
-            Updated :class:`TaskRecord`.
+            Updated :class:`Task`.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
@@ -401,7 +401,7 @@ class KanbanEngine:
             status:  Target status name, or ``"archived"`` to archive the task.
 
         Returns:
-            Updated :class:`TaskRecord`.
+            Updated :class:`Task`.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
@@ -439,7 +439,7 @@ class KanbanEngine:
                      Defaults to ``datetime.now(UTC)``.
 
         Returns:
-            Updated :class:`TaskRecord` with ``claimed_by`` and ``claimed_at`` set.
+            Updated :class:`Task` with ``claimed_by`` and ``claimed_at`` set.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
@@ -480,7 +480,7 @@ class KanbanEngine:
             task_id: Numeric task ID as a string.
 
         Returns:
-            Updated :class:`TaskRecord` with claim fields cleared.
+            Updated :class:`Task` with claim fields cleared.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
@@ -507,7 +507,7 @@ class KanbanEngine:
             now:     Reference time for claim expiry (injectable for tests).
 
         Returns:
-            Updated :class:`TaskRecord` with claim fields set.
+            Updated :class:`Task` with claim fields set.
 
         Raises:
             FileNotFoundError: No task matching ``task_id``.
@@ -534,11 +534,18 @@ class KanbanEngine:
             move_to:      Target status when *outcome* is ``"reject"`` (default ``"research"``).
 
         Returns:
-            Updated :class:`TaskRecord` reflecting the new state.
+            Updated :class:`Task` reflecting the new state.
 
         Raises:
             ValueError:        *outcome* is ``"block"`` but *block_reason* is empty.
             FileNotFoundError: No task matching ``task_id``.
+
+        Note:
+            The ``"success"`` outcome advances the task to the next status in the
+            configured sequence.  This linear progression is an **agent-specific
+            convention** used in OwlBear pipeline workflows — it is not enforced
+            by the underlying state machine.  For the full set of reachable
+            statuses from a given state, see :meth:`valid_transitions`.
         """
         if outcome == "block" and not block_reason:
             msg = "block_reason is required when outcome='block'"

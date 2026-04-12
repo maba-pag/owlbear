@@ -31,7 +31,7 @@ from typing import Any
 
 import yaml
 
-from owlbear_kanban.models import TaskRecord
+from owlbear_kanban.models import Task
 
 # ---------------------------------------------------------------------------
 # YAML loader that keeps timestamps as plain strings
@@ -144,18 +144,18 @@ def validate_path_containment(tasks_dir: Path, path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def read_task(path: Path) -> TaskRecord:
-    """Parse a task file into a :class:`TaskRecord`.
+def read_task(path: Path) -> Task:
+    """Parse a task file into a :class:`Task`.
 
     The file must follow the ``---``-delimited YAML frontmatter format.
     The markdown body (everything after the closing ``---`` line) is stored
-    in :attr:`TaskRecord.body`.
+    in :attr:`Task.body`.
 
     Args:
         path: Path to the task ``.md`` file.
 
     Returns:
-        Populated :class:`TaskRecord` including any unknown frontmatter fields.
+        Populated :class:`Task` including any unknown frontmatter fields.
 
     Raises:
         FileNotFoundError: *path* does not exist.
@@ -189,11 +189,11 @@ def read_task(path: Path) -> TaskRecord:
     data: dict[str, Any] = yaml.load(frontmatter_str, Loader=_NoTimestampLoader) or {}  # noqa: S506
     data["body"] = body
 
-    return TaskRecord.model_validate(data)
+    return Task.model_validate(data)
 
 
-def write_task(path: Path, record: TaskRecord) -> None:
-    """Serialise a :class:`TaskRecord` to a task file.
+def write_task(path: Path, record: Task) -> None:
+    """Serialise a :class:`Task` to a task file.
 
     Produces the canonical format::
 
