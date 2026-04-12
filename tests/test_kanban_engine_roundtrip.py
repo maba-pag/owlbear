@@ -19,9 +19,9 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.config_loader import load_config, save_config
-from owlbear_mcp_kanban.engine import KanbanEngine
-from owlbear_mcp_kanban.task_io import read_task, write_task
+from owlbear_kanban.config_loader import load_config, save_config
+from owlbear_kanban.engine import KanbanEngine
+from owlbear_kanban.task_io import read_task, write_task
 
 pytestmark = pytest.mark.slow
 
@@ -81,7 +81,7 @@ class TestFromAC_LiveBoardRoundTrip:
         )
 
     def test_all_task_files_yield_non_zero_id(self) -> None:
-        """Every parsed TaskRecord has id > 0 — no zero or negative IDs in live board."""
+        """Every parsed Task has id > 0 — no zero or negative IDs in live board."""
         task_files = _require_live_board()
         bad_ids: list[str] = []
         for path in task_files:
@@ -224,9 +224,9 @@ class TestFromAC_LiveBoardRoundTrip:
         )
 
     def test_body_field_is_never_none(self) -> None:
-        """Every TaskRecord parsed from the live board has body as str, never None.
+        """Every Task parsed from the live board has body as str, never None.
 
-        TaskRecord.body defaults to '' — None would indicate a model validation bug.
+        Task.body defaults to '' — None would indicate a model validation bug.
         """
         task_files = _require_live_board()
         none_body: list[str] = []

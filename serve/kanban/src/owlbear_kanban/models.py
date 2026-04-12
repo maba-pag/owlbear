@@ -2,7 +2,6 @@
 
 BoardConfig  — schema for .owlbear/kanban/config.yml
 Task         — schema for task file frontmatter + markdown body
-TaskRecord   — backward-compatibility alias for Task
 TaskSummary  — lightweight projection for list_tasks() results
 
 Timestamps are stored as plain strings to avoid Go nanosecond → Python
@@ -86,9 +85,6 @@ class Task(BaseModel):
     claimed_by: str | None = None
     claimed_at: str | None = None
 
-
-# Backward-compatibility alias — consumers importing TaskRecord continue to work.
-TaskRecord = Task
 
 
 class TaskSummary(BaseModel):

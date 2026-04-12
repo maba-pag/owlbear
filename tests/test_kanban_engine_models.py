@@ -1,4 +1,4 @@
-"""Failing tests for BoardConfig and TaskRecord Pydantic models (#713, RED phase).
+"""Failing tests for BoardConfig and Task Pydantic models (#713, RED phase).
 
 AC coverage:
   AC1 - BoardConfig: version (int), board name (string), tasks_dir (string),
@@ -6,7 +6,7 @@ AC coverage:
         defaults (status, priority, class preserved), next_id,
         claim_timeout (duration string), tui section preserved via extra-fields,
         unknown-field preservation
-  AC2 - TaskRecord: all frontmatter fields (id, title, status, priority, created,
+  AC2 - Task: all frontmatter fields (id, title, status, priority, created,
         updated, tags, parent, depends_on, blocked, block_reason, claimed_by,
         claimed_at), markdown body, unknown-field round-trip
   AC3 - ISO 8601 timestamps stored as strings (not datetime objects)
@@ -20,9 +20,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from owlbear_mcp_kanban.engine_models import (  # type: ignore[import-not-found]
+from owlbear_kanban.models import (
     BoardConfig,
-    TaskRecord,
+    Task,
 )
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ _MINIMAL_TASK: dict = {
 # mirrors a real claimed task file with all optional fields
 _FULL_TASK: dict = {
     "id": 713,
-    "title": "P3-01: RED — Pydantic models for BoardConfig and TaskRecord",
+    "title": "P3-01: RED — Pydantic models for BoardConfig and Task",
     "status": "todo",
     "priority": "needed",
     "created": "2026-04-09T03:24:26.6974428+02:00",
@@ -208,28 +208,28 @@ class TestFromAC_BoardConfig:
 
 
 # ===========================================================================
-# TestFromAC_TaskRecord
+# TestFromAC_Task
 # ===========================================================================
 
 
-class TestFromAC_TaskRecord:
-    """Tests for AC2/AC3: TaskRecord Pydantic model covering all task frontmatter fields."""
+class TestFromAC_Task:
+    """Tests for AC2/AC3: Task Pydantic model covering all task frontmatter fields."""
 
     # --- Happy path ---------------------------------------------------------
 
     def test_full_task_parses_without_error(self) -> None:
         """Full task data with all optional fields parses without ValidationError."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert task is not None
 
     def test_minimal_task_parses_without_error(self) -> None:
         """Minimal task (required fields only) parses successfully."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task is not None
 
     def test_all_required_frontmatter_fields_accessible(self) -> None:
         """id, title, status, priority, created, updated all accessible on parsed task."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.id == 42
         assert task.title == "Test task title"
         assert task.status == "todo"
@@ -239,40 +239,40 @@ class TestFromAC_TaskRecord:
 
     def test_body_stored_as_str(self) -> None:
         """body field stores the markdown content as a plain string."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.body, str)
         assert "## Objective" in task.body
 
     def test_empty_body_accepted(self) -> None:
         """body='' (no markdown content) is valid."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.body == ""
 
     def test_tags_populated_from_data(self) -> None:
         """tags field stores a list of strings from YAML frontmatter."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert task.tags == ["kanban", "phase-3", "type:test"]
 
     def test_parent_stored_as_int(self) -> None:
         """parent field is an int when set."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.parent, int)
         assert task.parent == 712
 
     def test_depends_on_is_list_of_ints(self) -> None:
         """depends_on field is a list of int task IDs."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.depends_on, list)
         assert task.depends_on == [711, 710]
 
     def test_blocked_stored_as_bool(self) -> None:
         """blocked field is a bool."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.blocked, bool)
 
     def test_claimed_by_stored_as_str(self) -> None:
         """claimed_by field is a str when a claim is present."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.claimed_by, str)
         assert task.claimed_by == "river-port"
 
@@ -280,81 +280,81 @@ class TestFromAC_TaskRecord:
 
     def test_tags_default_to_empty_list(self) -> None:
         """tags defaults to [] when not present in frontmatter."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.tags == []
 
     def test_depends_on_defaults_to_empty_list(self) -> None:
         """depends_on defaults to [] when not present in frontmatter."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.depends_on == []
 
     def test_parent_defaults_to_none(self) -> None:
         """parent defaults to None when not present in frontmatter."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.parent is None
 
     def test_blocked_defaults_to_false(self) -> None:
         """blocked defaults to False when not present in frontmatter."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.blocked is False
 
     def test_block_reason_defaults_to_none(self) -> None:
         """block_reason defaults to None when not present in frontmatter."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.block_reason is None
 
     def test_claimed_by_defaults_to_none(self) -> None:
         """claimed_by defaults to None when no claim is active."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.claimed_by is None
 
     def test_claimed_at_defaults_to_none(self) -> None:
         """claimed_at defaults to None when no claim is active."""
-        task = TaskRecord.model_validate(_MINIMAL_TASK)
+        task = Task.model_validate(_MINIMAL_TASK)
         assert task.claimed_at is None
 
     # --- AC3: ISO 8601 timestamps must be strings, not datetime objects ------
 
     def test_created_is_str_not_datetime(self) -> None:
         """created is stored as a str, not coerced to datetime (avoids precision drift)."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.created, str)
 
     def test_updated_is_str_not_datetime(self) -> None:
         """updated is stored as a str, not coerced to datetime."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.updated, str)
 
     def test_claimed_at_is_str_not_datetime(self) -> None:
         """claimed_at is stored as a str, not coerced to datetime."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         assert isinstance(task.claimed_at, str)
 
     def test_go_nanosecond_precision_preserved_verbatim(self) -> None:
         """7-digit nanosecond timestamp string is stored verbatim (no truncation to microseconds)."""
         go_timestamp = "2026-04-09T03:24:26.6974428+02:00"  # 7 decimal places (Go format)
         data = {**_MINIMAL_TASK, "created": go_timestamp}
-        task = TaskRecord.model_validate(data)
+        task = Task.model_validate(data)
         assert task.created == go_timestamp  # Must not be truncated to 6 decimal places
 
     # --- Unknown-field round-trip preservation --------------------------------
 
     def test_class_field_preserved_in_round_trip(self) -> None:
-        """class (standard Python reserved word in YAML) survives TaskRecord round-trip."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        """class (standard Python reserved word in YAML) survives Task round-trip."""
+        task = Task.model_validate(_FULL_TASK)
         dumped = task.model_dump()
         assert dumped.get("class") == "standard"
 
     def test_started_field_preserved_in_round_trip(self) -> None:
         """started timestamp (set by kanban-md on claim) preserved in round-trip."""
-        task = TaskRecord.model_validate(_FULL_TASK)
+        task = Task.model_validate(_FULL_TASK)
         dumped = task.model_dump()
         assert dumped.get("started") == _FULL_TASK["started"]
 
     def test_completed_field_preserved_in_round_trip(self) -> None:
         """completed timestamp survives round-trip when present."""
         data = {**_FULL_TASK, "completed": "2026-04-09T06:00:00.0000000+02:00"}
-        task = TaskRecord.model_validate(data)
+        task = Task.model_validate(data)
         dumped = task.model_dump()
         assert dumped.get("completed") == "2026-04-09T06:00:00.0000000+02:00"
 
@@ -364,22 +364,22 @@ class TestFromAC_TaskRecord:
         """Omitting id raises Pydantic ValidationError."""
         data = {k: v for k, v in _MINIMAL_TASK.items() if k != "id"}
         with pytest.raises(ValidationError):
-            TaskRecord.model_validate(data)
+            Task.model_validate(data)
 
     def test_missing_title_raises_validation_error(self) -> None:
         """Omitting title raises Pydantic ValidationError."""
         data = {k: v for k, v in _MINIMAL_TASK.items() if k != "title"}
         with pytest.raises(ValidationError):
-            TaskRecord.model_validate(data)
+            Task.model_validate(data)
 
     def test_missing_status_raises_validation_error(self) -> None:
         """Omitting status raises Pydantic ValidationError."""
         data = {k: v for k, v in _MINIMAL_TASK.items() if k != "status"}
         with pytest.raises(ValidationError):
-            TaskRecord.model_validate(data)
+            Task.model_validate(data)
 
     def test_missing_priority_raises_validation_error(self) -> None:
         """Omitting priority raises Pydantic ValidationError."""
         data = {k: v for k, v in _MINIMAL_TASK.items() if k != "priority"}
         with pytest.raises(ValidationError):
-            TaskRecord.model_validate(data)
+            Task.model_validate(data)

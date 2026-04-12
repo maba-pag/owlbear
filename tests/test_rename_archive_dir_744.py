@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.engine import (  # type: ignore[import-not-found]
+from owlbear_kanban.engine import (
     KanbanEngine,
     _ARCHIVE_DIR_NAME,
 )
@@ -143,7 +143,7 @@ class TestFromAC_EngineDocstrings:
 
     def test_module_docstring_has_no_v1_archive_reference(self) -> None:
         """engine.py module-level docstring must not reference 'v1-archive'."""
-        import owlbear_mcp_kanban.engine as engine_module
+        import owlbear_kanban.engine as engine_module
 
         doc = engine_module.__doc__ or ""
         assert "v1-archive" not in doc

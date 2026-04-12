@@ -23,8 +23,8 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.engine import KanbanEngine  # type: ignore[import-not-found]
-from owlbear_mcp_kanban.engine_models import TaskRecord  # type: ignore[import-not-found]
+from owlbear_kanban import KanbanEngine
+from owlbear_kanban.models import Task
 
 # ---------------------------------------------------------------------------
 # Shared config content — mirrors real .owlbear/kanban/config.yml
@@ -86,12 +86,12 @@ class TestFromAC_CreateTask:
     # --- Happy path ---------------------------------------------------------
 
     def test_create_returns_task_record(self, engine: KanbanEngine) -> None:
-        """create_task returns a TaskRecord instance."""
+        """create_task returns a Task instance."""
         record = engine.create_task("My new task")
-        assert isinstance(record, TaskRecord)
+        assert isinstance(record, Task)
 
     def test_create_task_id_equals_next_id(self, engine: KanbanEngine) -> None:
-        """Returned TaskRecord.id equals next_id from config before the call."""
+        """Returned Task.id equals next_id from config before the call."""
         record = engine.create_task("Allocate me")
         assert record.id == 100
 
@@ -179,9 +179,8 @@ class TestFromAC_CreateTask:
         assert 20 in record.depends_on
 
     def test_create_task_persisted_to_disk_and_readable(self, kanban_dir: Path, engine: KanbanEngine) -> None:
-        """Task file written to disk can be parsed back to a TaskRecord."""
-        from owlbear_mcp_kanban.task_io import read_task  # type: ignore[import-not-found]
-
+        """Task file written to disk can be parsed back to a Task."""
+        from owlbear_kanban.task_io import read_task
         engine.create_task("Persistence check", body="## AC\n- [ ] AC line")
         tasks_dir = kanban_dir / "tasks"
         (path,) = tasks_dir.glob("*.md")
@@ -334,7 +333,7 @@ class TestFromAC_EditTask:
 
     def test_edit_persists_to_disk(self, kanban_dir: Path, engine: KanbanEngine, task_id: str) -> None:
         """Changes made by edit_task survive a reload from disk."""
-        from owlbear_mcp_kanban.task_io import read_task  # type: ignore[import-not-found]
+        from owlbear_kanban.task_io import read_task  # noqa: PLC0415
 
         engine.edit_task(task_id, title="Persisted title")
         tasks_dir = kanban_dir / "tasks"
@@ -409,13 +408,13 @@ class TestFromAC_MoveTask:
         assert result.status == "todo"
 
     def test_move_task_returns_task_record(self, engine: KanbanEngine, task_id: str) -> None:
-        """move_task returns a TaskRecord."""
+        """move_task returns a Task."""
         result = engine.move_task(task_id, "backlog")
-        assert isinstance(result, TaskRecord)
+        assert isinstance(result, Task)
 
     def test_move_task_persists_status_change(self, kanban_dir: Path, engine: KanbanEngine, task_id: str) -> None:
         """Status change is written to disk and readable after move."""
-        from owlbear_mcp_kanban.task_io import read_task  # type: ignore[import-not-found]
+        from owlbear_kanban.task_io import read_task  # noqa: PLC0415
 
         engine.move_task(task_id, "in-progress")
         tasks_dir = kanban_dir / "tasks"
@@ -433,12 +432,12 @@ class TestFromAC_MoveTask:
     # --- AC6: move to archived ----------------------------------------------
 
     def test_move_task_to_archived(self, engine: KanbanEngine, task_id: str) -> None:
-        """move_task('archived') succeeds — returns TaskRecord with archived marker."""
+        """move_task('archived') succeeds — returns Task with archived marker."""
         result = engine.move_task(task_id, "archived")
         # Either status == "archived" or blocked-equivalent marker acceptable,
         # but the call must not raise.
         assert result is not None
-        assert isinstance(result, TaskRecord)
+        assert isinstance(result, Task)
 
     def test_move_task_archived_not_in_active_tasks(self, engine: KanbanEngine, task_id: str) -> None:
         """After archiving, the task does not appear in plain list_tasks()."""

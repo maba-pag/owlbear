@@ -22,14 +22,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.models import TaskRecord
+from owlbear_kanban.models import Task
 from owlbear_mcp_kanban.server import AppContext, mcp, pick_tasks
 
 # ---------------------------------------------------------------------------
 # Helpers (duplicated from test_kanban_mcp_migration.py for self-containment)
 # ---------------------------------------------------------------------------
 
-_MINIMAL_TASK_RECORD = TaskRecord(
+_MINIMAL_TASK_RECORD = Task(
     id=1,
     title="Minimal Task",
     status="todo",
@@ -39,7 +39,7 @@ _MINIMAL_TASK_RECORD = TaskRecord(
     body="## AC\n- [ ] Something important",
 )
 
-_TASK_NO_AC = TaskRecord(
+_TASK_NO_AC = Task(
     id=2,
     title="No AC Task",
     status="todo",

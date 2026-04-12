@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.engine import KanbanEngine  # type: ignore[import-not-found]
+from owlbear_kanban import KanbanEngine
 
 # ---------------------------------------------------------------------------
 # Shared config content — mirrors real .owlbear/kanban/config.yml
@@ -83,7 +83,7 @@ class TestFromAC_StartWork:
     """Tests for AC1: start_work blocked guard, claim, return full task."""
 
     def test_start_work_returns_task_record(self, engine: KanbanEngine) -> None:
-        """start_work returns a TaskRecord whose id matches the created task."""
+        """start_work returns a Task whose id matches the created task."""
         task = engine.create_task("Compound work task")
         result = engine.start_work(str(task.id))
         assert result.id == task.id
@@ -197,7 +197,7 @@ class TestFromAC_EndWorkSuccess:
         assert record.claimed_at is None
 
     def test_end_work_success_returns_task_record(self, engine: KanbanEngine) -> None:
-        """end_work(success) returns a TaskRecord with the updated status."""
+        """end_work(success) returns a Task with the updated status."""
         task = engine.create_task("Return check", status="backlog")
         engine.start_work(str(task.id))
         result = engine.end_work(str(task.id), note="Return check", outcome="success")
@@ -290,7 +290,7 @@ class TestFromAC_EndWorkFail:
         assert record.claimed_at is None
 
     def test_end_work_fail_returns_task_record(self, engine: KanbanEngine) -> None:
-        """end_work(fail) returns a TaskRecord with the unchanged status."""
+        """end_work(fail) returns a Task with the unchanged status."""
         task = engine.create_task("Return on fail", status="todo")
         engine.start_work(str(task.id))
         result = engine.end_work(str(task.id), note="Return check", outcome="fail")
@@ -410,7 +410,7 @@ class TestFromAC_EndWorkReject:
         assert record.claimed_at is None
 
     def test_end_work_reject_returns_updated_status(self, engine: KanbanEngine) -> None:
-        """end_work(reject) returns a TaskRecord with the rejected-to status."""
+        """end_work(reject) returns a Task with the rejected-to status."""
         task = engine.create_task("Return on reject", status="in-progress")
         engine.start_work(str(task.id))
         result = engine.end_work(

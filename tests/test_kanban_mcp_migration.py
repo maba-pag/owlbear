@@ -16,8 +16,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
-from owlbear_mcp_kanban.engine import KanbanEngine
-from owlbear_kanban.models import TaskRecord
+from owlbear_kanban import KanbanEngine
+from owlbear_kanban.models import Task
 from owlbear_mcp_kanban.models import KanbanTask
 from owlbear_mcp_kanban.server import (
     AppContext,
@@ -66,7 +66,7 @@ tui:
 next_id: 1
 """
 
-_MINIMAL_TASK_RECORD = TaskRecord(
+_MINIMAL_TASK_RECORD = Task(
     id=1,
     title="Migration Task",
     status="todo",
@@ -76,7 +76,7 @@ _MINIMAL_TASK_RECORD = TaskRecord(
     body="## AC\n- [ ] Something",
 )
 
-_CLAIMED_TASK_RECORD = TaskRecord(
+_CLAIMED_TASK_RECORD = Task(
     id=2,
     title="Claimed Task",
     status="in-progress",
@@ -88,7 +88,7 @@ _CLAIMED_TASK_RECORD = TaskRecord(
     claimed_at="2026-01-01T00:00:00+00:00",
 )
 
-_BLOCKED_TASK_RECORD = TaskRecord(
+_BLOCKED_TASK_RECORD = Task(
     id=3,
     title="Blocked Task",
     status="todo",
@@ -225,7 +225,7 @@ class TestFromAC_ListTasks:
     @pytest.mark.asyncio
     async def test_list_tasks_strips_body_and_timestamp_fields(self) -> None:
         """list_tasks strips body, file, created, updated, claimed_by, claimed_at from output."""
-        task = TaskRecord(
+        task = Task(
             id=1,
             title="Strip Test",
             status="todo",
@@ -247,7 +247,7 @@ class TestFromAC_ListTasks:
     @pytest.mark.asyncio
     async def test_list_tasks_claimed_bool_derived_from_claimed_by(self) -> None:
         """list_tasks output includes claimed: True when task is claimed, False when unclaimed."""
-        unclaimed = TaskRecord(
+        unclaimed = Task(
             id=1,
             title="Free",
             status="todo",
@@ -256,7 +256,7 @@ class TestFromAC_ListTasks:
             updated="2026-01-01T00:00:00+00:00",
             claimed_by=None,
         )
-        claimed = TaskRecord(
+        claimed = Task(
             id=2,
             title="Taken",
             status="in-progress",
@@ -450,7 +450,7 @@ class TestFromAC_MoveTask:
     @pytest.mark.asyncio
     async def test_move_task_returns_kanban_task(self) -> None:
         """move_task returns a KanbanTask instance."""
-        moved = TaskRecord(
+        moved = Task(
             id=1,
             title="Moved Task",
             status="in-progress",
@@ -474,7 +474,7 @@ class TestFromAC_MoveTask:
     @pytest.mark.asyncio
     async def test_move_task_archived_delegates_to_engine_with_archived(self) -> None:
         """move_task with status='archived' calls engine.move_task(task_id, 'archived')."""
-        archived = TaskRecord(
+        archived = Task(
             id=1,
             title="Done Task",
             status="archived",
@@ -556,7 +556,7 @@ class TestFromAC_EndWork:
     @pytest.mark.asyncio
     async def test_end_work_success_passes_outcome_to_engine(self) -> None:
         """end_work passes outcome='success' to engine.end_work."""
-        advanced = TaskRecord(
+        advanced = Task(
             id=1,
             title="Advanced Task",
             status="in-progress",
@@ -613,7 +613,7 @@ class TestFromAC_PickTasks:
     @pytest.mark.asyncio
     async def test_pick_tasks_returns_dispatch_dict(self) -> None:
         """pick_tasks returns a dict with 'dispatch' key containing task_id/status pairs."""
-        task = TaskRecord(
+        task = Task(
             id=10,
             title="Ready Task",
             status="todo",
@@ -636,7 +636,7 @@ class TestFromAC_PickTasks:
     @pytest.mark.asyncio
     async def test_pick_tasks_applies_gates_filter_no_ac(self) -> None:
         """pick_tasks gates filter removes todo tasks without AC patterns in body."""
-        no_ac_task = TaskRecord(
+        no_ac_task = Task(
             id=1,
             title="No AC Task",
             status="todo",
@@ -662,16 +662,16 @@ class TestFromAC_PickTasks:
 
 
 # ===========================================================================
-# TestFromAC_TaskRecordConversion
+# TestFromAC_TaskConversion
 # ===========================================================================
 
 
-class TestFromAC_TaskRecordConversion:
-    """Tool functions convert TaskRecord→KanbanTask correctly (claimed_by→claimed bool)."""
+class TestFromAC_TaskConversion:
+    """Tool functions convert Task→KanbanTask correctly (claimed_by→claimed bool)."""
 
     @pytest.mark.asyncio
     async def test_show_task_converts_claimed_by_str_to_claimed_true(self) -> None:
-        """show_task returns KanbanTask with claimed=True when engine returns TaskRecord(claimed_by=str)."""
+        """show_task returns KanbanTask with claimed=True when engine returns Task(claimed_by=str)."""
         app_ctx = _make_engine_app_ctx(show_task=_CLAIMED_TASK_RECORD)
         mcp_ctx = _make_mcp_ctx(app_ctx)
         result = await show_task(mcp_ctx, task_id="2")
@@ -680,7 +680,7 @@ class TestFromAC_TaskRecordConversion:
 
     @pytest.mark.asyncio
     async def test_show_task_converts_claimed_by_none_to_claimed_false(self) -> None:
-        """show_task returns KanbanTask with claimed=False when engine returns TaskRecord(claimed_by=None)."""
+        """show_task returns KanbanTask with claimed=False when engine returns Task(claimed_by=None)."""
         app_ctx = _make_engine_app_ctx(show_task=_MINIMAL_TASK_RECORD)
         mcp_ctx = _make_mcp_ctx(app_ctx)
         result = await show_task(mcp_ctx, task_id="1")
@@ -689,8 +689,8 @@ class TestFromAC_TaskRecordConversion:
 
     @pytest.mark.asyncio
     async def test_show_task_preserves_all_required_fields_in_kanban_task(self) -> None:
-        """show_task output preserves id, title, status, priority, blocked, tags from TaskRecord."""
-        rich_record = TaskRecord(
+        """show_task output preserves id, title, status, priority, blocked, tags from Task."""
+        rich_record = Task(
             id=42,
             title="Preservation Test",
             status="review",
@@ -817,7 +817,7 @@ class TestBuilderDiscovered:
     @pytest.mark.asyncio
     async def test_pick_tasks_filters_in_progress_without_writer_notes(self) -> None:
         """pick_tasks filters in-progress tasks without Test-Writer Notes (TDD gate)."""
-        in_progress_no_notes = TaskRecord(
+        in_progress_no_notes = Task(
             id=5,
             title="Ungated Task",
             status="in-progress",

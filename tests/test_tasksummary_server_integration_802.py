@@ -2,7 +2,7 @@
 
 AC coverage:
   AC3 - KanbanEngine.list_tasks() return annotation is list[TaskSummary] and
-        runtime items are TaskSummary instances (not TaskRecord / Task)
+        runtime items are TaskSummary instances (not Task)
   AC4 - server.py _strip dict eliminated; list_tasks uses TaskSummary model_dump
   AC5 - list_tasks outputSchema patching uses TaskSummary.model_json_schema()
 
@@ -10,9 +10,9 @@ AC6 (#801 tests pass GREEN) and AC7 (existing MCP tests unaffected) are
 meta-conditions verified by the builder — no new code tests apply.
 
 All tests MUST FAIL in RED:
-  - KanbanEngine.list_tasks is annotated list[TaskRecord], not list[TaskSummary]
-  - Runtime items are Task/TaskRecord instances, not TaskSummary
-  - TaskRecord.claimed does not exist (claimed_by does); body leaks in model_dump
+  - KanbanEngine.list_tasks is annotated list[Task], not list[TaskSummary]
+  - Runtime items are Task instances, not TaskSummary
+  - Task.claimed does not exist (claimed_by does); body leaks in model_dump
   - AC4 server.py _strip already removed (prior push) — no new tests apply
   - outputSchema items are a hardcoded dict, not TaskSummary.model_json_schema()
 """
@@ -82,7 +82,7 @@ class TestFromAC_EngineListTasksReturn:
     def test_engine_list_tasks_return_annotation_is_list_of_tasksummary(self) -> None:
         """KanbanEngine.list_tasks return annotation must resolve to list[TaskSummary].
 
-        RED: currently annotated list[TaskRecord] (TaskRecord = Task alias).
+        RED: currently annotated list[Task].
         """
         hints = typing.get_type_hints(KanbanEngine.list_tasks)
         ret = hints.get("return")
@@ -107,7 +107,7 @@ class TestFromAC_EngineListTasksReturn:
     ) -> None:
         """Each item returned by engine.list_tasks() must be a TaskSummary instance.
 
-        RED: currently returns Task (TaskRecord) instances.
+        RED: currently returns Task instances.
         """
         engine.create_task("Integration test task", tags=["phase-1"])
         results = engine.list_tasks()
@@ -123,7 +123,7 @@ class TestFromAC_EngineListTasksReturn:
     ) -> None:
         """Items from engine.list_tasks() must expose claimed (bool), not claimed_by (str).
 
-        RED: TaskRecord has claimed_by: str | None — no claimed bool attribute.
+        RED: Task has claimed_by: str | None — no claimed bool attribute.
         """
         engine.create_task("Claimed-bool test task")
         results = engine.list_tasks()
@@ -144,7 +144,7 @@ class TestFromAC_EngineListTasksReturn:
     def test_engine_list_tasks_body_not_in_model_dump(self, engine: KanbanEngine) -> None:
         """Items from engine.list_tasks() must not expose 'body' in model_dump().
 
-        RED: TaskRecord.model_dump() includes body (Task stores it as a field).
+        RED: Task.model_dump() includes body (Task stores it as a field).
         """
         engine.create_task("Body exclusion test", body="Private body text that must stay hidden")
         results = engine.list_tasks()

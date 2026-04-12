@@ -21,7 +21,7 @@ from owlbear_mcp_kanban.models import KanbanTask
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_kanban.models import TaskRecord
+    from owlbear_kanban.models import Task
 
 
 def _coerce_to_str(v: str | int) -> str:
@@ -151,8 +151,8 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {
 }
 
 
-def _record_to_task(record: TaskRecord) -> KanbanTask:
-    """Convert a TaskRecord to a KanbanTask (claimed_by → claimed bool)."""
+def _record_to_task(record: Task) -> KanbanTask:
+    """Convert a Task to a KanbanTask (claimed_by → claimed bool)."""
     return KanbanTask.model_validate(record.model_dump())
 
 

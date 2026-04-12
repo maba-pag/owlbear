@@ -146,7 +146,7 @@ def _add_task(
 
 class TestFromAC_ListAllTasks:
     def test_returns_all_task_files(self, tmp_path: Path) -> None:
-        """list_tasks() returns one TaskRecord per file in tasks_dir."""
+        """list_tasks() returns one Task per file in tasks_dir."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Alpha task")
         _add_task(kdir, 2, "Beta task")
@@ -169,8 +169,8 @@ class TestFromAC_ListAllTasks:
         assert result == []
 
     def test_result_items_are_task_records(self, tmp_path: Path) -> None:
-        """list_tasks() returns list[TaskRecord] with correct field values."""
-        from owlbear_kanban.models import TaskRecord
+        """list_tasks() returns list[TaskSummary] with correct field values."""
+        from owlbear_kanban.models import TaskSummary
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 5, "Field check task", status="review", priority="needed")
@@ -180,7 +180,7 @@ class TestFromAC_ListAllTasks:
 
         assert len(result) == 1
         rec = result[0]
-        assert isinstance(rec, TaskRecord)
+        assert isinstance(rec, TaskSummary)
         assert rec.id == 5
         assert rec.title == "Field check task"
         assert rec.status == "review"
@@ -318,7 +318,7 @@ class TestFromAC_FilterByUnclaimed:
         result = engine.list_tasks(unclaimed=True)
 
         assert len(result) == 2
-        assert all(t.claimed_by is None for t in result)
+        assert all(t.claimed is False for t in result)
 
     def test_unclaimed_false_returns_all_tasks(self, tmp_path: Path) -> None:
         """unclaimed=False means no filter — claimed and unclaimed both included."""

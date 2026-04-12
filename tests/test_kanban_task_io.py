@@ -1,7 +1,7 @@
 """Failing tests for task file I/O (#717, RED phase).
 
 AC coverage:
-  AC1 - read_task(path) -> TaskRecord: all frontmatter fields + markdown body
+  AC1 - read_task(path) -> Task: all frontmatter fields + markdown body
   AC2 - write_task(path, record): --- delimited YAML frontmatter + body
   AC3 - round-trip: unknown fields, body formatting, --- in body preserved
   AC4 - validate_path_containment: reject paths outside kanban tasks_dir
@@ -9,7 +9,7 @@ AC coverage:
   AC6 - Windows reserved filename rejection: CON, PRN, AUX, NUL, COM1-9, LPT1-9
   AC7 - file naming convention: {id}-{slug}.md
 
-Import path: owlbear_mcp_kanban.task_io (module does not exist yet).
+Import path: owlbear_kanban.task_io.
 """
 
 from __future__ import annotations
@@ -23,8 +23,8 @@ from unittest.mock import patch
 
 import pytest
 
-from owlbear_kanban.models import TaskRecord
-from owlbear_mcp_kanban.task_io import (  # type: ignore[import-not-found]
+from owlbear_kanban.models import Task
+from owlbear_kanban.task_io import (
     generate_slug,
     make_task_filename,
     read_task,
@@ -111,8 +111,8 @@ Content after first horizontal rule.
 Content after second horizontal rule.
 """
 
-# Minimal TaskRecord used in write tests
-_MINIMAL_RECORD = TaskRecord(
+# Minimal Task used in write tests
+_MINIMAL_RECORD = Task(
     id=42,
     title="Test task title",
     status="todo",
@@ -121,8 +121,8 @@ _MINIMAL_RECORD = TaskRecord(
     updated="2026-04-09T04:00:00.0000000+02:00",
 )
 
-# Full TaskRecord with all optional fields + unknown fields
-_FULL_RECORD = TaskRecord.model_validate(
+# Full Task with all optional fields + unknown fields
+_FULL_RECORD = Task.model_validate(
     {
         "id": 717,
         "title": "P3-05: RED \u2014 task file I/O (read, write, round-trip)",
@@ -145,7 +145,7 @@ _FULL_RECORD = TaskRecord.model_validate(
     }
 )
 
-_RECORD_WITH_DASHES_IN_BODY = TaskRecord(
+_RECORD_WITH_DASHES_IN_BODY = Task(
     id=99,
     title="Task with dashes in body",
     status="backlog",
@@ -162,16 +162,16 @@ _RECORD_WITH_DASHES_IN_BODY = TaskRecord(
 
 
 class TestFromAC_ReadTaskFile:
-    """Tests for AC1: read_task(path) -> TaskRecord with all frontmatter fields + body."""
+    """Tests for AC1: read_task(path) -> Task with all frontmatter fields + body."""
 
     # --- Happy path ---------------------------------------------------------
 
     def test_read_returns_task_record(self, tmp_path: Path) -> None:
-        """read_task returns a TaskRecord instance."""
+        """read_task returns a Task instance."""
         task_file = tmp_path / "42-test-task-title.md"
         task_file.write_text(_TASK_FILE_MINIMAL, encoding="utf-8")
         result = read_task(task_file)
-        assert isinstance(result, TaskRecord)
+        assert isinstance(result, Task)
 
     def test_read_parses_id(self, tmp_path: Path) -> None:
         """read_task correctly parses the id field as int."""
@@ -309,7 +309,7 @@ class TestFromAC_WriteTaskFile:
 
     def test_write_body_appears_after_second_delimiter(self, tmp_path: Path) -> None:
         """write_task places markdown body after the closing --- delimiter."""
-        record = TaskRecord(
+        record = Task(
             id=42,
             title="Title",
             status="todo",
@@ -423,7 +423,7 @@ class TestFromAC_RoundTrip:
     def test_round_trip_go_nanosecond_timestamp_exact(self, tmp_path: Path) -> None:
         """Round-trip preserves 7-digit Go nanosecond timestamp precision exactly."""
         go_ts = "2026-04-09T03:25:21.0909825+02:00"
-        record = TaskRecord(
+        record = Task(
             id=1,
             title="Precision test",
             status="todo",
@@ -440,7 +440,7 @@ class TestFromAC_RoundTrip:
     def test_round_trip_multiline_body_preserved(self, tmp_path: Path) -> None:
         """Round-trip preserves multi-paragraph body including blank lines."""
         multiline_body = "# Section 1\n\nParagraph one.\n\n# Section 2\n\nParagraph two.\n"
-        record = TaskRecord(
+        record = Task(
             id=5,
             title="Multi section",
             status="todo",
