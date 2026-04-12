@@ -88,7 +88,14 @@ class Task(BaseModel):
 
 
 class TaskSummary(BaseModel):
-    """Lightweight task summary for list operations — excludes body and claimed_by."""
+    """Lightweight task summary for list operations.
+
+    Excludes ``body``, ``claimed_by``, ``created``, and ``updated`` from the
+    full :class:`Task` schema.  ``claimed_by`` is coerced to a boolean
+    ``claimed`` field; temporal fields are silently dropped via
+    ``extra="ignore"``.  Dict-style read access (``summary["field"]``) is
+    supported for MCP serialisation consumers.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
@@ -102,8 +109,6 @@ class TaskSummary(BaseModel):
     claimed: bool = False
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
-    created: str = ""
-    updated: str = ""
 
     @model_validator(mode="before")
     @classmethod
@@ -113,3 +118,7 @@ class TaskSummary(BaseModel):
             data = dict(data)
             data["claimed"] = data.pop("claimed_by") is not None
         return data
+
+    def __getitem__(self, key: str) -> object:
+        """Allow dict-style read access for MCP serialisation consumers."""
+        return getattr(self, key)
