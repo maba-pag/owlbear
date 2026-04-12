@@ -6,7 +6,7 @@ reading, and writing kanban task files without invoking the kanban-md CLI.
 Architecture:
   - Constructor loads BoardConfig via config_loader.load_config().
   - list_tasks() scans tasks_dir (or archive dir), applies filters,
-    sorts by config-ranked field, and returns list[Task].
+    sorts by config-ranked field, and returns list[TaskSummary].
   - show_task() finds a single task file by ID and returns its Task.
   - create_task() allocates next_id, writes a new task file, increments config.
   - edit_task() modifies task fields in-place; slug/filename never changes.

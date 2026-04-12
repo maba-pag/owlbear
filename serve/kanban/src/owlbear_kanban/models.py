@@ -1,8 +1,9 @@
 """Engine-internal Pydantic models for the native kanban engine.
 
-BoardConfig — schema for .owlbear/kanban/config.yml
-Task        — schema for task file frontmatter + markdown body
-TaskRecord  — backward-compatibility alias for Task
+BoardConfig  — schema for .owlbear/kanban/config.yml
+Task         — schema for task file frontmatter + markdown body
+TaskRecord   — backward-compatibility alias for Task
+TaskSummary  — lightweight projection for list_tasks() results
 
 Timestamps are stored as plain strings to avoid Go nanosecond → Python
 microsecond precision drift on round-trips.
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class BoardInfo(BaseModel):
@@ -91,9 +92,9 @@ TaskRecord = Task
 
 
 class TaskSummary(BaseModel):
-    """Lightweight task summary for list operations."""
+    """Lightweight task summary for list operations — excludes body and claimed_by."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="ignore")
 
     id: int
     title: str
@@ -101,4 +102,18 @@ class TaskSummary(BaseModel):
     priority: str
     tags: list[str] = Field(default_factory=list)
     blocked: bool = False
-    claimed_by: str | None = None
+    block_reason: str | None = None
+    claimed: bool = False
+    parent: int | None = None
+    depends_on: list[int] = Field(default_factory=list)
+    created: str = ""
+    updated: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_claimed(cls, data: object) -> object:
+        """Convert claimed_by string to a boolean claimed flag."""
+        if isinstance(data, dict) and "claimed_by" in data:
+            data = dict(data)
+            data["claimed"] = data.pop("claimed_by") is not None
+        return data
