@@ -95,7 +95,7 @@ class KanbanEngine:
         The returned object is a ``model_copy()`` — mutating it does not
         affect engine state.
         """
-        return self._config.model_copy()
+        return self._config.model_copy(deep=True)
 
     def refresh_config(self) -> None:
         """Reload config from disk and update all derived state.
