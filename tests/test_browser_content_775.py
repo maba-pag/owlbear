@@ -42,12 +42,13 @@ class TestFromAC_ContentExtractor:
         from owlbear_browser.extractor import extract  # type: ignore[import-not-found]  # noqa: F401
 
     def test_extract_returns_string(self) -> None:
-        """extract() returns a string when given valid HTML."""
+        """extract() returns a string containing the page's main text content."""
         from owlbear_browser.extractor import extract  # type: ignore[import-not-found]
 
         html = "<html><body><article><p>Hello world</p></article></body></html>"
         result = extract(html)
         assert isinstance(result, str)
+        assert "Hello world" in result
 
     def test_extract_returns_main_content_text(self) -> None:
         """extract() includes text from the page's primary content area."""
@@ -70,11 +71,12 @@ class TestFromAC_ContentExtractor:
         assert "Paragraph content" in result
 
     def test_extract_empty_html_returns_string(self) -> None:
-        """extract('') returns a string without raising (empty content is valid input)."""
+        """extract('') returns an empty string without raising (empty content is valid input)."""
         from owlbear_browser.extractor import extract  # type: ignore[import-not-found]
 
         result = extract("")
         assert isinstance(result, str)
+        assert result == ""
 
     def test_extract_noise_only_page_omits_nav_and_footer(self) -> None:
         """extract() on a page containing only nav/footer does not include those texts."""
@@ -748,3 +750,228 @@ class TestBuilderDiscovered:
         assert "line1" in result
         assert "line2" in result
         assert "line3" in result
+
+
+# ---------------------------------------------------------------------------
+# #828 Binding AC 1: SharePoint-specific noise patterns
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SharePointPatterns:
+    """clean()/strip_noise() removes SharePoint-specific boilerplate by class and ID (#828 AC1)."""
+
+    # --- class-based patterns ---
+
+    def test_clean_strips_ms_breadcrumb_class(self) -> None:
+        """clean() removes <div class='ms-Breadcrumb'> breadcrumb chrome from output."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = (
+            '<div class="ms-Breadcrumb">Home &gt; Site &gt; Docs</div>'
+            "<p>Article body text</p>"
+        )
+        result = clean(html)
+        assert "Home" not in result or "Site" not in result, (
+            f"ms-Breadcrumb content still present after clean(): {result!r}"
+        )
+        assert "Article body text" in result
+
+    def test_clean_strips_ms_persona_class(self) -> None:
+        """clean() removes <div class='ms-Persona'> user avatar containers from output."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = (
+            '<div class="ms-Persona"><span>John Doe</span></div>'
+            "<p>Document content</p>"
+        )
+        result = clean(html)
+        assert "John Doe" not in result, (
+            f"ms-Persona content still present after clean(): {result!r}"
+        )
+        assert "Document content" in result
+
+    def test_clean_strips_ms_live_persona_class(self) -> None:
+        """clean() removes <div class='ms-LivePersona'> live persona containers from output."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = (
+            '<div class="ms-LivePersona"><span>Jane Smith</span></div>'
+            "<p>Page body</p>"
+        )
+        result = clean(html)
+        assert "Jane Smith" not in result, (
+            f"ms-LivePersona content still present after clean(): {result!r}"
+        )
+        assert "Page body" in result
+
+    def test_clean_strips_ms_datetime_field_class(self) -> None:
+        """clean() removes <div class='ms-DateTimeField'> dynamic timestamp widgets from output."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = (
+            '<div class="ms-DateTimeField">Modified: 3 hours ago</div>'
+            "<p>Main content text</p>"
+        )
+        result = clean(html)
+        assert "Modified: 3 hours ago" not in result, (
+            f"ms-DateTimeField content still present after clean(): {result!r}"
+        )
+        assert "Main content text" in result
+
+    # --- ID-based patterns ---
+
+    def test_clean_strips_suite_nav_placeholder_id(self) -> None:
+        """clean() removes <div id='SuiteNavPlaceHolder'> SharePoint suite nav from output."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = (
+            '<div id="SuiteNavPlaceHolder">Suite nav content here</div>'
+            "<p>Real article text</p>"
+        )
+        result = clean(html)
+        assert "Suite nav content here" not in result, (
+            f"SuiteNavPlaceHolder content still present after clean(): {result!r}"
+        )
+        assert "Real article text" in result
+
+    def test_clean_strips_o365_nav_header_id(self) -> None:
+        """clean() removes <div id='O365_NavHeader'> Office 365 nav header from output."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = (
+            '<div id="O365_NavHeader">Office 365 navigation header</div>'
+            "<p>Actual page content</p>"
+        )
+        result = clean(html)
+        assert "Office 365 navigation header" not in result, (
+            f"O365_NavHeader content still present after clean(): {result!r}"
+        )
+        assert "Actual page content" in result
+
+    def test_clean_strips_s4_ribbonrow_id(self) -> None:
+        """clean() removes <div id='s4-ribbonrow'> SharePoint ribbon toolbar from output."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = (
+            '<div id="s4-ribbonrow">Edit | Share | Follow</div>'
+            "<p>Content below ribbon</p>"
+        )
+        result = clean(html)
+        assert "Edit | Share | Follow" not in result, (
+            f"s4-ribbonrow content still present after clean(): {result!r}"
+        )
+        assert "Content below ribbon" in result
+
+
+# ---------------------------------------------------------------------------
+# #828 Binding AC 2: Content normalization — zero-width chars and carriage returns
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ContentNormalization:
+    """clean() removes zero-width Unicode artifacts and carriage returns (#828 AC2)."""
+
+    def test_clean_strips_zero_width_space_u200b(self) -> None:
+        """clean() removes U+200B (ZERO WIDTH SPACE) from HTML text content."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = "<p>Hello\u200bworld</p>"
+        result = clean(html)
+        assert "\u200b" not in result, (
+            f"U+200B (zero-width space) still present in clean() output: {result!r}"
+        )
+
+    def test_clean_strips_zero_width_nonjoiner_u200c(self) -> None:
+        """clean() removes U+200C (ZERO WIDTH NON-JOINER) from HTML text content."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = "<p>Content\u200cwith\u200cnon-joiners</p>"
+        result = clean(html)
+        assert "\u200c" not in result, (
+            f"U+200C (zero-width non-joiner) still present in clean() output: {result!r}"
+        )
+
+    def test_clean_strips_zero_width_joiner_u200d(self) -> None:
+        """clean() removes U+200D (ZERO WIDTH JOINER) from HTML text content."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = "<p>Text\u200dwith\u200djoiners</p>"
+        result = clean(html)
+        assert "\u200d" not in result, (
+            f"U+200D (zero-width joiner) still present in clean() output: {result!r}"
+        )
+
+    def test_clean_strips_bom_ufeff(self) -> None:
+        """clean() removes U+FEFF (BOM / ZERO WIDTH NO-BREAK SPACE) from HTML text content."""
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        html = "<p>\ufeffDocument with BOM artifact</p>"
+        result = clean(html)
+        assert "\ufeff" not in result, (
+            f"U+FEFF (BOM) still present in clean() output: {result!r}"
+        )
+
+    def test_normalize_content_strips_carriage_returns(self) -> None:
+        """_normalize_content() removes \\r from text that contains mid-line carriage returns."""
+        from owlbear_browser.cleaner import _normalize_content  # type: ignore[import-not-found]
+
+        text = "Line one\r\nLine two\rLine three"
+        result = _normalize_content(text)
+        assert "\r" not in result, (
+            f"Carriage return still present in _normalize_content() output: {result!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# #828 Binding AC 3: Deterministic output — hash stability with zero-width chars
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DeterministicOutput:
+    """clean() produces hash-stable output when inputs contain zero-width char artifacts (#828 AC3)."""
+
+    def test_clean_hash_stable_after_zero_width_space_removal(self) -> None:
+        """SHA-256 of clean() output is identical with and without U+200B in input HTML.
+
+        At GREEN phase, _normalize_content() must strip U+200B so that
+        compute_content_hash() produces the same value for content with or without the artifact.
+        FAILS at RED because _normalize_content() currently does not strip U+200B.
+        """
+        import hashlib
+
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        content = "This is test content for hash stability verification."
+        html_clean = f"<p>{content}</p>"
+        html_zw = f"<p>{content[:10]}\u200b{content[10:]}</p>"
+
+        hash_clean = hashlib.sha256(clean(html_clean).encode()).hexdigest()
+        hash_zw = hashlib.sha256(clean(html_zw).encode()).hexdigest()
+
+        assert hash_clean == hash_zw, (
+            "clean() should strip U+200B so SHA-256 hashes match for equivalent content; "
+            f"clean_hash={hash_clean[:8]}... zw_hash={hash_zw[:8]}..."
+        )
+
+    def test_clean_hash_stable_after_all_zero_width_chars_removed(self) -> None:
+        """SHA-256 of clean() output is identical when all four zero-width chars are stripped.
+
+        Input HTML with U+200B, U+200C, U+200D, and U+FEFF injected into text content
+        should produce the same hash as the same content without those chars.
+        FAILS at RED because _normalize_content() currently does not strip any of them.
+        """
+        import hashlib
+
+        from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
+
+        base = "Stable content for multi-artifact hash test."
+        html_clean = f"<p>{base}</p>"
+        html_dirty = f"<p>\ufeff{base[:8]}\u200b{base[8:16]}\u200c{base[16:24]}\u200d{base[24:]}</p>"
+
+        hash_clean = hashlib.sha256(clean(html_clean).encode()).hexdigest()
+        hash_dirty = hashlib.sha256(clean(html_dirty).encode()).hexdigest()
+
+        assert hash_clean == hash_dirty, (
+            "clean() should strip all zero-width chars (U+200B/200C/200D/FEFF) so hashes match; "
+            f"clean_hash={hash_clean[:8]}... dirty_hash={hash_dirty[:8]}..."
+        )
