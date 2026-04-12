@@ -198,9 +198,9 @@ class KanbanEngine:
             elif sort == "title":
                 tasks.sort(key=lambda t: t.title)
             elif sort == "created":
-                tasks.sort(key=lambda t: t.created)
+                tasks.sort(key=lambda t: datetime.fromisoformat(t.created))
             elif sort == "updated":
-                tasks.sort(key=lambda t: t.updated)
+                tasks.sort(key=lambda t: datetime.fromisoformat(t.updated))
 
         if reverse:
             tasks.reverse()
@@ -253,6 +253,9 @@ class KanbanEngine:
 
         Returns:
             The newly created :class:`Task`.
+
+        Raises:
+            ValueError: ``status`` or ``priority`` is not a valid configured value.
         """
         config: BoardConfig = load_config(self._kanban_dir)
 
@@ -337,6 +340,7 @@ class KanbanEngine:
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
+            ValueError: ``status`` or ``priority`` is not a valid configured value.
         """
         if status is not None:
             valid_statuses = {s["name"] for s in self._config.statuses}
