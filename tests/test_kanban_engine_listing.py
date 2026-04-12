@@ -549,6 +549,38 @@ class TestFromAC_SortByField:
 
         assert [t.id for t in result] == [1, 2]
 
+    # -----------------------------------------------------------------------
+    # AC4 — stored timestamp strings unchanged after datetime-based sort (#815)
+    # -----------------------------------------------------------------------
+
+    def test_sort_round_trip_string_fidelity(self, tmp_path: Path) -> None:
+        """AC4: list_tasks() returns the exact stored timestamp string — no mutation.
+
+        The sort key uses datetime.fromisoformat() for comparison only.
+        The stored Go 7-digit string must survive the round-trip unchanged:
+        7th digit must not be truncated, TZ offset must not be normalised.
+
+        This test also asserts correct UTC order so it fails RED:
+        Task 1: 2026-01-15T12:00:00.1234567+02:00 == 10:00 UTC (earlier)
+        Task 2: 2026-01-15T11:00:00.000000+00:00  == 11:00 UTC (later)
+        String sort: [2, 1] (wrong).  Correct UTC sort: [1, 2].
+        """
+        go_ts = "2026-01-15T12:00:00.1234567+02:00"  # Go 7-digit, 10:00 UTC
+        py_ts = "2026-01-15T11:00:00.000000+00:00"   # Python 6-digit, 11:00 UTC
+
+        kdir = _make_kanban_dir(tmp_path)
+        _add_task(kdir, 1, "Go fmt round trip", created=go_ts)
+        _add_task(kdir, 2, "Python fmt round trip", created=py_ts)
+
+        engine = KanbanEngine(kdir)
+        result = engine.list_tasks(sort="created")
+
+        # Correct UTC chronological order — FAILS RED with string sort
+        assert [t.id for t in result] == [1, 2]
+        # Go 7-digit string preserved exactly (not truncated to 6-digit µs)
+        task1 = next(t for t in result if t.id == 1)
+        assert task1.created == go_ts
+
 
 # ===========================================================================
 # AC5 — reverse ordering
