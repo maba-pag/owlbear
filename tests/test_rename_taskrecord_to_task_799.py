@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban.engine import KanbanEngine
-from owlbear_kanban.models import Task, TaskRecord
+from owlbear_kanban.models import Task, TaskRecord, TaskSummary
 
 # ---------------------------------------------------------------------------
 # Shared config — mirrors _BASE_CONFIG_YAML from test_kanban_engine_crud.py
@@ -127,12 +127,12 @@ class TestFromAC_RenameTaskRecordToTask:
     # --- AC3: CRUD — list_tasks returns list of Task instances --------------
 
     def test_list_tasks_returns_list_of_task_instances(self, engine: KanbanEngine) -> None:
-        """list_tasks returns Task instances - all items are isinstance(r, Task)."""
+        """list_tasks returns TaskSummary instances - all items are isinstance(r, TaskSummary)."""
         engine.create_task("List item alpha")
         engine.create_task("List item beta")
         results = engine.list_tasks()
         assert len(results) >= 2
-        assert all(isinstance(r, Task) for r in results)
+        assert all(isinstance(r, TaskSummary) for r in results)
 
     # --- Edge: list_tasks on empty board ------------------------------------
 
