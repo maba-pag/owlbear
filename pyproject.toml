@@ -23,6 +23,7 @@ validation = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
+pythonpath = ["serve/kanban/src"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile"
 asyncio_mode = "strict"
 markers = [
@@ -36,6 +37,7 @@ markers = [
 target-version = "py312"
 line-length = 120
 src = [
+  "serve/kanban/src",
   "serve/orchestrator/src",
   "serve/knowledge/src",
   "serve/mcp-kanban/src",
@@ -86,6 +88,7 @@ ignore = [
   "PERF401", # list comprehension recommendation — readability preference in tests
   "PLW1510", # subprocess.run without check — intentional in test assertions
   "PT001",   # pytest.raises usage — test-writer style preference
+  "PT011",   # pytest.raises without match= — intentional in negative value tests
   "RUF100",  # unused noqa — pre-existing marker suppression in test files
   "S101",    # assert is fine in tests
   "S105",    # token/password false positives in test assertions
@@ -111,6 +114,7 @@ ignore = [
   "PERF401", # list comprehension recommendation — readability preference in tests
   "PLW1510", # subprocess.run without check — intentional in test assertions
   "PT001",   # pytest.raises usage — test-writer style preference
+  "PT011",   # pytest.raises without match= — intentional in negative value tests
   "RUF100",  # unused noqa — pre-existing marker suppression in test files
   "S101",    # assert is fine in tests
   "S105",    # token/password false positives in test assertions
@@ -135,6 +139,7 @@ quote-style = "double"
 [tool.coverage.run]
 source_pkgs = [
   "owlbear",
+  "owlbear_kanban",
   "owlbear_orchestrator",
   "owlbear_knowledge",
   "owlbear_mcp_browser",
