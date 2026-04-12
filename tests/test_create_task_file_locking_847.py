@@ -257,34 +257,6 @@ class TestFromAC_CriticalSectionProtection:
 # ===========================================================================
 
 
-# Module-level worker required by multiprocessing (lambdas / nested functions
-# are not picklable on all platforms).
-def _mp_create_task(kanban_dir_str: str, ready_path: str, proceed_path: str) -> int:
-    """Helper invoked in a child process: signals readiness, waits for the
-    proceed flag, then creates one task and returns its ID."""
-    import time
-    from pathlib import Path
-
-    from owlbear_kanban import KanbanEngine
-
-    kanban_dir = Path(kanban_dir_str)
-    engine = KanbanEngine(kanban_dir)
-
-    # Signal that this process has loaded its engine and is ready to race.
-    Path(ready_path).touch()
-
-    # Busy-wait until both processes are ready (proceed flag set by parent).
-    deadline = time.monotonic() + 5.0
-    while not Path(proceed_path).exists():
-        if time.monotonic() > deadline:
-            msg = "proceed signal not received within 5 s"
-            raise TimeoutError(msg)
-        time.sleep(0.002)
-
-    task = engine.create_task("cross-process task")
-    return task.id
-
-
 class TestFromAC_CrossPlatformLocking:
     """Lock must work across SEPARATE processes (the real use-case for AC3).
 
@@ -308,34 +280,79 @@ class TestFromAC_CrossPlatformLocking:
         create_task as close to simultaneously as possible, maximising the
         probability of a race without a cross-process lock.
 
-        Currently FAILS because create_task uses no OS file lock — both
-        processes read next_id=100 before either writes the incremented value.
+        Uses subprocess.Popen with an inline -c script rather than
+        ProcessPoolExecutor so the worker is never pickled by reference —
+        avoiding the ModuleNotFoundError that arises when the spawned process
+        tries to import ``tests.test_create_task_file_locking_847``.
         """
-        import multiprocessing
-        from concurrent.futures import ProcessPoolExecutor
+        import subprocess
+        import sys
 
+        repo_root = Path(__file__).parent.parent
+        kanban_str = str(kanban_dir)
         ready1 = str(tmp_path / "ready1.flag")
         ready2 = str(tmp_path / "ready2.flag")
         proceed = str(tmp_path / "proceed.flag")
-        kanban_str = str(kanban_dir)
 
-        ctx = multiprocessing.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=2, mp_context=ctx) as pool:
-            f1 = pool.submit(_mp_create_task, kanban_str, ready1, proceed)
-            f2 = pool.submit(_mp_create_task, kanban_str, ready2, proceed)
+        # Inline script — no module-level pickling, no conftest.py bootstrap.
+        # sys.path is extended explicitly so owlbear_kanban is importable even
+        # when the subprocess was not started through pytest/uv.
+        worker_src = (
+            "import sys, time\n"
+            "from pathlib import Path\n"
+            "repo_root, kanban_dir_s, ready_s, proceed_s = sys.argv[1:]\n"
+            "sys.path.insert(0, str(Path(repo_root) / 'serve' / 'kanban' / 'src'))\n"
+            "from owlbear_kanban import KanbanEngine\n"
+            "engine = KanbanEngine(Path(kanban_dir_s))\n"
+            "Path(ready_s).touch()\n"
+            "deadline = time.monotonic() + 5.0\n"
+            "while not Path(proceed_s).exists():\n"
+            "    if time.monotonic() > deadline:\n"
+            "        raise TimeoutError('proceed not received')\n"
+            "    time.sleep(0.002)\n"
+            "task = engine.create_task('cross-process task')\n"
+            "print(task.id)\n"
+        )
+        base_cmd = [sys.executable, "-c", worker_src, str(repo_root), kanban_str]
 
+        p1 = subprocess.Popen(
+            [*base_cmd, ready1, proceed],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        p2 = subprocess.Popen(
+            [*base_cmd, ready2, proceed],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        try:
             # Wait until both worker processes have initialised their engines.
             deadline = time.monotonic() + 10.0
             while not (Path(ready1).exists() and Path(ready2).exists()):
                 if time.monotonic() > deadline:
+                    p1.kill()
+                    p2.kill()
                     pytest.fail("Worker processes did not signal ready within 10 s")
                 time.sleep(0.01)
 
             # Release both processes simultaneously.
             Path(proceed).touch()
 
-            id1 = f1.result(timeout=15)
-            id2 = f2.result(timeout=15)
+            out1, err1 = p1.communicate(timeout=15)
+            out2, err2 = p2.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            p1.kill()
+            p2.kill()
+            pytest.fail("Worker processes timed out waiting for create_task to complete")
+
+        assert p1.returncode == 0, f"Worker 1 failed (exit {p1.returncode}):\n{err1}"
+        assert p2.returncode == 0, f"Worker 2 failed (exit {p2.returncode}):\n{err2}"
+
+        id1 = int(out1.strip())
+        id2 = int(out2.strip())
 
         assert id1 != id2, (
             f"Cross-process TOCTOU race: both processes received task ID {id1} — "
