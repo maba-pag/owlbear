@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from owlbear_mcp_kanban.engine import KanbanEngine  # type: ignore[import-not-found]
+from owlbear_kanban import KanbanEngine
 
 # ---------------------------------------------------------------------------
 # Priority / status rank maps — derived from config.yml statuses/priorities
@@ -170,7 +170,7 @@ class TestFromAC_ListAllTasks:
 
     def test_result_items_are_task_records(self, tmp_path: Path) -> None:
         """list_tasks() returns list[TaskRecord] with correct field values."""
-        from owlbear_mcp_kanban.engine_models import TaskRecord
+        from owlbear_kanban.models import TaskRecord
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 5, "Field check task", status="review", priority="needed")
@@ -467,6 +467,87 @@ class TestFromAC_SortByField:
         result = engine.list_tasks(sort="updated")
 
         assert [t.id for t in result] == [1, 3, 2]
+
+    # -----------------------------------------------------------------------
+    # AC1 — sort by created with mixed timezone offsets (#815)
+    # -----------------------------------------------------------------------
+
+    def test_sort_by_created_mixed_tz_offsets(self, tmp_path: Path) -> None:
+        """AC1: created sort uses UTC order, not string order, with mixed TZ offsets.
+
+        Task 1: 2026-01-01T12:00:00+02:00 == 10:00 UTC (earlier — should rank first)
+        Task 2: 2026-01-01T11:00:00+00:00 == 11:00 UTC (later  — should rank second)
+        String sort orders by numeric hour digit: "11..." < "12..." → wrong [2, 1].
+        Correct UTC sort: [1, 2].
+        """
+        kdir = _make_kanban_dir(tmp_path)
+        _add_task(
+            kdir, 1, "Earlier UTC",
+            created="2026-01-01T12:00:00.0000000+02:00",
+        )
+        _add_task(
+            kdir, 2, "Later UTC",
+            created="2026-01-01T11:00:00.0000000+00:00",
+        )
+
+        engine = KanbanEngine(kdir)
+        result = engine.list_tasks(sort="created")
+
+        assert [t.id for t in result] == [1, 2]
+
+    # -----------------------------------------------------------------------
+    # AC2 — sort by updated with mixed timezone offsets (#815)
+    # -----------------------------------------------------------------------
+
+    def test_sort_by_updated_mixed_tz_offsets(self, tmp_path: Path) -> None:
+        """AC2: updated sort uses UTC order, not string order, with mixed TZ offsets.
+
+        Task 1: 2026-02-01T12:00:00+02:00 == 10:00 UTC (earlier — should rank first)
+        Task 2: 2026-02-01T11:00:00+00:00 == 11:00 UTC (later  — should rank second)
+        String sort orders by hour digit: "11..." < "12..." → wrong [2, 1].
+        Correct UTC sort: [1, 2].
+        """
+        kdir = _make_kanban_dir(tmp_path)
+        _add_task(
+            kdir, 1, "Earlier UTC updated",
+            updated="2026-02-01T12:00:00.0000000+02:00",
+        )
+        _add_task(
+            kdir, 2, "Later UTC updated",
+            updated="2026-02-01T11:00:00.0000000+00:00",
+        )
+
+        engine = KanbanEngine(kdir)
+        result = engine.list_tasks(sort="updated")
+
+        assert [t.id for t in result] == [1, 2]
+
+    # -----------------------------------------------------------------------
+    # AC3 — mixed Go 7-digit and Python 6-digit precision formats (#815)
+    # -----------------------------------------------------------------------
+
+    def test_sort_by_created_mixed_precision_formats(self, tmp_path: Path) -> None:
+        """AC3: sort handles Go 7-digit nanosecond and Python 6-digit microsecond formats.
+
+        Task 1: Go format    2026-01-01T12:00:00.1234567+02:00 == 10:00 UTC (earlier)
+        Task 2: Python format 2026-01-01T11:00:00.123456+00:00 == 11:00 UTC (later)
+        String sort: "11..." < "12..." → wrong [2, 1].
+        Correct UTC sort: [1, 2].
+        """
+        kdir = _make_kanban_dir(tmp_path)
+        _add_task(
+            kdir, 1, "Go fmt earlier UTC",
+            created="2026-01-01T12:00:00.1234567+02:00",
+        )
+        _add_task(
+            kdir, 2, "Python fmt later UTC",
+            created="2026-01-01T11:00:00.123456+00:00",
+        )
+
+        engine = KanbanEngine(kdir)
+        result = engine.list_tasks(sort="created")
+
+        assert [t.id for t in result] == [1, 2]
 
 
 # ===========================================================================
