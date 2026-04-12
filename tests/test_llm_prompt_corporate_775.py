@@ -4,7 +4,7 @@ Tests assert that LLM_EXTRACTION_PROMPT contains descriptive classification
 hints and contrastive guidance for corporate entity types and relation types
 BEYOND the bare comma-separated enum-value listings.
 
-Task: #789 (parent: #775 scope item 9)
+Task: #766 (parent: #751)
 ALL tests must fail RED against the current prompt — the prompt only contains
 comma-separated enum-value lists with no descriptive/contrastive text.
 """
