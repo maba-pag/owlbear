@@ -233,7 +233,7 @@ class TestFromAC_LifespanCleanup:
         ):
             server = MagicMock()
             err_msg = "test_exception"
-        with pytest.raises(RuntimeError, match=err_msg):
+            with pytest.raises(RuntimeError, match=err_msg):
                 async with app_lifespan(server):
                     raise RuntimeError(err_msg)
 
