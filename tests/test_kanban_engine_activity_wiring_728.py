@@ -71,7 +71,7 @@ def kanban_dir(tmp_path: Path) -> Path:
 @pytest.fixture()
 def engine(kanban_dir: Path) -> KanbanEngine:
     """KanbanEngine wired to temp kanban_dir with fixed agent_name."""
-    return KanbanEngine(kanban_dir, agent_name="test-agent")
+    return KanbanEngine(kanban_dir, agent_name="test-agent", activity_log=True)
 
 
 # ---------------------------------------------------------------------------

@@ -94,7 +94,8 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Instantiate KanbanEngine and yield AppContext for the MCP session."""
     kanban_dir: Path = _DEFAULT_KANBAN_DIR
     _apply_tool_exclusions(_server)
-    engine = KanbanEngine(kanban_dir)
+    activity_log = os.environ.get("KANBAN_ACTIVITY_LOG", "").strip().lower() in {"1", "true", "yes"}
+    engine = KanbanEngine(kanban_dir, activity_log=activity_log)
     yield AppContext(engine=engine, kanban_dir=kanban_dir)
 
 
