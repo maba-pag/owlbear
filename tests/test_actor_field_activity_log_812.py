@@ -1,4 +1,4 @@
-"""Failing RED tests for actor field addition to activity log (#812).
+"""GREEN tests for actor field addition to activity log (#812).
 
 AC coverage:
   AC1 - log_activity() gains actor parameter (default: "engine")
@@ -6,7 +6,7 @@ AC coverage:
   AC3 - New JSONL entries include "actor" field
   AC4 - Old entries without actor remain readable (backward compatible — no migration)
 
-All tests must FAIL against the current 4-param log_activity() — GREEN phase is task #812.
+All tests pass GREEN against the 5-param log_activity() implemented in task #812.
 """
 
 from __future__ import annotations
