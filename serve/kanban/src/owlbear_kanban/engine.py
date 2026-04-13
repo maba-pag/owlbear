@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import contextlib
 import random
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -34,9 +36,58 @@ from owlbear_kanban.models import BoardConfig, Task, TaskSummary
 from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from pathlib import Path
 
 _ARCHIVE_DIR_NAME = "archive"
+
+
+def _move_file(src: Path, dest: Path) -> None:
+    """Move *src* to *dest*, preferring ``git mv`` when inside a git repo.
+
+    Falls back to :meth:`Path.replace` when ``git`` is unavailable, the file
+    is not tracked, or the repo check fails for any reason.
+    """
+    try:
+        result = subprocess.run(  # noqa: S603
+            ["git", "mv", str(src), str(dest)],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            return
+    except FileNotFoundError:
+        # git not installed
+        pass
+    src.replace(dest)
+
+
+@contextlib.contextmanager
+def _exclusive_file_lock(lock_path: Path) -> Generator[None, None, None]:
+    """Acquire an exclusive cross-process file lock on *lock_path*.
+
+    Uses ``msvcrt.locking`` on Windows and ``fcntl.flock`` on Unix.
+    The lock is always released, including on exception paths.
+    """
+    with lock_path.open("a+b") as fh:
+        if sys.platform == "win32":
+            import msvcrt  # noqa: PLC0415
+
+            fh.seek(0)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                yield
+            finally:
+                fh.seek(0)
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl  # noqa: PLC0415
+
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
 
 class KanbanEngine:
@@ -257,41 +308,43 @@ class KanbanEngine:
         Raises:
             ValueError: ``status`` or ``priority`` is not a valid configured value.
         """
-        config: BoardConfig = load_config(self._kanban_dir)
+        with _exclusive_file_lock(self._kanban_dir / ".next_id.lock"):
+            config: BoardConfig = load_config(self._kanban_dir)
 
-        if status:
-            valid_statuses = {s["name"] for s in config.statuses}
-            if status not in valid_statuses:
-                msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
+            if status:
+                valid_statuses = {s["name"] for s in config.statuses}
+                if status not in valid_statuses:
+                    msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
+                    raise ValueError(msg)
+            if priority and priority not in config.priorities:
+                msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
                 raise ValueError(msg)
-        if priority and priority not in config.priorities:
-            msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
-            raise ValueError(msg)
 
-        task_id = config.next_id
-        now = datetime.now(tz=UTC).isoformat()
+            task_id = config.next_id
+            now = datetime.now(tz=UTC).isoformat()
 
-        record = Task(
-            id=task_id,
-            title=title,
-            status=status or config.defaults.status,
-            priority=priority or config.defaults.priority,
-            created=now,
-            updated=now,
-            body=body,
-            tags=list(tags) if tags else [],
-            parent=parent,
-            depends_on=list(depends_on) if depends_on else [],
-        )
+            record = Task(
+                id=task_id,
+                title=title,
+                status=status or config.defaults.status,
+                priority=priority or config.defaults.priority,
+                created=now,
+                updated=now,
+                body=body,
+                tags=list(tags) if tags else [],
+                parent=parent,
+                depends_on=list(depends_on) if depends_on else [],
+            )
 
-        filename = make_task_filename(task_id, title)
-        task_path = self._tasks_dir / filename
-        validate_path_containment(self._tasks_dir, task_path)
-        write_task(task_path, record)
+            filename = make_task_filename(task_id, title)
+            task_path = self._tasks_dir / filename
+            validate_path_containment(self._tasks_dir, task_path)
+            write_task(task_path, record)
 
-        config.next_id = task_id + 1
-        save_config(self._kanban_dir, config)
-        self._config = config
+            config.next_id = task_id + 1
+            save_config(self._kanban_dir, config)
+            self._config = config
+
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
         self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME
 
@@ -445,7 +498,7 @@ class KanbanEngine:
         if status == "archived":
             self._archive_dir.mkdir(parents=True, exist_ok=True)
             dest = self._archive_dir / task_path.name
-            task_path.replace(dest)
+            _move_file(task_path, dest)
             record.status = "archived"
         else:
             record.status = status

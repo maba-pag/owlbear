@@ -126,7 +126,7 @@ class CDPConnectionManager:
         """
         for domain in _IDP_DOMAINS:
             if domain in page.url:
-                msg = f"SSO redirect detected: {page.url}"
+                msg = f"SSO session expired: login redirect to {page.url}"
                 raise AuthenticationRequired(msg)
 
         login_field = page.query_selector("input[type='password']")

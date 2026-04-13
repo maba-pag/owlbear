@@ -60,7 +60,7 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
 _mcp = FastMCP("owlbear-mcp-browser", lifespan=app_lifespan)
 
 
-@_mcp.tool(annotations=ToolAnnotations(idempotentHint=True, destructiveHint=False))
+@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
 async def navigate(url: str) -> str:
     """Navigate the browser to *url*."""
     domains_env = os.environ.get("BROWSER_ALLOWED_DOMAINS", "")
@@ -73,31 +73,31 @@ async def navigate(url: str) -> str:
     return url
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
 async def click(selector: str) -> str:
     """Click the element identified by *selector*."""
     return selector
 
 
-@_mcp.tool(name="type", annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+@_mcp.tool(name="type", annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
 async def type_input(selector: str, text: str) -> str:
     """Type *text* into the element identified by *selector*."""
     return f"{selector}:{text}"
 
 
-@_mcp.tool(annotations=ToolAnnotations(idempotentHint=True, destructiveHint=False))
+@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
 async def select(selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
     return f"{selector}:{value}"
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def read_text() -> str:
     """Read the visible text content of the current page."""
     return ""
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
+@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def snapshot() -> str:
     """Take an accessibility snapshot of the current page as Markdown."""
     return ""
