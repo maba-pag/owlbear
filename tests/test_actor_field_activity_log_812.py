@@ -194,7 +194,7 @@ class TestFromAC_EngineCallSitesPassActor:
         entries = _read_entries(_activity_log(kanban_dir))
         create_entries = [e for e in entries if e["action"] == "create"]
         assert len(create_entries) == 1
-        assert "actor" in create_entries[0]
+        assert create_entries[0]["actor"] == "test-agent"
 
     def test_edit_task_entry_has_actor(
         self, engine: KanbanEngine, kanban_dir: Path
@@ -206,7 +206,7 @@ class TestFromAC_EngineCallSitesPassActor:
         entries = _read_entries(_activity_log(kanban_dir))
         edit_entries = [e for e in entries if e["action"] == "edit"]
         assert len(edit_entries) == 1
-        assert "actor" in edit_entries[0]
+        assert edit_entries[0]["actor"] == "test-agent"
 
     def test_move_task_entry_has_actor(
         self, engine: KanbanEngine, kanban_dir: Path
@@ -218,7 +218,7 @@ class TestFromAC_EngineCallSitesPassActor:
         entries = _read_entries(_activity_log(kanban_dir))
         move_entries = [e for e in entries if e["action"] == "move"]
         assert len(move_entries) == 1
-        assert "actor" in move_entries[0]
+        assert move_entries[0]["actor"] == "test-agent"
 
     def test_claim_task_entry_has_actor(
         self, engine: KanbanEngine, kanban_dir: Path
@@ -231,7 +231,7 @@ class TestFromAC_EngineCallSitesPassActor:
         entries = _read_entries(_activity_log(kanban_dir))
         claim_entries = [e for e in entries if e["action"] == "claim"]
         assert len(claim_entries) == 1
-        assert "actor" in claim_entries[0]
+        assert claim_entries[0]["actor"] == "test-agent"
 
     def test_release_task_entry_has_actor(
         self, engine: KanbanEngine, kanban_dir: Path
@@ -245,7 +245,7 @@ class TestFromAC_EngineCallSitesPassActor:
         entries = _read_entries(_activity_log(kanban_dir))
         release_entries = [e for e in entries if e["action"] == "release"]
         assert len(release_entries) == 1
-        assert "actor" in release_entries[0]
+        assert release_entries[0]["actor"] == "test-agent"
 
     def test_block_task_entry_has_actor(
         self, engine: KanbanEngine, kanban_dir: Path
@@ -257,7 +257,7 @@ class TestFromAC_EngineCallSitesPassActor:
         entries = _read_entries(_activity_log(kanban_dir))
         block_entries = [e for e in entries if e["action"] == "block"]
         assert len(block_entries) == 1
-        assert "actor" in block_entries[0]
+        assert block_entries[0]["actor"] == "test-agent"
 
     def test_unblock_task_entry_has_actor(
         self, engine: KanbanEngine, kanban_dir: Path
@@ -270,7 +270,7 @@ class TestFromAC_EngineCallSitesPassActor:
         entries = _read_entries(_activity_log(kanban_dir))
         unblock_entries = [e for e in entries if e["action"] == "unblock"]
         assert len(unblock_entries) == 1
-        assert "actor" in unblock_entries[0]
+        assert unblock_entries[0]["actor"] == "test-agent"
 
 
 # ===========================================================================
