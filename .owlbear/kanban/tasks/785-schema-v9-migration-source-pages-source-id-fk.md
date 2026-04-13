@@ -1,10 +1,10 @@
 ---
 id: 785
 title: Schema v9 migration (source_pages, source_id FK)
-status: review
+status: done
 priority: needed
 created: '2026-04-10T12:31:05.190224+00:00'
-updated: '2026-04-13T02:23:16.426960+00:00'
+updated: '2026-04-13T04:52:26.489879+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -13,8 +13,8 @@ depends_on:
 - 780
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: tall-wolf
+claimed_at: '2026-04-13T04:52:26.489879+00:00'
 ---
 ## Acceptance Criteria
 
@@ -187,3 +187,116 @@ Verified against `serve/knowledge/src/owlbear_knowledge/schema.py`:
 
 ### Pass-Through Rationale
 Test-writer explicitly filed this as a pass-through: "All 10 tests PASS — implementation complete per Authoritative AC." Architecture review confirmed: "Implementation already landed in schema.py; builder verifies conformance." No new code was required.
+[[2026-04-13]]
+## Review Evidence
+
+### Test Results
+- pytest: **31 passed, 0 failed** (10 from test_schema_v9_785.py + 21 from test_schema_v9_775.py)
+
+### Lint
+- ruff: **clean** — schema.py and test_schema_v9_785.py, no violations
+
+### Coverage
+- owlbear_knowledge.schema: **64%** — lower bound: older migration helpers (v1→v8) are covered by their own task test files, not this task's scope. Acceptable.
+
+### Pass 1 — CRITICAL
+
+#### 5.0 Test-Writer AC Coverage (TestFromAC_SchemaV9FreshInit)
+
+| AC Line | Mapped Test(s) | Would Fail If AC Violated? | Verdict |
+|---------|---------------|---------------------------|---------|
+| AC1: `_SCHEMA_VERSION = 9` | `test_fresh_init_schema_version_table_records_9` (asserts `row[0] == 9`) | YES — would get 8 or different value | COVERED |
+| AC2: source_pages table + columns (constraints) | `test_fresh_init_source_pages_table_exists`, `test_fresh_init_source_pages_url_is_not_null`, `test_fresh_init_source_pages_source_id_nullable`, `test_fresh_init_source_pages_status_defaults_to_discovered`, `test_fresh_init_source_pages_scope_defaults_to_global` | YES — each tests a hard constraint | COVERED |
+| AC2: column inventory (extraction_hash, last_extracted, created_at, updated_at) | test_schema_v9_775.py → `test_source_pages_has_column` (parametrized, 9 columns) | YES — parametrized test fails per missing column | COVERED (via #780 partner file) |
+| AC3: documents.source_id TEXT nullable | `test_fresh_init_documents_has_source_id_column` | YES — PRAGMA table_info assertion would fail | COVERED |
+| AC4 (mapped): idx_source_pages_source_id | `test_fresh_init_creates_idx_source_pages_source_id` | YES — index name set assertion | COVERED |
+| AC4 (Authoritative): `_SCOPE_TABLES` includes source_pages | `test_fresh_init_creates_idx_source_pages_scope` + `test_fresh_init_idx_source_pages_scope_bound_to_source_pages` | YES — scope index existence + tbl_name binding | COVERED |
+| AC5: All #780 tests pass | 21 tests in test_schema_v9_775.py all green | YES — MetaAC verified by runner | COVERED |
+
+No MISSING findings. AC2 full column inventory is split between the two complementary test files — a legitimate and documented division of labour.
+
+#### 5.1 Security Review
+- No hardcoded secrets, tokens, or API keys
+- All SQL uses `?` parameter placeholders — no injection risk
+- `_SCOPE_TABLES` and scope-loop format strings use hardcoded internal constants, not user input — no SQL injection surface
+- No file path operations, deserialization, or new external dependencies
+
+**No issues.**
+
+#### 5.2 Test Integrity
+Builder made no file changes (retroactive TDD pass-through). All `TestFromAC_*` tests are preserved exactly as written by the test-writer.
+
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| All 10 TestFromAC tests | None | PRESERVED |
+
+#### 5.3 Test Quality
+- **Assertion specificity:** STRONG — `row[0] == 9`, specific index names in sets, `pytest.raises(IntegrityError)`, PRAGMA-based column checks
+- **Negative/error-path coverage:** ADEQUATE — `test_fresh_init_source_pages_url_is_not_null` explicitly tests the NOT NULL constraint fires
+- **Mutation resistance:** STRONG — removing `source_pages`, dropping NOT NULL, changing default, removing the index all fail specific tests
+- **Test independence:** STRONG — each test creates a fresh in-memory DB via `_fresh_db()`
+- **Descriptive names:** STRONG — all names are clearly behavioural
+
+ADEQUATE or better on all dimensions. No WEAK rating.
+
+#### 5.4 Data Safety
+- In-memory SQLite tests, no shared mutable state
+- `contextlib.suppress(OperationalError)` pattern is idempotent and correct
+- No LLM output, no race conditions, no unbounded input
+
+**No issues.**
+
+#### 5.5 Implementation-Aware Test Gap Analysis
+- `init_db` explicitly creates `idx_source_pages_source_id` (schema.py line ~323). Test covers this. PASS.
+- `_apply_migrations` v8→v9 path covered by #780 tests. PASS.
+- `contextlib.suppress` idempotency on `ALTER TABLE documents ADD COLUMN source_id TEXT` — not tested here but not in scope for #785's fresh-init coverage focus. The migration path tests cover the v8→v9 execution. ACCEPTABLE.
+
+**No significant untested paths in scope.**
+
+#### 5.6 Necessity Check
+Not applicable — no new dependencies, this is schema DDL only.
+
+#### 5.7 Builder Process Quality
+- One `## Builder Notes` section, clean history, no retries. **CLEAN.**
+
+### Pass 2 — INFORMATIONAL (non-blocking)
+
+1. **Stale docstring in `test_fresh_init_creates_idx_source_pages_source_id`:** docstring body says "FAILS: the index is created only in `_migrate_v8_to_v9()`" but `init_db` explicitly creates it at line ~323, so the test PASSES. Stale note from test-writer's initial analysis before codebase verification. Cosmetic only — test name and assertion are correct.
+
+2. **Duplicate assertion in `test_fresh_init_idx_source_pages_scope_bound_to_source_pages`:** `assert row[0] == "source_pages"` appears twice consecutively. Harmless but should be cleaned up.
+
+### AC Compliance Table (Authoritative AC)
+
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `_SCHEMA_VERSION = 9` | schema.py:19 `_SCHEMA_VERSION: int = 9` | `test_fresh_init_schema_version_table_records_9` | PASS |
+| source_pages table, all 9 columns | schema.py:154-165 `_CREATE_SOURCE_PAGES` DDL; migration-path PRAGMA tests in #780 | Multiple (constraint + inventory split) | PASS |
+| documents.source_id TEXT nullable | schema.py:262 `ALTER TABLE documents ADD COLUMN source_id TEXT` | `test_fresh_init_documents_has_source_id_column` + #780 migration test | PASS |
+| `_SCOPE_TABLES` includes source_pages | schema.py:22-29 tuple verified | `test_fresh_init_creates_idx_source_pages_scope` + scope-bound test | PASS |
+| All #780 tests pass | 21 tests in test_schema_v9_775.py: 21 passed, 0 failed | Quality-Runner run 2026-04-13 | PASS |
+| File: serve/knowledge/src/owlbear_knowledge/schema.py | File path confirmed | — | PASS |
+
+### Verdict
+
+All Pass 1 criteria met. 0 deductions for critical findings. 2 informational items (stale docstring, duplicate assertion) — logged but non-blocking.
+
+**Confidence: .97 → PASS**
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Internal SQLite DDL only — no new MCP tools, CLI commands, or agent-visible behavior. `copilot-instructions.md` has no knowledge schema section; no update needed. |
+| 2 | Module docstrings | Yes | Verified | `schema.py` module docstring lists `source_pages`; `_migrate_v8_to_v9` docstring accurate ("adds source_pages table and source_id FK on documents"); `init_db` docstring updated to "migrated through v2-v9"; all other migration helpers have docstrings. No edits required. |
+| 3 | External attribution | No | N/A | Pure internal DDL migration, no external patterns or libraries. `.owlbear/sources/overview.md` — no new entry needed. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | Research conducted under parent #775; `.owlbear/research/775-phase1-browser-pipeline-schema.md` exists and findings F2/F6 cited in task body. No dedicated `785-*.md` required. Follow-up tasks created. |
+
+### Files Updated
+None — all docstrings accurate, no external docs impacted.
+
+### Scratch Files
+None found for task #785.
+
+### Review Evidence Section
+Present — full `## Review Evidence` section with confidence .97, 31 tests passed.
