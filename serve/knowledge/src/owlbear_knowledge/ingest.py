@@ -150,6 +150,13 @@ class IngestPipeline:
     ) -> IngestResult:
         """Ingest an IntakeResult with delta detection and cancellation support.
 
+        **Replace-on-change semantics:** when ``check_content_changed`` returns
+        ``changed=True`` with an ``existing_id``, all data for the prior document
+        (entities, edges, chunks, status, and the document row itself) is deleted via
+        ``delete_document_data(existing_id)`` before the new document is inserted.
+        This prevents ghost documents from accumulating on repeated ingest of the
+        same source with updated content.
+
         Untrusted-source content (determined by
         :func:`~owlbear_knowledge.content_safety.should_wrap`) is wrapped in
         ``<untrusted_web_content>`` sentinel tags before entity extraction to
