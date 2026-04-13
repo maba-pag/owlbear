@@ -1,4 +1,8 @@
-"""Failing tests for board_config() defensive copy (#805, RED phase).
+"""Regression tests for board_config() defensive copy (#805).
+
+Tests were written during the research phase (OOO); model_copy(deep=True) was
+applied in engine.board_config() before this task reached the build stage.
+All 5 tests serve as regression coverage for that fix.
 
 AC coverage:
   AC1 - board_config() returns config with valid statuses and display order
@@ -9,9 +13,6 @@ AC coverage:
   AC3 - returned object is a copy (mutation doesn't affect engine internal state)
         — three tests: append to statuses list, append to priorities list,
         mutate a nested status dict
-
-All tests in this file MUST FAIL until #805 is implemented GREEN
-(fix: model_copy(deep=True) in engine.board_config()).
 """
 
 from __future__ import annotations
