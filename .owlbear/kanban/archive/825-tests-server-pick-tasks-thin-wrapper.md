@@ -4,7 +4,7 @@ title: Tests — Server pick_tasks thin wrapper
 status: done
 priority: needed
 created: '2026-04-10T21:23:15.034176+00:00'
-updated: '2026-04-12T15:46:09.367920+00:00'
+updated: '2026-04-12T16:18:34.742518+00:00'
 tags:
 - phase-3
 - type:test
@@ -15,8 +15,8 @@ depends_on:
 - 824
 blocked: false
 block_reason: null
-claimed_by: stark-stag
-claimed_at: '2026-04-12T15:46:09.367920+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Acceptance Criteria
 
@@ -166,3 +166,38 @@ Action: advance to docs
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/825-*` files found)
+[[2026-04-12]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: delegates to pick_dispatchable | 4 RED tests (TestFromAC_PickTasksDelegation) — all fail with AttributeError: server module lacks pick_dispatchable import | PASS |
+| AC2: no inline gating in server.py | 3 RED tests (TestFromAC_NoInlineGating) — fail with AssertionError: _check_pick_gates, _PICK_PRIORITY_RANK, _PICK_AC_PATTERN still present | PASS |
+| AC3: response format unchanged | 4 PASS regression guards (TestFromAC_PickTasksResponseFormat) — dispatch dict structure, key-set, integer task_id, empty-board | PASS |
+| AC4: MCP contract preserved | 3 PASS regression guards (TestFromAC_PickTasksMCPContract) — registration, readOnlyHint, idempotentHint | PASS |
+| AC5: tests fail RED before slimming | 7 RED / 7 PASS confirmed by independent run | PASS |
+
+### Test Results
+- pytest (task-scoped): 7 failed, 7 passed — exactly as designed for RED phase
+- pytest (full suite, excluding 2 pre-existing collection errors): 309 failed, 4063 passed, 8 skipped — all 309 failures are pre-existing (AppContext API changes, missing lint-changed.ps1, analysis model changes, browser ctx refactor, etc.); zero failures attributable to #825
+- ruff: clean (0 violations on serve/ and tests/)
+
+### Architect Quality: 4/5
+AC was specific, well-structured, and correctly categorized RED vs PASS tests. Research doc provided detailed 14-test specification with clear failure modes. Minor gap: AC1 "from engine" wording is ambiguous — could mean "from engine module" or "passing engine parameter." Reviewer identified this as LAX (engine parameter not verified in delegation tests). This is a minor upstream gap, not a blocker.
+
+### Deduction Breakdown
+- All 5 AC lines have specific evidence: no deduction
+- Lint clean: no deduction
+- AC quality 4/5 (> 3): no deduction
+- Reviewer evidence: detailed, PASS verdict with .95 confidence: no deduction
+- Full-suite: 0 failures in #825 scope: no deduction
+- Research doc was uncommitted (researcher gap) — committed as leftover: no deduction (resolved)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 1e435518 | test | tests/test_server_pick_tasks_thin_wrapper_825.py | #825 |
+| 730ad4dd | chore | .owlbear/research/server-pick-tasks-thin-wrapper-tests.md, .owlbear/kanban/tasks/825-*.md | #825 |

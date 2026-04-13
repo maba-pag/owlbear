@@ -12881,3 +12881,149 @@
 {"timestamp": "2026-04-12T21:13:45.215411+00:00", "action": "edit", "task_id": 748, "detail": "append_body"}
 {"timestamp": "2026-04-12T21:13:45.228693+00:00", "action": "release", "task_id": 748, "detail": "green-dew"}
 {"timestamp": "2026-04-12T21:13:45.236578+00:00", "action": "move", "task_id": 748, "detail": "done -> archived"}
+{"timestamp": "2026-04-12T21:14:24.318218+00:00", "action": "claim", "task_id": 765, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:14:24.367952+00:00", "action": "claim", "task_id": 759, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:14:31.034174+00:00", "action": "claim", "task_id": 761, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:14:47.238145+00:00", "action": "claim", "task_id": 830, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:17:01.296301+00:00", "action": "edit", "task_id": 765, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:17:01.307189+00:00", "action": "release", "task_id": 765, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:17:01.318269+00:00", "action": "move", "task_id": 765, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T21:17:11.340542+00:00", "action": "edit", "task_id": 761, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:17:11.362314+00:00", "action": "release", "task_id": 761, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:17:11.382200+00:00", "action": "move", "task_id": 761, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T21:17:18.072904+00:00", "action": "edit", "task_id": 759, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:17:18.084014+00:00", "action": "release", "task_id": 759, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:17:18.095022+00:00", "action": "move", "task_id": 759, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T21:34:46.229089+00:00", "action": "edit", "task_id": 830, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:34:46.241807+00:00", "action": "release", "task_id": 830, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:34:46.250246+00:00", "action": "move", "task_id": 830, "detail": "done -> archived"}
+{"timestamp": "2026-04-12T21:35:30.875695+00:00", "action": "claim", "task_id": 842, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:51:29.914790+00:00", "action": "edit", "task_id": 842, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:51:29.937253+00:00", "action": "release", "task_id": 842, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:51:29.952841+00:00", "action": "move", "task_id": 842, "detail": "done -> archived"}
+{"timestamp": "2026-04-12T21:52:18.842696+00:00", "action": "claim", "task_id": 847, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:52:24.596222+00:00", "action": "claim", "task_id": 833, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:52:43.545394+00:00", "action": "claim", "task_id": 846, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:53:53.709805+00:00", "action": "edit", "task_id": 847, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:53:53.725142+00:00", "action": "release", "task_id": 847, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:53:53.736596+00:00", "action": "move", "task_id": 847, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-12T21:56:12.991817+00:00", "action": "edit", "task_id": 833, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:56:13.002849+00:00", "action": "release", "task_id": 833, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:56:13.011860+00:00", "action": "move", "task_id": 833, "detail": "review -> docs"}
+{"timestamp": "2026-04-12T21:59:10.938139+00:00", "action": "edit", "task_id": 846, "detail": "append_body"}
+{"timestamp": "2026-04-12T21:59:10.947116+00:00", "action": "release", "task_id": 846, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:59:10.968079+00:00", "action": "move", "task_id": 846, "detail": "review -> docs"}
+{"timestamp": "2026-04-12T21:59:44.386848+00:00", "action": "claim", "task_id": 851, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:59:49.710518+00:00", "action": "claim", "task_id": 780, "detail": "green-dew"}
+{"timestamp": "2026-04-12T21:59:49.740422+00:00", "action": "claim", "task_id": 781, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:01:14.506169+00:00", "action": "edit", "task_id": 780, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:01:14.527087+00:00", "action": "release", "task_id": 780, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:01:14.547254+00:00", "action": "move", "task_id": 780, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-12T22:01:40.180338+00:00", "action": "edit", "task_id": 851, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:01:40.180338+00:00", "action": "release", "task_id": 851, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:01:40.204355+00:00", "action": "move", "task_id": 851, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-12T22:02:01.292093+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:02:01.305244+00:00", "action": "release", "task_id": 781, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:02:01.330290+00:00", "action": "move", "task_id": 781, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-12T22:03:02.780617+00:00", "action": "claim", "task_id": 783, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:03:19.450403+00:00", "action": "edit", "task_id": 783, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:03:19.466468+00:00", "action": "release", "task_id": 783, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:03:19.492814+00:00", "action": "move", "task_id": 783, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-12T22:03:55.379809+00:00", "action": "claim", "task_id": 790, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:04:00.076088+00:00", "action": "create", "task_id": 858, "detail": "Rename knowledge DBs (local.db/global.db) and add sync tools"}
+{"timestamp": "2026-04-12T22:04:22.075815+00:00", "action": "claim", "task_id": 791, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:04:45.394428+00:00", "action": "claim", "task_id": 792, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:06:07.790438+00:00", "action": "edit", "task_id": 792, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:06:07.808035+00:00", "action": "release", "task_id": 792, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:06:07.822720+00:00", "action": "move", "task_id": 792, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-12T22:06:17.427635+00:00", "action": "edit", "task_id": 790, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:06:17.438748+00:00", "action": "release", "task_id": 790, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:06:17.464128+00:00", "action": "move", "task_id": 790, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-12T22:12:39.088259+00:00", "action": "edit", "task_id": 791, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:12:39.100486+00:00", "action": "release", "task_id": 791, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:12:39.120816+00:00", "action": "move", "task_id": 791, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-12T22:15:33.470414+00:00", "action": "claim", "task_id": 778, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:15:49.662273+00:00", "action": "claim", "task_id": 779, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:15:57.107246+00:00", "action": "claim", "task_id": 799, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:16:10.930361+00:00", "action": "claim", "task_id": 844, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:17:01.515264+00:00", "action": "edit", "task_id": 799, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:17:01.525722+00:00", "action": "release", "task_id": 799, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:17:01.534852+00:00", "action": "move", "task_id": 799, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T22:17:24.330522+00:00", "action": "edit", "task_id": 779, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:17:24.346607+00:00", "action": "release", "task_id": 779, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:17:24.354120+00:00", "action": "move", "task_id": 779, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T22:19:36.601723+00:00", "action": "edit", "task_id": 778, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:19:36.622112+00:00", "action": "release", "task_id": 778, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:19:36.635160+00:00", "action": "move", "task_id": 778, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T22:26:51.770401+00:00", "action": "edit", "task_id": 844, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:26:51.786923+00:00", "action": "release", "task_id": 844, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:26:51.807411+00:00", "action": "move", "task_id": 844, "detail": "done -> archived"}
+{"timestamp": "2026-04-12T22:27:20.509984+00:00", "action": "claim", "task_id": 784, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:27:20.535609+00:00", "action": "claim", "task_id": 780, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:27:32.886301+00:00", "action": "claim", "task_id": 800, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:27:32.940714+00:00", "action": "claim", "task_id": 789, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:27:53.853451+00:00", "action": "edit", "task_id": 780, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:27:53.874355+00:00", "action": "release", "task_id": 780, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:27:53.878350+00:00", "action": "move", "task_id": 780, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-12T22:29:21.028312+00:00", "action": "edit", "task_id": 789, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:29:21.054827+00:00", "action": "release", "task_id": 789, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:29:21.077263+00:00", "action": "move", "task_id": 789, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T22:29:53.968078+00:00", "action": "edit", "task_id": 800, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:29:53.988336+00:00", "action": "release", "task_id": 800, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:29:54.000806+00:00", "action": "move", "task_id": 800, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T22:32:17.494273+00:00", "action": "edit", "task_id": 784, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:32:17.516357+00:00", "action": "release", "task_id": 784, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:32:17.537873+00:00", "action": "move", "task_id": 784, "detail": "research -> backlog"}
+{"timestamp": "2026-04-12T22:32:40.602108+00:00", "action": "claim", "task_id": 781, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:32:50.465512+00:00", "action": "claim", "task_id": 833, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:32:51.677410+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:32:51.693187+00:00", "action": "release", "task_id": 781, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:32:51.703615+00:00", "action": "move", "task_id": 781, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-12T22:32:59.633943+00:00", "action": "claim", "task_id": 759, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:33:30.788840+00:00", "action": "claim", "task_id": 846, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:35:56.277361+00:00", "action": "edit", "task_id": 833, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:35:56.296975+00:00", "action": "release", "task_id": 833, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:35:56.315599+00:00", "action": "move", "task_id": 833, "detail": "docs -> done"}
+{"timestamp": "2026-04-12T22:37:15.785047+00:00", "action": "edit", "task_id": 846, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:37:15.795995+00:00", "action": "release", "task_id": 846, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:37:15.804002+00:00", "action": "move", "task_id": 846, "detail": "docs -> done"}
+{"timestamp": "2026-04-12T22:40:12.466594+00:00", "action": "edit", "task_id": 759, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:40:12.488847+00:00", "action": "release", "task_id": 759, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:40:12.506652+00:00", "action": "move", "task_id": 759, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-12T22:40:48.279871+00:00", "action": "claim", "task_id": 783, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:40:55.036038+00:00", "action": "edit", "task_id": 783, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:40:55.054716+00:00", "action": "release", "task_id": 783, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:40:55.067713+00:00", "action": "move", "task_id": 783, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-12T22:41:03.475162+00:00", "action": "claim", "task_id": 765, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:41:59.270392+00:00", "action": "claim", "task_id": 761, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:43:25.281884+00:00", "action": "edit", "task_id": 761, "detail": "append_body"}
+{"timestamp": "2026-04-12T22:43:25.290717+00:00", "action": "release", "task_id": 761, "detail": "green-dew"}
+{"timestamp": "2026-04-12T22:43:25.310137+00:00", "action": "move", "task_id": 761, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-12T23:58:01.715192+00:00", "action": "claim", "task_id": 778, "detail": "kind-reed"}
+{"timestamp": "2026-04-12T23:58:02.811746+00:00", "action": "claim", "task_id": 779, "detail": "kind-reed"}
+{"timestamp": "2026-04-12T23:58:07.498816+00:00", "action": "claim", "task_id": 799, "detail": "kind-reed"}
+{"timestamp": "2026-04-12T23:58:12.252614+00:00", "action": "claim", "task_id": 833, "detail": "kind-reed"}
+{"timestamp": "2026-04-12T23:58:33.609904+00:00", "action": "edit", "task_id": 779, "detail": "append_body"}
+{"timestamp": "2026-04-12T23:58:33.620253+00:00", "action": "release", "task_id": 779, "detail": "kind-reed"}
+{"timestamp": "2026-04-12T23:58:33.630649+00:00", "action": "move", "task_id": 779, "detail": "backlog -> research"}
+{"timestamp": "2026-04-12T23:58:59.907920+00:00", "action": "edit", "task_id": 799, "detail": "append_body"}
+{"timestamp": "2026-04-12T23:58:59.923750+00:00", "action": "release", "task_id": 799, "detail": "kind-reed"}
+{"timestamp": "2026-04-12T23:58:59.939463+00:00", "action": "move", "task_id": 799, "detail": "backlog -> research"}
+{"timestamp": "2026-04-13T00:03:52.693489+00:00", "action": "edit", "task_id": 778, "detail": "append_body"}
+{"timestamp": "2026-04-13T00:03:52.709346+00:00", "action": "release", "task_id": 778, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:03:52.723438+00:00", "action": "move", "task_id": 778, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-13T00:13:21.445245+00:00", "action": "edit", "task_id": 833, "detail": "append_body"}
+{"timestamp": "2026-04-13T00:13:21.474876+00:00", "action": "release", "task_id": 833, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:13:21.491767+00:00", "action": "move", "task_id": 833, "detail": "done -> archived"}
+{"timestamp": "2026-04-13T00:14:01.675179+00:00", "action": "claim", "task_id": 789, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:14:01.692919+00:00", "action": "claim", "task_id": 798, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:14:04.302551+00:00", "action": "claim", "task_id": 784, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:14:14.045972+00:00", "action": "claim", "task_id": 846, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:14:37.377010+00:00", "action": "edit", "task_id": 784, "detail": "append_body"}
+{"timestamp": "2026-04-13T00:14:37.392262+00:00", "action": "release", "task_id": 784, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:14:37.409724+00:00", "action": "move", "task_id": 784, "detail": "backlog -> research"}
+{"timestamp": "2026-04-13T00:16:01.484928+00:00", "action": "edit", "task_id": 789, "detail": "append_body"}
+{"timestamp": "2026-04-13T00:16:01.506609+00:00", "action": "release", "task_id": 789, "detail": "kind-reed"}
+{"timestamp": "2026-04-13T00:16:01.518129+00:00", "action": "move", "task_id": 789, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-13T00:16:05.786112+00:00", "action": "edit", "task_id": 798, "detail": "append_body"}
+{"timestamp": "2026-04-13T00:16:05.807059+00:00", "action": "release", "task_id": 798, "detail": "kind-reed"}

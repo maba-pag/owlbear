@@ -1,16 +1,20 @@
 ---
 id: 753
 title: 'P0-02: Execute CDP spike on corporate laptop'
-status: research
+status: backlog
 priority: critical
 created: '2026-04-10T10:55:24.830120+00:00'
-updated: '2026-04-10T11:50:33.012439+00:00'
+updated: '2026-04-11T11:56:17.621968+00:00'
 tags:
 - phase-0
 - type:user-action
 - scope:browser
 parent: 751
 depends_on: []
+blocked: true
+block_reason: 'User-action required: physically execute CDP spike script on corporate
+  laptop, observe EDR/DLP reactions, record go/no-go decision. Add `## Action Completed`
+  section to task body when done.'
 claimed_by: null
 claimed_at: null
 ---
@@ -49,3 +53,64 @@ AC:
 3. Execution plan and go/no-go decision matrix documented in research doc §3.2–§3.3
 4. Chrome 136 fresh-profile constraint (from #752 research) is the primary risk variable for execution
 5. Task is `type:user-action` — requires physical execution, EDR/DLP observation, and user-made go/no-go decision
+
+[[2026-04-11]]
+## Research (validation pass — 2026-04-11)
+- Research doc: .owlbear/research/cdp-spike-execution-753.md (updated)
+- Sources: 5 studied, 2 high-relevance (spike script + #776 archive status)
+- Recommendation: Advance to backlog — blocker resolved (confidence: .90)
+- Follow-up tasks created: none (execution chain complete)
+- Decision requests: none
+
+## Challenge Results
+- Challenger: FALLBACK — validation pass confirming resolved dependency, not a design choice
+- Confidence in original: .90
+- Key challenges: N/A
+- Researcher response: N/A
+
+## Findings Summary
+1. **Blocker resolved:** #776 (implement spike script) is DONE and archived. `.owlbear/scratch/cdp-spike.py` exists (~245 LOC)
+2. Production browser package also complete at `serve/browser/` (edge_launcher, cdp, extractor, cleaner)
+3. Execution plan and go/no-go decision matrix documented in research doc §3.2–§3.3
+4. #777 (trafilatura) and #778 (hash stability) are separate additive tasks — do not block core spike execution
+5. Task is `type:user-action` — requires: close Edge, install playwright, run spike, observe EDR/DLP, record go/no-go
+[[2026-04-11]]
+## Architecture Review
+
+### User-Action Assessment
+Task is tagged `type:user-action`. Criterion 13 evaluation:
+- **Counter-signals:** NONE (no function signatures, no test outcomes, no `type:test`/`type:config`)
+- **M1:** AC defines no testable Python interface — TRUE
+- **M2:** Completion can only be verified by human (physical EDR/DLP observation, go/no-go judgment) — TRUE
+- **S1:** Physical-action verbs: "Execute", "close Edge", "run spike", "observe" — YES
+- **S2:** External systems: Edge browser, corporate laptop, EDR, DLP, SharePoint — YES
+- **S3:** Manual steps: close Edge, install playwright, run spike, observe EDR/DLP, record go/no-go — YES
+- **Result:** `type:user-action` CONFIRMED → BLOCK verdict
+
+### Prerequisite Verification
+- `.owlbear/scratch/cdp-spike.py` — EXISTS (confirmed via filesystem check)
+- #776 (implement spike script) — DONE and archived per research validation pass
+- #777 (trafilatura) and #778 (hash stability) — independent, do not block spike execution
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| Spike executed, results documented | ADEQUATE for user-action | Body specifies 5 result categories (CDP connectivity, SSO extraction, EDR reaction, DLP reaction, SharePoint boilerplate) |
+| Go/no-go decision recorded | ADEQUATE for user-action | Body specifies decision matrix: CDP works → Phase 1, blocked → pivot |
+
+### Execution Checklist (for user)
+1. Close all Edge instances
+2. `pip install playwright` (or `uv pip install playwright`)
+3. `playwright install chromium` (if not already installed)
+4. Run `.owlbear/scratch/cdp-spike.py` with active Edge SSO session
+5. Observe: EDR alerts? DLP alerts? CDP connectivity? SSO cookie extraction?
+6. Document results in `.owlbear/research/cdp-spike-results.md`
+7. Record go/no-go decision
+8. Add `## Action Completed` section to this task body with AC checkboxes
+
+### Challenge Results
+- Challenger: FALLBACK — `type:user-action` BLOCK verdict; no design decision to challenge
+- Scribe: FALLBACK — scribe agent not in available roster; block reason recorded inline
+
+### Verdict: BLOCK
+User-action task. Prerequisites verified (script exists, #776 done). AC adequate for physical execution. Blocked pending user action.

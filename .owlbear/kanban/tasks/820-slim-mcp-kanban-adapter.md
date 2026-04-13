@@ -4,7 +4,7 @@ title: Slim mcp-kanban adapter
 status: research
 priority: needed
 created: '2026-04-10T21:22:41.393257+00:00'
-updated: '2026-04-10T21:22:41.393257+00:00'
+updated: '2026-04-12T03:33:19.015014+00:00'
 tags:
 - phase-2
 - scope:mcp-kanban
@@ -14,8 +14,8 @@ depends_on:
 - 819
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: crisp-loch
+claimed_at: '2026-04-12T03:33:19.015014+00:00'
 ---
 ## Acceptance Criteria
 

@@ -1,10 +1,10 @@
 ---
 id: 746
 title: 'P1-01: Archive voice I/O research docs to handoff location'
-status: docs
+status: done
 priority: needed
 created: '2026-04-10T10:36:20.117217+00:00'
-updated: '2026-04-11T13:22:45.392802+00:00'
+updated: '2026-04-12T20:58:38.404528+00:00'
 tags:
 - phase-1
 - type:archive
@@ -147,3 +147,57 @@ None.
 
 ### Verdict
 **PASS #746 → docs | confidence .97**
+[[2026-04-12]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 0a | Review Evidence present | — | PASS | `## Review Evidence` section confirmed in task body |
+| 1 | Behavior/API change | No | N/A | Pure filesystem archiving — no code, no behavior, no API touched |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | File reorganization only — no external patterns or articles referenced |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | No | N/A | No task-scoped research doc produced; task _was_ the archive of prior research |
+
+### Filesystem Verification
+- `.owlbear/research/voice-*.md` — 0 results (originals confirmed deleted) ✓
+- `.owlbear/research/moonshine-*.md` — 0 results (originals confirmed deleted) ✓
+- `.owlbear/briefs/draft-voice-rethink/research-archive/` — 12 files present (11 required + voicechannel-adapter.md) ✓
+- `handoff-dictation-project.md` line 135 — `## Research Archive` heading confirmed ✓
+
+### Files Updated
+None — no docs impact identified.
+
+### Scratch Files Cleaned
+None found (`.owlbear/scratch/746-*` — 0 matches).
+
+### Verdict
+DONE #746 → done | docs gate passed
+[[2026-04-12]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: 11 files copied to research-archive/ | file_search: 12 files in `.owlbear/briefs/draft-voice-rethink/research-archive/` (11 required + voicechannel-adapter.md) | PASS |
+| AC2: Originals deleted from .owlbear/research/ | file_search: 0 results for voice-*.md and moonshine-*.md in .owlbear/research/ | PASS |
+| AC3: Handoff doc updated with archive manifest | grep_search: `## Research Archive` heading at line 135 in handoff-dictation-project.md | PASS |
+| CRITICAL: share/skills/h-voice-panel/ untouched | file_search: only SKILL.md present, no deletions | PASS |
+
+### Test Results
+- pytest (full suite): 4068 passed, 339 failed, 8 skipped. No failures in task scope (test_archive_voice_research_746.py: 11/11 pass). 339 failures are pre-existing cross-task issues (agent renames, pydantic schema changes, bookmark pipeline kwarg changes).
+- ruff: clean
+
+### Architect Quality: 4/5
+AC was specific: named all 11 files, gave exact source/target paths, included explicit CRITICAL guard for the ideation voice panel. Minor gap: didn't mention the pre-existing voicechannel-adapter.md already in the archive, but caused no confusion.
+
+### Deduction Breakdown
+No deductions applied.
+- All 4 AC lines have specific evidence: PASS
+- Lint: clean
+- AC quality: 4/5 (above threshold)
+- Reviewer evidence: present, detailed, PASS verdict
+- Full-suite failures: 0 in task scope
+
+### Confidence: .98
+### Action: archive
