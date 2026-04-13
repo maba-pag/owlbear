@@ -2781,13 +2781,13 @@ version = "0.1.0"
 source = { editable = "serve/mcp-kanban" }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
-    { name = "ruamel-yaml" },
+    { name = "owlbear-kanban" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.26" },
-    { name = "ruamel-yaml", specifier = ">=0.18" },
+    { name = "owlbear-kanban", editable = "serve/kanban" },
 ]
 
 [[package]]
