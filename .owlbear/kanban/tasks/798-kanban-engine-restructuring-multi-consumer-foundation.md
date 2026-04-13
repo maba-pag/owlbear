@@ -4,7 +4,7 @@ title: Kanban Engine Restructuring — Multi-Consumer Foundation
 status: backlog
 priority: needed
 created: '2026-04-10T21:10:19.882817+00:00'
-updated: '2026-04-13T00:16:05.800551+00:00'
+updated: '2026-04-13T02:06:46.505617+00:00'
 tags:
 - kanban
 - architecture
@@ -184,3 +184,49 @@ Task #798 remains a parent container with 5 outcomes spanning 3 phases. Not impl
 
 ### Verdict: NO ADVANCE — stays in backlog as parent container
 ### Action Taken: Released claim. 6 children archived, 2 done, 10 still in-flight. Parent should be archived when all children reach done/archived.
+[[2026-04-13]]
+## Architecture Review (5th pass — no-change confirmation)
+
+### Assessment: Parent/Epic Container — No Pipeline Advancement
+
+Task #798 remains a non-implementable parent container. All work is in child tasks.
+
+### Children Status (2026-04-13, unchanged from 4th pass)
+
+| Phase | Task | Title | Status | Notes |
+|-------|------|-------|--------|-------|
+| P1 | #803 | Tests — refresh_config + config staleness fix | review (BLOCKED) | WMI/logfire hang |
+| P1 | #828 | Config staleness fix (impl) | archived | — |
+| P1 | #844 | Config staleness fix (tests) | archived | — |
+| P1 | #845 | TaskSummary adoption (tests) | research | 4x rejected redundant — ARCHIVE |
+| P1 | #846 | TaskSummary adoption (impl) | done | Reviewer PASS .97 |
+| P2 | #817 | Tests — Engine package boundary | todo | Stale deps flagged |
+| P2 | #818 | Extract engine to serve/kanban/ | in-progress | Reviewer FAIL .65 — 1-file fix needed |
+| P2 | #819 | Tests — MCP adapter slimming | done | — |
+| P2 | #822 | Compat alias removal | archived | — |
+| P2 | #831 | Tests — Remove engine_models.py | archived | — |
+| P2 | #832 | Impl — Remove engine_models.py | archived | — |
+| P3 | #823 | Tests — pick_dispatchable() | research | Unblocked, needs advance |
+| P3 | #824 | dispatch.py with pick_dispatchable() | review (BLOCKED) | Quality-Runner unavailable |
+| P3 | #825 | Tests — Server pick_tasks thin wrapper | archived | — |
+| P3 | #826 | Slim server pick_tasks to thin wrapper | in-progress | Awaiting builder |
+| — | #827 | Migrate task_io.py PyYAML→ruamel | todo | nice-to-have |
+| — | #843 | PyYAML→ruamel migration (impl) | backlog | DUPLICATE of #827 |
+| — | #851 | Fix stale ListTasks migration tests | review | Awaiting reviewer |
+
+### No Changes Since 4th Pass
+
+All 18 child timestamps predate the 4th-pass review (2026-04-13T00:16:05). No progress to report.
+
+### Standing Recommendations (unchanged)
+
+1. Archive #845 — 4 independent validations confirm redundancy
+2. Archive #843 — duplicate of #827
+3. Fix #818 — delete `serve/mcp-kanban/src/owlbear_mcp_kanban/engine_models.py`, re-review
+4. Resolve Quality-Runner blocker — unblocks #803 and #824 reviews
+5. Advance #823 from research to backlog — dep #822 archived
+
+### Verdict: NO ADVANCE — stays in backlog as parent container
+### Action Taken: Released claim. 6 archived, 2 done, 10 in-flight. No change since last review.
+[[2026-04-13]]
+## Architecture Review (6th pass — incremental progress)\n\n### Assessment: Parent/Epic Container — No Pipeline Advancement\n\nTask #798 remains a non-implementable parent container. All work is in child tasks.\n\n### Children Status (2026-04-13)\n\n| Phase | Task | Title | Status | Delta |\n|-------|------|-------|--------|-------|\n| P1 | #803 | Tests — refresh_config + config staleness fix | review (BLOCKED) | — |\n| P1 | #828 | Config staleness fix (impl) | archived | — |\n| P1 | #844 | Config staleness fix (tests) | archived | — |\n| P1 | #845 | TaskSummary adoption (tests) | research | ARCHIVE recommended (4x rejected) |\n| P1 | #846 | TaskSummary adoption (impl) | done | — |\n| P2 | #817 | Tests — Engine package boundary | review | was todo — builder pass-through done |\n| P2 | #818 | Extract engine to serve/kanban/ | in-progress | Reviewer FAIL .65 — 1-file fix pending |\n| P2 | #819 | Tests — MCP adapter slimming | done | — |\n| P2 | #822 | Compat alias removal | archived | — |\n| P2 | #831 | Tests — Remove engine_models.py | archived | — |\n| P2 | #832 | Impl — Remove engine_models.py | archived | — |\n| P3 | #823 | Tests — pick_dispatchable() | research | dep #822 done — ready to advance |\n| P3 | #824 | dispatch.py with pick_dispatchable() | review | was BLOCKED — check if unblocked |\n| P3 | #825 | Tests — Server pick_tasks thin wrapper | archived | — |\n| P3 | #826 | Slim server pick_tasks to thin wrapper | in-progress | test-writer notes done |\n| — | #827 | Migrate task_io.py PyYAML→ruamel | todo | — |\n| — | #843 | PyYAML→ruamel migration (impl) | backlog | DUPLICATE of #827 — ARCHIVE |\n| — | #851 | Fix stale ListTasks migration tests | docs | was review — reviewer passed |\n\n### Tally: 6 archived, 2 done, 10 in-flight\n\n### Progress Since 5th Pass\n\n1. #817 advanced todo → review (builder pass-through complete)\n2. #851 advanced review → docs (reviewer passed)\n\n### Standing Recommendations\n\n1. Archive #845 — 4 independent validations confirm redundancy\n2. Archive #843 — duplicate of #827\n3. Fix #818 — delete engine_models.py from mcp-kanban, re-review\n4. Resolve Quality-Runner blocker — unblocks #803 and #824 reviews\n5. Advance #823 from research to backlog — dep #822 archived\n\n### Verdict: NO ADVANCE — stays in backlog as parent container\n### Action Taken: Released claim. 6 archived, 2 done, 10 in-flight. Parent advances when all children reach done/archived.

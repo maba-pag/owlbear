@@ -1,10 +1,10 @@
 ---
 id: 799
 title: Tests — Rename TaskRecord → Task
-status: research
+status: backlog
 priority: critical
 created: '2026-04-10T21:20:28.162627+00:00'
-updated: '2026-04-12T23:58:59.935701+00:00'
+updated: '2026-04-13T02:29:11.010727+00:00'
 tags:
 - phase-1
 - type:test
@@ -131,3 +131,83 @@ Task premise invalid. The rename this task tests for was completed by #818 (extr
 
 ### Action: TERMINAL REJECT — ARCHIVE THIS TASK
 This task has completed two full review cycles with identical findings. No amount of further research will change the structural reality: the work is done, the old module doesn't exist, and RED tests are impossible for completed implementations. **Orchestrator should archive #799 and #800 (implementation counterpart) rather than re-processing.** No follow-up tasks needed.
+[[2026-04-13]]
+## Research (3rd validation pass — terminal)
+
+All prior findings re-confirmed against live codebase (2026-04-13):
+
+| Evidence | Status |
+|---|---|
+| `engine_models.py` absent | Confirmed (file_search: 0) |
+| `TaskRecord` in serve/**/*.py | Confirmed absent (grep: 0) |
+| `Task` canonical at owlbear_kanban.models:58 | Confirmed |
+| test_kanban_engine_models.py exists | Confirmed |
+| test_kanban_engine_crud.py exists | Confirmed |
+
+3 research cycles + 2 architecture reviews = identical verdict each time.
+
+Recommendation: Archive #799 and #800 as superseded (confidence: .95)
+Tier: T1 (autonomous cleanup)
+Follow-up tasks: none
+Decision requests: none
+Challenge: SKIPPED (validation of factual findings, 3rd identical pass)
+
+ORCHESTRATOR: This task should be archived, not dispatched further. The rename was completed by #818, alias cleanup by #821/#822. All ACs are covered by existing tests or structurally impossible (RED for completed work). #800 should also be archived.
+[[2026-04-13]]
+## Architecture Review (3rd pass — terminal)
+
+### Verdict: REJECT → ARCHIVE
+
+This is the **3rd architecture review** and **6th processing cycle** (3 research + 3 arch) for this task. Every cycle reaches identical findings. The task is irrecoverably superseded.
+
+### Quick-Check Verification (2026-04-13)
+
+| Evidence Point | Status |
+|---|---|
+| `engine_models.py` exists | **No** — file_search: 0 results |
+| `TaskRecord` in `serve/**/*.py` | **0 matches** |
+| `test_kanban_engine_models.py` exists | **Confirmed** |
+| `test_kanban_engine_crud.py` exists | **Confirmed** |
+
+### AC Assessment (unchanged across all 3 reviews)
+
+| AC Line | Status |
+|---|---|
+| `Task` importable from `engine_models` | SUPERSEDED — module doesn't exist |
+| `TaskRecord` alias resolves to `Task` | SUPERSEDED — alias lifecycle complete (#822) |
+| Engine CRUD works with renamed model | SUPERSEDED — 40+ tests in existing test file |
+| Tests fail RED before implementation | IMPOSSIBLE — implementation complete |
+
+### Evaluation
+
+| Criterion | Assessment |
+|---|---|
+| Premise challenge | **FAIL** — task premise invalid; work completed by #818/#821/#822 |
+| TDD compliance | **FAIL** — RED impossible for completed work |
+| All others | N/A — superseded |
+
+### Challenge: SKIPPED (REJECT verdict)
+
+### Action: TERMINAL REJECT
+
+**ORCHESTRATOR: ARCHIVE this task and #800.** 6 processing cycles with identical REJECT findings. The structural reality cannot change — `engine_models.py` does not exist, `TaskRecord` is gone, existing tests cover all ACs. Continuing to cycle this task wastes pipeline capacity. No follow-up tasks needed.
+[[2026-04-13]]
+## Research (4th validation pass — terminal)
+
+Quick-check verification (2026-04-13):
+
+| Evidence | Status |
+|---|---|
+| `engine_models.py` absent | Confirmed (file_search: 0) |
+| `TaskRecord` in serve/**/*.py | Confirmed absent (grep: 0) |
+| `Task` canonical at owlbear_kanban.models:58 | Confirmed |
+| test_kanban_engine_models.py exists | Confirmed |
+| test_kanban_engine_crud.py exists | Confirmed |
+
+Recommendation: Archive #799 and #800 as superseded (confidence: .95)
+Tier: T1 (autonomous cleanup)
+Follow-up tasks: none
+Decision requests: none
+Challenge: SKIPPED — 4th identical validation of factual findings
+
+**ORCHESTRATOR: This is the 7th processing cycle (4 research + 3 arch review) with identical ARCHIVE recommendation. Please archive #799 and #800. The rename was completed by #818, alias cleanup by #821/#822. All ACs are covered by existing tests or structurally impossible.**

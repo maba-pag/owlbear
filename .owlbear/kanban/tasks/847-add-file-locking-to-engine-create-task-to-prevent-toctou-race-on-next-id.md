@@ -1,10 +1,10 @@
 ---
 id: 847
 title: Add file locking to engine.create_task() to prevent TOCTOU race on next_id
-status: review
+status: done
 priority: needed
 created: '2026-04-12T12:05:01.757978+00:00'
-updated: '2026-04-12T21:53:53.732137+00:00'
+updated: '2026-04-13T02:23:08.283694+00:00'
 tags:
 - scope:kanban
 - bug
@@ -273,3 +273,64 @@ None — implementation already in place from prior builder pass:
 | AC3 (cross-process, msvcrt/fcntl) | `test_two_processes_create_tasks_no_duplicate_ids` PASS — two subprocesses, distinct IDs |
 | AC4 (no duplicate IDs) | 3 CriticalSectionProtection tests PASS |
 | AC5 (no deadlock) | `try/finally` in both branches; structural canary PASS |
+[[2026-04-13]]
+## Review Evidence
+
+### Test Results
+- pytest (independent run): **100 passed, 0 failed** — includes all 5 tests in `test_create_task_file_locking_847.py` (including `@pytest.mark.slow` cross-process test)
+- regressions: 95 engine tests passing (crud + compound + roundtrip)
+
+### Lint
+clean: true
+
+### Coverage
+owlbear_kanban.engine: 77% — Unix `fcntl` branch platform-excluded on Windows; expected, acknowledged in prior cycle.
+
+### Pass 2 Review Context
+This is the 2nd review cycle. Cycle 1 FAILED (AC3 test broken: `ModuleNotFoundError: No module named 'tests'` in spawned subprocess worker). Test-writer fixed by replacing `ProcessPoolExecutor(spawn)` + pickled module reference with `subprocess.Popen` + inline `-c` script. Fix is correct and effective — confirmed by independent test run.
+
+### AC Compliance Table
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 (lock before read) | `engine.py` `create_task()`: `with _exclusive_file_lock(...)` wraps `load_config()` call | `test_concurrent_creates_produce_unique_ids` — PASS | PASS |
+| AC2 (held through save_config) | Entire `load_config → write_task → save_config` inside `with` body | `test_lock_held_through_slow_save_config` — PASS | PASS |
+| AC3 (cross-process msvcrt/fcntl) | `_exclusive_file_lock`: `msvcrt.locking(LK_LOCK/LK_UNLCK)` on Windows, `fcntl.flock(LOCK_EX/LOCK_UN)` on Unix — OS-level, cross-process | `test_two_processes_create_tasks_no_duplicate_ids` — PASS (fix confirmed) | PASS |
+| AC4 (no duplicate IDs) | Barrier-forced concurrent tests: 3 threading tests + cross-process test all pass | All 4 uniqueness-asserting tests — PASS | PASS |
+| AC5 (no deadlock) | Both platform branches use `try/finally` guaranteeing release; structural canary keyword check | `test_engine_source_contains_lock_mechanism` — PASS | PASS |
+
+### Test Integrity
+| Original Test | Change | Assessment |
+|---------------|--------|------------|
+| test_concurrent_creates_produce_unique_ids | None | PRESERVED |
+| test_lock_held_through_slow_save_config | None | PRESERVED |
+| test_high_concurrency_all_unique_ids | None | PRESERVED |
+| test_two_processes_create_tasks_no_duplicate_ids | subprocess.Popen + inline -c script (was broken ProcessPoolExecutor) | STRENGTHENED — test now executes correctly |
+| test_engine_source_contains_lock_mechanism | None | PRESERVED |
+
+### Security
+Lock path is `kanban_dir / ".next_id.lock"` — not user-controlled. No injection, traversal, new dependencies, or secret exposure.
+
+### Builder Process
+2 builder entries: cycle-1 = implementation, cycle-2 = re-verification (no code changes). Normal pipeline cycle, not a loop.
+
+### Deductions
+None.
+
+### Verdict
+Confidence: **0.95 → PASS**
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `create_task()` public signature unchanged; `_exclusive_file_lock` is private. `copilot-instructions.md` has no engine entries to update. |
+| 2 | Module docstrings | Yes | Updated | `_exclusive_file_lock()` docstring was accurate ✓. `create_task()` docstring omitted the locking guarantee (the core behavioral change). Added 3-line note: "The entire read→write→save critical section is protected by an exclusive cross-process file lock (`.next_id.lock`), preventing duplicate IDs when concurrent engine instances call this method simultaneously." Commit: 73d858a6. |
+| 3 | External attribution | No | N/A | Implementation uses only Python stdlib (`msvcrt`, `fcntl`). No external repos or articles cited in task body. No sources entry needed. |
+| 4 | CLI changes | No | N/A | No CLI additions or modifications. |
+| 5 | Research doc | No | N/A | No research doc produced. Diagnosis was from observed duplicate IDs on disk; no `.owlbear/research/` file created or linked. |
+
+### Files Updated
+- `serve/kanban/src/owlbear_kanban/engine.py` — `create_task()` docstring (commit 73d858a6)
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/847-*` files found)

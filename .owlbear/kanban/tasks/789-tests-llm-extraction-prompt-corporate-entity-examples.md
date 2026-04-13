@@ -1,10 +1,10 @@
 ---
 id: 789
 title: Tests — LLM extraction prompt corporate entity examples
-status: todo
+status: review
 priority: needed
 created: '2026-04-10T12:31:33.658191+00:00'
-updated: '2026-04-13T00:16:01.518129+00:00'
+updated: '2026-04-13T02:24:03.788412+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -120,3 +120,42 @@ DEPENDS_ON-CORRECTION: task #789 should have depends_on [] — dependency #784 i
 
 ### Verdict: APPROVE (pass-through)
 ### Action Taken: Advanced to todo. All AC already satisfied by work completed under #766 (parent #751). Downstream agents should confirm pass-through and advance. Recommend archiving after pipeline completion.
+[[2026-04-13]]
+## Test-Writer Notes
+
+- **Pass-through: confirmed duplicate** — task tagged `type:test`; all AC already satisfied by work completed under #766 (parent #751).
+- Test file: `tests/test_llm_prompt_corporate_775.py` (175 LOC, 9 tests, all GREEN)
+- No new tests written — deliverables already exist.
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Entity type descriptive hints (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) | `TestFromAC_CorpEntityDescriptiveHints` — 5 tests, all GREEN | SATISFIED |
+| AC2: Contrastive CONCEPT differentiation | `TestFromAC_CorpEntityContrastiveConcept` — 2 tests, all GREEN | SATISFIED |
+| AC3: GOVERNS/SUPERSEDES_VERSION relation guidance | `TestFromAC_RelationTypeDescriptiveGuidance` — 2 tests, all GREEN | SATISFIED |
+| AC4: File `tests/test_llm_prompt_corporate_775.py` | File exists at specified path | SATISFIED |
+
+- Total tests: 9 | New failing tests: 0 | Pass-through reason: stale decomposition artifact
+- Architecture review (2nd pass, 2026-04-13): APPROVE (pass-through) — advance to in-progress for builder confirmation, then archive.
+[[2026-04-13]]
+## Builder Notes
+
+**Pass-through confirmation — no implementation required.**
+
+### Files Changed
+- None — all deliverables already exist.
+
+### Evidence
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Entity type descriptive hints (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) | `TestFromAC_CorpEntityDescriptiveHints` — 5 tests GREEN | SATISFIED |
+| AC2: Contrastive CONCEPT differentiation | `TestFromAC_CorpEntityContrastiveConcept` — 2 tests GREEN | SATISFIED |
+| AC3: GOVERNS/SUPERSEDES_VERSION relation guidance | `TestFromAC_RelationTypeDescriptiveGuidance` — 2 tests GREEN | SATISFIED |
+| AC4: File `tests/test_llm_prompt_corporate_775.py` | File exists (175 LOC) | SATISFIED |
+
+### Test Results
+- `tests/test_llm_prompt_corporate_775.py`: **9 passed, 0 failed**
+- Ruff: clean (no new files touched)
+- Coverage: N/A — pass-through, no new code
+
+### Summary
+Builder confirmation complete. All 9 tests GREEN. Stale decomposition artifact — work was completed under #766 (parent #751). Recommend archiving after review.

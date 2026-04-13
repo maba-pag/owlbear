@@ -3,21 +3,17 @@ id: 753
 title: 'P0-02: Execute CDP spike on corporate laptop'
 status: backlog
 priority: critical
-created: '2026-04-10T10:55:24.830120+00:00'
-updated: '2026-04-11T11:56:17.621968+00:00'
+created: 2026-04-10T10:55:24.83012Z
+updated: 2026-04-13T04:18:26.900045+02:00
 tags:
-- phase-0
-- type:user-action
-- scope:browser
+    - phase-0
+    - type:user-action
+    - scope:browser
 parent: 751
-depends_on: []
 blocked: true
-block_reason: 'User-action required: physically execute CDP spike script on corporate
-  laptop, observe EDR/DLP reactions, record go/no-go decision. Add `## Action Completed`
-  section to task body when done.'
-claimed_by: null
-claimed_at: null
+block_reason: 'User-action required: physically execute CDP spike script on corporate laptop, observe EDR/DLP reactions, record go/no-go decision. Add `## Action Completed` section to task body when done.'
 ---
+
 Execute the CDP spike script (P0-01 #752) on the corporate laptop with an active Edge SSO session.
 
 Document results in `.owlbear/research/cdp-spike-results.md`:
@@ -114,3 +110,11 @@ Task is tagged `type:user-action`. Criterion 13 evaluation:
 
 ### Verdict: BLOCK
 User-action task. Prerequisites verified (script exists, #776 done). AC adequate for physical execution. Blocked pending user action.
+
+## Hash Stability Checklist (from #778)
+
+Run spike with hash stability validation (step from #778 — AC1):
+
+5a. Run with `--hash-stability` flag: `python .owlbear/scratch/cdp-spike.py --hash-stability` (adds ~6 min per URL)
+5b. Check console output: look for `Hash stability: GO/NO-GO` verdict per URL and overall
+5c. If NO-GO: inspect the diff output in the log — check for dynamic element patterns to remove via `prune_xpath`

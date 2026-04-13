@@ -1,10 +1,10 @@
 ---
 id: 761
 title: 'P1-08: Impl — Content extractor'
-status: todo
+status: docs
 priority: needed
 created: '2026-04-10T10:55:57.270970+00:00'
-updated: '2026-04-12T22:43:25.306132+00:00'
+updated: '2026-04-13T03:08:26.546287+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -66,3 +66,59 @@ Parent: #751
 
 ### Verdict: APPROVE (SUPERSEDED — fast-track)
 ### Action Taken: Advanced to todo. All AC items verified as covered by #783/#788/#755. Downstream agents should fast-track with pass-through notes — no new tests or code needed.
+[[2026-04-13]]
+## Test-Writer Notes
+
+- Non-impl pass-through: task superseded — no new tests applicable.
+- All 4 AC items codebase-verified as covered by existing tests:
+
+| AC | Test Coverage | Location |
+|----|--------------|----------|
+| Static JS-based DOM extraction | `TestFromAC_ContentExtractor` (8 tests) | `test_browser_content_775.py` |
+| Delegates to cleaner for HTML→markdown | `TestFromAC_HTMLCleaner` (10) + `TestFromAC_NoiseRemoval` (8) | `test_browser_content_775.py` |
+| Login redirect detection (fail-fast) | `TestFromAC_SSODetection` (5 tests) | `test_edge_launcher_cdp_755.py` |
+| Only static/pre-defined JS | Inherently satisfied — `extractor.py` accepts `html: str` | structural |
+
+- Superseding tasks: #783 (RED/tests, in review) + #788 (GREEN/impl, in review)
+- Precedent: #760 (RED partner) also fast-tracked as superseded
+- Architect verdict: APPROVE (SUPERSEDED — fast-track), confidence .95
+- Passing through to builder (in-progress) for equivalent fast-track close.
+[[2026-04-13]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+- Superseded by #783 (tests) + #788 (impl) under parent #775.
+- All 4 AC items codebase-verified as covered by existing implementation and tests.
+[[2026-04-13]]
+## Review Evidence
+
+### Source Control
+No production files changed. Only kanban task body mutations (status/claim fields). Correct behavior for superseded pass-through task.
+
+### quality-runner
+Not available in reviewer's agent roster. Fallback applied: codebase structural verification used in lieu of independent test execution. -0.03 deduction.
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Static JS-based DOM extraction | `extractor.py:extract()` (L16) accepts `html: str`, calls `trafilatura.extract()` + `strip_noise()`. No `page.evaluate()` in path. `TestFromAC_ContentExtractor` — 8 tests confirmed present at lines L36, L40, L44, L53, L65, L73, L81, L96 | ✅ COVERED |
+| Delegates to cleaner for HTML→markdown | `extractor.py:extract()` falls back to `html_to_markdown()` from `cleaner.py` when trafilatura returns None. `TestFromAC_HTMLCleaner` — 10 tests confirmed present (L112–L191). `TestFromAC_NoiseRemoval` — 8 tests present from L209 | ✅ COVERED |
+| Login redirect detection (fail-fast) | `cdp.py:check_sso_redirect()` confirmed at L116; raises `AuthenticationRequired`. `TestFromAC_SSODetection` confirmed present at test_edge_launcher_cdp_755.py:244 (≥4 tests confirmed, 5 claimed by all upstream agents) | ✅ COVERED |
+| Only static/pre-defined JS | `extractor.py` accepts `html: str` — inherently satisfied; zero `page.evaluate()` in extraction path (codebase verified) | ✅ COVERED |
+
+### TestFromAC Modifications
+None. Builder verified zero code changes (correct pass-through handling).
+
+### Assertion Quality (static read)
+`test_browser_content_775.py` — `TestFromAC_ContentExtractor` tests discriminating assertions (e.g., `raises TypeError` for non-str input, content presence tests). `TestFromAC_HTMLCleaner` uses specific string-contains assertions for element preservation. Would fail if cleaner module removed or `html_to_markdown`/`strip_noise` refactored away.
+
+### Deductions
+- −0.03: quality-runner unavailable — could not independently execute `test_browser_content_775.py` and `test_edge_launcher_cdp_755.py`
+- 0 other deductions: no code changed, no TestFromAC modifications, supersession verified 4× by 4 upstream agents with each node confirming codebase evidence
+
+### Supersession Validity
+4-agent consensus (researcher → architect → test-writer → builder) with independent codebase verification each time. All implementation files confirmed with claimed content. All referenced test classes confirmed present with correct structure. This is a factual verification, not an opinion — supersession is accurate.
+
+### Verdict
+**Confidence: 0.94 → PASS #761 → docs**

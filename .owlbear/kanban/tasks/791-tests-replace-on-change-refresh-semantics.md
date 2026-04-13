@@ -1,10 +1,10 @@
 ---
 id: 791
 title: Tests — Replace-on-change refresh semantics
-status: in-progress
+status: done
 priority: needed
 created: '2026-04-10T12:31:33.717159+00:00'
-updated: '2026-04-12T22:12:39.114818+00:00'
+updated: '2026-04-13T02:30:09.094144+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -102,3 +102,81 @@ self._docs.insert_document(doc_id, intake, scope=scope)
 ### Builder action
 
 No new implementation needed. Builder should verify AC conformance via `uv run pytest tests/test_replace_on_change_775.py` — all 10 tests should pass against existing `ingest.py`.
+[[2026-04-13]]
+## Builder Notes
+- Task type: `type:test` — non-impl pass-through
+- No code changes needed; implementation already exists in `serve/knowledge/src/owlbear_knowledge/ingest.py` (landed in parent #775)
+- Test file: `tests/test_replace_on_change_775.py`
+
+### Test Results
+- **10/10 passed** (5.91s), no failures
+- All tests in `TestFromAC_ReplaceOnChangeSemantics`
+
+### AC Coverage
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1: delete_document_data(existing_id) before insert | test_delete_called_with_exact_existing_id, test_delete_precedes_insert_when_content_changes, test_new_document_no_prior_id_skips_delete | PASS |
+| AC2: No ghost docs after re-ingest (F1 regression) | test_f1_regression_ghost_doc_not_left_after_change, test_back_to_back_changes_each_delete_own_prior, test_change_path_returns_ok_status | PASS |
+| AC3: Unchanged content skips | test_unchanged_content_returns_skipped, test_unchanged_content_skips_delete, test_unchanged_content_skips_insert, test_unchanged_content_preserves_existing_document_id_in_result | PASS |
+| AC4: File path | tests/test_replace_on_change_775.py exists | PASS |
+
+### Lint
+- No new files changed — lint not required for pass-through
+
+[[2026-04-13]]
+## Review Evidence
+
+### Test Results
+pytest: **10 passed, 0 failed** (quality-runner independent run)
+ruff: **clean** — 0 violations
+Coverage `owlbear_knowledge.ingest`: **64%** (expected — tests target replace-on-change path only, not full pipeline)
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: delete_document_data(existing_id) before insert | `test_delete_called_with_exact_existing_id` (assert_called_once_with exact ID), `test_delete_precedes_insert_when_content_changes` (call-order capture), `test_new_document_no_prior_id_skips_delete` (assert_not_called) — all pass | PASS |
+| AC2: No ghost documents after re-ingest (F1 regression) | `test_f1_regression_ghost_doc_not_left_after_change` (delete + insert assertions), `test_back_to_back_changes_each_delete_own_prior` (call_count==2, exact IDs in order), `test_change_path_returns_ok_status` (status=='ok') — all pass | PASS |
+| AC3: Unchanged content skips | `test_unchanged_content_returns_skipped`, `test_unchanged_content_skips_delete`, `test_unchanged_content_skips_insert`, `test_unchanged_content_preserves_existing_document_id_in_result` — all pass | PASS |
+| AC4: File tests/test_replace_on_change_775.py | File exists, 10 tests in TestFromAC_ReplaceOnChangeSemantics | PASS |
+
+### Implementation Verification
+Read `ingest.py` lines 203–210 — confirmed:
+```python
+if existing_id is not None:
+    self._docs.delete_document_data(existing_id)
+self._docs.insert_document(doc_id, intake, scope=scope)
+```
+Implementation matches what tests assert.
+
+### Assertion Strength
+All assertions are discriminating: `assert_called_once_with(exact_id)`, call-order index comparison with failure messages, `assert_not_called()`, `result.document_id == existing_id`. None would pass with a broken implementation.
+
+### TestFromAC_ Modifications
+None — class created fresh for this task; builder made zero code changes (correct pass-through handling for type:test task).
+
+### Deductions
+- Tests: 0 (10/10 pass)
+- Lint: 0 (clean)
+- AC compliance: 0 (all 4 lines covered)
+- Assertion strength: 0 (all discriminating)
+- TestFromAC_ integrity: 0 (no modifications)
+- Security: 0 (no system boundary, pure mock-based)
+
+### Verdict
+Confidence: **0.97** → **PASS #791 → docs**
+[[2026-04-13]]
+## Docs Gate
+
+| Item | Applies? | Status | Evidence |
+|------|----------|--------|---------|
+| 1. Behavior/API Change | No | N/A | type:test pass-through — no behavior/API changed by #791 |
+| 2. Module Docstrings | No | N/A | No .py modules created/modified; only tests/test_replace_on_change_775.py added; module docstring (lines 1–11) is accurate (AC coverage, F1 regression description) |
+| 3. External Attribution | No | N/A | Tests use MagicMock only — no external patterns |
+| 4. CLI Changes | No | N/A | No CLI touchpoints |
+| 5. Research Doc | No | N/A | No .owlbear/research/ doc produced for this task |
+| 6. No Impact | Yes | CONFIRMED | Pure test file addition; all checklist items N/A |
+
+Files updated: none
+Scratch files: none found
+No commit required.

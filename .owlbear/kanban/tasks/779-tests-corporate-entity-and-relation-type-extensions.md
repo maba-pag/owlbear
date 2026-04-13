@@ -1,10 +1,10 @@
 ---
 id: 779
 title: Tests — Corporate entity and relation type extensions
-status: research
+status: backlog
 priority: needed
 created: '2026-04-10T12:30:43.945435+00:00'
-updated: '2026-04-12T23:58:33.626746+00:00'
+updated: '2026-04-13T02:31:59.354430+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -124,3 +124,93 @@ Independent read of source files confirms prior review and research findings:
 
 ### Verdict: REJECT
 ### Action Taken: Rejected to research (2nd cycle). Parent #775 is archived. All AC lines have verified existing coverage across 2 test files with 21+ green tests. This is a stale decomposition artifact — recommend orchestrator archive immediately.
+[[2026-04-13]]
+## Research (3rd pass — validation only)
+
+### Independent Verification
+
+Ran both test suites to confirm prior findings still hold:
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `test_schema_extensions_754.py` | 59 | GREEN |
+| `test_llm_prompt_corporate_775.py` | 9 | GREEN |
+
+All 4 AC lines remain fully covered by existing tests. No code gaps found.
+
+### AC Coverage (confirmed)
+
+| AC Line | Existing File | Evidence |
+|---------|--------------|----------|
+| EntityType members (5) | `test_schema_extensions_754.py` | 15 parametrized tests (exist x5, value x5, round-trip x5) |
+| RelationType members (2) | `test_schema_extensions_754.py` | 6 tests (exist x2, value x2, round-trip x2) |
+| `", ".join()` type-list | `test_llm_prompt_corporate_775.py` | Exercises both `_ENTITY_LIST` and `_RELATION_LIST` |
+| File: `test_models_entity_relation_775.py` | N/A | Would duplicate 21+ existing tests |
+
+### Recommendation
+
+Archive as stale decomposition artifact. Parent #775 is archived. All AC lines satisfied by existing coverage across 2 test files (68 green tests). Creating the proposed test file would violate KISS/YAGNI. Confidence: .95
+
+- Research doc: `.owlbear/research/779-entity-relation-tests-duplicate.md`
+- Sources: 5 studied, 4 high-relevance (all codebase)
+- Follow-up tasks created: none (all scope covered)
+- Decision requests: none
+- Challenge: SKIPPED (archival recommendation, not a design choice)
+
+**Note to orchestrator:** This task has cycled research-review-research 3 times with identical findings. Recommend immediate archival.
+[[2026-04-13]]
+## Architecture Review (3rd pass)
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Tests one concern (enum membership) |
+| Interface clarity | PASS | AC lines are specific and testable |
+| Dependency correctness | PASS | No dependencies, none needed |
+| Module layering | PASS | Test-only task |
+| TDD compliance | N/A | This IS the test task |
+| KISS/YAGNI | **FAIL** | All 4 AC lines already covered — creating `test_models_entity_relation_775.py` would duplicate 21+ existing tests |
+| Premise challenge | **FAIL** | Capability exists: `test_schema_extensions_754.py` (21 tests covering EntityType + RelationType members), `test_llm_prompt_corporate_775.py` (join pattern via `_ENTITY_LIST`/`_RELATION_LIST`) |
+| Pattern consistency | PASS | — |
+| Security surface | N/A | No system boundaries |
+| Single domain | PASS | knowledge domain only |
+
+### Independent Codebase Verification (3rd pass)
+
+Confirmed via grep:
+- `test_schema_extensions_754.py` L71: parametrizes all 5 EntityType members (exist, value, round-trip = 15 tests)
+- `test_schema_extensions_754.py` L105-121: GOVERNS + SUPERSEDES_VERSION (exist, value, round-trip = 6 tests)
+- `test_llm_prompt_corporate_775.py` L24-25: `", ".join()` exercised via `_ENTITY_LIST` and `_RELATION_LIST`
+
+### Challenge Results
+- Challenger: SKIPPED — REJECT verdict (no approve to challenge)
+- Architect response: N/A
+
+### Verdict: REJECT
+### Action Taken: Rejected to research (3rd cycle). Parent #775 is archived. All AC lines have verified existing coverage across 2 test files with 21+ green tests. This is a stale decomposition artifact. **Orchestrator: this task has cycled research→backlog→research 3 times with identical findings. Please archive immediately.**
+[[2026-04-13]]
+## Research (4th pass — validation only)
+
+### Verification
+59 passed in `test_schema_extensions_754.py`, 9 passed in `test_llm_prompt_corporate_775.py` — 68 total, all GREEN.
+
+### AC Coverage (confirmed, 4th time)
+
+| AC Line | Existing File | Evidence |
+|---------|--------------|----------|
+| EntityType members (5) | `test_schema_extensions_754.py` L71-96 | 15 parametrized tests (exist ×5, value ×5, round-trip ×5) |
+| RelationType members (2) | `test_schema_extensions_754.py` L103-121 | 6 tests (exist ×2, value ×2, round-trip ×2) |
+| `", ".join()` type-list | `test_llm_prompt_corporate_775.py` L24-25 | Exercises both `_ENTITY_LIST` and `_RELATION_LIST` |
+| File: `test_models_entity_relation_775.py` | N/A | Would duplicate 21+ existing tests |
+
+### Recommendation
+Archive as stale decomposition artifact. Parent #775 archived. Confidence: .95
+
+- Research doc: `.owlbear/research/779-entity-relation-tests-duplicate.md`
+- Sources: 5 studied, 4 high-relevance (all codebase)
+- Follow-up tasks created: none (all scope covered)
+- Decision requests: none
+- Challenge: SKIPPED (archival recommendation)
+
+**ORCHESTRATOR: This task has now cycled research→backlog→research 4 times with identical REJECT/archive findings across 3 architecture reviews and 4 research passes. 68 green tests cover all AC lines. Please archive immediately — further cycling wastes pipeline capacity.**

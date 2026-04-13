@@ -4,15 +4,18 @@ title: Tests — Content safety predicate inversion
 status: review
 priority: needed
 created: '2026-04-10T12:30:43.995109+00:00'
-updated: '2026-04-12T22:32:51.699613+00:00'
+updated: '2026-04-13T01:45:36.701228+00:00'
 tags:
 - phase-1
 - scope:knowledge
 - type:test
 parent: 775
 depends_on: []
-blocked: false
-block_reason: null
+blocked: true
+block_reason: 'Quality-Runner fatal environment error — pytest import chain interrupted
+  by KeyboardInterrupt during anyio module load on two consecutive attempts. Cannot
+  independently run tests. Critical rule: always run tests yourself. Unblock when
+  environment is restored.'
 claimed_by: null
 claimed_at: null
 ---
@@ -84,3 +87,24 @@ AC1/AC2 name `wrap_untrusted_content()` but the function under test for source-t
 ## Builder Notes
 - Non-implementation task — no code changes needed.
 - Passing through to review.
+[[2026-04-13]]
+## Review Evidence
+
+### Quality-Runner Execution
+- Invocation: `mode: scoped, task_id: 781, test_paths: [test_content_safety_inversion_775.py, test_content_safety_735.py], coverage_modules: [owlbear_knowledge.content_safety], lint_paths: [test_content_safety_inversion_775.py]`
+- Result: FATAL ERROR — pytest import chain interrupted by KeyboardInterrupt during anyio module load (2 consecutive attempts). Process cleanup also hanging. Possible Windows asyncio/execnet deadlock.
+- pytest exit code: 1, 0 tests run, lint not executed.
+
+### Pre-Read Static Analysis (performed before test execution)
+
+**Test file read:** `tests/test_content_safety_inversion_775.py` — 11 tests in `TestFromAC_ShouldWrapPredicate`. Structure well-formed. `TestFromAC_*` class present. All assertions use `is True` / `is False` (strict bool, not truthy). Descriptive test names. No shared mutable state.
+
+**AC3 test read:** `tests/test_content_safety_735.py::test_idempotency_guard_no_double_wrap` — wraps once, wraps twice, asserts `wrapped_twice == wrapped_once`. Strong assertion.
+
+**What could not be verified due to environment failure:**
+- Tests actually pass (cannot trust builder self-report)
+- Lint clean (ruff not run)
+- Coverage on `owlbear_knowledge.content_safety`
+
+### Verdict
+BLOCKED — environment failure prevents independent test execution. Per critical rules, cannot issue PASS without running tests myself.

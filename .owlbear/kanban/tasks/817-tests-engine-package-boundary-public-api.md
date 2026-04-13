@@ -1,10 +1,10 @@
 ---
 id: 817
 title: Tests — Engine package boundary + public API
-status: todo
+status: docs
 priority: critical
 created: '2026-04-10T21:22:21.043519+00:00'
-updated: '2026-04-12T20:32:33.815797+00:00'
+updated: '2026-04-13T02:57:43.075924+00:00'
 tags:
 - phase-2
 - type:test
@@ -99,3 +99,81 @@ Task #817 should have `depends_on: []` (empty list). All 8 listed dependencies (
 
 ### Verdict: APPROVE
 ### Action Taken: Advanced to todo. DEPENDS_ON-CORRECTION flagged for orchestrator to clear stale dependency list before dispatch.
+[[2026-04-13]]
+## Test-Writer Notes
+- Non-implementation pass-through: task is tagged `type:test` (test artifact task — not an implementation task requiring new tests).
+- Test file `tests/test_engine_package_boundary_817.py` already exists (8 tests, 4 classes) — created in a prior agent cycle.
+- All 8 tests currently pass GREEN (5.59s) — GREEN phase task #818 completed engine extraction before this task was dispatched.
+- Nothing for test-writer to produce: tests exist, AC is covered, no failing tests to write.
+- ruff: not run (no changes made).
+[[2026-04-13]]
+## Builder Notes
+
+**Pass-through task** (`type:test`) — test artifact task, no implementation required.
+
+### Files Changed
+- None. Test file `tests/test_engine_package_boundary_817.py` was created in a prior agent cycle (149 lines, 8 tests, 4 classes). No source changes needed.
+
+### Test Results
+- **8 passed, 0 failed** — all AC tests GREEN
+- Test classes: `TestFromAC_EngineImportable`, `TestFromAC_EngineBoundary`, `TestFromAC_EnginePublicAPI`, `TestFromAC_AdapterImportsEngine`
+
+### Lint
+- `ruff check tests/test_engine_package_boundary_817.py` — **All checks passed!**
+
+### Coverage
+- Coverage collected on `serve/kanban/src/owlbear_kanban` — engine package exercised by import and API surface tests.
+
+### Evidence Summary
+- AC1 ✅ `from owlbear_kanban import KanbanEngine, Task, TaskSummary` works
+- AC2 ✅ Engine source tree has zero `mcp`/`fastmcp` imports (AST-verified)
+- AC3 ✅ All 14 public methods/properties present + Task, TaskSummary, BoardConfig exported
+- AC4 ✅ `server.py` imports from `owlbear_kanban` (AST-verified)
+
+### Fixes Applied
+- None required.
+[[2026-04-13]]
+## Review Evidence
+
+### Test Results (independent run)
+pytest: **8 passed, 0 failed** (exit 0)
+ruff: **clean** (exit 0)
+
+### Coverage (`owlbear_kanban`)
+| Module | % |
+|--------|---|
+| `owlbear_kanban.__init__` | 100 |
+| `owlbear_kanban.models` | 91 |
+| `owlbear_kanban.engine` | 13 |
+| overall | 28 |
+
+Coverage depth is appropriate — this is a boundary/surface test, not a functional test suite. 100% on `__init__` and 91% on `models` confirm the surface is exercised.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `from owlbear_kanban import KanbanEngine, Task, TaskSummary` works | `TestFromAC_EngineImportable.test_import_core_exports` — import executes without error; `__init__.py` exports all three | ✅ PASS |
+| Engine does NOT import `mcp` or transport packages | `TestFromAC_EngineBoundary.test_no_mcp_transport_imports` — AST-scans all `*.py` under `serve/kanban/src/`, checks against `frozenset({"mcp","fastmcp"})`; 8/8 pass confirms zero violations | ✅ PASS |
+| Engine public API surface (KanbanEngine 14 members + 3 model exports) | `TestFromAC_EnginePublicAPI` — `hasattr(KanbanEngine, m)` for all 14 members; separate import tests for Task, TaskSummary, BoardConfig | ✅ PASS |
+| MCP adapter allowed to import `owlbear_kanban` | `TestFromAC_AdapterImportsEngine.test_adapter_imports_engine` — AST-scans `server.py`, asserts presence of `owlbear_kanban` import | ✅ PASS |
+| Tests fail RED before extraction | Structurally guaranteed: `test_engine_dir_exists` fails if `serve/kanban/` absent; all import tests fail with ImportError. Validated historically by Validation Pass note. | ✅ PASS |
+
+### TestFromAC Modifications
+Builder reports no changes to test file (pass-through task). Confirmed: test file exists from prior cycle, no builder edits detected.
+
+### Assertion Quality
+- Import tests: pure existence checks — fail on ImportError. Appropriate.
+- `test_engine_dir_exists`: path assertion — fails if package not extracted. Appropriate.
+- `test_no_mcp_transport_imports`: AST walk with violation accumulation — strong, catches any `import mcp`, `from mcp import ...`, `import fastmcp`, etc. No weak assertion concerns.
+- `test_engine_methods`: `hasattr(KanbanEngine, m)` on class — correct for methods and descriptors/properties; fails if any member removed.
+- `test_adapter_imports_engine`: AST walk of server.py with explicit `found=False` path — fails if import absent. Strong.
+
+### ALLOWED_IMPORTS Verification
+`test_package_boundary.py` lines 40–43 confirmed: `owlbear_kanban: set()` (no allowed cross-imports), `owlbear_mcp_kanban: {"owlbear_kanban"}` (adapter allowed to import engine). Consistent with boundary design.
+
+### Deductions
+0 deductions. All AC lines covered by purpose-built `TestFromAC_*` classes. Assertions would fail under incorrect implementation. No security concerns (read-only AST analysis).
+
+### Verdict
+Confidence: **0.97** → **PASS**

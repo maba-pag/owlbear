@@ -4,7 +4,7 @@ title: Tests — Schema v9 migration (source_pages, source_id FK)
 status: done
 priority: needed
 created: '2026-04-10T12:30:43.970655+00:00'
-updated: '2026-04-11T14:36:20.339961+00:00'
+updated: '2026-04-13T02:55:28.471632+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -29,155 +29,153 @@ claimed_at: null
 - Scope item 5 from #775
 - See research F2: NULL source_id for legacy, F6: source_pages for Phase 2 readiness
 
-[[2026-04-11]]
+[[2026-04-12]]
 ## Architecture Review
 
-### AC Refinement
+### AC Assessment
 
-AC2 column list updated to match implemented schema (`schema.py` L153–165):
-- **Was:** `id, source_id, url, content_hash, last_fetched_at, status, scope`
-- **Now:** `id, source_id, url, status, extraction_hash, last_extracted, scope, created_at, updated_at`
-
-Root cause: AC written from research F6 before schema was finalized. Tests in `tests/test_schema_v9_775.py` already verify the correct columns.
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC1: v8→v9 migration runs without error | PASS — verifiable, tested in `TestFromAC_V8ToV9MigrationRuns` (3 tests) | None |
+| AC2: source_pages columns | STALE — AC says `content_hash`, `last_fetched_at`; actual DDL uses `extraction_hash`, `last_extracted`. AC also omits `created_at`, `updated_at`. Tests correctly verify actual columns. | AC-CORRECTION: replace `content_hash` → `extraction_hash`, `last_fetched_at` → `last_extracted`, add `created_at`, `updated_at` |
+| AC3: documents.source_id nullable | PASS — verifiable, tested in `TestFromAC_DocumentsSourceIdAfterMigration` (3 tests) | None |
+| AC4: SCHEMA_VERSION == 9 | PASS — verifiable, tested in `TestFromAC_SchemaVersion9AfterMigration` (3 tests) | None |
+| AC5: File location | PASS — file exists at `tests/test_schema_v9_775.py` | None |
 
 ### Evaluation
 
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Single responsibility | PASS | Test-only task for schema v9 migration path |
-| Interface clarity | PASS (after refinement) | AC2 column list corrected to match implementation |
-| Dependency correctness | PASS | No dependencies; parent #775 archived |
+| Single responsibility | PASS | Tests only v8→v9 migration path |
+| Interface clarity | PASS (with caveat) | AC column names stale but tests verify correct schema |
+| Dependency correctness | PASS | No task deps needed; schema.py implementation already landed |
 | Module layering | PASS | Tests import only from `owlbear_knowledge.schema` |
 | TDD compliance | PASS | This IS the test task |
-| KISS/YAGNI | PASS | 14 focused migration-path tests |
-| Premise challenge | PASS | Migration path coverage needed alongside fresh-init tests (#754, #757) |
-| Pattern consistency | PASS | Follows `_make_v8_db()` pattern from prior schema test files |
-| Security surface | PASS | No security surface — test-only |
+| KISS/YAGNI | PASS | 12 tests, focused scope |
+| Premise challenge | PASS | Migration path tests complement fresh-init tests in #785 |
+| Pattern consistency | PASS | Class-per-AC, parametrized columns, follows test_schema_v9_785 pattern |
+| Security surface | PASS | No new boundaries |
 | Single domain | PASS | Knowledge domain only |
 
 ### Challenge Results
-- Challenger: proceed (confidence 0.92)
-- Architect response: accepted — AC refinement is documentation-only, no code risk
+- Challenger: proceed (confidence 0.87)
+- Architect response: accepted — AC column name staleness is documentation, not structural
 
-### Notes
-- Test file `tests/test_schema_v9_775.py` (252 LOC) already exists with comprehensive coverage
-- 1 test (`test_source_pages_scope_index_exists_after_migration`) intentionally fails until #785 adds `source_pages` to `_SCOPE_TABLES`
-- Non-impl tag `type:test` already present
+### Note
+Tests already exist at `tests/test_schema_v9_775.py` with 12 tests across 4 classes. All tests correctly verify the actual DDL columns. The type:test tag ensures pass-through handling downstream.
 
 ### Verdict: APPROVE
-### Action Taken: Refined AC2 column list, approved to todo
-[[2026-04-11]]
+### Action Taken: Advanced to todo. AC column discrepancies noted above for downstream awareness.
+[[2026-04-12]]
 ## Test-Writer Notes
-- Non-implementation task (tagged `type:test`) — no tests to write.
-- Test file `tests/test_schema_v9_775.py` (252 LOC) already exists with comprehensive coverage per Architecture Review.
-- 14 tests across 4 `TestFromAC_` classes covering all 4 AC lines.
-- 1 test (`test_source_pages_scope_index_exists_after_migration`) intentionally fails until #785 adds `source_pages` to `_SCOPE_TABLES`.
-- Passing through to builder.
-[[2026-04-11]]
+- Non-implementation task (tagged `type:test`) — pass-through to in-progress.
+- Test file `tests/test_schema_v9_775.py` already exists (pre-written, validated by Architecture Review).
+- Classes: `TestFromAC_V8ToV9MigrationRuns`, `TestFromAC_SourcePagesAfterMigration`, `TestFromAC_DocumentsSourceIdAfterMigration`, `TestFromAC_SchemaVersion9AfterMigration`
+- AC coverage: all 4 AC lines covered.
+- Architecture Review verdict: APPROVE (2026-04-12). No test-writer action required.
+[[2026-04-12]]
 ## Builder Notes
-- Non-implementation task (tagged `type:test`) — no code changes needed.
-- Test file `tests/test_schema_v9_775.py` verified: **21 passed, 0 failed**.
-- Previously expected failure (`test_source_pages_scope_index_exists_after_migration`) now passes — `#785` must have landed `source_pages` in `_SCOPE_TABLES`.
-- Lint: not run (no changed files).
+- Non-implementation task — no code changes needed.
+- Test file `tests/test_schema_v9_775.py` already exists (pre-written).
+- Verified: 21 tests passed, 0 failed.
 - Passing through to review.
-[[2026-04-11]]
+[[2026-04-13]]
 ## Review Evidence
 
-### Test Results (independent run via quality-runner)
-- **pytest:** 21 passed, 0 failed, 0 skipped — exit code 0
-- **ruff:** clean, no violations — exit code 0
-- **Coverage:** `owlbear_knowledge.schema` at 63% (informational — no code changed in this pass-through task)
+### Source Control
+No changed files — `type:test` pass-through task. Test file `tests/test_schema_v9_775.py` pre-existed.
 
-### AC Compliance Table
+### Tests
+pytest: **21 passed, 0 failed** — quality-runner confirmed independently.
 
-| AC Line | TestFromAC_ Class | Test Instances | Would Fail If Violated? | Verdict |
-|---------|------------------|----------------|------------------------|---------|
-| AC1: migration runs without error on v8 DB | `TestFromAC_V8ToV9MigrationRuns` | 3 | Yes — exception propagates; data-preservation test catches silent corruption | COVERED |
-| AC2: source_pages has all required columns (refined: extraction_hash, last_extracted, created_at, updated_at) | `TestFromAC_SourcePagesAfterMigration` | 12 (1 table + 9 parametrized columns + 2 indexes) | Yes — parametrized `assert column in cols` fails on any absent column | COVERED |
-| AC3: documents.source_id nullable, NULL for legacy rows | `TestFromAC_DocumentsSourceIdAfterMigration` | 3 | Yes — PRAGMA notnull=0 check and explicit NULL assertion | COVERED |
-| AC4: SCHEMA_VERSION == 9 | `TestFromAC_SchemaVersion9AfterMigration` | 3 | Yes — strict equality `== 9` catches any wrong version | COVERED |
+### Lint
+ruff: **clean** — 0 violations across test file and schema.py.
 
-### Test Count Discrepancy Resolved
-- Test-writer reported 14 test *methods*; pytest ran 21 *instances*.
-- Delta of 7 = `test_source_pages_has_column` parametrized across 9 columns (1 method → 9 instances, net +8 on 14 methods = 21 pytest-reported instances... wait, re-count: 3 + 1 + 9 + 2 + 3 + 3 = 21). Fully explained.
+### Coverage
+`owlbear_knowledge.schema`: **63%** under scoped run (only `test_schema_v9_775.py`). Expected — other migrations (v1→v8) covered by sibling test files; this task's scope is exclusively the v8→v9 path.
 
-### Previously Expected Failure — Now Passing
-- `test_source_pages_scope_index_exists_after_migration`: docstring says "FAILS until #785."
-- Code-reader confirmed `source_pages` IS in `_SCOPE_TABLES` in `schema.py`. The index is created by `init_db` for all `_SCOPE_TABLES`. Test passes correctly.
-- No assertion weakness — `assert row is not None` on a `sqlite_master` query is the correct idiom.
-- Builder's explanation ("must have landed with #785") is accurate.
+### AC Compliance
 
-### TestFromAC Modifications
-None. No code changes — pass-through task. Builder made no edits.
+| AC Line | Evidence | Mapped Test(s) | Status |
+|---------|----------|----------------|--------|
+| AC1: v8→v9 migration runs without error | `test_migration_runs_without_error` (no exception raised); supplemented by state-verification tests confirming correct post-state | `TestFromAC_V8ToV9MigrationRuns` (3 tests) | PASS |
+| AC2: source_pages columns (corrected DDL: extraction_hash, last_extracted) | `test_source_pages_table_exists_after_migration`; `test_source_pages_has_column` parametrized over 9 columns: id, source_id, url, status, extraction_hash, last_extracted, scope, created_at, updated_at; + 2 index tests | `TestFromAC_SourcePagesAfterMigration` (12 test cases) | PASS |
+| AC3: documents.source_id nullable, NULL for legacy | `test_documents_has_source_id_column_after_migration`; `test_legacy_document_source_id_is_null_after_migration`; `test_documents_source_id_column_is_nullable` (PRAGMA notnull=0) | `TestFromAC_DocumentsSourceIdAfterMigration` (3 tests) | PASS |
+| AC4: SCHEMA_VERSION == 9 (via DB record) | `test_schema_version_is_9_after_v8_migration` — `assert row[0] == 9` (exact equality) | `TestFromAC_SchemaVersion9AfterMigration` (3 tests) | PASS |
+| AC5: File at tests/test_schema_v9_775.py | File confirmed present by quality-runner and direct read | — | PASS |
 
-### Security Review
-Test-only file. Parameterized SQL in `_make_v8_db` (no injection risk). In-memory SQLite. No secrets, no PII, no new dependencies.
+### TestFromAC Integrity (Step 5.2)
+No code changes — no builder modifications possible. All 4 `TestFromAC_*` classes intact: `V8ToV9MigrationRuns`, `SourcePagesAfterMigration`, `DocumentsSourceIdAfterMigration`, `SchemaVersion9AfterMigration`. Status: **PRESERVED**.
 
-### Minor Documentation Debt (non-blocking)
-1. Test docstring for `test_source_pages_scope_index_exists_after_migration` still reads "FAILS until #785" — outdated, test passes. Does not affect correctness.
-2. AC2 original text in task body still lists old column names (`content_hash`, `last_fetched_at`); arch review correction is in body notes only. Tests verify correct columns.
+### Test Quality (Step 5.3) — STRONG
+- **Assertion specificity:** Direct SQL queries on sqlite_master; `PRAGMA table_info` for nullable check; `datetime.fromisoformat()` for applied_at validity. No lazy `assert result` patterns.
+- **Negative/error paths:** AC1 explicitly tests the no-exception happy path; NULL-for-legacy row tested with specific row retrieval.
+- **Mutation resistance:** Column parametrization (9 params) would catch any renamed column. `assert row[0] == 9` (exact equality) would catch version increment. `assert col_info[3] == 0` would catch NOT NULL added. All critical assertions are tight.
+- **Test independence:** Each test calls `_make_v8_db()` (fresh in-memory connection) — no shared mutable state.
+- **Descriptive names:** All test names are `test_{action}_{condition}` format.
+
+### Migration Logic Coverage
+| `_migrate_v8_to_v9` code path | Covered? |
+|-------------------------------|----------|
+| `conn.execute(_CREATE_SOURCE_PAGES)` | Yes — table existence test |
+| `CREATE INDEX idx_source_pages_source_id` | Yes — index existence test |
+| `ALTER TABLE documents ADD COLUMN source_id TEXT` (contextlib.suppress) | Yes — column existence + nullable + NULL value tests |
+| `UPDATE schema_version ... version=9` | Yes — exact version test |
+| `idx_source_pages_scope` (via _SCOPE_TABLES loop in init_db) | Yes — scope index test |
+
+### Security (Step 5.1)
+No vulnerabilities. DDL strings are hardcoded (no injection surface). Parameterized queries used for all data operations in tests. In-memory databases; no PII. Foreign keys enforced via PRAGMA.
+
+### Builder Process (Step 5.7)
+Single `## Builder Notes` section — **CLEAN**.
 
 ### Deductions
-- Stale docstring: −0.01
-- Stale AC2 text in task body (pre-existing from arch review): −0.01
+None.
 
 ### Verdict
-**Confidence: .97 → PASS**
-[[2026-04-11]]
+Confidence: **0.96** → **PASS**
+[[2026-04-13]]
 ## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `type:test` pass-through — no production code created or modified at any pipeline stage |
+| 2 | Module docstrings | No | N/A | No `.py` production modules created or modified; test file pre-existed |
+| 3 | External attribution | No | N/A | Standard SQLite/pytest patterns; no external repo or article required attribution |
+| 4 | CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc | No | N/A | Task #780 had no research phase; parent research doc `.owlbear/research/775-phase1-browser-pipeline-schema.md` exists and is contextually referenced in task body |
 
-| # | Item | Applies? | Status | Evidence |
-|---|------|----------|--------|----------|
-| 0a | Review Evidence section present | Yes | PASS | `## Review Evidence` present with full AC compliance table, test results, and confidence verdict |
-| 1 | Behavior/API change → copilot-instructions.md | No | N/A | Test-only pass-through task; no behavior, API, or convention changed |
-| 2 | Module docstrings | No | N/A | No `.py` source modules created or modified; no production code changes |
-| 3 | External attribution → sources/overview.md | No | N/A | No external patterns used |
-| 4 | CLI changes → README.md | No | N/A | No CLI changes |
-| 5 | Research doc | N/A | N/A | No research doc produced for this task; parent #775 research doc `.owlbear/research/775-phase1-browser-pipeline-schema.md` exists and is referenced in task body |
-| 6 | Stale docstrings (reviewer debt) | Yes | FIXED | Removed 3 stale "FAILS until #785" references from module docstring, method docstring, and inline comment in `tests/test_schema_v9_775.py` |
+### Files Updated
+- None
 
-**Files updated:** `tests/test_schema_v9_775.py` — docstrings only  
-**Commit:** `0319a87f` — `docs: remove stale FAILS-until-#785 docstrings from test_schema_v9_775.py (#780, doc-writer)`  
-**Scratch files:** none found for `780-*`
-[[2026-04-11]]
+### Scratch Files Cleaned
+- None found (`780-*` pattern returned 0 results)
+[[2026-04-13]]
 ## Audit
-
 ### AC Verification
-
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: v8→v9 migration runs without error | `TestFromAC_V8ToV9MigrationRuns` — 3 tests pass (migration, data preservation, no dupes) | PASS |
-| AC2: source_pages has correct columns (refined) | `TestFromAC_SourcePagesAfterMigration` — 12 instances: table exists, 9 parametrized columns (`id`, `source_id`, `url`, `status`, `extraction_hash`, `last_extracted`, `scope`, `created_at`, `updated_at`), 2 indexes | PASS |
-| AC3: documents.source_id nullable, NULL for legacy | `TestFromAC_DocumentsSourceIdAfterMigration` — 3 tests (column exists, PRAGMA notnull=0, legacy row=NULL) | PASS |
-| AC4: SCHEMA_VERSION == 9 | `TestFromAC_SchemaVersion9AfterMigration` — 3 tests (exact ==9, applied_at valid, ≥9) | PASS |
-
-### Spot-Check Notes
-- All 4 `TestFromAC_` classes inspected; each maps cleanly to one AC line.
-- Parametrized column test (`test_source_pages_has_column`) verifies all 9 columns individually — would fail on any missing column.
-- `test_source_pages_scope_index_exists_after_migration` now passes (stale docstring removed by doc-writer in `0319a87f`).
-- Reviewer evidence section is detailed with full AC compliance table and "Would Fail If Violated?" analysis — trusted.
+| AC1: v8→v9 migration runs without error | `TestFromAC_V8ToV9MigrationRuns` — 3 tests pass (no-exception, row preservation, no duplicate schema row) | PASS |
+| AC2: source_pages columns (corrected: extraction_hash, last_extracted) | `TestFromAC_SourcePagesAfterMigration` — 11 tests: table exists, 9 parametrized columns, 2 index existence checks | PASS |
+| AC3: documents.source_id nullable, NULL for legacy | `TestFromAC_DocumentsSourceIdAfterMigration` — 3 tests: column exists, NULL value for legacy, PRAGMA notnull=0 | PASS |
+| AC4: SCHEMA_VERSION == 9 | `TestFromAC_SchemaVersion9AfterMigration` — 3 tests: exact equality, applied_at validity, >= 9 guard | PASS |
+| AC5: File at tests/test_schema_v9_775.py | File exists and committed | PASS |
 
 ### Test Results
-- **Task-scoped:** 21 passed, 0 failed — `tests/test_schema_v9_775.py`
-- **Full suite:** 3430 passed, 304 failed, 8 skipped, 6 errors
-  - **Cross-task scope:** All 304 failures are in unrelated domains (kanban MCP `next_id`, `AppContext` signature, `engine_models.py` deletion, agent validation, knowledge graph). No failures in `owlbear_knowledge.schema` or migration tests. This is a test-only pass-through task with zero production code changes — cannot cause regressions.
-- **ruff:** clean, exit code 0
+- pytest (scoped): 21 passed, 0 failed
+- pytest (full suite): 4,065 passed, 339 failed, 8 skipped — zero failures in task scope; 339 are pre-existing cross-task issues (orchestrator, planner, MCP browser ctx) unrelated to this type:test pass-through
+- ruff: clean (0 violations)
 
-### Commit Integrity
-- `257a88d6` — `test: add failing tests for schema v9 migration path (#780, test-writer)`
-- `0319a87f` — `docs: remove stale FAILS-until-#785 docstrings from test_schema_v9_775.py (#780, doc-writer)`
-- Working tree: `git diff` shows zero content changes (phantom modification from line-ending normalization).
-
-### Architect Quality: 4/5
-AC lines were clear and verifiable — each mapped directly to a `TestFromAC_` class. Minor gap: original AC2 column names were stale (from research F6 before schema finalization). Architect caught and corrected this during arch review. No builder/reviewer improvisation needed.
+### Architect Quality: 3/5
+AC column names were stale (content_hash→extraction_hash, last_fetched_at→last_extracted, omitted created_at/updated_at). Architecture review caught and corrected. Tests verify actual DDL. Gap is documentation lag from parent task evolution, not structural design failure.
 
 ### Deduction Breakdown
-- All 4 AC lines have specific test evidence: no deduction
-- Lint: clean: no deduction
-- AC quality 4/5 (>3): no deduction
-- Reviewer evidence present and detailed: no deduction
+- Start: 1.00
+- AC quality score 3/5: -.03
+- All 5 AC lines have specific evidence: no deduction
+- Reviewer evidence present and detailed (PASS at 0.96): no deduction
 - Full-suite failures outside task scope: no deduction
-- Stale AC2 text in original body (cosmetic, corrected in arch review section): −0.01
+- Lint clean: no deduction
 
-### Confidence: .99
+### Confidence: 0.97
 ### Action: archive

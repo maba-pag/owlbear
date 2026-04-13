@@ -1,10 +1,10 @@
 ---
 id: 759
 title: 'P1-06: Impl — HTML→markdown cleaner'
-status: todo
+status: docs
 priority: needed
 created: '2026-04-10T10:55:57.210371+00:00'
-updated: '2026-04-12T22:40:12.500641+00:00'
+updated: '2026-04-13T03:10:59.073072+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -85,3 +85,80 @@ DEPENDS_ON-CORRECTION: task #759 should have depends_on [756]
 
 ### Verdict: APPROVE
 ### Action Taken: Advanced #759 to todo. Binding AC refined in review note. DEPENDS_ON-CORRECTION flagged for orchestrator. lxml explicit dep required as AC4.
+[[2026-04-13]]
+## Test-Writer Notes
+- Test file: tests/test_html_markdown_cleaner_759.py
+- Classes: TestFromAC_LxmlExplicitDependency
+- Tests per category: happy 1, edge 0, error 0, boundary 2
+- Total: 3 tests, all FAIL
+- ruff: clean
+
+### AC Coverage
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1 — TestFromAC_* in test_cleaner_756.py pass | Existing file, tests pass already | Pre-existing ✓ |
+| AC2 — TestFromAC_* in test_browser_content_775.py pass (StripNoise/HtmlToMarkdown/SharePointPatterns/ContentNormalization/DeterministicOutput) | Existing file, tests pass already | Pre-existing ✓ |
+| AC3 — TestFromAC_* in test_sharepoint_normalization_829.py pass | Existing file, tests pass already | Pre-existing ✓ |
+| AC4 — lxml>=4.9 explicit in serve/browser/pyproject.toml | 3 new failing tests | RED ✗ |
+
+### Why only AC4 has new tests
+AC1–AC3 reference test files created during predecessor tasks (#756, #828, #829). All those TestFromAC_* tests exist and pass against the completed implementation. The only uncovered AC line was AC4: lxml is not in serve/browser/pyproject.toml (current deps: playwright>=1.40, trafilatura>=1.6 only). The 3 new tests drive the builder to add `lxml>=4.9` explicitly.
+
+### Failure evidence (pytest -p no:logfire)
+```
+FAILED test_lxml_present_in_browser_dependencies       — AssertionError: lxml is not listed; current deps: ['playwright>=1.40', 'trafilatura>=1.6']
+FAILED test_lxml_version_constraint_includes_gte_4_9   — AssertionError: lxml not found in dependencies
+FAILED test_lxml_dep_has_no_strict_upper_pin           — AssertionError: lxml not found in dependencies
+3 failed in 3.73s
+```
+[[2026-04-13]]
+## Builder Notes
+
+### Files Changed
+- `serve/browser/pyproject.toml` — added `lxml>=4.9` to `project.dependencies`
+
+### Test Results
+- `test_html_markdown_cleaner_759.py` — 3/3 passed (RED → GREEN)
+- `test_cleaner_756.py` + `test_browser_content_775.py` + `test_sharepoint_normalization_829.py` — 143/143 passed (AC1–AC3 pre-existing, all green)
+- Total: 146 passed, 0 failed
+
+### Coverage
+Not measured separately — single-line config change with no code logic to cover.
+
+### Lint
+ruff: clean (exit 0)
+
+### Evidence Summary
+- RED verified: 3 tests failing before change (`lxml` absent from pyproject.toml)
+- GREEN verified: 3 tests passing after adding `lxml>=4.9` at correct position
+- Constraint satisfies all 3 test assertions: entry present, `>=4.9` present, no `==` pin
+- Pre-existing AC1–AC3 tests unaffected
+
+### Fixes Applied
+Added `lxml>=4.9` as explicit dependency in `serve/browser/pyproject.toml`. One-line change; no implementation code touched.
+[[2026-04-13]]
+## Review Evidence
+
+**Tests:** 146 passed, 0 failed (pytest exit 0). Scope: test_html_markdown_cleaner_759.py (3 new), test_cleaner_756.py, test_browser_content_775.py, test_sharepoint_normalization_829.py.
+
+**Lint:** cleaner.py — ruff clean (exit 0). test_html_markdown_cleaner_759.py — ruff had infrastructure-level KeyboardInterrupt (4 attempts), not a code violation; file manually verified clean (67 lines, stdlib-only imports, no unused vars).
+
+**Coverage:** owlbear_browser/cleaner — 100%.
+
+**Changed files:** serve/browser/pyproject.toml only — `lxml>=4.9` added to project.dependencies.
+
+**AC Compliance:**
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1 — TestFromAC_* in test_cleaner_756.py pass | 146 passed | PASS |
+| AC2 — TestFromAC_* in test_browser_content_775.py pass | 146 passed | PASS |
+| AC3 — TestFromAC_* in test_sharepoint_normalization_829.py pass | file exists, 146 passed | PASS |
+| AC4 — lxml>=4.9 in serve/browser/pyproject.toml | confirmed at line 7, no == pin | PASS |
+
+**Assertion quality:** All 3 new tests catch the broken state (absent dep) and defective states (no version floor, exact pin). Meaningful, not vacuous.
+
+**TestFromAC_* integrity:** Builder changed only pyproject.toml. No test modifications.
+
+**Deductions:** −0.02 (ruff not tool-verified on test file — manual review substituted).
+
+**Confidence: .98 → PASS**

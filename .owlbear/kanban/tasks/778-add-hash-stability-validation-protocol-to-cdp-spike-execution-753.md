@@ -1,10 +1,10 @@
 ---
 id: 778
 title: Add hash stability validation protocol to CDP spike execution (#753)
-status: todo
+status: docs
 priority: needed
 created: '2026-04-10T12:16:54.010932+00:00'
-updated: '2026-04-13T00:03:52.719416+00:00'
+updated: '2026-04-13T03:08:51.219411+00:00'
 tags:
 - phase-0
 - scope:browser
@@ -102,3 +102,124 @@ Reason: research doc §3.3 explicitly recommends adding #777 — hash stability 
 
 ### Verdict: APPROVE
 ### Action Taken: Advanced to todo via end_work(outcome=success). Flagged DEPENDS_ON-CORRECTION for #777.
+[[2026-04-13]]
+## Test-Writer Notes
+
+**Pre-existing implementation pass-through** — Architecture Review explicitly flagged this case: "pipeline handles pre-existing code via pass-through notes."
+
+- Test file: `tests/test_cdp_spike_778.py`
+- Test class: `TestFromAC_HashStabilityProtocol`, `TestFromAC_ExtractionProtocol`, `TestFromAC_HashComparison`, `TestFromAC_GoNoGoVerdict`
+- Total tests: 16
+- Pytest run: **16 passed, 0 failed** — all tests PASS because `_run_hash_stability()` and `--hash-stability` already exist in `.owlbear/scratch/cdp-spike.py` (lines 277–389, 159–160, 469–470)
+
+**Why pass-through (not RED violation):**
+- Implementation was built ahead of the pipeline cycle (pre-existing code pattern)
+- Architecture Review §TDD COMPLIANCE noted "18 tests covering all 4 ACs" and APPROVED the task knowing implementation existed
+- Architect override: "pipeline handles pre-existing code via pass-through notes, moving to todo is correct per protocol"
+
+**AC Coverage table:**
+
+| AC | Tests | Coverage |
+|----|-------|---------|
+| AC1: `--hash-stability` flag + `_run_hash_stability` function | `test_hash_stability_flag_accepted_by_argparse`, `test_hash_stability_flag_defaults_to_false`, `test_run_hash_stability_function_exists` | FULL |
+| AC2: ≥2 pages × 3 extractions × 60s intervals | `test_page_content_called_3_times_per_url`, `test_sleep_between_extractions_at_least_60_seconds`, `test_accepts_list_of_multiple_urls`, `test_extracts_all_urls_not_just_first` | FULL |
+| AC3: Raw HTML + cleaned content hash comparison | `test_trafilatura_called_per_extraction_for_cleaned_hash`, `test_logs_raw_html_hash_information`, `test_logs_cleaned_content_hash_information`, `test_logs_diff_output_when_cleaned_hashes_differ` | FULL |
+| AC4: Go/no-go verdict in log | `test_logs_go_verdict_when_all_cleaned_hashes_stable`, `test_logs_nogo_verdict_when_cleaned_hashes_unstable`, `test_none_from_trafilatura_does_not_raise`, `test_none_from_trafilatura_marks_url_as_fail_in_log`, `test_overall_verdict_logged_across_multiple_urls` | FULL |
+
+**Builder handoff:** AC1 still requires updating task #753's body (checklist steps 5a–5c from research §3.4). All Python implementation (AC2–4) is already present and verified green.
+[[2026-04-13]]
+## Builder Notes
+
+**Pre-existing implementation pass-through** — confirmed per test-writer and architecture review.
+
+### Files Changed
+- `.owlbear/kanban/tasks/753-p0-02-execute-cdp-spike-on-corporate-laptop.md` — added `## Hash Stability Checklist (from #778)` section (steps 5a–5c from research doc §3.4); removed one duplicate copy introduced by double-append
+- `.owlbear/scratch/cdp-spike.py` — no changes needed (implementation already present at lines 277–389, 159–160, 469–470)
+
+### Test Results
+- `tests/test_cdp_spike_778.py`: **16 passed, 0 failed** — all TestFromAC_* classes green
+- ruff: **clean** (both spike and test file)
+- Coverage: not measured (pre-existing spike script, not a production module)
+
+### AC Evidence
+| AC | Status | Evidence |
+|----|--------|----------|
+| AC1: `--hash-stability` flag + checklist in #753 | DONE | `_parse_args` has `--hash-stability` (line 159–160); checklist steps 5a–5c appended to task #753 body |
+| AC2: >=2 pages x 3 extractions x 60s intervals | DONE | `_run_hash_stability` calls `_check_url_hash_stability` per URL; each performs 3 iterations with `time.sleep(60)` |
+| AC3: Raw HTML + cleaned content hash comparison | DONE | `hashlib.sha256` on both `html` (raw) and `trafilatura.extract()` output (cleaned); diffs logged via `difflib` |
+| AC4: Go/no-go verdict logged | DONE | Per-URL GO/NO-GO/FAIL verdict + overall OVERALL verdict logged via `_log_step` |
+
+### Notes
+- Verified task #753 body now has exactly one `## Hash Stability Checklist (from #778)` section
+- No new dependencies added; `difflib`, `hashlib`, `time` are stdlib
+[[2026-04-13]]
+## Review Evidence
+
+### Test Execution
+Quality-Runner not in agent roster. Independent verification performed via:
+- Full code trace of all 16 `TestFromAC_*` tests against `cdp-spike.py` implementation (lines 277–389, 159–160, 469–470)
+- `pytest_results.txt` in workspace checked — test_cdp_spike_778.py not in failure list across ~500+ test failures spanning other files
+- Manual assertion trace: all 16 tests PASS against implementation (detailed below)
+
+### Lint
+`cdp-spike.py` and `test_cdp_spike_778.py`: builder reports ruff clean. No new code modified by builder in either file — no lint regression possible.
+
+### Source Control Changes
+- `.owlbear/kanban/tasks/753-p0-02-execute-cdp-spike-on-corporate-laptop.md` — added `## Hash Stability Checklist (from #778)` section (steps 5a–5c); removed duplicate  
+- `.owlbear/kanban/tasks/778-*.md` — status metadata only  
+- `cdp-spike.py` — no changes (pre-existing implementation)  
+- `test_cdp_spike_778.py` — no changes
+
+### AC Compliance
+
+| AC Line | Evidence | Mapped Tests | Status |
+|---------|----------|-------------|--------|
+| AC1: `--hash-stability` flag + checklist in #753 | `_parse_args` has `--hash-stability` at lines 159–160; diff confirms `## Hash Stability Checklist (from #778)` appended to task #753 body | `test_hash_stability_flag_accepted_by_argparse`, `test_hash_stability_flag_defaults_to_false`, `test_run_hash_stability_function_exists` | PASS |
+| AC2: ≥2 pages × 3 extractions × 60s intervals | `_STABILITY_EXTRACTIONS=3`, `_STABILITY_INTERVAL=60`, loop calls `page.goto(url)` + `page.content()` per iteration; sleep guarded by `if i > 0` → 2 sleeps of 60s | `test_page_content_called_3_times_per_url`, `test_sleep_between_extractions_at_least_60_seconds`, `test_accepts_list_of_multiple_urls`, `test_extracts_all_urls_not_just_first` | PASS |
+| AC3: Raw HTML + cleaned content hash comparison | `hashlib.sha256(html.encode())` for raw; `trafilatura.extract(...)` for cleaned; diffs logged via `difflib.unified_diff` | `test_trafilatura_called_per_extraction_for_cleaned_hash`, `test_logs_raw_html_hash_information`, `test_logs_cleaned_content_hash_information`, `test_logs_diff_output_when_cleaned_hashes_differ` | PASS |
+| AC4: Go/no-go verdict logged | Per-URL `GO`/`NO-GO`/`FAIL` + `OVERALL` verdict via `_log_step`; `_run_hash_stability` aggregates across all URLs | `test_logs_go_verdict_when_all_cleaned_hashes_stable`, `test_logs_nogo_verdict_when_cleaned_hashes_unstable`, `test_none_from_trafilatura_does_not_raise`, `test_none_from_trafilatura_marks_url_as_fail_in_log`, `test_overall_verdict_logged_across_multiple_urls` | PASS |
+
+### Manual Test Trace (all 16 tests)
+
+1. `test_hash_stability_flag_accepted_by_argparse` — `_parse_args(["--hash-stability"])` → parser has `--hash-stability` with `action="store_true"` → no SystemExit, `args.hash_stability` exists → PASS ✓  
+2. `test_hash_stability_flag_defaults_to_false` — `_parse_args([])` → `args.hash_stability == False` → PASS ✓  
+3. `test_run_hash_stability_function_exists` — `_run_hash_stability` attribute on module → callable → PASS ✓  
+4. `test_page_content_called_3_times_per_url` — 3 loop iterations each call `page.content()` → call_count=3 ≥ 3 → PASS ✓  
+5. `test_sleep_between_extractions_at_least_60_seconds` — `if i > 0: time.sleep(60)` → 2 calls of 60s → len ≥ 2, each ≥ 60 → PASS ✓  
+6. `test_accepts_list_of_multiple_urls` — no raise on 2-URL input → PASS ✓  
+7. `test_extracts_all_urls_not_just_first` — 2 URLs × 3 iterations = 6 `page.content()` calls → PASS ✓  
+8. `test_trafilatura_called_per_extraction_for_cleaned_hash` — 3 `trafilatura.extract()` calls per URL → PASS ✓  
+9. `test_logs_raw_html_hash_information` — logs `f"...raw html hash={raw_hash[:12]}..."` → "raw" + "html" + "hash" in output → PASS ✓  
+10. `test_logs_cleaned_content_hash_information` — logs `f"cleaned hash={ch[:12]}..."` → "hash" in output → PASS ✓  
+11. `test_logs_diff_output_when_cleaned_hashes_differ` — varying extract returns → hashes differ → logs `"Hash stability: diff (first vs last extraction)..."` → "diff" in output → PASS ✓  
+12. `test_logs_go_verdict_when_all_cleaned_hashes_stable` — same return value → all hashes identical → logs `"GO"` → PASS ✓  
+13. `test_logs_nogo_verdict_when_cleaned_hashes_unstable` — varying returns → logs `"NO-GO"` → PASS ✓  
+14. `test_none_from_trafilatura_does_not_raise` — None branch: `if cleaned is None: log; append(None)` → no TypeError → PASS ✓  
+15. `test_none_from_trafilatura_marks_url_as_fail_in_log` — None → logs `"FAIL"` in verdict line → PASS ✓  
+16. `test_overall_verdict_logged_across_multiple_urls` — logs `f"Hash stability: OVERALL verdict=..."` → "OVERALL" in output → PASS ✓  
+
+### TestFromAC Modifications
+None — builder made no changes to `test_cdp_spike_778.py`. All 4 `TestFromAC_*` classes preserved unmodified.
+
+### Test Quality Assessment
+
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | Call-count and sleep-interval assertions are strong numerical checks. Log-presence assertions (`test_logs_raw_*`, `test_logs_cleaned_*`) use broad keyword matching that would pass any log containing "raw"/"html"/"hash" — acceptable because behavioral assertions (call counts, verdicts) independently validate the implementation. |
+| Negative/error-path | STRONG | None-from-trafilatura (does-not-raise + marks-as-FAIL), NO-GO path, FAIL verdict path |
+| Mutation sensitivity | STRONG | Removing sleep → sleep call count fails. Removing URL iteration → content call count fails. Removing GO/NO-GO logging → verdict assertions fail. |
+| Test independence | STRONG | Each test calls `_load_spike()` fresh; `sys.modules.pop("cdp_spike", None)` ensures clean slate; `patch.dict` scoping correct |
+| Descriptive names | STRONG | All test names describe the behavior and condition under test |
+
+### Security Review
+No new system boundaries. Implementation uses only stdlib (`hashlib`, `difflib`, `time`). No user-controlled inputs reach file paths in the hash stability protocol. No hardcoded secrets or injection surfaces.
+
+### Pass-Through Legitimacy
+Pre-existing implementation pass-through is correctly applied: Architecture Review explicitly documented and approved this pattern; all tests were pre-written against pre-existing implementation; the "TDD COMPLIANCE: PASS" in the arch review is based on test existence and coverage, not RED sequence. Pipeline protocol is satisfied.
+
+### Deductions
+- **−0.02**: Quality-Runner not available — could not run tests via independent subprocess. Manual trace substituted with high confidence given complete implementation readability.
+- **−0.02**: Log-presence assertions in AC3 tests use broad keyword matching (ADEQUATE, not STRONG). Compensated by call-count and hash-comparison behavioral tests.
+
+### Verdict
+Confidence: **0.94 → PASS**
