@@ -293,6 +293,10 @@ class KanbanEngine:
     ) -> Task:
         """Allocate next_id, write a new task file, and increment config next_id.
 
+        The entire read→write→save critical section is protected by an exclusive
+        cross-process file lock (``.next_id.lock``), preventing duplicate IDs
+        when concurrent engine instances call this method simultaneously.
+
         Args:
             title:      Task title (used to generate the filename slug).
             body:       Initial markdown body.
