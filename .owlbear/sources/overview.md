@@ -8,8 +8,29 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | CDP connection API: endpoint_url, is_local param, default context access | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
 | Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Critical: `--remote-debugging-port` requires `--user-data-dir` to non-default dir from Chrome 136+ | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+
+## Migrate task_io.py from PyYAML to ruamel.yaml (Task #827)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| ruamel.yaml Basic Usage | <https://yaml.dev/doc/ruamel.yaml/basicuse/> | safe/rt modes, StringIO dump pattern, YAML instance API | .owlbear/research/migrate-task-io-pyyaml-to-ruamel-827.md | 2026-04-12 |
+| ruamel.yaml Differences with PyYAML | <https://yaml.dev/doc/ruamel.yaml/pyyaml/> | YAML 1.1→1.2 behavioral changes: booleans, octals, sexagesimals | .owlbear/research/migrate-task-io-pyyaml-to-ruamel-827.md | 2026-04-12 |
 | Playwright `launch_persistent_context` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context> | Alternative approach: Playwright-managed Edge lifecycle with channel="msedge" | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
 | Playwright Chrome Extensions docs | <https://playwright.dev/python/docs/chrome-extensions> | Confirms Edge removed `--load-extension` flags; `--remote-debugging-port` still usable | .owlbear/research/cdp-spike-752.md | 2026-04-10 |
+
+## Actor Field in Activity Log Tests (Task #811)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PocketPaw Audit Log docs | <https://pocketpaw.xyz/security/audit-log/> | JSONL audit log with `session_id`+`channel` fields for consumer identity; append-only semantics | .owlbear/research/811-actor-field-activity-log-tests.md | 2026-04-12 |
+| tundere-ledger (PyPI) | <https://pypi.org/project/tundere-ledger/> | Python JSONL audit log decorator with `actor_name` parameter for attribution | .owlbear/research/811-actor-field-activity-log-tests.md | 2026-04-12 |
+
+## Fix Timestamp Sort (Task #816)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Python datetime docs — fromisoformat | <https://docs.python.org/3/library/datetime.html> | fromisoformat() handles arbitrary fractional digits (truncated to 6); aware comparison normalizes to UTC | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
+| DEV Community — Sorting ISO 8601 timestamps | <https://dev.to/adnauseum/sorting-iso-8601-timestamps-5am2> | Confirms ISO 8601 string sort fails across different timezone offsets | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
 
 ## MCP Browser Server Research (Task #771)
 
@@ -70,6 +91,12 @@ External repos and resources studied during OwlBear development.
 | trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | extract() params: output_format, favor_precision, prune_xpath, include_links — evaluated as primary implementation approach (superseded by lxml custom) | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
 | trafilatura evaluation benchmarks | <https://trafilatura.readthedocs.io/en/latest/evaluation.html> | F1 0.909 (standard), 0.902 (precision) on news/blog; corporate intranet quality predicted .65 — informed decision to use lxml custom converter instead | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
 | markdownify 1.2.2 (PyPI) | <https://pypi.org/project/markdownify/> | HTML→markdown converter (MIT, BeautifulSoup-based) — evaluated as alternative; rejected: 3-4x more LOC vs trafilatura, no general boilerplate removal | .owlbear/research/759-html-markdown-cleaner.md | 2026-04-11 |
+
+## Hash Stability Validation Protocol (Task #778)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| trafilatura Python API docs (v2.0.0) | <https://trafilatura.readthedocs.io/en/latest/usage-python.html> | `extract()` params: `output_format`, `prune_xpath`, `include_links`, `include_tables`, `url` — hash stability loop calls `extract()` with these params for cleaned-content hashing | .owlbear/research/778-hash-stability-protocol.md | 2026-04-11 |
 
 ## board_config() Implementation (Task #806)
 
@@ -3445,6 +3472,13 @@ External repos and resources studied during OwlBear development.
 | Willison, "Delimiters won't save you" (2023) | <https://simonwillison.net/2023/May/11/delimiters-wont-save-you/> | Blog | Established limits of delimiter approach — informed defense-in-depth framing | `docs/research/untrusted-content-wrapping.md` | 2026-03-10 |
 | Greshake et al., "Indirect Prompt Injection" (2023) | <https://arxiv.org/abs/2302.12173> | CC-BY-4.0 | Threat model taxonomy for LLM-integrated apps, IDPI attack vectors | `docs/research/untrusted-content-wrapping.md` | 2026-03-10 |
 
+## IDPI ContentInjectionGuard at Graph Entry (Task #834)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| PinchTab idpishield `patterns/builtin.go` | <https://github.com/pinchtab/idpishield/blob/main/patterns/builtin.go> | Apache-2.0 | 100+ regex patterns across 12 categories — adapted to ~40 substring patterns for knowledge guard | `.owlbear/research/834-contentinjectionguard-green-impl.md` | 2026-04-12 |
+| OWASP LLM01:2025 Prompt Injection | <https://genai.owasp.org/llmrisk/llm01-prompt-injection/> | CC-BY-SA-4.0 | Strategy #3 (string-checking) and #6 (segregate content) as authoritative mitigation guidance | `.owlbear/research/834-contentinjectionguard-green-impl.md` | 2026-04-12 |
+
 ## claude-context-mode Evaluation (Task #745)
 
 | Source | URL | License | What we studied | Where Used | Date |
@@ -3880,3 +3914,11 @@ External repos and resources studied during OwlBear development.
 |--------|-----|---------|-----------------|------------|------|
 | MCP Python SDK stdio client | <https://github.com/modelcontextprotocol/python-sdk/blob/main/src/mcp/client/stdio.py> | MIT | Background asyncio.Task read loop + asyncio.Queue message buffer pattern (MemoryObjectReceiveStream equivalent); subprocess spawn and NDJSON read/write architecture | `.owlbear/research/voice-process-manager.md` | 2026-03-27 |
 | ACP Python SDK `spawn_stdio_transport` | `v1/.venv/Lib/site-packages/acp/transports.py` | Apache-2.0 | asyncio subprocess lifecycle, graceful terminate+kill shutdown pattern | `.owlbear/research/voice-process-manager.md` | 2026-03-27 |
+
+## SharePoint Normalization + Idempotent Output (Task #829)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| sp-dev-docs#6380 — CSS class instability | <https://github.com/SharePoint/sp-dev-docs/issues/6380> | SharePoint replacing semantic CSS classes (`CanvasZone`, `ControlZone`) with hashed names; confirms `ms-` prefix classes from Fluent UI more stable | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
+| Fluent UI v8 CSS class catalog | <https://github.com/Zerg00s/sp-modern-classes> | Community-maintained list of reusable SharePoint Online CSS classes — `ms-Breadcrumb`, `ms-Persona`, `ms-DateTimeField` patterns identified | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
+| trafilatura core functions docs | <https://trafilatura.readthedocs.io/en/latest/corefunctions.html> | `prune_xpath` parameter — supports custom XPath for pre-extraction element removal (evaluated as alternative approach, not adopted) | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
