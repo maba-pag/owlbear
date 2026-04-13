@@ -1,10 +1,10 @@
 ---
 id: 783
 title: Tests — owlbear_browser content extractor and HTML-to-MD cleaner
-status: review
+status: done
 priority: needed
 created: '2026-04-10T12:30:44.046816+00:00'
-updated: '2026-04-12T22:40:55.064713+00:00'
+updated: '2026-04-13T02:56:14.653535+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -13,8 +13,8 @@ parent: 775
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: tall-wolf
+claimed_at: '2026-04-13T02:56:14.653535+00:00'
 ---
 ## Acceptance Criteria
 
@@ -86,3 +86,65 @@ The file also contains tests for tasks #788 and #828 merged in prior RED-phase p
 ## Builder Notes
 - Non-implementation task — no code changes needed.
 - Passing through to review.
+[[2026-04-13]]
+## Review Evidence
+
+### Tests
+pytest: **80 passed, 0 failed, 0 skipped** — run independently via quality-runner.
+
+### Lint
+ruff: **clean** — 0 violations in `tests/test_browser_content_775.py`.
+
+### Coverage
+- `owlbear_browser.extractor`: **100%**
+- `owlbear_browser.cleaner`: **100%**
+
+### AC Compliance
+
+| AC Line | Mapped Test(s) | Would Fail If AC Violated? | Verdict |
+|---------|---------------|---------------------------|---------|
+| Tests verify content extraction from HTML string returns structured text | `TestFromAC_ContentExtractor` (8 tests) — `test_extract_returns_string`, `test_extract_returns_main_content_text`, `test_extract_paragraph_text_preserved`, noise exclusion, TypeError | Yes — presence/absence checks on exact strings, TypeError assertion | COVERED |
+| Tests verify HTML-to-markdown conversion (headings, lists, tables, links preserved) | `TestFromAC_HTMLCleaner` (10 tests) — h1/h2 exact markers, bullet regex, numbered regex, hyperlink URL/text, nested headings; table test checks content only | Headings/lists/links: Yes. Table: LAX — content words checked but not `|` pipe structure via `clean()` directly; compensated by `TestFromAC_HtmlToMarkdown.test_html_to_markdown_preserves_table_structure` which checks `|` | COVERED (LAX note on table) |
+| Tests verify noise removal (nav bars, footers, cookie banners, script tags stripped) | `TestFromAC_NoiseRemoval` (8 tests) — nav, footer, script, style, cookie-banner by class, cookie-consent by id, surrounding-content preserved, combined all-noise | Yes — positive and negative assertions on exact strings | COVERED |
+| File: `tests/test_browser_content_775.py` | File exists | n/a | COVERED |
+
+### Security (5.1)
+Test-only task — no new system boundaries, no injection surfaces, no secrets, no deserialization concerns. Clean.
+
+### TestFromAC Integrity (5.2)
+Builder passed through (no code changes). Zero modifications to any `TestFromAC_*` method. Not applicable.
+
+### Test Quality (5.3)
+- **Assertion specificity**: STRONG — assertions check exact string content ("# Page Title", "https://example.com"), regex patterns for bullet/numbered markers, negative assertions for stripped noise. No bare `assert result` patterns.
+- **Negative/error-path coverage**: STRONG — noise tests verify absent strings; `test_extract_non_string_raises_type_error` covers the error path; empty input tested throughout.
+- **Manual mutation reasoning**: Flipping html_to_markdown heading logic would fail `"# Page Title" in result`. Removing nav stripping would fail `"Home | About | Contact" not in result`. Mutations caught.
+- **Test independence**: STRONG — each test constructs own HTML fixture; no shared mutable state.
+- **Descriptive names**: STRONG — all names follow `test_{verb}_{behavior}` pattern with docstrings.
+- **LAX note**: `TestFromAC_HTMLCleaner.test_clean_preserves_table_cell_content` checks cell text presence only — does not verify markdown `|` pipe structure via `clean()` directly. Compensating coverage exists in `TestFromAC_HtmlToMarkdown.test_html_to_markdown_preserves_table_structure`. No auto-fail per protocol.
+
+### Builder Process Quality (5.7)
+Single pass-through from both test-writer and builder. CLEAN — no retries, no loop.
+
+### Deductions
+- −0.02: LAX table assertion in `TestFromAC_HTMLCleaner.test_clean_preserves_table_cell_content` (not auto-fail; compensated)
+- −0.01: Test-writer/builder both passed through without modification — relies on pre-existing RED-phase work from prior cycles
+
+### Verdict
+**Confidence: .97 → PASS**
+→ Advanced to docs.
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Test-only pass-through; no behavior, API, or conventions changed |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified by this task; builder passed through |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc | No | N/A | No research doc produced for this task |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/783-*` files found)
