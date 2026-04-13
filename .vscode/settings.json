@@ -74,6 +74,7 @@
     "charliermarsh.ruff": 3,
     "ms-python.vscode-pylance": 2
   },
+  "files.eol": "\n",
   "files.exclude": {
     ".venv": true,
     "**/__pycache__": true,
