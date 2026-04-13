@@ -1,10 +1,10 @@
 ---
-id: 841
+id: 866
 title: RED — Tests for BrowserContentFetcher + HttpxContentFetcher
-status: review
+status: done
 priority: needed
-created: '2026-04-12T02:23:15.779913+00:00'
-updated: '2026-04-12T15:06:07.568415+00:00'
+created: '2026-04-12T02:23:15.779913Z'
+updated: '2026-04-13T20:36:07.267150+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -17,6 +17,7 @@ block_reason: null
 claimed_by: null
 claimed_at: null
 ---
+
 ## Acceptance Criteria
 
 - `tests/test_contentfetcher_impl_830.py` with failing tests for:
@@ -162,3 +163,71 @@ Both implementation files were already committed prior to builder claim (impleme
 
 ### Builder-Discovered Tests
 None — AC was exhaustive.
+
+[[2026-04-13]]
+## Review Evidence
+
+### Test Results (independent run via Quality-Runner)
+`tests/test_contentfetcher_impl_830.py`: **21 passed, 0 failed** (exit 0)
+
+Builder self-reported 19; actual count is 21. Extra 2 tests are in `TestBuilderDiscovered` (SSRF scheme guard). Builder notes listed "Builder-Discovered Tests: None" — protocol deviation (undeclared builder-discovered tests), but the tests are legitimate and pass.
+
+### Lint
+ruff `serve/browser/src/owlbear_browser/fetcher.py`, `serve/knowledge/src/owlbear_knowledge/fetcher.py`, `tests/test_contentfetcher_impl_830.py`: **clean** (exit 0)
+
+### Coverage
+| Module | % |
+|--------|---|
+| `owlbear_browser.fetcher` | 100 |
+| `owlbear_knowledge.fetcher` | 100 |
+
+### Changed Files
+- `serve/browser/src/owlbear_browser/fetcher.py` — 21-line `BrowserContentFetcher` implementation
+- `serve/knowledge/src/owlbear_knowledge/fetcher.py` — `HttpxContentFetcher` + `_check_url_scheme` security helper
+
+### TestFromAC_ Integrity
+`TestFromAC_BrowserContentFetcher` (12 tests) and `TestFromAC_HttpxContentFetcher` (7 tests) — no modifications, no weakening detected. Additional `TestBuilderDiscovered` class (2 tests) added for SSRF remediation; not present in test-writer baseline.
+
+### AC Compliance Table
+
+| AC | Evidence | Test | Would Fail If Violated? | Status |
+|----|----------|------|-------------------------|--------|
+| B1: BrowserContentFetcher importable | `serve/browser/src/owlbear_browser/fetcher.py` exists | `test_browser_fetcher_module_is_importable` | YES — ImportError | PASS |
+| B2: isinstance(ContentFetcher), async | `BrowserContentFetcher` has `fetch` coroutine; protocol is `runtime_checkable` | `test_satisfies_contentfetcher_protocol`, `test_fetch_method_is_async_coroutine` | YES | PASS |
+| B3: delegation chain new_page→goto→check_sso_redirect→content→extract_content | `fetcher.py:14-20` exactly follows chain | 5 separate delegation tests, each using `assert_awaited_once_with` | YES — assert_awaited_once would fail | PASS |
+| B4: SSO redirect → AuthenticationRequired | `check_sso_redirect` raises propagated through `try` block | `test_sso_redirect_raises_authentication_required` | YES | PASS |
+| B5: page.close() on success | `finally: await page.close()` covers success path | `test_page_closed_after_successful_fetch` | YES | PASS |
+| B6: page.close() on error | `finally:` block ensures close regardless | `test_page_closed_even_when_error_is_raised` | YES | PASS |
+| H1: HttpxContentFetcher importable | `serve/knowledge/src/owlbear_knowledge/fetcher.py` exists | `test_httpx_fetcher_module_is_importable` | YES — ImportError | PASS |
+| H2: isinstance(ContentFetcher), async | `HttpxContentFetcher` has `fetch` coroutine | `test_satisfies_contentfetcher_protocol`, `test_fetch_method_is_async_coroutine` | YES | PASS |
+| H3: delegates to httpx.AsyncClient.get | `client.get(url)` called via `async with httpx.AsyncClient()` | `test_fetch_delegates_to_httpx_async_client_get` — `mock_client.get.assert_awaited_once_with(_TEST_URL)` | YES | PASS |
+| H4: non-2xx raises HTTPStatusError | `response.raise_for_status()` propagates | `test_non_2xx_response_raises_http_status_error` | YES | PASS |
+| H5: returns response.text | `return response.text` | `test_fetch_returns_response_text` — `assert result == "response body text"` | YES | PASS |
+
+### Security Note (beyond AC)
+`HttpxContentFetcher._check_url_scheme()` validates URL scheme before httpx call — blocks `file://`, `ftp://`, and other non-http/https schemes. This is a positive SSRF mitigation. `TestBuilderDiscovered` tests cover this. The empty-url pass-through (`if not url: return`) is intentional: httpx produces its own error for empty URLs.
+
+### Deductions
+
+| Finding | Deduction |
+|---------|-----------|
+| Builder self-reported 19 tests / "Builder-Discovered Tests: None" — file contains 21 tests including undeclared `TestBuilderDiscovered` class. Protocol deviation (not quality defect). | −0.02 |
+
+### Verdict
+**Confidence: 0.96 → PASS**
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | Two new modules added (owlbear_browser.fetcher, owlbear_knowledge.fetcher). copilot-instructions.md has only branch/identity sections — no module inventory to update. |
+| 2 | Module docstrings | Yes | Verified | Both files have module-level + class-level docstrings. fetch() methods lack per-method docstrings; interface is fully documented in ContentFetcher protocol class. D1xx not enforced per h-python-conventions. |
+| 3 | External attribution | No | N/A | Research doc sources: all internal (protocol.py, cdp.py, extractor.py, refresh.py, intake.py). No external repos or articles used. No sources/overview.md row needed. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | .owlbear/research/830-concrete-contentfetcher-implementations.md exists and is linked from task body. Follow-up tasks: none needed (#842 GREEN already exists — confirmed in task body). |
+
+### Files Updated
+None — no docs changes required.
+
+### Scratch Files
+No .owlbear/scratch/866-* files found. Clean.

@@ -1,10 +1,10 @@
 ---
 id: 799
 title: Tests — Rename TaskRecord → Task
-status: backlog
+status: archived
 priority: critical
-created: '2026-04-10T21:20:28.162627+00:00'
-updated: '2026-04-13T02:29:11.010727+00:00'
+created: '2026-04-10T21:20:28.162627Z'
+updated: '2026-04-13T22:11:27.366994+00:00'
 tags:
 - phase-1
 - type:test
@@ -16,7 +16,10 @@ blocked: false
 block_reason: null
 claimed_by: null
 claimed_at: null
+started: '2026-04-13T22:08:17.892923+02:00'
+completed: '2026-04-13T22:08:17.892923+02:00'
 ---
+
 ## Acceptance Criteria
 
 - Test file verifies `Task` importable from `engine_models`
@@ -211,3 +214,74 @@ Decision requests: none
 Challenge: SKIPPED — 4th identical validation of factual findings
 
 **ORCHESTRATOR: This is the 7th processing cycle (4 research + 3 arch review) with identical ARCHIVE recommendation. Please archive #799 and #800. The rename was completed by #818, alias cleanup by #821/#822. All ACs are covered by existing tests or structurally impossible.**
+[[2026-04-13]]
+## Architecture Review (4th pass — terminal)
+
+### Verdict: REJECT → ARCHIVE
+
+8th processing cycle (4 research + 4 arch review). Independent codebase verification confirms identical findings.
+
+### Evidence (2026-04-13)
+
+| Evidence Point | Status |
+|---|---|
+| `engine_models.py` exists | **No** — file_search: 0 results |
+| `TaskRecord` in `serve/**/*.py` | **0 matches** |
+| `test_kanban_engine_models.py` exists | **Confirmed** |
+| `test_kanban_engine_crud.py` exists | **Confirmed** |
+
+### AC Assessment (unchanged across all 4 reviews)
+
+| AC Line | Status |
+|---|---|
+| `Task` importable from `engine_models` | SUPERSEDED — module doesn't exist |
+| `TaskRecord` alias resolves to `Task` | SUPERSEDED — alias lifecycle complete (#822) |
+| Engine CRUD works with renamed model | SUPERSEDED — 40+ tests in existing test file |
+| Tests fail RED before implementation | IMPOSSIBLE — implementation complete |
+
+### Evaluation
+
+| Criterion | Assessment |
+|---|---|
+| Premise challenge | **FAIL** — work completed by #818/#821/#822 |
+| TDD compliance | **FAIL** — RED impossible for completed work |
+| All others | N/A — superseded |
+
+### Challenge: SKIPPED (REJECT verdict)
+
+### Action: TERMINAL REJECT
+
+**ORCHESTRATOR: ARCHIVE #799 and #800.** This is the 8th processing cycle with identical REJECT findings. `engine_models.py` does not exist, `TaskRecord` is gone, existing tests cover all ACs. No amount of further processing will change structural reality. Continuing to cycle wastes pipeline capacity.
+[[2026-04-13]]
+## Research (5th validation pass — terminal)
+
+Quick-check (2026-04-13): engine_models.py absent (0 files), TaskRecord absent in serve/**/*.py (0 matches), #800 already archived/removed. All prior findings hold. 9th processing cycle with identical verdict.
+
+Recommendation: Archive #799 (confidence: .95). No follow-up tasks. No decision requests. Tier: T1. Challenge: SKIPPED.
+[[2026-04-13]]
+## Architecture Review (5th pass — BLOCKING)
+
+### Verdict: BLOCK FOR ARCHIVAL
+
+This is the **10th processing cycle** (5 research + 5 arch review). Independent codebase verification confirms identical findings every time.
+
+### Evidence (2026-04-13)
+
+| Evidence Point | Status |
+|---|---|
+| `engine_models.py` exists | **No** — file_search: 0 results |
+| `TaskRecord` in `serve/**/*.py` | **0 matches** |
+| `Task` canonical at `owlbear_kanban.models:58` | **Confirmed** |
+
+### AC Assessment (unchanged across all 5 reviews)
+
+| AC Line | Status |
+|---|---|
+| `Task` importable from `engine_models` | SUPERSEDED — module doesn't exist |
+| `TaskRecord` alias resolves to `Task` | SUPERSEDED — alias lifecycle complete (#822) |
+| Engine CRUD works with renamed model | SUPERSEDED — existing test coverage |
+| Tests fail RED before implementation | IMPOSSIBLE — implementation complete |
+
+### Action: BLOCKED FOR MANUAL ARCHIVAL
+
+Rejecting to research causes an infinite dispatch loop — the orchestrator re-dispatches, research re-validates, architect re-rejects. Blocking breaks the loop. **User: please archive #799 and #800 (implementation counterpart).** The rename was completed by #818, alias cleanup by #821/#822. All ACs are either covered by existing tests or structurally impossible.

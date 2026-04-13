@@ -4,7 +4,7 @@ title: 'Fix #751 tests: replace split-column assertions with unified status colu
 status: review
 priority: needed
 created: '2026-04-10T16:05:19.844611+00:00'
-updated: '2026-04-11T15:00:18.984557+00:00'
+updated: '2026-04-13T22:10:02.480773+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -13,9 +13,8 @@ tags:
 parent: 751
 depends_on:
 - 757
-blocked: true
-block_reason: Quality-Runner unavailable — pytest-cov not installed in .venv; cannot
-  run tests independently
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -141,3 +140,6 @@ Note: This task is `type:test` (direct test-fix), not RED-phase. Tests are green
 **Builder process:** Single clean cycle. No loop patterns detected. `type:test` pass-through — correct.
 
 **Verdict:** BLOCK — quality-runner environment broken. Two AC lines (test execution pass, ruff) are unverifiable without independent test run. Static analysis on all verifiable items passes cleanly; likelihood of pass once environment is restored is high, but reviewer hard rule prohibits passing without independent test execution.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: 41 passed (`test_authenticated_content_pipeline_751.py`). Unblocked for review continuation.

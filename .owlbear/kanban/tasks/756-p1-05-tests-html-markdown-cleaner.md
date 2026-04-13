@@ -4,17 +4,15 @@ title: 'P1-05: Tests — HTML→markdown cleaner'
 status: review
 priority: needed
 created: '2026-04-10T10:55:24.919476+00:00'
-updated: '2026-04-11T11:49:21.365095+00:00'
+updated: '2026-04-13T22:09:50.518166+00:00'
 tags:
 - phase-1
 - type:test
 - scope:browser
 parent: 751
 depends_on: []
-blocked: true
-block_reason: 'Quality-Runner execution failed — WMI/logfire deadlock (known environment
-  issue). Cannot independently verify test execution. Per w-code-review fallback:
-  block until QR is available.'
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -127,3 +125,7 @@ BLOCK — environment failure prevents independent verification. Code quality an
 
 ### Action for Next Reviewer
 Re-claim and re-run quality-runner. If QR succeeds (19 passed, ruff clean, ~97% coverage), PASS at confidence ≥ 0.94.
+
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_cleaner_756.py`). Unblocked for review continuation.

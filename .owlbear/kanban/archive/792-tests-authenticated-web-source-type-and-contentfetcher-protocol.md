@@ -4,7 +4,7 @@ title: Tests — AUTHENTICATED_WEB source type and ContentFetcher protocol
 status: done
 priority: needed
 created: '2026-04-10T12:31:33.745249+00:00'
-updated: '2026-04-11T17:41:45.892891+00:00'
+updated: '2026-04-13T05:34:12.108212+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -30,202 +30,180 @@ claimed_at: null
 - WS-D: Pipeline Integration
 - Scope items 3+4 from #775
 
-[[2026-04-11]]
+[[2026-04-12]]
 ## Architecture Review
 
-### AC Refinement
+### AC Assessment
 
-AC2 references a non-existent `FetchResult` return type. The actual `ContentFetcher` protocol in `serve/knowledge/src/owlbear_knowledge/protocol.py` L98-106 returns `str`:
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC1: Tests verify AUTHENTICATED_WEB is a member of SourceType | PASS | 4 tests cover membership, value, enum iteration, StrEnum identity |
+| AC2: Tests verify ContentFetcher in protocol.py with `async fetch(url: str) -> FetchResult` | FAIL — `FetchResult` does not exist; actual return type is `str` | AC-CORRECTION: should read `async fetch(url: str) -> str`. Tests already correctly test `str` return type |
+| AC3: Tests verify _handle_authenticated_web() dispatches via ContentFetcher, returns RefreshResult | PASS | 7 tests: happy path, multi-URL dispatch, empty URLs, missing key, exception recording, cancel signal, source_id match |
+| AC4: Tests use mock ContentFetcher, no real browser dependency | PASS | 2 explicit tests: mock satisfies protocol isinstance, protocol importable without owlbear_browser |
+| AC5: File tests/test_authenticated_web_775.py | PASS | File exists, 326 lines, 15+ tests |
 
-```python
-@runtime_checkable
-class ContentFetcher(Protocol):
-    async def fetch(self, url: str) -> str: ...
-```
+### AC2 Correction
 
-No `FetchResult` class exists in the codebase. The test file already correctly tests against `-> str`.
+AC says `-> FetchResult` but `FetchResult` type does not exist anywhere in the codebase. Actual protocol signature at `serve/knowledge/src/owlbear_knowledge/protocol.py` L107: `async def fetch(self, url: str) -> str: ...`. Tests already correctly test against `str` return type. Non-blocking — cosmetic AC error, no downstream impact since tests are already written correctly.
 
-**Binding AC (supersedes original AC2):**
+### DEPENDS_ON-CORRECTION: task #792 should have depends_on []
 
-- Tests verify `AUTHENTICATED_WEB` is a member of `SourceType`
-- Tests verify `ContentFetcher` protocol exists in `protocol.py` with `async fetch(url: str) -> str` method (runtime_checkable)
-- Tests verify `_handle_authenticated_web()` dispatches via ContentFetcher and returns `RefreshResult`
-- Tests use mock ContentFetcher — no real browser dependency in tests
-- File: `tests/test_authenticated_web_775.py`
+Current: depends_on [785, 787]. Both are spurious:
+- #785 (Schema v9 migration) — tests import from owlbear_knowledge.models, .protocol, .refresh only. Zero schema migration dependency. All imports resolve from existing modules.
+- #787 (Browser package scaffold) — tests explicitly verify NO browser dependency (AC4). Two tests confirm ContentFetcher is importable without owlbear_browser.
+Tests use pure mocks (AsyncMock, MagicMock). No database, no browser, no schema needed.
 
 ### Evaluation
 
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Single responsibility | PASS | Focused test coverage for 3 interfaces (SourceType member, ContentFetcher protocol, _handle_authenticated_web dispatch) |
-| Interface clarity | PASS (after refinement) | AC2 corrected from `FetchResult` to `str`; all test targets precisely defined |
-| Dependency correctness | PASS-with-note | #785 (schema v9) and #787 (browser scaffold) listed as deps but tests don't import or use either. Tests mock all collaborators. Dependency removal recommended (see below) |
-| Module layering | PASS | Tests import only from `owlbear_knowledge.{models,protocol,refresh}` — no cross-namespace |
-| TDD compliance | PASS | This IS the test task; tagged `type:test`. Interfaces pre-exist (retroactive coverage) — GREEN-on-RED approved |
-| KISS/YAGNI | PASS | 17 tests, clean structure, no over-engineering |
-| Premise challenge | PASS | Some overlap with test_authenticated_content_pipeline_{751,775}.py, but this file provides focused, consolidated coverage under a single AC. Dedicated file is cleaner than scattered coverage. |
-| Pattern consistency | PASS | Follows TestFromAC_ naming, pytest.mark.asyncio, mock patterns consistent with existing test files |
-| Security surface | PASS | Test-only task, no security surface |
+| Single responsibility | PASS | Tests for one feature (AUTHENTICATED_WEB + ContentFetcher protocol) |
+| Interface clarity | PASS | All test imports resolve to existing modules; test assertions are specific |
+| Dependency correctness | FAIL | depends_on [785, 787] spurious — see DEPENDS_ON-CORRECTION above |
+| Module layering | PASS | Tests import from owlbear_knowledge only |
+| TDD compliance | PASS | type:test task; tests are the deliverable. Retroactive coverage approved |
+| KISS/YAGNI | PASS | 15 tests, no over-engineering |
+| Premise challenge | PASS | Tests cover real interfaces (SourceType, ContentFetcher, _handle_authenticated_web) |
+| Pattern consistency | PASS | Follows TestFromAC_ naming convention, pytest.mark.asyncio for async tests |
+| Security surface | PASS | Test-only task, no new system boundaries |
 | Single domain | PASS | Knowledge domain only |
 
-### Dependency Correction (orchestrator action needed)
-
-- **Current:** `depends_on: [785, 787]`
-- **Recommended:** `depends_on: []` (remove both)
-- **Rationale:** tests/test_authenticated_web_775.py imports only from owlbear_knowledge (models, protocol, refresh) with all collaborators mocked. No schema tables or browser packages are referenced. Dependencies were set from parent #775 scope ordering, not functional need.
-
-### GREEN-on-RED Justification
-
-All target interfaces were implemented by prior tasks before this test task was created. The test file's docstring acknowledges this: "All target interfaces were pre-existing (retroactive coverage)." Test-writer should verify existing tests pass and note pass-through.
-
 ### Challenge Results
-- Challenger: FALLBACK — challenger agent not in available roster
-- Self-challenge:
-  1. Should this task exist given test overlap with 751/775? YES — consolidated focused coverage vs scattered tests. Clean ownership boundary.
-  2. Do unnecessary deps block progress? #787 is blocked, which would transitively block #792. Removing the dep unblocks this task.
-  3. Is AC2 error material? Tests already correct (`str` return). Documentation-only fix in binding AC above.
+- Challenger: proceed (confidence 0.96)
+- Architect response: accepted — AC2 FetchResult error is cosmetic, tests test the correct interface
 
 ### Verdict: APPROVE
-### Action Taken: Refined AC2 (`FetchResult` → `str`), documented dependency corrections for orchestrator, approved GREEN-on-RED. Advanced to todo.
-[[2026-04-11]]
+### Action Taken: Advanced to todo. AC2 correction (FetchResult → str) and DEPENDS_ON-CORRECTION (remove [785, 787]) documented for orchestrator.
+[[2026-04-12]]
 ## Test-Writer Notes
-
-**GREEN-on-RED:** Architecture Review (#792) explicitly approved this as retroactive coverage — all target interfaces were pre-existing when this task was created. Test file already existed; verified all tests pass and ruff is clean.
-
-- **File:** `tests/test_authenticated_web_775.py`
-- **Class:** `TestFromAC_AuthenticatedWeb`
-- **Total:** 18 tests — all PASS (GREEN-on-RED approved)
-- **Ruff:** clean
-
-### Tests per category
-
-| Category | Tests |
-|----------|-------|
-| Happy path | test_authenticated_web_is_source_type_member, test_authenticated_web_has_expected_value, test_content_fetcher_importable_from_protocol, test_content_fetcher_has_fetch_method, test_handle_authenticated_web_returns_refresh_result, test_handle_authenticated_web_calls_content_fetcher_per_url |
-| Edge | test_handle_authenticated_web_empty_urls_returns_zero_counts, test_handle_authenticated_web_missing_urls_key_returns_zero_counts, test_handle_authenticated_web_cancel_signal_stops_iteration |
-| Error | test_handle_authenticated_web_fetch_exception_records_error |
-| Boundary / contract | test_authenticated_web_is_in_source_type_values, test_source_type_is_str_enum, test_content_fetcher_fetch_is_async, test_content_fetcher_is_runtime_checkable, test_non_conforming_object_fails_isinstance_check, test_handle_authenticated_web_result_source_id_matches_source, test_mock_satisfies_content_fetcher_protocol, test_no_browser_import_needed_for_content_fetcher |
-
-### AC Coverage
-
-| AC | Tests | Status |
-|----|-------|--------|
-| AC1: AUTHENTICATED_WEB is a SourceType member | 4 tests | ✓ |
-| AC2: ContentFetcher protocol with async fetch(url: str) -> str, runtime_checkable | 5 tests | ✓ |
-| AC3: _handle_authenticated_web() dispatches via ContentFetcher, returns RefreshResult | 7 tests | ✓ |
-| AC4: Mock ContentFetcher — no real browser dependency | 2 tests | ✓ |
-[[2026-04-11]]
+- Non-implementation task (tagged `type:test`) — pass-through per w-tdd-red Step 1a.
+- Test file: `tests/test_authenticated_web_775.py` (326 lines, 18 tests) — pre-existing, retroactive coverage.
+- Architecture Review explicitly approved GREEN-on-RED for this task (all target interfaces were pre-existing).
+- Tests verified passing: 18/18 pass against live owlbear_knowledge interfaces.
+- AC coverage: AC1 (4 tests), AC2 (5 tests), AC3 (7 tests), AC4 (2 tests).
+- Ruff: not run (pass-through; no new test code written).
+- Passing through to builder — no additional tests required.
+[[2026-04-13]]
 ## Builder Notes
-
-**GREEN-on-RED pass-through** — Architecture Review explicitly approved retroactive coverage; all target interfaces were pre-existing.
-
-### Files Changed
-- None — no implementation required.
-
-### Test Results
-- `tests/test_authenticated_web_775.py`: **18/18 PASS** (verified)
-- Ruff: **clean**
-
-### Evidence
-- `AUTHENTICATED_WEB` SourceType member: verified passing (4 tests)
-- `ContentFetcher` protocol with `async fetch(url: str) -> str`, runtime_checkable: verified passing (5 tests)
-- `_handle_authenticated_web()` dispatch via ContentFetcher, returns RefreshResult: verified passing (7 tests)
-- Mock ContentFetcher, no browser dependency: verified passing (2 tests)
-
-### Coverage
-Pre-existing interfaces; no new code. Coverage unchanged.
-[[2026-04-11]]
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+[[2026-04-13]]
 ## Review Evidence
 
-### Test Results (independent run)
-pytest: **18 passed, 0 failed** — exit code 0
+### Test Results
+pytest: **18 passed, 0 failed** (quality-runner independent run)
 
 ### Lint
 ruff: **clean** — 0 violations
 
 ### Coverage
-| Module | Coverage |
-|--------|----------|
-| owlbear_knowledge.protocol | 100% |
-| owlbear_knowledge.models | 100% |
-| owlbear_knowledge.refresh | 37% |
+`owlbear_knowledge.models`: 100%, `owlbear_knowledge.protocol`: 100%
+`owlbear_knowledge.refresh`: 37% (expected — scoped test file only exercises the `_handle_authenticated_web` dispatch path)
 
-Coverage note: 37% on `refresh` is acceptable — this task scopes only to the `_handle_authenticated_web` handler; the other SourceType dispatch branches are covered by other test files.
+### Source Control
+No changed production files — correct for a `type:test` pass-through task. Builder added only the `## Builder Notes` section to the task body.
 
-### TestFromAC Modification Check
-Builder reported: "Files Changed: None." No `TestFromAC_*` modifications detected. All 18 tests intact as written by test-writer.
+### Pass 1 — CRITICAL
 
-### AC Compliance Table (Binding AC from Architecture Review)
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test(s) | Would Fail If AC Violated? | Verdict |
+|---------|---------------|---------------------------|---------|
+| AC1: AUTHENTICATED_WEB is SourceType member | `test_authenticated_web_is_source_type_member`, `test_authenticated_web_has_expected_value`, `test_authenticated_web_is_in_source_type_values`, `test_source_type_is_str_enum` | YES — membership, value equality, list iteration, isinstance all checked | COVERED |
+| AC2: ContentFetcher in protocol.py with async fetch → str | `test_content_fetcher_importable_from_protocol`, `test_content_fetcher_has_fetch_method`, `test_content_fetcher_fetch_is_async`, `test_content_fetcher_is_runtime_checkable`, `test_non_conforming_object_fails_isinstance_check` | YES — import, hasattr, iscoroutinefunction, isinstance; conforming/non-conforming pair validates the structural contract | COVERED |
+| AC3: _handle_authenticated_web dispatches and returns RefreshResult | `test_handle_authenticated_web_returns_refresh_result`, `test_handle_authenticated_web_calls_content_fetcher_per_url`, `test_handle_authenticated_web_empty_urls_returns_zero_counts`, `test_handle_authenticated_web_missing_urls_key_returns_zero_counts`, `test_handle_authenticated_web_fetch_exception_records_error`, `test_handle_authenticated_web_cancel_signal_stops_iteration`, `test_handle_authenticated_web_result_source_id_matches_source` | YES — call count, URL order, zero-counts, exception path, cancel signal, source_id; all discriminating | COVERED |
+| AC4: Mock ContentFetcher, no browser dep | `test_mock_satisfies_content_fetcher_protocol`, `test_no_browser_import_needed_for_content_fetcher` | YES — isinstance with conforming mock; `importlib.util.find_spec` without owlbear_browser | COVERED |
 
-| AC | Tests | Would Fail If Violated? | Verdict |
-|----|-------|------------------------|---------|
-| AC1: `AUTHENTICATED_WEB` is a `SourceType` member | 4 tests: `is_source_type_member`, `has_expected_value`, `is_in_source_type_values`, `source_type_is_str_enum` | YES — `hasattr` + value equality checks directly on `SourceType.AUTHENTICATED_WEB` | COVERED |
-| AC2: `ContentFetcher` with `async fetch(url: str) -> str`, `runtime_checkable` | 5 tests: `importable_from_protocol`, `has_fetch_method`, `fetch_is_async`, `is_runtime_checkable`, `non_conforming_object_fails` | YES — `inspect.iscoroutinefunction`, `isinstance` checks verify all properties; non-conforming negative test is strong | COVERED |
-| AC3: `_handle_authenticated_web()` dispatches via `ContentFetcher`, returns `RefreshResult` | 7 tests: `returns_refresh_result`, `calls_content_fetcher_per_url`, `empty_urls_zero_counts`, `missing_urls_key_zero_counts`, `fetch_exception_records_error`, `cancel_signal_stops_iteration`, `result_source_id_matches_source` | YES — `mock_fetcher.fetch.call_count == len(urls)`, ordered call args checked, exception path asserts `failed==1` and error string captured | COVERED |
-| AC4: Mock `ContentFetcher` — no real browser dependency | 2 tests: `mock_satisfies_content_fetcher_protocol`, `no_browser_import_needed_for_content_fetcher` | YES — all AC3 tests use `AsyncMock` without any owlbear_browser import; `find_spec` confirms protocol importable standalone | COVERED |
+#### Security Review
+Test-only task. No new system boundaries, injection surfaces, hardcoded secrets, or deserialization concerns. Clean.
 
-### Assert Quality Assessment
-- `test_handle_authenticated_web_calls_content_fetcher_per_url`: checks `call_count == len(urls)` AND ordered `call_args_list` — strong.
-- `test_handle_authenticated_web_fetch_exception_records_error`: checks `failed==1`, `refreshed==0`, `len(errors)==1`, and `"network timeout" in errors[0]` — strong.
-- `test_handle_authenticated_web_missing_urls_key_returns_zero_counts`: checks `refreshed==0`, `failed==0`, and `fetch.assert_not_called()` — minor LAX (missing `skipped` and `errors` assertions), but compensated by adjacent `empty_urls` test which checks all four fields. No standalone concern.
+#### Test Integrity
+No code changes — builder passed through. All `TestFromAC_*` methods exist unmodified. Not applicable.
 
-### Security Review
-Test-only file. No new implementation. No hardcoded secrets, injection vectors, or OWASP concerns. PASS.
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | Error paths: tight (`failed==1`, `len(errors)==1`, `"network timeout" in errors[0]`). Happy path `test_handle_authenticated_web_returns_refresh_result` only checks `isinstance(result, RefreshResult)` (type only, not count). See Pass 2 note. |
+| Negative/error-path coverage | STRONG | Exception recording, cancel signal, empty URLs, missing key, non-conforming protocol instance |
+| Manual mutation reasoning | STRONG | Removing `AUTHENTICATED_WEB` → `hasattr` fails. Removing `fetch` → RuntimeError on usage. Removing URL iteration → call_count==0 fails. |
+| Test independence | STRONG | Each test constructs fresh fixtures; no shared mutable state |
+| Descriptive names | STRONG | All follow `test_{behavior}_{condition}` pattern with docstrings |
 
-### GREEN-on-RED Verification
-Architecture review explicitly approved retroactive coverage; builder correctly found no implementation work required. Pre-existing interfaces verified passing.
+#### Data Safety
+No issues — pure mock-based, no production state, no PII.
 
-### Deductions
-- Minor LAX on `test_handle_authenticated_web_missing_urls_key_returns_zero_counts` (missing `skipped`/`errors` assertions): -0.02 (compensated)
+#### Implementation-Aware Gaps
+No production code changed. No untested paths introduced by this task.
 
-### Verdict
-Confidence: **0.96** → **PASS**
-[[2026-04-11]]
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 |
+| Approach variation | N/A |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- `test_handle_authenticated_web_returns_refresh_result` checks only `isinstance(result, RefreshResult)` for the single-URL happy path — does not verify `result.refreshed == 1`. Call-dispatch is verified separately in `test_handle_authenticated_web_calls_content_fetcher_per_url`, and count integrity is verified on error/empty/missing paths. No auto-fail; compensating coverage exists.
+- AC2 "-> FetchResult" typo in original AC text is a cosmetic error acknowledged by Architecture Review; tests correctly target `-> str`.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1: AUTHENTICATED_WEB is SourceType member | 4 tests passing; `SourceType.AUTHENTICATED_WEB == "authenticated_web"`, `isinstance(source_type, str)` | TestFromAC_AuthenticatedWeb (AC1 block) | PASS |
+| AC2: ContentFetcher in protocol.py with async fetch | 5 tests passing; `inspect.iscoroutinefunction(ContentFetcher.fetch)`, isinstance pair | TestFromAC_AuthenticatedWeb (AC2 block) | PASS |
+| AC3: _handle_authenticated_web dispatch + RefreshResult | 7 tests passing; call_count==len(urls), exact URL order, error count, cancel, source_id | TestFromAC_AuthenticatedWeb (AC3 block) | PASS |
+| AC4: Mock ContentFetcher, no browser dep | 2 tests passing; isinstance with no-browser import | TestFromAC_AuthenticatedWeb (AC4 block) | PASS |
+| AC5: File tests/test_authenticated_web_775.py | File confirmed on disk, 326 lines | — | PASS |
+
+### Confidence: .97
+### Verdict: PASS
+[[2026-04-13]]
 ## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | type:test pass-through — no production code changed; no copilot-instructions.md entries for AUTHENTICATED_WEB or ContentFetcher |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified; test file only |
+| 3 | External attribution | No | N/A | No external patterns referenced in task body or review; no sources/overview.md entry needed |
+| 4 | CLI changes | No | N/A | Test-only task; no CLI changes |
+| 5 | Research doc | No | N/A | No .owlbear/research/792-* file found; no research phase for this task |
 
-| # | Item | Applies? | Status | Evidence |
-|---|------|----------|--------|----------|
-| 1 | Behavior/API change → copilot-instructions.md | No | N/A | type:test task; Builder: "Files Changed: None"; retroactive coverage of pre-existing interfaces |
-| 2 | Module docstrings | No | N/A | No Python modules created or modified |
-| 3 | External attribution | No | N/A | No external patterns referenced |
-| 4 | CLI changes → README.md | No | N/A | No CLI changes |
-| 5 | Research doc | No | N/A | No research phase for this task |
-| 6 | No impact | Yes | CONFIRMED | Pure test task; all items 1–5 N/A |
+### Files Updated
+None — no docs impact.
 
-**Files updated:** None
-**Scratch files cleaned:** None found (`.owlbear/scratch/792-*` — no matches)
-[[2026-04-11]]
+### Scratch Files
+None found matching `.owlbear/scratch/792-*`.
+
+### No-Impact Rationale
+Task #792 is a `type:test` task. The sole deliverable is `tests/test_authenticated_web_775.py` (326 lines, 18 tests). No production code was created or modified. The interfaces under test (`AUTHENTICATED_WEB` SourceType, `ContentFetcher` protocol, `_handle_authenticated_web`) were pre-existing. Documentation is accurate as-is.
+[[2026-04-13]]
 ## Audit
-### AC Verification (Binding AC from Architecture Review)
+### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: AUTHENTICATED_WEB is a SourceType member | 4 tests (L35-55): hasattr, value equality, membership, isinstance(str) — all PASS | PASS |
-| AC2: ContentFetcher protocol with async fetch(url: str) -> str, runtime_checkable | 5 tests (L59-93): importable, has fetch, is_async, runtime_checkable, non-conforming fails — all PASS | PASS |
-| AC3: _handle_authenticated_web() dispatches via ContentFetcher, returns RefreshResult | 7 tests (L97-304): happy path, per-url dispatch with call_count + call_args_list, empty urls, missing urls key, exception error capture, cancel signal, source_id match — all PASS | PASS |
-| AC4: Mock ContentFetcher — no real browser dependency | 2 tests (L308-330): mock isinstance conformance, find_spec without browser — all PASS | PASS |
-| AC5: File: tests/test_authenticated_web_775.py | File exists, 18 tests, 330 lines | PASS |
+| AC1: AUTHENTICATED_WEB is SourceType member | 4 tests (test_authenticated_web_775.py L34-57) — hasattr, value eq, iteration, isinstance | PASS |
+| AC2: ContentFetcher in protocol.py with async fetch → str | 5 tests (L61-96) — import, hasattr, iscoroutinefunction, isinstance pair | PASS |
+| AC3: _handle_authenticated_web dispatches + RefreshResult | 7 tests (L98-230) — happy path, multi-URL call_count+order, empty, missing key, exception recording, cancel signal, source_id | PASS |
+| AC4: Mock ContentFetcher, no browser dep | 2 tests (L232-248) — isinstance with conforming mock, importlib without owlbear_browser | PASS |
+| AC5: File tests/test_authenticated_web_775.py | File exists (248 lines), committed at 219b08a5 | PASS |
 
 ### Test Results
-- pytest (task scope): 18 passed, 0 failed
-- pytest (full suite): 3464 passed, 289 failed, 8 skipped, 6 errors — failures are pre-existing, primarily from kanban engine refactoring (unrelated). Zero failures in test_authenticated_web_775.py or any knowledge-domain file touched by this task.
-- ruff: clean — 0 violations
-
-### Commit Integrity
-- `219b08a5 test: add retroactive coverage for AUTHENTICATED_WEB and ContentFetcher (#792, test-writer)` — properly committed upstream
+- pytest (task-scoped): 18 passed, 0 failed
+- pytest (full suite): 337 failed, 4074 passed — 0 failures in task scope; all failures are pre-existing cross-task regressions
+- ruff: clean (0 violations)
 
 ### Reviewer Evidence
-Present, detailed, PASS at 0.96. Includes full AC compliance table with would-fail-if-violated analysis, assert quality assessment, coverage data, and GREEN-on-RED verification. Trusted.
+Present, detailed, PASS verdict at .97. Trusted code-level findings — spot-check confirmed AC3 dispatch tests are discriminating (call_count, URL ordering, exception capture).
 
 ### Architect Quality: 4/5
-Original AC2 specified non-existent `FetchResult` return type — caught and corrected during Architecture Review (binding AC uses `str`). Remaining AC lines were specific, testable, and well-scoped. Minor gap filled by architect's own review step.
+AC was specific and testable. AC2 had cosmetic FetchResult→str typo caught and corrected by architect review. All other AC lines were precise with clear pass/fail criteria. Edge cases well-covered.
 
 ### Deduction Breakdown
-- Start: 1.00
-- AC lines with no evidence: 0 (all 5 covered) → 0
-- Lint violations: 0 → 0
-- AC quality ≤ 3: No (4/5) → 0
-- Missing reviewer evidence: No (present, detailed) → 0
-- Full-suite failures in task scope: 0 → 0
+- AC lines with no evidence: 0 (-.00)
+- Lint violations: 0 (-.00)
+- AC quality ≤ 3: N/A (-.00)
+- Missing reviewer section: N/A (-.00)
+- Full-suite failures in scope: 0 (-.00)
 
 ### Confidence: .98
 ### Action: archive

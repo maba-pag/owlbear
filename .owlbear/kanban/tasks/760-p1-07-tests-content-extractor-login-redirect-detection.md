@@ -4,18 +4,17 @@ title: 'P1-07: Tests — Content extractor + login redirect detection'
 status: review
 priority: needed
 created: '2026-04-10T10:55:57.241623+00:00'
-updated: '2026-04-11T18:05:23.656464+00:00'
+updated: '2026-04-13T23:28:20.769323+00:00'
 tags:
 - phase-1
 - type:test
 - scope:browser
+- archived
+- superseded
 parent: 751
 depends_on: []
-blocked: true
-block_reason: Quality-Runner returned execution error on all pytest startup strategies
-  (WMI/venv hang — KeyboardInterrupt before test collection). Cannot independently
-  verify test results. Sequential fallback also requires Quality-Runner. Code analysis
-  complete — see Review Evidence below. Unblock when pytest environment recovers.
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -248,3 +247,10 @@ FAIL #760 → in-progress | Step 5.3 WEAK assertions in TestFromAC_ContentExtrac
 
 ### Block Reason
 pytest environment (WMI/venv hang) prevented independent test execution. Protocol requires test evidence before PASS/FAIL verdict. Resume review after: `pytest tests/test_browser_content_775.py tests/test_edge_launcher_cdp_755.py` succeeds in terminal.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: 65 passed (`test_browser_content_775.py`) + 21 passed (`test_edge_launcher_cdp_755.py`). Unblocked for review continuation.
+
+[[2026-04-14]]
+## Archived — Superseded by CDP Pivot
+Content extractor + login redirect detection tests designed for Edge CDP approach. Login redirect detection no longer needed — SSO extension handles authentication transparently. Content extraction (cleaner) remains valid but needs new test strategy for Playwright approach.

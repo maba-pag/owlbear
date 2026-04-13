@@ -4,18 +4,15 @@ title: Tests — Content safety predicate inversion
 status: review
 priority: needed
 created: '2026-04-10T12:30:43.995109+00:00'
-updated: '2026-04-13T01:45:36.701228+00:00'
+updated: '2026-04-13T22:09:50.564421+00:00'
 tags:
 - phase-1
 - scope:knowledge
 - type:test
 parent: 775
 depends_on: []
-blocked: true
-block_reason: 'Quality-Runner fatal environment error — pytest import chain interrupted
-  by KeyboardInterrupt during anyio module load on two consecutive attempts. Cannot
-  independently run tests. Critical rule: always run tests yourself. Unblock when
-  environment is restored.'
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -108,3 +105,6 @@ AC1/AC2 name `wrap_untrusted_content()` but the function under test for source-t
 
 ### Verdict
 BLOCKED — environment failure prevents independent test execution. Per critical rules, cannot issue PASS without running tests myself.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_content_safety_inversion_775.py`). Unblocked for review continuation.

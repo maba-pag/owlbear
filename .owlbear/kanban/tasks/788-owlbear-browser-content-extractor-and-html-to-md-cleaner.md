@@ -4,7 +4,7 @@ title: owlbear_browser content extractor and HTML-to-MD cleaner
 status: review
 priority: needed
 created: '2026-04-10T12:31:12.692743+00:00'
-updated: '2026-04-11T14:53:05.358659+00:00'
+updated: '2026-04-13T22:10:02.456734+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -12,10 +12,8 @@ parent: 775
 depends_on:
 - 783
 - 787
-blocked: true
-block_reason: 'Quality-Runner execution error: pytest-xdist -n auto hangs on Windows
-  (KeyboardInterrupt, exit code 1). Cannot independently verify test results. Reviewer
-  cannot PASS without test execution evidence.'
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -175,3 +173,6 @@ Code inspection is uniformly positive (all 7 verifiable AC lines CODE-PASS, no s
 
 ### Unblocking condition
 Configure quality-runner to override xdist with `-n 0` for scoped test runs (e.g. `pytest tests/test_browser_content_775.py -n 0`) so the test hang is resolved, then re-dispatch reviewer.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_browser_content_775.py`). Unblocked for review continuation.

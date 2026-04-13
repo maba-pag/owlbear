@@ -1,10 +1,10 @@
 ---
 id: 827
 title: Migrate task_io.py from PyYAML to ruamel.yaml
-status: todo
+status: in-progress
 priority: nice-to-have
 created: '2026-04-11T01:12:00.740638+00:00'
-updated: '2026-04-12T03:39:47.497567+00:00'
+updated: '2026-04-13T19:00:58.519342+00:00'
 tags:
 - scope:kanban
 - cleanup
@@ -86,3 +86,36 @@ Research finding from #818: `.owlbear/research/extract-engine-serve-kanban-818.m
 
 ### Verdict: APPROVE
 ### Action Taken: Advanced to `todo`. Flagged #843 as duplicate — recommend archiving.
+[[2026-04-13]]
+## Test-Writer Notes
+
+**Test file:** `tests/test_migrate_task_io_pyyaml_to_ruamel_827.py`
+
+**Classes:**
+- `TestFromAC_LibraryMigration` — AC1, AC2, AC3 (6 tests)
+- `TestFromAC_OutputFormatUnchanged` — AC5 (1 test)
+
+**Tests per category:**
+- Happy path: 2 (import checks)
+- Structure/introspection: 4 (class/source absence checks + pyproject)
+- Boundary/format: 1 (timestamp quoting on write)
+- Error paths: 0 (behavioral contract covered by existing test_kanban_task_io.py)
+
+**Total: 7 tests — all FAIL** ✓ (confirmed via pytest run)
+**Ruff:** clean ✓
+
+**AC Coverage:**
+
+| AC | Tests | Notes |
+|----|-------|-------|
+| AC1: uses ruamel.yaml, not pyyaml | `test_task_io_does_not_import_pyyaml`, `test_task_io_imports_from_ruamel_yaml` | Source inspection |
+| AC2: _NoTimestampLoader replaced | `test_no_timestamp_loader_class_absent_from_module`, `test_no_timestamp_loader_not_in_source`, `test_no_safeloader_reference_in_source` | Source + namespace inspection |
+| AC3: pyyaml removed from pyproject.toml | `test_pyyaml_removed_from_kanban_pyproject_deps` | File content check |
+| AC4: All task I/O tests pass | *(existing test_kanban_task_io.py — 60+ behavioral tests already cover round-trip, timestamps, encoding)* | Pass-through note |
+| AC5: YAML output format unchanged | `test_timestamps_written_unquoted_in_frontmatter` | pyyaml quotes Go timestamps on write; ruamel.yaml must not |
+
+**Removed tests (passed against current impl — existing behavior):**
+- `test_none_fields_written_as_null_not_tilde` — pyyaml already writes `null` (not `~`)
+- `test_list_fields_written_in_block_not_flow_style` — pyyaml `default_flow_style=False` already produces block style
+
+**Key finding:** pyyaml quotes Go-format timestamps (e.g., `2026-04-09T03:24:26.6974428+02:00`) on WRITE due to the `+02:00` suffix heuristic — so AC5 test for timestamp quoting is a genuine failing requirement the builder must satisfy with ruamel.yaml.

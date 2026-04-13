@@ -4,17 +4,17 @@ title: owlbear_browser package scaffold and CDP launcher
 status: review
 priority: critical
 created: '2026-04-10T12:31:05.248695+00:00'
-updated: '2026-04-10T18:55:39.446875+00:00'
+updated: '2026-04-13T23:28:20.722218+00:00'
 tags:
 - phase-1
 - scope:browser
+- archived
+- superseded
 parent: 775
 depends_on:
 - 782
-blocked: true
-block_reason: Quality-Runner unavailable — cannot run tests independently. file evidence
-  strongly supports PASS (see Review Evidence), but per w-code-review protocol, test
-  execution is required before a verdict can be issued.
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -317,3 +317,10 @@ N/A — no new dependencies beyond playwright which is the explicit subject of t
 Per w-code-review protocol Step 2 fallback, independent test execution is mandatory. Quality-runner is not in this session's agent roster. File and code analysis suggests PASS likely at .90+, but evidence is code-reading only, not execution.
 
 **Next reviewer:** Quality-Runner available → run `uv run pytest tests/test_browser_package_scaffold_787.py tests/test_edge_launcher_cdp_755.py --tb=short` + lint on `serve/browser/src/` → strong prior evidence suggests 25/25 pass. If confirmed: confidence .94 → PASS → docs.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_browser_package_scaffold_787.py`). Unblocked for review continuation.
+
+[[2026-04-14]]
+## Archived — Superseded by CDP Pivot
+Edge CDP launcher approach blocked by corporate Group Policy (`RemoteDebuggingAllowed=0`). Entire Edge/CDP architecture replaced by Playwright Chromium + Microsoft SSO extension. See `.owlbear/research/cdp-spike-results.md` for pivot findings. New pivot tasks created under #751.

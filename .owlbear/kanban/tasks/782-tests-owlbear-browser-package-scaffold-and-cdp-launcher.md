@@ -4,15 +4,17 @@ title: Tests — owlbear_browser package scaffold and CDP launcher
 status: review
 priority: needed
 created: '2026-04-10T12:30:44.020270+00:00'
-updated: '2026-04-11T13:28:14.241204+00:00'
+updated: '2026-04-13T23:28:20.750310+00:00'
 tags:
 - phase-1
 - scope:browser
 - type:test
+- archived
+- superseded
 parent: 775
 depends_on: []
-blocked: true
-block_reason: Quality-Runner pytest infrastructure failure — cannot verify tests independently
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -159,3 +161,10 @@ Pytest fails even in collection-only mode (--co). Environment defect, not code d
 ### Block Resolution
 
 Unblock by fixing the pytest environment (clear `.pyc` files or reconcile venv). Once re-run returns a clean result, reviewer can re-claim and issue verdict. Code-reader evidence is strong — no code-level blockers found.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_browser_cdp_775.py`). Unblocked for review continuation.
+
+[[2026-04-14]]
+## Archived — Superseded by CDP Pivot
+Tests for Edge CDP launcher — approach abandoned. Group Policy blocks CDP on corporate laptop. New architecture: Playwright Chromium + SSO extension. New test tasks will cover the pivot approach.

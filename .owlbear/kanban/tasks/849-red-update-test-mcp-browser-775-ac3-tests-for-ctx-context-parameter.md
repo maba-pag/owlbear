@@ -1,10 +1,10 @@
 ---
 id: 849
 title: 'RED: Update test_mcp_browser_775 AC3 tests for ctx: Context parameter'
-status: in-progress
+status: done
 priority: important
 created: '2026-04-12T12:52:52.072571+00:00'
-updated: '2026-04-12T16:56:07.281133+00:00'
+updated: '2026-04-13T20:45:57.977526+00:00'
 tags:
 - phase-1
 - scope:mcp-browser
@@ -121,3 +121,83 @@ ruff: `All checks passed!`
 | All 5 AC3 tests call `navigate(ctx, url=...)` | ✅ All 5 updated |
 | Tests fail initially (RED phase) | ✅ All 5 fail with TypeError |
 | ruff clean | ✅ All checks passed |
+[[2026-04-13]]
+## Builder Notes
+
+**Status:** DONE — previous builder session added `ctx: Context` to `navigate()` in server.py
+
+### Files changed
+- `serve/mcp-browser/src/owlbear_mcp_browser/server.py` — `navigate(ctx: Context, url: str)`, uses `ctx.request_context.lifespan_context.allowlist` (no env read)
+
+### Test results
+- `tests/test_mcp_browser_775.py`: **25 passed, 0 failed**
+- `TestFromAC_NavigateToolError` (5 AC3 tests): all pass — blocked domain, empty allowlist, unconfigured allowlist, allowlisted domain (no raise), subdomain boundary
+
+### Lint
+- `ruff check serve/mcp-browser/src/owlbear_mcp_browser/server.py tests/test_mcp_browser_775.py`: **All checks passed**
+
+### Coverage
+- `owlbear_mcp_browser.server`: **67%** — navigate() paths fully covered; uncovered lines are click/type_input/select/read_text/snapshot tools (scope of #850 GREEN task, not #849)
+
+### Evidence
+- All 5 AC3 tests pass (navigate allowlist paths)
+- ruff clean
+- 25/25 tests pass in test_mcp_browser_775.py
+- navigate() reads lifespan allowlist from ctx, no per-call env read
+
+### Retry context
+Previous builder session already added `ctx: Context` to `navigate()`. Tests were already green on arrival; gate checks confirm no regressions.
+[[2026-04-13]]
+## Review Evidence
+
+### Tests
+pytest `tests/test_mcp_browser_775.py`: **25 passed, 0 failed** (run independently via quality-runner)
+
+### Lint
+ruff `serve/mcp-browser/src/owlbear_mcp_browser/server.py` + `tests/test_mcp_browser_775.py`: **clean**
+
+### Coverage
+`owlbear_mcp_browser.server`: **67%** — navigate() allowlist/fetcher paths fully covered; uncovered lines are page-based tools (scope of #850+, not #849)
+
+### Changed Files
+`get_changed_files` (staged+unstaged): neither `tests/test_mcp_browser_775.py` nor `serve/mcp-browser/src/owlbear_mcp_browser/server.py` appear in the working-tree diff — both changes are already committed. GREEN work (ctx on navigate + AppContext fields) was in place before review.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Add `_make_app_ctx(domains)` and `_make_mcp_ctx(app_ctx)` helpers | Both helpers present at lines 43–50 of test_mcp_browser_775.py, following established kanban/knowledge/memory pattern | ✅ PASS |
+| AC2: All 5 AC3 tests call `navigate(ctx, url=...)` with mock ctx carrying appropriate allowlist | Confirmed at lines 163–222: all 5 tests construct ctx via `_make_mcp_ctx(_make_app_ctx([...]))` or `_make_mcp_ctx(AppContext(...))` and call `navigate(ctx, url=...)` | ✅ PASS |
+| AC3: Tests fail initially (RED phase) | Test-writer reports 5 failed, failure mode `TypeError: navigate() got multiple values for argument 'url'` — consistent with old `navigate(url: str)` receiving `ctx` as positional plus `url=` as keyword | ✅ PASS |
+| AC4: ruff clean | quality-runner confirmed ruff exit 0 | ✅ PASS |
+
+### Assertion Strength
+- 4 error-path tests: `pytest.raises(ToolError)` — STRONG; would fail if no exception raised or wrong type raised
+- 1 happy-path test: no-raise check only (no return-value assertion) — ADEQUATE for "verify no exception" contract
+
+### Test Quality Notes
+- Two tests (`test_navigate_raises_tool_error_when_allowlist_is_empty` and `test_navigate_raises_tool_error_when_domain_not_configured`) both use `_make_app_ctx([])` + any URL — functionally identical. Minor duplication; architect accepted these as distinct cases in the AC. Deduct .02.
+- Happy-path test uses `fetcher=mock_fetcher` — appropriate, because page=None means navigate() falls through to the fetcher path. The mock prevents a None-fetcher no-op from masking the allowlist check.
+- TestFromAC_NavigateToolError modifications improve tests (stronger isolation, no env-var dependency) — not a weakening. ✅
+
+### Deductions
+- .02 for two near-duplicate empty-allowlist tests
+
+### Verdict
+**PASS #849 → docs | confidence .93**
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | `navigate()` signature changed to `navigate(ctx: Context, url: str)`. `copilot-instructions.md` (80 lines) covers only branch/project identity — no MCP tool API inventory to update. No entry warranted. |
+| 2 | Module docstrings | Yes | Verified | `server.py` fully read (L1–200). All public symbols have accurate docstrings: module, `AppContext`, `app_lifespan`, `navigate`, `click`, `type_input`, `select`, `read_text`, `snapshot`. `navigate` docstring `"""Navigate the browser to *url*."""` remains accurate post-signature change. No edits needed. |
+| 3 | External attribution | No | N/A | Task used internal `_make_app_ctx/_make_mcp_ctx` pattern from kanban/knowledge/memory test files — no external sources. |
+| 4 | CLI changes | No | N/A | MCP tool, not CLI. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/836-mcp-browser-ctx-refactor.md` exists; linked in task body under `## Research`. Follow-up tasks noted as none needed. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `849-*` files found in `.owlbear/scratch/`)

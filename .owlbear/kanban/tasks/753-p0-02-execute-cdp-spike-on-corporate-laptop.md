@@ -1,17 +1,21 @@
 ---
 id: 753
 title: 'P0-02: Execute CDP spike on corporate laptop'
-status: backlog
+status: done
 priority: critical
-created: 2026-04-10T10:55:24.83012Z
-updated: 2026-04-13T04:18:26.900045+02:00
+created: '2026-04-10T10:55:24.83012Z'
+updated: '2026-04-13T23:19:53.984573+00:00'
 tags:
-    - phase-0
-    - type:user-action
-    - scope:browser
+- phase-0
+- type:user-action
+- scope:browser
+- archived
 parent: 751
-blocked: true
-block_reason: 'User-action required: physically execute CDP spike script on corporate laptop, observe EDR/DLP reactions, record go/no-go decision. Add `## Action Completed` section to task body when done.'
+depends_on: []
+blocked: false
+block_reason: null
+claimed_by: null
+claimed_at: null
 ---
 
 Execute the CDP spike script (P0-01 #752) on the corporate laptop with an active Edge SSO session.
@@ -118,3 +122,22 @@ Run spike with hash stability validation (step from #778 — AC1):
 5a. Run with `--hash-stability` flag: `python .owlbear/scratch/cdp-spike.py --hash-stability` (adds ~6 min per URL)
 5b. Check console output: look for `Hash stability: GO/NO-GO` verdict per URL and overall
 5c. If NO-GO: inspect the diff output in the log — check for dynamic element patterns to remove via `prune_xpath`
+
+[[2026-04-13]]
+## Action Completed
+
+- CDP connectivity: **FAIL** — `ECONNREFUSED 127.0.0.1:9222`
+- SSO extraction: NOT TESTED (blocked by CDP)
+- EDR reaction: N/A (CDP never opened)
+- DLP reaction: N/A
+- SharePoint boilerplate: NOT TESTED
+
+**Root cause:** Corporate Group Policy `RemoteDebuggingAllowed = 0` at `HKLM\SOFTWARE\Policies\Microsoft\Edge`. Edge silently ignores `--remote-debugging-port`. Also: `HeadlessModeEnabled = 0`.
+
+**Go/no-go: NO-GO** — CDP approach blocked on corporate laptop. Pivot strategy required.
+
+Full results: `.owlbear/research/cdp-spike-results.md`
+
+[[2026-04-14]]
+## Archived — CDP Pivot
+Spike completed, NO-GO recorded. CDP blocked by Group Policy (`RemoteDebuggingAllowed=0`). Pivot to Playwright Chromium + SSO extension validated in E2E PoC. See `.owlbear/research/cdp-spike-results.md`.

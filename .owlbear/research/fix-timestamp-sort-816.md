@@ -61,3 +61,20 @@ Challenge: FALLBACK — challenger agent not available in tool allowlist
 No new tasks needed. #815 (RED tests) and #816 (GREEN implementation) already exist as a TDD pair. Research confirms the implementation approach for #816.
 
 **Tier:** T1 — Bug fix. No new capability, no architecture change, no security impact.
+
+## 6. Validation Pass (2026-04-13)
+
+Research doc validated against current codebase. Implementation already in place.
+
+| AC Item | Status | Evidence |
+|---------|--------|----------|
+| Sort parses to `datetime` via `fromisoformat()` | ✅ Done | `engine.py` L252-255 |
+| Handles Go 7-digit + Python 6-digit formats | ✅ Done | Python 3.12 `fromisoformat()` accepts 1-7 fractional digits; verified empirically |
+| Stored format unchanged (string round-trip) | ✅ Done | Sort uses datetime as key only; `_NoTimestampLoader` + `str` field preserve originals |
+| Correct ordering across mixed TZ offsets | ✅ Done | `test_sort_by_created_mixed_tz_offsets` + `test_sort_by_updated_mixed_tz_offsets` pass GREEN |
+| #815 tests pass GREEN | ⚠️ 10/11 | `test_sort_round_trip_string_fidelity` has a test defect (accesses `created` on `TaskSummary` which drops it) — this is #815 scope |
+| Existing MCP tests pass (O4) | ⚠️ Pre-existing failures | 102 kanban test failures exist but **none caused by the timestamp sort fix** — all are pre-existing (removed `_run_kanban`, changed `AppContext` constructor, etc.) |
+
+### Key Finding
+
+The implementation for #816 is **already complete**. The 2-line fix at `engine.py` L252-255 matches the recommended Approach A exactly. The remaining test defect (`TaskSummary` missing `created` attribute) is a #815 test authoring bug, not a code defect in the sort logic.

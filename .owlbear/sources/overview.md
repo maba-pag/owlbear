@@ -38,6 +38,13 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | ToolAnnotations API, Context access, error handling patterns, tool decorator args | .owlbear/research/771-mcp-browser-server.md | 2026-04-11 |
 
+## Playwright Dep Bump for aria_snapshot (Task #855)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright Python Release Notes | <https://playwright.dev/python/docs/release-notes> | `page.aria_snapshot()` introduced in v1.59; `locator.aria_snapshot()` in v1.49 | .owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
+| PyPI playwright Release History | <https://pypi.org/project/playwright/#history> | Latest Python release is 1.58.0 (2026-01-30); v1.59 not yet published | .owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
+
 ## Excalidraw Skill Expansion (Task #743)
 
 | Source | URL | What | Where Used | Date |

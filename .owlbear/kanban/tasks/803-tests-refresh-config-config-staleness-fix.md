@@ -4,7 +4,7 @@ title: Tests — refresh_config + config staleness fix
 status: review
 priority: needed
 created: '2026-04-10T21:20:57.293478+00:00'
-updated: '2026-04-12T02:44:10.341982+00:00'
+updated: '2026-04-13T22:10:02.531605+00:00'
 tags:
 - phase-1
 - type:test
@@ -12,12 +12,8 @@ tags:
 - rigor:thorough
 parent: 798
 depends_on: []
-blocked: true
-block_reason: 'Tests cannot be run independently — Quality-Runner dispatched but pytest
-  initialization failed with WMI/logfire/protobuf KeyboardInterrupt (persistent environment
-  issue on Windows). Reviewer critical rule: "Always run tests yourself. Never trust
-  self-reports from the builder." Code inspection and static analysis are clean; infrastructure
-  is the sole blocker.'
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -173,3 +169,6 @@ Cannot give PASS or FAIL without independent test execution. Code quality throug
 
 ### Action
 Resolve WMI/logfire/protobuf hang in pytest environment before re-review. Once tests can run, expected outcome is PASS based on code inspection.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_refresh_config_803.py`). Unblocked for review continuation.

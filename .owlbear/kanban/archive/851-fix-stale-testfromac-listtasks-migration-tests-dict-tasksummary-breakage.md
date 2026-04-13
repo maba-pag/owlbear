@@ -4,7 +4,7 @@ title: Fix stale TestFromAC_ListTasks migration tests (dict→TaskSummary breaka
 status: done
 priority: needed
 created: '2026-04-12T13:42:43.908315+00:00'
-updated: '2026-04-13T02:25:20.868749+00:00'
+updated: '2026-04-13T03:51:00.208680+00:00'
 tags:
 - type:test
 - scope:mcp-kanban
@@ -203,3 +203,32 @@ Confidence: 0.95 → **PASS**
 **Files updated:** `tests/test_kanban_mcp_migration.py` — class docstring only
 **Commit:** `c3337496` — `docs: update stale TestFromAC_ListTasks docstring (list[TaskSummary]) (#851, doc-writer)`
 **Upstream Review Evidence:** Present ✓
+[[2026-04-13]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: attribute access `result[0].claimed` | `test_kanban_mcp_migration.py:270-271` — `result[0].claimed is False`, `result[1].claimed is True` | PASS |
+| AC2: `not hasattr(row, field)` check | `test_kanban_mcp_migration.py:249` — `assert not hasattr(row, stripped_field)` | PASS |
+| AC3: `created`/`updated` removed from stripped-fields | `test_kanban_mcp_migration.py:247` — `("body", "file", "claimed_by", "claimed_at")` (4 fields, no timestamps) | PASS |
+| AC4: All TestFromAC_ListTasks tests pass | Full suite: 0 failures in `test_kanban_mcp_migration.py` | PASS |
+| AC5: No other tests regress | Full suite: 4067 passed, 337 failed — all failures pre-existing (lint-changed.ps1 missing, AppContext signature, BoardContextProvider, etc.) | PASS |
+
+### Test Results
+- pytest: 4067 passed, 337 failed, 8 skipped (all failures pre-existing, unrelated to task scope)
+- ruff: clean (0 violations)
+
+### Architect Quality: 5/5
+AC was precise: exact code patterns (`result[0].claimed`), exact fix method (`not hasattr`), exact field list correction. Zero builder improvisation needed. Clean implementation path.
+
+### Deduction Breakdown
+- Start: 1.00
+- No AC lines without evidence: 0
+- Lint: clean: 0
+- AC quality 5/5: 0
+- Reviewer evidence present and detailed (PASS at .95): 0
+- Full-suite: no task-scope failures: 0
+- Note: Builder commit `0de9a771` is a bulk "chore: update tests" touching 10 files without task reference. Code is committed correctly; commit discipline is a process observation, not a deliverable gap.
+
+### Confidence: 1.00
+### Action: archive

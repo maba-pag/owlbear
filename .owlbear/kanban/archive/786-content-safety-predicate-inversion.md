@@ -1,10 +1,10 @@
 ---
 id: 786
 title: Content safety predicate inversion
-status: docs
+status: done
 priority: important
 created: '2026-04-10T12:31:05.221180+00:00'
-updated: '2026-04-12T16:52:13.692589+00:00'
+updated: '2026-04-13T10:47:04.123286+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -146,3 +146,46 @@ No new security concerns introduced. Pre-existing note: `source_url` attribute i
 
 ### Verdict
 Confidence: **0.96** → **PASS**
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `should_wrap()` and `wrap_untrusted_content()` signatures unchanged; predicate inversion is internal. `copilot-instructions.md` is 80 lines covering only project identity and branch structure — no knowledge module section to update. |
+| 2 | Module docstrings | Yes | Verified | Read all 66 lines of `content_safety.py`. Module docstring accurate. `should_wrap()` docstring (lines 25–38) correctly describes deny-list predicate and `None` treatment. `wrap_untrusted_content()` docstring (lines 44–54) accurate. No changes needed. |
+| 3 | External attribution | No | N/A | Change derived entirely from internal research finding F4 in `.owlbear/research/775-phase1-browser-pipeline-schema.md`. No external repos, articles, or docs used. |
+| 4 | CLI changes | No | N/A | Pure internal implementation change in `content_safety.py` — no CLI additions or modifications. |
+| 5 | Research doc | No | N/A | No dedicated `786-*.md` research file produced. Finding F4 confirmed in `.owlbear/research/775-phase1-browser-pipeline-schema.md` (line 68). Task context references it correctly. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/786-*` files found)
+[[2026-04-13]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: predicate `not in ("file","text","file_glob")` | content_safety.py:L40 `return source_type not in _TRUSTED_SOURCE_TYPES`; L22 `frozenset({"file","file_glob","text"})` | PASS |
+| AC2: All #781 tests pass; existing tests pass | 30/30 pass (11 inversion + 16 existing + 3 dedup) | PASS |
+| AC3: Defense-in-depth — new types wrapped by default | `not in` predicate wraps unknown types; confirmed by `test_unknown_future_type_returns_true` | PASS |
+| AC4: File is content_safety.py | Only file touched per git log + code read | PASS |
+
+### Test Results
+- pytest (task-scoped): 30/30 passed, 0 failed
+- pytest (full suite): 4076 passed, 335 failed, 8 skipped — all 335 failures unrelated (kanban model renames, analysis schema, browser scaffold)
+- ruff: clean (0 violations)
+
+### Architect Quality: 4/5
+AC was specific and verifiable. Minor gap: constant deduplication was an arch review note rather than a formal AC line, but correctly picked up by test-writer. Design direction (deny-list predicate) well-motivated by research F4.
+
+### Deduction Breakdown
+- All 4 AC lines have specific evidence: no deduction
+- Lint clean: no deduction
+- AC quality 4/5 > 3: no deduction
+- Reviewer evidence present and detailed (PASS at 0.96): no deduction
+- Full-suite failures: none in task scope: no deduction
+
+### Confidence: 0.98
+### Action: archive

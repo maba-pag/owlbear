@@ -1,10 +1,10 @@
 ---
 id: 793
 title: LLM extraction prompt corporate entity examples
-status: docs
+status: done
 priority: important
 created: '2026-04-10T12:31:51.861669+00:00'
-updated: '2026-04-12T16:51:47.768895+00:00'
+updated: '2026-04-13T11:11:22.999452+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -143,3 +143,46 @@ No new code, no new boundaries, no new dependencies. 0 security concerns.
 
 ### Verdict
 Confidence: **0.97** → **PASS**
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Verification-only task — no code changes. VCS review confirms `llm_extractor.py`, `test_llm_prompt_corporate_775.py`, `test_llm_extractor.py` unchanged. copilot-instructions.md has no references to LLM_EXTRACTION_PROMPT or corporate entity extraction — nothing to update. |
+| 2 | Module docstrings | No | Verified | No modules modified. Read `llm_extractor.py` (lines 1–104): module docstring present, `LLMExtractor` class docstring with Args block, `extract()` method docstring with Args/Returns. All public API documented accurately. |
+| 3 | External attribution | No | N/A | No external repos, articles, or patterns introduced. |
+| 4 | CLI changes | No | N/A | No CLI changes. |
+| 5 | Research doc | No | N/A | No research doc produced for #793. Reference to "research F3" is from parent task #775's existing research. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/793-*` files found)
+[[2026-04-13]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `LLM_EXTRACTION_PROMPT` updated with corporate entity disambiguation examples | `llm_extractor.py` lines 30–43: requirement, solution, procedure, policy, standard — each with contrastive "distinct from CONCEPT" language | PASS |
+| Prompt includes GOVERNS and SUPERSEDES_VERSION relation examples | `llm_extractor.py` lines 45–48: "a security policy governs a procedure", "Policy v2.0 supersedes_version Policy v1.0" | PASS |
+| All #789 tests pass; existing extraction tests still pass | `uv run pytest tests/test_llm_prompt_corporate_775.py tests/test_llm_extractor.py` → 23 passed, 0 failed | PASS |
+| File: `serve/knowledge/src/owlbear_knowledge/llm_extractor.py` | File exists, content verified | PASS |
+
+### Test Results
+- pytest (task-scoped): 23 passed, 0 failed
+- pytest (full suite): 468 passed, 5 failed, 1 skipped — all 5 failures outside task scope (orchestrator wave assembly, knowledge schema version, planner gates, agent validation, memory scaffold)
+- ruff: All checks passed
+
+### Architect Quality: 4/5
+AC was specific and verifiable. Minor gap: task was redundant with #767 (implementation already shipped). Architect correctly identified this and overrode challenger's BLOCK with pragmatic reasoning. Planning-level redundancy noted for retro, but AC quality itself was adequate.
+
+### Deduction Breakdown
+- No AC lines without evidence: -0.00
+- Lint clean: -0.00
+- AC quality 4/5 (> 3): -0.00
+- Reviewer evidence section present, detailed, PASS verdict: -0.00
+- Full-suite failures all outside task scope: -0.00
+
+### Confidence: 0.98
+### Action: archive

@@ -4,7 +4,7 @@ title: Tests — TaskSummary model
 status: review
 priority: needed
 created: '2026-04-10T21:20:41.798290+00:00'
-updated: '2026-04-12T01:31:43.197641+00:00'
+updated: '2026-04-13T22:10:02.508232+00:00'
 tags:
 - phase-1
 - type:test
@@ -13,11 +13,8 @@ tags:
 parent: 798
 depends_on:
 - 800
-blocked: true
-block_reason: Quality-Runner fatal execution error — WMI deadlock in Python 3.12.13
-  during pytest-xdist worker spawn (site module initialization). Cannot run tests
-  independently. Protocol requires independent test execution. Cannot issue verdict
-  without it.
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -181,3 +178,6 @@ Brief: `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md`
 
 ### Verdict
 **BLOCK** — Cannot independently execute tests. Static analysis suggests implementation is correct, but protocol requires independent test execution. Re-run review after resolving WMI/Python 3.12.13 environment issue or ensuring quality-runner can spawn pytest workers on this Windows machine.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational — independently verified with scoped run on #801: 14/14 passed, ruff clean. Unblocked for review continuation.

@@ -38,9 +38,9 @@ When `list_tasks` return type changed from `list[dict]` to `list[TaskSummary]`, 
 | `test_list_tasks_claimed_bool_derived_from_claimed_by` | Uses `result[0]["claimed"]` — `TaskSummary` has no `__getitem__`. **TypeError at runtime.** | BROKEN (1 test failure) |
 | `test_list_tasks_strips_body_and_timestamp_fields` | Uses `field not in row` — Pydantic v2 `__iter__` yields `(k,v)` tuples, so `str in model` is ALWAYS False. Verified empirically: `"x" in M(x=1)` → `False`. | FALSE POSITIVE (0 assertion value) |
 
-### 3c. AC3 defect
+### 3c. AC3 status (corrected)
 
-AC3 lists `created` and `updated` as excluded fields, but `TaskSummary` intentionally includes them (docstring: "excludes body and claimed_by" — timestamps not mentioned). Removing them would be a model change out of scope.
+AC3 is factually correct. `TaskSummary` does NOT include `created` or `updated` — its docstring explicitly states "Excludes body, claimed_by, created, and updated from the full Task schema." Earlier analysis misread the model; the 3rd arch review corrected this.
 
 ## 4. Recommendation
 

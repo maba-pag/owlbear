@@ -4,7 +4,7 @@ title: Tests — pick_dispatchable()
 status: done
 priority: needed
 created: '2026-04-10T21:23:01.614181+00:00'
-updated: '2026-04-12T15:03:17.785442+00:00'
+updated: '2026-04-13T18:26:43.647978+00:00'
 tags:
 - phase-3
 - type:test
@@ -34,16 +34,21 @@ claimed_at: null
 
 Phase 3, step 1. Depends on #822 (Phase 2 complete).
 Brief: `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md`
-[[2026-04-12]]
+[[2026-04-13]]
 ## Research
 - Research doc: .owlbear/research/823-pick-dispatchable-test-design.md
-- Sources: 9 studied, 7 high-relevance
-- Recommendation: Real engine + temp filesystem fixtures, 8 test classes (~150 LOC) (confidence: .85)
-- Key finding: engine.list_tasks() strips body via TaskSummary conversion — pick_dispatchable must use alternate path for body access (documented for #824 builder)
-- Tier: T1 (autonomous) — standard TDD RED phase
-- Follow-up tasks created: none (pipeline already has #824)
+- Sources: 9 studied, 7 high-relevance (≥.85)
+- Recommendation: Real engine + temp filesystem fixture pattern (confidence: .85)
+- Follow-up tasks created: none needed — #824 (implementation) already exists and depends on #823
 - Decision requests: none
-[[2026-04-12]]
+
+### Validation Pass (2026-04-13)
+Existing research doc confirmed current. Key verifications:
+- dispatch.py implemented via #824; tests/test_pick_dispatchable_823.py covers all 9 ACs
+- 37/37 tests pass GREEN (data flow issue resolved: reads via task_io.read_task)
+- Gate contracts (TDD + clarity), rank maps, tag filter, limit cap all match between doc and implementation
+- Challenge: N/A — T1 test task with established patterns
+[[2026-04-13]]
 ## Architecture Review
 
 ### Evaluation
@@ -51,207 +56,156 @@ Brief: `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md`
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
 | Single responsibility | PASS | Tests only `pick_dispatchable()` — one function, one test file |
-| Interface clarity | PASS | All 9 AC lines specify exact conditions and expected outcomes. Signature `pick_dispatchable(engine, limit=25, tag="")` defines inputs; `list[Task]` defines output. Gate conditions cite specific body patterns and tag sets. |
-| Dependency correctness | PASS | depends_on: [822] is correct — #822 is Phase 2 final task (compat alias removal). Phase 3 cannot start before Phase 2 completes. No missing dependencies. |
-| Module layering | PASS | Test imports from `owlbear_kanban.dispatch` — no upward imports, no MCP dependency |
-| TDD compliance | PASS | This IS the RED test task. #824 (implementation) depends on #823. |
-| KISS/YAGNI | PASS | 8 test classes (~150 LOC) — one per AC concern. No hypothetical requirements. |
-| Premise challenge | PASS | `pick_dispatchable()` is mandated by the brief Phase 3 spec (O3). Tests are prerequisite for #824. |
-| Pattern consistency | PASS | Follows proven real-engine + temp-filesystem fixture pattern from `tests/test_kanban_engine_listing.py` (`_make_kanban_dir`, `_add_task` helpers). Test class naming follows `TestFromAC_*` convention. |
-| Security surface | N/A | Pure test code, no new system boundaries |
-| Single domain | PASS | scope:kanban only |
+| Interface clarity | PASS | AC defines exact signature `(engine, limit=25, tag="")`, gate behaviors, rank orders, limit semantics, tag filtering |
+| Dependency correctness | PASS | depends_on=[822] — #822 archived (done) |
+| Module layering | PASS | Tests in `tests/` import from `owlbear_kanban.dispatch` — correct direction |
+| TDD compliance | PASS | This IS the test task; AC9 requires RED before implementation |
+| KISS/YAGNI | PASS | 37 tests, one class per AC, no speculative coverage |
+| Premise challenge | PASS | Custom dispatch logic for kanban engine — no existing capability covers this |
+| Pattern consistency | PASS | Uses real-engine + `tmp_path` fixture pattern matching existing test conventions |
+| Security surface | PASS | No new system boundaries — tests use temp filesystem fixtures |
+| Single domain | PASS | `scope:kanban` only |
 
-### Failure Mode Map
-N/A — test code introduces no production codepaths.
+### AC Assessment
 
-### Codebase Evidence
-- Fixture pattern: `tests/test_kanban_engine_listing.py` L57-130 — `_make_kanban_dir`, `_task_content`, `_add_task` helpers
-- Gate logic reference: `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` L320-405 — `_check_pick_gates`, rank maps, `_PICK_NON_IMPL_TAGS`
-- Target import path: `owlbear_kanban.dispatch` (module does not exist yet — RED is immediate)
-- Models: `serve/kanban/src/owlbear_kanban/models.py` — `Task` (has body), `TaskSummary` (no body)
-
-### Builder Note (for #824)
-Research correctly identifies `engine.list_tasks()` body-stripping issue (returns `TaskSummary`, `extra="ignore"` drops body). Tests using real engine + filesystem are agnostic to the builder's data access strategy. This is documented in the #824 research doc.
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC1 — returns `list[Task]` | Verifiable | 5 tests in `TestFromAC_PickDispatchableSignature` |
+| AC2 — TDD gate | Verifiable | 5 tests in `TestFromAC_PickDispatchableTDDGate` incl. all non-impl tags |
+| AC3 — Clarity gate | Verifiable | 8 tests in `TestFromAC_PickDispatchableClarityGate` covering all active statuses |
+| AC4 — Priority ranking | Verifiable | 3 tests in `TestFromAC_PickDispatchablePriorityRanking` |
+| AC5 — Status ranking | Verifiable | 4 tests in `TestFromAC_PickDispatchableStatusRanking` incl. cross-dimension |
+| AC6 — Limit capping | Verifiable | 4 tests in `TestFromAC_PickDispatchableLimit` incl. edge cases (0, default 25) |
+| AC7 — Tag filtering | Verifiable | 5 tests in `TestFromAC_PickDispatchableTagFilter` |
+| AC8 — Importable w/o MCP | Verifiable | 3 tests in `TestFromAC_PickDispatchableImport` |
+| AC9 — RED before impl | Verifiable | Docstring documents RED-phase intent; validated by pipeline |
 
 ### Challenge Results
-- Challenger: FALLBACK — no challenger agent available in current workspace
-- Architect response: proceeded with approval — T1 test task, all 9 AC lines verifiable, established patterns, no design decisions to challenge
+- Challenger: reconsider (6 concerns raised)
+- Architect response: **Rebutted all 6.**
+  1. `__init__.py` import concern: invalid — `dispatch.py` exists, 37/37 tests pass GREEN
+  2. AC2 wording: standard project phrasing, tests unambiguously verify behavior
+  3. AC3 "bullet/numbered AC" scope: clarity gate checks structured content, matching documented behavior
+  4–6. Tiebreaker/stability/private attribute: implementation details for #824, not AC requirements for this test task
+
+### Codebase Verification
+- Test file: `tests/test_pick_dispatchable_823.py` — 37 tests, all pass
+- Implementation: `serve/kanban/src/owlbear_kanban/dispatch.py` — `pick_dispatchable()` with gate predicates and rank maps
+- Non-impl tag `type:test` already present
 
 ### Verdict: APPROVE
-### Action Taken: Advanced to todo. AC is precise and verifiable. Research is thorough (confidence .85). Non-impl tag `type:test` already present. Dependency #822 (todo) correctly gates Phase 3 start.
-[[2026-04-12]]
+### Action Taken: Advanced to todo. All 9 ACs verifiable with precise test coverage. No AC refinement needed.
+[[2026-04-13]]
 ## Test-Writer Notes
-- Test file: tests/test_pick_dispatchable_823.py
-- Classes: TestFromAC_PickDispatchableImport, TestFromAC_PickDispatchableSignature, TestFromAC_PickDispatchableTDDGate, TestFromAC_PickDispatchableClarityGate, TestFromAC_PickDispatchablePriorityRanking, TestFromAC_PickDispatchableStatusRanking, TestFromAC_PickDispatchableLimit, TestFromAC_PickDispatchableTagFilter
-- Tests per category: happy 12, edge 9, error 5, boundary 6
-- Total: 32 tests, all FAIL (ModuleNotFoundError: No module named 'owlbear_kanban.dispatch')
-- ruff: clean
-- Commit: 47f7430f — "test: add failing tests for pick_dispatchable() (#823, test-writer)"
 
-### AC Coverage
-| AC | Tests |
-|----|-------|
-| returns list[Task] | test_returns_list, test_result_items_are_task_instances, test_accepts_limit_keyword, test_accepts_tag_keyword, test_result_has_body_field |
-| TDD gate | test_in_progress_without_notes_excluded, test_in_progress_with_notes_included, test_in_progress_non_impl_tag_exempt_from_tdd, test_non_in_progress_skips_tdd_gate, test_all_non_impl_tags_exempt_from_tdd_gate |
-| Clarity gate | test_todo_without_bullets_excluded, test_todo_empty_body_excluded, test_todo_with_bullet_list_included, test_todo_with_numbered_list_included, test_research_without_bullets_passes_clarity, test_backlog_without_bullets_passes_clarity, test_done_without_bullets_excluded, test_review_without_bullets_excluded |
-| Priority ranking | test_critical_before_someday, test_all_priorities_in_dispatch_order, test_critical_before_needed_before_important |
-| Status ranking | test_done_before_research, test_all_statuses_in_dispatch_order, test_priority_dominates_status, test_docs_before_in_progress |
-| Limit cap | test_limit_caps_results, test_limit_does_not_pad, test_default_limit_is_25, test_limit_zero_returns_empty |
-| Tag filtering | test_tag_filter_excludes_untagged, test_empty_tag_includes_all_passing, test_tag_no_match_returns_empty, test_multi_tag_task_matched_by_any_tag, test_tag_filter_applied_before_gates |
-| No MCP dependency | test_pick_dispatchable_callable, test_module_is_in_owlbear_kanban_package, test_dispatch_module_does_not_import_mcp |
-[[2026-04-12]]
+**Status:** Non-implementation pass-through — task tagged `type:test` (non-impl tag per Step 1a protocol).
+
+**Anomalous state:** Test file and implementation both pre-exist from a prior pipeline cycle (test-writer + builder already completed RED → GREEN via #824). Arch Reviewer validated and re-queued to `todo`.
+
+**Test file:** `tests/test_pick_dispatchable_823.py`
+
+| Class | AC | Tests | Status |
+|-------|----|-------|--------|
+| `TestFromAC_PickDispatchableImport` | AC8 | 3 | GREEN |
+| `TestFromAC_PickDispatchableSignature` | AC1 | 5 | GREEN |
+| `TestFromAC_PickDispatchableTDDGate` | AC2 | 5 | GREEN |
+| `TestFromAC_PickDispatchableClarityGate` | AC3 | 8 | GREEN |
+| `TestFromAC_PickDispatchablePriorityRanking` | AC4 | 3 | GREEN |
+| `TestFromAC_PickDispatchableStatusRanking` | AC5 | 4 | GREEN |
+| `TestFromAC_PickDispatchableLimit` | AC6 | 4 | GREEN |
+| `TestFromAC_PickDispatchableTagFilter` | AC7 | 5 | GREEN |
+
+**Total:** 37 tests — all pass GREEN (implementation `dispatch.py` already exists via #824).
+
+**AC coverage:** All 9 ACs covered. No gaps.
+
+**RED phase note:** Tests were written RED in a prior cycle. Implementation (#824) subsequently made them GREEN. Re-verified run: 37/37 pass.
+
+**Ruff:** No issues (pre-existing file, no changes made).
+[[2026-04-13]]
 ## Builder Notes
-
-### Files changed
-- None — test deliverable was committed by test-writer (47f7430f)
-
-### Test results (RED verification)
-- **pytest**: Collection aborted — `ModuleNotFoundError: No module named 'owlbear_kanban.dispatch'` ✅ (expected RED state, no implementation exists)
-- **Tests counted in file**: 37 methods across 8 `TestFromAC_*` classes (test-writer notes say 32; count discrepancy minor — all 8 classes present, all AC lines covered per AC coverage table)
-- **Ruff**: All checks passed ✅
-
-### Evidence summary
-| Check | Result |
-|-------|--------|
-| Test file exists | ✅ `tests/test_pick_dispatchable_823.py` |
-| All TestFromAC_* fail RED | ✅ ModuleNotFoundError at import |
-| No implementation in owlbear_kanban.dispatch | ✅ grep confirms — module does not exist |
-| Ruff clean | ✅ |
-| Commit from test-writer | ✅ 47f7430f |
-
-### AC compliance
-| AC | Status |
-|----|--------|
-| Tests verify pick_dispatchable signature | ✅ TestFromAC_PickDispatchableSignature (5 tests) |
-| TDD gate tests | ✅ TestFromAC_PickDispatchableTDDGate (5 tests) |
-| Clarity gate tests | ✅ TestFromAC_PickDispatchableClarityGate (8 tests) |
-| Priority ranking tests | ✅ TestFromAC_PickDispatchablePriorityRanking (3 tests) |
-| Status ranking tests | ✅ TestFromAC_PickDispatchableStatusRanking (4 tests) |
-| Limit cap tests | ✅ TestFromAC_PickDispatchableLimit (4 tests) |
-| Tag filtering tests | ✅ TestFromAC_PickDispatchableTagFilter (5 tests) |
-| No MCP dependency tests | ✅ TestFromAC_PickDispatchableImport (3 tests) |
-| Tests fail RED before implementation | ✅ Verified |
-[[2026-04-12]]
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+- Test run: 37/37 passed, 0 failed.
+- Ruff: no issues (pre-existing file, no changes made).
+- Evidence: `tests/test_pick_dispatchable_823.py` — all 8 TestFromAC_* classes GREEN.
+[[2026-04-13]]
 ## Review Evidence
 
-### Test Results
-- pytest: 37 passed, 0 failed (all GREEN — dispatch.py exists from #824 implementation, committed after builder verified RED)
+**pytest:** 37 passed, 0 failed — exit 0  
+**ruff:** clean — exit 0  
+**Coverage:** `owlbear_kanban.dispatch` 95% (threshold 90% ✓)
 
-### Lint
-clean: true — ruff 0 violations
+### AC Compliance
+| AC | Class | Assertion Quality |
+|----|-------|-------------------|
+| AC1 list[Task] | TestFromAC_PickDispatchableSignature | STRONG |
+| AC2 TDD gate | TestFromAC_PickDispatchableTDDGate | STRONG |
+| AC3 Clarity gate | TestFromAC_PickDispatchableClarityGate | STRONG |
+| AC4 Priority rank | TestFromAC_PickDispatchablePriorityRanking | STRONG |
+| AC5 Status rank | TestFromAC_PickDispatchableStatusRanking | STRONG |
+| AC6 Limit cap | TestFromAC_PickDispatchableLimit | STRONG |
+| AC7 Tag filter | TestFromAC_PickDispatchableTagFilter | ADEQUATE (order-of-ops test weak) |
+| AC8 MCP import | TestFromAC_PickDispatchableImport | ADEQUATE (vars() check misses aliased imports) |
+| AC9 RED phase | Meta-condition; docstring-documented; prior cycle validated | N/A |
 
-### Coverage
-- owlbear_kanban.dispatch: 95% (uncovered path likely the `get()` fallback for unknown priority/status values — untested but not an AC line)
+All 8 TestFromAC_ classes intact — no modifications detected.
 
-### Pass 1 — CRITICAL
+**Non-AC informational gap:** dispatch.py:143–145 `blocked` and `claimed_by` gates have zero test coverage. Outside AC scope. Recommended follow-up task to add coverage.
 
-#### Test-Writer AC Coverage
+**Minor quality items:** L190 StopIteration risk; L368/L407 sequence assertions would benefit from len guard.
 
-| AC Line | Mapped Tests | Would Fail If AC Violated? | Verdict |
-|---------|-------------|--------------------------|---------|
-| AC1 — returns list[Task] | TestFromAC_PickDispatchableSignature (5) | test_returns_list: isinstance(list); test_result_items_are_task_instances: isinstance(Task); test_result_has_body_field: task.body == exact_string | COVERED |
-| AC2 — TDD gate | TestFromAC_PickDispatchableTDDGate (5) | test_in_progress_without_notes_excluded: assert 1 not in ids; test_in_progress_with_notes_included: assert 2 in ids; test_all_non_impl_tags_exempt_*: iterates all 9 tags individually | COVERED |
-| AC3 — Clarity gate | TestFromAC_PickDispatchableClarityGate (8) | test_todo_without_bullets_excluded: assert 1 not in ids; test_todo_empty_body_excluded: assert 2 not in ids; test_research_without_bullets_passes_clarity: assert 5 in ids | COVERED |
-| AC4 — Priority ranking | TestFromAC_PickDispatchablePriorityRanking (3) | test_all_priorities_in_dispatch_order: assert result_priorities == ["critical","needed","important","nice-to-have","someday"] — exact order | COVERED |
-| AC5 — Status ranking | TestFromAC_PickDispatchableStatusRanking (4) | test_all_statuses_in_dispatch_order: exact 7-element order assertion; tasks added in reverse order to prevent file-order artifact | COVERED |
-| AC6 — Limit cap | TestFromAC_PickDispatchableLimit (4) | test_limit_caps_results: 10 tasks → len==3; test_default_limit_is_25: 30 tasks → len==25; test_limit_zero_returns_empty: result==[] | COVERED |
-| AC7 — Tag filtering | TestFromAC_PickDispatchableTagFilter (5) | test_tag_filter_excludes_untagged: {1 in ids, 2 not in ids}; test_empty_tag_includes_all_passing: ids=={1,2} exact set match | COVERED |
-| AC8 — No MCP dependency | TestFromAC_PickDispatchableImport (3) | test_pick_dispatchable_callable: callable(); test_module_is_in_owlbear_kanban_package: __package__=="owlbear_kanban"; test_dispatch_module_does_not_import_mcp: vars() check (LAX — see Pass 2) | COVERED/LAX |
-| AC9 — Tests fail RED | Builder self-report at commit 47f7430f — "ModuleNotFoundError: No module named 'owlbear_kanban.dispatch'" | Cannot independently verify: dispatch.py now exists from #824 implementation added after builder submitted #823 to review. Pipeline flow is consistent with builder's claim. | NOTE |
-
-#### Security Review
-- No hardcoded secrets, no injection, no path traversal concerns — pure test code using pytest tmp_path fixture throughout.
-- No new production dependencies.
-- No issues.
-
-#### Test Integrity — TestFromAC Comparison
-- Single commit: 47f7430f (test-writer). Builder notes "Files changed: None." No builder modifications to TestFromAC classes.
-- All 8 TestFromAC_* classes: PRESERVED
-
-#### Test Quality Assessment
-1. **Assertion specificity** — STRONG. Exact ordering asserts (`result_priorities == expected_order`), `assert X not in ids`, exact set equality (`ids == {1, 2}`), exact body content (`task.body == body_content`). No lazy `assert result` patterns.
-2. **Negative coverage** — STRONG. Every inclusion test has a corresponding exclusion test (bullets → included; no-bullets → excluded; notes → included; no-notes → excluded).
-3. **Manual mutation** — STRONG. Flipping any status rank value breaks `test_all_statuses_in_dispatch_order`. Flipping any priority rank breaks `test_all_priorities_in_dispatch_order`. Removing any non-impl tag breaks `test_all_non_impl_tags_exempt_from_tdd_gate`.
-4. **Test independence** — STRONG. Every test creates a fresh `tmp_path` board. No shared mutable state.
-5. **Descriptive names** — STRONG. All methods name the exact condition being tested.
-
-#### Data Safety
-- Pure test code, tmp_path fixtures only. No concerns.
-
-#### Builder Process Quality
-- Single attempt, CLEAN. No loop pattern.
-
-### Pass 2 — INFORMATIONAL
-
-1. **`test_dispatch_module_does_not_import_mcp` (AC8, LAX):** Uses `vars(_dispatch_mod)` which would miss `from mcp import X as alias` patterns. However, the test file itself imports `owlbear_kanban.dispatch` at module level — successful collection without MCP errors is the primary evidence for AC8. The `vars()` check is supplementary. No action needed.
-
-2. **AC9 unverifiable from current state:** `dispatch.py` now exists (95% coverage) meaning builder's RED self-report cannot be independently confirmed. Evidence is consistent with normal pipeline flow: test-writer commits RED → #823 moves to review → #824 builds implementation → tests now GREEN. The tests passing correctly with the implementation is itself validation of test quality.
-
-3. **`test_tag_filter_applied_before_gates` docstring overclaims:** The test name asserts tag filter "applied before gates" but the test only verifies the combined filtering outcome (which is observable). The claim about ordering is untestable from outside. Functional behavior is correct. No action needed.
-
-### Verdict
-- All 8 observable AC lines: COVERED with strong assertions
-- Test quality: STRONG
-- Security: clean
-- TestFromAC integrity: PRESERVED
-- Lint: clean
-- Tests: 37/37 pass
+**Deductions:** -.02 AC7 weak order proof, -.02 AC8 narrow detection, -.01 L190 StopIteration, -.01 non-AC gap
 
 **Confidence: .94 → PASS**
-[[2026-04-12]]
+[[2026-04-13]]
 ## Docs Gate
 ### Checklist
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
-| 1 | Behavior/API change | No | N/A | type:test task — only `tests/test_pick_dispatchable_823.py` added (commit 47f7430f). No production modules touched. copilot-instructions.md unchanged. |
-| 2 | Module docstrings | No | N/A | No production Python modules created or modified. Test file only. |
-| 3 | External attribution | No | N/A | All 9 research sources are internal codebase files (engine.py, models.py, server.py, gates.py, test files, briefs). No external repos or articles. sources/overview.md unchanged. |
-| 4 | CLI changes | No | N/A | Pure test code. No CLI commands added or modified. README unchanged. |
-| 5 | Research doc | Yes | Verified | `.owlbear/research/823-pick-dispatchable-test-design.md` exists and is linked in task body. Follow-up tasks: none required (pipeline has #824). |
+| 1 | Behavior/API change | No | N/A | type:test task — no behavior/API added by #823; dispatch.py created by #824 |
+| 2 | Module docstrings | Yes | Verified | Module docstring covers all 9 ACs; _make_kanban_dir, _task_content, _add_task each have docstrings; TestFromAC_* classes have no class docstrings per established convention (matches test_kanban_engine_listing.py); dispatch.py public API fully documented |
+| 3 | External attribution | No | N/A | All 9 research sources are internal project files — no external repos or articles |
+| 4 | CLI changes | No | N/A | Test task — no CLI additions or changes |
+| 5 | Research doc | Yes | Verified | .owlbear/research/823-pick-dispatchable-test-design.md exists and is linked from task body |
 
 ### Files Updated
-None — no documentation impact.
+- None
 
-### Scratch Files
-None found matching `.owlbear/scratch/823-*`.
-
-### Review Evidence Present
-✅ `## Review Evidence` section present with 37/37 pass, ruff clean, 95% coverage.
-[[2026-04-12]]
+### Scratch Files Cleaned
+- None found (no .owlbear/scratch/823-* files exist)
+[[2026-04-13]]
 ## Audit
-
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1 - returns list[Task] | TestFromAC_PickDispatchableSignature (5 tests): isinstance, body field checks | PASS |
-| AC2 - TDD gate | TestFromAC_PickDispatchableTDDGate (5 tests): exclusion/inclusion with notes, non-impl tags | PASS |
-| AC3 - Clarity gate | TestFromAC_PickDispatchableClarityGate (8 tests): bullet/numbered list inclusion, empty body exclusion | PASS |
-| AC4 - Priority ranking | TestFromAC_PickDispatchablePriorityRanking (3 tests): exact 5-element order assertion | PASS |
-| AC5 - Status ranking | TestFromAC_PickDispatchableStatusRanking (4 tests): exact 7-element order assertion, reverse insertion | PASS |
-| AC6 - Limit cap | TestFromAC_PickDispatchableLimit (4 tests): cap, no-pad, default=25, zero | PASS |
-| AC7 - Tag filtering | TestFromAC_PickDispatchableTagFilter (5 tests): exact set equality, multi-tag match | PASS |
-| AC8 - No MCP dependency | TestFromAC_PickDispatchableImport (3 tests): callable, package, vars check | PASS |
-| AC9 - Tests fail RED | Unverifiable (dispatch.py exists from #824). Pipeline flow consistent with builder claim at commit 47f7430f | NOTE |
+| AC1 — returns list[Task] | TestFromAC_PickDispatchableSignature (5 tests), all PASS | PASS |
+| AC2 — TDD gate | TestFromAC_PickDispatchableTDDGate (5 tests), all PASS | PASS |
+| AC3 — Clarity gate | TestFromAC_PickDispatchableClarityGate (8 tests), all PASS | PASS |
+| AC4 — Priority ranking | TestFromAC_PickDispatchablePriorityRanking (3 tests), all PASS | PASS |
+| AC5 — Status ranking | TestFromAC_PickDispatchableStatusRanking (4 tests), all PASS | PASS |
+| AC6 — Limit capping | TestFromAC_PickDispatchableLimit (4 tests), all PASS | PASS |
+| AC7 — Tag filtering | TestFromAC_PickDispatchableTagFilter (5 tests), all PASS | PASS |
+| AC8 — Importable w/o MCP | TestFromAC_PickDispatchableImport (3 tests), all PASS | PASS |
+| AC9 — RED before impl | Commit 47f7430f (07:15) precedes 92d30124 (14:30); docstring documents RED intent | PASS |
 
 ### Test Results
-- pytest (task-scoped): 37 passed, 0 failed
-- pytest (full suite): 302 pre-existing failures, 0 from test_pick_dispatchable_823.py
-- ruff: clean (0 violations)
+- pytest (task): 37/37 passed, 0 failed
+- pytest (full suite): 4133 passed, 380 failed, 8 skipped — 0 failures in task scope
+- ruff: clean
 
-### Reviewer Evidence: Present, detailed, PASS at .94. Strong assertion analysis across all AC lines. Pass 2 informational notes reasonable.
+### Reviewer Evidence
+Present, detailed, PASS at .94. Minor quality items flagged (AC7 order proof, AC8 detection narrowness) — non-blocking, evidence exists for both.
 
 ### Architect Quality: 5/5
-All 9 AC lines are specific and verifiable. Exact function signature, concrete gate definitions, explicit ranking orders. No builder improvisation needed. Clean implementation path.
+Exact function signature specified, return type, gate behaviors, ranking orders, limit semantics, tag filtering — all precise enough to write tests from directly. No builder improvisation needed.
 
 ### Deduction Breakdown
-- Start: 1.00
-- AC9 unverifiable from current state (by design): -0.01
-- Total deductions: -0.01
+- AC lines without evidence: 0 (-.00)
+- Lint violations: none (-.00)
+- AC quality ≤ 3: no, score 5 (-.00)
+- Missing reviewer evidence: no, present and detailed (-.00)
+- Full-suite failures in task scope: 0 (-.00)
 
-### Confidence: .99
+### Confidence: 1.00
 ### Action: archive
-
-### Commit Integrity
-- Upstream commit: 47f7430f "test: add failing tests for pick_dispatchable() (#823, test-writer)"
-- Single commit, no builder modifications to test file
-- No uncommitted #823 deliverables (test file diff is empty)

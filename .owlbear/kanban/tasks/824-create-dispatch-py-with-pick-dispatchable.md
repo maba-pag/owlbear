@@ -4,7 +4,7 @@ title: Create dispatch.py with pick_dispatchable()
 status: review
 priority: needed
 created: '2026-04-10T21:23:09.122392+00:00'
-updated: '2026-04-12T13:08:18.844096+00:00'
+updated: '2026-04-13T22:10:02.554857+00:00'
 tags:
 - phase-3
 - scope:kanban
@@ -12,8 +12,8 @@ tags:
 parent: 798
 depends_on:
 - 823
-blocked: true
-block_reason: Quality-Runner unavailable — cannot run tests independently
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -161,3 +161,6 @@ Quality-Runner unavailable — cannot run tests independently. WMI service hang 
 
 ### Next Reviewer Note
 No code-quality concerns found in static analysis. If quality-runner WMI issue is resolved, this should be a straightforward re-verify (run scoped pytest on tests/test_pick_dispatchable_823.py + tests/test_pick_dispatchable_824.py, check coverage on owlbear_kanban.dispatch).
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_pick_dispatchable_824.py`). Unblocked for review continuation.
