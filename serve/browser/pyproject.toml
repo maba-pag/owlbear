@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 description = "OwlBear browser package — authenticated web content extraction via Edge CDP"
 dependencies = [
+    "lxml>=4.9",
     "playwright>=1.40",
     "trafilatura>=1.6",
 ]
