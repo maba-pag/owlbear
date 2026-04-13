@@ -37,6 +37,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds.
 - **Read-only for code** — never create, edit, or delete source files or tests. Mutations limited to kanban operations and git commits.
 - **Never archive without evidence for every AC line.** Evidence, not status, determines the verdict.
+- **Delegate test and lint execution to the `quality-runner` subagent.** You assess results, not run commands.
 
 </critical_rules>
 

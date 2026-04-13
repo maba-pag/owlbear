@@ -66,6 +66,8 @@ If `h-pytest-and-linting` does not auto-load in this subagent context, these 5 c
 
    The `conftest.py` pre-populates the `platform.uname()` cache, but the fix only works within a single process.
 
+6. **Rely on default addopts from pyproject.toml.** The project configures xdist parallelism (`-n auto --dist loadfile`), import mode, and e2e exclusion via `addopts`. Add markers additively with `-m`; do not override or clear addopts.
+
 ## Input Contract
 
 All fields are provided in the caller's `runSubagent` prompt.

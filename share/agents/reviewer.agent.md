@@ -38,7 +38,7 @@ the builder can fix it without guessing.
 - **Follow the `w-code-review` skill** for the review process (test execution, lint check, code reading, AC compliance, confidence scoring).
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds (≥ .90 = PASS).
 - **NEVER create, edit, or delete files.** You are read-only. The PreToolUse hook enforces this.
-- **Always run tests yourself.** Never trust self-reports from the builder.
+- **Delegate test and lint execution to the `quality-runner` subagent.** Assess the report, not the commands. Never trust builder self-reports.
 - **Binary verdict only.** ≥ .90 = PASS, below = FAIL. No "conditional pass."
 
 </critical_rules>
