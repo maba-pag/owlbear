@@ -234,6 +234,15 @@ class RefreshOrchestrator:
         Returns:
             RefreshResult with per-status counters.
         """
+        if self._content_fetcher is None:
+            return RefreshResult(
+                source_id=str(source.id),
+                refreshed=0,
+                skipped=0,
+                failed=0,
+                errors=[],
+            )
+
         urls: list[str] = source.config.get("urls", [])
         refreshed = skipped = failed = 0
         errors: list[str] = []
