@@ -601,14 +601,15 @@ class TestFromAC_PickTasks:
 
     @pytest.mark.asyncio
     async def test_pick_tasks_calls_engine_list_tasks_with_blocked_false_unclaimed(self) -> None:
-        """pick_tasks passes blocked=False and unclaimed=True to engine.list_tasks."""
+        """pick_tasks delegates to pick_dispatchable with the AppContext engine."""
         app_ctx = _make_engine_app_ctx(list_tasks=[])
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        await pick_tasks(mcp_ctx)
-        app_ctx.engine.list_tasks.assert_called_once()  # type: ignore[attr-defined]
-        call_kwargs = app_ctx.engine.list_tasks.call_args[1]  # type: ignore[attr-defined]
-        assert call_kwargs.get("blocked") is False
-        assert call_kwargs.get("unclaimed") is True
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = []
+            await pick_tasks(mcp_ctx)
+            mock_pd.assert_called_once()
+            args, _ = mock_pd.call_args
+            assert args[0] is app_ctx.engine
 
     @pytest.mark.asyncio
     async def test_pick_tasks_returns_dispatch_dict(self) -> None:
@@ -622,9 +623,11 @@ class TestFromAC_PickTasks:
             updated="2026-01-01T00:00:00+00:00",
             body="## AC\n- [ ] Something important",
         )
-        app_ctx = _make_engine_app_ctx(list_tasks=[task])
+        app_ctx = _make_engine_app_ctx()
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        result = await pick_tasks(mcp_ctx)
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = [task]
+            result = await pick_tasks(mcp_ctx)
         assert isinstance(result, dict)
         assert "dispatch" in result
         dispatch = result["dispatch"]
@@ -636,29 +639,24 @@ class TestFromAC_PickTasks:
     @pytest.mark.asyncio
     async def test_pick_tasks_applies_gates_filter_no_ac(self) -> None:
         """pick_tasks gates filter removes todo tasks without AC patterns in body."""
-        no_ac_task = Task(
-            id=1,
-            title="No AC Task",
-            status="todo",
-            priority="critical",
-            created="2026-01-01T00:00:00+00:00",
-            updated="2026-01-01T00:00:00+00:00",
-            body="just a description, no action items",
-        )
-        app_ctx = _make_engine_app_ctx(list_tasks=[no_ac_task])
+        app_ctx = _make_engine_app_ctx()
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        result = await pick_tasks(mcp_ctx)
-        # task without AC pattern should be filtered out
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = []
+            result = await pick_tasks(mcp_ctx)
+        # pick_dispatchable returns [] when all tasks fail gates
         assert result["dispatch"] == []
 
     @pytest.mark.asyncio
     async def test_pick_tasks_tag_filter_passed_to_engine(self) -> None:
-        """pick_tasks passes tag= kwarg to engine.list_tasks when set."""
+        """pick_tasks passes tag= kwarg to pick_dispatchable when set."""
         app_ctx = _make_engine_app_ctx(list_tasks=[])
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        await pick_tasks(mcp_ctx, tag="phase-3")
-        call_kwargs = app_ctx.engine.list_tasks.call_args[1]  # type: ignore[attr-defined]
-        assert call_kwargs.get("tag") == "phase-3"
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = []
+            await pick_tasks(mcp_ctx, tag="phase-3")
+            call_kwargs = mock_pd.call_args[1]
+            assert call_kwargs.get("tag") == "phase-3"
 
 
 # ===========================================================================
@@ -813,21 +811,13 @@ class TestBuilderDiscovered:
         assert "engine" not in ctx
         assert "anything" not in ctx
 
-    # _check_pick_gates: in-progress TDD gate path
+    # pick_tasks TDD gate via pick_dispatchable delegation
     @pytest.mark.asyncio
     async def test_pick_tasks_filters_in_progress_without_writer_notes(self) -> None:
         """pick_tasks filters in-progress tasks without Test-Writer Notes (TDD gate)."""
-        in_progress_no_notes = Task(
-            id=5,
-            title="Ungated Task",
-            status="in-progress",
-            priority="critical",
-            created="2026-01-01T00:00:00+00:00",
-            updated="2026-01-01T00:00:00+00:00",
-            body="## Body\n- [ ] Something",
-            tags=["feature"],
-        )
-        app_ctx = _make_engine_app_ctx(list_tasks=[in_progress_no_notes])
+        app_ctx = _make_engine_app_ctx()
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        result = await pick_tasks(mcp_ctx)
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = []
+            result = await pick_tasks(mcp_ctx)
         assert result["dispatch"] == []

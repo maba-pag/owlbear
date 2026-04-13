@@ -206,9 +206,11 @@ class TestFromAC_PickTasksResponseFormat:
     @pytest.mark.asyncio
     async def test_response_is_dispatch_dict(self) -> None:
         """pick_tasks returns a dict with a 'dispatch' key containing a list."""
-        app_ctx = _make_engine_app_ctx(list_tasks=[])
+        app_ctx = _make_engine_app_ctx()
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        result = await pick_tasks(mcp_ctx)
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = []
+            result = await pick_tasks(mcp_ctx)
         assert isinstance(result, dict), "pick_tasks must return a dict"
         assert "dispatch" in result, "result must have 'dispatch' key"
         assert isinstance(result["dispatch"], list), "'dispatch' value must be a list"
@@ -216,9 +218,11 @@ class TestFromAC_PickTasksResponseFormat:
     @pytest.mark.asyncio
     async def test_dispatch_entries_have_task_id_and_status(self) -> None:
         """Each dispatch entry contains exactly 'task_id' and 'status' keys."""
-        app_ctx = _make_engine_app_ctx(list_tasks=[_MINIMAL_TASK_RECORD])
+        app_ctx = _make_engine_app_ctx()
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        result = await pick_tasks(mcp_ctx)
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = [_MINIMAL_TASK_RECORD]
+            result = await pick_tasks(mcp_ctx)
         dispatch = result["dispatch"]
         assert len(dispatch) == 1, "task with valid AC body should appear in dispatch"
         entry = dispatch[0]
@@ -229,9 +233,11 @@ class TestFromAC_PickTasksResponseFormat:
     @pytest.mark.asyncio
     async def test_task_id_is_integer(self) -> None:
         """task_id in each dispatch entry must be an int, not str."""
-        app_ctx = _make_engine_app_ctx(list_tasks=[_MINIMAL_TASK_RECORD])
+        app_ctx = _make_engine_app_ctx()
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        result = await pick_tasks(mcp_ctx)
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = [_MINIMAL_TASK_RECORD]
+            result = await pick_tasks(mcp_ctx)
         dispatch = result["dispatch"]
         assert len(dispatch) == 1
         assert isinstance(dispatch[0]["task_id"], int), (
@@ -241,9 +247,11 @@ class TestFromAC_PickTasksResponseFormat:
     @pytest.mark.asyncio
     async def test_empty_board_returns_empty_dispatch(self) -> None:
         """pick_tasks with no tasks returns {'dispatch': []}."""
-        app_ctx = _make_engine_app_ctx(list_tasks=[])
+        app_ctx = _make_engine_app_ctx()
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        result = await pick_tasks(mcp_ctx)
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = []
+            result = await pick_tasks(mcp_ctx)
         assert result == {"dispatch": []}, f"Expected {{'dispatch': []}}, got {result!r}"
 
 
