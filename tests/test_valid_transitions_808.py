@@ -1,5 +1,10 @@
 """Tests for Add valid_transitions(status) (#808, RED phase).
 
+NOTE: GREEN-on-arrival. The end_work() docstring Note section already exists in
+engine.py at the time these tests were written. Tests are written such that they
+would fail in the absence of the docstring content. This situation is documented
+in the architecture review and research doc (.owlbear/research/valid-transitions-impl-808.md).
+
 AC coverage:
   AC4 - end_work() docstring documents linear success progression as agent-specific
         convention, not a general state machine rule
