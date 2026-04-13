@@ -21,7 +21,7 @@ All tests MUST FAIL at RED phase:
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -127,7 +127,13 @@ class TestFromAC_NavigateUsesLifespanCtx:
         """navigate() does not raise when ctx allowlist contains the domain, even if BROWSER_ALLOWED_DOMAINS is unset."""
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx(["trusted.example.com"]))  # ctx has the domain
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(return_value="# Page")
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["trusted.example.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = _make_mcp_ctx(app_ctx)
         env_without = {k: v for k, v in os.environ.items() if k != "BROWSER_ALLOWED_DOMAINS"}
         with patch.dict(os.environ, env_without, clear=True):
             # must not raise — ctx allowlist permits the domain

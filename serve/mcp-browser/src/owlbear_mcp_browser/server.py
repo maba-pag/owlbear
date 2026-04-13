@@ -10,15 +10,13 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_browser.cdp import CDPConnectionManager
     from owlbear_browser.fetcher import BrowserContentFetcher
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from owlbear_browser._errors import AuthenticationRequired
-from owlbear_browser.cdp import CDPConnectionManager as _CDPConnectionManager
+from owlbear_browser.cdp import CDPConnectionManager
 from owlbear_browser.extractor import extract_content
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
@@ -65,15 +63,16 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
     allowlist = DomainAllowlist(domains=domains)
 
-    cdp: _CDPConnectionManager | None = None
+    cdp: CDPConnectionManager | None = None
     page: Any = None
     try:
-        manager = _CDPConnectionManager()
+        port = int(os.environ.get("BROWSER_CDP_PORT", "9222"))
+        manager = CDPConnectionManager(port=port)
         await manager.connect()
         cdp = manager
         contexts = manager._browser.contexts  # noqa: SLF001
-        if contexts and contexts[0].pages:
-            page = contexts[0].pages[0]
+        if contexts:
+            page = await contexts[0].new_page()
     except Exception:  # noqa: BLE001
         cdp = None
         page = None
@@ -81,11 +80,13 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
     try:
         yield AppContext(allowlist=allowlist, cdp=cdp, page=page)
     finally:
+        if page is not None:
+            await page.close()
         if cdp is not None:
             await cdp.disconnect()
 
 
-_MSG_NO_PAGE = "Browser not available: no active page session"
+_MSG_NO_PAGE = "No browser session"
 
 _mcp = FastMCP("owlbear-mcp-browser", lifespan=app_lifespan)
 
@@ -100,18 +101,10 @@ async def navigate(ctx: Context, url: str) -> str:
         raise ToolError(str(exc)) from exc
 
     if isinstance(app_ctx, AppContext):
-        if app_ctx.page is not None:
-            await app_ctx.page.goto(url)
-            return url
-        if app_ctx.fetcher is not None:
-            try:
-                content = await app_ctx.fetcher.fetch(url)
-            except AuthenticationRequired as exc:
-                msg = f"SSO session expired or authentication required: {exc}"
-                raise ToolError(msg) from exc
-            app_ctx.last_content = content
-            return content
-        return url  # AppContext with no browser — backward compat for #836
+        if app_ctx.page is None:
+            raise ToolError(_MSG_NO_PAGE)
+        await app_ctx.page.goto(url)
+        return url
 
     # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
     # explicitly set — avoids awaiting auto-generated MagicMock attributes.
@@ -133,8 +126,6 @@ async def click(ctx: Context, selector: str) -> str:
     if page is not None:
         await page.locator(selector).click()
         return selector
-    if isinstance(app_ctx, AppContext):
-        return selector  # AppContext with no browser — backward compat for #836
     raise ToolError(_MSG_NO_PAGE)
 
 
@@ -146,8 +137,6 @@ async def type_input(ctx: Context, selector: str, text: str) -> str:
     if page is not None:
         await page.locator(selector).fill(text)
         return f"{selector}:{text}"
-    if isinstance(app_ctx, AppContext):
-        return f"{selector}:{text}"  # AppContext with no browser — backward compat for #836
     raise ToolError(_MSG_NO_PAGE)
 
 
@@ -159,8 +148,6 @@ async def select(ctx: Context, selector: str, value: str) -> str:
     if page is not None:
         await page.locator(selector).select_option(value)
         return f"{selector}:{value}"
-    if isinstance(app_ctx, AppContext):
-        return f"{selector}:{value}"  # AppContext with no browser — backward compat for #836
     raise ToolError(_MSG_NO_PAGE)
 
 
@@ -172,10 +159,6 @@ async def read_text(ctx: Context) -> str:
     if page is not None:
         html = await page.content()
         return extract_content(html, page.url)
-    _missing = object()
-    last_content = getattr(app_ctx, "last_content", _missing)
-    if last_content is not _missing:
-        return last_content  # type: ignore[return-value]
     raise ToolError(_MSG_NO_PAGE)
 
 
@@ -186,8 +169,6 @@ async def snapshot(ctx: Context) -> str:
     page = getattr(app_ctx, "page", None)
     if page is not None:
         return await page.aria_snapshot()
-    if isinstance(app_ctx, AppContext):
-        return getattr(app_ctx, "last_content", "")  # AppContext with no browser — backward compat for #836
     raise ToolError(_MSG_NO_PAGE)
 
 

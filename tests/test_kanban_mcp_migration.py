@@ -288,6 +288,25 @@ class TestFromAC_ListTasks:
         result = await list_tasks(mcp_ctx)
         assert result == []
 
+    def test_list_tasks_output_schema_items_match_tasksummary_schema(self) -> None:
+        """outputSchema items must equal TaskSummary.model_json_schema() (AC5 regression guard).
+
+        Catches hardcoded dicts that silently diverge from the model when fields change.
+        """
+        from owlbear_kanban.models import TaskSummary
+        from owlbear_mcp_kanban.server import mcp
+
+        tool = next(
+            t
+            for t in mcp._tool_manager._tools.values()  # noqa: SLF001
+            if t.name == "list_tasks"
+        )
+        items_schema = tool.fn_metadata.output_schema["properties"]["result"]["items"]
+        assert items_schema == TaskSummary.model_json_schema(), (
+            "outputSchema items must equal TaskSummary.model_json_schema() — "
+            "hardcoded dict diverges from model definition"
+        )
+
 
 # ===========================================================================
 # TestFromAC_ShowTask

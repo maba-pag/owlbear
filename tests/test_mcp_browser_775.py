@@ -19,7 +19,7 @@ All tests MUST FAIL at RED phase:
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -197,8 +197,14 @@ class TestFromAC_NavigateToolError:
         """navigate() does not raise when URL hostname is in ctx allowlist."""
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx(["sharepoint.example.com"]))
-        # Must not raise for the allowed domain
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(return_value="# Page")
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["sharepoint.example.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = _make_mcp_ctx(app_ctx)
+        # Must not raise for the allowed domain — the fetcher handles the actual fetch
         await navigate(ctx, url="https://sharepoint.example.com/sites/IT/page")
 
     @pytest.mark.asyncio
