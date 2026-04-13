@@ -211,7 +211,7 @@ class TestFromAC_Lifespan:
 
 
 class TestFromAC_ListTasks:
-    """list_tasks delegates to engine.list_tasks and returns lean dict list."""
+    """list_tasks delegates to engine.list_tasks and returns list[TaskSummary]."""
 
     @pytest.mark.asyncio
     async def test_list_tasks_calls_engine_list_tasks(self) -> None:
