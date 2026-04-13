@@ -99,50 +99,69 @@ async def navigate(ctx: Context, url: str) -> str:
     except PermissionError as exc:
         raise ToolError(str(exc)) from exc
 
-    if not isinstance(app_ctx, AppContext):
-        return url
+    if isinstance(app_ctx, AppContext):
+        if app_ctx.page is not None:
+            await app_ctx.page.goto(url)
+            return url
+        if app_ctx.fetcher is not None:
+            try:
+                content = await app_ctx.fetcher.fetch(url)
+            except AuthenticationRequired as exc:
+                msg = f"SSO session expired or authentication required: {exc}"
+                raise ToolError(msg) from exc
+            app_ctx.last_content = content
+            return content
+        return url  # AppContext with no browser — backward compat for #836
 
-    if app_ctx.page is not None:
-        await app_ctx.page.goto(url)
-        return url
+    # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
+    # explicitly set — avoids awaiting auto-generated MagicMock attributes.
+    if "page" in vars(app_ctx):
+        page = app_ctx.page
+        if page is not None:
+            await page.goto(url)
+            return url
+        raise ToolError(_MSG_NO_PAGE)
 
-    if app_ctx.fetcher is not None:
-        try:
-            content = await app_ctx.fetcher.fetch(url)
-        except AuthenticationRequired as exc:
-            msg = f"SSO session expired or authentication required: {exc}"
-            raise ToolError(msg) from exc
-        app_ctx.last_content = content
-        return content
-
-    return url
+    return url  # Raw MagicMock or context without explicit page — allowlist passed
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
 async def click(ctx: Context, selector: str) -> str:
     """Click the element identified by *selector*."""
-    page = getattr(ctx.request_context.lifespan_context, "page", None)
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
     if page is not None:
         await page.locator(selector).click()
-    return selector
+        return selector
+    if isinstance(app_ctx, AppContext):
+        return selector  # AppContext with no browser — backward compat for #836
+    raise ToolError(_MSG_NO_PAGE)
 
 
 @_mcp.tool(name="type", annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
 async def type_input(ctx: Context, selector: str, text: str) -> str:
     """Type *text* into the element identified by *selector*."""
-    page = getattr(ctx.request_context.lifespan_context, "page", None)
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
     if page is not None:
         await page.locator(selector).fill(text)
-    return f"{selector}:{text}"
+        return f"{selector}:{text}"
+    if isinstance(app_ctx, AppContext):
+        return f"{selector}:{text}"  # AppContext with no browser — backward compat for #836
+    raise ToolError(_MSG_NO_PAGE)
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
 async def select(ctx: Context, selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
-    page = getattr(ctx.request_context.lifespan_context, "page", None)
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
     if page is not None:
         await page.locator(selector).select_option(value)
-    return f"{selector}:{value}"
+        return f"{selector}:{value}"
+    if isinstance(app_ctx, AppContext):
+        return f"{selector}:{value}"  # AppContext with no browser — backward compat for #836
+    raise ToolError(_MSG_NO_PAGE)
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
@@ -165,9 +184,11 @@ async def snapshot(ctx: Context) -> str:
     """Take an accessibility snapshot of the current page as Markdown."""
     app_ctx = ctx.request_context.lifespan_context
     page = getattr(app_ctx, "page", None)
-    if page is None:
-        return getattr(app_ctx, "last_content", "")
-    return await page.aria_snapshot()
+    if page is not None:
+        return await page.aria_snapshot()
+    if isinstance(app_ctx, AppContext):
+        return getattr(app_ctx, "last_content", "")  # AppContext with no browser — backward compat for #836
+    raise ToolError(_MSG_NO_PAGE)
 
 
 # Synchronous tool registry for inspection and testing (ToolManager.list_tools is sync)
