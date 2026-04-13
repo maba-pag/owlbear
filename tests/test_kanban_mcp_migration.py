@@ -224,7 +224,7 @@ class TestFromAC_ListTasks:
 
     @pytest.mark.asyncio
     async def test_list_tasks_strips_body_and_timestamp_fields(self) -> None:
-        """list_tasks strips body, file, created, updated, claimed_by, claimed_at from output."""
+        """list_tasks strips body, file, claimed_by, claimed_at from output."""
         task = Task(
             id=1,
             title="Strip Test",
@@ -241,8 +241,8 @@ class TestFromAC_ListTasks:
         result = await list_tasks(mcp_ctx)
         assert len(result) == 1
         row = result[0]
-        for stripped_field in ("body", "file", "created", "updated", "claimed_by", "claimed_at"):
-            assert stripped_field not in row, f"Field {stripped_field!r} should be stripped from list output"
+        for stripped_field in ("body", "file", "claimed_by", "claimed_at"):
+            assert not hasattr(row, stripped_field), f"Field {stripped_field!r} should be stripped from list output"
 
     @pytest.mark.asyncio
     async def test_list_tasks_claimed_bool_derived_from_claimed_by(self) -> None:
@@ -268,8 +268,8 @@ class TestFromAC_ListTasks:
         app_ctx = _make_engine_app_ctx(list_tasks=[unclaimed, claimed])
         mcp_ctx = _make_mcp_ctx(app_ctx)
         result = await list_tasks(mcp_ctx)
-        assert result[0]["claimed"] is False
-        assert result[1]["claimed"] is True
+        assert result[0].claimed is False
+        assert result[1].claimed is True
 
     @pytest.mark.asyncio
     async def test_list_tasks_passes_status_filter_to_engine(self) -> None:

@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.config_loader import (  # type: ignore[import-not-found]
+from owlbear_kanban.config_loader import (
     load_config,
     save_config,
 )
-from owlbear_mcp_kanban.engine_models import BoardConfig  # type: ignore[import-not-found]
+from owlbear_kanban.models import BoardConfig
 
 # ---------------------------------------------------------------------------
 # Shared fixture config content — mirrors real .owlbear/kanban/config.yml
@@ -455,7 +455,7 @@ class TestBuilderDiscovered:
         Covers the ``else: raw = CommentedMap()`` branch in save_config
         (line 78 — config_path.exists() is False).
         """
-        from owlbear_mcp_kanban.engine_models import BoardDefaults, BoardInfo
+        from owlbear_kanban.models import BoardDefaults, BoardInfo
 
         config = BoardConfig(
             version=1,

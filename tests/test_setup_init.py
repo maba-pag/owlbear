@@ -2,13 +2,13 @@
 
 Covers:
   AC1  — seed/.vscode/settings.json: three chat.*Locations keys with {{owlbear_path}} placeholders
-  AC2  — seed/.vscode/mcp.json: github + 3 owlbear kebab-case servers + ddgs, --project placeholder in owlbear args
+  AC2  — seed/.vscode/mcp.json: 3 owlbear kebab-case servers + ddgs + markitdown, --project placeholder in owlbear args
   AC3  — seed/.owlbear/kanban/config.yml: next_id: 1, standard statuses
   AC5  — seed/.owlbear/hooks/deny-writes.ps1 and lint-changed.ps1: static files present
   AC6  — seed/.owlbear/knowledge/.gitkeep: empty directory marker
-  AC7  — seed/owlbear-project.json: {{name}} / {{type}} placeholders, schema_version hardcoded,
+  AC7  — seed/owlbear-project.json: {{name}} placeholder,
           NO computed-field placeholders (owlbear_path, created_at)
-  AC8  — init(target_dir, owlbear_dir, *, name, project_type): seed/ walk, placeholder replacement,
+  AC8  — init(target_dir, owlbear_dir, *, name): seed/ walk, placeholder replacement,
           computed fields, idempotency, scratch-pad exclusion, __main__ guard, CLI args
   AC9  — init() does NOT create .github/ in target
   AC12 — settings.json deep merge: inner-dict union for chat.*Locations,
@@ -83,17 +83,10 @@ class TestFromAC_SeedSettingsTemplate:
 
 
 class TestFromAC_SeedMcpTemplate:
-    """AC2: seed/.vscode/mcp.json with github + 3 kebab-case owlbear servers + ddgs; --project placeholder."""
+    """AC2: seed/.vscode/mcp.json with owlbear servers + ddgs + markitdown; --project placeholder."""
 
     def test_seed_mcp_json_exists(self) -> None:
         assert (_SEED_DIR / ".vscode" / "mcp.json").exists(), "seed/.vscode/mcp.json does not exist"
-
-    def test_seed_mcp_has_github_http_server(self) -> None:
-        data = json.loads((_SEED_DIR / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
-        assert "github" in data["servers"], (
-            f"'github' key missing from seed mcp.json servers: {list(data['servers'].keys())}"
-        )
-        assert data["servers"]["github"].get("type") == "http", "github server must have type: http"
 
     def test_seed_mcp_has_all_owlbear_kebab_case_servers(self) -> None:
         data = json.loads((_SEED_DIR / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
@@ -220,7 +213,7 @@ class TestSeedStoreDirs:
 
 
 class TestFromAC_SeedOwlbearProjectJson:
-    """AC7: seed/owlbear-project.json with {{name}}/{{type}} placeholders; schema_version hardcoded."""
+    """AC7: seed/owlbear-project.json with {{name}} placeholder."""
 
     def test_seed_owlbear_project_json_exists(self) -> None:
         assert (_SEED_DIR / "owlbear-project.json").exists(), "seed/owlbear-project.json does not exist"
@@ -228,23 +221,6 @@ class TestFromAC_SeedOwlbearProjectJson:
     def test_seed_owlbear_project_json_has_name_placeholder(self) -> None:
         content = (_SEED_DIR / "owlbear-project.json").read_text(encoding="utf-8")
         assert "{{name}}" in content, "seed/owlbear-project.json missing {{name}} placeholder"
-
-    def test_seed_owlbear_project_json_has_type_placeholder(self) -> None:
-        content = (_SEED_DIR / "owlbear-project.json").read_text(encoding="utf-8")
-        assert "{{type}}" in content, "seed/owlbear-project.json missing {{type}} placeholder"
-
-    def test_seed_owlbear_project_json_has_schema_version_hardcoded_not_placeholder(self) -> None:
-        """schema_version: 1 must be hardcoded; it must NOT be a {{placeholder}}."""
-        content = (_SEED_DIR / "owlbear-project.json").read_text(encoding="utf-8")
-        assert "{{schema_version}}" not in content, (
-            "schema_version must NOT be a template placeholder — it should be hardcoded as 1"
-        )
-        # Parse with placeholders substituted so we can read the hardcoded value
-        parseable = content.replace("{{name}}", "probe").replace("{{type}}", "bare")
-        data = json.loads(parseable)
-        assert data.get("schema_version") == 1, (
-            f"schema_version must be hardcoded to 1, got {data.get('schema_version')!r}"
-        )
 
     def test_seed_owlbear_project_json_has_no_computed_field_placeholders(self) -> None:
         """owlbear_path and created_at are computed at runtime — must NOT be template placeholders."""
@@ -263,7 +239,7 @@ class TestFromAC_SeedOwlbearProjectJson:
 
 
 class TestFromAC_InitFunction:
-    """AC8: init(target_dir, owlbear_dir, *, name, project_type) walks seed/, replaces placeholders."""
+    """AC8: init(target_dir, owlbear_dir, *, name) walks seed/, replaces placeholders."""
 
     def test_init_creates_vscode_settings_json(self, tmp_path: Path) -> None:
         from init import init  # type: ignore[import]  # ImportError until builder creates setup/init.py
@@ -332,24 +308,6 @@ class TestFromAC_InitFunction:
         init(target, _OWLBEAR_DIR, name="custom-project-name")
         data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
         assert data["name"] == "custom-project-name", f"explicit name kwarg not respected, got {data['name']!r}"
-
-    def test_init_owlbear_project_json_project_type_defaults_to_bare(self, tmp_path: Path) -> None:
-        from init import init  # type: ignore[import]
-
-        target = tmp_path / "target"
-        target.mkdir()
-        init(target, _OWLBEAR_DIR)
-        data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
-        assert data["type"] == "bare", f"project_type should default to 'bare', got {data['type']!r}"
-
-    def test_init_owlbear_project_json_project_type_accepts_kwarg(self, tmp_path: Path) -> None:
-        from init import init  # type: ignore[import]
-
-        target = tmp_path / "target"
-        target.mkdir()
-        init(target, _OWLBEAR_DIR, project_type="python-uv")
-        data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
-        assert data["type"] == "python-uv", f"project_type kwarg not respected, got {data['type']!r}"
 
     def test_init_owlbear_project_json_owlbear_path_is_relative_posix(self, tmp_path: Path) -> None:
         from init import init  # type: ignore[import]
@@ -608,22 +566,6 @@ class TestFromAC_CliInterface:
             f"--name kwarg not written to owlbear-project.json, got {data['name']!r}"
         )
 
-    def test_cli_accepts_type_argument(self, tmp_path: Path) -> None:
-        """CLI must accept --type TYPE and write it to owlbear-project.json."""
-        script = _SETUP_DIR / "init.py"
-        target = tmp_path / "target"
-        target.mkdir()
-        result = subprocess.run(
-            [sys.executable, str(script), "--type", "python-uv"],
-            cwd=str(target),
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        assert result.returncode == 0, f"CLI exited non-zero ({result.returncode})\nstderr: {result.stderr}"
-        data = json.loads((target / "owlbear-project.json").read_text(encoding="utf-8"))
-        assert data["type"] == "python-uv", f"--type kwarg not written to owlbear-project.json, got {data['type']!r}"
-
 
 # ---------------------------------------------------------------------------
 # JSONC comment handling in settings.json
@@ -721,7 +663,7 @@ class TestMcpJsonMerge:
         target.mkdir()
         init(target, _OWLBEAR_DIR)
         data = json.loads((target / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
-        for expected in ("github", "owlbear-kanban", "owlbear-knowledge", "owlbear-memory", "ddgs"):
+        for expected in ("owlbear-kanban", "owlbear-knowledge", "owlbear-memory", "ddgs"):
             assert expected in data["servers"], f"Server '{expected}' missing from fresh mcp.json"
 
     def test_mcp_merge_no_raw_placeholders_remain(self, tmp_path: Path) -> None:

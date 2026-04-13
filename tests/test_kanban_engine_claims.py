@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.agent_names import ADJECTIVES, NOUNS  # type: ignore[import-not-found]
-from owlbear_mcp_kanban.engine import KanbanEngine  # type: ignore[import-not-found]
+from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
+from owlbear_kanban import KanbanEngine
 
 # ---------------------------------------------------------------------------
 # Shared config content — mirrors real .owlbear/kanban/config.yml

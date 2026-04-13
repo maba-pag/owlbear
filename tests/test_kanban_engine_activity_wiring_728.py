@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_mcp_kanban.engine import KanbanEngine
+from owlbear_kanban import KanbanEngine
 
 # ---------------------------------------------------------------------------
 # Config + fixtures

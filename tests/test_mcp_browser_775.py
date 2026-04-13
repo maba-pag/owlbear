@@ -23,6 +23,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from owlbear_mcp_browser.allowlist import DomainAllowlist
+from owlbear_mcp_browser.server import AppContext
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,6 +37,18 @@ def _make_mock_server() -> MagicMock:
     server = MagicMock()
     server.remove_tool = MagicMock()
     return server
+
+
+def _make_app_ctx(domains: list[str]) -> AppContext:
+    """Return an AppContext with a DomainAllowlist for the given domains."""
+    return AppContext(allowlist=DomainAllowlist(domains=domains))
+
+
+def _make_mcp_ctx(app_ctx: AppContext) -> MagicMock:
+    """Return a MagicMock ctx with app_ctx wired into lifespan_context."""
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = app_ctx
+    return ctx
 
 
 # ===========================================================================
@@ -146,47 +161,45 @@ class TestFromAC_NavigateToolError:
 
     @pytest.mark.asyncio
     async def test_navigate_raises_tool_error_for_blocked_domain(self) -> None:
-        """navigate() raises ToolError when URL hostname is not in BROWSER_ALLOWED_DOMAINS."""
+        """navigate() raises ToolError when URL hostname is not in allowlist ctx."""
         from mcp.server.fastmcp.exceptions import ToolError
 
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "example.com"}), pytest.raises(ToolError):
-            await navigate(url="https://evil.com/malicious-page")
+        ctx = _make_mcp_ctx(_make_app_ctx(["example.com"]))
+        with pytest.raises(ToolError):
+            await navigate(ctx, url="https://evil.com/malicious-page")
 
     @pytest.mark.asyncio
     async def test_navigate_raises_tool_error_when_allowlist_is_empty(self) -> None:
-        """navigate() raises ToolError when BROWSER_ALLOWED_DOMAINS is empty (deny-by-default)."""
+        """navigate() raises ToolError when allowlist ctx carries no domains (deny-by-default)."""
         from mcp.server.fastmcp.exceptions import ToolError
 
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": ""}), pytest.raises(ToolError):
-            await navigate(url="https://any-domain.com/page")
+        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        with pytest.raises(ToolError):
+            await navigate(ctx, url="https://any-domain.com/page")
 
     @pytest.mark.asyncio
     async def test_navigate_raises_tool_error_when_domain_not_configured(self) -> None:
-        """navigate() raises ToolError when BROWSER_ALLOWED_DOMAINS is unset (deny-by-default)."""
+        """navigate() raises ToolError when ctx allowlist has no configured domains."""
         from mcp.server.fastmcp.exceptions import ToolError
 
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        env_without = {k: v for k, v in os.environ.items() if k != "BROWSER_ALLOWED_DOMAINS"}
-        with patch.dict(os.environ, env_without, clear=True), pytest.raises(ToolError):
-            await navigate(url="https://any-domain.com/page")
+        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        with pytest.raises(ToolError):
+            await navigate(ctx, url="https://any-domain.com/page")
 
     @pytest.mark.asyncio
     async def test_navigate_does_not_raise_for_allowlisted_domain(self) -> None:
-        """navigate() does not raise ToolError when URL hostname is in BROWSER_ALLOWED_DOMAINS."""
-        from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
+        """navigate() does not raise when URL hostname is in ctx allowlist."""
+        from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com"}):
-            async with app_lifespan(mock_server):
-                from owlbear_mcp_browser.server import navigate
-
-                # Must not raise for the allowed domain
-                await navigate(url="https://sharepoint.example.com/sites/IT/page")
+        ctx = _make_mcp_ctx(_make_app_ctx(["sharepoint.example.com"]))
+        # Must not raise for the allowed domain
+        await navigate(ctx, url="https://sharepoint.example.com/sites/IT/page")
 
     @pytest.mark.asyncio
     async def test_navigate_raises_tool_error_for_subdomain_not_in_allowlist(self) -> None:
@@ -196,8 +209,9 @@ class TestFromAC_NavigateToolError:
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
         # "example.com" is listed, "sub.example.com" is NOT
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "example.com"}), pytest.raises(ToolError):
-            await navigate(url="https://sub.example.com/page")
+        ctx = _make_mcp_ctx(_make_app_ctx(["example.com"]))
+        with pytest.raises(ToolError):
+            await navigate(ctx, url="https://sub.example.com/page")
 
 
 # ===========================================================================
