@@ -30,17 +30,23 @@ from owlbear_mcp_browser.server import app_lifespan
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_cdp() -> MagicMock:
-    """Return a MagicMock CDPConnectionManager that connects and disconnects cleanly.
+def _make_mock_launcher() -> MagicMock:
+    """Return a MagicMock PlaywrightLauncher that launches and closes cleanly.
 
-    ``_browser.contexts`` is set to an empty list so the page-extraction branch
-    inside the current lifespan does not try to index into a MagicMock iterable.
+    Provides a mock BrowserContext via .context so the fetcher-wiring branch
+    inside the lifespan can call BrowserContentFetcher(launcher.context).
     """
-    cdp = MagicMock()
-    cdp.connect = AsyncMock()
-    cdp.disconnect = AsyncMock()
-    cdp._browser.contexts = []  # noqa: SLF001 — prevent page extraction side-effect
-    return cdp
+    page = MagicMock()
+    page.close = AsyncMock()  # lifespan awaits page.close() in finally block
+    context = MagicMock()
+    context.new_page = AsyncMock(return_value=page)
+    launcher = MagicMock()
+    launcher.context = context
+    launcher.launch = AsyncMock()
+    launcher.close = AsyncMock()
+    launcher.__aenter__ = AsyncMock(return_value=launcher)
+    launcher.__aexit__ = AsyncMock(return_value=False)
+    return launcher
 
 
 # ===========================================================================
@@ -49,11 +55,9 @@ def _make_mock_cdp() -> MagicMock:
 
 
 class TestFromAC_LifespanBrowserFetcherWiring:
-    """app_lifespan creates BrowserContentFetcher on successful CDPConnectionManager.connect() (AC2).
+    """app_lifespan creates BrowserContentFetcher on successful PlaywrightLauncher.launch() (AC2).
 
-    RED rationale: current app_lifespan() never instantiates BrowserContentFetcher —
-    AppContext.fetcher remains None (the field default).  Every test below asserts a
-    post-connect state that cannot be satisfied until the builder adds the wiring.
+    Updated for #871 Playwright pivot: CDPConnectionManager replaced by PlaywrightLauncher.
     """
 
     # ------------------------------------------------------------------
@@ -62,30 +66,24 @@ class TestFromAC_LifespanBrowserFetcherWiring:
 
     @pytest.mark.asyncio
     async def test_lifespan_fetcher_is_not_none_when_cdp_connect_succeeds(self) -> None:
-        """AC2: app_lifespan sets AppContext.fetcher to a non-None object on successful connect.
+        """AC2: app_lifespan sets AppContext.fetcher to a non-None object on successful launch."""
+        mock_launcher = _make_mock_launcher()
 
-        FAILS at RED because app_lifespan yields AppContext(fetcher=None).
-        """
-        mock_cdp = _make_mock_cdp()
-
-        with patch("owlbear_mcp_browser.server._CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(MagicMock()) as ctx:
                 assert ctx.fetcher is not None, (
-                    "AppContext.fetcher must be set when CDPConnectionManager connects successfully;"
+                    "AppContext.fetcher must be set when PlaywrightLauncher launches successfully;"
                     " got None — app_lifespan is not creating BrowserContentFetcher"
                 )
 
     @pytest.mark.asyncio
     async def test_lifespan_fetcher_is_browser_content_fetcher_instance(self) -> None:
-        """AC2: AppContext.fetcher is a BrowserContentFetcher after successful connect (not just non-None).
-
-        FAILS at RED because ctx.fetcher is None → isinstance(None, BrowserContentFetcher) is False.
-        """
+        """AC2: AppContext.fetcher is a BrowserContentFetcher after successful launch."""
         from owlbear_browser.fetcher import BrowserContentFetcher
 
-        mock_cdp = _make_mock_cdp()
+        mock_launcher = _make_mock_launcher()
 
-        with patch("owlbear_mcp_browser.server._CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(MagicMock()) as ctx:
                 assert isinstance(ctx.fetcher, BrowserContentFetcher), (
                     f"AppContext.fetcher must be a BrowserContentFetcher instance;"
@@ -98,25 +96,18 @@ class TestFromAC_LifespanBrowserFetcherWiring:
 
     @pytest.mark.asyncio
     async def test_lifespan_browser_content_fetcher_constructed_with_cdp_manager(self) -> None:
-        """AC2: BrowserContentFetcher(cdp) is called with the CDPConnectionManager instance.
-
-        FAILS at RED with AttributeError:
-          patch("owlbear_mcp_browser.server.BrowserContentFetcher") raises AttributeError
-          because BrowserContentFetcher is only TYPE_CHECKING-imported in server.py —
-          it does not exist as a runtime name in the server module until the builder adds
-          the import.
-        """
-        mock_cdp = _make_mock_cdp()
+        """AC2: BrowserContentFetcher is called with launcher.context (Playwright BrowserContext)."""
+        mock_launcher = _make_mock_launcher()
         mock_fetcher_cls = MagicMock(return_value=MagicMock())
 
         with (
-            patch("owlbear_mcp_browser.server._CDPConnectionManager", return_value=mock_cdp),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher),
             patch("owlbear_mcp_browser.server.BrowserContentFetcher", mock_fetcher_cls),
         ):
             async with app_lifespan(MagicMock()):
                 pass
 
-        mock_fetcher_cls.assert_called_once_with(mock_cdp)
+        mock_fetcher_cls.assert_called_once_with(mock_launcher.context)
 
     # ------------------------------------------------------------------
     # Edge: each lifespan invocation creates an independent fetcher
@@ -124,16 +115,12 @@ class TestFromAC_LifespanBrowserFetcherWiring:
 
     @pytest.mark.asyncio
     async def test_lifespan_creates_independent_fetcher_per_invocation(self) -> None:
-        """AC2: Separate lifespan invocations each create a fresh BrowserContentFetcher.
-
-        FAILS at RED because fetcher1 and fetcher2 are both None:
-          assert None is not None  → False.
-        """
-        mock_cdp = _make_mock_cdp()
+        """AC2: Separate lifespan invocations each create a fresh BrowserContentFetcher."""
+        mock_launcher = _make_mock_launcher()
         fetcher1: object | None = None
         fetcher2: object | None = None
 
-        with patch("owlbear_mcp_browser.server._CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(MagicMock()) as ctx1:
                 fetcher1 = ctx1.fetcher
             async with app_lifespan(MagicMock()) as ctx2:
