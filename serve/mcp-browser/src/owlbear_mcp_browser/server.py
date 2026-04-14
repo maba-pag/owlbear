@@ -168,7 +168,10 @@ async def select(ctx: Context, selector: str, value: str) -> str:
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def read_text(ctx: Context) -> str:
-    """Read the visible text content of the current page."""
+    """Read the visible text content of the current page.
+
+    Returns the last cached content if no browser session is active.
+    """
     app_ctx = ctx.request_context.lifespan_context
     page = getattr(app_ctx, "page", None)
     if page is not None:
@@ -179,7 +182,10 @@ async def read_text(ctx: Context) -> str:
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
 async def snapshot(ctx: Context) -> str:
-    """Take an accessibility snapshot of the current page as Markdown."""
+    """Take an accessibility snapshot of the current page as Markdown.
+
+    Returns the last cached content if no browser session is active.
+    """
     app_ctx = ctx.request_context.lifespan_context
     page = getattr(app_ctx, "page", None)
     if page is not None:
