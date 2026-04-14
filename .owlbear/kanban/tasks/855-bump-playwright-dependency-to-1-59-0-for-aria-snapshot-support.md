@@ -1,18 +1,17 @@
 ---
 id: 855
 title: Bump playwright dependency to >=1.59.0 for aria_snapshot support
-status: research
+status: done
 priority: important
 created: '2026-04-12T14:03:37.182864+00:00'
-updated: '2026-04-13T13:43:45.275165+00:00'
+updated: '2026-04-14T16:10:56.445356+00:00'
 tags:
 - phase-2
 - scope:mcp-browser
 parent: 837
 depends_on: []
-blocked: true
-block_reason: 'Playwright Python 1.59.0 not yet published on PyPI (latest: 1.58.0,
-  2026-01-30). AC item ''uv lock succeeds'' is infeasible until release.'
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
@@ -42,3 +41,5 @@ Update serve/browser/pyproject.toml playwright dependency from >=1.40.0 to >=1.5
 - Confidence in original: .85
 - Key challenges: n/a
 - Researcher response: n/a
+[[2026-04-14]]
+Resolved: `page.aria_snapshot()` (v1.59) is just a convenience alias for `page.locator('body').aria_snapshot()` (available since v1.49). Applied fix: server.py uses locator form, dep bumped to >=1.49, test mocks updated. No need to wait for v1.59 Python release.

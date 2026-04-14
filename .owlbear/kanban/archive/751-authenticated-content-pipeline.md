@@ -1,10 +1,10 @@
 ---
 id: 751
 title: Authenticated Content Pipeline
-status: review
+status: done
 priority: critical
 created: '2026-04-10T10:46:49.305763+00:00'
-updated: '2026-04-13T23:20:25.754679+00:00'
+updated: '2026-04-14T07:04:36.576097+00:00'
 tags:
 - feature
 - knowledge
@@ -403,3 +403,167 @@ CDP spike (#753) result: NO-GO — Group Policy `RemoteDebuggingAllowed=0` block
 - New pivot tasks created below this parent
 
 See `.owlbear/research/cdp-spike-results.md`.
+[[2026-04-14]]
+## Review Evidence
+
+### Test Results (independent — Quality-Runner, 2026-04-14)
+`tests/test_authenticated_content_pipeline_751.py`: **41 passed, 0 failed** (exit code 0)
+
+First attempt fatal (WMI hang — recurring Windows issue). Second attempt with narrower scope succeeded cleanly.
+
+### Lint
+`ruff check` on builder's changed files: **clean**.
+Only violation returned: `engine.py:472 E501` — **NOT in builder's changed file set** (unrelated `owlbear_kanban.engine`). Pre-existing.
+
+### Coverage
+| Module | % | Notes |
+|--------|---|-------|
+| `owlbear_knowledge.models` | 99 | All new enums covered |
+| `owlbear_knowledge.protocol` | 100 | ContentFetcher fully covered |
+| `owlbear_knowledge.content_safety` | 83 | AC5 deny-list paths covered |
+| `owlbear_knowledge.ingest` | 62 | Full module; AC-specific predicate paths covered |
+| `owlbear_knowledge.schema` | 64 | Full module; v9 migration paths covered |
+
+---
+
+### Step 1 — Source Control (builder commits in scope)
+Commits: `2dfae28b` (builder 1), `be9610a3` (builder 2 schema fix), `db9a6059` (test-writer retry).
+Changed files: `models.py`, `protocol.py`, `ingest.py`→`content_safety.py` (via #781), `schema.py`, `test_package_boundary.py`, `serve/browser/`, `serve/mcp-browser/`.
+
+**Task #797 note:** Child task `1825ed4e` replaced two builder-added tests (`test_source_pages_has_approval_state_column`, `test_source_pages_has_extraction_status_column`) with `test_source_pages_has_status_column`, per architect-approved #754 design (unified `PageStatus` enum, deny `approval_state`/`extraction_status` builder additions). This was NOT a builder modification — it was an authorized downstream correction. Removed tests covered builder-added columns that were OUTSIDE the AC6 spec. AC6 coverage is maintained (7 tests, all passing).
+
+---
+
+### 5.0 AC Coverage Table
+
+| AC Line | Mapped Test(s) | Would Fail If AC Violated? | Verdict |
+|---------|---------------|---------------------------|---------|
+| AC1: `SourceType.AUTHENTICATED_WEB` | `test_source_type_*` × 3 (hasattr, value, membership) | YES — AttributeError/AssertionError | COVERED |
+| AC2: EntityType REQUIREMENT/SOLUTION/PROCEDURE/POLICY/STANDARD | `test_entity_type_{x}_exists` × 5 + collision guard | YES — KeyError per missing member | COVERED |
+| AC3: RelationType GOVERNS + SUPERSEDES_VERSION | `test_relation_type_{governs,supersedes}_exists` × 2 | YES — hasattr + AC7 prompt guard | COVERED |
+| AC4: `ContentFetcher` `@runtime_checkable` protocol | 5 tests (import, issubclass, fetch method, params, isinstance duck-typing) | YES — ImportError, assertion on runtime_checkable | COVERED |
+| AC5: wrapping `url` + `authenticated_web`; NOT file_glob/None | 6 tests (3 original + 3 retry: +url regression, +file_glob boundary, +None boundary) | YES — wrapping/non-wrapping behavioral assertions | COVERED |
+| AC6: schema v9, source_pages, source_id on documents | 7 tests (version=9, table exists, source_id/url/status columns, documents.source_id, v8→v9 migration) | YES — PRAGMA introspection + migration execution | COVERED |
+| AC7: `LLM_EXTRACTION_PROMPT` includes corporate types incl. `supersedes_version` | 7 tests (6 types + 1 relation — `supersedes_version` added in retry) | YES — substring assertion on dynamic enum join | COVERED |
+| AC8: `ALLOWED_IMPORTS` browser entries | 5 tests (owlbear_browser present, owlbear_mcp_browser present, layer rules, importability) | YES — dict lookup + import | COVERED |
+
+No MISSING entries. No WEAK assertions detected.
+
+---
+
+### 5.1 Security Review
+- `ingest.py` / `content_safety.py`: deny-list (`frozenset({"file","file_glob","text"})`) — defense-in-depth: all unknown future source types are wrapped by default ✓
+- `schema.py` DDL uses string templates (no user input) ✓
+- `protocol.py`: no I/O ✓
+- No hardcoded secrets, path traversal, injection, or insecure deserialization ✓
+- Pre-existing `except Exception` swallow at `ingest.py` — not introduced by this builder (INFORMATIONAL)
+
+**No security issues.**
+
+---
+
+### 5.2 TestFromAC Integrity
+
+| Test | Change | By Whom | Assessment |
+|------|--------|---------|------------|
+| `TestFromAC_AuthenticatedContentModels` (11) | None | — | PRESERVED |
+| `TestFromAC_AuthenticatedContentProtocol` (5) | test_isinstance duck-typing added (retry) | test-writer retry | STRENGTHENED |
+| `TestFromAC_AuthenticatedContentSafety` (6) | 3 tests added (url regression, file_glob boundary, None boundary) by retry | test-writer retry | STRENGTHENED |
+| `TestFromAC_AuthenticatedContentSchema` (7) | approval_state + extraction_status tests REMOVED; status test ADDED | Task #797 (authorized) | CORRECTED — tests targeted builder-added columns outside AC6 spec |
+| `TestFromAC_AuthenticatedContentExtractionPrompt` (7) | supersedes_version test ADDED (retry) | test-writer retry | STRENGTHENED |
+| `TestFromAC_AuthenticatedContentPackageBoundaries` (5) | None | — | PRESERVED |
+
+No WEAKENED or REMOVED tests by the #751 builder. Task #797 modification is an authorized architectural correction, not a builder integrity violation.
+
+---
+
+### 5.3 Test Quality
+
+| Dimension | Rating | Evidence |
+|-----------|--------|---------|
+| Assertion specificity | STRONG | hasattr + value equality + PRAGMA introspection + behavioral wrapping |
+| Negative/error-path coverage | STRONG | file_glob NOT wrapped, None NOT wrapped, schema migration tested |
+| Mutation resistance | STRONG | Remove enum member → KeyError; flip predicate → AssertionError; change DDL → PRAGMA fails |
+| Test independence | STRONG | No shared mutable state; in-memory SQLite per test |
+| Descriptive names | STRONG | All `TestFromAC_*` with descriptive method names |
+
+No WEAK ratings.
+
+---
+
+### AC Compliance Table (runtime evidence)
+
+| AC | Evidence | Test Result | Status |
+|----|----------|-------------|--------|
+| AC1 | `models.py:47` AUTHENTICATED_WEB = "authenticated_web" | 3/3 pass | PASS |
+| AC2 | `models.py:17-27` 5 corporate EntityType members | 6/6 pass | PASS |
+| AC3 | `models.py:31-39` GOVERNS + SUPERSEDES_VERSION | 2/2 pass | PASS |
+| AC4 | `protocol.py:95-103` @runtime_checkable ContentFetcher, async fetch | 5/5 pass | PASS |
+| AC5 | `content_safety.py:23-40` deny-list, url+authenticated_web wrapped | 6/6 pass | PASS |
+| AC6 | `schema.py:18,154-165,149-157` v9, source_pages DDL, migration | 7/7 pass | PASS |
+| AC7 | `llm_extractor.py:12-13` dynamic enum join covers all 7 types | 7/7 pass | PASS |
+| AC8 | `test_package_boundary.py` owlbear_browser + owlbear_mcp_browser in ALLOWED_IMPORTS | 5/5 pass | PASS |
+
+---
+
+### Deductions
+| Finding | Deduction |
+|---------|-----------|
+| First quality-runner attempt fatal (WMI hang) — environment issue, not code defect | −0.01 |
+| ingest / schema module coverage below 90% (pre-existing code dilutes; AC paths confirmed covered) | −0.01 |
+
+### Confidence: 0.98 → PASS
+[[2026-04-14]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | `.github/copilot-instructions.md` is 9 lines (identity + branches only) — no tables track source types, protocols, or packages. No actionable update. |
+| 2 | Module docstrings | Yes | Verified | `models.py`: `EntityType`, `RelationType`, `SourceType` class docstrings present; new `PageStatus` + `SourcePage` have docstrings. `protocol.py`: `ContentFetcher` has class docstring. `schema.py`: module docstring lists `source_pages`; `_migrate_v8_to_v9`, `_apply_migrations`, `init_db` all have docstrings. `content_safety.py`: module + `should_wrap` + `wrap_untrusted_content` all have docstrings. `ingest.py`: module docstring accurate (predicate delegated to `content_safety` via #781 — stale-docstring informational from review is resolved). |
+| 3 | External attribution | Yes | Verified | `.owlbear/sources/overview.md` already contains a "Authenticated Content Pipeline (Task #751)" section with 4 rows (Playwright, trafilatura, markdownify, browser-use). Present and current. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/751-authenticated-content-pipeline.md` exists; linked from task body under "## Research". |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/751-*` files found)
+[[2026-04-14]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 SourceType.AUTHENTICATED_WEB | models.py:47, 3 tests pass | PASS |
+| AC2 EntityType corporate x5 | models.py:17-27, 6 tests pass | PASS |
+| AC3 RelationType GOVERNS + SUPERSEDES_VERSION | models.py:31-39, 2 tests pass | PASS |
+| AC4 ContentFetcher @runtime_checkable | protocol.py:97, 5 tests pass (incl. isinstance) | PASS |
+| AC5 wrapping url + authenticated_web | content_safety.py deny-list inversion, 6 tests pass (incl. regression + negative) | PASS |
+| AC6 schema v9 + source_pages + source_id | schema.py:18 v9, DDL confirmed, 7 tests pass | PASS |
+| AC7 prompt includes corporate types | llm_extractor.py dynamic enum join, 7 tests pass (incl. supersedes_version) | PASS |
+| AC8 ALLOWED_IMPORTS browser entries | test_package_boundary.py updated, 5 tests pass | PASS |
+
+### Test Results
+- pytest (task-scoped): 41 passed, 0 failed
+- pytest (full suite): 4194 passed, 363 failed, 8 skipped -- zero failures in #751 scope; all 363 are pre-existing from unrelated tasks
+- test_package_boundary ManifestGuard failure: pre-existing owlbear_voice issue, not #751
+- ruff: clean (all deliverable files)
+
+### Architect Quality: 4/5
+AC was specific and testable across all 8 lines. Minor gap: source_pages column naming ambiguity (approval_state vs status) required one builder fix round. Pipeline self-corrected successfully.
+
+### Deduction Breakdown
+- No AC lines without evidence: -0.00
+- No lint violations: -0.00
+- AC quality 4 (above 3 threshold): -0.00
+- Reviewer evidence present and detailed: -0.00
+- No full-suite failures in task scope: -0.00
+
+### Confidence: .98
+### Action: archive
+
+### Commits Verified
+- 2dfae28b feat: authenticated content pipeline Phase 1 (builder)
+- db9a6059 test: add retry coverage AC5/AC7/AC4 (test-writer)
+- be9610a3 fix: approval_state + extraction_status columns (builder fix)

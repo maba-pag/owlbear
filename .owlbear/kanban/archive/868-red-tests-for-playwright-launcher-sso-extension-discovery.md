@@ -4,7 +4,7 @@ title: 'RED: Tests for Playwright launcher + SSO extension discovery'
 status: done
 priority: critical
 created: '2026-04-13T23:21:28.944487+00:00'
-updated: '2026-04-14T16:04:51.205584+00:00'
+updated: '2026-04-14T16:19:52.365993+00:00'
 tags:
 - pivot
 - phase-1
@@ -15,8 +15,8 @@ parent: 751
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: soft-pike
-claimed_at: '2026-04-14T16:04:51.205584+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Context
 
@@ -274,3 +274,42 @@ Task tagged `type:test` and `tdd-red` — pass-through tags present.
 
 **Files updated:** None required.
 **Scratch files:** No `.owlbear/scratch/868-*` files found — nothing to clean.
+[[2026-04-14]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — test file exists | `tests/test_playwright_launcher_868.py` present on disk | PASS |
+| AC2 — find_sso_extension() tests (5 scenarios) | 6 tests in `TestFromAC_SSOExtensionDiscovery`, all pass (versioned path, ext dir missing, no subfolders, env var override, env var missing path, multiple versions) | PASS |
+| AC3 — build_playwright_args() tests | 4 tests in `TestFromAC_PlaywrightArgs`, all pass (disable-extensions-except, load-extension, no remote-debugging-port, no 0.0.0.0) | PASS |
+| AC4 — PlaywrightLauncher tests | 6 tests in `TestFromAC_PlaywrightLauncherLifecycle`, all pass (launch_persistent_context called, user_data_dir passed, close calls context.close, close calls pw.stop, context manager, page property) | PASS |
+| AC5 — All tests FAIL at RED phase | Test-writer commit `bf14a8a5` confirms tests existed before implementation; builder confirmed ModuleNotFoundError collection error | PASS |
+| AC6 — ruff clean | `ruff check` exit 0 on all task files | PASS |
+
+### Test Results
+- pytest (task-scoped): 16 passed, 0 failed
+- pytest (full suite): 4166 passed, 335 failed — zero failures in #868 scope; 335 are pre-existing cross-task failures
+- ruff: clean (all checks passed)
+
+### Architect Quality: 5/5
+AC was precise: specific function signatures, typed exceptions, exact test scenarios, security constraints. Zero improvisation required by builder. All 16 tests map directly to AC lines.
+
+### Deduction Breakdown
+- No AC lines without evidence: -.00
+- No lint violations: -.00
+- AC quality 5/5 > 3: -.00
+- Reviewer section present and thorough (.97, PASS): -.00
+- No full-suite failures in task scope: -.00
+
+### Process Notes
+- **Uncommitted builder deliverables:** `playwright_launcher.py` was untracked; `_errors.py` had uncommitted changes. Committed by auditor as `81e4dea2`.
+- **Scope overlap:** Builder removed `EdgeNotFoundError` and `CDPConnectionError` from `_errors.py` — this is #870's AC2. No runtime dependents, no breakage, but builder exceeded scope.
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| bf14a8a5 | test | tests/test_playwright_launcher_868.py | #868 |
+| 81e4dea2 | feat | playwright_launcher.py, _errors.py, kanban task | #868 |

@@ -1,349 +1,3 @@
-{"timestamp":"2026-04-03T19:51:57.5021566+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-03T19:51:57.5194983+02:00","action":"claim","task_id":210,"detail":"reviewer"}
-{"timestamp":"2026-04-03T19:51:58.5190012+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-03T19:51:58.5343615+02:00","action":"claim","task_id":574,"detail":"reviewer"}
-{"timestamp":"2026-04-03T19:52:53.0901961+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
-{"timestamp":"2026-04-03T19:52:58.5272057+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
-{"timestamp":"2026-04-03T19:52:58.5443279+02:00","action":"release","task_id":587,"detail":"writer"}
-{"timestamp":"2026-04-03T19:54:13.0648395+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-03T19:54:28.7735802+02:00","action":"move","task_id":530,"detail":"in-progress -\u003e review"}
-{"timestamp":"2026-04-03T19:54:48.2105479+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-03T19:54:48.2252428+02:00","action":"release","task_id":530,"detail":"builder"}
-{"timestamp":"2026-04-03T19:55:57.3273628+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-03T19:56:14.6212361+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-03T19:56:14.6339997+02:00","action":"release","task_id":574,"detail":"reviewer"}
-{"timestamp":"2026-04-03T20:00:25.9912357+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-03T20:00:43.5879135+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-03T20:00:43.5992576+02:00","action":"release","task_id":210,"detail":"reviewer"}
-{"timestamp":"2026-04-03T20:01:30.2241165+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
-{"timestamp":"2026-04-03T20:01:30.237822+02:00","action":"claim","task_id":576,"detail":"test-writer"}
-{"timestamp":"2026-04-03T20:01:30.7026813+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-03T20:01:30.7156858+02:00","action":"claim","task_id":585,"detail":"cider-lark"}
-{"timestamp":"2026-04-03T20:01:30.8903927+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-03T20:01:30.9047188+02:00","action":"claim","task_id":483,"detail":"test-writer"}
-{"timestamp":"2026-04-03T20:01:51.45714+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
-{"timestamp":"2026-04-03T20:02:03.1377205+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
-{"timestamp":"2026-04-03T20:02:03.152157+02:00","action":"release","task_id":576,"detail":"test-writer"}
-{"timestamp":"2026-04-03T20:02:05.7844171+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-03T20:02:10.4026656+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-03T20:02:10.4177721+02:00","action":"release","task_id":483,"detail":"test-writer"}
-{"timestamp":"2026-04-03T20:19:00.0075222+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-03T20:19:00.019977+02:00","action":"release","task_id":585,"detail":"cider-lark"}
-{"timestamp":"2026-04-03T20:22:05.1253153+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-03T20:22:05.1377443+02:00","action":"claim","task_id":210,"detail":"writer"}
-{"timestamp":"2026-04-03T20:22:05.354874+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-03T20:22:05.3905259+02:00","action":"claim","task_id":574,"detail":"writer"}
-{"timestamp":"2026-04-03T20:22:13.9102582+02:00","action":"edit","task_id":587,"detail":"Test: Fix row_factory in mcp-memory app_lifespan"}
-{"timestamp":"2026-04-03T20:22:13.9248517+02:00","action":"claim","task_id":587,"detail":"auditor"}
-{"timestamp":"2026-04-04T02:48:51.5021458+02:00","action":"edit","task_id":587,"detail":"Test: Fix row-factory in mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T02:48:51.5159763+02:00","action":"claim","task_id":587,"detail":"wheat-gust"}
-{"timestamp":"2026-04-04T02:49:06.4471908+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-04T02:49:06.4586268+02:00","action":"claim","task_id":574,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T02:49:55.1164141+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-04T02:49:55.1293421+02:00","action":"claim","task_id":210,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T02:50:53.4246562+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-04T02:50:53.9592484+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-04T02:50:53.9702842+02:00","action":"release","task_id":210,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T02:53:23.7529698+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-04T02:53:23.7669644+02:00","action":"release","task_id":574,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T03:01:12.8742227+02:00","action":"move","task_id":587,"detail":"done -\u003e archived"}
-{"timestamp":"2026-04-04T03:01:22.3331808+02:00","action":"edit","task_id":587,"detail":"Test: Fix row-factory in mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:01:22.3452003+02:00","action":"release","task_id":587,"detail":"wheat-gust"}
-{"timestamp":"2026-04-04T03:02:12.1387733+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-04T03:02:12.1583091+02:00","action":"claim","task_id":483,"detail":"nectar-vine"}
-{"timestamp":"2026-04-04T03:02:35.0447871+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T03:02:35.0577765+02:00","action":"claim","task_id":585,"detail":"reviewer"}
-{"timestamp":"2026-04-04T03:04:31.6434424+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:04:31.6562376+02:00","action":"claim","task_id":586,"detail":"test-writer"}
-{"timestamp":"2026-04-04T03:05:06.7049444+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:05:06.7203849+02:00","action":"release","task_id":586,"detail":"test-writer"}
-{"timestamp":"2026-04-04T03:06:01.3273921+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:06:01.3422404+02:00","action":"claim","task_id":586,"detail":"test-writer"}
-{"timestamp":"2026-04-04T03:06:45.9400419+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:07:41.8803049+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:08:24.180827+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:08:32.2762217+02:00","action":"edit","task_id":586,"detail":"Fix: add row-factory to mcp-memory app_lifespan"}
-{"timestamp":"2026-04-04T03:08:32.290095+02:00","action":"release","task_id":586,"detail":"test-writer"}
-{"timestamp":"2026-04-04T03:09:05.0068752+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T03:09:38.4315787+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T03:09:45.2282814+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T03:09:45.2404106+02:00","action":"release","task_id":585,"detail":"reviewer"}
-{"timestamp":"2026-04-04T03:10:17.5732051+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-04T03:10:17.5849905+02:00","action":"claim","task_id":530,"detail":"reviewer"}
-{"timestamp":"2026-04-04T03:10:38.6556895+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-04T03:10:38.6669293+02:00","action":"block","task_id":483,"detail":"Uncommitted workspace reorganization broke 73+ TestFromAC tests. Files at agents/ skills/ instructions/ deleted and untracked .github/ copies created. TestFromAC constraint blocks builder from updating paths."}
-{"timestamp":"2026-04-04T03:10:46.7698413+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-04T03:10:46.7798972+02:00","action":"release","task_id":483,"detail":"nectar-vine"}
-{"timestamp":"2026-04-04T03:11:10.299335+02:00","action":"move","task_id":530,"detail":"review -\u003e docs"}
-{"timestamp":"2026-04-04T03:11:35.3435882+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-04T03:11:46.2986082+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-04T03:11:46.3123907+02:00","action":"release","task_id":530,"detail":"reviewer"}
-{"timestamp":"2026-04-04T03:12:20.1411986+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
-{"timestamp":"2026-04-04T03:12:20.1550144+02:00","action":"claim","task_id":576,"detail":"midge-vale"}
-{"timestamp":"2026-04-04T03:26:53.9547648+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
-{"timestamp":"2026-04-04T03:27:04.196627+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
-{"timestamp":"2026-04-04T03:27:04.2116628+02:00","action":"release","task_id":576,"detail":"midge-vale"}
-{"timestamp":"2026-04-04T06:29:39.6558397+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-04T06:29:39.6672572+02:00","action":"claim","task_id":210,"detail":"auditor"}
-{"timestamp":"2026-04-04T06:37:49.7348975+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-04T06:38:09.1241961+02:00","action":"move","task_id":210,"detail":"done -\u003e archived"}
-{"timestamp":"2026-04-04T06:38:13.48815+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-04T06:38:13.4995681+02:00","action":"release","task_id":210,"detail":"auditor"}
-{"timestamp":"2026-04-04T06:38:39.5245995+02:00","action":"edit","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
-{"timestamp":"2026-04-04T06:38:39.5366461+02:00","action":"unblock","task_id":29,"detail":"Clean up .github/ v1 prompts and residual files"}
-{"timestamp":"2026-04-04T06:38:56.7951619+02:00","action":"edit","task_id":210,"detail":"Add postToolUse lint guard hook to builder agent (Phase 2)"}
-{"timestamp":"2026-04-04T06:39:36.9212523+02:00","action":"move","task_id":29,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T06:41:08.321566+02:00","action":"edit","task_id":570,"detail":"Register owlbear-memory server in .vscode/mcp.json"}
-{"timestamp":"2026-04-04T06:41:08.3365239+02:00","action":"claim","task_id":570,"detail":"fawn-staff"}
-{"timestamp":"2026-04-04T06:41:14.4273786+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T06:41:14.4388084+02:00","action":"claim","task_id":585,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T06:41:17.2411805+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-04T06:41:17.2569524+02:00","action":"claim","task_id":530,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T06:41:20.2887995+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-04T06:41:20.2998431+02:00","action":"claim","task_id":574,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T06:43:49.397703+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T06:43:49.4104267+02:00","action":"release","task_id":585,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T06:44:24.9036909+02:00","action":"edit","task_id":574,"detail":"P2-03: Update agent-common + research-docs instructions with MCP alternatives"}
-{"timestamp":"2026-04-04T06:44:24.9155008+02:00","action":"release","task_id":574,"detail":"doc-writer"}
-{"timestamp":"2026-04-04T06:44:28.8257846+02:00","action":"move","task_id":574,"detail":"docs -\u003e review"}
-{"timestamp":"2026-04-04T06:46:46.9577429+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-04-04T06:46:46.9972824+02:00","action":"unblock","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-04-04T06:46:53.5714129+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-04-04T06:46:54.5040597+02:00","action":"move","task_id":570,"detail":"in-progress -\u003e todo"}
-{"timestamp":"2026-04-04T06:48:27.0755215+02:00","action":"edit","task_id":547,"detail":"Add model-facing lint feedback via additionalContext to builder PostToolUse hook"}
-{"timestamp":"2026-04-04T06:48:27.0921639+02:00","action":"claim","task_id":547,"detail":"smoke-willow"}
-{"timestamp":"2026-04-04T06:48:52.261377+02:00","action":"edit","task_id":576,"detail":"P2-05: Update skill cheatsheets with MCP tool alternatives alongside CLI"}
-{"timestamp":"2026-04-04T06:48:52.2738121+02:00","action":"claim","task_id":576,"detail":"reviewer"}
-{"timestamp":"2026-04-04T07:08:49.8303774+02:00","action":"create","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
-{"timestamp":"2026-04-04T07:09:23.6109197+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-04-04T07:09:24.3917069+02:00","action":"move","task_id":31,"detail":"backlog -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:24.9958381+02:00","action":"edit","task_id":140,"detail":"Extract bookmark pipeline + refresh orchestrator"}
-{"timestamp":"2026-04-04T07:09:25.0084099+02:00","action":"unblock","task_id":140,"detail":"Extract bookmark pipeline + refresh orchestrator"}
-{"timestamp":"2026-04-04T07:09:25.5966944+02:00","action":"move","task_id":140,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:26.2027863+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-04-04T07:09:26.2221094+02:00","action":"unblock","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-04-04T07:09:26.9439544+02:00","action":"move","task_id":148,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:27.6661414+02:00","action":"edit","task_id":159,"detail":"Extract retrieval.py (GraphAugmentedRetriever)"}
-{"timestamp":"2026-04-04T07:09:27.6798708+02:00","action":"unblock","task_id":159,"detail":"Extract retrieval.py (GraphAugmentedRetriever)"}
-{"timestamp":"2026-04-04T07:09:28.2999752+02:00","action":"move","task_id":159,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:29.0215368+02:00","action":"edit","task_id":329,"detail":"Add NON_IMPL_TAGS cross-reference comments to 3 skill files"}
-{"timestamp":"2026-04-04T07:09:29.0379307+02:00","action":"unblock","task_id":329,"detail":"Add NON_IMPL_TAGS cross-reference comments to 3 skill files"}
-{"timestamp":"2026-04-04T07:09:29.568677+02:00","action":"move","task_id":329,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:30.1058547+02:00","action":"edit","task_id":370,"detail":"Update #136 AC: bookmark tools target server.py not tools.py"}
-{"timestamp":"2026-04-04T07:09:30.1179033+02:00","action":"unblock","task_id":370,"detail":"Update #136 AC: bookmark tools target server.py not tools.py"}
-{"timestamp":"2026-04-04T07:09:30.6485115+02:00","action":"move","task_id":370,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:31.26579+02:00","action":"edit","task_id":463,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-04-04T07:09:31.2777805+02:00","action":"unblock","task_id":463,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-04-04T07:09:31.9419664+02:00","action":"move","task_id":463,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:32.6433702+02:00","action":"edit","task_id":492,"detail":"Add outputSchema and tool annotations to knowledge and project MCP servers"}
-{"timestamp":"2026-04-04T07:09:32.6618088+02:00","action":"unblock","task_id":492,"detail":"Add outputSchema and tool annotations to knowledge and project MCP servers"}
-{"timestamp":"2026-04-04T07:09:33.3095988+02:00","action":"move","task_id":492,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:33.9084435+02:00","action":"edit","task_id":512,"detail":"Add ToolAnnotations to mcp-project server tools"}
-{"timestamp":"2026-04-04T07:09:33.9212878+02:00","action":"unblock","task_id":512,"detail":"Add ToolAnnotations to mcp-project server tools"}
-{"timestamp":"2026-04-04T07:09:34.478825+02:00","action":"move","task_id":512,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:35.1024628+02:00","action":"edit","task_id":550,"detail":"Test: Bookmark pipeline orchestrator"}
-{"timestamp":"2026-04-04T07:09:35.1191502+02:00","action":"unblock","task_id":550,"detail":"Test: Bookmark pipeline orchestrator"}
-{"timestamp":"2026-04-04T07:09:35.8024138+02:00","action":"move","task_id":550,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:36.4926576+02:00","action":"edit","task_id":558,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
-{"timestamp":"2026-04-04T07:09:36.5093341+02:00","action":"unblock","task_id":558,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
-{"timestamp":"2026-04-04T07:09:37.1992109+02:00","action":"move","task_id":558,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:37.8715477+02:00","action":"edit","task_id":560,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
-{"timestamp":"2026-04-04T07:09:37.8835779+02:00","action":"unblock","task_id":560,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
-{"timestamp":"2026-04-04T07:09:38.4648541+02:00","action":"move","task_id":560,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:39.0230535+02:00","action":"edit","task_id":561,"detail":"Add static test: reviewer tools list excludes write tools"}
-{"timestamp":"2026-04-04T07:09:39.0355102+02:00","action":"unblock","task_id":561,"detail":"Add static test: reviewer tools list excludes write tools"}
-{"timestamp":"2026-04-04T07:09:39.594813+02:00","action":"move","task_id":561,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:40.3141263+02:00","action":"edit","task_id":26,"detail":"Slack notification integration"}
-{"timestamp":"2026-04-04T07:09:40.3263192+02:00","action":"unblock","task_id":26,"detail":"Slack notification integration"}
-{"timestamp":"2026-04-04T07:09:41.0371403+02:00","action":"move","task_id":26,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:41.5928542+02:00","action":"edit","task_id":514,"detail":"Test: Notifier protocol and SlackNotifier"}
-{"timestamp":"2026-04-04T07:09:41.6063482+02:00","action":"unblock","task_id":514,"detail":"Test: Notifier protocol and SlackNotifier"}
-{"timestamp":"2026-04-04T07:09:42.1522169+02:00","action":"move","task_id":514,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:42.7222757+02:00","action":"edit","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
-{"timestamp":"2026-04-04T07:09:42.7338157+02:00","action":"unblock","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
-{"timestamp":"2026-04-04T07:09:43.3729546+02:00","action":"move","task_id":515,"detail":"backlog -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:44.0108835+02:00","action":"edit","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
-{"timestamp":"2026-04-04T07:09:44.0235395+02:00","action":"unblock","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
-{"timestamp":"2026-04-04T07:09:44.6909179+02:00","action":"move","task_id":516,"detail":"backlog -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:45.2733323+02:00","action":"edit","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
-{"timestamp":"2026-04-04T07:09:45.2873368+02:00","action":"unblock","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
-{"timestamp":"2026-04-04T07:09:45.8264282+02:00","action":"move","task_id":517,"detail":"backlog -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:46.3587216+02:00","action":"edit","task_id":518,"detail":"Test: Decision-request notification scan"}
-{"timestamp":"2026-04-04T07:09:46.3704545+02:00","action":"unblock","task_id":518,"detail":"Test: Decision-request notification scan"}
-{"timestamp":"2026-04-04T07:09:47.0560153+02:00","action":"move","task_id":518,"detail":"backlog -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:47.7432528+02:00","action":"edit","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
-{"timestamp":"2026-04-04T07:09:47.7563635+02:00","action":"unblock","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
-{"timestamp":"2026-04-04T07:09:48.4299323+02:00","action":"move","task_id":519,"detail":"backlog -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:49.1041807+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-04-04T07:09:49.1171494+02:00","action":"unblock","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-04-04T07:09:49.7958134+02:00","action":"move","task_id":209,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:09:50.4711971+02:00","action":"edit","task_id":31,"detail":"Self-improvement analysis pipeline"}
-{"timestamp":"2026-04-04T07:09:51.5148755+02:00","action":"edit","task_id":140,"detail":"Extract bookmark pipeline + refresh orchestrator"}
-{"timestamp":"2026-04-04T07:09:52.7419401+02:00","action":"edit","task_id":148,"detail":"Wire ErrorJournal into AcpClient when v2 error infrastructure exists"}
-{"timestamp":"2026-04-04T07:09:54.1677803+02:00","action":"edit","task_id":159,"detail":"Extract retrieval.py (GraphAugmentedRetriever)"}
-{"timestamp":"2026-04-04T07:09:55.2270091+02:00","action":"edit","task_id":329,"detail":"Add NON_IMPL_TAGS cross-reference comments to 3 skill files"}
-{"timestamp":"2026-04-04T07:09:56.2983403+02:00","action":"edit","task_id":370,"detail":"Update #136 AC: bookmark tools target server.py not tools.py"}
-{"timestamp":"2026-04-04T07:09:57.6032282+02:00","action":"edit","task_id":463,"detail":"Add loop-detection red flag to reviewer agent"}
-{"timestamp":"2026-04-04T07:09:58.9437846+02:00","action":"edit","task_id":492,"detail":"Add outputSchema and tool annotations to knowledge and project MCP servers"}
-{"timestamp":"2026-04-04T07:10:00.1038934+02:00","action":"edit","task_id":512,"detail":"Add ToolAnnotations to mcp-project server tools"}
-{"timestamp":"2026-04-04T07:10:01.3453494+02:00","action":"edit","task_id":550,"detail":"Test: Bookmark pipeline orchestrator"}
-{"timestamp":"2026-04-04T07:10:02.7414249+02:00","action":"edit","task_id":558,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
-{"timestamp":"2026-04-04T07:10:04.1364158+02:00","action":"edit","task_id":560,"detail":"Add dispatch-cycle trace ID to orchestrator protocol"}
-{"timestamp":"2026-04-04T07:10:05.3738217+02:00","action":"edit","task_id":561,"detail":"Add static test: reviewer tools list excludes write tools"}
-{"timestamp":"2026-04-04T07:10:06.7484027+02:00","action":"edit","task_id":26,"detail":"Slack notification integration"}
-{"timestamp":"2026-04-04T07:10:07.8411294+02:00","action":"edit","task_id":514,"detail":"Test: Notifier protocol and SlackNotifier"}
-{"timestamp":"2026-04-04T07:10:09.045851+02:00","action":"edit","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
-{"timestamp":"2026-04-04T07:10:10.3564447+02:00","action":"edit","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
-{"timestamp":"2026-04-04T07:10:11.5149324+02:00","action":"edit","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
-{"timestamp":"2026-04-04T07:10:12.9419065+02:00","action":"edit","task_id":518,"detail":"Test: Decision-request notification scan"}
-{"timestamp":"2026-04-04T07:10:14.2484972+02:00","action":"edit","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
-{"timestamp":"2026-04-04T07:10:15.4440013+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-04-04T07:10:32.003959+02:00","action":"edit","task_id":515,"detail":"Implement Notifier protocol and SlackNotifier (webhook + urllib)"}
-{"timestamp":"2026-04-04T07:10:33.6114375+02:00","action":"edit","task_id":516,"detail":"Test: Notifier dispatch loop integration"}
-{"timestamp":"2026-04-04T07:10:35.460467+02:00","action":"edit","task_id":517,"detail":"Integrate Notifier into dispatch loop (run_loop)"}
-{"timestamp":"2026-04-04T07:10:37.324297+02:00","action":"edit","task_id":518,"detail":"Test: Decision-request notification scan"}
-{"timestamp":"2026-04-04T07:10:39.0875805+02:00","action":"edit","task_id":519,"detail":"Add blocked-task scan for decision-request notifications"}
-{"timestamp":"2026-04-04T07:10:40.9030556+02:00","action":"edit","task_id":209,"detail":"Add stop commit guard hooks to builder and writer agents (Phase 1)"}
-{"timestamp":"2026-04-04T07:24:32.8980321+02:00","action":"edit","task_id":266,"detail":"Add fresh-context retry to builder agent"}
-{"timestamp":"2026-04-04T07:24:32.9106089+02:00","action":"unblock","task_id":266,"detail":"Add fresh-context retry to builder agent"}
-{"timestamp":"2026-04-04T07:24:33.6551154+02:00","action":"move","task_id":266,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:24:34.3331049+02:00","action":"edit","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-04T07:24:34.3452166+02:00","action":"unblock","task_id":483,"detail":"Phase A: Add MCP tool references alongside CLI in all agents and skills"}
-{"timestamp":"2026-04-04T07:24:34.9608581+02:00","action":"move","task_id":483,"detail":"in-progress -\u003e archived"}
-{"timestamp":"2026-04-04T07:25:23.5257657+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T07:25:23.5406882+02:00","action":"unblock","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T07:30:30.5223777+02:00","action":"edit","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-04-04T07:30:30.5383413+02:00","action":"unblock","task_id":44,"detail":"Add skills-ref validation to CI"}
-{"timestamp":"2026-04-04T07:30:31.2967753+02:00","action":"move","task_id":44,"detail":"todo -\u003e archived"}
-{"timestamp":"2026-04-04T07:30:31.9157347+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
-{"timestamp":"2026-04-04T07:30:31.9280772+02:00","action":"unblock","task_id":62,"detail":"Implement voice process manager"}
-{"timestamp":"2026-04-04T07:30:32.5799627+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-04-04T07:30:32.5973373+02:00","action":"unblock","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-04-04T07:30:33.2381908+02:00","action":"move","task_id":499,"detail":"ideation -\u003e archived"}
-{"timestamp":"2026-04-04T07:30:42.5009633+02:00","action":"edit","task_id":62,"detail":"Implement voice process manager"}
-{"timestamp":"2026-04-04T07:30:43.1390715+02:00","action":"edit","task_id":499,"detail":"Incorporate deer-flow memory patterns into memory-mcp design (#387)"}
-{"timestamp":"2026-04-04T07:31:44.9872975+02:00","action":"edit","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
-{"timestamp":"2026-04-04T07:31:44.9997701+02:00","action":"unblock","task_id":136,"detail":"Extract bookmark pipeline, refresh orchestrator, and bookmark MCP tools"}
-{"timestamp":"2026-04-04T07:32:46.6833454+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T07:32:46.6994536+02:00","action":"unblock","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T07:41:15.6221765+02:00","action":"edit","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-04-04T07:41:15.6362696+02:00","action":"unblock","task_id":167,"detail":"Validate multi-project setup in VS Code (manual)"}
-{"timestamp":"2026-04-04T07:41:15.7504888+02:00","action":"edit","task_id":228,"detail":"Subagent nesting architecture — validate designs and create implementation plan"}
-{"timestamp":"2026-04-04T07:41:15.8729803+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T07:41:15.9061316+02:00","action":"unblock","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T07:43:45.1572014+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T07:43:45.1716871+02:00","action":"claim","task_id":543,"detail":"test-writer"}
-{"timestamp":"2026-04-04T07:43:56.8846713+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T07:43:56.8990972+02:00","action":"claim","task_id":37,"detail":"researcher"}
-{"timestamp":"2026-04-04T07:45:38.4985226+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T07:45:38.5114605+02:00","action":"claim","task_id":548,"detail":"architect"}
-{"timestamp":"2026-04-04T07:46:00.1638577+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T07:46:03.7803451+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T07:46:04.2961166+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T07:46:04.3068605+02:00","action":"release","task_id":543,"detail":"test-writer"}
-{"timestamp":"2026-04-04T07:52:22.0928277+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T07:52:22.1063221+02:00","action":"release","task_id":548,"detail":"architect"}
-{"timestamp":"2026-04-04T07:55:54.2827908+02:00","action":"create","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
-{"timestamp":"2026-04-04T07:56:04.934863+02:00","action":"create","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
-{"timestamp":"2026-04-04T07:56:05.2580684+02:00","action":"create","task_id":591,"detail":"Add PreToolUse path guard hook to doc-writer agent (Phase 5)"}
-{"timestamp":"2026-04-04T07:58:17.771877+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T07:58:22.7539106+02:00","action":"move","task_id":37,"detail":"ideation -\u003e backlog"}
-{"timestamp":"2026-04-04T07:58:39.0978256+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T07:58:39.1097688+02:00","action":"release","task_id":37,"detail":"researcher"}
-{"timestamp":"2026-04-04T14:37:05.8785691+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T14:37:21.8300088+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T15:48:29.8999606+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T15:48:29.9118979+02:00","action":"claim","task_id":543,"detail":"helm-vapor"}
-{"timestamp":"2026-04-04T15:48:44.2382886+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
-{"timestamp":"2026-04-04T15:48:44.2509601+02:00","action":"claim","task_id":263,"detail":"grove-foam"}
-{"timestamp":"2026-04-04T15:48:46.7669333+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T15:48:46.7787706+02:00","action":"claim","task_id":318,"detail":"knoll-spur"}
-{"timestamp":"2026-04-04T15:48:48.6647033+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T15:48:48.6852883+02:00","action":"claim","task_id":37,"detail":"ember-storm"}
-{"timestamp":"2026-04-04T15:49:07.888398+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T15:49:07.8995958+02:00","action":"release","task_id":543,"detail":"helm-vapor"}
-{"timestamp":"2026-04-04T15:50:57.3998791+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T15:51:07.9552418+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T15:51:07.9656362+02:00","action":"release","task_id":318,"detail":"knoll-spur"}
-{"timestamp":"2026-04-04T15:51:57.7337561+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T15:51:57.7442305+02:00","action":"release","task_id":37,"detail":"ember-storm"}
-{"timestamp":"2026-04-04T15:56:39.1733117+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
-{"timestamp":"2026-04-04T15:56:54.6353606+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
-{"timestamp":"2026-04-04T15:57:55.3633715+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
-{"timestamp":"2026-04-04T15:59:24.9335607+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
-{"timestamp":"2026-04-04T15:59:24.9453157+02:00","action":"release","task_id":263,"detail":"grove-foam"}
-{"timestamp":"2026-04-04T16:00:24.2939944+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T16:00:24.3066552+02:00","action":"claim","task_id":548,"detail":"peak-helm"}
-{"timestamp":"2026-04-04T16:00:25.1832757+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
-{"timestamp":"2026-04-04T16:00:25.1953353+02:00","action":"claim","task_id":588,"detail":"lunar-deep"}
-{"timestamp":"2026-04-04T16:00:37.3508896+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
-{"timestamp":"2026-04-04T16:00:37.3634627+02:00","action":"claim","task_id":589,"detail":"warp-ember"}
-{"timestamp":"2026-04-04T16:00:51.368946+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T16:00:51.3847375+02:00","action":"release","task_id":548,"detail":"peak-helm"}
-{"timestamp":"2026-04-04T16:03:53.2249048+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
-{"timestamp":"2026-04-04T16:03:53.2362301+02:00","action":"claim","task_id":437,"detail":"cedar-drift"}
-{"timestamp":"2026-04-04T16:04:57.3615395+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
-{"timestamp":"2026-04-04T16:04:57.3788395+02:00","action":"release","task_id":588,"detail":"lunar-deep"}
-{"timestamp":"2026-04-04T16:05:06.8870467+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
-{"timestamp":"2026-04-04T16:05:18.5971141+02:00","action":"edit","task_id":437,"detail":"Test: parallel fan-out in reviewer agent"}
-{"timestamp":"2026-04-04T16:05:18.6072019+02:00","action":"release","task_id":437,"detail":"cedar-drift"}
-{"timestamp":"2026-04-04T16:09:57.7606787+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
-{"timestamp":"2026-04-04T16:09:57.7712256+02:00","action":"release","task_id":589,"detail":"warp-ember"}
-{"timestamp":"2026-04-04T16:13:28.0844522+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
-{"timestamp":"2026-04-04T16:13:28.0955417+02:00","action":"claim","task_id":588,"detail":"glen-brisk"}
-{"timestamp":"2026-04-04T16:13:42.7658675+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
-{"timestamp":"2026-04-04T16:13:42.7762473+02:00","action":"claim","task_id":590,"detail":"glade-eagle"}
-{"timestamp":"2026-04-04T16:13:51.6264144+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T16:13:51.6399262+02:00","action":"claim","task_id":318,"detail":"nova-river"}
-{"timestamp":"2026-04-04T16:15:54.5306837+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
-{"timestamp":"2026-04-04T16:15:54.5417473+02:00","action":"release","task_id":588,"detail":"glen-brisk"}
-{"timestamp":"2026-04-04T16:16:23.3685285+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
-{"timestamp":"2026-04-04T16:16:23.3795815+02:00","action":"claim","task_id":589,"detail":"oaken-flint"}
-{"timestamp":"2026-04-04T16:18:09.9252536+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
-{"timestamp":"2026-04-04T16:18:46.533139+02:00","action":"edit","task_id":589,"detail":"Add PreToolUse path guard hook to test-writer agent (Phase 3)"}
-{"timestamp":"2026-04-04T16:18:46.5439849+02:00","action":"release","task_id":589,"detail":"oaken-flint"}
-{"timestamp":"2026-04-04T16:20:32.1626742+02:00","action":"edit","task_id":590,"detail":"Add SessionStart context injection hook to pipeline agents (Phase 4)"}
-{"timestamp":"2026-04-04T16:20:32.1725803+02:00","action":"release","task_id":590,"detail":"glade-eagle"}
-{"timestamp":"2026-04-04T16:20:53.1743167+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T16:20:59.0137581+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T16:21:21.4420248+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T16:21:26.9260776+02:00","action":"edit","task_id":320,"detail":"Tests for fix-attempt delegation flow"}
-{"timestamp":"2026-04-04T16:21:33.1566253+02:00","action":"edit","task_id":318,"detail":"Create fix-attempt.agent.md with assign-mode tools"}
-{"timestamp":"2026-04-04T16:21:33.1696342+02:00","action":"release","task_id":318,"detail":"nova-river"}
-{"timestamp":"2026-04-04T16:21:58.0201417+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T16:21:58.0313318+02:00","action":"claim","task_id":548,"detail":"cliff-kelp"}
-{"timestamp":"2026-04-04T16:22:01.4990139+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T16:22:01.5117331+02:00","action":"claim","task_id":37,"detail":"wolf-fort"}
-{"timestamp":"2026-04-04T16:22:15.5367346+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
-{"timestamp":"2026-04-04T16:22:15.5494586+02:00","action":"claim","task_id":263,"detail":"robin-horn"}
-{"timestamp":"2026-04-04T16:22:29.0856883+02:00","action":"edit","task_id":37,"detail":"Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement"}
-{"timestamp":"2026-04-04T16:22:29.0966996+02:00","action":"release","task_id":37,"detail":"wolf-fort"}
-{"timestamp":"2026-04-04T16:22:30.3277275+02:00","action":"edit","task_id":263,"detail":"Create Quality-Runner subagent (agent.md + skill)"}
-{"timestamp":"2026-04-04T16:22:30.3393856+02:00","action":"release","task_id":263,"detail":"robin-horn"}
-{"timestamp":"2026-04-04T16:23:04.8142353+02:00","action":"edit","task_id":548,"detail":"Verify exit code 2 routing via -File invocation in subagent context"}
-{"timestamp":"2026-04-04T16:23:04.8243654+02:00","action":"release","task_id":548,"detail":"cliff-kelp"}
-{"timestamp":"2026-04-04T16:23:32.5156968+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T16:23:32.5272218+02:00","action":"claim","task_id":543,"detail":"south-solar"}
-{"timestamp":"2026-04-04T16:25:37.8749367+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T16:25:37.8854913+02:00","action":"release","task_id":543,"detail":"south-solar"}
-{"timestamp":"2026-04-04T16:28:06.6340808+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T16:28:06.6452932+02:00","action":"claim","task_id":543,"detail":"orbit-mist"}
-{"timestamp":"2026-04-04T16:28:21.3695692+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
-{"timestamp":"2026-04-04T16:28:21.3795233+02:00","action":"claim","task_id":477,"detail":"zinc-vivid"}
-{"timestamp":"2026-04-04T16:28:40.432993+02:00","action":"edit","task_id":543,"detail":"Test: TypedDict return types for outputSchema on mcp-project"}
-{"timestamp":"2026-04-04T16:28:40.4487862+02:00","action":"release","task_id":543,"detail":"orbit-mist"}
-{"timestamp":"2026-04-04T16:32:28.6810303+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-04T16:32:28.6921196+02:00","action":"claim","task_id":530,"detail":"mast-flora"}
-{"timestamp":"2026-04-04T16:33:07.6048538+02:00","action":"edit","task_id":530,"detail":"Update curator agent and skill for memory-mcp"}
-{"timestamp":"2026-04-04T16:33:07.6159461+02:00","action":"release","task_id":530,"detail":"mast-flora"}
-{"timestamp":"2026-04-04T16:37:59.6507728+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
-{"timestamp":"2026-04-04T16:38:05.6314776+02:00","action":"edit","task_id":477,"detail":"Switch move/pick to JSON output, remove board_context tool"}
-{"timestamp":"2026-04-04T16:38:05.6419678+02:00","action":"release","task_id":477,"detail":"zinc-vivid"}
-{"timestamp":"2026-04-04T16:38:47.9075727+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T16:38:47.9181815+02:00","action":"claim","task_id":585,"detail":"delta-hill"}
-{"timestamp":"2026-04-04T16:46:14.2076588+02:00","action":"edit","task_id":585,"detail":"Test: Build approve_memory CLI wrapper"}
-{"timestamp":"2026-04-04T16:46:14.2204405+02:00","action":"release","task_id":585,"detail":"delta-hill"}
-{"timestamp":"2026-04-04T16:46:14.805838+02:00","action":"move","task_id":585,"detail":"done -\u003e archived"}
 {"timestamp":"2026-04-04T16:47:08.0480094+02:00","action":"edit","task_id":264,"detail":"Wire Quality-Runner into pipeline agents"}
 {"timestamp":"2026-04-04T16:47:08.0697426+02:00","action":"claim","task_id":264,"detail":"cliff-atlas"}
 {"timestamp":"2026-04-04T16:47:31.3772539+02:00","action":"edit","task_id":588,"detail":"Support 'archived' status in move_task MCP tool"}
@@ -10198,3 +9852,483 @@
 {"timestamp": "2026-04-14T01:00:19.099043+00:00", "action": "edit", "task_id": 849, "detail": "append_body"}
 {"timestamp": "2026-04-14T01:00:19.112120+00:00", "action": "release", "task_id": 849, "detail": "green-stem"}
 {"timestamp": "2026-04-14T01:00:19.116506+00:00", "action": "move", "task_id": 849, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T01:01:16.051206+00:00", "action": "claim", "task_id": 756, "detail": "green-stem"}
+{"timestamp": "2026-04-14T01:01:27.921208+00:00", "action": "claim", "task_id": 754, "detail": "green-stem"}
+{"timestamp": "2026-04-14T01:01:30.946033+00:00", "action": "claim", "task_id": 787, "detail": "green-stem"}
+{"timestamp": "2026-04-14T01:01:34.141313+00:00", "action": "claim", "task_id": 751, "detail": "green-stem"}
+{"timestamp": "2026-04-14T01:04:33.473518+00:00", "action": "edit", "task_id": 754, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:04:33.489640+00:00", "action": "release", "task_id": 754, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:04:33.498784+00:00", "action": "move", "task_id": 754, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:04:58.729897+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:04:58.740439+00:00", "action": "release", "task_id": 787, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:04:58.748992+00:00", "action": "move", "task_id": 787, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:05:11.852317+00:00", "action": "edit", "task_id": 756, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:05:11.861453+00:00", "action": "release", "task_id": 756, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:05:11.868427+00:00", "action": "move", "task_id": 756, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:11:37.389071+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:11:37.389071+00:00", "action": "release", "task_id": 751, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:11:37.405157+00:00", "action": "move", "task_id": 751, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:12:10.411210+00:00", "action": "claim", "task_id": 781, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:12:17.315837+00:00", "action": "claim", "task_id": 788, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:12:27.457052+00:00", "action": "claim", "task_id": 760, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:12:35.081987+00:00", "action": "claim", "task_id": 782, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:13:00.819872+00:00", "action": "edit", "task_id": 782, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:13:00.833922+00:00", "action": "release", "task_id": 782, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:13:00.843962+00:00", "action": "move", "task_id": 782, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:13:07.128236+00:00", "action": "move", "task_id": 782, "detail": "docs -> archived"}
+{"timestamp": "2026-04-14T01:13:42.616559+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:13:42.616559+00:00", "action": "release", "task_id": 781, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:13:42.632499+00:00", "action": "move", "task_id": 781, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:15:52.746591+00:00", "action": "edit", "task_id": 760, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:15:52.759617+00:00", "action": "release", "task_id": 760, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:15:52.769128+00:00", "action": "move", "task_id": 760, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:18:16.361595+00:00", "action": "edit", "task_id": 788, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:18:16.370570+00:00", "action": "release", "task_id": 788, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:18:16.377591+00:00", "action": "move", "task_id": 788, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:18:55.408250+00:00", "action": "claim", "task_id": 803, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:18:59.514746+00:00", "action": "claim", "task_id": 797, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:19:00.086629+00:00", "action": "claim", "task_id": 824, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:19:05.543509+00:00", "action": "claim", "task_id": 801, "detail": "proud-ember"}
+{"timestamp": "2026-04-14T01:20:58.093010+00:00", "action": "edit", "task_id": 801, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:20:58.103220+00:00", "action": "block", "task_id": 801, "detail": "Quality-Runner execution failure (2nd cycle) \u2014 KeyboardInterrupt during pytest plugin loading (logfire \u2192 charset_normalizer \u2192 importlib). Cannot run tests independently. Protocol requires test execution before issuing verdict."}
+{"timestamp": "2026-04-14T01:20:58.114221+00:00", "action": "release", "task_id": 801, "detail": "dry-glen"}
+{"timestamp": "2026-04-14T01:21:22.414629+00:00", "action": "edit", "task_id": 824, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:21:22.433848+00:00", "action": "release", "task_id": 824, "detail": "dry-glen"}
+{"timestamp": "2026-04-14T01:21:22.446059+00:00", "action": "move", "task_id": 824, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:29:01.133510+00:00", "action": "edit", "task_id": 797, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:29:01.180129+00:00", "action": "block", "task_id": 797, "detail": "Quality-Runner FATAL (2nd cycle): pytest-xdist (`-n auto --dist loadfile` in pyproject.toml addopts) conflicts with `--cov` flags appended by quality-runner. Both plugins are installed but cannot co-operate under quality-runner's invocation. Cannot independently run tests per critical rules."}
+{"timestamp": "2026-04-14T01:29:01.198363+00:00", "action": "release", "task_id": 797, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:38:03.111379+00:00", "action": "edit", "task_id": 803, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:38:03.121411+00:00", "action": "release", "task_id": 803, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:38:03.131187+00:00", "action": "move", "task_id": 803, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T01:38:47.791031+00:00", "action": "claim", "task_id": 798, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:38:56.140071+00:00", "action": "edit", "task_id": 798, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:38:56.156288+00:00", "action": "release", "task_id": 798, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:38:56.172028+00:00", "action": "move", "task_id": 798, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T01:39:25.266615+00:00", "action": "claim", "task_id": 861, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:46:59.145547+00:00", "action": "edit", "task_id": 861, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:46:59.158917+00:00", "action": "release", "task_id": 861, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:46:59.163080+00:00", "action": "move", "task_id": 861, "detail": "review -> todo"}
+{"timestamp": "2026-04-14T01:48:43.960706+00:00", "action": "claim", "task_id": 751, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:48:47.558464+00:00", "action": "claim", "task_id": 869, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:49:01.305667+00:00", "action": "claim", "task_id": 841, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:49:05.604115+00:00", "action": "claim", "task_id": 850, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:49:39.333874+00:00", "action": "edit", "task_id": 841, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:49:39.333874+00:00", "action": "release", "task_id": 841, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:49:39.349668+00:00", "action": "move", "task_id": 841, "detail": "backlog -> research"}
+{"timestamp": "2026-04-14T01:51:21.674436+00:00", "action": "create", "task_id": 872, "detail": "RED: Tests for BrowserContentFetcher accepting Playwright BrowserContext"}
+{"timestamp": "2026-04-14T01:51:43.524141+00:00", "action": "create", "task_id": 873, "detail": "GREEN: Refactor BrowserContentFetcher to accept Playwright BrowserContext"}
+{"timestamp": "2026-04-14T01:52:10.174991+00:00", "action": "edit", "task_id": 869, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:52:10.203146+00:00", "action": "release", "task_id": 869, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:52:10.236184+00:00", "action": "move", "task_id": 869, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T01:52:35.426239+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-14T01:52:35.450012+00:00", "action": "release", "task_id": 751, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T01:52:35.470717+00:00", "action": "move", "task_id": 751, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T02:09:38.139950+00:00", "action": "edit", "task_id": 850, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:09:38.153635+00:00", "action": "release", "task_id": 850, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:09:38.171182+00:00", "action": "move", "task_id": 850, "detail": "done -> backlog"}
+{"timestamp": "2026-04-14T02:10:01.778404+00:00", "action": "claim", "task_id": 798, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:10:16.391625+00:00", "action": "edit", "task_id": 798, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:10:16.407924+00:00", "action": "release", "task_id": 798, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:10:16.412632+00:00", "action": "move", "task_id": 798, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T02:10:34.310134+00:00", "action": "claim", "task_id": 754, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:10:39.776593+00:00", "action": "claim", "task_id": 756, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:10:43.979583+00:00", "action": "claim", "task_id": 787, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:12:05.952204+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:12:05.971233+00:00", "action": "release", "task_id": 787, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:12:05.982386+00:00", "action": "move", "task_id": 787, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T02:12:18.807005+00:00", "action": "edit", "task_id": 754, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:12:18.831436+00:00", "action": "release", "task_id": 754, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:12:18.843244+00:00", "action": "move", "task_id": 754, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T02:12:28.597528+00:00", "action": "edit", "task_id": 756, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:12:28.609754+00:00", "action": "release", "task_id": 756, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:12:28.621510+00:00", "action": "move", "task_id": 756, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T02:12:45.980896+00:00", "action": "claim", "task_id": 836, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:13:12.504677+00:00", "action": "claim", "task_id": 760, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:13:14.092649+00:00", "action": "claim", "task_id": 781, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:13:14.417456+00:00", "action": "claim", "task_id": 788, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:13:45.806739+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:13:45.817908+00:00", "action": "release", "task_id": 781, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:13:45.826420+00:00", "action": "move", "task_id": 781, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T02:14:27.671355+00:00", "action": "edit", "task_id": 760, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:14:27.690564+00:00", "action": "release", "task_id": 760, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:14:27.706728+00:00", "action": "move", "task_id": 760, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T02:14:37.153465+00:00", "action": "edit", "task_id": 788, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:14:37.164594+00:00", "action": "release", "task_id": 788, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:14:37.174148+00:00", "action": "move", "task_id": 788, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T02:18:05.861912+00:00", "action": "edit", "task_id": 836, "detail": "append_body"}
+{"timestamp": "2026-04-14T02:18:05.876660+00:00", "action": "release", "task_id": 836, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:18:05.887870+00:00", "action": "move", "task_id": 836, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T02:18:42.473481+00:00", "action": "claim", "task_id": 837, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:18:44.670726+00:00", "action": "claim", "task_id": 824, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:18:47.122191+00:00", "action": "claim", "task_id": 803, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T02:19:07.063292+00:00", "action": "claim", "task_id": 852, "detail": "crisp-root"}
+{"timestamp": "2026-04-14T06:52:12.634150+00:00", "action": "claim", "task_id": 841, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T06:52:20.132092+00:00", "action": "claim", "task_id": 872, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T06:52:21.050343+00:00", "action": "claim", "task_id": 873, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T06:52:31.014016+00:00", "action": "claim", "task_id": 751, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T06:53:37.551955+00:00", "action": "edit", "task_id": 841, "detail": "append_body"}
+{"timestamp": "2026-04-14T06:53:37.583304+00:00", "action": "release", "task_id": 841, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T06:53:37.608667+00:00", "action": "move", "task_id": 841, "detail": "research -> backlog"}
+{"timestamp": "2026-04-14T06:55:12.658098+00:00", "action": "edit", "task_id": 873, "detail": "append_body"}
+{"timestamp": "2026-04-14T06:55:12.688107+00:00", "action": "release", "task_id": 873, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T06:55:12.727995+00:00", "action": "move", "task_id": 873, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T06:55:33.275992+00:00", "action": "edit", "task_id": 872, "detail": "append_body"}
+{"timestamp": "2026-04-14T06:55:33.316229+00:00", "action": "release", "task_id": 872, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T06:55:33.416140+00:00", "action": "move", "task_id": 872, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T07:04:36.555044+00:00", "action": "edit", "task_id": 751, "detail": "append_body"}
+{"timestamp": "2026-04-14T07:04:36.580653+00:00", "action": "release", "task_id": 751, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T07:04:36.591432+00:00", "action": "move", "task_id": 751, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T07:05:31.401752+00:00", "action": "claim", "task_id": 754, "detail": "quiet-rush"}
+{"timestamp": "2026-04-14T08:32:35.052517+00:00", "action": "claim", "task_id": 850, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:32:36.158528+00:00", "action": "claim", "task_id": 841, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:32:36.934087+00:00", "action": "claim", "task_id": 787, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:33:45.237593+00:00", "action": "edit", "task_id": 841, "detail": "append_body"}
+{"timestamp": "2026-04-14T08:33:45.255833+00:00", "action": "block", "task_id": 841, "detail": "Premise invalid (confirmed 4x). Rejecting creates infinite loop. Needs human decision to archive."}
+{"timestamp": "2026-04-14T08:33:45.269933+00:00", "action": "release", "task_id": 841, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:39:28.766613+00:00", "action": "edit", "task_id": 787, "detail": "append_body"}
+{"timestamp": "2026-04-14T08:39:28.782512+00:00", "action": "release", "task_id": 787, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:39:28.782512+00:00", "action": "move", "task_id": 787, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T08:40:10.945087+00:00", "action": "edit", "task_id": 850, "detail": "append_body"}
+{"timestamp": "2026-04-14T08:40:10.954131+00:00", "action": "release", "task_id": 850, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:40:10.964635+00:00", "action": "move", "task_id": 850, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T08:40:58.295241+00:00", "action": "claim", "task_id": 756, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:51:22.006388+00:00", "action": "edit", "task_id": 756, "detail": "append_body"}
+{"timestamp": "2026-04-14T08:51:22.022629+00:00", "action": "release", "task_id": 756, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T08:51:22.035704+00:00", "action": "move", "task_id": 756, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T08:52:10.354362+00:00", "action": "claim", "task_id": 760, "detail": "north-thorn"}
+{"timestamp":"2026-04-14T10:53:16.5024935+02:00","action":"delete","task_id":841,"detail":"Fix stale TestFromAC_TaskSummaryExcludes tests (created/updated in exclusion set)"}
+{"timestamp": "2026-04-14T09:11:59.561861+00:00", "action": "claim", "task_id": 760, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:29:17.838878+00:00", "action": "edit", "task_id": 760, "detail": "append_body"}
+{"timestamp": "2026-04-14T09:29:17.872104+00:00", "action": "release", "task_id": 760, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:29:17.887949+00:00", "action": "move", "task_id": 760, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T09:29:57.560594+00:00", "action": "claim", "task_id": 781, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:37:41.988122+00:00", "action": "edit", "task_id": 781, "detail": "append_body"}
+{"timestamp": "2026-04-14T09:37:42.002926+00:00", "action": "release", "task_id": 781, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:37:42.018327+00:00", "action": "move", "task_id": 781, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T09:38:30.564994+00:00", "action": "claim", "task_id": 788, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:45:19.253849+00:00", "action": "edit", "task_id": 788, "detail": "append_body"}
+{"timestamp": "2026-04-14T09:45:19.269498+00:00", "action": "release", "task_id": 788, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:45:19.277501+00:00", "action": "move", "task_id": 788, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T09:45:54.286095+00:00", "action": "claim", "task_id": 856, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:45:55.268322+00:00", "action": "claim", "task_id": 869, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:45:56.085785+00:00", "action": "claim", "task_id": 871, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:45:56.901219+00:00", "action": "claim", "task_id": 868, "detail": "north-thorn"}
+{"timestamp": "2026-04-14T09:57:08.232493+00:00", "action": "edit", "task_id": 869, "detail": "append_body"}
+{"timestamp": "2026-04-14T09:57:08.252194+00:00", "action": "release", "task_id": 869, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T09:57:08.266306+00:00", "action": "move", "task_id": 869, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T09:57:10.104902+00:00", "action": "edit", "task_id": 868, "detail": "append_body"}
+{"timestamp": "2026-04-14T09:57:10.127031+00:00", "action": "release", "task_id": 868, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T09:57:10.144755+00:00", "action": "move", "task_id": 868, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T10:01:09.305658+00:00", "action": "edit", "task_id": 871, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:01:09.321358+00:00", "action": "release", "task_id": 871, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:01:09.332105+00:00", "action": "move", "task_id": 871, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T10:01:21.750262+00:00", "action": "edit", "task_id": 856, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:01:21.772687+00:00", "action": "release", "task_id": 856, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:01:21.788733+00:00", "action": "move", "task_id": 856, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T10:01:52.614331+00:00", "action": "claim", "task_id": 872, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:01:54.581377+00:00", "action": "claim", "task_id": 873, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:02:02.289866+00:00", "action": "claim", "task_id": 857, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:03:03.927715+00:00", "action": "claim", "task_id": 798, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:04:24.166114+00:00", "action": "edit", "task_id": 798, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:04:24.186210+00:00", "action": "release", "task_id": 798, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:04:24.199551+00:00", "action": "move", "task_id": 798, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T10:06:12.918373+00:00", "action": "edit", "task_id": 857, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:06:12.947775+00:00", "action": "release", "task_id": 857, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:06:12.962257+00:00", "action": "move", "task_id": 857, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T10:09:14.997830+00:00", "action": "edit", "task_id": 872, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:09:15.020568+00:00", "action": "release", "task_id": 872, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:09:15.040426+00:00", "action": "move", "task_id": 872, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T10:10:28.703789+00:00", "action": "edit", "task_id": 873, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:10:28.724732+00:00", "action": "release", "task_id": 873, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:10:28.737488+00:00", "action": "move", "task_id": 873, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T10:11:11.297697+00:00", "action": "claim", "task_id": 861, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:11:12.606255+00:00", "action": "claim", "task_id": 858, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:11:42.745626+00:00", "action": "claim", "task_id": 836, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:11:51.293096+00:00", "action": "claim", "task_id": 870, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:14:06.795599+00:00", "action": "edit", "task_id": 836, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:14:06.811888+00:00", "action": "release", "task_id": 836, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:14:06.814967+00:00", "action": "move", "task_id": 836, "detail": "review -> backlog"}
+{"timestamp": "2026-04-14T10:20:46.886788+00:00", "action": "edit", "task_id": 870, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:20:46.911638+00:00", "action": "release", "task_id": 870, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:20:46.928316+00:00", "action": "move", "task_id": 870, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T10:20:48.307134+00:00", "action": "edit", "task_id": 861, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:20:48.331646+00:00", "action": "release", "task_id": 861, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:20:48.346280+00:00", "action": "move", "task_id": 861, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T10:28:50.161026+00:00", "action": "edit", "task_id": 858, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:28:50.170035+00:00", "action": "release", "task_id": 858, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:28:50.178860+00:00", "action": "move", "task_id": 858, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T10:29:20.722930+00:00", "action": "claim", "task_id": 859, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:29:33.170608+00:00", "action": "claim", "task_id": 853, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:30:31.302896+00:00", "action": "claim", "task_id": 854, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:31:26.446888+00:00", "action": "edit", "task_id": 853, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:31:26.470862+00:00", "action": "release", "task_id": 853, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:31:26.490568+00:00", "action": "move", "task_id": 853, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T10:35:00.863960+00:00", "action": "edit", "task_id": 854, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:35:00.874125+00:00", "action": "release", "task_id": 854, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:35:00.884833+00:00", "action": "move", "task_id": 854, "detail": "review -> in-progress"}
+{"timestamp": "2026-04-14T10:36:39.718316+00:00", "action": "edit", "task_id": 859, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:36:39.738610+00:00", "action": "release", "task_id": 859, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:36:39.745609+00:00", "action": "move", "task_id": 859, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T10:38:02.163714+00:00", "action": "claim", "task_id": 868, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:38:08.368556+00:00", "action": "claim", "task_id": 848, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:38:08.894298+00:00", "action": "claim", "task_id": 862, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:38:20.300881+00:00", "action": "claim", "task_id": 836, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:38:40.445866+00:00", "action": "edit", "task_id": 797, "detail": "updated"}
+{"timestamp": "2026-04-14T10:38:40.476279+00:00", "action": "edit", "task_id": 801, "detail": "updated"}
+{"timestamp": "2026-04-14T10:41:24.913374+00:00", "action": "edit", "task_id": 836, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:41:24.927056+00:00", "action": "release", "task_id": 836, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:41:24.939531+00:00", "action": "move", "task_id": 836, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T10:41:27.357399+00:00", "action": "edit", "task_id": 862, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:41:27.373905+00:00", "action": "release", "task_id": 862, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:41:27.396221+00:00", "action": "move", "task_id": 862, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T10:43:39.375268+00:00", "action": "edit", "task_id": 868, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:43:39.387560+00:00", "action": "release", "task_id": 868, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:43:39.397479+00:00", "action": "move", "task_id": 868, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T10:45:07.450255+00:00", "action": "edit", "task_id": 848, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:45:07.460361+00:00", "action": "release", "task_id": 848, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:45:07.468025+00:00", "action": "move", "task_id": 848, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T10:45:27.530946+00:00", "action": "claim", "task_id": 869, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:45:37.256252+00:00", "action": "claim", "task_id": 867, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:45:51.223964+00:00", "action": "claim", "task_id": 856, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:46:14.811215+00:00", "action": "claim", "task_id": 798, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:47:36.710358+00:00", "action": "edit", "task_id": 867, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:47:36.731543+00:00", "action": "release", "task_id": 867, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:47:36.747205+00:00", "action": "move", "task_id": 867, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T10:48:35.881093+00:00", "action": "edit", "task_id": 798, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:48:35.897655+00:00", "action": "release", "task_id": 798, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:48:35.911815+00:00", "action": "move", "task_id": 798, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T10:48:46.095716+00:00", "action": "edit", "task_id": 869, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:48:46.110225+00:00", "action": "release", "task_id": 869, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:48:46.123630+00:00", "action": "move", "task_id": 869, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T10:51:53.223251+00:00", "action": "edit", "task_id": 856, "detail": "append_body"}
+{"timestamp": "2026-04-14T10:51:53.233074+00:00", "action": "release", "task_id": 856, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:51:53.239837+00:00", "action": "move", "task_id": 856, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T10:52:39.554367+00:00", "action": "claim", "task_id": 857, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:52:42.538040+00:00", "action": "claim", "task_id": 858, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:52:51.578320+00:00", "action": "claim", "task_id": 859, "detail": "strong-vale"}
+{"timestamp": "2026-04-14T10:55:34.069888+00:00", "action": "claim", "task_id": 871, "detail": "nice-owl"}
+{"timestamp": "2026-04-14T11:02:35.810258+00:00", "action": "edit", "task_id": 858, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:02:35.825552+00:00", "action": "release", "task_id": 858, "detail": "nice-owl"}
+{"timestamp": "2026-04-14T11:02:35.839162+00:00", "action": "move", "task_id": 858, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T11:05:53.296922+00:00", "action": "edit", "task_id": 859, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:05:53.310837+00:00", "action": "release", "task_id": 859, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:05:53.322850+00:00", "action": "move", "task_id": 859, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T11:14:11.402145+00:00", "action": "edit", "task_id": 857, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:14:11.416152+00:00", "action": "release", "task_id": 857, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:14:11.432265+00:00", "action": "move", "task_id": 857, "detail": "review -> in-progress"}
+{"timestamp": "2026-04-14T11:38:47.836966+00:00", "action": "edit", "task_id": 871, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:38:47.851904+00:00", "action": "release", "task_id": 871, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:38:47.863149+00:00", "action": "move", "task_id": 871, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T11:39:12.819252+00:00", "action": "claim", "task_id": 872, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:39:16.210945+00:00", "action": "claim", "task_id": 850, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:41:55.727607+00:00", "action": "edit", "task_id": 850, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:41:55.737642+00:00", "action": "release", "task_id": 850, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:41:55.744418+00:00", "action": "move", "task_id": 850, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T11:44:20.542883+00:00", "action": "edit", "task_id": 872, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:44:20.556795+00:00", "action": "release", "task_id": 872, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:44:20.567488+00:00", "action": "move", "task_id": 872, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T11:46:41.061066+00:00", "action": "claim", "task_id": 798, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:46:44.015483+00:00", "action": "claim", "task_id": 858, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:46:47.461336+00:00", "action": "claim", "task_id": 859, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:46:51.544129+00:00", "action": "claim", "task_id": 856, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:48:05.489698+00:00", "action": "edit", "task_id": 856, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:48:05.507770+00:00", "action": "release", "task_id": 856, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:48:05.522148+00:00", "action": "move", "task_id": 856, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T11:48:19.262621+00:00", "action": "edit", "task_id": 858, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:48:19.290460+00:00", "action": "release", "task_id": 858, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:48:19.313049+00:00", "action": "move", "task_id": 858, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T11:50:50.837362+00:00", "action": "edit", "task_id": 859, "detail": "append_body"}
+{"timestamp": "2026-04-14T11:50:50.853990+00:00", "action": "release", "task_id": 859, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T11:50:50.866294+00:00", "action": "move", "task_id": 859, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T12:21:04.665577+00:00", "action": "edit", "task_id": 862, "detail": "updated"}
+{"timestamp": "2026-04-14T14:10:36.838197+00:00", "action": "block", "task_id": 862, "detail": "LLMExtractor removed \u2014 task premise invalidated, needs re-scoping before work can proceed"}
+{"timestamp": "2026-04-14T14:12:19.482520+00:00", "action": "claim", "task_id": 864, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:12:20.864825+00:00", "action": "claim", "task_id": 863, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:12:37.668642+00:00", "action": "claim", "task_id": 856, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:22:38.769851+00:00", "action": "edit", "task_id": 863, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:22:38.956912+00:00", "action": "release", "task_id": 863, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:22:39.152256+00:00", "action": "move", "task_id": 863, "detail": "research -> backlog"}
+{"timestamp": "2026-04-14T14:25:52.439128+00:00", "action": "create", "task_id": 874, "detail": "P3-05: Investigate StructuredExtractor replacement after pydantic-ai removal"}
+{"timestamp": "2026-04-14T14:26:11.101325+00:00", "action": "edit", "task_id": 864, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:26:11.127037+00:00", "action": "release", "task_id": 864, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:26:11.155501+00:00", "action": "move", "task_id": 864, "detail": "research -> backlog"}
+{"timestamp": "2026-04-14T14:34:48.241032+00:00", "action": "edit", "task_id": 856, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:34:48.252113+00:00", "action": "release", "task_id": 856, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:34:48.259443+00:00", "action": "move", "task_id": 856, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T14:35:34.145674+00:00", "action": "claim", "task_id": 858, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:43:38.116276+00:00", "action": "edit", "task_id": 858, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:43:38.128039+00:00", "action": "release", "task_id": 858, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:43:38.138133+00:00", "action": "move", "task_id": 858, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T14:44:27.652814+00:00", "action": "claim", "task_id": 859, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:51:42.963482+00:00", "action": "edit", "task_id": 859, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:51:42.978744+00:00", "action": "release", "task_id": 859, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:51:42.985659+00:00", "action": "move", "task_id": 859, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T14:51:59.853162+00:00", "action": "claim", "task_id": 873, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:52:40.760898+00:00", "action": "claim", "task_id": 868, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:52:41.778165+00:00", "action": "claim", "task_id": 869, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:52:51.447992+00:00", "action": "claim", "task_id": 871, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:56:02.773971+00:00", "action": "edit", "task_id": 868, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:56:02.784256+00:00", "action": "release", "task_id": 868, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:56:02.794488+00:00", "action": "move", "task_id": 868, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T14:56:43.475158+00:00", "action": "edit", "task_id": 869, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:56:43.486580+00:00", "action": "release", "task_id": 869, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:56:43.495214+00:00", "action": "move", "task_id": 869, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T14:59:58.344967+00:00", "action": "edit", "task_id": 873, "detail": "append_body"}
+{"timestamp": "2026-04-14T14:59:58.357056+00:00", "action": "release", "task_id": 873, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T14:59:58.371367+00:00", "action": "move", "task_id": 873, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T15:01:30.934916+00:00", "action": "edit", "task_id": 871, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:01:30.950719+00:00", "action": "release", "task_id": 871, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:01:30.960104+00:00", "action": "move", "task_id": 871, "detail": "review -> backlog"}
+{"timestamp": "2026-04-14T15:02:30.357795+00:00", "action": "claim", "task_id": 861, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:02:51.886841+00:00", "action": "claim", "task_id": 848, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:03:03.383651+00:00", "action": "edit", "task_id": 848, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:03:03.412885+00:00", "action": "release", "task_id": 848, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:03:03.424208+00:00", "action": "move", "task_id": 848, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T15:03:40.526893+00:00", "action": "claim", "task_id": 872, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:04:09.278354+00:00", "action": "claim", "task_id": 836, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:05:13.017409+00:00", "action": "edit", "task_id": 836, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:05:13.038702+00:00", "action": "release", "task_id": 836, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:05:13.052140+00:00", "action": "move", "task_id": 836, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T15:05:40.717159+00:00", "action": "edit", "task_id": 861, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:05:40.732016+00:00", "action": "release", "task_id": 861, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:05:40.743772+00:00", "action": "move", "task_id": 861, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T15:06:49.325229+00:00", "action": "edit", "task_id": 872, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:06:49.348219+00:00", "action": "release", "task_id": 872, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:06:49.367303+00:00", "action": "move", "task_id": 872, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T15:07:01.024918+00:00", "action": "unblock", "task_id": 797, "detail": ""}
+{"timestamp": "2026-04-14T15:07:01.090921+00:00", "action": "unblock", "task_id": 801, "detail": ""}
+{"timestamp": "2026-04-14T15:07:15.561488+00:00", "action": "claim", "task_id": 870, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:07:15.742661+00:00", "action": "claim", "task_id": 867, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:07:31.736815+00:00", "action": "edit", "task_id": 867, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:07:31.768030+00:00", "action": "release", "task_id": 867, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:07:31.790712+00:00", "action": "move", "task_id": 867, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T15:13:40.321343+00:00", "action": "unblock", "task_id": 841, "detail": ""}
+{"timestamp": "2026-04-14T15:17:04.962351+00:00", "action": "edit", "task_id": 870, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:17:04.971301+00:00", "action": "release", "task_id": 870, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:17:04.978101+00:00", "action": "move", "task_id": 870, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T15:18:50.197427+00:00", "action": "claim", "task_id": 836, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:18:52.473936+00:00", "action": "claim", "task_id": 872, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:19:49.760688+00:00", "action": "claim", "task_id": 869, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:20:12.183604+00:00", "action": "edit", "task_id": 836, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:20:12.196246+00:00", "action": "release", "task_id": 836, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:20:12.208119+00:00", "action": "move", "task_id": 836, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T15:20:22.817237+00:00", "action": "claim", "task_id": 868, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:21:52.077289+00:00", "action": "edit", "task_id": 872, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:21:52.088905+00:00", "action": "release", "task_id": 872, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:21:52.096313+00:00", "action": "move", "task_id": 872, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T15:22:26.119008+00:00", "action": "edit", "task_id": 868, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:22:26.131901+00:00", "action": "release", "task_id": 868, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:22:26.138617+00:00", "action": "move", "task_id": 868, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T15:23:26.347506+00:00", "action": "edit", "task_id": 869, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:23:26.356513+00:00", "action": "release", "task_id": 869, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:23:26.363875+00:00", "action": "move", "task_id": 869, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T15:23:54.685567+00:00", "action": "claim", "task_id": 863, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:23:58.118886+00:00", "action": "claim", "task_id": 874, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:24:07.147544+00:00", "action": "claim", "task_id": 850, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:24:07.187096+00:00", "action": "claim", "task_id": 871, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:25:36.255140+00:00", "action": "edit", "task_id": 863, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:25:36.279627+00:00", "action": "release", "task_id": 863, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:25:36.300664+00:00", "action": "move", "task_id": 863, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T15:28:11.565928+00:00", "action": "edit", "task_id": 850, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:28:11.580477+00:00", "action": "release", "task_id": 850, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:28:11.589579+00:00", "action": "move", "task_id": 850, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T15:28:36.396730+00:00", "action": "create", "task_id": 875, "detail": "P3-06: Implement LLMExtractor with openai SDK"}
+{"timestamp": "2026-04-14T15:28:36.446181+00:00", "action": "create", "task_id": 876, "detail": "P3-07: Wire LLMExtractor into MCP knowledge server"}
+{"timestamp": "2026-04-14T15:28:40.324828+00:00", "action": "create", "task_id": 877, "detail": "Resolve page=None behavior conflict in mcp-browser tools (click/type/select must ToolError, read_text/snapshot keep last_content fallback)"}
+{"timestamp": "2026-04-14T15:29:03.008354+00:00", "action": "edit", "task_id": 874, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:29:03.022148+00:00", "action": "release", "task_id": 874, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:29:03.033321+00:00", "action": "move", "task_id": 874, "detail": "research -> backlog"}
+{"timestamp": "2026-04-14T15:29:06.095151+00:00", "action": "edit", "task_id": 871, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:29:06.105633+00:00", "action": "release", "task_id": 871, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:29:06.113517+00:00", "action": "move", "task_id": 871, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T15:29:45.071773+00:00", "action": "claim", "task_id": 873, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:30:00.145468+00:00", "action": "claim", "task_id": 853, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:30:10.217745+00:00", "action": "claim", "task_id": 797, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:30:18.447167+00:00", "action": "claim", "task_id": 801, "detail": "smart-slate"}
+{"timestamp": "2026-04-14T15:33:16.671998+00:00", "action": "edit", "task_id": 797, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:33:16.681779+00:00", "action": "release", "task_id": 797, "detail": "fast-teal"}
+{"timestamp": "2026-04-14T15:33:16.688795+00:00", "action": "move", "task_id": 797, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T15:34:05.077222+00:00", "action": "edit", "task_id": 853, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:34:05.085147+00:00", "action": "release", "task_id": 853, "detail": "fast-teal"}
+{"timestamp": "2026-04-14T15:34:05.092975+00:00", "action": "move", "task_id": 853, "detail": "in-progress -> backlog"}
+{"timestamp": "2026-04-14T15:35:09.328927+00:00", "action": "edit", "task_id": 873, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:35:09.340626+00:00", "action": "release", "task_id": 873, "detail": "fast-teal"}
+{"timestamp": "2026-04-14T15:35:09.348167+00:00", "action": "move", "task_id": 873, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T15:42:14.870131+00:00", "action": "edit", "task_id": 801, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:42:14.885959+00:00", "action": "release", "task_id": 801, "detail": "fast-teal"}
+{"timestamp": "2026-04-14T15:42:14.897893+00:00", "action": "move", "task_id": 801, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T15:43:09.002224+00:00", "action": "claim", "task_id": 870, "detail": "fast-teal"}
+{"timestamp": "2026-04-14T15:43:38.811542+00:00", "action": "claim", "task_id": 861, "detail": "fast-teal"}
+{"timestamp": "2026-04-14T15:47:52.159286+00:00", "action": "edit", "task_id": 870, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:47:52.175444+00:00", "action": "release", "task_id": 870, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T15:47:52.185409+00:00", "action": "move", "task_id": 870, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T15:48:47.068181+00:00", "action": "claim", "task_id": 854, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T15:52:37.730288+00:00", "action": "edit", "task_id": 854, "detail": "append_body"}
+{"timestamp": "2026-04-14T15:52:37.742502+00:00", "action": "release", "task_id": 854, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T15:52:37.755602+00:00", "action": "move", "task_id": 854, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T16:02:45.665013+00:00", "action": "edit", "task_id": 861, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:02:45.673936+00:00", "action": "release", "task_id": 861, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:02:45.681280+00:00", "action": "move", "task_id": 861, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T16:04:28.947079+00:00", "action": "claim", "task_id": 873, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:04:47.229575+00:00", "action": "claim", "task_id": 797, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:04:51.214885+00:00", "action": "claim", "task_id": 868, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:05:00.305030+00:00", "action": "claim", "task_id": 801, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:05:12.068776+00:00", "action": "edit", "task_id": 797, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:05:12.090689+00:00", "action": "release", "task_id": 797, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:05:12.107720+00:00", "action": "move", "task_id": 797, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T16:06:32.615838+00:00", "action": "edit", "task_id": 801, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:06:32.628540+00:00", "action": "release", "task_id": 801, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:06:32.639714+00:00", "action": "move", "task_id": 801, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T16:10:52.222945+00:00", "action": "edit", "task_id": 855, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:10:52.257076+00:00", "action": "release", "task_id": 855, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:10:52.291949+00:00", "action": "move", "task_id": 855, "detail": "research -> backlog"}
+{"timestamp": "2026-04-14T16:10:56.454962+00:00", "action": "unblock", "task_id": 855, "detail": ""}
+{"timestamp": "2026-04-14T16:14:10.770708+00:00", "action": "edit", "task_id": 873, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:14:10.786579+00:00", "action": "release", "task_id": 873, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:14:10.801158+00:00", "action": "move", "task_id": 873, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T16:19:52.353176+00:00", "action": "edit", "task_id": 868, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:19:52.376566+00:00", "action": "release", "task_id": 868, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:19:52.388683+00:00", "action": "move", "task_id": 868, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T16:20:39.660215+00:00", "action": "claim", "task_id": 877, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:20:55.466989+00:00", "action": "claim", "task_id": 869, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:20:56.979251+00:00", "action": "claim", "task_id": 861, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:21:06.910366+00:00", "action": "claim", "task_id": 870, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:21:28.008433+00:00", "action": "edit", "task_id": 861, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:21:28.027339+00:00", "action": "release", "task_id": 861, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:21:28.044120+00:00", "action": "move", "task_id": 861, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T16:22:36.935063+00:00", "action": "edit", "task_id": 870, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:22:36.952467+00:00", "action": "release", "task_id": 870, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:22:36.966581+00:00", "action": "move", "task_id": 870, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T16:27:54.588705+00:00", "action": "edit", "task_id": 877, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:27:54.613922+00:00", "action": "release", "task_id": 877, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:27:54.638771+00:00", "action": "move", "task_id": 877, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T16:49:18.064563+00:00", "action": "edit", "task_id": 869, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:49:18.080644+00:00", "action": "release", "task_id": 869, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:49:18.088519+00:00", "action": "move", "task_id": 869, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T16:49:45.702320+00:00", "action": "claim", "task_id": 874, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:49:45.810214+00:00", "action": "claim", "task_id": 875, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:49:57.809018+00:00", "action": "claim", "task_id": 872, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:49:58.885287+00:00", "action": "claim", "task_id": 853, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:50:55.879593+00:00", "action": "edit", "task_id": 874, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:50:55.890470+00:00", "action": "release", "task_id": 874, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:50:55.897425+00:00", "action": "move", "task_id": 874, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T16:51:30.674083+00:00", "action": "edit", "task_id": 853, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:51:30.689662+00:00", "action": "release", "task_id": 853, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:51:30.701292+00:00", "action": "move", "task_id": 853, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T16:56:14.860786+00:00", "action": "edit", "task_id": 875, "detail": "append_body"}
+{"timestamp": "2026-04-14T16:56:14.883042+00:00", "action": "release", "task_id": 875, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T16:56:14.898663+00:00", "action": "move", "task_id": 875, "detail": "research -> backlog"}
+{"timestamp": "2026-04-14T17:07:22.097351+00:00", "action": "edit", "task_id": 872, "detail": "append_body"}
+{"timestamp": "2026-04-14T17:07:22.112765+00:00", "action": "release", "task_id": 872, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T17:07:22.124682+00:00", "action": "move", "task_id": 872, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T17:07:41.410289+00:00", "action": "claim", "task_id": 857, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T17:07:42.132945+00:00", "action": "claim", "task_id": 876, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T17:08:10.111043+00:00", "action": "claim", "task_id": 836, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T17:09:05.894898+00:00", "action": "claim", "task_id": 871, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T17:12:11.586945+00:00", "action": "edit", "task_id": 871, "detail": "append_body"}
+{"timestamp": "2026-04-14T17:12:11.616951+00:00", "action": "release", "task_id": 871, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T17:12:11.635292+00:00", "action": "move", "task_id": 871, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T17:12:17.110760+00:00", "action": "edit", "task_id": 876, "detail": "append_body"}
+{"timestamp": "2026-04-14T17:12:17.127371+00:00", "action": "release", "task_id": 876, "detail": "soft-pike"}
+{"timestamp": "2026-04-14T17:12:17.139155+00:00", "action": "move", "task_id": 876, "detail": "research -> backlog"}

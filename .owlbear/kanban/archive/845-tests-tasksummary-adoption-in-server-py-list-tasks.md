@@ -4,7 +4,7 @@ title: Tests — TaskSummary adoption in server.py list_tasks
 status: done
 priority: needed
 created: '2026-04-11T11:41:03.139406+00:00'
-updated: '2026-04-13T20:34:46.343545+00:00'
+updated: '2026-04-14T00:30:11.040631+00:00'
 tags:
 - kanban
 - phase-1
@@ -397,3 +397,30 @@ None.
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/845-*` files found)
+[[2026-04-14]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: list_tasks uses TaskSummary (not _strip dict) | server.py:135 `[TaskSummary.model_validate(record.model_dump()) for record in records]` | PASS |
+| AC2: response includes id/title/status/priority/tags/blocked/block_reason/claimed/parent/depends_on | models.py:100-115 all 10 fields declared on TaskSummary | PASS |
+| AC3: excludes body/created/updated/claimed_by/claimed_at/file | ConfigDict(extra="ignore") + no such fields; test_list_tasks_strips_body_and_timestamp_fields covers 4 explicitly | PASS |
+| AC4: claimed is bool from claimed_by | models.py:118-122 _coerce_claimed validator; identity assertions in test | PASS |
+| AC5: outputSchema matches TaskSummary schema | server.py:147-152 uses model_json_schema(); test_list_tasks_output_schema_items_match_tasksummary_schema (AC5 regression guard) | PASS |
+| AC6: Tests fail RED before implementation | N/A — implementation pre-dates task (commit 3703469e); architect loop-breaker approved pass-through | PASS (acknowledged) |
+
+### Test Results
+- pytest (task-scoped): 25 passed, 0 failed (TestFromAC_ListTasks 6/6 + slimming 19/19)
+- pytest (full suite): 4202 passed, 355 failed, 8 skipped — 0 failures in task-relevant files; all 355 pre-existing
+- ruff (task files): clean
+
+### Architect Quality: 3/5
+AC was written targeting already-delivered work (commit 3703469e, #802), causing 5+ pipeline cycles before loop-breaker resolution. AC3 contained a factual defect (created/updated listed as excluded but actually present in TaskSummary — later corrected when model was updated). Significant pipeline waste, but ultimately resolved correctly.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC quality score 3/5: -.03
+- No other deductions (all AC evidenced, lint clean, reviewer evidence detailed, no task-scope failures)
+
+### Confidence: 0.97
+### Action: archive

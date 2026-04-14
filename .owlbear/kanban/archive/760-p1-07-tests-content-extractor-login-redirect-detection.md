@@ -1,10 +1,10 @@
 ---
 id: 760
 title: 'P1-07: Tests — Content extractor + login redirect detection'
-status: review
+status: done
 priority: needed
 created: '2026-04-10T10:55:57.241623+00:00'
-updated: '2026-04-13T23:28:20.769323+00:00'
+updated: '2026-04-14T09:29:17.864198+00:00'
 tags:
 - phase-1
 - type:test
@@ -254,3 +254,109 @@ pytest environment recovered (WMI hang resolved). Quality-Runner confirmed opera
 [[2026-04-14]]
 ## Archived — Superseded by CDP Pivot
 Content extractor + login redirect detection tests designed for Edge CDP approach. Login redirect detection no longer needed — SSO extension handles authentication transparently. Content extraction (cleaner) remains valid but needs new test strategy for Playwright approach.
+[[2026-04-14]]
+## Review Evidence — Cycle 3
+
+### Quality-Runner Results (independent — 2026-04-14)
+- **pytest**: `tests/test_browser_content_775.py` + `tests/test_edge_launcher_cdp_755.py`: **101 passed, 0 failed** (exit code 0). Builder self-report of 87 tests reflects a smaller scoped run; 101 includes all collected tests under both files.
+- **ruff**: clean — 0 violations (`tests/test_browser_content_775.py`, `tests/test_edge_launcher_cdp_755.py`, `serve/browser/src/owlbear_browser/cdp.py`). Exit code 0.
+- **Coverage**: `owlbear_browser._errors` 100%, `owlbear_browser.extractor` 100%, `owlbear_browser.cleaner` 100%, `owlbear_browser.cdp` 75% (uncovered lines are the happy-path branches of connect/disconnect, not the SSO path under review here).
+
+### Cycle 1 Finding Remediation — Verified
+
+**Fix 1 — `test_extract_returns_string` weak assertion**
+- `tests/test_browser_content_775.py:L51-L52`: `assert isinstance(result, str)` + `assert "Hello world" in result`
+- File-confirmed. Would fail if `extract()` returns empty string or strips article content. STRENGTHENED ✓
+
+**Fix 2 — `test_extract_empty_html_returns_string` weak assertion**
+- `tests/test_browser_content_775.py:L77`: `assert isinstance(result, str)` + `assert result == ""`
+- File-confirmed. Would fail if `extract()` returns None or non-empty string for empty input. STRENGTHENED ✓
+
+**Fix 3 — AC3 message wording**
+- `serve/browser/src/owlbear_browser/cdp.py`: `f"SSO session expired: login redirect to {page.url}"`
+- File-confirmed. Matches AC3 "reports SSO expiry" wording. ✓
+
+**Fix 4 — AC3 integration gap**
+- Task #838 ("Wire check_sso_redirect() into browser URL-fetch pipeline") was created and confirmed by cycle 2 reviewer. Accepted deferral per cycle 1 option (b). ✓
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — DOM extraction via static JS | `TestFromAC_ContentExtractor` (8 tests) in `test_browser_content_775.py` — 101/0 pass | PASS |
+| AC2 — Only pre-defined JS, no LLM-influenced scripts | No `page.evaluate()` in `serve/browser/` extraction path; `extractor.py` accepts `html: str` only | PASS |
+| AC3 — Login redirect detection aborts extraction, reports SSO expiry | `TestFromAC_SSODetection` (5 tests) — detection in isolation confirmed. Integration deferred to #838 (architect-accepted, per cycle 1 option b). Message wording confirmed: "SSO session expired: login redirect to {page.url}" | PASS (deferred integration) |
+| AC4 — Returns cleaned markdown (delegates to cleaner) | `TestFromAC_HTMLCleaner` + `TestFromAC_NoiseRemoval` (17 tests) — confirmed in prior cycles, all tests passing | PASS |
+
+### Step 5.2 — TestFromAC Integrity
+No builder-modified test files in this cycle's scope (superseded pass-through). All `TestFromAC_*` classes PRESERVED.
+
+### Step 5.3 — Test Quality
+- `test_extract_returns_string`: `assert "Hello world" in result` — STRONG ✓
+- `test_extract_empty_html_returns_string`: `assert result == ""` — STRONG ✓
+- No WEAK assertions remain.
+
+### Step 5.7 — Builder Process
+3 builder cycles (Cycle 1: initial pass-through via supersession; Cycle 2: two assertion fixes + message wording fix; Cycle 2.2: env was the blocker, not builder friction). Approaches varied per issue. CLEAN.
+
+### Context Note
+Task tagged `archived` and `superseded` — Edge/CDP architecture replaced by Playwright Chromium pivot. All code quality obligations for the scope of this task are met. The pass-through designation and deferred AC3 integration (to #838) remain sound given the architecture pivot makes `cdp.py` dead code pending cleanup task #870.
+
+### Deductions
+| Finding | Deduction |
+|---------|-----------|
+| AC3 integration gap: `check_sso_redirect` never called from extraction path (deferred to #838, accepted by cycle 1 reviewer) | −0.04 |
+| Two prior blocked cycles (WMI/env); not a code defect | −0.02 |
+
+### Verdict
+**Confidence: 0.94 → PASS**
+[[2026-04-14]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Only change to cdp.py was error message string in `check_sso_redirect()` — signature, return type, and observable behavior unchanged. copilot-instructions.md does not document owlbear_browser module; no update needed. |
+| 2 | Module docstrings | Yes | Verified | `cdp.py:check_sso_redirect()` docstring (L116–L129): "When an SSO redirect or login form is detected" — still accurate post-message change. No docstring referenced old message text. All public classes and functions have docstrings. |
+| 3 | External attribution | No | N/A | Task body explicitly states "all local/kanban — no external sources." sources/overview.md not affected. |
+| 4 | CLI changes | No | N/A | `type:test` task — no CLI additions or modifications. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/760-content-extractor-tests-superseded.md` confirmed present; linked in task body under [[2026-04-11]] Research section. |
+
+### Files Updated
+None — all checklist items verified accurate without edits.
+
+### Scratch Files
+No `.owlbear/scratch/760-*` files found.
+
+### Review Evidence
+Present: Cycle 3 (2026-04-14), confidence 0.94 → PASS. ✓
+
+[[2026-04-14]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 -- DOM extraction via static JS | `TestFromAC_ContentExtractor` (8 tests) in test_browser_content_775.py, assertions strengthened (L51: `"Hello world" in result`, L79: `result == ""`). 101/0 pass. | PASS |
+| AC2 -- Only pre-defined JS | `extractor.py` accepts `html: str` only, no `page.evaluate()` in extraction path (confirmed grep). | PASS |
+| AC3 -- Login redirect detection aborts extraction, reports SSO expiry | `TestFromAC_SSODetection` (5 tests) in test_edge_launcher_cdp_755.py. Message: "SSO session expired: login redirect to..." (cdp.py:L129). Integration now exists in fetcher.py:L18 (added by #830). | PASS |
+| AC4 -- Returns cleaned markdown | `TestFromAC_HTMLCleaner` + `TestFromAC_NoiseRemoval` (17 tests). `extract()` delegates to `strip_noise()` + `html_to_markdown()`. | PASS |
+
+### Test Results
+- pytest (task-scoped): 101 passed, 0 failed
+- pytest (full suite): 4195 passed, 362 failed -- 0 failures in task scope
+- ruff (task scope): clean, 0 violations
+
+### Architect Quality: 4/5
+AC was specific with 4 clear testable items. Duplication with #783/#788 was a decomposition-level overlap between parent tasks #751 and #775, not an AC specificity issue. Pipeline handled supersession cleanly.
+
+### Deduction Breakdown
+- Starting at 1.0
+- All 4 AC lines have specific evidence: no deduction
+- Lint clean in task scope: no deduction
+- AC quality 4/5 (above 3 threshold): no deduction
+- Reviewer evidence present, detailed, 3 cycles: no deduction
+- Full-suite failures: 0 in task scope: no deduction
+- Reviewer's AC3 integration gap deduction (-.04) is now stale -- fetcher.py:L18 wires check_sso_redirect: no deduction carried forward
+- Deliverables committed (cdp.py in 60af19c0, test assertions in b0132b94/73ed9072): no deduction
+
+### Confidence: .98
+### Action: archive

@@ -2,10 +2,10 @@
 id: 841
 title: Fix stale TestFromAC_TaskSummaryExcludes tests (created/updated in exclusion
   set)
-status: research
+status: archived
 priority: needed
-created: '2026-04-12T15:36:21.009577+00:00'
-updated: '2026-04-13T20:47:57.961503+00:00'
+created: '2026-04-12T15:36:21.009577Z'
+updated: '2026-04-14T15:13:40.313206+00:00'
 tags:
 - type:test
 - scope:mcp-kanban
@@ -16,7 +16,10 @@ blocked: false
 block_reason: null
 claimed_by: null
 claimed_at: null
+started: '2026-04-14T10:53:16.4977092+02:00'
+completed: '2026-04-14T10:53:16.4977092+02:00'
 ---
+
 ## Acceptance Criteria
 
 - `_EXCLUSION_FIELDS` in `test_tasksummary_model_801.py` removes `created` and `updated` (TaskSummary intentionally includes timestamps per model docstring)
@@ -119,3 +122,108 @@ Re-checked both source files against the AC:
 
 ### Action
 This task has completed a full reject → research → backlog cycle. Research confirmed the premise is invalid (T1 — no action required). **Recommend closing/archiving this task.** No code changes are needed. If adding timestamps to TaskSummary is desired, that is a feature change requiring a separate task with correct AC.
+[[2026-04-14]]
+## Research (validation pass)
+
+Re-verified existing research doc `.owlbear/research/stale-tasksummary-excludes-841.md` against current codebase (2026-04-14). All prior findings confirmed:
+
+- **Model docstring** (models.py:91–96): "Excludes body, claimed_by, created, and updated" — unchanged
+- **Model fields**: TaskSummary does NOT declare `created`/`updated`; `extra="ignore"` drops them
+- **Test file** `_EXCLUSION_FIELDS` (test_tasksummary_model_801.py:61–67): `{"body", "created", "updated", "claimed_by", "claimed_at", "file"}` — correct per model design
+- **All 14 tests pass** (verified via pytest)
+- **Implementing the AC would break correct tests** — `test_temporal_fields_not_in_construction_output` would fail (model_dump never contains created/updated)
+
+**Verdict:** Premise invalid. No code changes needed. Task should be archived.
+
+- Research doc: .owlbear/research/stale-tasksummary-excludes-841.md
+- Sources: 5 studied, 4 high-relevance
+- Finding: Premise invalid — no fix needed (confidence: 0.95)
+- Follow-up tasks: none
+- Decision requests: none
+- Tier: T1 — no action required
+
+## Challenge Results
+- Challenger: SKIPPED — factual verification, no competing options
+- Confidence in original: 0.95
+[[2026-04-14]]
+## Architecture Review (3rd cycle)
+
+### Verdict: REJECT — premise invalid, confirmed by 2 prior reviews + 2 research cycles
+
+### Re-verification (2026-04-14)
+- **Model docstring** (models.py:91–96): "Excludes body, claimed_by, created, and updated" — unchanged
+- **Model fields**: TaskSummary does NOT declare `created`/`updated`; `extra="ignore"` drops them
+- **Test file** `_EXCLUSION_FIELDS` (test_tasksummary_model_801.py:61–67): `{"body", "created", "updated", "claimed_by", "claimed_at", "file"}` — correct per model design
+- **All tests pass**: no stale tests exist
+- **Dependency #851**: done/archived
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Premise challenge | FAIL | AC contradicts the actual model. `created`/`updated` are intentionally excluded per model docstring and field declarations. Implementing AC would break currently-passing, correct tests. |
+
+### Challenge Results
+- Challenger: SKIPPED — factual re-verification of prior rejection (3rd cycle), no competing options
+- Confidence: 0.95
+
+### Action
+**STRONGLY RECOMMEND ARCHIVING THIS TASK.** It has completed 3 reject→research→backlog cycles, each confirming the same conclusion: the premise is invalid and no code changes are needed. Re-researching will produce the same result. If adding timestamps to TaskSummary is desired, create a new feature task with correct AC.
+[[2026-04-14]]
+## Research (4th cycle — final validation pass)
+
+Re-verified `.owlbear/research/stale-tasksummary-excludes-841.md` against codebase (2026-04-14). All findings confirmed unchanged:
+
+- **Model docstring** (models.py:91–96): "Excludes body, claimed_by, created, and updated" — unchanged
+- **Model fields**: TaskSummary does NOT declare `created`/`updated`; `extra="ignore"` drops them
+- **Test file** `_EXCLUSION_FIELDS` (test_tasksummary_model_801.py:61–67): `{"body", "created", "updated", "claimed_by", "claimed_at", "file"}` — correct per model design
+- **All 14 tests pass** (verified via pytest — 14 passed in 12.90s)
+- **Implementing the AC would break correct tests** — `test_temporal_fields_not_in_construction_output` asserts created/updated are absent, which is correct
+
+**Verdict: Premise invalid. No code changes needed. STRONGLY RECOMMEND ARCHIVING — this is the 4th cycle confirming the same conclusion.**
+
+- Research doc: .owlbear/research/stale-tasksummary-excludes-841.md
+- Sources: 5 studied, 4 high-relevance
+- Finding: Premise invalid — no fix needed (confidence: 0.95)
+- Follow-up tasks created: none (no action required)
+- Decision requests: none
+- Tier: T1 — no action required
+
+## Challenge Results
+- Challenger: SKIPPED — factual verification, no competing options
+- Confidence in original: 0.95
+[[2026-04-14]]
+## Architecture Review (4th cycle — BLOCK to break loop)
+
+### Verdict: BLOCK — premise invalid, infinite reject/research loop detected
+
+### Re-verification (2026-04-14)
+- **Model docstring** (models.py:91–96): "Excludes body, claimed_by, created, and updated" — created/updated are INTENTIONALLY EXCLUDED
+- **Model fields**: TaskSummary does NOT declare `created` or `updated`; `extra="ignore"` drops them silently
+- **Test file** `_EXCLUSION_FIELDS` (test_tasksummary_model_801.py:60–67): `{"body", "created", "updated", "claimed_by", "claimed_at", "file"}` — CORRECT per model design
+- **All 14 tests pass**: no stale tests exist
+- **Dependency #851**: done/archived
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| `_EXCLUSION_FIELDS` removes `created`/`updated` | INVALID | Model docstring explicitly lists these as excluded. Removing them would break tests. |
+| Exclusion set is `{body, claimed_by, claimed_at, file}` only | INVALID | Correct set includes `created` and `updated` (6 fields, not 4) |
+| `test_temporal_fields_not_in_construction_output` rewritten to assert presence | INVALID | This test is correct — `model_dump()` never contains created/updated because the model excludes them |
+| Module-level docstring AC2 comment corrected | INVALID | AC2 comment already matches the correct exclusion set |
+| All `TestFromAC_TaskSummaryExcludes` tests pass | ALREADY TRUE | All 14 tests pass right now |
+| No other tests regress | N/A | No changes needed |
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Premise challenge | FAIL | Every AC line is based on a misquote of the model docstring. The task claims TaskSummary "intentionally includes timestamps" — the opposite is true. |
+
+### Loop Analysis
+This task has completed 3 full reject-research-backlog cycles (reviews on 2026-04-13, 2026-04-13, 2026-04-14; research on 2026-04-13, 2026-04-14). Each cycle confirmed identical findings at 0.95 confidence. Rejecting to research again will produce the same result.
+
+### Challenge Results
+- Challenger: SKIPPED — 4th cycle of factual re-verification, no competing interpretations remain
+- Confidence: 0.95
+
+### Recommendation
+**ARCHIVE THIS TASK.** No code changes are needed. The tests are correct. If adding timestamps to TaskSummary is desired in the future, that is a feature change requiring a new task with correct AC.

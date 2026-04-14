@@ -5,7 +5,7 @@ title: 'RED: Tests for mcp-browser session management (AppContext CDP/Page, life
 status: todo
 priority: important
 created: '2026-04-12T14:03:37.122556+00:00'
-updated: '2026-04-13T23:28:20.793531+00:00'
+updated: '2026-04-14T16:51:30.695275+00:00'
 tags:
 - phase-2
 - scope:mcp-browser
@@ -197,3 +197,76 @@ All 5 should be updated to inject a mock page into the AppContext lifespan conte
 [[2026-04-14]]
 ## Archived — Superseded by CDP Pivot
 CDP session management tests designed for Edge CDP approach with `CDPConnectionManager`, `page.goto()` via CDP port. CDP blocked by Group Policy. New architecture uses Playwright `launch_persistent_context()` + SSO extension — different session model entirely.
+[[2026-04-14]]
+## Test-Writer Notes
+- Non-implementation pass-through: task tagged `archived` + `superseded`.
+- Root cause: CDP approach blocked by Group Policy (see archived section in body). New architecture uses Playwright `launch_persistent_context()` + SSO extension — different session model entirely.
+- A test file `tests/test_mcp_browser_session_853.py` (27 tests) was written in the prior test-writer run for the old CDP model. Those tests are now obsolete; file remains in repo but is targeted at an abandoned design.
+- No new tests written. No testable interface exists for the superseded AC.
+- Passing through to in-progress for any follow-up cleanup decisions.
+
+[[2026-04-14]]
+## Builder Notes
+
+### Verdict: REJECT → backlog (AC wrong / superseded conflict)
+
+### Test Results (current HEAD)
+- **21/27 passing** — AC1–AC10 all pass (AppContext fields, lifespan success/fail/cleanup, 6 tool bodies with page present)
+- **6/27 failing** — `TestFromAC_ToolErrorWhenNoPage`: all 6 tool-with-page-None ToolError assertions fail
+
+### Root Cause
+AC11 ("all tools raise ToolError when page is None") is irreconcilable with `TestFromAC_AllToolsCallableWithCtx` in `tests/test_mcp_browser_836.py`.
+
+| Source | Test | Input | Assertion |
+|--------|------|-------|-----------|
+| `test_mcp_browser_836.py` | `test_click_called_with_ctx_and_selector` | `AppContext(page=None, launcher=None)` | `isinstance(result, str)` — PASSES |
+| `test_mcp_browser_session_853.py` | `test_click_raises_when_page_none` | `AppContext(page=None, launcher=None)` | `ToolError` raised — FAILS |
+
+Both AppContext inputs are identical at runtime (page=None). No implementation can satisfy both simultaneously. This is the same conflict that caused the previous REJECT on this task.
+
+### Additional Context
+Task is tagged `archived` + `superseded`. The test-writer's final pass explicitly noted "Non-implementation pass-through" — no testable interface change was made. The task has been through two full reject cycles on the same AC11 contradiction.
+
+### AC Suggestion
+Architect should choose one of three resolutions:
+1. **Close/archive**: Delete or mark this task done — the 21 passing tests prove the Playwright session model works; AC11 is the only outstanding item.
+2. **Remove AC11**: Accept graceful-degradation behavior (tools return empty/stub when page=None) — matches current 836 contract.
+3. **Update 836 first**: Create a task to update `TestFromAC_AllToolsCallableWithCtx` in 836 so its 5 non-navigate tests use a page-present ctx, then re-open 853 for AC11 implementation.
+
+### Files Changed
+None — no source changes made.
+[[2026-04-14]]
+## Architecture Review (close-out)
+
+### Context
+Re-review of archived/superseded task. CDP session management architecture was abandoned after corporate Group Policy blocked `RemoteDebuggingAllowed`. Parent #837 pivoted to Playwright `launch_persistent_context()` + SSO extension. Parent body explicitly states: "Superseded children: #853 (RED tests), #854 (GREEN impl), #859 (reconciliation). New pivot tasks created to replace."
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | N/A | Task superseded — AC targets dead architecture |
+| Interface clarity | N/A | AC references CDPConnectionManager, CDP port lifecycle, page.goto via CDP — all abandoned |
+| Dependency correctness | N/A | Dependency #850 irrelevant to superseded scope |
+| Module layering | N/A | — |
+| TDD compliance | N/A | — |
+| KISS/YAGNI | N/A | — |
+| Premise challenge | **FAIL** | The capability this task tests (CDP session management) **cannot exist** — Group Policy blocks CDP. Parent pivoted to entirely different session model. |
+| Pattern consistency | N/A | — |
+| Security surface | N/A | — |
+| Single domain | N/A | — |
+
+### History
+- 2 build-reject cycles on irreconcilable AC11 conflict (ToolError-on-page-None vs. 836 silent-return contract)
+- Test-writer wrote pass-through note (archived/superseded, no testable interface)
+- Builder rejected twice citing same AC11 contradiction
+- CDP pivot makes AC11 resolution moot — entire AC targets dead architecture
+
+### Obsolete Test File
+`tests/test_mcp_browser_session_853.py` (27 tests) targets the abandoned CDP model. File should be removed or replaced when the new Playwright session management tasks land. Not blocking close-out.
+
+### Challenge Results
+- Challenger: SKIP — APPROVE for close-out of archived/superseded task, no design decisions to challenge
+
+### Verdict: APPROVE (close-out)
+### Action Taken: Advanced to todo as archived/superseded pass-through. All downstream agents should pass through — no implementation, no tests to write/verify. The AC targets a dead architecture (CDP blocked by Group Policy). Builder's suggested resolution #1 (close/archive) adopted.

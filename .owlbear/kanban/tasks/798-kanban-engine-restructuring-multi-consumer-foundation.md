@@ -1,10 +1,10 @@
 ---
 id: 798
 title: Kanban Engine Restructuring — Multi-Consumer Foundation
-status: todo
+status: done
 priority: needed
 created: '2026-04-10T21:10:19.882817+00:00'
-updated: '2026-04-13T20:46:09.033421+00:00'
+updated: '2026-04-14T11:46:41.056114+00:00'
 tags:
 - kanban
 - architecture
@@ -13,8 +13,8 @@ parent: null
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: smart-slate
+claimed_at: '2026-04-14T11:46:41.056114+00:00'
 ---
 ## Summary
 
@@ -992,3 +992,84 @@ Parent container produces no testable Python code. Tagged as epic/container — 
 
 ### Verdict: APPROVE — all children complete, all outcomes delivered
 ### Action Taken: Advanced to todo. Test-writer should write pass-through note (no testable code — parent container).
+[[2026-04-14]]
+## Test-Writer Notes
+- Non-implementation task (parent/epic container, tags: kanban, architecture, multi-phase) — no tests applicable.
+- 15th-pass arch review confirms all 33 children archived, all 5 outcomes delivered. Parent container produces no testable Python interfaces.
+- Passing through to builder.
+[[2026-04-14]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+
+[[2026-04-14]]
+## Review Evidence
+
+### Test Results
+- No tests applicable — parent/epic container. Test-writer and builder both passed through with documented notes.
+
+### Lint: N/A — no changed files
+
+### Coverage: N/A — no touched modules
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+No `TestFromAC_*` classes exist (pass-through task). Conditional skipped per Step 5.0.
+
+#### Security Review
+No changed code. No security surface. No issues.
+
+#### Test Integrity
+No `TestFromAC_*` classes exist. Conditional skipped per Step 5.2.
+
+#### Test Quality
+N/A — pass-through. No tests written (correct for a parent container).
+
+#### Data Safety
+No changed code. No data safety concerns.
+
+#### Implementation-Aware Gaps
+No code changes. No gaps.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 |
+| Approach variation | N/A |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+None.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| O1: Standalone kanban engine, importable without MCP dependency | `serve/kanban/src/owlbear_kanban/` exists; zero `owlbear_mcp` imports across all 7 source files (grep confirmed no matches) | N/A — container | PASS |
+| O2: Canonical engine model — Task + TaskSummary | `models.py:58` (`class Task`), `models.py:90` (`class TaskSummary`), `models.py:39` (`class BoardConfig`) | N/A | PASS |
+| O3: Dispatch gating — pick_dispatchable() extracted | `dispatch.py:113` (`def pick_dispatchable(engine: KanbanEngine, ...)`) | N/A | PASS |
+| O4: MCP behavioral compatibility — thin adapter | `server.py:16-19` imports `KanbanEngine`, `pick_dispatchable`, `TaskSummary` from `owlbear_kanban`; `engine_models.py` absent from mcp-kanban package (file_search returned no results) | N/A | PASS |
+| O5: GUI-ready data contract | `engine.py:153` (`def board_config()`), `engine.py:172` (`def valid_transitions()`), `engine.py:127` (`self._revision: int = 0`), `engine.py:135` (`def revision() -> int`) | N/A | PASS |
+
+### Confidence: .97
+### Verdict: PASS — all 5 outcomes delivered and verified via direct codebase evidence. All 33 children archived. Pass-through by test-writer and builder is correct and documented.
+
+[[2026-04-14]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Parent container. `copilot-instructions.md` in owlbear-dev has only Project Identity + Repository Branches sections — no package internals. `owlbear-system.instructions.md` references "mcp-kanban" which is still the correct external-facing name (`serve/mcp-kanban/` unchanged). No staleness. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified directly by this task. All child tasks were handled through their own docs gates. |
+| 3 | External attribution | No | N/A | Task body references an internal brief only (`.owlbear/briefs/draft-kanban-web-gui-prep/brief.md`). `sources/overview.md` was updated by child task docs phases (actor field #811, timestamp sort #816, ruamel #827 each confirmed). |
+| 4 | CLI changes | No | N/A | Parent container — no CLI changes. |
+| 5 | Research doc | No | N/A | No `.owlbear/research/798-*.md` exists. The brief is a planning artifact, not a researcher-phase output. No follow-up tasks outstanding — all 33 children archived. |
+
+### Files Updated
+None — no documentation impact.
+
+### Scratch Files
+No `.owlbear/scratch/798-*` files found.
+
+### Summary
+No-impact gate pass. Task #798 is a parent/epic container; all documentation concerns were handled within the 33 child tasks' individual docs gates. All 5 outcomes verified via direct codebase evidence (confidence .97 from reviewer). Advancing to done.

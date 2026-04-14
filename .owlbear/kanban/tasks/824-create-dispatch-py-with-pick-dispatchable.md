@@ -1,10 +1,10 @@
 ---
 id: 824
 title: Create dispatch.py with pick_dispatchable()
-status: review
+status: docs
 priority: needed
 created: '2026-04-10T21:23:09.122392+00:00'
-updated: '2026-04-13T22:10:02.554857+00:00'
+updated: '2026-04-14T02:18:44.665727+00:00'
 tags:
 - phase-3
 - scope:kanban
@@ -14,8 +14,8 @@ depends_on:
 - 823
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: crisp-root
+claimed_at: '2026-04-14T02:18:44.665727+00:00'
 ---
 ## Acceptance Criteria
 
@@ -164,3 +164,38 @@ No code-quality concerns found in static analysis. If quality-runner WMI issue i
 [[2026-04-13]]
 ## Environment Restored
 pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_pick_dispatchable_824.py`). Unblocked for review continuation.
+[[2026-04-14]]
+## Review Evidence
+
+### Test Results
+- pytest: **75 passed, 0 failed** (covers #823: 37 tests + #824: 38 tests)
+- Exit code: 0
+
+### Lint
+- ruff: **clean** — 0 violations on dispatch.py, __init__.py, and both test files
+- Exit code: 0
+
+### Coverage
+- `owlbear_kanban.dispatch`: **100%** (41 statements, 0 missed)
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `dispatch.py` in `owlbear_kanban` package | File exists at `serve/kanban/src/owlbear_kanban/dispatch.py` | PASS |
+| `pick_dispatchable(engine, *, limit=25, tag="") → list[Task]` | Signature confirmed, dispatch.py line 113 | PASS |
+| Owns gate predicates: TDD gate + clarity gate | `_passes_tdd_gate()` / `_passes_clarity_gate()` as separate functions | PASS |
+| Owns priority/status rank maps (hardcoded) | `PRIORITY_RANK` / `STATUS_RANK` module-level constants, lines 29–44 | PASS |
+| Result capping at `limit` | `return passing[:limit]` at dispatch.py line 155 | PASS |
+| Tag filtering | Tag check applied in dispatch loop before gate predicates | PASS |
+| Rank maps documented: execution priority ≠ display order | Module docstring lines 6–11 explicitly documents inverse-of-config ordering | PASS |
+| #823 tests pass GREEN | 75 total passing includes all 37 #823 tests | PASS |
+
+### TestFromAC_* Integrity
+6 TestFromAC_ classes (38 tests) in #824. None modified by builder — all match test-writer notes. Assertions are specific: exact rank integer values, `__all__` membership, identity check on re-export, exclusion verified by id-set membership. No vacuous assertions.
+
+### Deductions
+None.
+
+### Verdict
+PASS #824 → docs | confidence .97

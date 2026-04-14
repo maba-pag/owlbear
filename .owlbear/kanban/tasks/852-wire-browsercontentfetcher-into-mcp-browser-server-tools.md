@@ -4,7 +4,7 @@ title: Wire BrowserContentFetcher into MCP browser server tools
 status: review
 priority: important
 created: '2026-04-12T14:03:06.606752+00:00'
-updated: '2026-04-13T23:29:43.484792+00:00'
+updated: '2026-04-14T02:19:07.056293+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -14,8 +14,8 @@ depends_on:
 - 842
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: crisp-root
+claimed_at: '2026-04-14T02:19:07.056293+00:00'
 ---
 ## Context
 

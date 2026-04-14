@@ -1,10 +1,10 @@
 ---
 id: 803
 title: Tests — refresh_config + config staleness fix
-status: review
+status: docs
 priority: needed
 created: '2026-04-10T21:20:57.293478+00:00'
-updated: '2026-04-13T22:10:02.531605+00:00'
+updated: '2026-04-14T02:18:47.119193+00:00'
 tags:
 - phase-1
 - type:test
@@ -14,8 +14,8 @@ parent: 798
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: crisp-root
+claimed_at: '2026-04-14T02:18:47.119193+00:00'
 ---
 ## Acceptance Criteria
 
@@ -172,3 +172,63 @@ Resolve WMI/logfire/protobuf hang in pytest environment before re-review. Once t
 [[2026-04-13]]
 ## Environment Restored
 pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_refresh_config_803.py`). Unblocked for review continuation.
+[[2026-04-14]]
+## Review Evidence
+
+**Reviewer:** reviewer-mode (Claude Sonnet 4.6)
+**Task:** #803 — Tests — refresh_config + config staleness fix
+**Test file:** `tests/test_refresh_config_803.py` (6 tests, delivered by child #840 builder; #803 builder pass-through)
+**Review cycle:** 2nd (cycle 1 blocked by env; environment confirmed restored)
+
+---
+
+### Test Execution (Quality-Runner, independent — 2026-04-14)
+First attempt: FATAL (pywin32/WMI env hang — recurring Windows issue). Retry succeeded.
+**6 passed, 0 failed** (exit code 0). Builder self-report of 6/6 confirmed.
+
+### Lint
+ruff: **clean** — 0 violations (`tests/test_refresh_config_803.py`). Exit code 0.
+`get_errors` static check: clean on both test file and `serve/kanban/src/owlbear_kanban/engine.py`.
+
+### Coverage
+| Module | % | Notes |
+|--------|---|-------|
+| `owlbear_kanban.engine` | 33 | Expected — 6 tests cover refresh_config() only; rest covered by dedicated task suites |
+| `owlbear_kanban.config_loader` | 91 | Config loading path well covered |
+
+---
+
+### AC Compliance Table
+
+| AC | Mapped Test | Assertion | Would Fail If Violated? | Status |
+|----|------------|-----------|------------------------|--------|
+| AC1: reload YAML from disk | `test_refresh_config_reloads_yaml_from_disk` | `board_config().next_id == 999` | YES — exact equality | STRONG |
+| AC2: update `_config`, `tasks_dir`, rank maps (`archive_dir` excluded per arch review) | Tests 1–4 | Exact value/list/glob assertions | YES | STRONG |
+| AC3: `create_task` staleness | SKIP — arch-approved; covered by #828 tests | — | ACCEPTABLE |
+| AC4: `move_task` validates against new statuses | Tests 5–6 | `record.status == "staging"` + `pytest.raises(ValueError, match="backlog")` | YES — type + message match | STRONG |
+| AC5: Tests fail RED | MOOT — impl pre-existed (arch-approved) | — | ACCEPTABLE |
+
+### Implementation Analysis
+`refresh_config()` at engine.py L161-168:
+```python
+self._config = load_config(self._kanban_dir)
+self._tasks_dir = self._kanban_dir / self._config.tasks_dir
+self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME
+```
+- `_priority_rank()` and `_status_rank()` are on-demand computed from `self._config` — no eager cache. Correct.
+- `move_task()` reads `{s["name"] for s in self._config.statuses}` live. Correct.
+- All test assertions trace through correct code paths.
+
+### TestFromAC Integrity
+`TestFromAC_RefreshConfig` is a NEW class in a NEW file. #803 builder is verified pass-through — no prior TestFromAC_ classes to protect. PRESERVED.
+
+### Security
+All tests use `tmp_path`; no I/O beyond temp directory. No injection surface, no secrets, no shell. PASS.
+
+### Deductions
+| Finding | Deduction |
+|---------|-----------|
+| Quality-runner first attempt fatal (env issue — pywin32/WMI); retry succeeded | −0.01 |
+
+### Verdict
+Confidence: **0.99 → PASS**

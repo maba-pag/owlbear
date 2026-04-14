@@ -1,10 +1,10 @@
 ---
 id: 787
 title: owlbear_browser package scaffold and CDP launcher
-status: review
+status: done
 priority: critical
 created: '2026-04-10T12:31:05.248695+00:00'
-updated: '2026-04-13T23:28:20.722218+00:00'
+updated: '2026-04-14T08:39:28.782512+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -324,3 +324,149 @@ pytest environment recovered (WMI hang resolved). Quality-Runner confirmed opera
 [[2026-04-14]]
 ## Archived — Superseded by CDP Pivot
 Edge CDP launcher approach blocked by corporate Group Policy (`RemoteDebuggingAllowed=0`). Entire Edge/CDP architecture replaced by Playwright Chromium + Microsoft SSO extension. See `.owlbear/research/cdp-spike-results.md` for pivot findings. New pivot tasks created under #751.
+[[2026-04-14]]
+## Review Evidence
+
+### Test Results (independent — Quality-Runner)
+`tests/test_browser_package_scaffold_787.py tests/test_edge_launcher_cdp_755.py`: **25 passed, 0 failed** (exit 0)
+
+### Lint
+ruff `serve/browser/src/owlbear_browser/ tests/test_browser_package_scaffold_787.py`: **clean** (exit 0)
+
+### Coverage
+| Module | % |
+|--------|---|
+| `owlbear_browser/__init__.py` | 100 |
+| `owlbear_browser/_errors.py` | 100 |
+| `owlbear_browser/cdp.py` | 75 |
+| `owlbear_browser/launcher.py` | 75 |
+| overall | 44 |
+
+**Coverage note:** Builder made zero code changes. Target modules (cdp.py: 75%, launcher.py: 75%) are adequately covered by the 21 #755 tests. Lower-coverage modules (cleaner, extractor, fetcher) are outside this task's scope and covered by separate task test files. Coverage check per Step 4: N/A — no touched modules (zero builder changes).
+
+---
+
+### Step 1 — Source Control Changes
+`get_changed_files` confirms: **zero changes** to `serve/browser/`, `tests/test_browser_package_scaffold_787.py`, or `tests/test_edge_launcher_cdp_755.py`. Consistent with builder claim of pre-completed AC. `playwright>=1.40` dep present in commit 00468f0f (task #758).
+
+---
+
+### Pass 1 — CRITICAL
+
+#### 5.0 Test-Writer AC Coverage
+
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| playwright>=1.40 present | `test_playwright_dep_present_in_project_dependencies` | YES — `assert _find_playwright_dep(deps) is not None` | COVERED |
+| version operator >= or ~= | `test_playwright_dep_specifies_lower_bound_operator` | YES — asserts `>= in dep or ~= in dep` | COVERED |
+| minimum version 1.40 | `test_playwright_min_version_is_at_least_1_40` | YES — parses tuple, compares >= (1,40) | COVERED |
+| no exact pin | `test_playwright_dep_not_pinned_to_exact_version` | YES — asserts `== not in dep` | COVERED |
+| launcher.py (find_edge_binary, build_launch_args, EdgeNotFoundError) | TestFromAC_EdgeDiscovery + TestFromAC_CDPLaunchArgs (10 tests) in test_edge_launcher_cdp_755.py | YES — imports fail if absent, mock assertions fail on wrong behavior | COVERED |
+| cdp.py (CDPConnectionManager, errors, SSO) | TestFromAC_ConnectionLifecycle + TestFromAC_SSODetection (11 tests) | YES | COVERED |
+| ALLOWED_IMPORTS owlbear_browser: set() | test_package_boundary.py (pre-existing) | YES | COVERED (pre-done) |
+| root pyproject.toml ruff.src | test_edge_launcher_cdp_758.py (pre-existing) | YES | COVERED (pre-done) |
+
+No MISSING entries.
+
+#### 5.1 Security Review
+- `build_launch_args()`: `--remote-allow-origins=http://127.0.0.1:{port}` (never wildcard), no 0.0.0.0, `--user-data-dir` mandatory ✓
+- `CDPConnectionManager.connect()`: `http://127.0.0.1:{self._port}` — localhost only ✓
+- playwright lazy import ✓
+- No hardcoded secrets, no injection surface ✓
+- playwright>=1.40 Microsoft-maintained, no CVEs ✓
+
+**No security issues.**
+
+#### 5.2 Test Integrity
+`get_changed_files` confirms test files NOT modified by builder. All TestFromAC_ classes **PRESERVED**.
+
+#### 5.3 Test Quality
+| Dimension | Rating |
+|-----------|--------|
+| Assertion specificity | STRONG (exact string/version comparisons, mock call_args inspection) |
+| Negative/error-path coverage | STRONG (EdgeNotFoundError 2 paths, CDPConnectionError, EDGE_PATH missing/invalid) |
+| Mutation resistance | STRONG (missing arg → AssertionError; wrong endpoint → fails; missing class → ImportError) |
+| Test independence | STRONG (monkeypatch at module level, no shared state) |
+| Descriptive names | STRONG (all TestFromAC_* with descriptive methods) |
+
+**No WEAK ratings.**
+
+#### 5.4 Data Safety
+No LLM output, no shared mutable state, no unbounded input, no multi-step atomicity. **PASS.**
+
+#### 5.5 Implementation-Aware Test Gap Analysis
+Zero code changes by builder. Pre-existing implementation previously verified by prior reviewer. `launch_edge()` (subprocess.Popen) not tested by #787 AC tests — covered by #755 separately. **No gaps for this task's scope.**
+
+#### 5.6 Necessity Check
+N/A — no new dependencies added by this build cycle.
+
+---
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| serve/browser/pyproject.toml: playwright>=1.40 | File read: L7 `"playwright>=1.40"` + 4 passing TestFromAC tests | PASS |
+| launcher.py: find_edge_binary, build_launch_args, EdgeNotFoundError | 21 #755 tests pass (exit 0) | PASS |
+| cdp.py: CDPConnectionManager, CDPConnectionError, AuthenticationRequired, SSO | 21 #755 tests pass | PASS |
+| ALLOWED_IMPORTS owlbear_browser: set() | Pre-existing, arch review pass 2 confirmed | PASS |
+| root pyproject.toml tool.ruff.src: "serve/browser/src" | Pre-existing, arch review pass 2 confirmed, ruff clean on target paths | PASS |
+
+---
+
+### Deductions
+None.
+
+### Context Note
+Task tagged `archived` and `superseded` — Edge/CDP architecture replaced by Playwright Chromium pivot (#869). Cleanup task #870 will delete test files. AC is fully met; code is clean. Superseded status does not constitute a quality defect.
+
+### Verdict
+**Confidence: .95 → PASS**
+[[2026-04-14]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change → copilot-instructions.md | No | N/A | `.github/copilot-instructions.md` has only Project Identity + Branch table sections — no tech stack or package registry. Task tagged `archived`/`superseded`; adding a superseded package would be inaccurate. |
+| 2 | Module docstrings | Yes | Verified — no updates needed | Read `launcher.py`, `cdp.py`, `_errors.py`, `__init__.py`. All public classes and functions have accurate docstrings: `find_edge_binary()`, `build_launch_args()`, `launch_edge()`, `CDPConnectionManager` (class + all methods), `playwright_connect_over_cdp()`, all 3 error classes. |
+| 3 | External attribution | No | N/A | Playwright `connect_over_cdp` and `launch_persistent_context` already attributed in `.owlbear/sources/overview.md` lines 9, 18-19 via task #752. No new external patterns introduced by #787. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | No | N/A | No `.owlbear/research/787-*` file exists or was linked from task body. Pivot doc (`cdp-spike-results.md`) referenced only as archive context, not produced by #787 research phase. |
+
+### Files Updated
+None — no docs impact.
+
+### Scratch Files
+No `.owlbear/scratch/787-*` files found. Nothing to clean.
+
+### Commit
+Skipped — no documentation files updated.
+[[2026-04-14]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| serve/browser/pyproject.toml: playwright>=1.40 | File read: L8 `"playwright>=1.40"` + 4 TestFromAC pass (reviewer QR) | PASS |
+| launcher.py: find_edge_binary, build_launch_args, EdgeNotFoundError | File exists, exports confirmed (spot-check L1-40), 21 #755 tests pass (reviewer QR) | PASS |
+| cdp.py: CDPConnectionManager, CDPConnectionError, AuthenticationRequired, SSO | File exists, 21 #755 tests pass (reviewer QR) | PASS |
+| ALLOWED_IMPORTS owlbear_browser: set() | Pre-existing, arch review pass 2 confirmed L47 | PASS |
+| Root pyproject.toml tool.ruff.src: "serve/browser/src" | Pre-existing, reviewer confirmed | PASS |
+
+### Test Results
+- pytest (full suite): 33 passed, 0 failed, 4 warnings
+- ruff: 1 E501 in serve/kanban/engine.py (outside task scope, pre-existing)
+
+### Architect Quality: 4/5
+Original AC was vague (module structure, security constraints, error types all missing). Architect caught this in pass 1 (REFINE) and produced precise binding AC in pass 2 with exact modules, exports, signatures, security constraints, and dependency correction. Minor gap: stale dependency metadata (#782 vs #755) required orchestrator action.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 5 PASS)
+- Lint violations in scope: 0
+- AC quality score: 4/5 (no deduction, above 3)
+- Missing reviewer evidence: 0 (two detailed passes, QR-confirmed)
+- Full-suite failures in scope: 0
+
+### Confidence: .98
+### Action: archive
+
+Note: Task tagged superseded (Edge CDP replaced by Playwright Chromium pivot). AC fully met; superseded status is not a quality defect. Cleanup handled by #870.

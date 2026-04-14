@@ -1,10 +1,10 @@
 ---
 id: 782
 title: Tests — owlbear_browser package scaffold and CDP launcher
-status: review
+status: docs
 priority: needed
 created: '2026-04-10T12:30:44.020270+00:00'
-updated: '2026-04-13T23:28:20.750310+00:00'
+updated: '2026-04-14T01:13:00.839947+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -168,3 +168,18 @@ pytest environment recovered (WMI hang resolved). Quality-Runner confirmed opera
 [[2026-04-14]]
 ## Archived — Superseded by CDP Pivot
 Tests for Edge CDP launcher — approach abandoned. Group Policy blocks CDP on corporate laptop. New architecture: Playwright Chromium + SSO extension. New test tasks will cover the pivot approach.
+[[2026-04-14]]
+## Review Evidence
+
+**Review cycle:** 2nd  
+**Reviewer action:** Administrative closure — task superseded before review could complete.
+
+### Superseded Status
+
+Task body (2026-04-14): *"Archived — Superseded by CDP Pivot. Tests for Edge CDP launcher — approach abandoned. Group Policy blocks CDP on corporate laptop. New architecture: Playwright Chromium + SSO extension."*
+
+The implementation under review (`EdgeCDPLauncher` SIGKILL fix in `edge_launcher.py`, `tests/test_browser_cdp_775.py`) is no longer part of the active architecture. The 1st-cycle review was blocked on environment defect; environment was restored (2026-04-13 note confirmed), but the architectural pivot was announced before a 2nd review cycle could be dispatched.
+
+### Review Verdict
+
+**No verdict issued.** Standard AC compliance, test quality, and confidence scoring are not applicable to superseded work. Moving to `archived`. No follow-up tasks required — new test tasks for the Playwright pivot are expected under the #775 parent.

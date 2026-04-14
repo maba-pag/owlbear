@@ -1,10 +1,10 @@
 ---
 id: 801
 title: Tests — TaskSummary model
-status: review
+status: done
 priority: needed
 created: '2026-04-10T21:20:41.798290+00:00'
-updated: '2026-04-13T22:10:02.508232+00:00'
+updated: '2026-04-14T16:06:32.636560+00:00'
 tags:
 - phase-1
 - type:test
@@ -181,3 +181,131 @@ Brief: `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md`
 [[2026-04-13]]
 ## Environment Restored
 pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational — independently verified with scoped run on #801: 14/14 passed, ruff clean. Unblocked for review continuation.
+[[2026-04-14]]
+## Review Evidence (Cycle 2)
+
+### Execution Summary
+- Reviewer claimed task, dispatched quality-runner + Explore (code-reader fallback) in parallel.
+- **quality-runner**: FATAL EXECUTION ERROR — KeyboardInterrupt during pytest plugin loading (`logfire → charset_normalizer → importlib`). Both internal retry attempts failed. Cannot run pytest, ruff, or coverage. Different error than Cycle 1 (prior: WMI deadlock; now: import-time crash during plugin initialization). Environment recovery note in task body (2026-04-13) was stale — environment is broken again.
+- **Explore (code-reader)**: Full static analysis returned — used for documentation only. Cannot substitute for test execution.
+
+### Step 1 — Changed Files
+Per task body (builder notes):
+- `serve/kanban/src/owlbear_kanban/models.py` — TaskSummary schema overhaul
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` — list_tasks return type change
+- `tests/test_tasksummary_model_801.py` — test-writer artifact (committed pre-builder)
+
+### Step 2 — Test Execution
+**BLOCKED** — Fatal pytest initialization failure. Quality-runner returned:
+```
+Fatal: pytest initialization failure. Both retry attempts failed with KeyboardInterrupt during plugin loading (logfire → charset_normalizer → importlib). Virtual environment may be corrupted or have conflicting dependencies.
+```
+
+### Static Analysis (Explore Agent — for reference only, not verdict evidence)
+
+**AC compliance — static verification:**
+
+| AC Line | Tests Mapped | Assertion Strength | Static Verdict |
+|---------|-------------|-------------------|---------------|
+| TaskSummary schema: 10 inclusion fields | `test_inclusion_fields_all_present`, `test_claimed_is_bool_not_optional_string`, `test_block_reason_field_present`, `test_parent_field_present`, `test_depends_on_field_present` | TIGHT — set subtraction + annotation type check | COVERED |
+| TaskSummary excludes 6 fields | `test_excluded_fields_absent_from_schema`, `test_claimed_by_not_in_schema`, `test_body_not_in_construction_output`, `test_temporal_fields_not_in_construction_output`, `test_claimed_by_not_in_construction_output` | TIGHT — schema AND model_dump() output verified | COVERED |
+| list_tasks returns TaskSummary projections | `test_list_tasks_return_type_is_list_of_tasksummary` | TIGHT — get_type_hints() + args[0] identity check | COVERED |
+| TaskSummary constructed from Task instance | `test_from_task_instance_construction_succeeds`, `test_claimed_true_when_task_has_claimed_by`, `test_claimed_false_when_task_unclaimed` | TIGHT — isinstance + both bool coercion paths | COVERED |
+
+**TestFromAC integrity:** No modifications detected in 14 tests across 4 test classes. All assertions tight and specific.
+
+**Implementation quality (static):** `extra="ignore"` correct, `_coerce_claimed` validator logic correct (pops claimed_by, converts None → False / non-None → True), `list_tasks` returns actual TaskSummary instances via `model_validate()`. No security concerns.
+
+**Lint (static):** Code appears clean — cannot independently verify with ruff.
+
+### Verdict
+**BLOCK** — Cannot independently execute tests. Static analysis strongly suggests correct implementation (confidence ~0.93 from static alone), but protocol requires test execution evidence. Blocking until environment is repaired.
+
+### Required action
+Fix pytest plugin loading failure (logfire/charset_normalizer import crash). Confirm quality-runner can complete a scoped test run, then return task to `review` for Cycle 3.
+
+[[2026-04-14]]
+## Review Evidence (Cycle 3)
+
+### Execution Summary
+- Cycle 3 review after 2 BLOCK cycles (environment issues: WMI deadlock and pytest plugin crash). No implementation or test failures in prior cycles.
+- Dispatched quality-runner + Explore (code-reader) in parallel per Step 2.5.
+- Both returned successfully. Environment confirmed operational.
+
+### Test Results
+- pytest: **14 passed, 0 failed** (independently executed)
+- ruff: **clean** (0 violations on models.py, server.py, test file)
+- Coverage: `owlbear_kanban.models` = **98%**, `owlbear_mcp_kanban.server` = 38% (low server % expected — only return-type check tested; other MCP tools out of scope)
+
+### Pass 1 — CRITICAL
+
+#### 5.0 Test-Writer AC Coverage
+
+| AC Line | Mapped Tests | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| TaskSummary schema: 10 inclusion fields | `test_inclusion_fields_all_present`, `test_claimed_is_bool_not_optional_string`, `test_block_reason_field_present`, `test_parent_field_present`, `test_depends_on_field_present` | Yes — set subtraction + `annotation is bool` identity check | COVERED |
+| TaskSummary excludes 6 fields | `test_excluded_fields_absent_from_schema`, `test_claimed_by_not_in_schema`, `test_body_not_in_construction_output`, `test_temporal_fields_not_in_construction_output`, `test_claimed_by_not_in_construction_output` | Yes — schema AND model_dump() output verified; extra="ignore" leak caught if reverted | COVERED |
+| list_tasks returns TaskSummary projections | `test_list_tasks_return_type_is_list_of_tasksummary` | Yes — `inspect.unwrap()` + `get_type_hints()` + `args[0] is TaskSummary` identity check | COVERED |
+| TaskSummary constructed from Task instance | `test_from_task_instance_construction_succeeds`, `test_claimed_true_when_task_has_claimed_by`, `test_claimed_false_when_task_unclaimed` | Yes — isinstance + both coercion directions | COVERED |
+| Tests fail RED before implementation | Confirmed by test-writer (14 failed pre-builder); not independently re-testable | N/A | REPORTED |
+
+#### 5.1 Security Review
+- No hardcoded secrets, injection, path traversal, or insecure deserialization.
+- `extra="ignore"` reduces attack surface vs prior `extra="allow"` — improvement.
+- `_coerce_claimed` creates dict copy before popping key: safe.
+- No findings.
+
+#### 5.2 Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| All 14 TestFromAC_* methods | No modifications detected | PRESERVED |
+
+#### 5.3 Test Quality
+- **Assertion specificity:** STRONG — set operations, type identity checks, model_dump() output inspection, reflection-based type hint verification.
+- **Error-path coverage:** STRONG — both claimed coercion paths (True/False) tested; exclusion tested at schema AND instance level.
+- **Mutation resistance:** STRONG — flipping `extra="ignore"` → `extra="allow"` would fail 5 tests; removing `_coerce_claimed` would fail 3 tests; reverting return type to `list[dict]` would fail 1 test.
+- **Test independence:** STRONG — fresh instances via constants; no shared mutable state.
+- **Naming:** STRONG — self-documenting names throughout.
+
+#### 5.4 Data Safety
+- No race conditions, unbounded inputs, or unvalidated LLM output. No findings.
+
+#### 5.5 Implementation-Aware Test Gap Analysis
+- `_coerce_claimed` validator: both paths exercised. Pass.
+- `extra="ignore"` config: verified by 5 construction output tests. Pass.
+- `__getitem__` method on TaskSummary: pre-existing method, not in task scope — not reviewed.
+- **Informational only (not blocking):** No tests for invalid field types (e.g., id="not-an-int"). Out of scope for this RED/schema task.
+
+#### 5.7 Builder Process Quality
+- One `## Builder Notes` section. No retry loops. CLEAN.
+
+### AC Compliance Table
+
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| 10 inclusion fields in schema | models.py: `id, title, status, priority, tags, blocked, block_reason, claimed: bool, parent, depends_on` at lines ~101–110 | `test_inclusion_fields_all_present` (14 passed) | PASS |
+| 6 fields excluded from schema | models.py: `extra="ignore"`; no body/created/updated/claimed_by/claimed_at/file in model_fields | `test_excluded_fields_absent_from_schema` (14 passed) | PASS |
+| list_tasks returns `list[TaskSummary]` | server.py: return annotation `list[TaskSummary]`; body: `[TaskSummary.model_validate(record.model_dump()) for record in records]` | `test_list_tasks_return_type_is_list_of_tasksummary` (14 passed) | PASS |
+| TaskSummary constructed from Task | models.py: `_coerce_claimed` pops `claimed_by`, converts None→False / non-None→True | `test_claimed_true/false_when_task_*` (14 passed) | PASS |
+
+### Deductions
+- 0 Pass 1 deductions.
+- 0 Pass 2 notes worth recording.
+
+### Verdict
+**PASS** — confidence .97. All AC lines covered with tight assertions. 14/14 tests green. Ruff clean. models.py coverage 98%. No TestFromAC modifications. No security concerns.
+
+[[2026-04-14]]
+## Docs Gate
+
+| # | Item | Applies? | Status | Evidence |
+|---|------|----------|--------|----------|
+| 1 | copilot-instructions.md behavior/API | No | N/A | File contains only project identity + branch table (~10 lines). No API or model documentation sections exist to update. |
+| 2 | Module docstrings | Yes | PASS | `TaskSummary` docstring (models.py:96–103) accurately describes: lightweight projection, excluded fields, bool coercion of claimed_by, dict-style access. `list_tasks` docstring (server.py:120) accurate: "List kanban tasks with optional filters." No updates needed. |
+| 3 | External attribution | No | N/A | Research sources S1–S3 are internal project files (engine models, server.py, brief). No external repos or articles. No sources/overview.md row needed. |
+| 4 | CLI changes | No | N/A | Task modified internal model schema and MCP tool return type. No CLI commands added or modified. |
+| 5 | Research doc | Yes | PASS | `.owlbear/research/tasksummary-model-tests-801.md` confirmed present. Task body links it correctly. Follow-up tasks noted as none (#802 GREEN already existed). |
+
+**Files updated:** None  
+**Scratch files cleaned:** None found (`.owlbear/scratch/801-*` search returned 0 results)  
+**Commit:** Not required

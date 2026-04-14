@@ -4,7 +4,7 @@ title: Implement browser session management in mcp-browser AppContext
 status: in-progress
 priority: important
 created: '2026-04-11T15:28:49.551640+00:00'
-updated: '2026-04-13T23:20:25.733844+00:00'
+updated: '2026-04-14T02:18:42.467478+00:00'
 tags:
 - phase-2
 - scope:mcp-browser
@@ -13,8 +13,8 @@ depends_on:
 - 771
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: crisp-root
+claimed_at: '2026-04-14T02:18:42.467478+00:00'
 ---
 Add browser session state to mcp-browser AppContext: CDPConnectionManager and Playwright Page lifecycle.
 
@@ -168,7 +168,7 @@ Commit: f0867899 (branch dev)
 ### REJECT reason — test indentation bug
 `TestFromAC_LifespanCleanup::test_lifespan_cleanup_calls_browser_close_on_exception_exit` cannot pass as written. The `with pytest.raises(RuntimeError, match=err_msg):` block is **deindented outside** the `with patch("owlbear_browser.cdp.playwright_connect_over_cdp", ...)` block. As a result:
 
-1. The patch context exits after `err_msg = "test_exception"` 
+1. The patch context exits after `err_msg = "test_exception"`
 2. `playwright_connect_over_cdp` is unpatched when `app_lifespan(server)` runs
 3. CDP connect fails → `cdp=None` → `finally` block skips `disconnect()`
 4. `mock_browser.close.assert_awaited_once()` → **AssertionError: Awaited 0 times**

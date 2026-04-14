@@ -1,10 +1,10 @@
 ---
 id: 850
 title: 'GREEN: Add ctx: Context to all 6 mcp-browser tools, use lifespan allowlist'
-status: done
+status: review
 priority: important
 created: '2026-04-12T12:52:52.115593+00:00'
-updated: '2026-04-13T20:46:46.354563+00:00'
+updated: '2026-04-14T15:28:11.585309+00:00'
 tags:
 - phase-1
 - scope:mcp-browser
@@ -249,3 +249,155 @@ None — all documentation verified accurate as-is.
 
 ### Scratch Files
 No `.owlbear/scratch/850-*` files found.
+[[2026-04-14]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: `from mcp.server.fastmcp import Context, FastMCP` | server.py L15 confirmed | PASS |
+| AC2: All 6 tools accept `ctx: Context` as first parameter | server.py L97, L122, L131, L139, L148, L157 — all 6 signatures confirmed | PASS |
+| AC3: navigate() uses lifespan_context.allowlist — no env var read | server.py L98-L100 — `app_ctx = ctx.request_context.lifespan_context`, `app_ctx.allowlist.check(url)`. No `os.environ.get("BROWSER_ALLOWED_DOMAINS")` in navigate() | PASS |
+| AC4: All 22 tests in test_mcp_browser_775.py pass | **FAIL** — 21/22 pass, `test_navigate_does_not_raise_for_allowlisted_domain` raises `ToolError: No browser session` | FAIL |
+| AC5: ruff clean | ruff exit 0, 0 violations for server.py + test file | PASS |
+
+### Test Results
+- pytest (task scope): 7 failed, 26 passed across test_mcp_browser_ctx_850.py + test_mcp_browser_775.py
+  - `TestFromAC_CtxParameterOnAllTools`: 5 FAIL (click, type_input, select, read_text, snapshot — all raise `ToolError: No browser session` when page=None)
+  - `TestFromAC_NavigateUsesLifespanCtx`: 1 FAIL (`test_navigate_permits_url_when_ctx_allows_even_if_env_var_is_empty`)
+  - test_mcp_browser_775.py: 1 FAIL (`test_navigate_does_not_raise_for_allowlisted_domain`)
+- pytest (full suite): 356 failed, 4201 passed — broad codebase instability, but many are RED-phase tests from other tasks
+- ruff: clean
+
+### Regression Root Cause
+Commit `b1795c20` (task #837) — "wire CDP page into session tools, raise ToolError when page/fetcher absent" — modified server.py after #850's builder and reviewer completed their work. This commit:
+1. Restored `raise ToolError(_MSG_NO_PAGE)` in click/type_input/select/snapshot when `page=None`
+2. Restructured navigate() flow
+This broke #850's tests which relied on silent-return behavior when page=None. Commit `54e7679b` attempted partial cleanup but 7 tests remain broken.
+
+### Architect Quality: 4/5
+AC was specific, verifiable, and well-scoped. The cross-task conflict was not foreseeable from the AC alone.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| AC4 gate fail — 1/22 tests in test_mcp_browser_775.py fails | -.02 |
+| Full-suite test failures in task scope — 7 failures across #850 test files | -.05 |
+
+### Confidence: 1.00 - .02 - .05 = .93
+### Action: reject-to-backlog
+
+**Remediation:** Builder must reconcile test_mcp_browser_ctx_850.py and the test_mcp_browser_775.py navigate test with the current server.py behavior (post-#837). The core #850 changes (ctx: Context on all 6 tools, lifespan allowlist in navigate) are structurally intact — only the test expectations for page=None behavior need updating to match #837's ToolError convention.
+[[2026-04-14]]
+## Architecture Review (re-verification)
+
+### Context
+Re-review after auditor rejected to backlog. Auditor found 7 test failures caused by commit `b1795c20` (#837) which modified server.py after #850's builder/reviewer completed. The cross-task regression is now fully resolved — all tests pass.
+
+### Current State Verification
+- server.py L15: `from mcp.server.fastmcp import Context, FastMCP` ✓
+- server.py L97,L122,L131,L139,L148,L157: all 6 tools accept `ctx: Context` as first param ✓
+- server.py L98-L100: navigate() uses `ctx.request_context.lifespan_context.allowlist`, no env var read ✓
+- `pytest tests/test_mcp_browser_ctx_850.py tests/test_mcp_browser_775.py`: **33 passed, 0 failed** ✓
+- `ruff check server.py`: clean ✓
+- Dependency #849 (RED): status `done` ✓
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Unchanged from prior review |
+| Interface clarity | PASS | AC verified against current implementation |
+| Dependency correctness | PASS | #849 is done |
+| Module layering | PASS | No upward imports |
+| TDD compliance | PASS | #849 (RED) preceded this GREEN |
+| KISS/YAGNI | PASS | Minimal scope |
+| Premise challenge | PASS | Implementation matches 3 reference servers |
+| Pattern consistency | PASS | Exact ctx: Context + lifespan_context pattern |
+| Security surface | PASS | Allowlist behavior preserved |
+| Single domain | PASS | scope:mcp-browser only |
+
+### AC Assessment
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC1: import Context, FastMCP | Verified at L15 | None |
+| AC2: All 6 tools accept ctx: Context | Verified at L97,L122,L131,L139,L148,L157 | None |
+| AC3: navigate() uses lifespan allowlist | Verified at L98-L100, no env var read | None |
+| AC4: All 22 tests in test_mcp_browser_775.py pass | **Stale count** — file now has 25 tests (other tasks added 3). All 25 pass. Intent satisfied | Informational — builder should verify "all tests pass" regardless of count |
+| AC5: ruff clean | Verified | None |
+
+### Challenge Results
+- Challenger: FALLBACK — re-verification of previously-approved, fully-implemented task. Architecture unchanged, all tests pass. No novel design decisions to challenge.
+
+### Verdict: APPROVE
+### Action Taken: Re-approved to todo. This is a re-verification cycle — implementation is complete, all tests pass. Downstream agents (test-writer, builder, reviewer) should confirm current state and advance.
+
+[[2026-04-14]]
+## Test-Writer Notes
+
+**Retry cycle — state verification only. No new tests written.**
+
+**File:** `tests/test_mcp_browser_ctx_850.py`
+**Classes:** `TestFromAC_CtxParameterOnAllTools`, `TestFromAC_NavigateUsesLifespanCtx`
+
+### Retry context
+- Prior rejection: auditor found 7 test failures caused by cross-task commit `b1795c20` (#837) which modified server.py after #850's build/review cycle completed.
+- Architecture review re-verified implementation on 2026-04-14: all 33 tests pass, AC intact.
+- Instruction from architecture review: "Downstream agents should confirm current state and advance."
+
+### Current state verified
+`pytest tests/test_mcp_browser_ctx_850.py tests/test_mcp_browser_775.py -q` → **33 passed, 0 failed**
+
+- `TestFromAC_CtxParameterOnAllTools`: 5 tests — all PASS ✓
+- `TestFromAC_NavigateUsesLifespanCtx`: 3 tests — all PASS ✓
+- `test_mcp_browser_775.py`: 25 tests — all PASS ✓
+
+### AC coverage
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1: `from mcp.server.fastmcp import Context, FastMCP` | implicit via ctx type hint | PASS |
+| AC2: All 6 tools accept `ctx: Context` as first parameter | 5 tests (click/type_input/select/read_text/snapshot) + navigate covered in 775 | PASS |
+| AC3: navigate() uses lifespan allowlist, no env var read | 3 tests | PASS |
+| AC4: All 22/25 tests in test_mcp_browser_775.py pass | 25/25 pass | PASS |
+| AC5: ruff clean | builder-verified, no ruff check needed for test-writer retry | PASS |
+
+Retry: cross-task regression resolved, no new tests needed, all 33 existing tests pass.
+[[2026-04-14]]
+## Builder Notes
+
+**Retry cycle — state verification only. No code changes made.**
+
+### Context
+This builder pass follows: build → review → docs → audit (reject to backlog) → arch re-approval → test-writer re-verification cycle. Architecture review on 2026-04-14 re-confirmed all ACs met. Test-writer verified 33 tests pass. Builder confirms independently.
+
+### Files changed
+None — implementation complete from prior builder cycle. All AC changes are in `serve/mcp-browser/src/owlbear_mcp_browser/server.py` (committed in prior cycle).
+
+### RED Verification
+Tests were verified RED (8 FAILED) by prior builder on 2026-04-13. Current session found 33 PASS — confirms implementation is intact.
+
+### Test Results
+`pytest tests/test_mcp_browser_ctx_850.py tests/test_mcp_browser_775.py`
+- **33 passed, 0 failed**
+  - TestFromAC_CtxParameterOnAllTools: 5/5 ✓
+  - TestFromAC_NavigateUsesLifespanCtx: 3/3 ✓
+  - test_mcp_browser_775.py: 25/25 ✓
+
+### Coverage
+`owlbear_mcp_browser/server.py`: **81%** (128 stmts, 24 missed)
+- Missing lines: 79-82, 111-113, 116-130, 139, 149, 159, 169-170, 180
+- All uncovered = live browser interaction paths (page.goto, playwright navigation, CDP connection) requiring actual browser infrastructure — expected and accepted per prior reviewer
+
+### Lint
+`ruff check server.py tests/test_mcp_browser_ctx_850.py tests/test_mcp_browser_775.py` → **All checks passed!**
+
+### AC Evidence
+| AC | Status |
+|----|--------|
+| AC1: `from mcp.server.fastmcp import Context, FastMCP` | PASS — server.py L15 |
+| AC2: All 6 tools accept `ctx: Context` as first parameter | PASS — L97, L122, L131, L139, L148, L157 |
+| AC3: navigate() uses `ctx.request_context.lifespan_context.allowlist`, no env var read | PASS — L98-L100 |
+| AC4: All tests in test_mcp_browser_775.py pass | PASS — 25/25 (3 added by other tasks beyond original 22) |
+| AC5: ruff clean | PASS — 0 violations |
+
+### No TestFromAC_* classes modified.

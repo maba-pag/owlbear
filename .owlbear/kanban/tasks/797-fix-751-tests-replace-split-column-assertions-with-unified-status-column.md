@@ -1,10 +1,10 @@
 ---
 id: 797
 title: 'Fix #751 tests: replace split-column assertions with unified status column'
-status: review
+status: done
 priority: needed
 created: '2026-04-10T16:05:19.844611+00:00'
-updated: '2026-04-13T22:10:02.480773+00:00'
+updated: '2026-04-14T16:05:12.101539+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -82,7 +82,7 @@ After #757 removes the split columns from the DDL (per refined AC), these two #7
 | All remaining tests still pass | 41/41 passed | PASS ✓ |
 | ruff clean | No violations | PASS ✓ |
 
-**Pytest result:** 41 passed, 0 failed  
+**Pytest result:** 41 passed, 0 failed
 **Commit:** `1825ed4e` — `test: replace split-column assertions with unified status column (#797, test-writer)`
 
 Note: This task is `type:test` (direct test-fix), not RED-phase. Tests are green after fix — this is the intended outcome per architecture review.
@@ -91,8 +91,8 @@ Note: This task is `type:test` (direct test-fix), not RED-phase. Tests are green
 
 **Files changed:** `tests/test_authenticated_content_pipeline_751.py` (test-writer commit `1825ed4e`)
 
-**Test results:** 41 passed, 0 failed  
-**Coverage:** 99.6% (280/281 statements, 2/2 branches)  
+**Test results:** 41 passed, 0 failed
+**Coverage:** 99.6% (280/281 statements, 2/2 branches)
 **Lint:** ruff clean — no violations
 
 **AC Evidence:**
@@ -143,3 +143,101 @@ Note: This task is `type:test` (direct test-fix), not RED-phase. Tests are green
 [[2026-04-13]]
 ## Environment Restored
 pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: 41 passed (`test_authenticated_content_pipeline_751.py`). Unblocked for review continuation.
+[[2026-04-14]]
+## Review Evidence (Cycle 2)
+
+### Quality-Runner Execution
+**FATAL** — pytest argument parse error:
+```
+ERROR: unrecognized arguments: -n --dist --cov --cov-report=term-missing --cov-fail-under=0
+```
+Root cause: `pyproject.toml` sets `addopts = -n auto --dist loadfile` (xdist parallelization); quality-runner appends `--cov` flags; xdist and pytest-cov cannot co-exist under this invocation. Both plugins are installed — this is a **different failure mode** from Cycle 1 (which was `pytest-cov` missing). "Environment Restored" note was accurate for raw pytest but did not address quality-runner's combined invocation.
+
+**Ruff:** exit code 0, violations: [] — clean. (`clean: false` in quality-runner output is a wrapper artifact caused by FATAL status, not a lint violation.)
+
+### Static Verification (all verifiable AC lines)
+
+| Check | Method | Result |
+|-------|--------|--------|
+| AC1: `test_source_pages_has_approval_state_column` replaced → `test_source_pages_has_status_column` | read_file L444-451 | PASS — test present, assertion `assert "status" in cols` confirmed at L451 |
+| AC2: `test_source_pages_has_extraction_status_column` removed | grep (0 matches) | PASS |
+| AC1 (cont): `approval_state` / `extraction_status` absent from file | grep (0 matches each) | PASS |
+| AC4: ruff clean | quality-runner ruff exit_code=0, violations=[] | PASS |
+| Pattern: same PRAGMA table_info layout as sibling tests | read_file L426-451 | PASS — identical structure to url/source_id column tests |
+
+### Unverifiable AC Line
+
+| AC | Status | Reason |
+|----|--------|--------|
+| AC3: All remaining tests in test_authenticated_content_pipeline_751.py still pass | **UNVERIFIED** | Quality-runner FATAL prevents pytest execution |
+
+### Corroborating Evidence (informational only, not verdict evidence)
+#751 parent reviewer (2026-04-14, today) ran `tests/test_authenticated_content_pipeline_751.py` via quality-runner independently and documented: **41 passed, 0 failed** (exit code 0). The #797 commit `1825ed4e` was already in place when that run occurred. This is noted for context but cannot substitute for my own independent execution per critical rules.
+
+### TestFromAC_* Integrity
+No modifications detected. The changed test (replacement) was authored by the test-writer, not a builder modification.
+
+### Security
+No concerns. Test-only file. No production code changed. No new imports.
+
+### Required Fix to Unblock
+**Option A (preferred):** Quality-runner should pass `-p no:xdist` (or `-n 0`) when appending `--cov` flags, to override pyproject.toml's default addopts parallelization for scoped runs. This is a quality-runner capability change.
+
+**Option B:** Move xdist configuration out of `[tool.pytest.ini_options] addopts` into a conftest or separate profile so quality-runner's scoped invocations are not affected.
+
+After either fix is applied: re-claim and re-dispatch quality-runner with:
+```
+mode: scoped
+task_id: 797
+test_paths: ["tests/test_authenticated_content_pipeline_751.py"]
+lint_paths: ["tests/test_authenticated_content_pipeline_751.py"]
+```
+Expect: 41 passed, 0 failed, ruff clean → PASS at ~0.97 confidence.
+
+[[2026-04-14]]
+## Review Evidence
+
+### Quality-Runner (Cycle 3 — environment functional)
+- **pytest:** 41 passed, 0 failed, exit code 0
+- **ruff:** clean, violations: [], exit code 0
+- Prior two review cycles were blocked by environment issues (missing pytest-cov Cycle 1; xdist+cov conflict Cycle 2), not code defects. Both resolved before this cycle.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `test_source_pages_has_status_column` asserting `"status" in cols` | `tests/test_authenticated_content_pipeline_751.py:L444-L451` — test present, assertion exact match | PASS |
+| `test_source_pages_has_extraction_status_column` removed | grep: 0 matches for `extraction_status` in file | PASS |
+| `approval_state` absent from file | grep: 0 matches | PASS |
+| All remaining tests pass | quality-runner: 41/41 passed, exit code 0 | PASS |
+| ruff clean | quality-runner: exit code 0, violations: [] | PASS |
+
+### TestFromAC_* Integrity
+N/A — no `TestFromAC_*` classes in this file. Test-writer authored the replacement directly.
+
+### Security
+No concerns. Test-only file. No production code changed. No new imports.
+
+### Builder Process
+Single clean cycle. `type:test` pass-through — correct.
+
+### Deductions
+None.
+
+### Confidence: .98 → PASS
+[[2026-04-14]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `type:test` task — only `tests/test_authenticated_content_pipeline_751.py` modified; no production code touched |
+| 2 | Module docstrings | No | N/A | No Python modules created or changed; test file has no public API to document |
+| 3 | External attribution | No | N/A | PRAGMA table_info pattern is standard SQLite — no external repo or article cited |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | No | N/A | No research phase; task body has no linked `.owlbear/research/` document |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None found (`.owlbear/scratch/797-*` — 0 matches)

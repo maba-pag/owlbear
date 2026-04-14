@@ -2,10 +2,10 @@
 id: 754
 title: 'P1-01: Tests — Schema: source type, entity/relation types, source_pages, source_id
   FK'
-status: review
+status: done
 priority: critical
 created: '2026-04-10T10:55:24.860558+00:00'
-updated: '2026-04-13T22:09:50.494980+00:00'
+updated: '2026-04-14T07:05:31.385178+00:00'
 tags:
 - phase-1
 - type:test
@@ -15,8 +15,8 @@ parent: 751
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: quiet-rush
+claimed_at: '2026-04-14T07:05:31.385178+00:00'
 ---
 RED phase. Tests for schema extensions:
 1. AUTHENTICATED_WEB in SourceType enum
@@ -306,3 +306,115 @@ With the current schema (no `approval_state`, no `extraction_status` columns), b
 [[2026-04-13]]
 ## Environment Restored
 pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_schema_extensions_754.py`). Unblocked for review continuation.
+[[2026-04-14]]
+## Review Evidence
+
+### Test Results
+Quality-Runner executed independently: **59 passed, 0 failed, 0 skipped** (`tests/test_schema_extensions_754.py`). Exit code 0. Builder self-report confirmed.
+
+### Lint
+ruff: **clean** — 0 violations across `models.py`, `schema.py`, `source_store.py`, `tests/test_schema_extensions_754.py`. Exit code 0.
+
+### Coverage
+| Module | Coverage | Notes |
+|--------|----------|-------|
+| `owlbear_knowledge.models` | **100%** | All new enums + SourcePage model fully covered |
+| `owlbear_knowledge.schema` | 48% | Large pre-existing migration ladder (v1–v8); new v9 migration fully covered |
+| `owlbear_knowledge.source_store` | 57% | Pre-existing store methods; new `delete_cascade` fully covered |
+
+Covered by separate test suites for pre-existing code; new code is at 100% — informational only.
+
+---
+
+### Prior Cycle CRITICAL Finding — Resolution Status
+
+Pass 1 of cycle 1 flagged: `test_authenticated_content_pipeline_751.py` asserting `approval_state`/`extraction_status` columns that were removed.
+
+Code-reader verified: **RESOLVED.** `tests/test_authenticated_content_pipeline_751.py` [L388–L426](tests/test_authenticated_content_pipeline_751.py#L388-L426) asserts `source_id`, `url`, `status` — the correct column names. No `approval_state` or `extraction_status` references exist. Prior finding no longer applies.
+
+---
+
+### 5.0 AC Coverage Table
+
+| AC Line | Mapped Tests | Would Fail If Violated? | Verdict |
+|---------|-------------|------------------------|---------|
+| AC1: AUTHENTICATED_WEB in SourceType | `TestFromAC_SourceTypeAuthenticatedWeb` (4) — hasattr, value equality, isinstance str, round-trip | Yes — AttributeError / AssertionError | COVERED |
+| AC2: EntityType REQUIREMENT/SOLUTION/PROCEDURE/POLICY/STANDARD | `TestFromAC_EntityTypeCorporate` (15) — member_exists×5, value_matches×5, round_trips×5 | Yes — KeyError on each missing member | COVERED |
+| AC3: RelationType GOVERNS, SUPERSEDES_VERSION | `TestFromAC_RelationTypeCorporate` (6) — exists×2, value×2, round_trip×2 | Yes | COVERED |
+| AC4: SourcePage + PageStatus (5 values) | `TestFromAC_SourcePageModel` (16) — import, parametrized members, isinstance, field access, nullable fields, auto_id | Yes — ImportError or AttributeError if missing | COVERED |
+| AC5: source_id FK on documents + schema v9 | `TestFromAC_DocumentsSourceIdFK` (8 per runner count) — PRAGMA introspection, schema_version==9 | Yes — AssertionError | COVERED |
+| AC6: Cascade delete (6 downstream tables) | `TestFromAC_CascadeDelete` (11) — zero-row per table, returns True, nonexistent returns False, isolation test | Yes — row count AssertionError | COVERED |
+
+---
+
+### 5.1 Security
+
+- `delete_cascade` ([source_store.py L99–L122](serve/knowledge/src/owlbear_knowledge/source_store.py#L99-L122)): all SQL uses parameterised queries `(?, ?)` throughout. Bidirectional edge deletion `WHERE source_id = ? OR target_id = ?` with `(eid, eid)` — correct and injection-safe. ✓
+- No hardcoded secrets, no path traversal, no deserialization, no new trust boundaries. ✓
+
+### 5.2 TestFromAC Integrity
+
+Builder changed source files only (`models.py`, `schema.py`, `source_store.py`). No `TestFromAC_*` methods modified. **All PRESERVED.**
+
+### 5.3 Test Quality
+
+| Dimension | Rating | Evidence |
+|-----------|--------|---------|
+| Assertion specificity | STRONG | Direct value equality, PRAGMA column introspection, row count = 0 after cascade |
+| Negative/error-path | STRONG | `test_cascade_delete_nonexistent_source_returns_false` ✓ |
+| Mutation resistance | STRONG | Remove any enum member → KeyError; remove DDL column → AssertionError; remove method → AttributeError |
+| Test independence | STRONG | Fresh `_make_db()` `:memory:` per test; no shared state |
+| Descriptive names | STRONG | All `TestFromAC_*` with descriptive method names |
+
+Minor LAX (noted only): `test_cascade_delete_does_not_remove_unrelated_documents` [scope: adequate for AC6 — does not verify unrelated entities/edges]. No compensating gap.
+
+### 5.4 Data Safety — clean. N/A for schema/enum additions.
+
+### 5.5 Implementation Analysis
+
+- **models.py**: `SourceType.AUTHENTICATED_WEB = "authenticated_web"` ✓; EntityType 5 corporate values ✓; RelationType GOVERNS/SUPERSEDES_VERSION ✓; `PageStatus` StrEnum 5 values ✓; `SourcePage` Pydantic model 6 fields ✓.
+- **schema.py** [L123–L129](serve/knowledge/src/owlbear_knowledge/schema.py#L123-L129): `_CREATE_SOURCE_PAGES` DDL — `source_id`, `url NOT NULL`, `status DEFAULT 'discovered'`, `extraction_hash`, `last_extracted` ✓. Migration [L184–L191](serve/knowledge/src/owlbear_knowledge/schema.py#L184-L191): `CREATE TABLE source_pages`, `CREATE INDEX idx_source_pages_source_id`, `ALTER TABLE documents ADD COLUMN source_id TEXT` ✓. Schema version advances to v9 ✓.
+- **source_store.py** `delete_cascade` [L96–L124](serve/knowledge/src/owlbear_knowledge/source_store.py#L96-L124): returns False if source absent [L99–L102]; collects doc_ids [L106–L107]; per doc: entity IDs → edges (both directions) → entities → chunks → document_status [L111–L118]; then documents → source_pages → knowledge_sources [L120–L122]. Full 6-table chain confirmed. ✓
+
+### 5.7 Builder Process — **CLEAN** (1 Builder Notes section, no retry loop).
+
+---
+
+### AC Compliance Table (runtime evidence)
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 AUTHENTICATED_WEB | 59/59 pass + models.py ✓ | PASS |
+| AC2 EntityType corporate | 59/59 pass + models.py ✓ | PASS |
+| AC3 RelationType corporate | 59/59 pass + models.py ✓ | PASS |
+| AC4 SourcePage + PageStatus | 59/59 pass + models.py ✓ (100% coverage) | PASS |
+| AC5 source_id FK + schema v9 | 59/59 pass + schema.py [L79, L185–L191] ✓ | PASS |
+| AC6 cascade delete (6 tables) | 59/59 pass + source_store.py [L96–L122] ✓ | PASS |
+
+---
+
+### Deductions
+| Finding | Severity | Deduction |
+|---------|----------|-----------|
+| schema.py/source_store.py overall module coverage below 90% | Informational (new code at 100%; pre-existing code tested by dedicated suites) | −.02 |
+| Minor LAX on cascade isolation test (entities/edges from unrelated docs not verified) | Minor informational | −.02 |
+
+**Confidence: .96 → PASS**
+[[2026-04-14]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | copilot-instructions.md contains only project identity and branch structure — no knowledge module schema section to update. Enum additions, new SourcePage model, and delete_cascade() method are internal API; no external-facing docs reference them. |
+| 2 | Module docstrings | Yes | Verified — no updates needed | models.py: PageStatus has docstring "Status of a SourcePage in the crawl/approval lifecycle." ✓; SourcePage has docstring "A page belonging to an authenticated-web knowledge source." ✓; EntityType/RelationType/SourceType retain accurate class-level docstrings ✓. source_store.py: delete_cascade() has accurate docstring with full cascade chain ✓. All public classes and new functions covered. |
+| 3 | External attribution | No | N/A | Research doc section 2 lists 7 sources — all internal codebase files. No external repos, articles, or docs were used. sources/overview.md requires no new entry. |
+| 4 | CLI changes | No | N/A | Task scope: schema + model + store method. No CLI commands added or modified. README unaffected. |
+| 5 | Research doc | Yes | Verified | .owlbear/research/754-schema-extensions-red-tests.md exists ✓; linked in task body under [[2026-04-10]] Research section ✓; follow-up tasks noted as none (task itself is the follow-up from #751 research) ✓. |
+
+### Files Updated
+None — all checklist items verified accurate; no documentation changes required.
+
+### Scratch Files
+No .owlbear/scratch/754-* files found. Nothing to clean.

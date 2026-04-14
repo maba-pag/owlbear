@@ -2,6 +2,22 @@
 
 External repos and resources studied during OwlBear development.
 
+## StructuredExtractor Replacement Research (Task #874)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| OpenAI Python SDK — Structured Outputs | <https://developers.openai.com/api/docs/guides/structured-outputs> | Native `response_format` with Pydantic JSON schema, `AsyncOpenAI` async client | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| LiteLLM — Structured Outputs (JSON Mode) | <https://docs.litellm.ai/docs/completion/json_mode> | `response_format` with Pydantic models, multi-provider support, dep count analysis | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| Instructor — Structured LLM Outputs | <https://python.useinstructor.com/> | `response_model` abstraction, retry/validation, Pydantic integration | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| Kuboid — LiteLLM Supply Chain Attack March 2026 | <https://www.kuboid.in/blog/litellm-supply-chain-attack-march-2026-explained> | TeamPCP/LAPSUS$ credential stealer in v1.82.7-8, releases paused | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+
+## LLMExtractor Implementation Research (Task #875)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| OpenAI Structured Outputs guide | <https://developers.openai.com/api/docs/guides/structured-outputs> | Strict JSON schema, `response_format`, Pydantic support, refusal handling | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
+| openai-python SDK helpers.md | <https://github.com/openai/openai-python/blob/main/helpers.md> | `chat.completions.parse()` API, auto-schema from Pydantic, `ParsedChatCompletion` | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
+
 ## Edge CDP Validation Spike (Task #752)
 
 | Source | URL | What | Where Used | Date |
@@ -31,6 +47,13 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Python datetime docs — fromisoformat | <https://docs.python.org/3/library/datetime.html> | fromisoformat() handles arbitrary fractional digits (truncated to 6); aware comparison normalizes to UTC | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
 | DEV Community — Sorting ISO 8601 timestamps | <https://dev.to/adnauseum/sorting-iso-8601-timestamps-5am2> | Confirms ISO 8601 string sort fails across different timezone offsets | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
+
+## Source-Aware Candidate Filtering (Task #863)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Kumar et al. (2025) — LLM-Powered KGs for Enterprise Intelligence | <https://arxiv.org/html/2503.07993v1> | Enterprise KG integrating multiple data sources via LLM entity extraction and embedding-based matching | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Saeedi et al. (2020) — Incremental Multi-source Entity Resolution | <https://dbs.uni-leipzig.de/index.php/research/publications/incremental-multi-source-entity-resolution-for-knowledge-graph-completion> | Multi-source entity clustering for KG completion; source-order-independent resolution | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
 
 ## MCP Browser Server Research (Task #771)
 

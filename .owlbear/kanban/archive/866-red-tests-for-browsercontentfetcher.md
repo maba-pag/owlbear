@@ -4,7 +4,7 @@ title: RED — Tests for BrowserContentFetcher + HttpxContentFetcher
 status: done
 priority: needed
 created: '2026-04-12T02:23:15.779913Z'
-updated: '2026-04-14T00:30:43.774210+00:00'
+updated: '2026-04-14T00:38:37.091838+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -14,8 +14,8 @@ depends_on:
 - 830
 blocked: false
 block_reason: null
-claimed_by: green-stem
-claimed_at: '2026-04-14T00:30:43.774210+00:00'
+claimed_by: null
+claimed_at: null
 ---
 
 ## Acceptance Criteria
@@ -231,3 +231,41 @@ None — no docs changes required.
 
 ### Scratch Files
 No .owlbear/scratch/866-* files found. Clean.
+[[2026-04-14]]
+## Audit
+### AC Verification (spot-check; reviewer's full table trusted)
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| B1: importable | test_browser_fetcher_module_is_importable, fetcher.py exists | PASS |
+| B2: isinstance + async | test_satisfies_contentfetcher_protocol, test_fetch_method_is_async_coroutine | PASS |
+| B3: delegation chain | 5 tests with assert_awaited_once; implementation matches chain exactly (fetcher.py:14-20) | PASS |
+| B4: SSO → AuthenticationRequired | test_sso_redirect_raises_authentication_required | PASS |
+| B5: page.close on success | test_page_closed_after_successful_fetch; finally block in impl | PASS |
+| B6: page.close on error | test_page_closed_even_when_error_is_raised; finally block in impl | PASS |
+| H1: importable | test_httpx_fetcher_module_is_importable, fetcher.py exists | PASS |
+| H2: isinstance + async | test_satisfies_contentfetcher_protocol, test_fetch_method_is_async_coroutine | PASS |
+| H3: httpx delegation | test_fetch_delegates_to_httpx_async_client_get; mock_client.get.assert_awaited_once_with | PASS |
+| H4: non-2xx raises | test_non_2xx_response_raises_http_status_error; response.raise_for_status() in impl | PASS |
+| H5: returns response.text | test_fetch_returns_response_text; assert result == "response body text" | PASS |
+
+### Test Results
+- pytest (full suite): 4202 passed, 355 failed, 8 skipped — 0 failures in task scope (test_contentfetcher_impl_830.py: 21/21 pass). 355 failures are pre-existing across 19 unrelated test files.
+- ruff: 1 violation (E501 in engine.py:472) — not in task scope. Task files clean.
+
+### Architect Quality: 4/5
+AC was specific with file paths, class names, delegation chains, expected exceptions. All 11 AC lines directly testable. SSRF scheme guard not anticipated (builder added beyond AC) — minor gap, positive security addition.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 → no deduction
+- Lint violations in scope: 0 → no deduction
+- AC quality score 4 (> 3): → no deduction
+- Reviewer evidence section: present, detailed, PASS → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 9210fc79 | chore | .owlbear/kanban/tasks/866-*.md | #866 |
