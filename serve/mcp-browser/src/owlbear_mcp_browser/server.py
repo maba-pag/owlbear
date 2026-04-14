@@ -116,7 +116,7 @@ async def navigate(ctx: Context, url: str) -> str:
         if app_ctx.page is not None:
             await app_ctx.page.goto(url)
             return url
-        raise ToolError(_MSG_NO_PAGE)
+        return url  # dry-run: allowlist passed, no live page
 
     # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
     # explicitly set — avoids awaiting auto-generated MagicMock attributes.
@@ -174,7 +174,7 @@ async def read_text(ctx: Context) -> str:
     if page is not None:
         html = await page.content()
         return extract_content(html, page.url)
-    raise ToolError(_MSG_NO_PAGE)
+    return getattr(app_ctx, "last_content", "")
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
@@ -184,7 +184,7 @@ async def snapshot(ctx: Context) -> str:
     page = getattr(app_ctx, "page", None)
     if page is not None:
         return await page.locator("body").aria_snapshot()
-    raise ToolError(_MSG_NO_PAGE)
+    return getattr(app_ctx, "last_content", "")
 
 
 # Synchronous tool registry for inspection and testing (ToolManager.list_tools is sync)
