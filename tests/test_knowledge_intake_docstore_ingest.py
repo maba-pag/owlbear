@@ -658,7 +658,7 @@ class TestFromAC_IngestPipelineConstructor:
 
         pipeline = IngestPipeline(
             document_store=MagicMock(),
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
             cancel_signal=cancel_signal,
         )
@@ -685,7 +685,7 @@ class TestFromAC_IngestTextUpgrade:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         await pipeline.ingest_text("some text to ingest")
@@ -703,7 +703,7 @@ class TestFromAC_IngestTextUpgrade:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         await pipeline.ingest_text("text for embedding")
@@ -738,7 +738,7 @@ class TestFromAC_IngestMethod:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(content="text to ingest", source="test://src", metadata={"source_type": "text"})
@@ -796,7 +796,7 @@ class TestFromAC_DeltaDetection:
         doc_store.check_content_changed.return_value = (False, "existing-doc-id")
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(content="same content", source="file://doc.txt", metadata={"source_type": "file"})
@@ -815,7 +815,7 @@ class TestFromAC_DeltaDetection:
         doc_store.check_content_changed.return_value = (False, "doc-id-skip")
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(content="unchanged", source="src://x", metadata={})
@@ -846,7 +846,7 @@ class TestFromAC_CancelSignalIngest:
 
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
             cancel_signal=cancel_signal,
         )
@@ -912,7 +912,7 @@ class TestFromAC_IngestErrorHandling:
 
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(content="text", source="src://err", metadata={})
@@ -1127,7 +1127,7 @@ class TestFromAC_IngestTextErrorHandling:
 
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         result = await pipeline.ingest_text("some text that triggers failure")
@@ -1146,7 +1146,7 @@ class TestFromAC_IngestTextErrorHandling:
 
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=broken_chunker,
         )
         result = await pipeline.ingest_text("text that makes chunker fail")

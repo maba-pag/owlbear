@@ -416,7 +416,7 @@ class TestFromAC_IngestScope:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(
@@ -441,7 +441,7 @@ class TestFromAC_IngestScope:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(content="text", source="src://x", metadata={})
@@ -469,7 +469,7 @@ class TestFromAC_IngestScope:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(content="content", source="src://y", metadata={})
@@ -504,7 +504,7 @@ class TestFromAC_IngestUpdateContentHash:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(content="hashable content", source="file://hash.txt", metadata={})
@@ -803,7 +803,7 @@ class TestFromAC_IngestCheckContentChangedScope:
         doc_store.store_extractions.return_value = (0, 0)
         pipeline = IngestPipeline(
             document_store=doc_store,
-            entity_extractor=EntityExtractor("stub"),
+            entity_extractor=EntityExtractor(),
             text_chunker=TextChunker(),
         )
         intake = IntakeResult(

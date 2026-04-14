@@ -86,13 +86,13 @@ class TestFromAC_InitDb:  # noqa: N801
         init_db(conn)
         init_db(conn)  # must not raise
 
-    def test_init_db_idempotent_schema_version_equals_8(self) -> None:
+    def test_init_db_idempotent_schema_version_equals_9(self) -> None:
         conn = sqlite3.connect(":memory:")
         init_db(conn)
         init_db(conn)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 8
+        assert row[0] == 9
 
 
 # ---------------------------------------------------------------------------
@@ -727,11 +727,11 @@ class TestFromAC_PackageManifest:  # noqa: N801
             f"Expected pydantic>=2.10.0 in dependencies, found: {pydantic_deps}"
         )
 
-    def test_pydantic_is_sole_runtime_dependency(self) -> None:
-        """pydantic must be the ONLY entry in [project].dependencies."""
+    def test_pydantic_and_strictyaml_are_runtime_dependencies(self) -> None:
+        """pydantic and strictyaml must be the runtime dependencies."""
         data = self._load_pyproject()
         deps: list[str] = data.get("project", {}).get("dependencies", [])
-        assert len(deps) == 1, f"Expected exactly 1 runtime dependency (pydantic), found {len(deps)}: {deps}"
+        assert len(deps) == 2, f"Expected exactly 2 runtime dependencies, found {len(deps)}: {deps}"
 
 
 # ---------------------------------------------------------------------------
@@ -742,8 +742,8 @@ class TestFromAC_PackageManifest:  # noqa: N801
 class TestBuilderDiscovered:
     """Edge cases and migration paths discovered during implementation."""
 
-    def test_init_db_migrates_v1_schema_to_v8(self) -> None:
-        """Full migration path v1 -> v8: all migration helpers and dispatch branches run."""
+    def test_init_db_migrates_v1_schema_to_v9(self) -> None:
+        """Full migration path v1 -> v9: all migration helpers and dispatch branches run."""
         conn = sqlite3.connect(":memory:")
         # Create a minimal v1 schema (no scope columns, no chunks/document_status)
         conn.execute(
@@ -767,7 +767,7 @@ class TestBuilderDiscovered:
 
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         assert row is not None
-        assert row[0] == 8
+        assert row[0] == 9
 
         # Verify that migration-added tables now exist
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
