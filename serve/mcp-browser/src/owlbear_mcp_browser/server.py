@@ -10,14 +10,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_browser.fetcher import BrowserContentFetcher
-
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from owlbear_browser.cdp import CDPConnectionManager
+from owlbear_browser._errors import AuthenticationRequired
+from owlbear_browser.cdp import CDPConnectionManager as _CDPConnectionManager
 from owlbear_browser.extractor import extract_content
+from owlbear_browser.fetcher import BrowserContentFetcher
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
 __all__ = ["AppContext", "app_lifespan", "mcp_app"]
@@ -28,7 +28,7 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     allowlist: DomainAllowlist
-    cdp: CDPConnectionManager | None = None
+    cdp: _CDPConnectionManager | None = None
     page: Any = None
     fetcher: BrowserContentFetcher | None = None
     last_content: str = ""
@@ -63,22 +63,25 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
     allowlist = DomainAllowlist(domains=domains)
 
-    cdp: CDPConnectionManager | None = None
+    cdp: _CDPConnectionManager | None = None
     page: Any = None
+    fetcher: BrowserContentFetcher | None = None
     try:
         port = int(os.environ.get("BROWSER_CDP_PORT", "9222"))
-        manager = CDPConnectionManager(port=port)
+        manager = _CDPConnectionManager(port=port)
         await manager.connect()
         cdp = manager
+        fetcher = BrowserContentFetcher(cdp)
         contexts = manager._browser.contexts  # noqa: SLF001
         if contexts:
             page = await contexts[0].new_page()
     except Exception:  # noqa: BLE001
         cdp = None
         page = None
+        fetcher = None
 
     try:
-        yield AppContext(allowlist=allowlist, cdp=cdp, page=page)
+        yield AppContext(allowlist=allowlist, cdp=cdp, page=page, fetcher=fetcher)
     finally:
         if page is not None:
             await page.close()
@@ -101,9 +104,19 @@ async def navigate(ctx: Context, url: str) -> str:
         raise ToolError(str(exc)) from exc
 
     if isinstance(app_ctx, AppContext):
+        if app_ctx.fetcher is not None:
+            try:
+                content = await app_ctx.fetcher.fetch(url)
+            except AuthenticationRequired as exc:
+                msg = f"SSO session expired or authentication required: {exc}"
+                raise ToolError(msg) from exc
+            app_ctx.last_content = content
+            return content
         if app_ctx.page is not None:
             await app_ctx.page.goto(url)
-        return url  # URL is allowlist-validated; no browser/fetcher = dry-run
+            return url
+        msg = "Browser not available"
+        raise ToolError(msg)
 
     # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
     # explicitly set — avoids awaiting auto-generated MagicMock attributes.
