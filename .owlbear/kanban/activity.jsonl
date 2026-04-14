@@ -10657,3 +10657,124 @@
 {"timestamp": "2026-04-14T21:45:32.948561+00:00", "action": "move", "task_id": 853, "detail": "done -> archived"}
 {"timestamp": "2026-04-14T21:46:07.749517+00:00", "action": "claim", "task_id": 879, "detail": "ripe-rook"}
 {"timestamp": "2026-04-14T21:46:27.199049+00:00", "action": "claim", "task_id": 857, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:54:17.493531+00:00", "action": "edit", "task_id": 857, "detail": "append_body"}
+{"timestamp": "2026-04-14T21:54:17.494583+00:00", "action": "release", "task_id": 857, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:54:17.510861+00:00", "action": "move", "task_id": 857, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T21:57:42.321512+00:00", "action": "edit", "task_id": 879, "detail": "append_body"}
+{"timestamp": "2026-04-14T21:57:42.333767+00:00", "action": "release", "task_id": 879, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:57:42.350574+00:00", "action": "move", "task_id": 879, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T21:58:09.946515+00:00", "action": "claim", "task_id": 835, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:58:26.308509+00:00", "action": "claim", "task_id": 876, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:58:50.665141+00:00", "action": "claim", "task_id": 768, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:58:56.218588+00:00", "action": "edit", "task_id": 768, "detail": "append_body"}
+{"timestamp": "2026-04-14T21:58:56.232873+00:00", "action": "release", "task_id": 768, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:58:56.246135+00:00", "action": "move", "task_id": 768, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T21:58:59.193115+00:00", "action": "claim", "task_id": 855, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:59:15.400796+00:00", "action": "edit", "task_id": 835, "detail": "append_body"}
+{"timestamp": "2026-04-14T21:59:15.428292+00:00", "action": "release", "task_id": 835, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T21:59:15.453248+00:00", "action": "move", "task_id": 835, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T22:00:00.392009+00:00", "action": "edit", "task_id": 876, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:00:00.412748+00:00", "action": "release", "task_id": 876, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:00:00.428993+00:00", "action": "move", "task_id": 876, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T22:01:01.442977+00:00", "action": "claim", "task_id": 827, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:01:19.961259+00:00", "action": "edit", "task_id": 827, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:01:19.971669+00:00", "action": "release", "task_id": 827, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:01:19.989005+00:00", "action": "move", "task_id": 827, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T22:02:50.564161+00:00", "action": "edit", "task_id": 855, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:02:50.580740+00:00", "action": "release", "task_id": 855, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:02:50.596510+00:00", "action": "move", "task_id": 855, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T22:04:04.718126+00:00", "action": "claim", "task_id": 876, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:04:09.870693+00:00", "action": "claim", "task_id": 855, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:04:12.749501+00:00", "action": "claim", "task_id": 827, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:04:22.161662+00:00", "action": "claim", "task_id": 871, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:05:00.541452+00:00", "action": "edit", "task_id": 827, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:05:00.643603+00:00", "action": "release", "task_id": 827, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:05:00.716960+00:00", "action": "move", "task_id": 827, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T22:05:13.434959+00:00", "action": "edit", "task_id": 855, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:05:13.475066+00:00", "action": "release", "task_id": 855, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:05:13.515051+00:00", "action": "move", "task_id": 855, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T22:05:49.267642+00:00", "action": "edit", "task_id": 876, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:05:49.297391+00:00", "action": "release", "task_id": 876, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:05:49.330414+00:00", "action": "move", "task_id": 876, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T22:11:54.431205+00:00", "action": "edit", "task_id": 871, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:11:54.453445+00:00", "action": "release", "task_id": 871, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:11:54.464603+00:00", "action": "move", "task_id": 871, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T22:12:14.418930+00:00", "action": "claim", "task_id": 854, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:12:24.119841+00:00", "action": "claim", "task_id": 883, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:12:24.606620+00:00", "action": "claim", "task_id": 884, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:12:38.724012+00:00", "action": "claim", "task_id": 874, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:13:16.378226+00:00", "action": "edit", "task_id": 854, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:13:16.414482+00:00", "action": "release", "task_id": 854, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:13:16.443245+00:00", "action": "move", "task_id": 854, "detail": "research -> backlog"}
+{"timestamp": "2026-04-14T22:16:08.276425+00:00", "action": "edit", "task_id": 883, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:16:08.347374+00:00", "action": "release", "task_id": 883, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:16:08.390891+00:00", "action": "move", "task_id": 883, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T22:16:12.496644+00:00", "action": "edit", "task_id": 884, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:16:12.534001+00:00", "action": "release", "task_id": 884, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:20:28.217144+00:00", "action": "edit", "task_id": 874, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:20:28.231240+00:00", "action": "release", "task_id": 874, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:20:28.242573+00:00", "action": "move", "task_id": 874, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T22:20:57.894641+00:00", "action": "claim", "task_id": 885, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:21:06.741157+00:00", "action": "claim", "task_id": 875, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:24:47.691199+00:00", "action": "edit", "task_id": 885, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:24:47.720267+00:00", "action": "release", "task_id": 885, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:24:47.747291+00:00", "action": "move", "task_id": 885, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T22:28:42.239962+00:00", "action": "edit", "task_id": 875, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:28:42.257618+00:00", "action": "release", "task_id": 875, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:28:42.265616+00:00", "action": "move", "task_id": 875, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T22:29:05.661186+00:00", "action": "claim", "task_id": 881, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:29:07.309412+00:00", "action": "claim", "task_id": 843, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:29:26.306381+00:00", "action": "claim", "task_id": 835, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:29:49.557627+00:00", "action": "claim", "task_id": 880, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:30:22.103433+00:00", "action": "edit", "task_id": 880, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:30:22.119330+00:00", "action": "release", "task_id": 880, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:30:22.119330+00:00", "action": "move", "task_id": 880, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T22:33:14.843043+00:00", "action": "edit", "task_id": 835, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:33:14.874375+00:00", "action": "release", "task_id": 835, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:33:14.897422+00:00", "action": "move", "task_id": 835, "detail": "review -> docs"}
+{"timestamp": "2026-04-14T22:35:29.790257+00:00", "action": "edit", "task_id": 881, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:35:29.846733+00:00", "action": "release", "task_id": 881, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:35:29.894322+00:00", "action": "move", "task_id": 881, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T22:38:55.375796+00:00", "action": "edit", "task_id": 843, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:38:55.391667+00:00", "action": "release", "task_id": 843, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:38:55.407601+00:00", "action": "move", "task_id": 843, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T22:39:17.790543+00:00", "action": "claim", "task_id": 882, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:39:21.084220+00:00", "action": "claim", "task_id": 848, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:40:23.081178+00:00", "action": "edit", "task_id": 848, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:40:23.097894+00:00", "action": "release", "task_id": 848, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:40:23.114056+00:00", "action": "move", "task_id": 848, "detail": "in-progress -> review"}
+{"timestamp": "2026-04-14T22:40:31.534396+00:00", "action": "edit", "task_id": 882, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:40:31.545053+00:00", "action": "release", "task_id": 882, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:40:31.555550+00:00", "action": "move", "task_id": 882, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T22:41:37.728886+00:00", "action": "claim", "task_id": 835, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:41:40.631621+00:00", "action": "claim", "task_id": 854, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:41:47.687598+00:00", "action": "edit", "task_id": 854, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:41:47.687598+00:00", "action": "release", "task_id": 854, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:41:47.709093+00:00", "action": "move", "task_id": 854, "detail": "backlog -> research"}
+{"timestamp": "2026-04-14T22:41:52.277082+00:00", "action": "claim", "task_id": 855, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:41:52.377395+00:00", "action": "claim", "task_id": 884, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:42:29.702531+00:00", "action": "edit", "task_id": 835, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:42:29.728146+00:00", "action": "release", "task_id": 835, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:42:29.751239+00:00", "action": "move", "task_id": 835, "detail": "docs -> done"}
+{"timestamp": "2026-04-14T22:43:30.003194+00:00", "action": "edit", "task_id": 884, "detail": "append_body"}
+{"timestamp": "2026-04-14T22:43:30.033878+00:00", "action": "release", "task_id": 884, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T22:43:30.056826+00:00", "action": "move", "task_id": 884, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-14T23:13:11.301824+00:00", "action": "edit", "task_id": 855, "detail": "append_body"}
+{"timestamp": "2026-04-14T23:13:11.318952+00:00", "action": "release", "task_id": 855, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:13:11.326248+00:00", "action": "move", "task_id": 855, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T23:13:39.514421+00:00", "action": "claim", "task_id": 883, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:13:47.605016+00:00", "action": "claim", "task_id": 885, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:14:01.666797+00:00", "action": "claim", "task_id": 876, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:21:57.282670+00:00", "action": "edit", "task_id": 883, "detail": "append_body"}
+{"timestamp": "2026-04-14T23:21:57.297198+00:00", "action": "release", "task_id": 883, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:21:57.299145+00:00", "action": "move", "task_id": 883, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T23:22:45.055716+00:00", "action": "edit", "task_id": 885, "detail": "append_body"}
+{"timestamp": "2026-04-14T23:22:45.085249+00:00", "action": "release", "task_id": 885, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:22:45.099559+00:00", "action": "move", "task_id": 885, "detail": "todo -> in-progress"}
+{"timestamp": "2026-04-14T23:33:34.629424+00:00", "action": "edit", "task_id": 876, "detail": "append_body"}
+{"timestamp": "2026-04-14T23:33:34.645943+00:00", "action": "release", "task_id": 876, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:33:34.645943+00:00", "action": "move", "task_id": 876, "detail": "done -> archived"}
+{"timestamp": "2026-04-14T23:34:26.188657+00:00", "action": "claim", "task_id": 827, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:41:39.874323+00:00", "action": "edit", "task_id": 827, "detail": "append_body"}
+{"timestamp": "2026-04-14T23:41:39.891800+00:00", "action": "release", "task_id": 827, "detail": "ripe-rook"}
+{"timestamp": "2026-04-14T23:41:39.907729+00:00", "action": "move", "task_id": 827, "detail": "done -> archived"}
