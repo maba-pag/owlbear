@@ -485,16 +485,19 @@ class TestFromAC_ToolErrorWhenNoPage:
     """AC11: Every tool raises ToolError when ctx.lifespan_context.page is None."""
 
     @pytest.mark.asyncio
-    async def test_navigate_raises_when_page_none(self) -> None:
-        """navigate raises ToolError when AppContext.page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_navigate_returns_url_when_page_none(self) -> None:
+        """navigate returns url (dry-run) when AppContext page is None and domain is allowed.
 
+        Adjudicated in #877: AppContext with fetcher=None and page=None should return the
+        url (dry-run path) rather than raising ToolError. Allowlist check still enforced.
+        """
         from owlbear_mcp_browser.server import navigate
 
-        ctx = _make_mcp_ctx_no_page()  # FAILS: AppContext lacks cdp/page
+        ctx = _make_mcp_ctx_no_page()
 
-        with pytest.raises(ToolError):
-            await navigate(ctx, _ALLOWED_URL)  # FAILS: navigate has no ctx param + no page check
+        # FAILS on HEAD: navigate still raises ToolError instead of returning url
+        result = await navigate(ctx, _ALLOWED_URL)
+        assert result == _ALLOWED_URL
 
     @pytest.mark.asyncio
     async def test_click_raises_when_page_none(self) -> None:
@@ -533,25 +536,31 @@ class TestFromAC_ToolErrorWhenNoPage:
             await select(ctx, _SELECTOR, _OPTION_VALUE)  # FAILS: no ctx param + no page check
 
     @pytest.mark.asyncio
-    async def test_read_text_raises_when_page_none(self) -> None:
-        """read_text raises ToolError when AppContext.page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_read_text_returns_string_when_page_none(self) -> None:
+        """read_text returns last_content fallback (empty string) when page is None.
 
+        Adjudicated in #877: read_text supports fetcher-only pipeline and should not
+        raise ToolError when page is None — return last_content instead.
+        """
         from owlbear_mcp_browser.server import read_text
 
-        ctx = _make_mcp_ctx_no_page()  # FAILS: AppContext lacks cdp/page
+        ctx = _make_mcp_ctx_no_page()
 
-        with pytest.raises(ToolError):
-            await read_text(ctx)  # FAILS: read_text has no ctx param + no page check
+        # FAILS on HEAD: read_text still raises ToolError instead of returning last_content
+        result = await read_text(ctx)
+        assert isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_snapshot_raises_when_page_none(self) -> None:
-        """snapshot raises ToolError when AppContext.page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_snapshot_returns_string_when_page_none(self) -> None:
+        """snapshot returns last_content fallback (empty string) when page is None.
 
+        Adjudicated in #877: snapshot supports fetcher-only pipeline and should not
+        raise ToolError when page is None — return last_content instead.
+        """
         from owlbear_mcp_browser.server import snapshot
 
-        ctx = _make_mcp_ctx_no_page()  # FAILS: AppContext lacks cdp/page
+        ctx = _make_mcp_ctx_no_page()
 
-        with pytest.raises(ToolError):
-            await snapshot(ctx)  # FAILS: snapshot has no ctx param + no page check
+        # FAILS on HEAD: snapshot still raises ToolError instead of returning last_content
+        result = await snapshot(ctx)
+        assert isinstance(result, str)

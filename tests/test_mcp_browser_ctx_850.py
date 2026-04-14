@@ -59,7 +59,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """click() accepts ctx as first positional arg and returns the selector string."""
         from owlbear_mcp_browser.server import click  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.click = AsyncMock()
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await click(ctx, selector="#submit-btn")
         assert result == "#submit-btn"
 
@@ -68,7 +73,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """type_input() accepts ctx as first positional arg and returns 'selector:text'."""
         from owlbear_mcp_browser.server import type_input  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.fill = AsyncMock()
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await type_input(ctx, selector="#search", text="hello world")
         assert result == "#search:hello world"
 
@@ -77,7 +87,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """select() accepts ctx as first positional arg and returns 'selector:value'."""
         from owlbear_mcp_browser.server import select  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.select_option = AsyncMock()
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await select(ctx, selector="#dropdown", value="option-1")
         assert result == "#dropdown:option-1"
 

@@ -421,16 +421,19 @@ class TestFromAC_ReadTextTool:
         assert result == "# Hello"
 
     @pytest.mark.asyncio
-    async def test_read_text_raises_tool_error_when_page_is_none(self) -> None:
-        """read_text() raises ToolError when AppContext.page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_read_text_returns_string_when_page_is_none(self) -> None:
+        """read_text() returns last_content fallback (empty string) when page is None.
 
+        Adjudicated in #877: read_text has a fetcher-only pipeline fallback. A browser
+        page is not required — return last_content (may be "") instead of raising ToolError.
+        """
         from owlbear_mcp_browser.server import read_text
 
         ctx = _make_ctx_with_page(None)
 
-        with pytest.raises(ToolError):
-            await read_text(ctx)
+        # FAILS on HEAD: read_text still raises ToolError instead of returning last_content
+        result = await read_text(ctx)
+        assert isinstance(result, str)
 
 
 # ===========================================================================
@@ -455,13 +458,16 @@ class TestFromAC_SnapshotTool:
         assert result == "- heading 'Hello' [level=1]"
 
     @pytest.mark.asyncio
-    async def test_snapshot_raises_tool_error_when_page_is_none(self) -> None:
-        """snapshot() raises ToolError when AppContext.page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_snapshot_returns_string_when_page_is_none(self) -> None:
+        """snapshot() returns last_content fallback (empty string) when page is None.
 
+        Adjudicated in #877: snapshot has a fetcher-only pipeline fallback. A browser
+        page is not required — return last_content (may be "") instead of raising ToolError.
+        """
         from owlbear_mcp_browser.server import snapshot
 
         ctx = _make_ctx_with_page(None)
 
-        with pytest.raises(ToolError):
-            await snapshot(ctx)
+        # FAILS on HEAD: snapshot still raises ToolError instead of returning last_content
+        result = await snapshot(ctx)
+        assert isinstance(result, str)

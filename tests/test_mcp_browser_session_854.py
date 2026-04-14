@@ -192,16 +192,19 @@ class TestFromAC_NoSessionMessage:
     """AC11: All tools must raise ToolError('No browser session') when page is None."""
 
     @pytest.mark.asyncio
-    async def test_navigate_no_session_message(self) -> None:
-        """navigate raises ToolError with message 'No browser session' when page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_navigate_returns_url_when_no_page(self) -> None:
+        """navigate returns url (AppContext dry-run) instead of raising ToolError when page is None.
 
+        Adjudicated in #877: AppContext path with fetcher=None and page=None should return
+        url rather than raising ToolError — allowlist check is still enforced.
+        """
         from owlbear_mcp_browser.server import navigate
 
-        ctx = _make_mcp_ctx_no_page()  # FAILS: AppContext lacks cdp/page
+        ctx = _make_mcp_ctx_no_page()
 
-        with pytest.raises(ToolError, match=_NO_SESSION_MSG):
-            await navigate(ctx, _ALLOWED_URL)  # FAILS: wrong message on current HEAD
+        # FAILS on HEAD: navigate raises ToolError instead of returning url
+        result = await navigate(ctx, _ALLOWED_URL)
+        assert result == _ALLOWED_URL
 
     @pytest.mark.asyncio
     async def test_click_no_session_message(self) -> None:
@@ -240,25 +243,31 @@ class TestFromAC_NoSessionMessage:
             await select(ctx, _SELECTOR, _OPTION_VALUE)  # FAILS: no ctx param + no ToolError
 
     @pytest.mark.asyncio
-    async def test_read_text_no_session_message(self) -> None:
-        """read_text raises ToolError with message 'No browser session' when page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_read_text_returns_string_when_no_page(self) -> None:
+        """read_text returns last_content fallback (empty string) instead of raising ToolError.
 
+        Adjudicated in #877: read_text supports fetcher-only pipeline; page is not required.
+        Return last_content (default "") rather than raising ToolError with 'No browser session'.
+        """
         from owlbear_mcp_browser.server import read_text
 
-        ctx = _make_mcp_ctx_no_page()  # FAILS: AppContext lacks cdp/page
+        ctx = _make_mcp_ctx_no_page()
 
-        with pytest.raises(ToolError, match=_NO_SESSION_MSG):
-            await read_text(ctx)  # FAILS: returns last_content instead of raising ToolError
+        # FAILS on HEAD: read_text raises ToolError instead of returning last_content
+        result = await read_text(ctx)
+        assert isinstance(result, str)
 
     @pytest.mark.asyncio
-    async def test_snapshot_no_session_message(self) -> None:
-        """snapshot raises ToolError with message 'No browser session' when page is None."""
-        from mcp.server.fastmcp.exceptions import ToolError
+    async def test_snapshot_returns_string_when_no_page(self) -> None:
+        """snapshot returns last_content fallback (empty string) instead of raising ToolError.
 
+        Adjudicated in #877: snapshot supports fetcher-only pipeline; page is not required.
+        Return last_content (default "") rather than raising ToolError with 'No browser session'.
+        """
         from owlbear_mcp_browser.server import snapshot
 
-        ctx = _make_mcp_ctx_no_page()  # FAILS: AppContext lacks cdp/page
+        ctx = _make_mcp_ctx_no_page()
 
-        with pytest.raises(ToolError, match=_NO_SESSION_MSG):
-            await snapshot(ctx)  # FAILS: snapshot has no ctx param + raises no ToolError
+        # FAILS on HEAD: snapshot raises ToolError instead of returning last_content
+        result = await snapshot(ctx)
+        assert isinstance(result, str)
