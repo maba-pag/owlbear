@@ -4,7 +4,7 @@ title: RED — Tests for BrowserContentFetcher + HttpxContentFetcher
 status: done
 priority: needed
 created: '2026-04-12T02:23:15.779913Z'
-updated: '2026-04-13T20:36:07.267150+00:00'
+updated: '2026-04-14T00:30:43.774210+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -14,8 +14,8 @@ depends_on:
 - 830
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: green-stem
+claimed_at: '2026-04-14T00:30:43.774210+00:00'
 ---
 
 ## Acceptance Criteria
