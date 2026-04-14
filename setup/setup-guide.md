@@ -174,7 +174,6 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Variable | Description |
 |----------|-------------|
 | `OWLBEAR_KB_PATH` | Override the path to the SQLite knowledge database |
-| `OWLBEAR_MODEL` | Override the LLM model used by the entity extractor |
 | `KNOWLEDGE_TOOLS_EXCLUDE` | Comma-separated tool names to hide (e.g. for query-only access) |
 
 ---

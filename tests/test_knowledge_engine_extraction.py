@@ -159,14 +159,14 @@ class TestFromAC_EntityExtractionPipeline:  # noqa: N801
     @pytest.mark.asyncio
     async def test_entity_extractor_returns_extraction_result(self) -> None:
         """extract() returns an ExtractionResult instance."""
-        extractor = EntityExtractor(model="openai:gpt-4o")
+        extractor = EntityExtractor()
         result = await extractor.extract("def hello(): pass")
         assert isinstance(result, ExtractionResult)
 
     @pytest.mark.asyncio
     async def test_entity_extractor_entities_have_name_and_entity_type(self) -> None:
         """All entities in the result have non-empty name and valid entity_type."""
-        extractor = EntityExtractor(model="openai:gpt-4o")
+        extractor = EntityExtractor()
         result = await extractor.extract("class Foo:\n    def bar(self): pass\n")
         for entity in result.entities:
             assert isinstance(entity, Entity)
@@ -178,7 +178,7 @@ class TestFromAC_EntityExtractionPipeline:  # noqa: N801
         """EntityExtractor.extract must be an async method (awaitable)."""
         import inspect
 
-        extractor = EntityExtractor(model="openai:gpt-4o")
+        extractor = EntityExtractor()
         coro = extractor.extract("text")
         assert inspect.isawaitable(coro)
         coro.close()  # avoid RuntimeWarning
