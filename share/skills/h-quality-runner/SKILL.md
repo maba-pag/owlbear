@@ -86,7 +86,7 @@ If Quality-Runner is unavailable (not listed in the calling agent's `agents:` ar
 
 ```powershell
 # Scoped
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
+uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short -n 0
 uv run ruff check serve/ tests/
 
 # Full suite (use isBackground=true — backgroundNotifications signals completion)

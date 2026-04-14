@@ -126,12 +126,22 @@ If scoped pytest runs show plugin-load errors or incorrect async behavior, disab
 
 ```powershell
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
-uv run pytest tests/test_{module}.py -q --tb=short -p pytest_asyncio.plugin
+uv run pytest tests/test_{module}.py -q --tb=short -p pytest_asyncio.plugin -p xdist -n 0
 # With coverage:
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q -p pytest_asyncio.plugin -p pytest_cov
+uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q -p pytest_asyncio.plugin -p pytest_cov -p xdist -n 0
 ```
 
+`-p xdist` is required because `addopts` contains `-n auto --dist loadfile` — without the plugin loaded those flags cause `unrecognized arguments`. `-n 0` overrides xdist parallelism for scoped runs.
+
 Restore before returning the terminal: `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=''`
+
+> **Preferred alternative:** Instead of disabling all plugins, selectively disable the known-bad logfire plugins:
+>
+> ```powershell
+> uv run pytest tests/test_{module}.py -p no:logfire -p no:pytest_logfire -q --tb=short
+> ```
+>
+> This keeps all other plugins (xdist, cov, asyncio) working from autoload.
 
 ## Known Gotchas
 
