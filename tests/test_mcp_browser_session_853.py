@@ -1,24 +1,23 @@
-"""Failing RED-phase tests for #853: mcp-browser session management.
+"""Tests for #853: mcp-browser session management (Playwright launcher model).
+
+Task is tagged ``archived`` + ``superseded`` (CDP approach blocked by Group Policy; parent
+#837 pivoted to Playwright ``launch_persistent_context()`` + SSO extension).  Test file was
+updated by tasks #871 (Playwright pivot) and #877 (AC11 adjudication).  All 27 tests PASS
+on current HEAD.
 
 AC coverage:
-  AC1  AppContext includes CDPConnectionManager and optional Page fields
-  AC2  lifespan: successful CDP connection yields AppContext with cdp+page
-  AC3  lifespan: failed CDP connection yields AppContext with cdp=None, page=None
-  AC4  lifespan cleanup: disconnects CDP and closes page on exit
+  AC1  AppContext includes PlaywrightLauncher and optional Page fields (defaults None)
+  AC2  lifespan: successful PlaywrightLauncher.launch() yields AppContext with launcher+page
+  AC3  lifespan: failed PlaywrightLauncher.launch() yields AppContext with launcher=None, page=None
+  AC4  lifespan cleanup: calls page.close() and launcher.close() on exit; skipped when launch failed
   AC5  navigate(): checks allowlist then calls page.goto(url)
   AC6  click(): calls page.locator(selector).click()
   AC7  type(): calls page.locator(selector).fill(text)
   AC8  select(): calls page.locator(selector).select_option(value)
   AC9  read_text(): calls extract_content(page.content(), page.url)
   AC10 snapshot(): calls page.aria_snapshot()
-  AC11 all tools: raise ToolError when page is None
-
-All tests FAIL on current HEAD:
-  - AC1: AppContext has no cdp/page fields → AttributeError/TypeError
-  - AC2-AC4: CDPConnectionManager not imported in server.py → AttributeError on patch
-  - AC5-AC10: helper _make_mcp_ctx_with_page raises TypeError (AppContext lacks cdp/page);
-              tool signatures lack ctx param → TypeError
-  - AC11: _make_mcp_ctx_no_page raises TypeError; tools don't check page → ToolError not raised
+  AC11 (adjudicated #877): click/type/select raise ToolError when page is None;
+       navigate returns url (dry-run), read_text/snapshot return last_content string
 """
 
 from __future__ import annotations
