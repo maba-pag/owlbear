@@ -259,14 +259,12 @@ class TestBuilderDiscovered:
             await navigate(ctx, url="https://sso.corp.com/protected")
 
     # ------------------------------------------------------------------
-    # AC5: fetcher=None → ToolError unconditionally (page not checked)
+    # Adjudicated in #877: fetcher=None, page=None → dry-run return url
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_navigate_fetcher_none_raises_tool_error(self) -> None:
-        """AC5: navigate() raises ToolError when AppContext.fetcher is None (page=None)."""
-        from mcp.server.fastmcp.exceptions import ToolError
-
+    async def test_navigate_fetcher_none_returns_url_when_page_none(self) -> None:
+        """Adjudicated in #877: navigate() returns url (dry-run) when fetcher=None and page=None."""
         from owlbear_mcp_browser.allowlist import DomainAllowlist
         from owlbear_mcp_browser.server import AppContext, navigate
 
@@ -277,8 +275,8 @@ class TestBuilderDiscovered:
         ctx = MagicMock()
         ctx.request_context.lifespan_context = app_ctx
 
-        with pytest.raises(ToolError):
-            await navigate(ctx, url="https://corp.example.com/page")
+        result = await navigate(ctx, url="https://corp.example.com/page")
+        assert result == "https://corp.example.com/page"
 
     @pytest.mark.asyncio
     async def test_navigate_fetcher_none_falls_back_to_page_goto_when_page_is_set(self) -> None:
