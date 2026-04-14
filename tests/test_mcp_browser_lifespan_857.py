@@ -281,10 +281,8 @@ class TestBuilderDiscovered:
             await navigate(ctx, url="https://corp.example.com/page")
 
     @pytest.mark.asyncio
-    async def test_navigate_fetcher_none_raises_tool_error_even_when_page_is_set(self) -> None:
-        """AC5: navigate() raises ToolError when fetcher is None even if a page object is present."""
-        from mcp.server.fastmcp.exceptions import ToolError
-
+    async def test_navigate_fetcher_none_falls_back_to_page_goto_when_page_is_set(self) -> None:
+        """AC5 fallback: navigate() calls page.goto(url) when fetcher is None but page is set."""
         from owlbear_mcp_browser.allowlist import DomainAllowlist
         from owlbear_mcp_browser.server import AppContext, navigate
 
@@ -298,6 +296,7 @@ class TestBuilderDiscovered:
         ctx = MagicMock()
         ctx.request_context.lifespan_context = app_ctx
 
-        with pytest.raises(ToolError):
-            await navigate(ctx, url="https://corp.example.com/page")
-        mock_page.goto.assert_not_called()
+        result = await navigate(ctx, url="https://corp.example.com/page")
+
+        mock_page.goto.assert_called_once_with("https://corp.example.com/page")
+        assert result == "https://corp.example.com/page"
