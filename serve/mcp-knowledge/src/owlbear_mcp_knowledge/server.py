@@ -22,8 +22,10 @@ from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
+from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
+from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
@@ -95,6 +97,9 @@ class AppContext:
     bookmark_store: BookmarkStore | None
     refresh_orchestrator: RefreshOrchestrator | None = None
     consolidation_service: ConsolidationService | None = None
+    structured_extractor: object | None = None
+    intra_doc_builder: IntraDocGraphBuilder | None = None
+    inter_doc_builder: InterDocGraphBuilder | None = None
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -175,7 +180,24 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         gs = GraphStore(conn)
         vs = QdrantVectorStore()
         emb = BgeM3EmbeddingProvider()
-        extractor = EntityExtractor()
+        structured_extractor = None
+        api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            try:
+                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
+
+                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
+                base_url = os.environ.get("OWLBEAR_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+                structured_extractor = LLMExtractor(model=model, api_key=api_key, base_url=base_url)
+            except ImportError:
+                structured_extractor = None
+        extractor = EntityExtractor(extractor=structured_extractor)
+        intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
+        inter_doc_builder = (
+            InterDocGraphBuilder(structured_extractor, vs, gs)
+            if structured_extractor is not None
+            else None
+        )
         gar = GraphAugmentedRetriever(vs, gs, emb)
         qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
         doc_store = DocumentStore(conn, gs, vs, emb)
@@ -209,6 +231,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             bookmark_store=bookmark_store,
             refresh_orchestrator=refresh_orchestrator,
             consolidation_service=consolidation_service,
+            structured_extractor=structured_extractor,
+            intra_doc_builder=intra_doc_builder,
+            inter_doc_builder=inter_doc_builder,
         )
         _app_context = ctx
         _apply_tool_exclusions(_server)
