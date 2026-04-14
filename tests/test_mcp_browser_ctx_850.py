@@ -101,7 +101,11 @@ class TestFromAC_CtxParameterOnAllTools:
         """read_text() accepts ctx as first positional arg and returns a string."""
         from owlbear_mcp_browser.server import read_text  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_page = MagicMock()
+        mock_page.url = "https://example.com/"
+        mock_page.content = AsyncMock(return_value="<html><body>Hello world</body></html>")
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await read_text(ctx)
         assert isinstance(result, str)
 
@@ -110,7 +114,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """snapshot() accepts ctx as first positional arg and returns a string."""
         from owlbear_mcp_browser.server import snapshot  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.aria_snapshot = AsyncMock(return_value="- heading: Hello\n")
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await snapshot(ctx)
         assert isinstance(result, str)
 
