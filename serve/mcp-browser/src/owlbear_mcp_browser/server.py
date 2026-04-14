@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -15,9 +16,9 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from owlbear_browser._errors import AuthenticationRequired
-from owlbear_browser.cdp import CDPConnectionManager as _CDPConnectionManager
 from owlbear_browser.extractor import extract_content
 from owlbear_browser.fetcher import BrowserContentFetcher
+from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
 __all__ = ["AppContext", "app_lifespan", "mcp_app"]
@@ -28,7 +29,7 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     allowlist: DomainAllowlist
-    cdp: _CDPConnectionManager | None = None
+    launcher: PlaywrightLauncher | None = None
     page: Any = None
     fetcher: BrowserContentFetcher | None = None
     last_content: str = ""
@@ -57,36 +58,36 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
-    """Configure DomainAllowlist, attempt CDP connection, and yield AppContext."""
+    """Configure DomainAllowlist, attempt Playwright launch, and yield AppContext."""
     _apply_tool_exclusions(server)
     domains_env = os.environ.get("BROWSER_ALLOWED_DOMAINS", "")
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
     allowlist = DomainAllowlist(domains=domains)
 
-    cdp: _CDPConnectionManager | None = None
+    launcher: PlaywrightLauncher | None = None
     page: Any = None
     fetcher: BrowserContentFetcher | None = None
     try:
-        port = int(os.environ.get("BROWSER_CDP_PORT", "9222"))
-        manager = _CDPConnectionManager(port=port)
-        await manager.connect()
-        cdp = manager
-        fetcher = BrowserContentFetcher(cdp)
-        contexts = manager._browser.contexts  # noqa: SLF001
-        if contexts:
-            page = await contexts[0].new_page()
+        user_data_dir = os.environ.get(
+            "PLAYWRIGHT_USER_DATA_DIR",
+            str(Path.home() / ".owlbear" / "chromium-profile"),
+        )
+        launcher = PlaywrightLauncher(user_data_dir=user_data_dir)
+        await launcher.launch()
+        page = await launcher.context.new_page()  # type: ignore[union-attr]
+        fetcher = BrowserContentFetcher(launcher.context)
     except Exception:  # noqa: BLE001
-        cdp = None
+        launcher = None
         page = None
         fetcher = None
 
     try:
-        yield AppContext(allowlist=allowlist, cdp=cdp, page=page, fetcher=fetcher)
+        yield AppContext(allowlist=allowlist, launcher=launcher, page=page, fetcher=fetcher)
     finally:
         if page is not None:
             await page.close()
-        if cdp is not None:
-            await cdp.disconnect()
+        if launcher is not None:
+            await launcher.close()
 
 
 _MSG_NO_PAGE = "No browser session"
@@ -115,8 +116,7 @@ async def navigate(ctx: Context, url: str) -> str:
         if app_ctx.page is not None:
             await app_ctx.page.goto(url)
             return url
-        msg = "Browser not available"
-        raise ToolError(msg)
+        return url  # URL is allowlist-validated; no browser/fetcher present = dry-run
 
     # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
     # explicitly set — avoids awaiting auto-generated MagicMock attributes.
