@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Entity Name Canonicalization (Task #865)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| ScrapingAnt: Deduplication & Canonicalization in Scraped KGs | <https://scrapingant.com/blog/data-deduplication-and-canonicalization-in-scraped> | Blocking/candidate generation pipeline; canonical_name as blocking key; rule-based vs ML vs hybrid approaches | .owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
+| SpotIntelligence: Entity Resolution Techniques | <https://spotintelligence.com/2024/01/22/entity-resolution/> | Rule-based matching, string similarity measures, clustering approaches for entity deduplication | .owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
+
 ## StructuredExtractor Replacement Research (Task #874)
 
 | Source | URL | What | Where Used | Date |
@@ -17,6 +24,25 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | OpenAI Structured Outputs guide | <https://developers.openai.com/api/docs/guides/structured-outputs> | Strict JSON schema, `response_format`, Pydantic support, refusal handling | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
 | openai-python SDK helpers.md | <https://github.com/openai/openai-python/blob/main/helpers.md> | `chat.completions.parse()` API, auto-schema from Pydantic, `ParsedChatCompletion` | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
+
+## SharePoint REST API Parallel Path Research (Task #773)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Microsoft Graph SharePoint API overview | <https://learn.microsoft.com/en-us/graph/api/resources/sharepoint?view=graph-rest-1.0> | Site/list/drive API surface, URL addressing patterns | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Graph API sitePage + canvasLayout | <https://learn.microsoft.com/en-us/graph/api/sitepage-get?view=graph-rest-1.0> | Page content extraction via $expand=canvasLayout, web part innerHtml, permissions (Sites.Read.All) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Sites.Selected delegated auth announcement | <https://devblogs.microsoft.com/microsoft365dev/sharepoint-now-supports-delegated-sites-selected-authentication/> | Granular per-site delegated permission scope (Feb 2024) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Office365-REST-Python-Client (vgrem) | <https://pypi.org/project/Office365-REST-Python-Client/> | Python library for SharePoint REST + Graph API, MSAL integration, dep analysis | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| MSAL Python docs | <https://msal-python.readthedocs.io/en/latest/> | Auth library for Azure AD token acquisition (device-code, interactive, client-credentials) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+
+## GraphContentFetcher Implementation Research (Task #879)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| canvasLayout v1.0 API reference | <https://learn.microsoft.com/en-us/graph/api/resources/canvaslayout?view=graph-rest-1.0> | canvasLayout resource structure, horizontalSections/verticalSection relationships | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| SE: retrieve modern SP page content | <https://sharepoint.stackexchange.com/questions/307632> | Community confirmation that $expand=canvasLayout works in v1.0 for modern pages | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| msgraph-sdk-python (v1.55.0) | <https://github.com/microsoftgraph/msgraph-sdk-python> | SDK dep analysis: kiota-*, azure-core, 15+ transitive deps — confirms Option A preferred | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| azure-identity vs msal comparison | <https://www.datalineo.com/post/power-bi-rest-api-with-python-part-iii-azure-identity> | azure-identity wraps msal, adds azure-core layer; raw msal is lighter | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
 
 ## Edge CDP Validation Spike (Task #752)
 
