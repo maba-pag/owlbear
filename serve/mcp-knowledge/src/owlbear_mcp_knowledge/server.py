@@ -38,7 +38,7 @@ from owlbear_knowledge.source_store import KnowledgeSourceStore
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-_DEFAULT_KB_PATH = "store/knowledge/knowledge.db"
+_DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 _DEFAULT_MODEL = "gpt-4o-mini"
 
 
@@ -183,7 +183,7 @@ async def _web_read(url: str) -> str | None:
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Initialise knowledge-base services; close the DB connection on exit."""
     global _app_context  # noqa: PLW0603
-    path = os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
+    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     conn = init_db(path)
     try:
         gs = GraphStore(conn)
@@ -455,7 +455,7 @@ async def import_scope(
 ) -> str:
     """Import a project-local knowledge snapshot into the global KB.
 
-    Reads a portable SQLite file (default: ``.owlbear/knowledge/knowledge.db``)
+    Reads a portable SQLite file (default: ``.owlbear/knowledge/local.db``)
     and ingests its documents into the global KB under ``scope="project:{project_name}"``.
     Duplicate documents (same content hash) are skipped.
     """
