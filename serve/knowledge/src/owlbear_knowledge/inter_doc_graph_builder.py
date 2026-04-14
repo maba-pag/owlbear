@@ -51,9 +51,29 @@ entities list empty — only return edges.
 """
 
 
-def _stamp_inter_edge(edge: Edge) -> Edge:
-    """Return a copy of *edge* stamped with inter-doc weight and source."""
-    return edge.model_copy(update={"weight": _INTER_WEIGHT, "metadata": {**edge.metadata, "source": _INTER_SOURCE}})
+def _stamp_inter_edge(
+    edge: Edge,
+    entity_by_id: dict[str, Entity],
+    source_by_entity: dict[str, str | None],
+) -> Edge:
+    """Return a copy of *edge* stamped with inter-doc weight, source, doc_pair, and source_pair."""
+    ent_a = entity_by_id.get(edge.source_id)
+    ent_b = entity_by_id.get(edge.target_id)
+    doc_id_a = ent_a.document_id if ent_a is not None else None
+    doc_id_b = ent_b.document_id if ent_b is not None else None
+    src_a = source_by_entity.get(edge.source_id)
+    src_b = source_by_entity.get(edge.target_id)
+    doc_pair = sorted(d for d in [doc_id_a, doc_id_b] if isinstance(d, str))
+    source_pair = sorted(s for s in [src_a, src_b] if isinstance(s, str))
+    return edge.model_copy(update={
+        "weight": _INTER_WEIGHT,
+        "metadata": {
+            **edge.metadata,
+            "source": _INTER_SOURCE,
+            "doc_pair": doc_pair,
+            "source_pair": source_pair,
+        },
+    })
 
 
 def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:
@@ -94,14 +114,41 @@ class InterDocGraphBuilder:
         self._top_k = top_k
         self._cosine_threshold = cosine_threshold
 
+    def _build_source_map(self, entities: list[Entity]) -> dict[str, str | None]:
+        """Return entity_id → source_id by consulting graph_store.get_document().
+
+        Calls get_document for every unique non-None document_id in *entities*.
+        Entities with document_id=None map to None (unknown source).
+        Orphaned document_ids (get_document returns None) also map to None.
+        """
+        unique_doc_ids = {e.document_id for e in entities if e.document_id is not None}
+        doc_to_source: dict[str, str | None] = {}
+        for doc_id in unique_doc_ids:
+            doc = self._graph_store.get_document(doc_id)
+            doc_to_source[doc_id] = doc.source_id if doc is not None else None
+        return {
+            entity.id: (
+                None if entity.document_id is None else doc_to_source.get(entity.document_id)
+            )
+            for entity in entities
+        }
+
     def _collect_candidates(
         self,
         entities: list[Entity],
         entity_by_id: dict[str, Entity],
         existing_pairs: set[tuple[str, str]],
+        source_by_entity: dict[str, str | None],
     ) -> list[tuple[Entity, Entity]]:
-        """Return cross-document candidate pairs after vector filtering and dedup."""
-        candidate_pairs: list[tuple[Entity, Entity]] = []
+        """Return cross-document candidate pairs, cross-source pairs first.
+
+        Cross-source pairs (both entities have known, distinct source_ids) are
+        prioritised over same-source cross-document pairs.  Entities with
+        document_id=None or a resolved source_id=None are treated as unknown
+        source and never promoted to the cross-source bucket.
+        """
+        cross_source: list[tuple[Entity, Entity]] = []
+        same_source: list[tuple[Entity, Entity]] = []
         for entity in entities:
             embedding = self._vector_store.get_embedding(entity.id)
             similar = self._vector_store.search_similar(embedding, top_k=self._top_k)
@@ -115,8 +162,13 @@ class InterDocGraphBuilder:
                     continue
                 if (entity.id, other.id) in existing_pairs:
                     continue
-                candidate_pairs.append((entity, other))
-        return candidate_pairs
+                src_a = source_by_entity.get(entity.id)
+                src_b = source_by_entity.get(other.id)
+                if src_a is not None and src_b is not None and src_a != src_b:
+                    cross_source.append((entity, other))
+                else:
+                    same_source.append((entity, other))
+        return cross_source + same_source
 
     async def build(
         self,
@@ -139,7 +191,8 @@ class InterDocGraphBuilder:
             existing_pairs.add((e.target_id, e.source_id))
 
         entity_by_id: dict[str, Entity] = {e.id: e for e in entities}
-        candidate_pairs = self._collect_candidates(entities, entity_by_id, existing_pairs)
+        source_by_entity = self._build_source_map(entities)
+        candidate_pairs = self._collect_candidates(entities, entity_by_id, existing_pairs, source_by_entity)
 
         if not candidate_pairs:
             return GraphBuildResult()
@@ -152,5 +205,5 @@ class InterDocGraphBuilder:
             result = await self._extractor.extract(prompt)
             all_edges.extend(result.edges)
 
-        stamped = [_stamp_inter_edge(e) for e in all_edges]
+        stamped = [_stamp_inter_edge(e, entity_by_id, source_by_entity) for e in all_edges]
         return GraphBuildResult(edges=stamped, edges_added=len(stamped))
