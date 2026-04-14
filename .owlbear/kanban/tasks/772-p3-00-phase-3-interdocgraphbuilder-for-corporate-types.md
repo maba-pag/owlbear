@@ -1,10 +1,10 @@
 ---
 id: 772
 title: 'P3-00: Phase 3 — InterDocGraphBuilder for corporate types'
-status: in-progress
+status: done
 priority: nice-to-have
 created: '2026-04-10T10:56:34.377861+00:00'
-updated: '2026-04-13T20:52:19.504575+00:00'
+updated: '2026-04-14T20:21:56.082748+00:00'
 tags:
 - phase-3
 - scope:knowledge
@@ -13,8 +13,8 @@ parent: 751
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: ripe-rook
+claimed_at: '2026-04-14T20:21:56.082748+00:00'
 ---
 Placeholder — needs decomposition when Phase 1 is complete.
 
@@ -92,3 +92,91 @@ Parent: #751
 - Architecture review (also in body) confirms: "#772 is a non-implementation tracking epic."
 - All testable implementation is carried by children #862 (P3-01: prompt), #863 (P3-02: source-aware filtering), #864 (P3-03: pipeline wiring), #865 (P3-04: canonicalization).
 - Passing through to builder.
+[[2026-04-14]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+[[2026-04-14]]
+## Review Evidence
+
+### Test Results
+N/A — Non-implementation tracking epic. No `TestFromAC_*` classes exist. Test-writer and builder both correctly identified the pass-through nature and produced no test or production code changes.
+
+### Lint
+N/A — No files changed attributable to this task. Confirmed via `get_changed_files()`: zero diffs touch any file owned by #772.
+
+### Coverage
+N/A — No new code.
+
+---
+
+### Pass 1 — CRITICAL
+
+#### 5.0 Test-Writer AC Coverage
+Conditional skip — no `TestFromAC_*` classes exist. Correct: task has no AC lines and produces no testable Python interfaces.
+
+#### 5.1 Security Review
+No code changes. No new attack surface. PASS.
+
+#### 5.2 Test Integrity
+Conditional skip — no `TestFromAC_*` classes exist.
+
+#### 5.3 Test Quality
+N/A — no tests.
+
+#### 5.4 Data Safety
+N/A — no code changes.
+
+#### 5.5 Implementation-Aware Test Gap Analysis
+N/A — no implementation.
+
+#### 5.6 Necessity Check
+N/A — no new dependencies.
+
+#### 5.7 Builder Process Quality
+CLEAN — single pass-through, zero file changes, consistent with tracking epic nature.
+
+---
+
+### AC Compliance Table
+
+| Deliverable | Evidence | Status |
+|-------------|----------|--------|
+| Research completed with follow-up tasks | #862-#865 created at research status; research doc at `.owlbear/research/772-interdocgraphbuilder-corporate-types.md` | PASS |
+| Architecture review: APPROVE | Full eval table 10 criteria all PASS/FLAG; codebase evidence cited (inter_doc_graph_builder.py line refs verified) | PASS |
+| Follow-up task AC quality | All 4 children assessed: #862, #863 clean; #864 had missing depends_on flag → now resolved (confirmed in diff: depends_on: [862, 863]); #865 correctly deferred | PASS |
+| No unexpected code changes | `get_changed_files()` confirms zero diffs attributable to #772 | PASS |
+| Premise validation | 4 codebase gaps verified independently: INTER_DOC_PROMPT dead code (L31-52), _build_inter_prompt name-only (L59-61), document_id-only filter (L99-120), no call site in refresh/ingest | PASS |
+
+---
+
+### Pass 2 — INFORMATIONAL
+
+**6.1** Architecture review's challenger subagent was unavailable (FALLBACK). Architect compensated with direct codebase verification — all 4 premises cited with line numbers. Informational only; does not affect verdict.
+
+**6.2** #864 dependency gap was flagged by architect. Confirmed resolved via git diff: `depends_on: [862, 863]` now present.
+
+---
+
+### Deductions
+- Challenger FALLBACK (systemic limitation, compensated by independent codebase verification): −0.02
+
+### Confidence: .98 → PASS
+
+`PASS #772 -> docs | confidence .98`
+[[2026-04-14]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Tracking epic — zero code changes; confirmed by Review Evidence (`get_changed_files()` zero diffs) |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | All 6 research sources are internal: codebase files, brief voices, prior research #256 — no external patterns used |
+| 4 | CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/772-interdocgraphbuilder-corporate-types.md` exists, linked from task body, follow-up tasks #862–#865 created at research status |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `772-*` scratch files found)
