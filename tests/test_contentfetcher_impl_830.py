@@ -4,10 +4,10 @@ AC mapping (from tasks #830 and #841):
 
   AC-B1  BrowserContentFetcher importable from owlbear_browser.fetcher
   AC-B2  isinstance(obj, ContentFetcher) is True for BrowserContentFetcher
-  AC-B3  fetch(url) delegates: CDPConnectionManager._browser.contexts[0].new_page()
-           → page.goto(url) → check_sso_redirect(page) → page.content()
+  AC-B3  fetch(url) delegates: BrowserContext.new_page()
+           → page.goto(url, wait_until="domcontentloaded") → page.content()
            → extract_content(html, url) → return markdown str
-  AC-B4  SSO redirect detected → raises AuthenticationRequired
+  AC-B4  SSO handled by extension layer — check_sso_redirect no longer called
   AC-B5  page.close() always called after successful fetch
   AC-B6  page.close() always called even when an error is raised during fetch
 
@@ -17,7 +17,8 @@ AC mapping (from tasks #830 and #841):
   AC-H4  Non-2xx HTTP response raises httpx.HTTPStatusError
   AC-H5  fetch() returns response.text as str
 
-All 18 tests FAIL at RED phase — neither fetcher.py file exists yet.
+All 20 tests pass: 11 BrowserContentFetcher (BrowserContext-based), 7 HttpxContentFetcher,
+2 TestBuilderDiscovered.
 """
 
 from __future__ import annotations
@@ -33,7 +34,6 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _TEST_URL = "https://contoso.sharepoint.com/sites/team"
-_SSO_URL = "https://login.microsoftonline.com/tenant/oauth2"
 _SAMPLE_HTML = "<html><body><h1>Project Home</h1><p>Meeting notes.</p></body></html>"
 _SAMPLE_MARKDOWN = "# Project Home\n\nMeeting notes."
 
@@ -54,16 +54,11 @@ def _make_mock_page() -> MagicMock:
     return page
 
 
-def _make_mock_cdp(page: MagicMock) -> MagicMock:
-    """Return a mock CDPConnectionManager wired with one context/page."""
-    context = MagicMock()
-    context.new_page = AsyncMock(return_value=page)
-    browser = MagicMock()
-    browser.contexts = [context]
-    cdp = MagicMock()
-    cdp._browser = browser
-    cdp.check_sso_redirect = AsyncMock()  # no redirect by default
-    return cdp
+def _make_mock_context(page: MagicMock) -> MagicMock:
+    """Return a mock Playwright BrowserContext with new_page wired to page."""
+    ctx = MagicMock()
+    ctx.new_page = AsyncMock(return_value=page)
+    return ctx
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +67,7 @@ def _make_mock_cdp(page: MagicMock) -> MagicMock:
 
 
 class TestFromAC_BrowserContentFetcher:
-    """AC-B1..B6: BrowserContentFetcher wraps CDPConnectionManager for authenticated fetch."""
+    """AC-B1..B6: BrowserContentFetcher wraps Playwright BrowserContext for authenticated fetch."""
 
     # --- AC-B1: importable ---
 
@@ -88,8 +83,8 @@ class TestFromAC_BrowserContentFetcher:
         from owlbear_knowledge.protocol import ContentFetcher
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
-        fetcher = BrowserContentFetcher(cdp)
+        ctx = _make_mock_context(page)
+        fetcher = BrowserContentFetcher(ctx)
 
         assert isinstance(fetcher, ContentFetcher)
 
@@ -103,45 +98,46 @@ class TestFromAC_BrowserContentFetcher:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_fetch_opens_new_page_from_browser_context(self) -> None:
-        """AC-B3: fetch() calls cdp._browser.contexts[0].new_page()."""
+        """AC-B3: fetch() calls context.new_page() directly (not via CDP chain)."""
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
+        ctx = _make_mock_context(page)
 
         with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
+            fetcher = BrowserContentFetcher(ctx)
             await fetcher.fetch(_TEST_URL)
 
-        cdp._browser.contexts[0].new_page.assert_awaited_once()
+        ctx.new_page.assert_awaited_once()
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_fetch_navigates_to_url_via_goto(self) -> None:
-        """AC-B3: fetch() calls page.goto(url) with the requested URL."""
+        """AC-B3: fetch() calls page.goto(url, wait_until='domcontentloaded')."""
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
+        ctx = _make_mock_context(page)
 
         with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
+            fetcher = BrowserContentFetcher(ctx)
             await fetcher.fetch(_TEST_URL)
 
-        page.goto.assert_awaited_once_with(_TEST_URL)
+        page.goto.assert_awaited_once_with(_TEST_URL, wait_until="domcontentloaded")
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_fetch_calls_check_sso_redirect_with_page(self) -> None:
-        """AC-B3: fetch() calls cdp.check_sso_redirect(page) after navigation."""
+    async def test_fetch_does_not_call_check_sso_redirect(self) -> None:
+        """AC-B4: fetch() never calls check_sso_redirect — SSO extension handles auth."""
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
+        ctx = _make_mock_context(page)
+        ctx.check_sso_redirect = AsyncMock()
 
         with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
+            fetcher = BrowserContentFetcher(ctx)
             await fetcher.fetch(_TEST_URL)
 
-        cdp.check_sso_redirect.assert_awaited_once_with(page)
+        ctx.check_sso_redirect.assert_not_called()
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_fetch_calls_page_content(self) -> None:
@@ -149,10 +145,10 @@ class TestFromAC_BrowserContentFetcher:
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
+        ctx = _make_mock_context(page)
 
         with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
+            fetcher = BrowserContentFetcher(ctx)
             await fetcher.fetch(_TEST_URL)
 
         page.content.assert_awaited_once()
@@ -163,12 +159,12 @@ class TestFromAC_BrowserContentFetcher:
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
+        ctx = _make_mock_context(page)
 
         with patch(
             "owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN
         ) as mock_extract:
-            fetcher = BrowserContentFetcher(cdp)
+            fetcher = BrowserContentFetcher(ctx)
             await fetcher.fetch(_TEST_URL)
 
         mock_extract.assert_called_once_with(_SAMPLE_HTML, _TEST_URL)
@@ -179,33 +175,13 @@ class TestFromAC_BrowserContentFetcher:
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
+        ctx = _make_mock_context(page)
 
         with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
+            fetcher = BrowserContentFetcher(ctx)
             result = await fetcher.fetch(_TEST_URL)
 
         assert result == _SAMPLE_MARKDOWN
-
-    # --- AC-B4: SSO detection ---
-
-    @pytest.mark.asyncio(loop_scope="function")
-    async def test_sso_redirect_raises_authentication_required(self) -> None:
-        """AC-B4: AuthenticationRequired from check_sso_redirect is propagated by fetch()."""
-        from owlbear_browser._errors import AuthenticationRequired
-        from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
-
-        page = _make_mock_page()
-        page.url = _SSO_URL
-        cdp = _make_mock_cdp(page)
-        cdp.check_sso_redirect = AsyncMock(
-            side_effect=AuthenticationRequired("SSO session expired: login redirect")
-        )
-
-        with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
-            with pytest.raises(AuthenticationRequired):
-                await fetcher.fetch(_TEST_URL)
 
     # --- AC-B5/B6: page lifecycle ---
 
@@ -215,10 +191,10 @@ class TestFromAC_BrowserContentFetcher:
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
+        ctx = _make_mock_context(page)
 
         with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
+            fetcher = BrowserContentFetcher(ctx)
             await fetcher.fetch(_TEST_URL)
 
         page.close.assert_awaited_once()
@@ -226,18 +202,15 @@ class TestFromAC_BrowserContentFetcher:
     @pytest.mark.asyncio(loop_scope="function")
     async def test_page_closed_even_when_error_is_raised(self) -> None:
         """AC-B6: page.close() is awaited even when an exception escapes fetch()."""
-        from owlbear_browser._errors import AuthenticationRequired
         from owlbear_browser.fetcher import BrowserContentFetcher  # type: ignore[import]
 
         page = _make_mock_page()
-        cdp = _make_mock_cdp(page)
-        cdp.check_sso_redirect = AsyncMock(
-            side_effect=AuthenticationRequired("login redirect")
-        )
+        page.goto = AsyncMock(side_effect=RuntimeError("navigation timed out"))
+        ctx = _make_mock_context(page)
 
         with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN):
-            fetcher = BrowserContentFetcher(cdp)
-            with pytest.raises(AuthenticationRequired):
+            fetcher = BrowserContentFetcher(ctx)
+            with pytest.raises(RuntimeError):
                 await fetcher.fetch(_TEST_URL)
 
         page.close.assert_awaited_once()
