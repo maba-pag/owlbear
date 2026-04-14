@@ -2,10 +2,10 @@
 id: 853
 title: 'RED: Tests for mcp-browser session management (AppContext CDP/Page, lifespan,
   tool bodies)'
-status: todo
+status: done
 priority: important
 created: '2026-04-12T14:03:37.122556+00:00'
-updated: '2026-04-14T16:51:30.695275+00:00'
+updated: '2026-04-14T21:45:32.933734+00:00'
 tags:
 - phase-2
 - scope:mcp-browser
@@ -270,3 +270,157 @@ Re-review of archived/superseded task. CDP session management architecture was a
 
 ### Verdict: APPROVE (close-out)
 ### Action Taken: Advanced to todo as archived/superseded pass-through. All downstream agents should pass through — no implementation, no tests to write/verify. The AC targets a dead architecture (CDP blocked by Group Policy). Builder's suggested resolution #1 (close/archive) adopted.
+[[2026-04-14]]
+## Test-Writer Notes
+- Non-implementation pass-through: task tagged `archived` + `superseded`.
+- Architecture review verdict (lower in body) is APPROVE (close-out) — all downstream agents pass through, no tests to write.
+- Root cause: CDP session management approach blocked by Group Policy; parent #837 pivoted to Playwright `launch_persistent_context()` + SSO extension. AC targets a dead architecture.
+- Existing test file `tests/test_mcp_browser_session_853.py` (27 tests, CDP model) remains in repo but targets the abandoned design. No new tests written.
+[[2026-04-14]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+- Task tagged `archived` + `superseded`. CDP session management AC targets dead architecture (Group Policy blocks CDP). Architecture review (close-out) verdict: APPROVE. Existing test file `tests/test_mcp_browser_session_853.py` remains in repo but targets abandoned CDP design.
+[[2026-04-14]]
+## Review Evidence
+
+### Source Control Changes
+`get_changed_files` diff (staged + unstaged): no changes to `tests/test_mcp_browser_session_853.py` in this cycle. Builder claim of 0 file changes: **CONFIRMED**.
+
+### Test Results (independent)
+Not run directly by quality-runner — see below for rationale. Prior evidence from #877 review (independent quality-runner run, retry cycle 3): "AC6 legacy files (837/853/854/857): 72 passed, 0 failed." #877 reviewer confirmed **all 853 tests pass on current HEAD** as part of the cross-file 93/0 pass run.
+
+### Lint
+Not re-run — no production code changes. Test file lint was verified clean in #877's final review pass.
+
+### Coverage
+N/A — no production code changes in this cycle.
+
+---
+
+### Current State of Test File
+
+`tests/test_mcp_browser_session_853.py` was updated by prior tasks (#871 pivot, #877 adjudication). Current state is **NOT** the abandoned CDP design the builder described. Key updates already applied:
+
+- `AppContext` helpers now use `launcher=` kwarg (Playwright field, not `cdp=`)
+- `TestFromAC_LifespanSuccessfulConnection` patches `PlaywrightLauncher`, not `CDPConnectionManager`
+- `TestFromAC_ToolErrorWhenNoPage::test_navigate_returns_url_when_page_none` — adjudicated by #877 (returns url dry-run, not ToolError)
+- `TestFromAC_ToolErrorWhenNoPage::test_read_text_returns_string_when_page_none` — adjudicated by #877 (returns last_content, not ToolError)
+- `TestFromAC_ToolErrorWhenNoPage::test_snapshot_returns_string_when_page_none` — adjudicated by #877 (returns last_content, not ToolError)
+- `click/type/select` raise ToolError when page=None (matches current server.py behavior)
+
+---
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage (5.0)
+TestFromAC_* classes exist. All 13 AC lines have mapped tests. Each test would fail if the AC were violated. No MISSING lines. Per #877 evidence, all 27 tests now PASS — correct for close-out.
+
+#### Security (5.1)
+No production code changes. N/A.
+
+#### Test Integrity (5.2)
+TestFromAC_ modifications were made by other tasks (#877 adjudication task), not by the builder of #853. The modifications changed 3 tests from ToolError assertions to fallback assertions, which is consistent with the architecture adjudication decision in #877 that was independently reviewed and passed. Not a weakening by the builder of this task — sanctioned contract update.
+
+#### Test Quality (5.3)
+Test assertions are specific (async call mocks verified, `assert_called_once_with`, struct field checks, `pytest.raises(ToolError)` for error paths). STRONG.
+
+#### Data Safety (5.4)
+N/A — no production code.
+
+#### Implementation-Aware Test Gap Analysis (5.5)
+N/A — no production code changes.
+
+#### Builder Process Quality (5.7)
+3 `## Builder Notes` sections total:
+1. REJECT → todo (AC11 conflict with 836)
+2. REJECT → backlog (2nd cycle, same conflict)
+3. Pass-through (correct post-close-out decision)
+
+Pattern: FRICTION for cycles 1-2, but cycle 3 is fundamentally a pass-through after architect approval — not an identical retry. No LOOP condition triggered.
+
+---
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AppContext fields (launcher+page) | test file L93-155: `ctx.launcher`, `ctx.page` assertions; #877 review: 72/0 pass | PASS |
+| Lifespan success: launcher+page set | L164-213: PlaywrightLauncher patch, ctx.launcher/page assertions | PASS |
+| Lifespan failed: launcher=None, page=None | L228-258: RuntimeError side_effect, ctx.launcher/page=None assertions | PASS |
+| Lifespan cleanup | L270-320: close/launch call assertions | PASS |
+| navigate() allowlist+page.goto | L338-380: goto called once, ToolError on blocked domain | PASS |
+| click() locator.click | L395-408: locator.click called once | PASS |
+| type() locator.fill | L421-435: locator.fill called with text | PASS |
+| select() locator.select_option | L448-462: locator.select_option called with value | PASS |
+| read_text() extract_content | L478-491: extract_content patched, called with html+url | PASS |
+| snapshot() aria_snapshot | L503-518: aria_snapshot called once | PASS |
+| ToolError when page=None (click/type/select) | L531-560: pytest.raises(ToolError) | PASS |
+| navigate/read_text/snapshot page=None behavior | L484,502-510,538-547: adjudicated #877 (returns url/string) | PASS |
+| All tests mock at boundary | No real Playwright imports — PlaywrightLauncher patched | PASS |
+
+### Informational (Pass 2)
+
+- **6.2** Module docstring still says "All tests FAIL on current HEAD" with CDP-era failure descriptions. Stale after #871/#877 updates. Minor doc debt.
+- **6.1** Builder's third pass description ("file targets abandoned CDP design") was inaccurate — file was substantially updated by prior tasks. Self-reporting quality issue (informational).
+
+### Deductions
+- Builder inaccurate self-report about file state: −0.03
+- Stale module docstring/comments: −0.02
+
+### Confidence: .93 → PASS
+
+`PASS #853 -> docs | confidence .93`
+[[2026-04-14]]
+## Docs Gate
+
+| # | Item | Applies? | Status | Evidence |
+|---|------|----------|--------|----------|
+| 1 | Behavior/API change → copilot-instructions.md | No | N/A | No production code changes — archived/superseded pass-through |
+| 2 | Module docstrings | Yes | UPDATED | `tests/test_mcp_browser_session_853.py` module docstring was stale (CDP-era "All tests FAIL" + CDPConnectionManager references); updated to reflect Playwright launcher model and adjudicated AC11; commit `42205322` |
+| 3 | External attribution → sources/overview.md | No | N/A | No new external patterns — task used established codebase mock patterns |
+| 4 | CLI changes → README.md | No | N/A | Test-only task |
+| 5 | Research doc | N/A | VERIFIED | `.owlbear/research/837-mcp-browser-session-management.md` exists; linked from task body |
+| 6 | Scratch files | — | CLEAN | No `.owlbear/scratch/853-*` files found |
+
+**Files updated:** `tests/test_mcp_browser_session_853.py` (module docstring — reviewer flag 6.2)
+**Commit:** `42205322` — `docs: update stale module docstring in test_mcp_browser_session_853.py (#853, doc-writer)`
+[[2026-04-14]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AppContext fields (launcher+page) | test file L93-155, 27/27 pass | PASS |
+| Lifespan success: launcher+page set | L164-213, PlaywrightLauncher patched | PASS |
+| Lifespan failed: launcher=None, page=None | L228-258, RuntimeError side_effect | PASS |
+| Lifespan cleanup | L270-320, close/launch assertions | PASS |
+| navigate() allowlist+page.goto | L338-380, goto + ToolError on blocked | PASS |
+| click() locator.click | L395-408 | PASS |
+| type() locator.fill | L421-435 | PASS |
+| select() locator.select_option | L448-462 | PASS |
+| read_text() extract_content | L478-491 | PASS |
+| snapshot() aria_snapshot | L503-518 | PASS |
+| ToolError when page=None (click/type/select) | L531-560, pytest.raises(ToolError) | PASS |
+| navigate/read_text/snapshot page=None (adjudicated #877) | Returns url/string, not ToolError | PASS |
+| All tests mock at CDP boundary | No real Playwright imports | PASS |
+
+### Test Results
+- pytest (task scope): 27 passed, 0 failed
+- pytest (mcp-browser scope): 91 passed, 0 failed
+- pytest (full suite): 4,260 passed, 324 failed — all failures outside mcp-browser scope (pre-existing in unrelated domains)
+- ruff: 1 E501 in engine.py:472 — outside task scope
+
+### Architect Quality: 4/5
+Original AC was specific and testable (13 clear lines with mock targets). AC11 conflict with #836 wasn't anticipated but is a genuine edge case. External blocker (Group Policy blocking CDP) forced supersession — not an AC quality issue. Close-out pipeline handled correctly.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 13 mapped) → -0.00
+- Lint violations in scope: 0 → -0.00
+- AC quality ≤ 3: No (4/5) → -0.00
+- Missing reviewer evidence: No (detailed, PASS) → -0.00
+- Full-suite failures in task scope: 0 → -0.00
+
+### Confidence: .98
+(.02 withheld for full-suite noise — 324 pre-existing failures are not in scope but indicate broader test health debt)
+
+### Action: archive
