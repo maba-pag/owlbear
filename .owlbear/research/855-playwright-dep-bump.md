@@ -69,14 +69,28 @@ No breaking changes affect our codebase.
 
 ## 4. Recommendation (confidence: .85)
 
-**Block #855 until Playwright Python 1.59.0 is published to PyPI.** Node.js 1.59.1 shipped ~April 4; Python typically follows within weeks. The snapshot tool is still a stub with no production callers — no urgency.
+~~**Block #855 until Playwright Python 1.59.0 is published to PyPI.**~~ Node.js 1.59.1 shipped ~April 4; Python typically follows within weeks. The snapshot tool is still a stub with no production callers — no urgency.
 
-**Alternative (confidence: .75):** Revise AC to `>=1.49.0` and use `page.locator('body').aria_snapshot()`. This unblocks immediately but requires updating both this task's AC and the #837 implementation plan (tests + tool code). Less clean.
+~~**Alternative (confidence: .75):**~~ Revise AC to `>=1.49.0` and use `page.locator('body').aria_snapshot()`. This unblocks immediately but requires updating both this task's AC and the #837 implementation plan (tests + tool code). Less clean.
 
 Challenge: FALLBACK — blocking recommendation based on factual PyPI constraint, not controversial.
 
 **Tier: T1 — Autonomous.** Config change with no architectural implications. Blocked by external dependency availability, not by a design decision.
 
+### 4a. Resolution (2026-04-14)
+
+The "alternative" (Option B) was the correct choice all along. `page.aria_snapshot()` in v1.59 is explicitly documented as *"equivalent to `page.locator('body').aria_snapshot()`"* — it's a convenience alias, not a new capability. The recommendation to block was wrong: waiting months for a convenience alias while the functionally identical API has been available since v1.49 is not justified.
+
+**Applied fix:**
+- `server.py`: `page.aria_snapshot()` → `page.locator("body").aria_snapshot()`
+- `serve/browser/pyproject.toml`: `playwright>=1.40` → `playwright>=1.49`
+- Test mocks: moved `aria_snapshot` from page mock to locator mock
+- No breaking changes between v1.40 and v1.49 affect our codebase
+
+**Lesson for future research:** When an API has an equivalent that already exists, prefer the available equivalent over blocking on a convenience alias. Assess both options on merit, not on AC alignment — the AC can be revised.
+
 ## 5. Follow-up Tasks
 
-None needed — task #855 is already the correctly scoped follow-up. It should be unblocked and executed once playwright-python 1.59.0 appears on PyPI.
+~~None needed — task #855 is already the correctly scoped follow-up. It should be unblocked and executed once playwright-python 1.59.0 appears on PyPI.~~
+
+Completed — see §4a.

@@ -62,32 +62,33 @@ def _make_mock_page() -> MagicMock:
     page.goto = AsyncMock()
     page.content = AsyncMock(return_value=_SAMPLE_HTML)
     page.close = AsyncMock()
-    page.aria_snapshot = AsyncMock(return_value="# Snapshot\n- item 1")
-    page.locator = MagicMock(return_value=_make_mock_locator())
+    loc = _make_mock_locator()
+    loc.aria_snapshot = AsyncMock(return_value="# Snapshot\n- item 1")
+    page.locator = MagicMock(return_value=loc)
     return page
 
 
-def _make_mock_cdp(page: MagicMock) -> MagicMock:
-    """Return a mock CDPConnectionManager wired with one Playwright context/page."""
+def _make_mock_launcher(page: MagicMock) -> MagicMock:
+    """Return a mock PlaywrightLauncher wired with a BrowserContext and page."""
     context = MagicMock()
     context.new_page = AsyncMock(return_value=page)
-    browser = MagicMock()
-    browser.contexts = [context]
-    cdp = MagicMock()
-    cdp._browser = browser
-    cdp.connect = AsyncMock()
-    cdp.disconnect = AsyncMock()
-    return cdp
+    launcher = MagicMock()
+    launcher.context = context
+    launcher.launch = AsyncMock()
+    launcher.close = AsyncMock()
+    launcher.__aenter__ = AsyncMock(return_value=launcher)
+    launcher.__aexit__ = AsyncMock(return_value=False)
+    return launcher
 
 
 def _make_mcp_ctx_with_page(page: MagicMock) -> MagicMock:
-    """Return a mock MCP ctx whose lifespan_context has cdp and page set."""
+    """Return a mock MCP ctx whose lifespan_context has launcher and page set."""
     from owlbear_mcp_browser.allowlist import DomainAllowlist
     from owlbear_mcp_browser.server import AppContext
 
     app_ctx = AppContext(
         allowlist=DomainAllowlist(domains=["sharepoint.example.com"]),
-        cdp=MagicMock(),
+        launcher=MagicMock(),
         page=page,
     )
     ctx = MagicMock()
@@ -102,7 +103,7 @@ def _make_mcp_ctx_no_page() -> MagicMock:
 
     app_ctx = AppContext(
         allowlist=DomainAllowlist(domains=["sharepoint.example.com"]),
-        cdp=None,
+        launcher=None,
         page=None,
     )
     ctx = MagicMock()
@@ -116,15 +117,15 @@ def _make_mcp_ctx_no_page() -> MagicMock:
 
 
 class TestFromAC_AppContextFields:
-    """AC1: AppContext dataclass must expose cdp and page as optional fields."""
+    """AC1: AppContext dataclass must expose launcher and page as optional fields (updated #871)."""
 
     def test_appcontext_cdp_defaults_to_none(self) -> None:
-        """AppContext constructed with only allowlist must have cdp=None by default."""
+        """AppContext constructed with only allowlist must have launcher=None by default."""
         from owlbear_mcp_browser.allowlist import DomainAllowlist
         from owlbear_mcp_browser.server import AppContext
 
         ctx = AppContext(allowlist=DomainAllowlist(domains=[]))
-        assert ctx.cdp is None  # FAILS: no cdp field on current HEAD
+        assert ctx.launcher is None
 
     def test_appcontext_page_defaults_to_none(self) -> None:
         """AppContext constructed with only allowlist must have page=None by default."""
@@ -132,16 +133,16 @@ class TestFromAC_AppContextFields:
         from owlbear_mcp_browser.server import AppContext
 
         ctx = AppContext(allowlist=DomainAllowlist(domains=[]))
-        assert ctx.page is None  # FAILS: no page field on current HEAD
+        assert ctx.page is None
 
     def test_appcontext_accepts_cdp_kwarg(self) -> None:
-        """AppContext constructor must accept cdp keyword argument and store it."""
+        """AppContext constructor must accept launcher keyword argument and store it."""
         from owlbear_mcp_browser.allowlist import DomainAllowlist
         from owlbear_mcp_browser.server import AppContext
 
-        mock_cdp = MagicMock()
-        ctx = AppContext(allowlist=DomainAllowlist(domains=[]), cdp=mock_cdp)
-        assert ctx.cdp is mock_cdp  # FAILS: TypeError on current HEAD (unexpected kwarg)
+        mock_launcher = MagicMock()
+        ctx = AppContext(allowlist=DomainAllowlist(domains=[]), launcher=mock_launcher)
+        assert ctx.launcher is mock_launcher
 
     def test_appcontext_accepts_page_kwarg(self) -> None:
         """AppContext constructor must accept page keyword argument and store it."""
@@ -150,7 +151,7 @@ class TestFromAC_AppContextFields:
 
         mock_page = MagicMock()
         ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
-        assert ctx.page is mock_page  # FAILS: TypeError on current HEAD (unexpected kwarg)
+        assert ctx.page is mock_page
 
 
 # ===========================================================================
@@ -159,67 +160,63 @@ class TestFromAC_AppContextFields:
 
 
 class TestFromAC_LifespanSuccessfulConnection:
-    """AC2: Successful CDP connect yields AppContext with cdp and page populated."""
+    """AC2: Successful PlaywrightLauncher start yields AppContext with launcher and page (updated #871)."""
 
     @pytest.mark.asyncio
     async def test_lifespan_sets_cdp_on_successful_connect(self) -> None:
-        """App lifespan sets ctx.cdp to the CDPConnectionManager instance when connect succeeds."""
+        """Successful launch: AppContext.launcher is set to the PlaywrightLauncher instance."""
         from owlbear_mcp_browser.server import app_lifespan
 
         mock_page = _make_mock_page()
-        mock_cdp = _make_mock_cdp(mock_page)
+        mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(mock_server) as ctx:
-                assert ctx.cdp is mock_cdp
+                assert ctx.launcher is mock_launcher
 
     @pytest.mark.asyncio
     async def test_lifespan_sets_page_on_successful_connect(self) -> None:
-        """App lifespan sets ctx.page from cdp._browser.contexts[0].new_page() when CDP connects."""
+        """Successful launch: AppContext.page is set from launcher.context.new_page()."""
         from owlbear_mcp_browser.server import app_lifespan
 
         mock_page = _make_mock_page()
-        mock_cdp = _make_mock_cdp(mock_page)
+        mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(mock_server) as ctx:
                 assert ctx.page is mock_page
 
     @pytest.mark.asyncio
     async def test_lifespan_calls_cdp_connect(self) -> None:
-        """App lifespan calls CDPConnectionManager.connect() during startup."""
+        """App lifespan calls PlaywrightLauncher.launch() during startup."""
         from owlbear_mcp_browser.server import app_lifespan
 
         mock_page = _make_mock_page()
-        mock_cdp = _make_mock_cdp(mock_page)
+        mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(mock_server) as _:
                 pass
 
-        mock_cdp.connect.assert_called_once()
+        mock_launcher.launch.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_lifespan_calls_new_page(self) -> None:
-        """App lifespan calls cdp._browser.contexts[0].new_page() to open the shared page."""
+        """App lifespan calls launcher.context.new_page() to get the shared page."""
         from owlbear_mcp_browser.server import app_lifespan
 
         mock_page = _make_mock_page()
-        mock_cdp = _make_mock_cdp(mock_page)
+        mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(mock_server) as _:
                 pass
 
-        mock_cdp._browser.contexts[0].new_page.assert_called_once()
+        mock_launcher.context.new_page.assert_called_once()
 
 
 # ===========================================================================
@@ -228,35 +225,33 @@ class TestFromAC_LifespanSuccessfulConnection:
 
 
 class TestFromAC_LifespanFailedConnection:
-    """AC3: When CDPConnectionManager.connect() raises, lifespan yields cdp=None, page=None."""
+    """AC3: When PlaywrightLauncher.launch() raises, lifespan yields launcher=None, page=None."""
 
     @pytest.mark.asyncio
     async def test_lifespan_sets_cdp_none_on_failed_connect(self) -> None:
-        """ctx.cdp is None when CDP connect raises (no Edge running)."""
+        """ctx.launcher is None when launch raises (Playwright unavailable)."""
         from owlbear_mcp_browser.server import app_lifespan
 
-        mock_cdp = MagicMock()
-        mock_cdp.connect = AsyncMock(side_effect=ConnectionRefusedError("no Edge"))
-        mock_cdp.disconnect = AsyncMock()
+        failing_launcher = MagicMock()
+        failing_launcher.launch = AsyncMock(side_effect=RuntimeError("playwright unavailable"))
+        failing_launcher.close = AsyncMock()
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=failing_launcher):
             async with app_lifespan(mock_server) as ctx:
-                assert ctx.cdp is None
+                assert ctx.launcher is None
 
     @pytest.mark.asyncio
     async def test_lifespan_sets_page_none_on_failed_connect(self) -> None:
-        """ctx.page is None when CDP connect raises (no Edge running)."""
+        """ctx.page is None when launch raises (Playwright unavailable)."""
         from owlbear_mcp_browser.server import app_lifespan
 
-        mock_cdp = MagicMock()
-        mock_cdp.connect = AsyncMock(side_effect=ConnectionRefusedError("no Edge"))
-        mock_cdp.disconnect = AsyncMock()
+        failing_launcher = MagicMock()
+        failing_launcher.launch = AsyncMock(side_effect=RuntimeError("playwright unavailable"))
+        failing_launcher.close = AsyncMock()
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=failing_launcher):
             async with app_lifespan(mock_server) as ctx:
                 assert ctx.page is None
 
@@ -267,7 +262,7 @@ class TestFromAC_LifespanFailedConnection:
 
 
 class TestFromAC_LifespanCleanup:
-    """AC4: Lifespan finally-block closes page and disconnects CDP on exit."""
+    """AC4: Lifespan finally-block closes page and launcher on exit (updated for #871)."""
 
     @pytest.mark.asyncio
     async def test_lifespan_cleanup_closes_page(self) -> None:
@@ -275,48 +270,45 @@ class TestFromAC_LifespanCleanup:
         from owlbear_mcp_browser.server import app_lifespan
 
         mock_page = _make_mock_page()
-        mock_cdp = _make_mock_cdp(mock_page)
+        mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(mock_server) as _:
                 pass
 
-        mock_page.close.assert_called_once()  # FAILS: no cleanup in current lifespan
+        mock_page.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_lifespan_cleanup_disconnects_cdp(self) -> None:
-        """App lifespan calls cdp.disconnect() after yielding (cleanup on session end)."""
+        """App lifespan calls launcher.close() after yielding (cleanup on session end)."""
         from owlbear_mcp_browser.server import app_lifespan
 
         mock_page = _make_mock_page()
-        mock_cdp = _make_mock_cdp(mock_page)
+        mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(mock_server) as _:
                 pass
 
-        mock_cdp.disconnect.assert_called_once()  # FAILS: no cleanup in current lifespan
+        mock_launcher.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_lifespan_cleanup_skipped_when_connect_failed(self) -> None:
-        """When CDP connect failed (cdp=None), lifespan exits without calling disconnect."""
+        """When launch failed (launcher=None), lifespan exits without calling close."""
         from owlbear_mcp_browser.server import app_lifespan
 
-        mock_cdp = MagicMock()
-        mock_cdp.connect = AsyncMock(side_effect=Exception("no browser"))
-        mock_cdp.disconnect = AsyncMock()
+        failing_launcher = MagicMock()
+        failing_launcher.launch = AsyncMock(side_effect=Exception("no browser"))
+        failing_launcher.close = AsyncMock()
         mock_server = MagicMock()
 
-        # FAILS: CDPConnectionManager not imported in server.py → AttributeError on patch
-        with patch("owlbear_mcp_browser.server.CDPConnectionManager", return_value=mock_cdp):
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=failing_launcher):
             async with app_lifespan(mock_server) as _:
                 pass
 
-        mock_cdp.disconnect.assert_not_called()
+        failing_launcher.close.assert_not_called()
 
 
 # ===========================================================================
@@ -480,7 +472,7 @@ class TestFromAC_SnapshotToolBody:
 
         result = await snapshot(ctx)  # FAILS: snapshot has no ctx param
 
-        mock_page.aria_snapshot.assert_called_once()
+        mock_page.locator("body").aria_snapshot.assert_called_once()
         assert result == "# Snapshot\n- item 1"
 
 

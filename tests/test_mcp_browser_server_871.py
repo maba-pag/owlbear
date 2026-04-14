@@ -43,11 +43,11 @@ def _make_mock_page() -> MagicMock:
     page.goto = AsyncMock()
     page.content = AsyncMock(return_value="<html><body><h1>Test</h1></body></html>")
     page.close = AsyncMock()
-    page.aria_snapshot = AsyncMock(return_value="- heading 'Test' [level=1]")
     locator = MagicMock()
     locator.click = AsyncMock()
     locator.fill = AsyncMock()
     locator.select_option = AsyncMock()
+    locator.aria_snapshot = AsyncMock(return_value="- heading 'Test' [level=1]")
     page.locator = MagicMock(return_value=locator)
     return page
 
@@ -398,17 +398,10 @@ class TestFromAC_BrowserFetcherPlaywrightContext:
         assert mock_fetcher_cls.called, (
             "BrowserContentFetcher must be instantiated in lifespan; not called"
         )
-        # The argument must be the Playwright BrowserContext, not a CDPConnectionManager
-        from owlbear_browser.cdp import CDPConnectionManager
-
         call_arg = (
             mock_fetcher_cls.call_args.args[0]
             if mock_fetcher_cls.call_args.args
             else next(iter(mock_fetcher_cls.call_args.kwargs.values()), None)
-        )
-        assert not isinstance(call_arg, CDPConnectionManager), (
-            "BrowserContentFetcher must receive a Playwright BrowserContext, "
-            "not a CDPConnectionManager"
         )
         assert call_arg is mock_launcher.context, (
             "BrowserContentFetcher must receive launcher.context specifically; "

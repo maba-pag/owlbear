@@ -116,7 +116,7 @@ async def navigate(ctx: Context, url: str) -> str:
         if app_ctx.page is not None:
             await app_ctx.page.goto(url)
             return url
-        return url  # URL is allowlist-validated; no browser/fetcher present = dry-run
+        raise ToolError(_MSG_NO_PAGE)
 
     # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
     # explicitly set — avoids awaiting auto-generated MagicMock attributes.
@@ -137,6 +137,8 @@ async def click(ctx: Context, selector: str) -> str:
     page = getattr(app_ctx, "page", None)
     if page is not None:
         await page.locator(selector).click()
+    else:
+        raise ToolError(_MSG_NO_PAGE)
     return selector
 
 
@@ -147,6 +149,8 @@ async def type_input(ctx: Context, selector: str, text: str) -> str:
     page = getattr(app_ctx, "page", None)
     if page is not None:
         await page.locator(selector).fill(text)
+    else:
+        raise ToolError(_MSG_NO_PAGE)
     return f"{selector}:{text}"
 
 
@@ -157,6 +161,8 @@ async def select(ctx: Context, selector: str, value: str) -> str:
     page = getattr(app_ctx, "page", None)
     if page is not None:
         await page.locator(selector).select_option(value)
+    else:
+        raise ToolError(_MSG_NO_PAGE)
     return f"{selector}:{value}"
 
 
@@ -168,7 +174,7 @@ async def read_text(ctx: Context) -> str:
     if page is not None:
         html = await page.content()
         return extract_content(html, page.url)
-    return getattr(app_ctx, "last_content", "")
+    raise ToolError(_MSG_NO_PAGE)
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
@@ -177,8 +183,8 @@ async def snapshot(ctx: Context) -> str:
     app_ctx = ctx.request_context.lifespan_context
     page = getattr(app_ctx, "page", None)
     if page is not None:
-        return await page.aria_snapshot()
-    return getattr(app_ctx, "last_content", "")
+        return await page.locator("body").aria_snapshot()
+    raise ToolError(_MSG_NO_PAGE)
 
 
 # Synchronous tool registry for inspection and testing (ToolManager.list_tools is sync)
