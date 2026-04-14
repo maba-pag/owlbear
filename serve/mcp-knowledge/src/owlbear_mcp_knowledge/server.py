@@ -30,8 +30,10 @@ from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
+from owlbear_knowledge.scope_transfer import _do_import as _core_do_import
 from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
 from owlbear_knowledge.scope_transfer import import_scope as _core_import_scope
+from owlbear_knowledge.scope_transfer import resolve_global_db_path
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 if TYPE_CHECKING:
@@ -235,6 +237,8 @@ __all__ = [
     "mcp",
     "refresh_source",
     "search_knowledge",
+    "sync_from_global",
+    "sync_to_global",
     "update_bookmark_tags",
 ]
 
@@ -464,6 +468,81 @@ async def export_scope(
         Path(output_path),
         app_ctx.conn,
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def sync_from_global(ctx: Context) -> str:
+    """Import all documents from the global knowledge DB into the local DB under scope='global'.
+
+    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
+    env var).  Duplicate documents (same content hash) are skipped.
+
+    Returns a count string on success, or an ``error: `` string on failure.
+    """
+    global_path = resolve_global_db_path(Path.cwd())
+    if isinstance(global_path, str):
+        return "error: global DB path could not be resolved"
+
+    if not global_path.exists():
+        return f"error: global DB not found at {global_path}"
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    local_conn: sqlite3.Connection = app_ctx.conn
+
+    def _run() -> str:
+        global_conn = sqlite3.connect(str(global_path))
+        try:
+            raw = _core_do_import(global_conn, local_conn, target_scope="global")
+        finally:
+            global_conn.close()
+        # Reformat raw "Imported N documents (skipped M duplicates) into scope global"
+        # → AC format: "Imported N documents (skipped M duplicates) from global into local under scope 'global'"
+        prefix = "Imported "
+        if raw.startswith(prefix):
+            counts_part = raw[len(prefix):raw.index(" into scope")]
+            return f"Imported {counts_part} from global into local under scope 'global'"
+        return raw
+
+    return await asyncio.to_thread(_run)
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def sync_to_global(ctx: Context) -> str:
+    """Export local documents with scope='global' into the global knowledge DB.
+
+    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
+    env var).  Creates the global DB file (with schema) if it doesn't exist yet.
+    Only documents with ``scope='global'`` in the local DB are exported.
+    Duplicate documents (same content hash) are skipped.
+
+    Returns a count string on success, or an ``error: `` string on failure.
+    """
+    global_path = resolve_global_db_path(Path.cwd())
+    if isinstance(global_path, str):
+        return f"error: {global_path}"
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    local_conn: sqlite3.Connection = app_ctx.conn
+
+    def _run() -> str:
+        global_path.parent.mkdir(parents=True, exist_ok=True)
+        global_conn = sqlite3.connect(str(global_path))
+        try:
+            _schema_init_db(global_conn)
+            raw = _core_do_import(
+                local_conn, global_conn, target_scope="global", source_scope="global"
+            )
+        finally:
+            global_conn.close()
+        # Reformat raw "Imported N documents (skipped M duplicates) into scope global"
+        # → AC format: "Exported N documents (skipped M duplicates) from local scope 'global' to global DB"
+        prefix = "Imported "
+        if raw.startswith(prefix):
+            counts_part = raw[len(prefix):raw.index(" into scope")]
+            return f"Exported {counts_part} from local scope 'global' to global DB"
+        return raw
+
+    return await asyncio.to_thread(_run)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))

@@ -246,11 +246,19 @@ def _do_import(
     src_conn: sqlite3.Connection,
     dest_conn: sqlite3.Connection,
     target_scope: str,
+    source_scope: str | None = None,
 ) -> str:
     """Execute the row-level copy from *src_conn* into *dest_conn* under *target_scope*.
 
     All inserts are wrapped in a single transaction (atomic).  Duplicate documents
     (same scope + content_hash already in dest) are skipped along with their child rows.
+
+    Args:
+        src_conn: Source SQLite connection to read rows from.
+        dest_conn: Destination SQLite connection to write rows into.
+        target_scope: Scope value assigned to all imported rows in *dest_conn*.
+        source_scope: When non-None, only rows with ``scope = source_scope`` in the
+            source are copied.  Defaults to ``None`` (copy all rows, backward-compatible).
     """
     # Gather content hashes already in dest under this scope for dedup
     existing_hashes: set[str] = {
@@ -263,13 +271,45 @@ def _do_import(
 
     # Read source data (snapshots before transaction begins)
     src_conn.row_factory = sqlite3.Row
-    docs = src_conn.execute("SELECT * FROM documents").fetchall()
-    doc_statuses: dict[str, sqlite3.Row] = {
-        row["document_id"]: row for row in src_conn.execute("SELECT * FROM document_status").fetchall()
-    }
-    chunks = src_conn.execute("SELECT * FROM chunks").fetchall()
-    entities = src_conn.execute("SELECT * FROM entities").fetchall()
-    edges = src_conn.execute("SELECT * FROM edges").fetchall()
+    if source_scope is not None:
+        docs = src_conn.execute(
+            "SELECT * FROM documents WHERE scope = ?", (source_scope,)
+        ).fetchall()
+        doc_ids_placeholder = ",".join("?" * len(docs)) if docs else "NULL"
+        doc_ids = [doc["id"] for doc in docs]
+        doc_statuses: dict[str, sqlite3.Row] = {
+            row["document_id"]: row
+            for row in src_conn.execute(
+                f"SELECT * FROM document_status WHERE document_id IN ({doc_ids_placeholder})",  # noqa: S608
+                doc_ids,
+            ).fetchall()
+        }
+        chunks = src_conn.execute(
+            f"SELECT * FROM chunks WHERE document_id IN ({doc_ids_placeholder})",  # noqa: S608
+            doc_ids,
+        ).fetchall()
+        entities = src_conn.execute(
+            f"SELECT * FROM entities WHERE document_id IN ({doc_ids_placeholder})",  # noqa: S608
+            doc_ids,
+        ).fetchall()
+        # Edges are filtered to those where both endpoints belong to included entities
+        entity_ids = [e["id"] for e in entities]
+        if entity_ids:
+            eid_placeholder = ",".join("?" * len(entity_ids))
+            edges = src_conn.execute(
+                f"SELECT * FROM edges WHERE source_id IN ({eid_placeholder}) AND target_id IN ({eid_placeholder})",  # noqa: S608
+                entity_ids + entity_ids,
+            ).fetchall()
+        else:
+            edges = []
+    else:
+        docs = src_conn.execute("SELECT * FROM documents").fetchall()
+        doc_statuses = {
+            row["document_id"]: row for row in src_conn.execute("SELECT * FROM document_status").fetchall()
+        }
+        chunks = src_conn.execute("SELECT * FROM chunks").fetchall()
+        entities = src_conn.execute("SELECT * FROM entities").fetchall()
+        edges = src_conn.execute("SELECT * FROM edges").fetchall()
 
     # Decide which documents to import vs skip (content-hash dedup)
     skipped_doc_ids: set[str] = set()
