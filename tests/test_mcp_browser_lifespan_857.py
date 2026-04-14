@@ -131,3 +131,173 @@ class TestFromAC_LifespanBrowserFetcherWiring:
         assert fetcher1 is not fetcher2, (
             "Each lifespan invocation must create an independent BrowserContentFetcher"
         )
+
+
+# ===========================================================================
+# TestBuilderDiscovered — gaps identified in code review
+# ===========================================================================
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests — fill gaps identified in #857 code review.
+
+    Covers:
+    - AC2 guard: fetcher=None when PlaywrightLauncher.launch() raises
+    - AC3: navigate calls fetcher.fetch(url), stores result, returns markdown
+    - AC4: AuthenticationRequired is wrapped into ToolError
+    - AC5: navigate raises ToolError unconditionally when fetcher is None
+    """
+
+    # ------------------------------------------------------------------
+    # AC2 guard: failed launch → fetcher stays None
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_lifespan_fetcher_is_none_when_launcher_launch_raises(self) -> None:
+        """AC2 guard: app_lifespan sets fetcher=None when PlaywrightLauncher.launch() raises."""
+        mock_launcher = MagicMock()
+        mock_launcher.launch = AsyncMock(side_effect=Exception("browser unavailable"))
+        mock_launcher.close = AsyncMock()
+
+        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
+            async with app_lifespan(MagicMock()) as ctx:
+                assert ctx.fetcher is None, (
+                    "fetcher must be None when PlaywrightLauncher.launch() raises;"
+                    f" got {ctx.fetcher!r}"
+                )
+
+    # ------------------------------------------------------------------
+    # AC3: navigate calls fetcher.fetch(url), stores last_content, returns it
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_navigate_calls_fetcher_fetch_with_exact_url(self) -> None:
+        """AC3: navigate() calls fetcher.fetch(url) with the exact URL argument."""
+        from owlbear_mcp_browser.allowlist import DomainAllowlist
+        from owlbear_mcp_browser.server import AppContext, navigate
+
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(return_value="# Page")
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["corp.example.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = app_ctx
+
+        await navigate(ctx, url="https://corp.example.com/page")
+
+        mock_fetcher.fetch.assert_called_once_with("https://corp.example.com/page")
+
+    @pytest.mark.asyncio
+    async def test_navigate_stores_fetched_content_in_last_content(self) -> None:
+        """AC3: navigate() stores the fetcher result in app_ctx.last_content."""
+        from owlbear_mcp_browser.allowlist import DomainAllowlist
+        from owlbear_mcp_browser.server import AppContext, navigate
+
+        fetched = "# My Page\n\nBody text."
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(return_value=fetched)
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["corp.example.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = app_ctx
+
+        await navigate(ctx, url="https://corp.example.com/report")
+
+        assert app_ctx.last_content == fetched, (
+            f"last_content must equal fetched content; got {app_ctx.last_content!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_navigate_returns_fetched_markdown_content(self) -> None:
+        """AC3: navigate() returns the markdown string returned by fetcher.fetch()."""
+        from owlbear_mcp_browser.allowlist import DomainAllowlist
+        from owlbear_mcp_browser.server import AppContext, navigate
+
+        fetched = "# Title\n\nParagraph."
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(return_value=fetched)
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["corp.example.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = app_ctx
+
+        result = await navigate(ctx, url="https://corp.example.com/doc")
+
+        assert result == fetched, f"navigate must return fetched markdown; got {result!r}"
+
+    # ------------------------------------------------------------------
+    # AC4: AuthenticationRequired → ToolError with descriptive message
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_navigate_authentication_required_raises_tool_error_with_descriptive_message(
+        self,
+    ) -> None:
+        """AC4: navigate() wraps AuthenticationRequired into ToolError with a descriptive message."""
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        from owlbear_browser._errors import AuthenticationRequired
+        from owlbear_mcp_browser.allowlist import DomainAllowlist
+        from owlbear_mcp_browser.server import AppContext, navigate
+
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(side_effect=AuthenticationRequired("login page detected"))
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["sso.corp.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = app_ctx
+
+        with pytest.raises(ToolError, match=r"SSO|authentication|session"):
+            await navigate(ctx, url="https://sso.corp.com/protected")
+
+    # ------------------------------------------------------------------
+    # AC5: fetcher=None → ToolError unconditionally (page not checked)
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_navigate_fetcher_none_raises_tool_error(self) -> None:
+        """AC5: navigate() raises ToolError when AppContext.fetcher is None (page=None)."""
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        from owlbear_mcp_browser.allowlist import DomainAllowlist
+        from owlbear_mcp_browser.server import AppContext, navigate
+
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["corp.example.com"]),
+            fetcher=None,
+        )
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = app_ctx
+
+        with pytest.raises(ToolError):
+            await navigate(ctx, url="https://corp.example.com/page")
+
+    @pytest.mark.asyncio
+    async def test_navigate_fetcher_none_raises_tool_error_even_when_page_is_set(self) -> None:
+        """AC5: navigate() raises ToolError when fetcher is None even if a page object is present."""
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        from owlbear_mcp_browser.allowlist import DomainAllowlist
+        from owlbear_mcp_browser.server import AppContext, navigate
+
+        mock_page = MagicMock()
+        mock_page.goto = AsyncMock()
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["corp.example.com"]),
+            fetcher=None,
+            page=mock_page,
+        )
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = app_ctx
+
+        with pytest.raises(ToolError):
+            await navigate(ctx, url="https://corp.example.com/page")
+        mock_page.goto.assert_not_called()
