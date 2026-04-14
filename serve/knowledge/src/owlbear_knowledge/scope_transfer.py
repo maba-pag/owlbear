@@ -6,6 +6,7 @@ project-local knowledge portability.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import uuid
@@ -15,11 +16,55 @@ from owlbear_knowledge._paths import sandbox_path
 from owlbear_knowledge.schema import init_db
 from owlbear_knowledge.status_store import compute_content_hash
 
-_AUTO_DETECT_RELATIVE = Path(".owlbear") / "knowledge" / "knowledge.db"
+_AUTO_DETECT_RELATIVE = Path(".owlbear") / "knowledge" / "local.db"
 _ENV_VAR = "OWLBEAR_LOCAL_KB_PATH"
 
 # FK-ordered tables for import and export (insert order respects FK constraints)
 _TRANSFER_TABLES = ("documents", "document_status", "chunks", "entities", "edges")
+
+
+# ---------------------------------------------------------------------------
+# Global DB path resolution
+# ---------------------------------------------------------------------------
+
+
+def resolve_global_db_path(cwd: Path) -> Path | str:
+    """Resolve the global knowledge DB path from environment or owlbear-project.json.
+
+    Resolution order:
+    1. ``OWLBEAR_GLOBAL_KB_PATH`` env var — returned as a Path immediately.
+    2. ``owlbear-project.json`` in *cwd* — reads ``owlbear_path`` field and resolves
+       ``{owlbear_path}/store/knowledge/global.db``.
+
+    Returns:
+        A :class:`~pathlib.Path` on success, or an ``"error: "``-prefixed string on
+        failure.
+    """
+    env_val = os.environ.get("OWLBEAR_GLOBAL_KB_PATH")
+    if env_val:
+        return Path(env_val)
+
+    config_path = cwd / "owlbear-project.json"
+    try:
+        config_text = config_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "error: owlbear-project.json not found in cwd"
+
+    try:
+        config = json.loads(config_text)
+    except json.JSONDecodeError as exc:
+        return f"error: owlbear-project.json is not valid JSON: {exc}"
+
+    try:
+        owlbear_path_str = config["owlbear_path"]
+    except KeyError:
+        return "error: owlbear_path field missing from owlbear-project.json"
+
+    owlbear_path = Path(owlbear_path_str)
+    if not owlbear_path.exists():
+        return f"error: owlbear_path directory does not exist: {owlbear_path}"
+
+    return owlbear_path / "store" / "knowledge" / "global.db"
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +317,7 @@ def _do_import(
     return f"Imported {imported} documents (skipped {skipped} duplicates) into scope {target_scope}"
 
 
-def import_scope(
+def import_scope(  # noqa: PLR0912
     src_path: Path | str | None,
     project_name: str,
     dest_conn: sqlite3.Connection,
@@ -303,13 +348,18 @@ def import_scope(
         if env_val:
             resolved_path = Path(env_val)
         elif workspace_root is not None:
-            auto = workspace_root / _AUTO_DETECT_RELATIVE
-            if auto.exists():
-                resolved_path = auto
+            # Check local.db (primary) then knowledge.db (backward compat)
+            for _candidate in (
+                workspace_root / _AUTO_DETECT_RELATIVE,
+                workspace_root / Path(".owlbear") / "knowledge" / "knowledge.db",
+            ):
+                if _candidate.exists():
+                    resolved_path = _candidate
+                    break
             else:
-                return "error: no source path given and .owlbear/knowledge/knowledge.db not found"
+                return "error: explicit source path required (local DB is the running DB)"
         else:
-            return "error: no source path given and no workspace root for auto-detect"
+            return "error: explicit source path required (local DB is the running DB)"
 
     # -- Sandbox check (when workspace_root is provided) --
     if workspace_root is not None:

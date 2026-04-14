@@ -24,7 +24,6 @@ from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEval
 from owlbear_knowledge.extractor import EntityExtractor
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
-from owlbear_knowledge.llm_extractor import LLMExtractor
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
@@ -39,7 +38,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 _DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
-_DEFAULT_MODEL = "gpt-4o-mini"
 
 
 class SearchResult(TypedDict):
@@ -118,48 +116,34 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     return excluded
 
 
-def make_text_completion_fn(model: str) -> TextCompletionFn:
-    """Return a TextCompletionFn backed by a PydanticAI Agent with output_type=str.
+def make_text_completion_fn() -> TextCompletionFn:
+    """Return a no-op TextCompletionFn stub.
 
-    Falls back to a no-op stub when pydantic-ai is absent.
+    LLM-backed completion via pydantic-ai was removed. This stub preserves
+    the call-site contract so ConsolidationService still wires up.
     """
-    try:
-        import pydantic_ai  # noqa: PLC0415
 
-        agent = pydantic_ai.Agent(model, output_type=str)
-
-        async def _complete(prompt: str) -> str:
-            result = await agent.run(prompt)
-            return result.output
-
-    except Exception:  # noqa: BLE001
-
-        async def _complete(_prompt: str) -> str:  # type: ignore[misc]
-            return ""
+    async def _complete(_prompt: str) -> str:
+        return ""
 
     return _complete
 
 
-def make_evaluate_fn(model: str) -> EvaluateFn:
-    """Return an EvaluateFn callable for the given model name.
+def make_evaluate_fn() -> EvaluateFn:
+    """Return a neutral no-op EvaluateFn stub.
 
-    Delegates to ``make_pydantic_evaluate_fn`` when pydantic-ai is installed.
-    Falls back to a neutral no-op stub when pydantic-ai is absent.
+    LLM-backed evaluation via pydantic-ai was removed. Returns a neutral
+    result that always allows ingestion.
     """
-    try:
-        from owlbear_knowledge.evaluator import make_pydantic_evaluate_fn  # noqa: PLC0415
 
-        return make_pydantic_evaluate_fn(model)
-    except Exception:  # noqa: BLE001
+    async def _evaluate(_prompt: str) -> EvaluationResult:
+        return EvaluationResult(
+            relevance_score=0.5,
+            summary="No project context available -- neutral evaluation.",
+            worth_ingesting=True,
+        )
 
-        async def _evaluate(_prompt: str) -> EvaluationResult:
-            return EvaluationResult(
-                relevance_score=0.5,
-                summary="No project context available -- neutral evaluation.",
-                worth_ingesting=True,
-            )
-
-        return _evaluate
+    return _evaluate
 
 
 async def _web_read(url: str) -> str | None:
@@ -189,12 +173,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         gs = GraphStore(conn)
         vs = QdrantVectorStore()
         emb = BgeM3EmbeddingProvider()
-        model = os.environ.get("OWLBEAR_MODEL", _DEFAULT_MODEL)
-        try:
-            llm_extractor = LLMExtractor(model)
-            extractor = EntityExtractor(model, extractor=llm_extractor)
-        except Exception:  # noqa: BLE001
-            extractor = EntityExtractor(model)
+        extractor = EntityExtractor()
         gar = GraphAugmentedRetriever(vs, gs, emb)
         qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
         doc_store = DocumentStore(conn, gs, vs, emb)
@@ -202,7 +181,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         pipeline = IngestPipeline(doc_store, extractor, chunker)
         source_store = KnowledgeSourceStore(conn)
         bookmark_store = BookmarkStore(conn)
-        evaluator = SourceEvaluator(llm_fn=make_evaluate_fn(model))
+        evaluator = SourceEvaluator(llm_fn=make_evaluate_fn())
 
         bookmark_pipeline = BookmarkPipeline(
             bookmark_store=bookmark_store,
@@ -215,12 +194,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             pipeline=pipeline,
             workspace_root=Path.cwd(),
         )
-        try:
-            consolidation_service: ConsolidationService | None = ConsolidationService(
-                conn, make_text_completion_fn(model)
-            )
-        except Exception:  # noqa: BLE001
-            consolidation_service = None
+        consolidation_service: ConsolidationService | None = ConsolidationService(
+            conn, make_text_completion_fn()
+        )
         ctx = AppContext(
             conn=conn,
             query_service=qs,
