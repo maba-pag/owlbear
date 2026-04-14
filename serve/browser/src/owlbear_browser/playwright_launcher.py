@@ -79,7 +79,9 @@ class PlaywrightLauncher:
     """Async context manager that launches Chromium with the SSO extension.
 
     Args:
-        sso_ext_path: Path to the versioned SSO extension directory.
+        sso_ext_path: Path to the versioned SSO extension directory.  If
+            ``None`` (the default), the path is auto-discovered via
+            :func:`find_sso_extension` at :meth:`launch` time.
         user_data_dir: Path to the persistent Chromium profile directory.
     """
 
