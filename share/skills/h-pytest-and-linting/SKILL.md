@@ -24,10 +24,10 @@ uv run pytest tests/test_{module}.py -q --tb=short
 uv run pytest tests/ serve/ -m "not api" -q --tb=short
 ```
 
-For full suite runs, use `isBackground=true` to avoid terminal corruption from long-lived VS Code sessions. With `backgroundNotifications` enabled, the agent is automatically notified when the command finishes — no manual polling needed:
+For full suite runs, use `mode=async` to avoid output truncation in long-lived terminal sessions. The agent is automatically notified when the command finishes — no manual polling needed:
 
 ```powershell
-run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", isBackground=true)
+run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", mode=async)
 # Agent receives automatic notification on completion
 # Then: get_terminal_output(id=...) to retrieve the output
 # If the terminal needs input: send_to_terminal(id=..., data="...")
