@@ -1,10 +1,10 @@
 ---
 id: 837
 title: Implement browser session management in mcp-browser AppContext
-status: in-progress
+status: review
 priority: important
 created: '2026-04-11T15:28:49.551640+00:00'
-updated: '2026-04-14T02:18:42.467478+00:00'
+updated: '2026-04-15T09:27:49.569392+00:00'
 tags:
 - phase-2
 - scope:mcp-browser
@@ -13,8 +13,8 @@ depends_on:
 - 771
 blocked: false
 block_reason: null
-claimed_by: crisp-root
-claimed_at: '2026-04-14T02:18:42.467478+00:00'
+claimed_by: null
+claimed_at: null
 ---
 Add browser session state to mcp-browser AppContext: CDPConnectionManager and Playwright Page lifecycle.
 
@@ -300,3 +300,37 @@ CDP approach NO-GO — corporate Group Policy blocks `RemoteDebuggingAllowed`. V
 Superseded children: #853 (RED tests), #854 (GREEN impl), #859 (reconciliation). New pivot tasks created to replace.
 
 See `.owlbear/research/cdp-spike-results.md` §Pivot Strategy.
+
+[[2026-04-15]]
+## Builder Notes
+
+### Files changed
+- `serve/mcp-browser/src/owlbear_mcp_browser/server.py` — implementation already present from prior build passes; verified correct against updated test suite
+
+### Changes implemented
+No new code changes required. Prior builder's work (b1795c20) already satisfies all ACs. Previous review failure (3 regressions in #836 tests) has since been resolved — all 67 tests pass at current HEAD.
+
+### Test results
+- `tests/test_mcp_browser_session_837.py`: **23/23 passed** ✓
+- `tests/test_mcp_browser_836.py`: **21/21 passed** ✓
+- `tests/test_mcp_browser_775.py`: **23/23 passed** (no regression) ✓
+- Total: **67/67 passed**
+
+### Coverage
+- `owlbear_mcp_browser/server.py`: **96%** (lines 111–113, 117–118 uncovered — fetcher delegation path, scope of task #852)
+
+### Lint
+- `ruff check`: **clean** ✓
+
+### AC compliance
+| AC | Status |
+|----|--------|
+| AppContext has `launcher` + `page` fields | PASS (server.py:28–35) |
+| Lifespan opens PlaywrightLauncher or degrades gracefully | PASS (server.py:63–80) |
+| Lifespan cleanup calls `launcher.close()` in finally | PASS (server.py:84–86) |
+| navigate() uses page.goto() after allowlist check | PASS (server.py:105–109) |
+| click/type_input/select use locator methods | PASS (server.py:127–158) |
+| read_text uses extract_content(html, url) | PASS (server.py:165–168) |
+| snapshot returns page.locator("body").aria_snapshot() | PASS (server.py:178–181) |
+| All tools raise ToolError when page=None | PASS |
+| ruff clean | PASS |

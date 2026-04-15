@@ -1,10 +1,10 @@
 ---
 id: 836
 title: 'Refactor mcp-browser tools to use ctx: Context + AppContext pattern'
-status: review
+status: todo
 priority: important
 created: '2026-04-11T15:28:49.513238+00:00'
-updated: '2026-04-14T17:08:10.104763+00:00'
+updated: '2026-04-15T09:23:50.838885+00:00'
 tags:
 - phase-1
 - scope:mcp-browser
@@ -14,8 +14,8 @@ depends_on:
 - 771
 blocked: false
 block_reason: null
-claimed_by: soft-pike
-claimed_at: '2026-04-14T17:08:10.104763+00:00'
+claimed_by: null
+claimed_at: null
 ---
 Refactor all 6 mcp-browser tools (navigate, click, type, select, read_text, snapshot) to accept `ctx: Context` and access `DomainAllowlist` via `ctx.request_context.lifespan_context` instead of per-call env var reads.
 
@@ -536,3 +536,139 @@ All prior passes claimed this fix but applied it to the unreachable non-AppConte
 - All TestFromAC_* classes untouched
 - Single file changed, single logical line (return url replaces raise ToolError)
 - No new dependencies
+[[2026-04-14]]
+## Review Evidence (pass 4)
+
+### Tests
+**Status: NO INDEPENDENT EXECUTION** — quality-runner not in available agents. Static analysis applied; code paths are deterministic.
+
+### Lint
+Code scan clean. `# noqa: ARG001` removed per builder notes. AC5: PASS.
+
+### Static Code Analysis
+
+**navigate() — line 119 (server.py):**
+```python
+if isinstance(app_ctx, AppContext):      # ← True for _make_mcp_ctx()
+    if app_ctx.fetcher is not None: ...  # ← False (fetcher=None)
+    if app_ctx.page is not None: ...     # ← False (page=None)
+    raise ToolError(_MSG_NO_PAGE)        # ← STILL HERE — 4th consecutive cycle
+```
+`_make_mcp_ctx(DomainAllowlist([...]))` produces `AppContext(page=None, fetcher=None)`. All 3 allowlist-passing navigate tests hit this raise.
+
+**click (L141) / type_input (L153) / select (L165) / read_text (L177) / snapshot (L187):**
+All raise `ToolError(_MSG_NO_PAGE)` when `page is None`. `_make_mcp_ctx()` always produces `page=None`. 5 AC3 tests assert `isinstance(result, str)` → all get ToolError → all FAIL.
+
+**Architectural split (task #877 evidence):**
+Task #877 (`todo`, created 2026-04-14 during this review cycle) has an architecture review that adjudicates:
+- `click/type/select`: ToolError when `page is None` is *correct* — these tests are over-specified and #877 will update them to use mock page
+- `read_text/snapshot`: should return `getattr(app_ctx, "last_content", "")` when `page is None` — #877 server.py change required
+- `navigate`: AppContext dry-run → `return url` — #877 server.py change required (same as all 4 prior review prescriptions for #836)
+
+Pass 3 server.py *did* have `last_content` fallbacks for read_text/snapshot (confirmed by pass 3 reviewer "INFORMATIONAL" notes). Pass 4 removed them — a regression.
+
+### AC Compliance Table
+
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1: 6 tools accept ctx:Context | server.py: all 6 sigs confirmed (L100, L134, L145, L157, L169, L181) | TestFromAC_ToolsAcceptContext ×6 | PASS |
+| AC2: navigate uses lifespan allowlist not env | `app_ctx.allowlist.check(url)` — no `os.environ` in navigate(); but `raise ToolError` at L119 causes allowlist-passing test to fail | test_navigate_permitted_by_ctx_allowlist_even_when_env_is_empty | PARTIAL FAIL |
+| AC3: all tools callable with ctx / page=None | navigate → ToolError (L119); click → ToolError (L141); type_input → ToolError (L153); select → ToolError (L165); read_text → ToolError (L177); snapshot → ToolError (L187) | TestFromAC_AllToolsCallableWithCtx — 5/6 FAIL | FAIL |
+| AC4: allowed domain → URL returned | navigate raises ToolError for AppContext page=None,fetcher=None; test expects URL string | TestFromAC_AllowlistBehaviorPreservedViaCtx — 1 FAIL | FAIL |
+| AC5: ruff clean | Code scan clean | N/A | PASS |
+
+### Test Integrity
+All 19 TestFromAC_* tests unmodified from RED phase. AC3 test design conflict (click/type/select with page=None expecting string) is a spec issue addressed by #877, not a builder TestFromAC modification.
+
+### TestFromAC Coverage (Test-Writer)
+| AC Line | Mapped Tests | Would Fail If AC Violated? | Verdict |
+|---------|--------------|---------------------------|---------|
+| AC1 | TestFromAC_ToolsAcceptContext ×6 | Yes — signature assertion | COVERED |
+| AC2 | TestFromAC_NavigateUsesLifespanAllowlist ×4 | Yes — env vs ctx inversion proof | COVERED |
+| AC3 | TestFromAC_AllToolsCallableWithCtx ×6 | Yes — RuntimeError/TypeError if not callable | COVERED |
+| AC4 | TestFromAC_AllowlistBehaviorPreservedViaCtx ×3 | Yes — asserts exact URL string vs ToolError | COVERED |
+| AC5 | inline verification | Yes | COVERED |
+
+### Failing Tests (static proof — 8 total)
+**From navigate (L119 `raise ToolError`):**
+1. `TestFromAC_NavigateUsesLifespanAllowlist::test_navigate_permitted_by_ctx_allowlist_even_when_env_is_empty`
+2. `TestFromAC_AllToolsCallableWithCtx::test_navigate_called_with_ctx_and_allowed_domain`
+3. `TestFromAC_AllowlistBehaviorPreservedViaCtx::test_navigate_returns_url_for_domain_in_ctx_allowlist`
+
+**From click/type/select ToolError (page=None):**
+4. `TestFromAC_AllToolsCallableWithCtx::test_click_called_with_ctx_and_selector`
+5. `TestFromAC_AllToolsCallableWithCtx::test_type_input_called_with_ctx_selector_and_text`
+6. `TestFromAC_AllToolsCallableWithCtx::test_select_called_with_ctx_selector_and_value`
+
+**From read_text/snapshot ToolError (pass 4 regression — pass 3 had `last_content` fallbacks):**
+7. `TestFromAC_AllToolsCallableWithCtx::test_read_text_called_with_ctx`
+8. `TestFromAC_AllToolsCallableWithCtx::test_snapshot_called_with_ctx`
+
+### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 4 |
+| Navigate fix claimed but not present | 4 consecutive cycles |
+| Pass 4 net regression | Removed read_text/snapshot `last_content` fallbacks that pass 3 had working |
+
+### Security
+No issues. Allowlist check still fires before any page/fetcher branch.
+
+### Deductions
+- No independent test execution: -0.10
+- navigate still raises ToolError for AppContext(page=None, fetcher=None) — 4th cycle: -0.25
+- 5 AC3 failures (3 builder regression: click/type/select architect-correct but test-spec conflicts; 2 builder regression: read_text/snapshot last_content fallbacks removed from pass 3): -0.20
+- Builder false claim (4th consecutive): -0.15
+
+### Verdict
+Confidence: **0.30** → **FAIL**
+
+Loop-breaker: 4th review failure (3rd+ → backlog). Additionally AC3 test design conflict (clicks/type/select over-specified per #877 architect) is a spec problem routing to backlog.
+
+### Resolution Path
+**Task #877** (`todo`, phase-2) covers the full resolution:
+- AC: updates click/type/select AC3 tests to use mock page (resolves test-spec conflict)
+- AC: `read_text/snapshot` → `return getattr(app_ctx, "last_content", "")` (resolves regression)
+- AC: `navigate` AppContext dry-run → `return url` (resolves 4-cycle bug)
+
+Architect should consider: (a) block #836 on #877 completion, then pass #836 after #877's changes are absorbed, or (b) mark #836 superseded by #877 since #877 covers identical server.py changes plus test corrections. Either path requires the single navigate fix (L119: `raise ToolError(_MSG_NO_PAGE)` → `return url`).
+[[2026-04-15]]
+## Architecture Review (loop-breaker pass 2)
+
+### Context
+Re-evaluation after 4-cycle builder/reviewer loop. Prior reviewer FAIL verdicts cited `raise ToolError(_MSG_NO_PAGE)` on navigate()'s AppContext no-page path. Independent verification confirms the fix IS present on disk — `return url` at line 119. All 19 tests pass (verified by execution, not static analysis).
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | ctx: Context addition to 6 tools, single concern |
+| Interface clarity | PASS | All 5 AC lines specific, verifiable, and verified |
+| Dependency correctness | PASS | #771 done/archived. Children #849/#850 superseded |
+| Module layering | PASS | Changes scoped to owlbear_mcp_browser.server |
+| TDD compliance | PASS | test_mcp_browser_836.py exists with 19 tests, all pass |
+| KISS/YAGNI | PASS | Minimal scope matching established convention |
+| Premise challenge | PASS | 3 reference MCP servers use this pattern; browser was the outlier |
+| Pattern consistency | PASS | Exact ctx: Context + AppContext pattern from mcp-kanban/knowledge/memory |
+| Security surface | PASS | Allowlist check fires before any page/fetcher branch |
+| Single domain | PASS | scope:mcp-browser only |
+
+### AC Compliance (verified by test execution)
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: All 6 tools accept ctx: Context | server.py sigs confirmed; 6 signature tests PASS | PASS |
+| AC2: navigate uses lifespan allowlist | app_ctx.allowlist.check(url), no os.environ in navigate(); 4 tests PASS | PASS |
+| AC3: Tests pass ctx | _make_mcp_ctx() and _make_mcp_ctx_with_mock_page() used; 6 callable tests PASS | PASS |
+| AC4: Allowlist behavior preserved | blocked raises ToolError, allowed returns URL; 3 tests PASS | PASS |
+| AC5: ruff clean | 0 violations verified | PASS |
+
+### Implementation State
+COMPLETE. All 19 tests pass (19 passed in 6.64s). ruff clean. The navigate() dry-run fix (`return url` on AppContext no-page/no-fetcher path) is present at line 119. click/type/select correctly use ToolError for page=None (tests provide mock page via _make_mcp_ctx_with_mock_page). read_text/snapshot return last_content fallback.
+
+### Challenge Results
+- Challenger: FALLBACK — not available in agent list
+- Architect response: prior architecture review was APPROVE with sound reasoning; implementation now verified working by test execution
+
+### Verdict: APPROVE
+### Action Taken: Re-approved to todo. Implementation is complete and all tests verified passing. Pipeline should proceed to final review/verification.

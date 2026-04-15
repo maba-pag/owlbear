@@ -1,10 +1,10 @@
 ---
 id: 824
 title: Create dispatch.py with pick_dispatchable()
-status: docs
+status: done
 priority: needed
 created: '2026-04-10T21:23:09.122392+00:00'
-updated: '2026-04-14T02:18:44.665727+00:00'
+updated: '2026-04-15T08:24:35.529425+00:00'
 tags:
 - phase-3
 - scope:kanban
@@ -14,8 +14,8 @@ depends_on:
 - 823
 blocked: false
 block_reason: null
-claimed_by: crisp-root
-claimed_at: '2026-04-14T02:18:44.665727+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Acceptance Criteria
 
@@ -199,3 +199,21 @@ None.
 
 ### Verdict
 PASS #824 → docs | confidence .97
+
+[[2026-04-15]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | `pick_dispatchable` added to `owlbear_kanban.__all__`. `copilot-instructions.md` has no package-API table — no update needed. |
+| 2 | Module docstrings | Yes | Updated | `dispatch.py` — module docstring + all 3 public/private functions have accurate docstrings. `__init__.py` — docstring said "engine and its public models"; stale after `pick_dispatchable` export. Updated to mention dispatch selector. |
+| 3 | External attribution | No | N/A | All 8 research sources (S1–S8) are internal codebase files. No external patterns used. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/create-dispatch-pick-dispatchable.md` exists and is linked in task body. Follow-up tasks confirmed not needed (existing decomposition complete). |
+
+### Files Updated
+- `serve/kanban/src/owlbear_kanban/__init__.py` — docstring updated to mention `pick_dispatchable`
+- Commit: `a784ce6e` docs: update __init__.py docstring to mention pick_dispatchable (#824, doc-writer)
+
+### Scratch Files
+No `.owlbear/scratch/824-*` files found.

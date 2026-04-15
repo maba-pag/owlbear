@@ -4,7 +4,7 @@ title: Tests — MCP adapter slimming regression
 status: done
 priority: needed
 created: '2026-04-10T21:22:34.474123+00:00'
-updated: '2026-04-12T12:03:19.245804+00:00'
+updated: '2026-04-15T12:06:02.530442+00:00'
 tags:
 - phase-2
 - type:test
@@ -15,8 +15,8 @@ depends_on:
 - 818
 blocked: false
 block_reason: null
-claimed_by: dry-lark
-claimed_at: '2026-04-12T12:03:19.245804+00:00'
+claimed_by: low-owl
+claimed_at: '2026-04-15T12:06:02.530442+00:00'
 ---
 ## Acceptance Criteria
 

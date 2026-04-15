@@ -15,8 +15,8 @@ depends_on:
 - 820
 blocked: false
 block_reason: null
-claimed_by: sure-stag
-claimed_at: '2026-04-12T07:35:35.123877+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Acceptance Criteria
 

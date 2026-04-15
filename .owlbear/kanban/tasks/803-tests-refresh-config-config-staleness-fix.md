@@ -1,10 +1,10 @@
 ---
 id: 803
 title: Tests — refresh_config + config staleness fix
-status: docs
+status: done
 priority: needed
 created: '2026-04-10T21:20:57.293478+00:00'
-updated: '2026-04-14T02:18:47.119193+00:00'
+updated: '2026-04-15T08:18:34.257676+00:00'
 tags:
 - phase-1
 - type:test
@@ -14,8 +14,8 @@ parent: 798
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: crisp-root
-claimed_at: '2026-04-14T02:18:47.119193+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Acceptance Criteria
 
@@ -232,3 +232,20 @@ All tests use `tmp_path`; no I/O beyond temp directory. No injection surface, no
 
 ### Verdict
 Confidence: **0.99 → PASS**
+
+[[2026-04-15]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `type:test` task — only `tests/test_refresh_config_803.py` added; no production code modified; copilot-instructions.md unchanged |
+| 2 | Module docstrings | Yes | Verified | Module-level docstring with AC coverage map; class `TestFromAC_RefreshConfig` docstring; all 6 test method docstrings present and accurate |
+| 3 | External attribution | No | N/A | Research doc sources all internal (engine.py, models.py, test_config_staleness_fix_828.py); no external repos or articles used |
+| 4 | CLI changes | No | N/A | Test-only task; no CLI additions or modifications |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/refresh-config-tests-803.md` exists; linked in task body; follow-up #840 delivered 6 tests (GREEN, 0 failures) |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/803-*` files found)

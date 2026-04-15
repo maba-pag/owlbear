@@ -1,10 +1,10 @@
 ---
 id: 814
 title: Add status/priority validation
-status: docs
+status: done
 priority: needed
 created: '2026-04-10T21:22:01.275308+00:00'
-updated: '2026-04-13T14:06:10.813203+00:00'
+updated: '2026-04-15T08:21:35.306709+00:00'
 tags:
 - phase-1
 - scope:mcp-kanban
@@ -14,8 +14,8 @@ depends_on:
 - 813
 blocked: false
 block_reason: null
-claimed_by: late-pool
-claimed_at: '2026-04-13T14:06:10.813203+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Acceptance Criteria
 
@@ -267,3 +267,19 @@ All significant code paths are covered by the 16 tests. No untested validation l
 
 ### Verdict
 PASS #814 -> docs | confidence .91
+[[2026-04-15]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | `create_task`/`edit_task` now raise `ValueError` for invalid status/priority; MCP maps to `ToolError`. `.github/copilot-instructions.md` covers only project identity and branch structure — no kanban API docs to update. |
+| 2 | Module docstrings | Yes | Verified | `engine.py` `create_task` and `edit_task` both have accurate `Raises: ValueError:` entries in their docstrings (lines 303-323 / 390-409). `server.py` handlers use consistent minimal one-liner style matching `move_task` — no docstring change warranted. |
+| 3 | External attribution | No | N/A | Research doc confirms all 9 sources were internal codebase — no external patterns used. |
+| 4 | CLI changes | No | N/A | scope:mcp-kanban only; no CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/status-priority-validation-814.md` exists, linked from task body under `## Research`. Follow-up tasks: none required (task was itself the implementation). |
+
+### Files Updated
+None — all docstrings accurate; no documentation files required changes.
+
+### Scratch Files Cleaned
+Deleted 7 files: `lint-814.txt`, `test-814.txt`, `test-coverage-814.txt`, `test-kanban-engine-814.txt`, `test-mcp-814-v2.txt`, `test-mcp-814.txt`, `test-output-814.txt`.

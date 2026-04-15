@@ -13,8 +13,8 @@ parent: 798
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: kind-reed
-claimed_at: '2026-04-13T00:14:14.037693+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Acceptance Criteria
 
