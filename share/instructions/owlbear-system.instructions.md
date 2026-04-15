@@ -1,5 +1,6 @@
 ---
 description: "OwlBear system instructions — decision heuristics, system awareness, memory governance, and operational fundamentals"
+applyTo: "**"
 ---
 
 ## 2. Decision Heuristics

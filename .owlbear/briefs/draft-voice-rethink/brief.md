@@ -13,13 +13,6 @@ OwlBear v2 carries a voice subsystem (STT, TTS, subprocess protocol, VoiceChanne
 ## Approach
 Surgical removal. Delete directories, remove dependency entries, update docs, verify tests pass.
 
-### CRITICAL: "Voice" Disambiguation
-The word "voice" has two unrelated meanings in OwlBear:
-1. **Voice I/O infrastructure** (STT, TTS, VoiceChannel, subprocess) — THIS is what we're removing
-2. **Ideation domain voices** (architect-voice, critic-voice, enduser-voice, etc.) — agent personalities used in the ideation workflow (`w-ideation`, `h-voice-panel`). These live in `share/agents/`, `share/skills/`, and `share/instructions/`. **DO NOT TOUCH THESE.**
-
-Deletion must be scoped strictly to voice **I/O** code. Any file referencing voice agents, voice panel, or domain voice deliberation is NOT in scope.
-
 ### Removal Scope
 - `serve/voice/` — entire directory (STT, TTS, main.py, pyproject.toml)
 - `serve/orchestrator/src/owlbear/voice/` — all voice modules (channel.py, process.py, protocol.py, etc.)
@@ -37,7 +30,7 @@ Deletion must be scoped strictly to voice **I/O** code. Any file referencing voi
 
 ## Risks & Mitigations
 - Risk: Accidentally removing shared infrastructure used by voice AND other modules. Mitigation: Check imports before deleting; the voice I/O modules are well-isolated in their own directories.
-- Risk: Accidentally deleting ideation voice agents/skills (architect-voice, critic-voice, etc.) which share the word "voice" but are completely unrelated. Mitigation: Only delete from `serve/voice/`, `serve/orchestrator/src/owlbear/voice/`, and `tests/test_voice_*.py`. Never touch `share/agents/`, `share/skills/`, or `share/instructions/`.
+- Risk: Accidentally deleting ideation voice agents/skills (ideation-architect, ideation-critic, etc.) which share the word "voice" but are completely unrelated. Mitigation: Only delete from `serve/voice/`, `serve/orchestrator/src/owlbear/voice/`, and `tests/test_voice_*.py`. Never touch `share/agents/`, `share/skills/`, or `share/instructions/`.
 - Risk: Losing useful research. Mitigation: Archive research docs to the new project folder before deleting.
 
 ## Key Decisions

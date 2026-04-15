@@ -8,6 +8,6 @@
 | `r-` | 3 | Rules — shared conventions |
 | `h-` | 14 | Handbook — domain knowledge |
 
-Deprecated/archived: `h-kanban-md` (DEPRECATED), `w-dispatch-planning` (ARCHIVED), `w-project-scoping` (DEPRECATED).
+Deprecated/archived: `h-kanban-md` (DEPRECATED).
 
 See `h-agent-structure` for structural standards and naming grammar.

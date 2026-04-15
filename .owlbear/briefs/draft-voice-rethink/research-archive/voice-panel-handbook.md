@@ -1,11 +1,11 @@
-# Voice Panel Handbook — Research
+# Ideation Panel Handbook — Research
 
-> **Owning task:** #652 — P4-12: Create h-voice-panel/SKILL.md handbook
+> **Owning task:** #652 — P4-12: Create h-ideation-panel/SKILL.md handbook
 > **Date:** 2026-04-07 **Status:** Complete
 
 ## 1. Context and Question
 
-Task #652 requires creating `share/skills/h-voice-panel/SKILL.md` — a consolidated handbook documenting voice characterizations, invocation patterns, Critic-loop rules, disagreement resolution, and Mediator synthesis rules. The spec lives in `.owlbear/research/thinking-companion-framework.md` §7 and §12. All six voice agents are already built (tasks #644–#650).
+Task #652 requires creating `share/skills/h-ideation-panel/SKILL.md` — a consolidated handbook documenting voice characterizations, invocation patterns, Critic-loop rules, disagreement resolution, and Mediator synthesis rules. The spec lives in `.owlbear/research/thinking-companion-framework.md` §7 and §12. All six voice agents are already built (tasks #644–#650).
 
 **Research question:** What structure, content, and conventions should the handbook follow to serve as the single reference for both Mediator and voice agents?
 
@@ -13,11 +13,11 @@ Task #652 requires creating `share/skills/h-voice-panel/SKILL.md` — a consolid
 
 | # | Source | Relevance | What Taken |
 |---|--------|-----------|------------|
-| 1 | `thinking-companion-framework.md` §7 | 1.0 | Voice panel architecture, voice selection logic, multi-model assignment, attribution rules |
+| 1 | `thinking-companion-framework.md` §7 | 1.0 | Ideation panel architecture, voice selection logic, multi-model assignment, attribution rules |
 | 2 | `thinking-companion-framework.md` §12 | 1.0 | Blackboard pattern, voice reasoning cycle, Critic-loop rules (≤5 cycles), deliberation flow phases |
 | 3 | Voice agent files (6 agents in `share/agents/`) | 0.95 | YAML frontmatter conventions, tool sets, persona text, I/O contracts, Critic invocation prompts |
 | 4 | Voice agent research docs (6 in `.owlbear/research/`) | 0.85 | Design rationale, template replication pattern, model diversity justification |
-| 5 | `ideator.agent.md` | 0.90 | Mediator invocation patterns (parallel domain voices → sequential Pragmatist), context window economy |
+| 5 | `ideator.agent.md` | 0.90 | Mediator invocation patterns (parallel domain opinions → sequential Pragmatist), context window economy |
 | 6 | Six Thinking Hats (de Bono 1985, Wikipedia) | 0.70 | Theoretical basis for deliberate perspective-shifting with distinct roles |
 | 7 | Blackboard design pattern (Lalanda 1997, Wikipedia) | 0.75 | Architectural precedent: shared workspace + specialized knowledge sources + control component |
 | 8 | Existing `h-*` skills (h-quality-runner, h-agent-structure, h-mcp-kanban) | 0.80 | YAML frontmatter conventions, section structure, reference style for handbook skills |
@@ -32,7 +32,7 @@ Task #652 requires creating `share/skills/h-voice-panel/SKILL.md` — a consolid
 | Environment audit | Pass — no existing skill | Info lives across 1 spec doc + 6 agent files + 6 research docs. No consolidated reference exists. |
 | Prior art | Pass (2+ sources) | Six Thinking Hats (de Bono), Blackboard pattern (Lalanda), existing Challenger agent pattern |
 | Technical feasibility | Pass — pure markdown | Follows `share/skills/h-*/SKILL.md` pattern. No code. Compatible with VS Code skill auto-loading. |
-| Architecture fit | Pass | Mediator reads it for invocation rules; domain voices read it for Critic-loop rules. Referenced by `w-ideation` skill. |
+| Architecture fit | Pass | Mediator reads it for invocation rules; domain opinions read it for Critic-loop rules. Referenced by `w-ideation` skill. |
 | Implementation approach | Defined below | Section-by-section mapping from AC to spec sources. |
 
 ### Proposed Handbook Structure (mapped to AC)
@@ -48,22 +48,22 @@ Task #652 requires creating `share/skills/h-voice-panel/SKILL.md` — a consolid
 | References all voice agents | § Voice Roster (names) | Agent file `name:` fields |
 | Voice selection logic | § Voice Selection | Spec §7 selection table + w-ideation content-split |
 
-**Note (post-challenge):** Voice Selection Logic added as 8th section after challenger identified gap. The w-ideation research doc (task #651) content-split table explicitly assigns the "detailed signal table" to h-voice-panel. AC item "convergence threshold" maps to the qualitative Critic exit condition ("position is solid"), not a numeric threshold — this is an AC interpretation, not invention.
+**Note (post-challenge):** Voice Selection Logic added as 8th section after challenger identified gap. The w-ideation research doc (task #651) content-split table explicitly assigns the "detailed signal table" to h-ideation-panel. AC item "convergence threshold" maps to the qualitative Critic exit condition ("position is solid"), not a numeric threshold — this is an AC interpretation, not invention.
 
 ### Voice Characterization Summary (from agent files)
 
 | Voice | Agent Name | Model | Domain | Stance | Tool Count |
 |-------|-----------|-------|--------|--------|------------|
-| Critic | critic-voice | GPT-5.4 | Adversarial challenge | Purely destructive — never proposes | 5 (read-only) |
-| Architect | architect-voice | Claude Opus 4.6 | System design, structure, patterns | Opinionated — spots coupling | 8 (read + write + agent) |
-| Data Person | data-voice | Claude Opus 4.6 | Data quality, schemas, ETL | Opinionated — schema-as-contract | 8 |
-| End User | enduser-voice | Claude Opus 4.6 | UX, cognitive load, clarity | Opinionated — comprehension first | 8 |
-| Security Mind | security-voice | Claude Opus 4.6 | Access control, trust, blast radius | Opinionated — defense-in-depth | 8 |
-| Pragmatist | pragmatist-voice | Claude Opus 4.6 | Synthesis, consolidation | Neutral — never advocates | 4 (read + createFile) |
+| Critic | ideation-critic | GPT-5.4 | Adversarial challenge | Purely destructive — never proposes | 5 (read-only) |
+| Architect | ideation-architect | Claude Opus 4.6 | System design, structure, patterns | Opinionated — spots coupling | 8 (read + write + agent) |
+| Data Person | ideation-data | Claude Opus 4.6 | Data quality, schemas, ETL | Opinionated — schema-as-contract | 8 |
+| End User | ideation-enduser | Claude Opus 4.6 | UX, cognitive load, clarity | Opinionated — comprehension first | 8 |
+| Security Mind | ideation-security | Claude Opus 4.6 | Access control, trust, blast radius | Opinionated — defense-in-depth | 8 |
+| Pragmatist | ideation-pragmatist | Claude Opus 4.6 | Synthesis, consolidation | Neutral — never advocates | 4 (read + createFile) |
 
 ### Critic-Loop Rules (from spec §12)
 
-- Max 5 cycles per domain voice
+- Max 5 cycles per domain opinion
 - Exit on: Critic says "position is solid" OR 5 cycles reached
 - Critic prompt must include: "do not manufacture objections"
 - Critic runs on different model (GPT-5.4) for genuine cognitive diversity
@@ -76,7 +76,7 @@ The spec does not use literal LLM temperature parameters. "Temperature" in the A
 | Voice | Behavioral Temperature | Rationale |
 |-------|----------------------|-----------|
 | Critic | High (aggressive) | Must find real flaws; pull no punches |
-| Domain voices | High (opinionated) | Strong positions, not hedged summaries |
+| Domain opinions | High (opinionated) | Strong positions, not hedged summaries |
 | Pragmatist | Low (neutral) | Pure synthesis, no advocacy |
 | Mediator | Medium (facilitative) | Presents, doesn't advocate |
 
