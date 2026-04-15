@@ -118,6 +118,19 @@ def _passes_clarity_gate(task: Task) -> bool:
     return bool(_AC_PATTERN.search(body))
 
 
+def _passes_dependency_gate(task: Task, active_ids: frozenset[int]) -> bool:
+    """Return True if all depends_on IDs are resolved (not in active tasks).
+
+    A dependency is met when its task ID is absent from the active task set
+    (i.e. archived or purged).  Any dependency still present in the tasks
+    directory — regardless of status, including ``done`` — is considered unmet.
+    """
+    deps: list[int] = task.depends_on or []
+    if not deps:
+        return True
+    return not any(dep_id in active_ids for dep_id in deps)
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -133,10 +146,11 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
     Gates applied (in order):
     1. Terminal status exclusion — archived/done tasks are excluded.
     2. Blocked exclusion — blocked=True tasks are excluded.
-    3. Claimed exclusion — tasks with an active (non-expired) claim are excluded.
-    4. Tag filter — when tag is non-empty, only tasks carrying that tag pass.
-    5. TDD gate — in-progress tasks need ## Test-Writer Notes or a non-impl tag.
-    6. Clarity gate — active-status tasks need at least one bullet/numbered AC line.
+    3. Dependency gate — tasks whose depends_on IDs are still active are excluded.
+    4. Claimed exclusion — tasks with an active (non-expired) claim are excluded.
+    5. Tag filter — when tag is non-empty, only tasks carrying that tag pass.
+    6. TDD gate — in-progress tasks need ## Test-Writer Notes or a non-impl tag.
+    7. Clarity gate — active-status tasks need at least one bullet/numbered AC line.
 
     Results are sorted by (PRIORITY_RANK, STATUS_RANK) ascending and capped at limit.
 
@@ -152,6 +166,7 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
         read_task(path) for path in sorted(engine._tasks_dir.glob("*.md"))  # noqa: SLF001
     ]
 
+    active_ids: frozenset[int] = frozenset(t.id for t in tasks if t.id is not None)
     claim_timeout = engine._parse_claim_timeout()  # noqa: SLF001
 
     passing: list[Task] = []
@@ -159,6 +174,8 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
         if task.status in _TERMINAL_STATUSES:
             continue
         if task.blocked:
+            continue
+        if not _passes_dependency_gate(task, active_ids):
             continue
         if task.claimed_by is not None and _claim_is_active(task, claim_timeout):
             continue
