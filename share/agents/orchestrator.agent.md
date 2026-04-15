@@ -3,8 +3,9 @@ name: orchestrator
 description: "Dispatch loop — plan, dispatch agents, re-plan from fresh board state"
 argument-hint: "Orchestrate: {scope_or-filter — e.g., 'phase-2', 'all todos', 'tag:parser'}"
 user-invocable: true
+disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
-tools: [vscode/memory, read/readFile, agent, 'owlbear-kanban/pick_tasks', 'owlbear-kanban/list_tasks', 'owlbear-kanban/show_task', 'owlbear-kanban/move_task', 'owlbear-kanban/edit_task', 'owlbear-memory/*']
+tools: [vscode/memory, read/readFile, agent, 'owlbear-kanban/pick_tasks', 'owlbear-kanban/list_tasks', 'owlbear-kanban/show_task', 'owlbear-memory/*']
 agents:
   - planner
   - scribe
