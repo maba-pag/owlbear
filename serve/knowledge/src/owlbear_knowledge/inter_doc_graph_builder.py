@@ -1,10 +1,12 @@
 """Inter-document graph builder — DI-based implementation.
 
 :class:`InterDocGraphBuilder` uses vector pre-filtering to find candidate
-entity pairs across documents, deduplicates against existing graph edges,
-batches pairs for LLM inference via an injected :class:`StructuredExtractor`,
-and stamps all returned edges with ``weight=0.4`` and
-``metadata["source"]="inter_doc_inference"``.
+entity pairs across documents, prioritises cross-source pairs, deduplicates
+against existing graph edges, batches pairs for LLM inference via an
+injected :class:`StructuredExtractor`, and stamps all returned edges with
+``weight=0.4``, ``metadata["source"]="inter_doc_inference"``,
+``metadata["doc_pair"]=[doc_a_id, doc_b_id]``, and
+``metadata["source_pair"]=[source_a_id, source_b_id]``.
 """
 
 from __future__ import annotations
@@ -86,18 +88,28 @@ class InterDocGraphBuilder:
 
     Discovers cross-document entity relationships by:
 
-    1. Calling ``vector_store.get_embedding`` + ``search_similar`` per entity
+    1. Building a source map via ``graph_store.get_document`` to resolve
+       each entity's ``source_id`` from its ``document_id``.
+    2. Calling ``vector_store.get_embedding`` + ``search_similar`` per entity
        to find candidate similar entities across documents.
-    2. Filtering out same-document pairs and pairs with existing edges.
-    3. Batching remaining candidate pairs in groups of 40 and calling the
+    3. Prioritising cross-source candidate pairs (both source IDs known and
+       distinct) before same-source cross-document pairs.
+    4. Filtering out same-document pairs and pairs with existing edges.
+    5. Batching remaining candidate pairs in groups of 40 and calling the
        injected ``extractor.extract`` once per batch.
-    4. Stamping all returned edges with ``weight=0.4`` and
-       ``metadata["source"]="inter_doc_inference"``.
+    6. Stamping all returned edges with ``weight=0.4``,
+       ``metadata["source"]="inter_doc_inference"``,
+       ``metadata["doc_pair"]=[doc_a_id, doc_b_id]``, and
+       ``metadata["source_pair"]=[source_a_id, source_b_id]``.
+       Entity pairs where either source ID is unknown (``None``) are placed
+       in the same-source bucket and receive a partial or empty
+       ``source_pair``.
 
     Args:
         extractor: Injected :class:`StructuredExtractor` for LLM inference.
         vector_store: Backend satisfying :class:`VectorStoreProtocol`.
-        graph_store: :class:`GraphStore` instance for edge deduplication.
+        graph_store: :class:`GraphStore` instance for edge deduplication
+            and source-map resolution.
     """
 
     def __init__(
@@ -133,12 +145,41 @@ class InterDocGraphBuilder:
             for entity in entities
         }
 
+    def _canonical_candidates(
+        self,
+        entities: list[Entity],
+        existing_pairs: set[tuple[str, str]],
+    ) -> list[tuple[Entity, Entity]]:
+        """Return cross-doc pairs sharing canonical_name (canonical-name blocking)."""
+        groups: dict[str, list[Entity]] = {}
+        for entity in entities:
+            key = entity.canonical_name
+            if key:
+                groups.setdefault(key, []).append(entity)
+
+        seen: set[tuple[str, str]] = set()
+        result: list[tuple[Entity, Entity]] = []
+        for group in groups.values():
+            if len(group) < _MIN_ENTITIES:
+                continue
+            for i, a in enumerate(group):
+                for b in group[i + 1:]:
+                    if a.document_id == b.document_id:
+                        continue
+                    if (a.id, b.id) in existing_pairs or (b.id, a.id) in existing_pairs:
+                        continue
+                    pair_key = (min(a.id, b.id), max(a.id, b.id))
+                    if pair_key not in seen:
+                        seen.add(pair_key)
+                        result.append((a, b))
+        return result
+
     def _collect_candidates(
         self,
         entities: list[Entity],
         entity_by_id: dict[str, Entity],
         existing_pairs: set[tuple[str, str]],
-        source_by_entity: dict[str, str | None],
+        source_by_entity: dict[str, str | None] | None = None,
     ) -> list[tuple[Entity, Entity]]:
         """Return cross-document candidate pairs, cross-source pairs first.
 
@@ -146,7 +187,17 @@ class InterDocGraphBuilder:
         prioritised over same-source cross-document pairs.  Entities with
         document_id=None or a resolved source_id=None are treated as unknown
         source and never promoted to the cross-source bucket.
+
+        Canonical-name blocking adds cross-doc pairs sharing the same
+        ``canonical_name`` even when vector similarity is below threshold
+        (union semantics — canonical adds matches beyond vector results).
         """
+        if source_by_entity is None:
+            source_by_entity = {}
+
+        canonical = self._canonical_candidates(entities, existing_pairs)
+        seen: set[tuple[str, str]] = {(min(a.id, b.id), max(a.id, b.id)) for a, b in canonical}
+
         cross_source: list[tuple[Entity, Entity]] = []
         same_source: list[tuple[Entity, Entity]] = []
         for entity in entities:
@@ -162,13 +213,18 @@ class InterDocGraphBuilder:
                     continue
                 if (entity.id, other.id) in existing_pairs:
                     continue
+                pair_key = (min(entity.id, other.id), max(entity.id, other.id))
+                if pair_key in seen:
+                    continue
+                seen.add(pair_key)
                 src_a = source_by_entity.get(entity.id)
                 src_b = source_by_entity.get(other.id)
                 if src_a is not None and src_b is not None and src_a != src_b:
                     cross_source.append((entity, other))
                 else:
                     same_source.append((entity, other))
-        return cross_source + same_source
+
+        return canonical + cross_source + same_source
 
     async def build(
         self,

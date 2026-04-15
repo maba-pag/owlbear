@@ -78,6 +78,8 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
+| Kumar et al. (2025) — Enterprise KG multi-source integration | <https://arxiv.org/abs/2503.07993> | Cross-source entity matching via embedding + LLM mapper; context for sort-first prioritization approach | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Saeedi et al. (2020) — Incremental multi-source entity resolution | ESWC 2020 proceedings (no URL in research doc) | Multi-source entity resolution for KG completion; context for cross-source bucket strategy | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
 | Kumar et al. (2025) — LLM-Powered KGs for Enterprise Intelligence | <https://arxiv.org/html/2503.07993v1> | Enterprise KG integrating multiple data sources via LLM entity extraction and embedding-based matching | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
 | Saeedi et al. (2020) — Incremental Multi-source Entity Resolution | <https://dbs.uni-leipzig.de/index.php/research/publications/incremental-multi-source-entity-resolution-for-knowledge-graph-completion> | Multi-source entity clustering for KG completion; source-order-independent resolution | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
 
@@ -3978,3 +3980,11 @@ External repos and resources studied during OwlBear development.
 | sp-dev-docs#6380 — CSS class instability | <https://github.com/SharePoint/sp-dev-docs/issues/6380> | SharePoint replacing semantic CSS classes (`CanvasZone`, `ControlZone`) with hashed names; confirms `ms-` prefix classes from Fluent UI more stable | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
 | Fluent UI v8 CSS class catalog | <https://github.com/Zerg00s/sp-modern-classes> | Community-maintained list of reusable SharePoint Online CSS classes — `ms-Breadcrumb`, `ms-Persona`, `ms-DateTimeField` patterns identified | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
 | trafilatura core functions docs | <https://trafilatura.readthedocs.io/en/latest/corefunctions.html> | `prune_xpath` parameter — supports custom XPath for pre-extraction element removal (evaluated as alternative approach, not adopted) | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
+
+## Azure AD App Registration Request (Task #878)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Graph API `sitePage.Get` permissions | <https://learn.microsoft.com/en-us/graph/api/sitepage-get> | Confirmed `Sites.Read.All` (delegated) as least privileged permission for sitePage read; verified `$expand=canvasLayout` query parameter | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+| Entra ID app registration quickstart | <https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app> | App registration steps, supported account types, admin consent process | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+| OAuth 2.0 device authorization grant | <https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code> | Device-code flow protocol: `/devicecode` endpoint, polling, token response format, Conditional Access considerations | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
