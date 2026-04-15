@@ -47,6 +47,7 @@ class SourceType(StrEnum):
     URL_LIST = "url_list"
     FILE_GLOB = "file_glob"
     AUTHENTICATED_WEB = "authenticated_web"
+    SHAREPOINT_API = "sharepoint_api"
 
 
 # -- Helpers -----------------------------------------------------------------
@@ -61,7 +62,7 @@ def _uuid_hex() -> str:
 
 
 class KnowledgeSource(BaseModel):
-    """A registered knowledge source — where content comes from."""
+    """A registered knowledge source ÔÇö where content comes from."""
 
     model_config = ConfigDict(frozen=True)
 
