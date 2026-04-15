@@ -83,6 +83,12 @@ External repos and resources studied during OwlBear development.
 | Kumar et al. (2025) — LLM-Powered KGs for Enterprise Intelligence | <https://arxiv.org/html/2503.07993v1> | Enterprise KG integrating multiple data sources via LLM entity extraction and embedding-based matching | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
 | Saeedi et al. (2020) — Incremental Multi-source Entity Resolution | <https://dbs.uni-leipzig.de/index.php/research/publications/incremental-multi-source-entity-resolution-for-knowledge-graph-completion> | Multi-source entity clustering for KG completion; source-order-independent resolution | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
 
+## MCP Browser Session Management (Task #837)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright Page API | <https://playwright.dev/python/docs/api/class-page> | `page.goto()`, `page.locator().click/fill/select_option()`, `page.content()`, `page.locator("body").aria_snapshot()` — page interaction patterns for navigate/click/type/select/read_text/snapshot tools | `serve/mcp-browser/src/owlbear_mcp_browser/server.py` | 2026-04-12 |
+
 ## MCP Browser Server Research (Task #771)
 
 | Source | URL | What | Where Used | Date |
