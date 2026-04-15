@@ -119,6 +119,28 @@ def _make_orchestrator(
     )
 
 
+# ---------------------------------------------------------------------------
+# Builder-discovered: URL_LIST sources call _intake.read_url which requires
+# network access. Patch it globally so these unit tests remain offline-safe.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _mock_intake_read_url() -> object:
+    """Patch _intake.read_url for all tests in this module (offline safety)."""
+    from owlbear_knowledge.intake import IntakeResult
+
+    async def _fake(url: str) -> IntakeResult:
+        return IntakeResult(
+            content=f"<p>Mock content for {url}</p>",
+            source=url,
+            metadata={"source_type": "url", "fetched_at": "2026-01-01T00:00:00+00:00"},
+        )
+
+    with patch("owlbear_knowledge.refresh._intake.read_url", new=_fake):
+        yield
+
+
 # ===========================================================================
 # AC4 + AC6: Constructor DI params
 # ===========================================================================

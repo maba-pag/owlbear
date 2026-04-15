@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,10 +16,14 @@ from owlbear_knowledge.models import KnowledgeSource, SourceType
 
 if TYPE_CHECKING:
     from owlbear_knowledge.cancellation import CancelSignal
+    from owlbear_knowledge.graph_store import GraphStore
     from owlbear_knowledge.ingest import IngestPipeline, IngestResult
+    from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
     from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 logger = logging.getLogger(__name__)
+
+_MIN_SCOPE_DOCS = 2  # guard: skip inter-doc build when scope has fewer than 2 documents
 
 # ---------------------------------------------------------------------------
 # Models
@@ -54,18 +59,22 @@ class RefreshOrchestrator:
             When ``None``, authenticated web refresh is a no-op.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         store: KnowledgeSourceStore | object,
         pipeline: IngestPipeline | object,
         workspace_root: Path | None = None,
         content_fetcher: object | None = None,
+        inter_doc_builder: InterDocGraphBuilder | None = None,
+        graph_store: GraphStore | None = None,
     ) -> None:
         self._store = store
         self._pipeline = pipeline
         self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
         self._content_fetcher = content_fetcher
+        self._inter_doc_builder = inter_doc_builder
+        self._graph_store = graph_store
 
     async def refresh(
         self,
@@ -151,6 +160,7 @@ class RefreshOrchestrator:
                 ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":
                     refreshed += 1
+                    self._schedule_inter_doc_build(source, ingest_result.document_id)
                 elif ingest_result.status == "skipped":
                     skipped += 1
                 else:
@@ -200,6 +210,7 @@ class RefreshOrchestrator:
                 ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":
                     refreshed += 1
+                    self._schedule_inter_doc_build(source, ingest_result.document_id)
                 elif ingest_result.status == "skipped":
                     skipped += 1
                 else:
@@ -260,6 +271,7 @@ class RefreshOrchestrator:
                 ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":
                     refreshed += 1
+                    self._schedule_inter_doc_build(source, ingest_result.document_id)
                 elif ingest_result.status == "skipped":
                     skipped += 1
                 else:
@@ -275,6 +287,29 @@ class RefreshOrchestrator:
             failed=failed,
             errors=errors,
         )
+
+    def _schedule_inter_doc_build(self, source: KnowledgeSource, document_id: str) -> None:
+        """Schedule an inter-doc graph build as a non-blocking background task."""
+        if self._inter_doc_builder is None or self._graph_store is None:
+            return
+
+        builder = self._inter_doc_builder
+        graph_store = self._graph_store
+
+        async def _run() -> None:
+            try:
+                if len(graph_store.list_documents(scopes=[source.scope])) < _MIN_SCOPE_DOCS:
+                    return
+                entities = graph_store.list_entities_for_document(document_id)
+                result = await builder.build(entities, scope=source.scope)
+                for edge in result.edges:
+                    graph_store.insert_edge(edge)
+            except Exception as exc:  # noqa: BLE001
+                logger.error(  # noqa: TRY400
+                    "Inter-doc build failed for source %r: %s", source.id, exc
+                )
+
+        asyncio.create_task(_run())  # noqa: RUF006
 
     def _update_source_record(        self,
         source: KnowledgeSource,
