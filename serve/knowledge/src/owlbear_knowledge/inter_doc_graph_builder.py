@@ -49,6 +49,12 @@ focus on conceptual, dependency, or implementation relationships that
 bridge document boundaries. Do NOT hallucinate edges that lack evidence.
 When in doubt, omit.
 
+Corporate relation type guidance:
+- **governs**: Use when a policy or standard entity governs (controls or constrains) another
+  entity — e.g., a security policy governs a procedure.
+- **supersedes_version**: Use when a document or standard supersedes a prior version of
+  itself — e.g., Policy v2.0 supersedes_version Policy v1.0.
+
 Return your findings as JSON matching the ExtractionResult schema. Leave the
 entities list empty — only return edges.
 """
@@ -80,8 +86,16 @@ def _stamp_inter_edge(
 
 
 def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:
-    pair_strs = ", ".join(f"({a.name}, {b.name})" for a, b in pairs)
-    return f"scope: {scope}\nEntity pairs: {pair_strs}"
+    pair_lines = []
+    for a, b in pairs:
+        a_desc = f" — {a.description}" if a.description else ""
+        b_desc = f" — {b.description}" if b.description else ""
+        pair_lines.append(
+            f"  ({a.name} [{a.entity_type.value}]{a_desc}, "
+            f"{b.name} [{b.entity_type.value}]{b_desc})"
+        )
+    pairs_str = "\n".join(pair_lines)
+    return f"scope: {scope}\nEntity pairs:\n{pairs_str}"
 
 
 class InterDocGraphBuilder:

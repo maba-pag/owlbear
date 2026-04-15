@@ -67,11 +67,21 @@ class LLMExtractor:
     """Concrete StructuredExtractor using the openai SDK.
 
     Works with any OpenAI-compatible endpoint via ``base_url``.
+    Accepts an optional ``system_prompt`` constructor argument (defaults to
+    :data:`LLM_EXTRACTION_PROMPT`); pass :data:`INTER_DOC_PROMPT` to use
+    inter-document relationship inference instead.
     Gracefully degrades to an empty :class:`ExtractionResult` on any LLM failure.
     """
 
-    def __init__(self, model: str, api_key: str | None = None, base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        system_prompt: str = LLM_EXTRACTION_PROMPT,
+    ) -> None:
         self._model = model
+        self._system_prompt = system_prompt
         self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def extract(self, prompt: str) -> ExtractionResult:
@@ -79,7 +89,7 @@ class LLMExtractor:
             response = await self._client.chat.completions.parse(
                 model=self._model,
                 messages=[
-                    {"role": "system", "content": LLM_EXTRACTION_PROMPT},
+                    {"role": "system", "content": self._system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 response_format=ExtractionResult,
