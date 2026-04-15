@@ -53,9 +53,9 @@ class TestFromAC_OriginalsDeleted:
         )
 
     def test_voice_panel_handbook_deleted_from_research(self) -> None:
-        """voice-panel-handbook.md must be absent from .owlbear/research/ (NOT the share/skills/ copy)."""
-        assert not (RESEARCH_DIR / "voice-panel-handbook.md").exists(), (
-            "voice-panel-handbook.md still exists in .owlbear/research/ — builder must delete this copy only"
+        """ideation-panel-handbook.md must be absent from .owlbear/research/ (NOT the share/skills/ copy)."""
+        assert not (RESEARCH_DIR / "ideation-panel-handbook.md").exists(), (
+            "ideation-panel-handbook.md still exists in .owlbear/research/ — builder must delete this copy only"
         )
 
     def test_voice_process_manager_deleted_from_research(self) -> None:
