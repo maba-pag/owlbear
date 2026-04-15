@@ -74,6 +74,9 @@ class LLMExtractor:
     Accepts an optional ``system_prompt`` constructor argument (defaults to
     :data:`LLM_EXTRACTION_PROMPT`); pass :data:`INTER_DOC_PROMPT` to use
     inter-document relationship inference instead.
+    Pass ``default_headers`` to inject editor headers for Copilot-compatible
+    endpoints.  Pass ``requests_per_minute`` to cap extraction throughput with
+    a sliding-window rate limiter (``None`` = unlimited).
     Gracefully degrades to an empty :class:`ExtractionResult` on any LLM failure.
     """
 
@@ -94,6 +97,11 @@ class LLMExtractor:
         self._rpm_count: int = 0
 
     async def extract(self, prompt: str) -> ExtractionResult:
+        """Extract entities and relationships from *prompt*.
+
+        Enforces the rate limit when ``requests_per_minute`` was set.
+        Returns an empty :class:`ExtractionResult` on any LLM or rate-limit failure.
+        """
         if self._requests_per_minute is not None:
             now = time.monotonic()
             if now - self._rpm_window_start >= _RPM_WINDOW_SECONDS:

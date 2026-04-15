@@ -25,6 +25,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | github-copilot-sdk PyPI (v0.2.2 recheck) | <https://pypi.org/project/github-copilot-sdk/> | Confirmed: still no `response_format`, BYOK routes through CLI subprocess, session/event API only | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
 | copilot-api proxy (ericc-ch, recheck) | <https://github.com/ericc-ch/copilot-api> | 3.7k stars, explicit abuse-detection warnings added, confirms risk is actively enforced | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
+| Graphicator | `C:\Users\p362329\OneDrive\Coding\Projects\tool.graphicator` | (own project) | Device-flow OAuth implementation ported to `copilot_auth.py`: `request_device_code`, `poll_for_access_token`, `exchange_for_copilot_token`, token cache, editor headers | `serve/knowledge/src/owlbear_knowledge/copilot_auth.py` | 2026-04-15 |
 
 ## Entity Name Canonicalization (Task #865)
 
@@ -161,7 +162,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | API verification: is_local (v1.58+), 30s timeout, default context pattern | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
 | Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Verification: `--user-data-dir` to non-default dir mandatory from Chrome 136+ | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
-| Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/security.md | HR#4: CDP binds 127.0.0.1 only, no wildcard origins — identified gap in #752 design | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+| Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/security.md | HR#4: CDP binds 127.0.0.1 only, no wildcard origins — identified gap in #752 design | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
 
 ## Phase 0 CDP Spike Research (Task #774)
 
@@ -301,12 +302,12 @@ External repos and resources studied during OwlBear development.
 | v1 improvement_proposals.py | `v1/src/owlbear/core/improvement_proposals.py` | Prior art: descriptive-only proposals from EventStore metrics, never consumed automatically | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
 | #31 research: self-improvement analysis pipeline | `.owlbear/research/self-improvement-analysis-pipeline.md` | Original design: 4 detectors, AnalysisProposal schema, CLI entrypoint | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
 
-## Voice Panel Handbook (Task #652)
+## Ideation Panel Handbook (Task #652)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Six Thinking Hats (de Bono 1985) | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Deliberate perspective-shifting with distinct roles — theoretical basis for multi-voice panel | .owlbear/research/voice-panel-handbook.md | 2026-04-07 |
-| Blackboard design pattern (Lalanda 1997) | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Shared workspace + specialized knowledge sources — architectural precedent for Working Directory comms | .owlbear/research/voice-panel-handbook.md | 2026-04-07 |
+| Six Thinking Hats (de Bono 1985) | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Deliberate perspective-shifting with distinct roles — theoretical basis for multi-ideation panel | .owlbear/research/ideation-panel-handbook.md | 2026-04-07 |
+| Blackboard design pattern (Lalanda 1997) | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Shared workspace + specialized knowledge sources — architectural precedent for Working Directory comms | .owlbear/research/ideation-panel-handbook.md | 2026-04-07 |
 
 ## Briefs Directory Structure (Task #642)
 
@@ -340,7 +341,7 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Six Thinking Hats — Blue Hat synthesis role | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Blue Hat: "The Big Picture & Managing" — facilitator aggregating all thinking directions into cohesive summary (de Bono 1985) | .owlbear/research/pragmatist-voice-agent.md | 2026-04-06 |
+| Six Thinking Hats — Blue Hat synthesis role | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Blue Hat: "The Big Picture & Managing" — facilitator aggregating all thinking directions into cohesive summary (de Bono 1985) | .owlbear/research/ideation-pragmatist-agent.md | 2026-04-06 |
 
 ## Blocked-Task Scan for Decision-Request Notifications (Task #348)
 
