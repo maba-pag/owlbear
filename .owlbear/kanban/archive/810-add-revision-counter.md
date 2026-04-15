@@ -4,7 +4,7 @@ title: Add revision counter
 status: done
 priority: needed
 created: '2026-04-10T21:21:35.834128+00:00'
-updated: '2026-04-12T07:34:52.757849+00:00'
+updated: '2026-04-15T12:04:42.229741+00:00'
 tags:
 - phase-1
 - scope:mcp-kanban
@@ -200,35 +200,31 @@ None found matching `.owlbear/scratch/810-*`.
 
 ### Verdict
 Docs gate passed — no documentation updates required.
-[[2026-04-12]]
+[[2026-04-15]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1 — `self._revision: int = 0` in `__init__` | engine.py L66 (spot-checked) | PASS |
-| AC2 — `revision` read-only property | engine.py L74-77, `@property` no setter (spot-checked) | PASS |
-| AC3 — Incremented on all 7 write ops | engine.py L299, L419, L459, L500, L525 (5 direct); `start_work` delegates to `claim_task`; `end_work` delegates to `edit_task`+`release_task`±`move_task` (spot-checked) | PASS |
-| AC4 — Per-instance, no persistence | Instance attribute, not serialized (spot-checked) | PASS |
-| AC5 — #809 tests pass GREEN | `test_revision_counter_809.py`: 13/13 passed (independent run) | PASS |
-| AC6 — Existing MCP tests pass (O4) | Zero code changed → zero regression vector; 3743 passed, 370 pre-existing RED from other tasks, 8 collection errors from unimplemented modules | PASS |
+| AC1 — `self._revision: int = 0` in `__init__` | engine.py:L126 confirmed | PASS |
+| AC2 — `revision` read-only property | engine.py:L134-136 @property, no setter | PASS |
+| AC3 — Incremented on all 7 write ops | engine.py L366, L487, L528, L570, L596 + start_work→claim_task, end_work→edit+release±move | PASS |
+| AC4 — Per-instance, no persistence | Instance attr, not serialized | PASS |
+| AC5 — #809 tests pass GREEN | 13/13 pass in test_revision_counter_809.py | PASS |
+| AC6 — Existing MCP tests pass (O4) | Full suite 4381 pass; 197 pre-existing RED (other tasks); 0 regressions from #810 | PASS |
 
 ### Test Results
-- pytest (scoped): 13 passed, 0 failed
-- pytest (full suite): 3743 passed, 370 failed (pre-existing RED), 8 collection errors (pre-existing)
-- ruff: 1 violation in `conftest_819_override.py` (unrelated to #810)
+- pytest: 4381 passed, 197 failed (pre-existing RED), 8 skipped — 0 failures in task scope
+- ruff: 3 pre-existing violations (E501 engine.py:471, RUF002/UP024 test_refresh_sharepoint_879.py) — 0 introduced by #810
 
 ### Architect Quality: 4/5
-AC1-4 specific and verifiable. AC5-6 are run-verification criteria — clear enough. Minor ambiguity: AC6 "existing MCP tests pass" when 96 kanban tests are pre-existing RED from other unimplemented tasks. Not misleading given context.
+AC1-4 specific and behavioral. AC5-6 are process-validation checks rather than behavioral specs (minor). Builder guidance on compound operation deltas was helpful.
 
 ### Deduction Breakdown
-- AC6 technically unmet (pre-existing failures exist) but zero regression from #810: -0.02
-- All other criteria clean: no further deductions
+- AC lines without evidence: 0 → no deduction
+- Lint violations introduced: 0 (zero files changed) → no deduction
+- AC quality ≤ 3: No (4/5) → no deduction
+- Missing reviewer evidence: No → no deduction
+- Full-suite failures in task scope: 0 → no deduction
 
-### Confidence: 0.98
+### Confidence: 1.00
 ### Action: archive
-
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| 6961bc87 | test | tests/test_revision_counter_809.py | #809 |
-| 9b39b7cd | chore | kanban tasks, archive, research doc | #809, #810 |
