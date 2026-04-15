@@ -468,7 +468,9 @@ class KanbanEngine:
         if self._activity_log_path:
             if blocked is not None and old_blocked != record.blocked:
                 if record.blocked:
-                    log_activity(self._activity_log_path, "block", record.id, block_reason or "", actor=self._agent_name)
+                    log_activity(
+                        self._activity_log_path, "block", record.id, block_reason or "", actor=self._agent_name
+                    )
                 else:
                     log_activity(self._activity_log_path, "unblock", record.id, "", actor=self._agent_name)
             else:
@@ -513,8 +515,10 @@ class KanbanEngine:
         if status == "archived":
             self._archive_dir.mkdir(parents=True, exist_ok=True)
             dest = self._archive_dir / task_path.name
-            _move_file(task_path, dest)
             record.status = "archived"
+            record.updated = datetime.now(tz=UTC).isoformat()
+            write_task(task_path, record)
+            _move_file(task_path, dest)
         else:
             record.status = status
             record.updated = datetime.now(tz=UTC).isoformat()
