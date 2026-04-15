@@ -1,13 +1,13 @@
 # Critic Voice Agent — Research
 
-> **Owning task:** #644 — P4-04: Create critic-voice.agent.md
+> **Owning task:** #644 — P4-04: Create ideation-critic.agent.md
 > **Date:** 2026-04-06 **Status:** Complete
 
 ## 1. Context and Question
 
-The Ideator framework (thinking companion) requires a Critic subagent that provides genuine adversarial challenge to positions held by domain voices and the Mediator. The Critic runs on a **different model** (GPT-5.4) than all other voices (Opus) to produce cognitive diversity — not just different arguments, but fundamentally different reasoning patterns.
+The Ideator framework (thinking companion) requires a Critic subagent that provides genuine adversarial challenge to positions held by domain opinions and the Mediator. The Critic runs on a **different model** (GPT-5.4) than all other voices (Opus) to produce cognitive diversity — not just different arguments, but fundamentally different reasoning patterns.
 
-**Core question:** Can a single agent file serve both standalone checks (Mediator-invoked after M1/M2/M4/M5) and embedded critic loops (invoked by domain voices during deliberation)?
+**Core question:** Can a single agent file serve both standalone checks (Mediator-invoked after M1/M2/M4/M5) and embedded critic loops (invoked by domain opinions during deliberation)?
 
 ## 2. Sources Studied
 
@@ -26,9 +26,9 @@ The Ideator framework (thinking companion) requires a Critic subagent that provi
 
 The two invocation scopes differ only in **input context**, not agent config:
 
-| Aspect | Standalone (Mediator) | Embedded (Domain Voice) |
+| Aspect | Standalone (Mediator) | Embedded (Domain Opinion) |
 |--------|----------------------|------------------------|
-| Invoker | ideator.agent.md | architect-voice, data-voice, etc. |
+| Invoker | ideator.agent.md | ideation-architect, ideation-data, etc. |
 | Input | Problem/outcomes/approach/Brief + "What's wrong?" | Voice's current position + "Challenge me" |
 | Reads | `context.md` from Working Dir | `context.md` + position passed in prompt |
 | Returns | Challenges to Mediator (no file writes) | Challenges to invoking voice (no file writes) |
@@ -40,7 +40,7 @@ The two invocation scopes differ only in **input context**, not agent config:
 
 | Option | Description | KISS | Maintainability | Spec Alignment |
 |--------|-------------|------|-----------------|----------------|
-| **A: Single file, dual-scope** | One `critic-voice.agent.md`, scope from input | ✓ | One file | Explicit spec requirement |
+| **A: Single file, dual-scope** | One `ideation-critic.agent.md`, scope from input | ✓ | One file | Explicit spec requirement |
 | B: Split files per scope | Separate standalone + embedded agents | ✗ | Two files, shared logic | Contradicts spec |
 | C: Extend existing Challenger | Reuse `challenger.agent.md` | ✗ | Pollutes pipeline agent | Wrong model, wrong domain |
 
@@ -60,7 +60,7 @@ The two invocation scopes differ only in **input context**, not agent config:
 |-----------|-----------|--------|
 | Pipeline stage | Execution (review, research) | Ideation (pre-pipeline) |
 | Model | Claude Opus 4.6 | GPT-5.4 |
-| Invoked by | Researcher, reviewer, architect | Domain voices, Mediator |
+| Invoked by | Researcher, reviewer, architect | Domain opinions, Mediator |
 | Input | Task verdicts + AC + evidence | Positions, outcomes, approaches |
 | Purpose | Stress-test pipeline decisions | Challenge thinking-in-progress |
 

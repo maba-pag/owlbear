@@ -1,10 +1,10 @@
 ---
 id: 767
 title: 'P1-14: Impl — Updated extraction prompt'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:56:34.222398+00:00'
-updated: '2026-04-12T00:44:00.544514+00:00'
+updated: '2026-04-15T10:34:09.480281+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -173,36 +173,29 @@ Confidence: **.95** → **PASS #767 -> docs**
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/767-*` files found)
-[[2026-04-12]]
+[[2026-04-15]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: descriptive hint per corporate entity type | `llm_extractor.py:29-40` — each of requirement/solution/procedure/policy/standard has bullet-point guidance; `TestFromAC_CorpEntityDescriptiveHints` 5/5 PASSED | PASS |
-| AC2: contrastive coreference with CONCEPT | `llm_extractor.py:29-40` — "distinct from a concept", "not a generic concept", "unlike a concept", "rather than concept"; `TestFromAC_CorpEntityContrastiveConcept` 2/2 PASSED | PASS |
-| AC3: relation guidance for GOVERNS, SUPERSEDES_VERSION | `llm_extractor.py:49-53` — both named as descriptive guidance beyond enum list; `TestFromAC_RelationTypeDescriptiveGuidance` 2/2 PASSED | PASS |
+| AC1: Descriptive hint per corporate entity type | `llm_extractor.py:29-40` — 5 types with bullet descriptions; `TestFromAC_CorpEntityDescriptiveHints` 5/5 PASS | PASS |
+| AC2: Contrastive coreference with CONCEPT | `llm_extractor.py:29-40` — "distinct from a concept", "not a generic concept", "unlike a concept", "rather than concept"; `TestFromAC_CorpEntityContrastiveConcept` 2/2 PASS | PASS |
+| AC3: Relation guidance for GOVERNS, SUPERSEDES_VERSION | `llm_extractor.py:49-53` — both with named guidance; `TestFromAC_RelationTypeDescriptiveGuidance` 2/2 PASS | PASS |
 
 ### Test Results
-- pytest (task-scoped): 50/50 passed (9 AC + 41 regression in test_authenticated_content_pipeline_751.py)
-- pytest (full suite): 3580 passed, 275 failed — all failures in unrelated modules (kanban, analysis, lint-guard, orchestrator, bookmark); 0 failures in task scope
-- ruff: clean (exit 0)
+- pytest (task-scoped): 50 passed (9 AC + 41 regression), 0 failed
+- pytest (full suite): 4386 passed, 192 failed — all failures pre-existing, unrelated to task scope (kanban server AttributeError ~84, analysis/lint-guard assertions, missing lint-changed.ps1, AppContext signature changes). 3 knowledge_integration failures caused by upstream LLMExtractor refactor (#875), not prompt text.
+- ruff: 3 violations, all outside task scope (engine.py E501, test_refresh_sharepoint_879.py RUF002/UP024). Task files clean.
 
-### Architect Quality: 5/5
-AC lines were specific, mechanically verifiable via strip-and-check tests, single-responsibility scope. No builder improvisation needed.
+### Architect Quality: 4/5
+AC was mechanically testable via strip-and-check technique. Not explicitly listed in original task body but clearly defined through architecture review's "AC Clarification for Builder" section. Minor gap: original task body relied on implicit AC from pre-existing tests rather than stating AC lines explicitly.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (-.02 each) = 0
-- Lint violations: 0 (-.05) = 0
-- AC quality ≤ 3: no (-.03) = 0
-- Missing reviewer evidence: no (-.02) = 0
-- Full-suite failures in task scope: 0 (-.05) = 0
-- Total deductions: 0
+- AC lines without evidence: 0 (all 3 verified) → no deduction
+- Lint violations in scope: 0 → no deduction
+- AC quality 4 > 3 → no deduction
+- Reviewer evidence: present, detailed, PASS at .95 → no deduction
+- Full-suite failures in scope: 0 → no deduction
 
 ### Confidence: 1.00
 ### Action: archive
-
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| 8732feba | feat | llm_extractor.py | #767 (builder) |
-| 1061434b | chore | 767 kanban body | #767 (auditor) |

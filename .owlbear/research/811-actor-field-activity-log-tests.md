@@ -18,7 +18,7 @@ Task #811 is the RED phase for adding an `actor` field to `activity.jsonl` entri
 | S3 | `tests/test_kanban_engine_activity.py` | Codebase | 0.9 — Existing RED tests for 4-field schema |
 | S4 | `tests/test_kanban_engine_activity_wiring_728.py` | Codebase | 0.9 — Existing engine ↔ log wiring tests |
 | S5 | `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md` | Codebase | 0.9 — Brief specifying actor field design |
-| S6 | `.owlbear/briefs/draft-kanban-web-gui-prep/synthesis.md` | Codebase | 0.8 — Voice panel consensus on actor field |
+| S6 | `.owlbear/briefs/draft-kanban-web-gui-prep/synthesis.md` | Codebase | 0.8 — Ideation panel consensus on actor field |
 | S7 | PocketPaw audit log (`pocketpaw.xyz/security/audit-log`) | External | 0.7 — JSONL audit log with `channel` field for source identity |
 | S8 | tundere-ledger (`pypi.org/project/tundere-ledger`) | External | 0.6 — Python JSONL audit log with `actor_name` parameter |
 

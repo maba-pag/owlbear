@@ -2,6 +2,73 @@
 
 External repos and resources studied during OwlBear development.
 
+## Copilot SDK vs OpenAI-Compat Endpoint Research (Task #887)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| github-copilot-sdk PyPI | <https://pypi.org/project/github-copilot-sdk/> | MIT | SDK API surface (v0.2.2): session-based event-driven chat, no `response_format` support, BYOK, auth methods, tool definitions | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| GitHub Copilot SDK repo | <https://github.com/github/copilot-sdk> | MIT | Architecture (JSON-RPC ↔ Copilot CLI), models, FAQ (auth, billing, BYOK), getting-started guide | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| copilot-api (ericc-ch) | <https://github.com/ericc-ch/copilot-api> | MIT | Reverse-engineered OpenAI-compat proxy for Copilot: endpoints (`/v1/chat/completions`, `/v1/models`), auth flow, rate-limit controls, GitHub ToS/abuse-detection warnings | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| GitHub Copilot Requests docs | <https://docs.github.com/en/copilot/concepts/billing/copilot-requests> | N/A | Premium request model, model multipliers (GPT-4.1 = 0×, GPT-5 mini = 0× on paid plans), rate limits, quota behavior | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+
+## Copilot SDK Monitoring Check (Task #889)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Copilot SDK CHANGELOG.md | <https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md> | v0.2.0–v0.2.2 changelog: confirmed no `response_format` or completions API added | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+| Copilot SDK Issue #857 | <https://github.com/github/copilot-sdk/issues/857> | "Force structured output" — open feature request, no milestone | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+| PyPI github-copilot-sdk v0.2.2 | <https://pypi.org/project/github-copilot-sdk/> | SDK API surface: session-based, no `response_format`, BYOK `wire_api` field (custom providers only) | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+
+## Copilot Auth Port Feasibility (Task #888)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| github-copilot-sdk PyPI (v0.2.2 recheck) | <https://pypi.org/project/github-copilot-sdk/> | Confirmed: still no `response_format`, BYOK routes through CLI subprocess, session/event API only | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
+| copilot-api proxy (ericc-ch, recheck) | <https://github.com/ericc-ch/copilot-api> | 3.7k stars, explicit abuse-detection warnings added, confirms risk is actively enforced | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
+| Graphicator | `C:\Users\p362329\OneDrive\Coding\Projects\tool.graphicator` | (own project) | Device-flow OAuth implementation ported to `copilot_auth.py`: `request_device_code`, `poll_for_access_token`, `exchange_for_copilot_token`, token cache, editor headers | `serve/knowledge/src/owlbear_knowledge/copilot_auth.py` | 2026-04-15 |
+
+## Entity Name Canonicalization (Task #865)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| ScrapingAnt: Deduplication & Canonicalization in Scraped KGs | <https://scrapingant.com/blog/data-deduplication-and-canonicalization-in-scraped> | Blocking/candidate generation pipeline; canonical_name as blocking key; rule-based vs ML vs hybrid approaches | .owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
+| SpotIntelligence: Entity Resolution Techniques | <https://spotintelligence.com/2024/01/22/entity-resolution/> | Rule-based matching, string similarity measures, clustering approaches for entity deduplication | .owlbear/research/865-entity-name-canonicalization.md | 2026-04-14 |
+
+## StructuredExtractor Replacement Research (Task #874)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| OpenAI Python SDK — Structured Outputs | <https://developers.openai.com/api/docs/guides/structured-outputs> | Native `response_format` with Pydantic JSON schema, `AsyncOpenAI` async client | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| LiteLLM — Structured Outputs (JSON Mode) | <https://docs.litellm.ai/docs/completion/json_mode> | `response_format` with Pydantic models, multi-provider support, dep count analysis | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| Instructor — Structured LLM Outputs | <https://python.useinstructor.com/> | `response_model` abstraction, retry/validation, Pydantic integration | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+| Kuboid — LiteLLM Supply Chain Attack March 2026 | <https://www.kuboid.in/blog/litellm-supply-chain-attack-march-2026-explained> | TeamPCP/LAPSUS$ credential stealer in v1.82.7-8, releases paused | .owlbear/research/874-structuredextractor-replacement.md | 2026-04-14 |
+
+## LLMExtractor Implementation Research (Task #875)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| OpenAI Structured Outputs guide | <https://developers.openai.com/api/docs/guides/structured-outputs> | Strict JSON schema, `response_format`, Pydantic support, refusal handling | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
+| openai-python SDK helpers.md | <https://github.com/openai/openai-python/blob/main/helpers.md> | `chat.completions.parse()` API, auto-schema from Pydantic, `ParsedChatCompletion` | .owlbear/research/875-llmextractor-openai-implementation.md | 2026-04-14 |
+
+## SharePoint REST API Parallel Path Research (Task #773)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Microsoft Graph SharePoint API overview | <https://learn.microsoft.com/en-us/graph/api/resources/sharepoint?view=graph-rest-1.0> | Site/list/drive API surface, URL addressing patterns | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Graph API sitePage + canvasLayout | <https://learn.microsoft.com/en-us/graph/api/sitepage-get?view=graph-rest-1.0> | Page content extraction via $expand=canvasLayout, web part innerHtml, permissions (Sites.Read.All) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Sites.Selected delegated auth announcement | <https://devblogs.microsoft.com/microsoft365dev/sharepoint-now-supports-delegated-sites-selected-authentication/> | Granular per-site delegated permission scope (Feb 2024) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| Office365-REST-Python-Client (vgrem) | <https://pypi.org/project/Office365-REST-Python-Client/> | Python library for SharePoint REST + Graph API, MSAL integration, dep analysis | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+| MSAL Python docs | <https://msal-python.readthedocs.io/en/latest/> | Auth library for Azure AD token acquisition (device-code, interactive, client-credentials) | .owlbear/research/773-sharepoint-rest-api-parallel-path.md | 2026-04-14 |
+
+## GraphContentFetcher Implementation Research (Task #879)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| canvasLayout v1.0 API reference | <https://learn.microsoft.com/en-us/graph/api/resources/canvaslayout?view=graph-rest-1.0> | canvasLayout resource structure, horizontalSections/verticalSection relationships | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| SE: retrieve modern SP page content | <https://sharepoint.stackexchange.com/questions/307632> | Community confirmation that $expand=canvasLayout works in v1.0 for modern pages | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| msgraph-sdk-python (v1.55.0) | <https://github.com/microsoftgraph/msgraph-sdk-python> | SDK dep analysis: kiota-*, azure-core, 15+ transitive deps — confirms Option A preferred | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+| azure-identity vs msal comparison | <https://www.datalineo.com/post/power-bi-rest-api-with-python-part-iii-azure-identity> | azure-identity wraps msal, adds azure-core layer; raw msal is lighter | .owlbear/research/879-graphcontentfetcher-implementation.md | 2026-04-14 |
+
 ## Edge CDP Validation Spike (Task #752)
 
 | Source | URL | What | Where Used | Date |
@@ -32,11 +99,39 @@ External repos and resources studied during OwlBear development.
 | Python datetime docs — fromisoformat | <https://docs.python.org/3/library/datetime.html> | fromisoformat() handles arbitrary fractional digits (truncated to 6); aware comparison normalizes to UTC | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
 | DEV Community — Sorting ISO 8601 timestamps | <https://dev.to/adnauseum/sorting-iso-8601-timestamps-5am2> | Confirms ISO 8601 string sort fails across different timezone offsets | .owlbear/research/fix-timestamp-sort-816.md | 2026-04-12 |
 
+## Source-Aware Candidate Filtering (Task #863)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Kumar et al. (2025) — Enterprise KG multi-source integration | <https://arxiv.org/abs/2503.07993> | Cross-source entity matching via embedding + LLM mapper; context for sort-first prioritization approach | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Saeedi et al. (2020) — Incremental multi-source entity resolution | ESWC 2020 proceedings (no URL in research doc) | Multi-source entity resolution for KG completion; context for cross-source bucket strategy | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Kumar et al. (2025) — LLM-Powered KGs for Enterprise Intelligence | <https://arxiv.org/html/2503.07993v1> | Enterprise KG integrating multiple data sources via LLM entity extraction and embedding-based matching | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+| Saeedi et al. (2020) — Incremental Multi-source Entity Resolution | <https://dbs.uni-leipzig.de/index.php/research/publications/incremental-multi-source-entity-resolution-for-knowledge-graph-completion> | Multi-source entity clustering for KG completion; source-order-independent resolution | .owlbear/research/863-source-aware-candidate-filtering.md | 2026-04-14 |
+
+## MCP Browser Session Management (Task #837)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright Page API | <https://playwright.dev/python/docs/api/class-page> | `page.goto()`, `page.locator().click/fill/select_option()`, `page.content()`, `page.locator("body").aria_snapshot()` — page interaction patterns for navigate/click/type/select/read_text/snapshot tools | `serve/mcp-browser/src/owlbear_mcp_browser/server.py` | 2026-04-12 |
+
 ## MCP Browser Server Research (Task #771)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | ToolAnnotations API, Context access, error handling patterns, tool decorator args | .owlbear/research/771-mcp-browser-server.md | 2026-04-11 |
+
+## MCP Browser ctx Refactor (Task #836)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP Dependency Injection Documentation | <https://gofastmcp.com/servers/dependency-injection> | `ctx: Context` auto-injection pattern, `request_context.lifespan_context` access for tools | .owlbear/research/836-mcp-browser-ctx-refactor.md | 2026-04-12 |
+
+## Playwright Dep Bump for aria_snapshot (Task #855)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright Python Release Notes | <https://playwright.dev/python/docs/release-notes> | `page.aria_snapshot()` introduced in v1.59; `locator.aria_snapshot()` in v1.49 | .owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
+| PyPI playwright Release History | <https://pypi.org/project/playwright/#history> | Latest Python release is 1.58.0 (2026-01-30); v1.59 not yet published | .owlbear/research/855-playwright-dep-bump.md | 2026-04-13 |
 
 ## Excalidraw Skill Expansion (Task #743)
 
@@ -67,7 +162,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Playwright `connect_over_cdp` API | <https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp> | API verification: is_local (v1.58+), 30s timeout, default context pattern | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
 | Chrome 136 remote-debugging-port restriction | <https://developer.chrome.com/blog/remote-debugging-port> | Verification: `--user-data-dir` to non-default dir mandatory from Chrome 136+ | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
-| Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/security.md | HR#4: CDP binds 127.0.0.1 only, no wildcard origins — identified gap in #752 design | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
+| Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/security.md | HR#4: CDP binds 127.0.0.1 only, no wildcard origins — identified gap in #752 design | .owlbear/research/cdp-spike-impl-776.md | 2026-04-10 |
 
 ## Phase 0 CDP Spike Research (Task #774)
 
@@ -207,12 +302,12 @@ External repos and resources studied during OwlBear development.
 | v1 improvement_proposals.py | `v1/src/owlbear/core/improvement_proposals.py` | Prior art: descriptive-only proposals from EventStore metrics, never consumed automatically | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
 | #31 research: self-improvement analysis pipeline | `.owlbear/research/self-improvement-analysis-pipeline.md` | Original design: 4 detectors, AnalysisProposal schema, CLI entrypoint | .owlbear/research/analysis-detector-wiring.md | 2026-04-08 |
 
-## Voice Panel Handbook (Task #652)
+## Ideation Panel Handbook (Task #652)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Six Thinking Hats (de Bono 1985) | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Deliberate perspective-shifting with distinct roles — theoretical basis for multi-voice panel | .owlbear/research/voice-panel-handbook.md | 2026-04-07 |
-| Blackboard design pattern (Lalanda 1997) | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Shared workspace + specialized knowledge sources — architectural precedent for Working Directory comms | .owlbear/research/voice-panel-handbook.md | 2026-04-07 |
+| Six Thinking Hats (de Bono 1985) | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Deliberate perspective-shifting with distinct roles — theoretical basis for multi-ideation panel | .owlbear/research/ideation-panel-handbook.md | 2026-04-07 |
+| Blackboard design pattern (Lalanda 1997) | <https://en.wikipedia.org/wiki/Blackboard_(design_pattern)> | Shared workspace + specialized knowledge sources — architectural precedent for Working Directory comms | .owlbear/research/ideation-panel-handbook.md | 2026-04-07 |
 
 ## Briefs Directory Structure (Task #642)
 
@@ -246,7 +341,7 @@ External repos and resources studied during OwlBear development.
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
-| Six Thinking Hats — Blue Hat synthesis role | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Blue Hat: "The Big Picture & Managing" — facilitator aggregating all thinking directions into cohesive summary (de Bono 1985) | .owlbear/research/pragmatist-voice-agent.md | 2026-04-06 |
+| Six Thinking Hats — Blue Hat synthesis role | <https://en.wikipedia.org/wiki/Six_Thinking_Hats> | Blue Hat: "The Big Picture & Managing" — facilitator aggregating all thinking directions into cohesive summary (de Bono 1985) | .owlbear/research/ideation-pragmatist-agent.md | 2026-04-06 |
 
 ## Blocked-Task Scan for Decision-Request Notifications (Task #348)
 
@@ -3922,3 +4017,11 @@ External repos and resources studied during OwlBear development.
 | sp-dev-docs#6380 — CSS class instability | <https://github.com/SharePoint/sp-dev-docs/issues/6380> | SharePoint replacing semantic CSS classes (`CanvasZone`, `ControlZone`) with hashed names; confirms `ms-` prefix classes from Fluent UI more stable | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
 | Fluent UI v8 CSS class catalog | <https://github.com/Zerg00s/sp-modern-classes> | Community-maintained list of reusable SharePoint Online CSS classes — `ms-Breadcrumb`, `ms-Persona`, `ms-DateTimeField` patterns identified | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
 | trafilatura core functions docs | <https://trafilatura.readthedocs.io/en/latest/corefunctions.html> | `prune_xpath` parameter — supports custom XPath for pre-extraction element removal (evaluated as alternative approach, not adopted) | .owlbear/research/829-sharepoint-normalization-cleaner.md | 2026-04-12 |
+
+## Azure AD App Registration Request (Task #878)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Graph API `sitePage.Get` permissions | <https://learn.microsoft.com/en-us/graph/api/sitepage-get> | Confirmed `Sites.Read.All` (delegated) as least privileged permission for sitePage read; verified `$expand=canvasLayout` query parameter | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+| Entra ID app registration quickstart | <https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app> | App registration steps, supported account types, admin consent process | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+| OAuth 2.0 device authorization grant | <https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code> | Device-code flow protocol: `/devicecode` endpoint, polling, token response format, Conditional Access considerations | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |

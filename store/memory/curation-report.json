@@ -1,5 +1,260 @@
 ﻿[
   {
+    "cycle": "2026-04-15T-periodic-24",
+    "note": "Periodic curation cycle 24. Channel A: MCP DB empty (0 rows, no entries in any state). Channel B: inbox empty. Repo memory root clean. Task body scan: #765 (done), #836 (done), #886 (review), #887 (done). No Channel A entries to process. 2 MEDIUM carries pruned (3rd carry, no recurrence): wip-preservation-selective-staging, msal-sync-blocks-async-event-loop (MSAL code deleted in #886 — doubly confirmed dead). 1 MEDIUM carry continued (3rd carry, borderline recurrence in #836 AC3 test-spec conflict): cross-task-testfromac-contract-conflict. 1 new MEDIUM added from #836 (static-analysis reviewer misread test fixture helper for 4 cycles). 0 promotions (no HIGH-threshold findings). SECURITY-URGENT (18th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 8,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "carry:cycle23:852-builder+test-writer:cross-task-testfromac-contract-conflict",
+        "content_preview": "New #852 AC (fetcher=None → ToolError) contradicted existing #775 TestFromAC_* test. #836 AC3: click/type/select test-spec expected str return but impl raised ToolError; needed arch re-eval via task #877.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 3rd carry. Partial recurrence in #836: AC3 tests (click/type/select) used _make_mcp_ctx_with_mock_page(), not _make_mcp_ctx(), creating test-spec vs implementation tension resolved via architecture review escalation (task #877). Pattern: TestFromAC design conflicts with implementation requirements require arch review, not builder override. Promote at 4th carry if recurs again."
+      },
+      {
+        "entry_id": "inline:#836-reviewer:static-analysis-test-fixture-misread",
+        "content_preview": "4 consecutive reviewer passes incorrectly identified click/type/select AC3 tests as using _make_mcp_ctx() (page=None) when actual file used _make_mcp_ctx_with_mock_page(). Caused false FAIL verdicts; resolved only by live test execution.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Static-only reviewers without test execution systematically misidentify fixture helpers when there are multiple helpers with similar names. The error persisted through 4 review cycles (passes 1-4) until architecture review ran tests live. Non-obvious (static path trace looks identical). Keep one cycle; promote if recurs in another task."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "carry:cycle23:882-builder:wip-preservation-selective-staging",
+        "content_preview": "Builder had uncommitted WIP (#865) while needing to commit a one-line change (#882). Used backup/restore + selective staging.",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry (cycles 22-24), no recurrence in #765/#836/#886/#887. Single task-specific workaround. Pruning."
+      },
+      {
+        "entry_id": "carry:cycle23:883-reviewer:msal-sync-blocks-async-event-loop",
+        "content_preview": "_acquire_token() is synchronous inside async def fetch(); MSAL network calls block the event loop. Tests pass because MSAL is mocked.",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry (cycles 22-24), no recurrence. MSAL code deleted entirely in #886 (graph_fetcher.py removed, msal dep removed from pyproject.toml). Doubly confirmed dead. Pruning."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-18TH-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 18 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
+    "cycle": "2026-04-15T-periodic-23",
+    "note": "Periodic curation cycle 23 (user label: cycle 15). Channel A: MCP DB 0 pending entries. Channel B: inbox empty. Task body scan: #884–#885 (SHAREPOINT_API dispatch, both done). 3 MEDIUM carries from cycle 22 hit 2nd occurrence — promoted: (1) TestFromAC lint errors propagate (promoted to h-pytest-and-linting Known Gotchas); (2) parent TestFromAC freezes child API kwarg names (promoted to r-pipeline-protocol § TestFromAC API-Name Freeze); (3) pre-existing GREEN impl contaminates RED baseline (promoted to r-pipeline-protocol § Child GREEN Builders). 2 MEDIUM carries hit 3rd carry with no recurrence — pruned: 829-auditor-ac-copy-paste, 846-arch-redundant-without-test-run. 3 MEDIUM entries continue to 2nd carry: wip-preservation-selective-staging, msal-sync-blocks-async-event-loop, cross-task-testfromac-contract-conflict. SECURITY-URGENT (17th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 8,
+    "promotions": [
+      {
+        "entry_id": "carry:cycle22:884-test-writer:testfromac-lint-errors-propagate",
+        "content_preview": "Test-writer introduced ruff errors (RUF002 EN dash, UP024 IOError) inside TestFromAC_* class body; builders cannot modify",
+        "recommendation": "approve",
+        "reason": "HIGH — 2nd occurrence (cycle 22 first; cycle 23 confirmed in #884 reviewer report: 2 pre-existing ruff violations in TestFromAC_* persisting through full pipeline). Promoted to h-pytest-and-linting Known Gotchas."
+      },
+      {
+        "entry_id": "carry:cycle22:884-arch:parent-testfromac-locks-child-api-naming",
+        "content_preview": "Parent TestFromAC_* test used graph_fetcher kwarg; child task canonicalized to graph_content_fetcher; builder needed backward-compat alias",
+        "recommendation": "approve",
+        "reason": "HIGH — 2nd occurrence (cycle 22 first; #884-#885 pipeline confirmed kwarg-name lock in full detail). Promoted to r-pipeline-protocol § TestFromAC API-Name Freeze."
+      },
+      {
+        "entry_id": "carry:cycle22:879+883+885-builder:pre-existing-impl-child-green-tasks",
+        "content_preview": "Parent #879 builder implemented full feature before decomposition; child GREEN tasks (#882, #883, #885) found code already in place; RED re-verification was skipped",
+        "recommendation": "approve",
+        "reason": "HIGH — 2nd occurrence (cycle 22 first; #884 reviewer found AC5 violated: 1/19 tests passing in RED state due to pre-existing constructor param from prior pass). Promoted to r-pipeline-protocol § Child GREEN Builders."
+      }
+    ],
+    "kept_medium": [
+      {
+        "entry_id": "carry:cycle22:882-builder:wip-preservation-selective-staging",
+        "content_preview": "Builder had uncommitted WIP (#865 changes) while needing to commit a one-line change (#882). Used backup/restore + selective staging.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
+      },
+      {
+        "entry_id": "carry:cycle22:883-reviewer:msal-sync-blocks-async-event-loop",
+        "content_preview": "_acquire_token() is synchronous inside async def fetch(); MSAL network calls block the event loop in production. Tests pass because MSAL is mocked.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
+      },
+      {
+        "entry_id": "carry:cycle22:852-builder+test-writer:cross-task-testfromac-contract-conflict",
+        "content_preview": "New #852 AC (fetcher=None → ToolError) contradicted existing #775 TestFromAC_* test (fetcher=None → success). Builder REJECTed correctly.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "carry:cycle21:829-auditor-ac-copy-paste-without-research-verification",
+        "content_preview": "AC writer may copy body bullet points into AC without verifying function attribution or completeness against research findings",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry (cycles 21-23), no recurrence in #879–#885. Single task-specific pattern. Pruning."
+      },
+      {
+        "entry_id": "carry:cycle21:846-arch-declared-redundant-without-test-run",
+        "content_preview": "Arch review + research declared 'all AC items already implemented' but builder found failing tests due to Pydantic subtlety",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry (cycles 21-23), no recurrence in #879–#885. Pruning."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-17TH-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 17 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
+    "cycle": "2026-04-15T-periodic-22",
+    "note": "Periodic curation cycle 22 (user label: cycle 10). Channel A: MCP DB empty (0 rows total). Channel B: inbox empty. Task body scan: #879–#885 (GraphContentFetcher pipeline, all in docs/review) and #852 (browser fetcher wiring, in review). 1 HIGH promoted: edit_task-unavailable-stale-depends_on — 3rd independent occurrence (#758, #787, #879 each in different pipeline context, all reporting agents could not apply identified depends_on correction). Promoted to r-pipeline-protocol §2 Follow-up Task Quality as `depends_on` Correction Pattern. 6 new MEDIUM entries added (1st carry each). 2 MEDIUM carries continued (2nd carry). 1 MEDIUM carry pruned (3rd carry, no recurrence: tdd-test-task-scope-overlap-sibling-parents). SECURITY-URGENT (16th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 9,
+    "promotions": [
+      {
+        "entry_id": "inline:#758+#787+#879:edit_task-unavailable-stale-depends_on",
+        "content_preview": "Architects and researchers identify incorrect depends_on metadata but cannot apply corrections — edit_task/update_task not always available; stale dependency metadata propagates",
+        "recommendation": "approve",
+        "reason": "HIGH — 3 independent occurrences across different pipeline contexts (#758 architect, #787 architect, #879 researcher). Recurring, actionable, non-obvious. Promoted to r-pipeline-protocol §2 as `depends_on` Correction Pattern with DEPENDS_ON-CORRECTION tag guidance."
+      }
+    ],
+    "kept_medium": [
+      {
+        "entry_id": "inline:#882-builder:wip-preservation-selective-staging",
+        "content_preview": "Builder had uncommitted WIP (#865 changes) in working tree while needing to commit a one-line change (#882). Used backup/restore + selective staging.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable workaround pattern for staging around WIP. Keep one cycle; promote if recurs."
+      },
+      {
+        "entry_id": "inline:#883-reviewer:msal-sync-blocks-async-event-loop",
+        "content_preview": "_acquire_token() is synchronous inside async def fetch(); MSAL network calls block the event loop in production. Tests pass because MSAL is mocked.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (reviewer/builder should flag sync calls in async methods). Non-obvious (tests pass cleanly). Keep one cycle; promote if recurs."
+      },
+      {
+        "entry_id": "inline:#884-arch:parent-testfromac-locks-child-api-naming",
+        "content_preview": "Parent task test-writer used graph_fetcher kwarg in TestFromAC_*; child tasks canonicalized to graph_content_fetcher; builder had to implement backward-compat alias because TestFromAC_* cannot be modified.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (planners/architects should note that parent TestFromAC_* tests freeze parameter names for child tasks). Keep one cycle."
+      },
+      {
+        "entry_id": "inline:#884-test-writer:testfromac-lint-errors-propagate",
+        "content_preview": "Test-writer introduced ruff errors (RUF002 EN dash, UP024 IOError) inside TestFromAC_* class body; builders cannot modify TestFromAC_* so these erros persist indefinitely.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (test-writers must run ruff check before committing test files). Keep one cycle."
+      },
+      {
+        "entry_id": "inline:#879+#883+#885-builder:pre-existing-impl-child-green-tasks",
+        "content_preview": "Parent #879 builder implemented full feature before decomposition. Child GREEN tasks (#882, #883, #885) found code already in place. RED re-verification was skipped in #883.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (child GREEN builders should still independently verify RED precondition even when code appears pre-existing). Keep one cycle."
+      },
+      {
+        "entry_id": "inline:#852-builder+test-writer:cross-task-testfromac-contract-conflict",
+        "content_preview": "New #852 AC (fetcher=None → ToolError) contradicted existing #775 TestFromAC_* test (fetcher=None → success). Builder REJECTed correctly; test-writer updated #775 test with mock fetcher.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Single occurrence. Correct pipeline behavior demonstrated (REJECT → test-writer fix → retry). Actionable if recurs: builder should REJECT with exact fix instructions when TestFromAC_* conflict is irresolvable. Keep one cycle."
+      },
+      {
+        "entry_id": "carry:cycle21:829-auditor-ac-copy-paste-without-research-verification",
+        "content_preview": "AC writer may copy body bullet points into AC without verifying function attribution or completeness against research findings",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 2nd carry. No direct recurrence in #879–#885/#852. Keep one more cycle; prune at 3rd carry if still no recurrence."
+      },
+      {
+        "entry_id": "carry:cycle21:846-arch-declared-redundant-without-test-run",
+        "content_preview": "Arch review + research declared 'all AC items already implemented' but builder found failing tests due to Pydantic subtlety",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 2nd carry. No recurrence in #879–#885. Keep one more cycle; prune at 3rd carry if still no recurrence."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "carry:cycle21:tdd-test-task-scope-overlap-sibling-parents",
+        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module — caught by architect pass 1",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry, no new occurrence in #876–#885. Single task-specific pattern. Pruning."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-16TH-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 16 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
+    "cycle": "2026-04-14T-periodic-21",
+    "note": "Periodic curation cycle 21. Channel A: owlbearMemory MCP tools unavailable (consistent cycles 3-21). Channel B: 1 new inbox entry (829-auditor.md — AC copy-paste from body without research verification). Task body scan: #798–#875 (all done tasks since cycle 20). 1 HIGH promoted: stale pytest cache in retry cycles — 2 independent observations (#857 reviewer pass 2, #871 builder cycles 2-3), both reported false '0 failed' while a test was actually failing; promoted to h-pytest-and-linting Known Gotchas. 3 cycle-19 MEDIUM carries pruned: sys-modules-pre-stub (3rd carry, no 2nd sighting), self-referential-scan-glob (3rd carry, no 2nd sighting), too-broad-import-scan-pattern (3rd carry, no 2nd sighting). 4 MEDIUM entries kept: 829-auditor AC quality (1st carry), 846-arch-redundant-without-test-run (1st carry), edit_task-unavailable (2nd carry), tdd-test-scope-overlap (2nd carry). SECURITY-URGENT (15th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 8,
+    "promotions": [
+      {
+        "entry_id": "inline:#857-reviewer-pass2+#871-builder-cycle2:stale-pytest-cache-retry-cycles",
+        "content_preview": "Stale .pytest_cache causes agents to report false '0 failed' in retry cycles — seen in #857 (reviewer) and #871 (builder)",
+        "recommendation": "approve",
+        "reason": "HIGH — 2 independent occurrences in same sprint (#857 reviewer pass 2 + #871 builder cycles 2-3). Actionable. Non-obvious. Promoted to h-pytest-and-linting SKILL.md Known Gotchas."
+      }
+    ],
+    "kept_medium": [
+      {
+        "entry_id": "inbox:829-auditor-ac-copy-paste-without-research-verification",
+        "content_preview": "AC writer may copy body bullet points into AC without verifying function attribution or completeness against research findings",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry (from 829-auditor.md inbox). Single observation. Actionable (planner should cross-check research doc for function attribution before writing AC). Keep one more cycle; promote if recurs."
+      },
+      {
+        "entry_id": "inline:#846-arch-declared-redundant-without-test-run",
+        "content_preview": "Arch review (2 passes) + research confirmed 'all AC items already implemented' but builder found 3 genuinely failing tests due to Pydantic field declaration subtlety",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Single occurrence. Arch review is not expected to run tests, but the 'fully redundant' fast-track guidance should prompt a test-run check. Keep one cycle."
+      },
+      {
+        "entry_id": "carry:cycle20:edit_task-unavailable-stale-depends_on",
+        "content_preview": "Architect flagged depends_on corrections (#758, #787) but edit_task not available — stale metadata proceeds uncorrected",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 2nd carry (1st in cycle 20). No new occurrence in #798–#875. Keep one more cycle; promote if seen again in a separate pipeline context."
+      },
+      {
+        "entry_id": "carry:cycle20:tdd-test-task-scope-overlap-sibling-parents",
+        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module — caught by architect pass 1",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 2nd carry (1st in cycle 20). No new occurrence in #798–#875. Keep one more cycle."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "carry:cycle19:sys-modules-pre-stub-uninstalled-deps",
+        "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py — enables per-function errors instead of collection-time ModuleNotFoundError",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry, no second occurrence across 3 cycles. Single task-specific fix. Pruning."
+      },
+      {
+        "entry_id": "carry:cycle19:self-referential-scan-glob",
+        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself — could never pass",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry, no second occurrence. Task-specific error. Pruning."
+      },
+      {
+        "entry_id": "carry:cycle19:too-broad-import-scan-pattern",
+        "content_preview": "re.compile(r'owlbear[._]voice') too broad — matched function names, docstrings, not just import statements; fixed with anchored pattern",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry, no second occurrence. Task-specific regex mistake. Pruning."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-15TH-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 15 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
     "cycle": "2026-04-10T-periodic-20",
     "note": "Periodic curation cycle 20. Channel A: MCP DB queried via sqlite — 0 pending entries (table empty; 0 total). Channel B: inbox empty. Task body scan: #758 (P1-04: Edge launcher + CDP connection manager, arch + test-writer notes) and #787 (owlbear_browser package scaffold, arch pass 1+2 + test-writer notes) are new since cycle 19. No tasks in range #777–#797 have builder/reviewer notes. Two new MEDIUM findings: (1) edit_task-unavailable pattern — architect agents flagged depends_on corrections in #758 and #787 but could not call edit_task; stale metadata proceeds uncorrected (co-related occurrence, keep one more cycle); (2) TDD test task scope overlap between sibling parent pipelines — #782 (parent #775) duplicated scope of #755 (parent #751), caught by architect on pass 1 (single occurrence, keep). One MEDIUM carry pruned: UnicodeDecodeError-as-ValueError silently suppressed (#731, cycle 18 carry) — 3 cycles, no second occurrence, prune. Four MEDIUM carries retained from cycle 19: sys.modules pre-stubbing, self-referential test glob, too-broad import scan, edit_task-unavailability (new). SECURITY-URGENT (14th carry): _web_read SSRF (CWE-918) still unaddressed — 14 curation cycles, no kanban task. USER ACTION REQUIRED.",
     "entries_processed": 4,

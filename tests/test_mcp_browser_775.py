@@ -19,7 +19,7 @@ All tests MUST FAIL at RED phase:
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -37,6 +37,19 @@ def _make_mock_server() -> MagicMock:
     server = MagicMock()
     server.remove_tool = MagicMock()
     return server
+
+
+def _make_mock_launcher() -> MagicMock:
+    """Return a mock PlaywrightLauncher that launches without opening a real browser."""
+    page = MagicMock()
+    page.close = AsyncMock()
+    context = MagicMock()
+    context.new_page = AsyncMock(return_value=page)
+    launcher = MagicMock()
+    launcher.context = context
+    launcher.launch = AsyncMock()
+    launcher.close = AsyncMock()
+    return launcher
 
 
 def _make_app_ctx(domains: list[str]) -> AppContext:
@@ -92,7 +105,8 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com,intranet.corp"}):
+        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com,intranet.corp"}), \
+             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
             async with app_lifespan(mock_server) as ctx:
                 # The context must carry an allowlist that permits listed domains
                 from owlbear_mcp_browser.allowlist import DomainAllowlist
@@ -106,7 +120,8 @@ class TestFromAC_DomainAllowlistEnvVar:
 
         mock_server = _make_mock_server()
         env_without = {k: v for k, v in os.environ.items() if k != "BROWSER_ALLOWED_DOMAINS"}
-        with patch.dict(os.environ, env_without, clear=True):
+        with patch.dict(os.environ, env_without, clear=True), \
+             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
             async with app_lifespan(mock_server) as ctx:
                 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
@@ -121,7 +136,8 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": ""}):
+        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": ""}), \
+             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
             async with app_lifespan(mock_server) as ctx:
                 with pytest.raises(PermissionError):
                     ctx.allowlist.check("https://any.domain.com/page")
@@ -132,7 +148,8 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "host-a.corp,host-b.corp"}):
+        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "host-a.corp,host-b.corp"}), \
+             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
             async with app_lifespan(mock_server) as ctx:
                 # Both listed domains must be permitted
                 ctx.allowlist.check("https://host-a.corp/page")  # must not raise
@@ -144,7 +161,8 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com"}):
+        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com"}), \
+             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
             async with app_lifespan(mock_server) as ctx:
                 ctx.allowlist.check("https://sharepoint.example.com/sites/IT")  # must not raise
                 with pytest.raises(PermissionError):
@@ -197,8 +215,14 @@ class TestFromAC_NavigateToolError:
         """navigate() does not raise when URL hostname is in ctx allowlist."""
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx(["sharepoint.example.com"]))
-        # Must not raise for the allowed domain
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(return_value="# Page")
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["sharepoint.example.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = _make_mcp_ctx(app_ctx)
+        # Must not raise for the allowed domain — the fetcher handles the actual fetch
         await navigate(ctx, url="https://sharepoint.example.com/sites/IT/page")
 
     @pytest.mark.asyncio
@@ -330,7 +354,8 @@ class TestFromAC_ApplyToolExclusions:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply:
+        with patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply, \
+             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
             async with app_lifespan(mock_server):
                 mock_apply.assert_called_once()
 
@@ -340,7 +365,8 @@ class TestFromAC_ApplyToolExclusions:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply:
+        with patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply, \
+             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
             async with app_lifespan(mock_server):
                 call_args = mock_apply.call_args
                 assert call_args is not None

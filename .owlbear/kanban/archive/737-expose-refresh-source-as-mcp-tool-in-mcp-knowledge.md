@@ -1,7 +1,7 @@
 ---
 id: 737
 title: Expose refresh_source as MCP tool in mcp-knowledge
-status: done
+status: archived
 priority: important
 created: '2026-04-10T04:24:32.3432406+02:00'
 updated: '2026-04-10T05:31:44.138886+00:00'

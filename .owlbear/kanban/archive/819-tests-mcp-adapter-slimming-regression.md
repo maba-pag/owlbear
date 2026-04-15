@@ -1,10 +1,10 @@
 ---
 id: 819
 title: Tests — MCP adapter slimming regression
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:22:34.474123+00:00'
-updated: '2026-04-12T12:15:09.555315+00:00'
+updated: '2026-04-15T12:38:08.254491+00:00'
 tags:
 - phase-2
 - type:test
@@ -226,36 +226,30 @@ None — no documentation changes required.
 
 ### Verdict
 No-impact: test-only deliverable with all-internal sources. Gate passed.
-[[2026-04-12]]
+
+[[2026-04-15]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: mcp-kanban imports from `owlbear_kanban`, no local engine files | `TestFromAC_AdapterImportBoundary` (8 tests) — 6 file-absence + 2 AST import checks; all pass | PASS |
-| AC2: all 8 MCP tools delegate + return correct types | `TestFromAC_AllToolsDelegateToEngine` (8 tests) — delegation + return type per tool; all pass | PASS |
-| AC3: `server.py` creates `KanbanEngine` from `owlbear_kanban` | `TestFromAC_EngineCreation` (3 tests) — identity, lifespan instantiation, kanban_dir arg; all pass | PASS |
-| AC4: diagnostic messages on all assertions | All 19 assertions carry diagnostic messages per arch review refinement; verified in source | PASS |
+| AC1: mcp-kanban imports from `owlbear_kanban`, no local engine files | `TestFromAC_AdapterImportBoundary` (8 tests) — 6 file-absence + 2 AST import checks, all pass | PASS |
+| AC2: all 8 MCP tools delegate + return correct types | `TestFromAC_AllToolsDelegateToEngine` (8 tests) — delegation via `assert_called_once()` + `isinstance` return type per tool | PASS |
+| AC3: `server.py` creates `KanbanEngine` from `owlbear_kanban` | `TestFromAC_EngineCreation` (3 tests) — bound-name identity, lifespan instantiation, kanban_dir arg | PASS |
+| AC4: diagnostic assertion messages (refined) | All 19 assertions carry diagnostic messages describing pre-slimming failure mode | PASS |
 
 ### Test Results
-- pytest (task): 19 passed, 0 failed
-- pytest (full suite): 304 failed, 3946 passed — all failures pre-existing (old `AppContext(kanban_bin=...)` interface from pre-#818 tests); zero failures in `test_mcp_adapter_slimming_819.py`
-- ruff: clean
+- pytest (full suite): 4384 passed, 194 failed, 8 skipped — 0 failures in `test_mcp_adapter_slimming_819.py`; all 19 task tests pass. 194 failures are pre-existing in unrelated files.
+- ruff: 3 violations, none in task scope (engine.py L471 line length, test_refresh_sharepoint_879.py EN DASH + IOError alias)
 
 ### Architect Quality: 4/5
-AC1-3 specific and directly verifiable. AC4 required refinement (literal RED impossible since #818 completed first) — correctly identified and refined during arch review. Intentional scope boundaries (smoke tests, not deep per-tool testing) well-documented.
+AC1-3 specific and verifiable. AC4 originally unverifiable ("tests fail RED before slimming" — #818 already completed); properly refined by architecture review to diagnostic assertion messages.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (all 4 covered) → 0
-- Lint violations: 0 → 0
-- AC quality ≤ 3: no (4/5) → 0
-- Missing reviewer evidence: no (detailed, PASS at .97) → 0
-- Full-suite failures in task scope: 0 → 0
+- No AC lines without evidence: -0
+- No lint violations in scope: -0
+- AC quality > 3: -0
+- Reviewer evidence present and detailed (PASS .97): -0
+- No full-suite failures in task scope: -0
 
 ### Confidence: 1.00
 ### Action: archive
-
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| f638070a | test | tests/test_mcp_adapter_slimming_819.py | #819 |
-| 77054b61 | chore | task body + research doc | #819 |

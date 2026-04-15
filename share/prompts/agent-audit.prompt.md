@@ -77,8 +77,8 @@ Project-wide conventions (commit format, file placement, attribution, tags) live
 - Signal mapping in `r-pipeline-protocol` doesn't match agent `<output_format>`
 - Agent tier assignment doesn't match its pipeline-protocol needs
 - Agent `tools:` allowlist missing tools it needs or including tools outside its tier
-- **Rejection flow consistency:** reviewer's `<pipeline_position>` targets must match `w-code-review` Step 8 (severity-based: impl issue → in-progress, test gap → todo, test/AC quality → backlog, 3rd+ FAIL → backlog). Builder routes rejections by cause (test assumption → todo, AC wrong → backlog). Architect uses REJECT to ideation. Auditor rejects always → backlog. No agent uses BLOCK/BLOCKED as a verdict — blocking is reserved for DR-pending tasks (scribe) and stale triage (dispatcher).
-- Agent renames: verify `dispatcher` (for dispatch), `planner` (for decomposition), `doc-writer` (for docs gate) are used consistently everywhere
+- **Rejection flow consistency:** reviewer's `<pipeline_position>` targets must match `w-code-review` Step 8 (severity-based: impl issue → in-progress, test gap → todo, test/AC quality → backlog, 3rd+ FAIL → backlog). Builder routes rejections by cause (test assumption → todo, AC wrong → backlog). Architect uses REJECT to ideation. Auditor rejects always → backlog. No agent uses BLOCK/BLOCKED as a verdict — blocking is reserved for DR-pending tasks (scribe).
+- Agent renames: verify `planner` (for decomposition), `doc-writer` (for docs gate) are used consistently everywhere
 
 ### 6. Signal-to-noise ratio
 

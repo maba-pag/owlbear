@@ -275,20 +275,22 @@ class TestFromAC_AllToolsDelegateToEngine:
 
     @pytest.mark.asyncio
     async def test_pick_tasks_delegates_to_engine(self) -> None:
-        """pick_tasks calls engine.list_tasks() and returns dict with 'dispatch' key."""
+        """pick_tasks delegates to pick_dispatchable and returns dict with 'dispatch' key."""
         engine = _make_mock_engine()
         ctx = _make_mcp_ctx(_make_app_ctx(engine))
 
-        result = await pick_tasks(ctx)
+        with patch("owlbear_mcp_kanban.server.pick_dispatchable") as mock_pd:
+            mock_pd.return_value = []
+            result = await pick_tasks(ctx)
+            mock_pd.assert_called_once()
 
-        engine.list_tasks.assert_called_once()
         assert isinstance(result, dict), (
             "pick_tasks must return a dict — "
-            "pre-slimming failure: engine.list_tasks() was not callable from server"
+            "pre-slimming failure: pick_dispatchable not wired into server pick_tasks"
         )
         assert "dispatch" in result, (
             "pick_tasks result must have 'dispatch' key — "
-            "pre-slimming failure: adapter not yet wired to engine list_tasks"
+            "pre-slimming failure: adapter not yet wired to pick_dispatchable"
         )
 
 

@@ -1,10 +1,10 @@
 ---
 id: 766
 title: 'P1-13: Tests — Updated extraction prompt with corporate domain examples'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:55:57.417675+00:00'
-updated: '2026-04-12T00:31:26.028344+00:00'
+updated: '2026-04-15T10:23:39.896668+00:00'
 tags:
 - phase-1
 - type:test
@@ -159,36 +159,37 @@ None — no docs impact.
 
 ### Scratch Files
 No `.owlbear/scratch/766-*` files found. Nothing to clean.
-[[2026-04-12]]
+[[2026-04-15]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: Guidance for REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD | `llm_extractor.py` L29-43: descriptive bullets per type; `TestFromAC_CorpEntityDescriptiveHints` 5/5 PASS | PASS |
-| AC2: GOVERNS, SUPERSEDES_VERSION relation examples | `llm_extractor.py` L45-48: descriptive guidance with example sentences; `TestFromAC_RelationTypeDescriptiveGuidance` 2/2 PASS | PASS |
-| AC3: Not collapsed to CONCEPT | `llm_extractor.py` L29-43: contrastive phrasing ("distinct from a concept", "unlike a concept"); `TestFromAC_CorpEntityContrastiveConcept` 2/2 PASS | PASS |
+| AC1: Guidance for REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD | `llm_extractor.py` L36-43: bullet points with descriptive text per type; `TestFromAC_CorpEntityDescriptiveHints` 5/5 PASS | PASS |
+| AC2: GOVERNS, SUPERSEDES_VERSION relation examples | `llm_extractor.py` L45-48: descriptive guidance with examples; `TestFromAC_RelationTypeDescriptiveGuidance` 2/2 PASS | PASS |
+| AC3: Corporate text not collapsed to CONCEPT | `llm_extractor.py` L36-43: contrastive "distinct from a concept", "unlike a concept", "rather than concept" phrasing; `TestFromAC_CorpEntityContrastiveConcept` 2/2 PASS | PASS |
 
 ### Test Results
-- pytest (task scope): 9 passed, 0 failed
-- pytest (full suite): 3,580 passed, 275 failed, 6 errors — all failures pre-existing (kanban AppContext signature, import errors, TaskSummary schema, missing lint-changed.ps1). Zero failures in knowledge/extraction scope.
-- ruff: clean — 0 violations
+- pytest (task-scoped): 9 passed, 0 failed
+- pytest (full suite): 4386 passed, 192 failed — all failures in unrelated files (mcp_kanban, lint_feedback, deny_src_writes, etc.)
+- ruff: 0 violations in task files; 3 pre-existing violations in unrelated files
 
 ### Architect Quality: 4/5
-AC lines were specific and testable — entity types enumerated, relation types named, "not collapsed to CONCEPT" is verifiable. Minor gap: body text "Depends on schema (#757)" is stale (task doesn't exist, schema already in models.py), but AC lines themselves didn't rely on it. Builder improvisation not needed.
+AC lines specific and directly testable. Minor: stale #757 dependency reference in body (schema already existed), cosmetic AC numbering inversion between test docstrings and task body (content correctly mapped). Both flagged and resolved by architect review.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (all 3 covered) → −0
-- Lint violations: 0 → −0
-- AC quality ≤ 3: no (4/5) → −0
-- Missing reviewer evidence: no (detailed, PASS) → −0
-- Full-suite failures in scope: 0 → −0
+- Start: 1.00
+- All 3 AC lines have specific file + test evidence: no deduction
+- Lint clean in task files: no deduction
+- AC quality 4/5 (>3): no deduction
+- Reviewer evidence section present and detailed (PASS): no deduction
+- Full-suite failures: 0 in task scope: no deduction
 
-### Confidence: 1.00
+### Confidence: .98
 ### Action: archive
 
-## Commits
+### Commits
 | Commit | Type | Files | Tasks |
 |--------|------|-------|-------|
-| 8732feba | feat | llm_extractor.py | #766 |
-| 9171fc59 | test | test_llm_prompt_corporate_775.py | #766 (originally #789) |
-| 1519c019 | chore | research doc + kanban body | #766 |
+| 9171fc59 | test | tests/test_llm_prompt_corporate_775.py | #789→#766 |
+| 4e9bf3c3 | chore | tests/test_llm_prompt_corporate_775.py | #789 attribution fix |
+| 8732feba | feat | serve/knowledge/src/owlbear_knowledge/llm_extractor.py | #766 |

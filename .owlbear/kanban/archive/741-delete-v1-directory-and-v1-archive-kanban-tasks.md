@@ -1,7 +1,7 @@
 ---
 id: 741
 title: Delete v1/ directory and v1-archive kanban tasks
-status: done
+status: archived
 priority: important
 created: '2026-04-10T04:29:46.8972445+02:00'
 updated: '2026-04-10T07:34:39.278162+00:00'

@@ -1,10 +1,10 @@
 ---
 id: 764
 title: 'P1-11: Tests — Cleaned-content hash + replace-on-change cascade'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:55:57.357680+00:00'
-updated: '2026-04-11T20:19:53.140000+00:00'
+updated: '2026-04-15T10:14:24.389418+00:00'
 tags:
 - phase-1
 - type:test
@@ -204,42 +204,38 @@ Builder changed only `ingest.py` and `status_store.py`. Test file not modified. 
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/764-*` files found)
-[[2026-04-11]]
+[[2026-04-15]]
 ## Audit
+
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: Delta detection hashes cleaned markdown, not raw HTML | ingest.py:174 `content_for_hash = content_cleaner(intake.content) if content_cleaner is not None else intake.content`; 4 tests pass (TestFromAC_HashCleanedContent) | PASS |
-| AC2: Changed content → cascade-delete before re-ingestion | ingest.py:192 `delete_document_data(existing_id)` before `insert_document`; 3 tests pass (TestFromAC_CascadeDeleteOnChange) | PASS |
-| AC3: Unchanged content hash → skip | ingest.py:178-183 early return with `status="skipped"` on cleaned-content match; 2 tests pass (TestFromAC_SkipUnchangedCleanedContent) | PASS |
-| AC4: No entity accumulation on refresh | Via AC2 cascade delete; 3 tests pass (TestFromAC_NoEntityAccumulationOnRefresh) | PASS |
+| AC1: Delta detection hashes cleaned markdown, not raw HTML | TestFromAC_HashCleanedContent: 4 tests pass (test_hash_computed_on_cleaner_output_not_raw, test_ingest_accepts_content_cleaner_kwarg, test_cleaner_called_with_raw_intake_content, test_no_cleaner_hashes_raw_content) | PASS |
+| AC2: Changed content cascade-delete before re-ingest | TestFromAC_CascadeDeleteOnChange: 3 tests pass (test_changed_content_old_entities_removed_from_db, test_changed_content_old_edges_removed_from_db, test_cascade_preserves_unrelated_document_entities) | PASS |
+| AC3: Unchanged content hash skip | TestFromAC_SkipUnchangedCleanedContent: 2 tests pass (test_different_raw_same_cleaned_content_returns_skipped, test_whitespace_only_raw_difference_skips) | PASS |
+| AC4: No entity accumulation on refresh | TestFromAC_NoEntityAccumulationOnRefresh: 3 tests pass (test_entity_count_stable_after_content_change, test_multiple_refresh_cycles_entity_count_stable, test_edge_count_stable_after_refresh) | PASS |
 
 ### Test Results
 - pytest (task): 12 passed, 0 failed
-- pytest (knowledge domain): 422 passed, 7 failed (all 7 pre-existing — 3 schema v8/v9 in test_knowledge_foundation, 3 API-dependent in test_knowledge_integration, 1 SearchResult field change in test_mcp_knowledge_typeddict_541)
-- pytest (full suite partial): 178 passed in ~65s before KeyboardInterrupt; 24 failures all in unrelated modules (test_analysis.py, test_add_editfiles_to_deny_code_writes_638.py); 6 collection errors in kanban/planner modules. No failures caused by #764.
-- ruff: All checks passed
+- pytest (full suite): 192 failed, 4386 passed, 8 skipped. 192 failures are pre-existing across many unrelated files (mcp_kanban, deny_src_writes, lint_feedback, etc.). 3 knowledge_integration failures are pre-existing (test file last modified in #162, not in task scope).
+- ruff: 3 violations, all outside task scope (engine.py E501, test_refresh_sharepoint_879.py RUF002/UP024)
+
+### Reviewer Evidence
+Present and detailed. Thorough AC mapping table, security review (clean), test integrity check (TestFromAC preserved), test quality assessment (STRONG). Verdict: PASS at .95. Trusted for code-level findings.
+
+### Upstream Commit
+c42261fe test: add failing tests for cleaned-content hash + cascade (#764, test-writer) -- 1 file, 387 insertions. Properly scoped and attributed.
 
 ### Architect Quality: 4/5
-4 AC lines are specific and directly testable. Minor gap: no mention of content_cleaner exception path, but builder's outer except handles it defensively. Overall adequate AC that enabled clean TDD flow.
-
-### Commit Integrity
-- `c42261fe` test: test file committed by test-writer (#764)
-- `921843c7` feat: source changes committed by builder (#765 — GREEN companion)
-- `a0a66a19` chore: research doc + kanban leftovers committed by auditor
-- Note: research doc was not committed by researcher (minor process gap)
+Four ACs are specific, testable, and map cleanly to 12 tests. Minor gap: no AC for cleaner exception path, but builder/reviewer correctly noted it's outside scope. No improvisation needed.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (all 4 verified) → no deduction
-- Lint violations: 0 → no deduction
-- AC quality ≤ 3: no (4/5) → no deduction
-- Missing reviewer section: no (detailed, PASS at .95) → no deduction
-- Full-suite task-scope failures: 0 → no deduction
+- Start: 1.00
+- AC lines with no evidence: 0 (0 x -.02 = -.00)
+- Lint violations in scope: 0 (-.00)
+- AC quality LE 3: No, score 4 (-.00)
+- Missing reviewer evidence: No (-.00)
+- Full-suite failures in scope: 0 (-.00)
 
-### Confidence: .98
+### Confidence: 1.00
 ### Action: archive
-
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| a0a66a19 | chore | kanban task, research doc | #764 |

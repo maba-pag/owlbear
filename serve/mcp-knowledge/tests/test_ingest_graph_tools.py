@@ -16,7 +16,6 @@ embeddings required. Tests fail with ImportError until builder creates server.py
 
 from __future__ import annotations
 
-import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -730,57 +729,6 @@ class TestFromAC_AppContextExtension:
         ):
             async with app_lifespan(MagicMock()) as ctx:
                 assert ctx.ingest_pipeline is not None
-
-    @pytest.mark.asyncio
-    async def test_entity_extractor_receives_owlbear_model_env_var(self) -> None:
-        """EntityExtractor is instantiated with the OWLBEAR_MODEL env var value."""
-        with (
-            patch("owlbear_mcp_knowledge.server.init_db"),
-            patch("owlbear_mcp_knowledge.server.GraphStore"),
-            patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
-            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
-            patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-            patch("owlbear_mcp_knowledge.server.DocumentStore"),
-            patch("owlbear_mcp_knowledge.server.EntityExtractor") as mock_extractor_cls,
-            patch("owlbear_mcp_knowledge.server.TextChunker"),
-            patch("owlbear_mcp_knowledge.server.IngestPipeline"),
-            patch.dict(os.environ, {"OWLBEAR_MODEL": "gpt-4o-mini"}),
-        ):
-            async with app_lifespan(MagicMock()):
-                pass
-
-        mock_extractor_cls.assert_called_once()
-        all_args = list(mock_extractor_cls.call_args.args or ()) + list(
-            (mock_extractor_cls.call_args.kwargs or {}).values()
-        )
-        assert "gpt-4o-mini" in all_args, f"Expected 'gpt-4o-mini' among EntityExtractor args: {all_args}"
-
-    @pytest.mark.asyncio
-    async def test_entity_extractor_receives_some_default_model_string(self) -> None:
-        """When OWLBEAR_MODEL is absent, EntityExtractor receives a non-empty default string."""
-        with (
-            patch("owlbear_mcp_knowledge.server.init_db"),
-            patch("owlbear_mcp_knowledge.server.GraphStore"),
-            patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
-            patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
-            patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-            patch("owlbear_mcp_knowledge.server.DocumentStore"),
-            patch("owlbear_mcp_knowledge.server.EntityExtractor") as mock_extractor_cls,
-            patch("owlbear_mcp_knowledge.server.TextChunker"),
-            patch("owlbear_mcp_knowledge.server.IngestPipeline"),
-            patch.dict(os.environ, {}, clear=True),
-        ):
-            async with app_lifespan(MagicMock()):
-                pass
-
-        mock_extractor_cls.assert_called_once()
-        all_args = list(mock_extractor_cls.call_args.args or ()) + list(
-            (mock_extractor_cls.call_args.kwargs or {}).values()
-        )
-        str_args = [a for a in all_args if isinstance(a, str)]
-        assert any(len(s) > 0 for s in str_args), (
-            f"Expected a non-empty default model string in EntityExtractor args: {all_args}"
-        )
 
 
 # ---------------------------------------------------------------------------

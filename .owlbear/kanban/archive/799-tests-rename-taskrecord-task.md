@@ -1,7 +1,7 @@
 ---
 id: 799
 title: Tests — Rename TaskRecord → Task
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T21:20:28.162627+00:00'
 updated: '2026-04-11T15:20:35.301339+00:00'

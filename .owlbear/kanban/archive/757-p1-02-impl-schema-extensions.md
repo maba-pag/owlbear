@@ -1,7 +1,7 @@
 ---
 id: 757
 title: 'P1-02: Impl — Schema extensions'
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T10:55:57.126815+00:00'
 updated: '2026-04-10T17:39:21.592251+00:00'

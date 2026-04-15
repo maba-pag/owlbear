@@ -22,24 +22,26 @@ from owlbear_knowledge.document_store import DocumentStore
 from owlbear_knowledge.embeddings import BgeM3EmbeddingProvider
 from owlbear_knowledge.evaluator import EvaluateFn, EvaluationResult, SourceEvaluator
 from owlbear_knowledge.extractor import EntityExtractor
+from owlbear_knowledge.graph_builder import IntraDocGraphBuilder
 from owlbear_knowledge.graph_store import GraphStore
 from owlbear_knowledge.ingest import IngestPipeline
-from owlbear_knowledge.llm_extractor import LLMExtractor
+from owlbear_knowledge.inter_doc_graph_builder import InterDocGraphBuilder
 from owlbear_knowledge.models import EntityType
 from owlbear_knowledge.qdrant import QdrantVectorStore
 from owlbear_knowledge.query_service import KnowledgeQueryService
 from owlbear_knowledge.refresh import RefreshOrchestrator
 from owlbear_knowledge.retrieval import GraphAugmentedRetriever
 from owlbear_knowledge.schema import init_db as _schema_init_db
+from owlbear_knowledge.scope_transfer import _do_import as _core_do_import
 from owlbear_knowledge.scope_transfer import export_scope as _core_export_scope
 from owlbear_knowledge.scope_transfer import import_scope as _core_import_scope
+from owlbear_knowledge.scope_transfer import resolve_global_db_path
 from owlbear_knowledge.source_store import KnowledgeSourceStore
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-_DEFAULT_KB_PATH = "store/knowledge/knowledge.db"
-_DEFAULT_MODEL = "gpt-4o-mini"
+_DEFAULT_KB_PATH = ".owlbear/knowledge/local.db"
 
 
 class SearchResult(TypedDict):
@@ -95,6 +97,9 @@ class AppContext:
     bookmark_store: BookmarkStore | None
     refresh_orchestrator: RefreshOrchestrator | None = None
     consolidation_service: ConsolidationService | None = None
+    structured_extractor: object | None = None
+    intra_doc_builder: IntraDocGraphBuilder | None = None
+    inter_doc_builder: InterDocGraphBuilder | None = None
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -118,48 +123,34 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
     return excluded
 
 
-def make_text_completion_fn(model: str) -> TextCompletionFn:
-    """Return a TextCompletionFn backed by a PydanticAI Agent with output_type=str.
+def make_text_completion_fn() -> TextCompletionFn:
+    """Return a no-op TextCompletionFn stub.
 
-    Falls back to a no-op stub when pydantic-ai is absent.
+    LLM-backed completion via pydantic-ai was removed. This stub preserves
+    the call-site contract so ConsolidationService still wires up.
     """
-    try:
-        import pydantic_ai  # noqa: PLC0415
 
-        agent = pydantic_ai.Agent(model, output_type=str)
-
-        async def _complete(prompt: str) -> str:
-            result = await agent.run(prompt)
-            return result.output
-
-    except Exception:  # noqa: BLE001
-
-        async def _complete(_prompt: str) -> str:  # type: ignore[misc]
-            return ""
+    async def _complete(_prompt: str) -> str:
+        return ""
 
     return _complete
 
 
-def make_evaluate_fn(model: str) -> EvaluateFn:
-    """Return an EvaluateFn callable for the given model name.
+def make_evaluate_fn() -> EvaluateFn:
+    """Return a neutral no-op EvaluateFn stub.
 
-    Delegates to ``make_pydantic_evaluate_fn`` when pydantic-ai is installed.
-    Falls back to a neutral no-op stub when pydantic-ai is absent.
+    LLM-backed evaluation via pydantic-ai was removed. Returns a neutral
+    result that always allows ingestion.
     """
-    try:
-        from owlbear_knowledge.evaluator import make_pydantic_evaluate_fn  # noqa: PLC0415
 
-        return make_pydantic_evaluate_fn(model)
-    except Exception:  # noqa: BLE001
+    async def _evaluate(_prompt: str) -> EvaluationResult:
+        return EvaluationResult(
+            relevance_score=0.5,
+            summary="No project context available -- neutral evaluation.",
+            worth_ingesting=True,
+        )
 
-        async def _evaluate(_prompt: str) -> EvaluationResult:
-            return EvaluationResult(
-                relevance_score=0.5,
-                summary="No project context available -- neutral evaluation.",
-                worth_ingesting=True,
-            )
-
-        return _evaluate
+    return _evaluate
 
 
 async def _web_read(url: str) -> str | None:
@@ -180,21 +171,49 @@ async def _web_read(url: str) -> str | None:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
+async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  # noqa: PLR0915
     """Initialise knowledge-base services; close the DB connection on exit."""
     global _app_context  # noqa: PLW0603
-    path = os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
+    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
     conn = init_db(path)
     try:
         gs = GraphStore(conn)
         vs = QdrantVectorStore()
         emb = BgeM3EmbeddingProvider()
-        model = os.environ.get("OWLBEAR_MODEL", _DEFAULT_MODEL)
-        try:
-            llm_extractor = LLMExtractor(model)
-            extractor = EntityExtractor(model, extractor=llm_extractor)
-        except Exception:  # noqa: BLE001
-            extractor = EntityExtractor(model)
+        structured_extractor = None
+        api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            try:
+                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
+
+                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
+                base_url = os.environ.get("OWLBEAR_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
+                structured_extractor = LLMExtractor(model=model, api_key=api_key, base_url=base_url)
+            except ImportError:
+                structured_extractor = None
+        else:
+            try:
+                from owlbear_knowledge.copilot_auth import detect_editor_versions, get_copilot_token  # noqa: PLC0415
+                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
+
+                copilot_token = await get_copilot_token()
+                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
+                editor_versions = detect_editor_versions()
+                headers = {**editor_versions, "Copilot-Integration-Id": "vscode-chat"}
+                structured_extractor = LLMExtractor(
+                    model=model,
+                    api_key=copilot_token,
+                    default_headers=headers,
+                )
+            except Exception:  # noqa: BLE001
+                structured_extractor = None
+        extractor = EntityExtractor(extractor=structured_extractor)
+        intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
+        inter_doc_builder = (
+            InterDocGraphBuilder(structured_extractor, vs, gs)
+            if structured_extractor is not None
+            else None
+        )
         gar = GraphAugmentedRetriever(vs, gs, emb)
         qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
         doc_store = DocumentStore(conn, gs, vs, emb)
@@ -202,7 +221,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
         pipeline = IngestPipeline(doc_store, extractor, chunker)
         source_store = KnowledgeSourceStore(conn)
         bookmark_store = BookmarkStore(conn)
-        evaluator = SourceEvaluator(llm_fn=make_evaluate_fn(model))
+        evaluator = SourceEvaluator(llm_fn=make_evaluate_fn())
 
         bookmark_pipeline = BookmarkPipeline(
             bookmark_store=bookmark_store,
@@ -215,12 +234,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             pipeline=pipeline,
             workspace_root=Path.cwd(),
         )
-        try:
-            consolidation_service: ConsolidationService | None = ConsolidationService(
-                conn, make_text_completion_fn(model)
-            )
-        except Exception:  # noqa: BLE001
-            consolidation_service = None
+        consolidation_service: ConsolidationService | None = ConsolidationService(
+            conn, make_text_completion_fn()
+        )
         ctx = AppContext(
             conn=conn,
             query_service=qs,
@@ -231,6 +247,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
             bookmark_store=bookmark_store,
             refresh_orchestrator=refresh_orchestrator,
             consolidation_service=consolidation_service,
+            structured_extractor=structured_extractor,
+            intra_doc_builder=intra_doc_builder,
+            inter_doc_builder=inter_doc_builder,
         )
         _app_context = ctx
         _apply_tool_exclusions(_server)
@@ -259,6 +278,8 @@ __all__ = [
     "mcp",
     "refresh_source",
     "search_knowledge",
+    "sync_from_global",
+    "sync_to_global",
     "update_bookmark_tags",
 ]
 
@@ -455,7 +476,7 @@ async def import_scope(
 ) -> str:
     """Import a project-local knowledge snapshot into the global KB.
 
-    Reads a portable SQLite file (default: ``.owlbear/knowledge/knowledge.db``)
+    Reads a portable SQLite file (default: ``.owlbear/knowledge/local.db``)
     and ingests its documents into the global KB under ``scope="project:{project_name}"``.
     Duplicate documents (same content hash) are skipped.
     """
@@ -488,6 +509,81 @@ async def export_scope(
         Path(output_path),
         app_ctx.conn,
     )
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def sync_from_global(ctx: Context) -> str:
+    """Import all documents from the global knowledge DB into the local DB under scope='global'.
+
+    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
+    env var).  Duplicate documents (same content hash) are skipped.
+
+    Returns a count string on success, or an ``error: `` string on failure.
+    """
+    global_path = resolve_global_db_path(Path.cwd())
+    if isinstance(global_path, str):
+        return "error: global DB path could not be resolved"
+
+    if not global_path.exists():
+        return f"error: global DB not found at {global_path}"
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    local_conn: sqlite3.Connection = app_ctx.conn
+
+    def _run() -> str:
+        global_conn = sqlite3.connect(str(global_path))
+        try:
+            raw = _core_do_import(global_conn, local_conn, target_scope="global")
+        finally:
+            global_conn.close()
+        # Reformat raw "Imported N documents (skipped M duplicates) into scope global"
+        # → AC format: "Imported N documents (skipped M duplicates) from global into local under scope 'global'"
+        prefix = "Imported "
+        if raw.startswith(prefix):
+            counts_part = raw[len(prefix):raw.index(" into scope")]
+            return f"Imported {counts_part} from global into local under scope 'global'"
+        return raw
+
+    return await asyncio.to_thread(_run)
+
+
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
+async def sync_to_global(ctx: Context) -> str:
+    """Export local documents with scope='global' into the global knowledge DB.
+
+    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
+    env var).  Creates the global DB file (with schema) if it doesn't exist yet.
+    Only documents with ``scope='global'`` in the local DB are exported.
+    Duplicate documents (same content hash) are skipped.
+
+    Returns a count string on success, or an ``error: `` string on failure.
+    """
+    global_path = resolve_global_db_path(Path.cwd())
+    if isinstance(global_path, str):
+        return f"error: {global_path}"
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    local_conn: sqlite3.Connection = app_ctx.conn
+
+    def _run() -> str:
+        global_path.parent.mkdir(parents=True, exist_ok=True)
+        global_conn = sqlite3.connect(str(global_path))
+        try:
+            _schema_init_db(global_conn)
+            raw = _core_do_import(
+                local_conn, global_conn, target_scope="global", source_scope="global"
+            )
+        finally:
+            global_conn.close()
+        # Reformat raw "Imported N documents (skipped M duplicates) into scope global"
+        # → AC format: "Exported N documents (skipped M duplicates) from local scope 'global' to global DB"
+        prefix = "Imported "
+        if raw.startswith(prefix):
+            counts_part = raw[len(prefix):raw.index(" into scope")]
+            return f"Exported {counts_part} from local scope 'global' to global DB"
+        return raw
+
+    return await asyncio.to_thread(_run)
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))

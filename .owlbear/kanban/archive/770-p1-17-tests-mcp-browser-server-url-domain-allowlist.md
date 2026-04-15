@@ -1,10 +1,10 @@
 ---
 id: 770
 title: 'P1-17: Tests — MCP browser server + URL domain allowlist'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:56:34.316989+00:00'
-updated: '2026-04-12T00:58:55.956697+00:00'
+updated: '2026-04-15T10:49:09.116231+00:00'
 tags:
 - phase-1
 - type:test
@@ -275,46 +275,48 @@ None.
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/770-*` files found)
-[[2026-04-12]]
+[[2026-04-15]]
 ## Audit
-### AC Verification
+### AC Verification (descoped to AC4 — ToolAnnotations only)
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| ToolAnnotations imported in server module | server.py:15 `from mcp.types import ToolAnnotations` | PASS |
-| All 6 tools have annotations ≠ None | server.py:63,75,80,85,90,96 — all 6 decorators | PASS |
-| read_text: readOnlyHint=True | server.py:90 `ToolAnnotations(readOnlyHint=True, idempotentHint=True)` | PASS |
-| read_text: idempotentHint=True | server.py:90 same | PASS |
-| snapshot: readOnlyHint=True | server.py:96 `ToolAnnotations(readOnlyHint=True, idempotentHint=True)` | PASS |
-| snapshot: idempotentHint=True | server.py:96 same | PASS |
-| navigate: idempotentHint=True | server.py:63 `ToolAnnotations(idempotentHint=True, destructiveHint=False)` | PASS |
-| navigate: destructiveHint=False | server.py:63 same | PASS |
-| select: idempotentHint=True | server.py:85 `ToolAnnotations(idempotentHint=True, destructiveHint=False)` | PASS |
-| select: destructiveHint=False | server.py:85 same | PASS |
-| click: destructiveHint=False | server.py:75 `ToolAnnotations(readOnlyHint=False, destructiveHint=False)` | PASS |
-| type: destructiveHint=False | server.py:80 `ToolAnnotations(readOnlyHint=False, destructiveHint=False)` | PASS |
+| ToolAnnotations imported in server module | server.py:16 `from mcp.types import ToolAnnotations` | PASS |
+| All 6 tools have annotations != None | server.py:98,136,145,155,170,183 — all 6 decorators have `annotations=ToolAnnotations(...)` | PASS |
+| read_text: readOnlyHint=True | server.py:170, test `test_read_text_read_only_hint_true` passes | PASS |
+| read_text: idempotentHint=True | server.py:170, test `test_read_text_idempotent_hint_true` passes | PASS |
+| snapshot: readOnlyHint=True | server.py:183, test `test_snapshot_read_only_hint_true` passes | PASS |
+| snapshot: idempotentHint=True | server.py:183, test `test_snapshot_idempotent_hint_true` passes | PASS |
+| navigate: idempotentHint=True | server.py:98, test `test_navigate_idempotent_hint_true` passes | PASS |
+| navigate: destructiveHint=False | server.py:98, test `test_navigate_destructive_hint_false` passes | PASS |
+| select: idempotentHint=True | server.py:155, test `test_select_idempotent_hint_true` passes | PASS |
+| select: destructiveHint=False | server.py:155, test `test_select_destructive_hint_false` passes | PASS |
+| click: destructiveHint=False | server.py:136, test `test_click_destructive_hint_false` passes | PASS |
+| type: destructiveHint=False | server.py:145, test `test_type_destructive_hint_false` passes | PASS |
 
 ### Test Results
-- pytest: 101 passed, 24 failed (all pre-existing in unrelated files: test_analysis.py model mismatch, test_add_editfiles_to_deny_code_writes_638.py artifact missing), 6 collection errors (pre-existing module import issues in kanban/planner tests). Zero failures in #770 scope.
-- ruff: All checks passed
+- pytest (task scope): 42 passed, 0 failed (17 #770 + 25 #775 regression)
+- pytest (full suite): 4386 passed, 192 failed, 8 skipped — no failures in #770 scope; all failures in unrelated files
+- ruff: 3 violations in unrelated files (engine.py E501, test_refresh_sharepoint_879.py RUF002/UP024); zero in #770 files
+
+### Reviewer Evidence
+Detailed review section present. PASS at .97. AC-to-test mapping complete (12/12 COVERED). Test integrity, security, and builder process quality all assessed. Trusted.
 
 ### Architect Quality: 4/5
-Good descoping from 5 ACs to 1 unique AC (ToolAnnotations). Specific per-tool hint values. Clear test file and pattern references. Minor gap: didn't specify parametrized vs individual test strategy, but test-writer filled it reasonably.
+Original 5-AC scope was over-broad (4/5 ACs duplicated #790). Research correctly descoped to AC4. Refined AC was specific with exact per-tool hint values. Minor deduction for upstream AC quality requiring descoping.
+
+### Commit Integrity
+- Test file committed in `792022b6` (docs commit, first commit of file)
+- ToolAnnotations on decorators committed in `60af19c0` (batch chore commit)
+- Builder's claimed commit message not found — work was swept into batch commits
+- Informational only; deliverables are present and committed
 
 ### Deduction Breakdown
-- Starting: 1.00
-- All 12 AC lines have specific evidence: no deduction
-- Lint: clean: no deduction
-- AC quality 4/5 (> 3): no deduction
-- Reviewer evidence: present, detailed, PASS at .97: no deduction
-- Full-suite failures: none in task scope: no deduction
-- Informational: builder commit attributed to #771 (5ff9c228) not #770; test file first committed in doc-writer commit (792022b6) not test-writer commit. Process gap but deliverables are in git.
+- Start: 1.00
+- AC lines with no evidence: 0 (all 12 verified) — no deduction
+- Lint violations in scope: 0 — no deduction
+- AC quality 4/5 (>3): no deduction
+- Reviewer evidence: present, detailed — no deduction
+- Full-suite failures in task scope: 0 — no deduction
 
 ### Confidence: .98
 ### Action: archive
-
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| 5ff9c228 | feat | server.py (ToolAnnotations) | #771 (contains #770 work) |
-| 792022b6 | docs | test_mcp_browser_tool_annotations_770.py | #770 |
-| 47abe867 | chore | kanban leftovers | #770 |

@@ -5,7 +5,7 @@
 
 ## 1. Context and Question
 
-The Phase-4 Thinking Companion Framework (`.owlbear/research/thinking-companion-framework.md`, Section 13, prerequisite #9) specifies that `w-project-scoping` should be deprecated in favor of the planned Ideator agent. The Ideator subsumes the skill's "vague idea → structured definition" function with a richer deliberation model (Mediator + Voice Panel).
+The Phase-4 Thinking Companion Framework (`.owlbear/research/thinking-companion-framework.md`, Section 13, prerequisite #9) specifies that `w-project-scoping` should be deprecated in favor of the planned Ideator agent. The Ideator subsumes the skill's "vague idea → structured definition" function with a richer deliberation model (Mediator + Ideation Panel).
 
 **Question:** What deprecation approach fits existing conventions, and what references need updating?
 

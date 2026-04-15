@@ -1,7 +1,7 @@
 ---
 id: 831
 title: Tests — Remove legacy engine_models.py from mcp-kanban
-status: done
+status: archived
 priority: needed
 created: '2026-04-11T11:41:14.160517+00:00'
 updated: '2026-04-11T19:23:56.691027+00:00'

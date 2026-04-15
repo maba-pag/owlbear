@@ -1,6 +1,6 @@
 # Briefs
 
-This directory is the **Blackboard** for the Ideator agent system. Voice agents communicate through shared filesystem artifacts here — each agent reads and writes only the files it owns.
+This directory is the **Blackboard** for the Ideator agent system. Opinionated agents communicate through shared filesystem artifacts here — each agent reads and writes only the files it owns.
 
 ## Directory Structure
 
@@ -19,14 +19,14 @@ Each ideation session lives in a named Working Directory:
                                Written by the research subagent during M3.
   decisions.md              ← User decisions as they are made
                                Created empty at invocation; populated after each user choice.
-  voices/
-    {name}.md               ← Domain voice final position (after Critic cycles)
-    {name}-debate.md        ← Domain voice ↔ Critic debate log
-  synthesis.md              ← Pragmatist synthesis of all voice results
+  opinions/
+    {name}.md               ← Domain opinion final position (after Critic cycles)
+    {name}-debate.md        ← Domain opinion ↔ Critic debate log
+  synthesis.md              ← Pragmatist synthesis of all opinion results
   brief.md                  ← Final Brief (written at user approval)
 ```
 
-**Standard voice names:** `architect`, `data-person`, `enduser`, `security`
+**Standard opinionated agent names:** `architect`, `data-person`, `enduser`, `security`
 
 ### `input/` subfolder convention
 
@@ -38,16 +38,16 @@ Place any reference materials the Ideator should consider here before starting:
 
 The Mediator reads `input/*` at start and summarises what it found. Files are never modified.
 
-### `voices/` subdirectory convention
+### `opinions/` subdirectory convention
 
-Each domain voice writes two files:
+Each domain opinion writes two files:
 
 | File | Contents |
 |------|----------|
-| `voices/{name}.md` | Final, hardened position — the conclusion after Critic cycles |
-| `voices/{name}-debate.md` | Full Critic dialogue log — adversarial rounds, refinements |
+| `opinions/{name}.md` | Final, hardened position — the conclusion after Critic cycles |
+| `opinions/{name}-debate.md` | Full Critic dialogue log — adversarial rounds, refinements |
 
-The Pragmatist reads only `voices/{name}.md` (final positions), never the debate logs.
+The Pragmatist reads only `opinions/{name}.md` (final positions), never the debate logs.
 
 ## Agent Read / Write Matrix
 
@@ -55,14 +55,14 @@ The Pragmatist reads only `voices/{name}.md` (final positions), never the debate
 |-------|-------|--------|
 | **Mediator** | `input/*`, `context.md`, `decisions.md`, `synthesis.md` | `context.md` (incremental), `decisions.md`, `brief.md` |
 | **Research subagent** | `context.md`, `input/*`, codebase (tools), ecosystem (web fetch) | `research-notes.md` (returns summary to Mediator) |
-| **Domain Voice** | `context.md`, `decisions.md`, optionally `research-notes.md` | `voices/{name}.md`, `voices/{name}-debate.md` |
+| **Domain Opinion** | `context.md`, `decisions.md`, optionally `research-notes.md` | `opinions/{name}.md`, `opinions/{name}-debate.md` |
 | **Critic** (standalone, M1/M2/M4/M5) | `context.md` | Returns response to Mediator — no direct file write |
-| **Critic** (voice-embedded) | Voice's current draft + `context.md` | Returns response to invoking voice — no direct file write |
-| **Pragmatist** | `context.md`, `decisions.md`, ALL `voices/*.md` | `synthesis.md` |
+| **Critic** (op-agent-embedded) | Opinionated agent's current draft + `context.md` | Returns response to invoking opinionated agent — no direct file write |
+| **Pragmatist** | `context.md`, `decisions.md`, ALL `opinions/*.md` | `synthesis.md` |
 | **Final Critic** (optional) | `context.md`, `synthesis.md` | Appends challenges to `synthesis.md` |
 | **Planner** | `brief.md` | Kanban tasks |
 
-**Rule:** The Mediator never reads raw research, debate logs, or individual voice arguments. Its context window stays clean throughout the conversation.
+**Rule:** The Mediator never reads raw research, debate logs, or individual opinion arguments. Its context window stays clean throughout the conversation.
 
 ## Brief Lifecycle
 
@@ -73,7 +73,7 @@ The Pragmatist reads only `voices/{name}.md` (final positions), never the debate
 
 2. **After M1 (project named)** — `draft-new/` renamed to `draft-{project-name}/`
 
-3. **During ideation** — `context.md` populated incrementally; voices write to `voices/`; Pragmatist writes `synthesis.md`
+3. **During ideation** — `context.md` populated incrementally; opinionated agents write to `opinions/`; Pragmatist writes `synthesis.md`
 
 4. **At user approval** — Mediator writes `brief.md` from context + decisions + synthesis
 

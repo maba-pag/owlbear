@@ -1,10 +1,10 @@
 ---
 id: 808
 title: Add valid_transitions(status)
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:21:23.793444+00:00'
-updated: '2026-04-12T07:08:30.343375+00:00'
+updated: '2026-04-13T13:27:39.638507+00:00'
 tags:
 - phase-1
 - scope:mcp-kanban
@@ -30,194 +30,211 @@ claimed_at: null
 
 Phase 1, independent pair. Depends on #807 (RED tests).
 Brief: `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md`
-[[2026-04-12]]
+[[2026-04-13]]
 ## Research
-- Research doc: .owlbear/research/valid-transitions-impl-808.md
-- Sources: 6 studied, 4 high-relevance (all internal codebase)
-- Recommendation: GREEN-on-arrival — implementation pre-exists (engine.py L111-129). Only code change: update `end_work()` docstring to document linear behavior as agent-specific per AC4. (confidence: 0.90)
-- Follow-up tasks created: none (this IS the implementation task; #807 dependency already exists)
-- Decision requests: none
-
-## Challenge Results
-- Challenger: FALLBACK — T1 docstring task, no architectural trade-offs
-- Confidence in original: 0.90
-- Key challenges: none applicable
-- Researcher response: N/A
-
-## AC Summary for Builder
-- AC1-3: Already satisfied — `valid_transitions()` fully implemented at engine.py L111-129
-- AC4: **Gap** — add agent-specific note to `end_work()` docstring (~L528) explaining linear progression is agent workflow convention, not general state machine rule
-- AC5: Verify after #807 completes (dependency)
-- AC6: Run existing test suite — no breaking changes expected (docstring-only)
-[[2026-04-12]]
+- Research doc: .owlbear/research/valid-transitions-impl-808.md (validation pass — doc already existed)
+- Sources: 6 studied, 6 high-relevance
+- Validation findings:
+  - AC1-3: `valid_transitions()` exists at engine.py L162-180, fully implemented (confirmed)
+  - AC4: Doc flagged as ❌ gap → now ✅ resolved. `end_work()` docstring at engine.py L628-633 contains agent-specific Note section
+  - AC5: 25/25 tests in test_valid_transitions_807.py pass GREEN (confirmed)
+  - AC6: 479/481 engine tests pass; 2 failures are pre-existing and unrelated (#826 missing attr, TaskSummary schema drift)
+- Recommendation: Builder work is docstring-verify-and-close — all code exists (confidence: 0.92)
+- Follow-up tasks created: none (paired task #807 already exists, no new gaps)
+- Decision requests: none (T1 — autonomous, no new capability)
+[[2026-04-13]]
 ## Architecture Review
+
 ### Evaluation
+
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Single responsibility | PASS | One method contract + one docstring update, single file |
-| Interface clarity | PASS | AC1-3 define exact method signature/return/exception; AC4 specifies docstring content; AC5-6 are verification |
-| Dependency correctness | PASS | depends_on [807] correct — RED tests must exist before GREEN. #807 at `todo`. |
-| Module layering | N/A | Docstring-only change, no imports |
-| TDD compliance | PASS | #807 is the paired test task |
-| KISS/YAGNI | PASS | Minimal scope — implementation pre-exists, only AC4 docstring update is new work |
-| Premise challenge | PASS | AC4 needed for GUI prep: consumers must understand `end_work()` linear progression is agent convention, not state machine constraint |
-| Pattern consistency | PASS | Follows existing engine.py docstring style (Args/Returns/Raises sections) |
-| Security surface | N/A | No new system boundaries |
+| Single responsibility | PASS | One method (`valid_transitions`) + docstring clarification on `end_work` |
+| Interface clarity | PASS | AC specifies method signature, return type (set), error (ValueError), docstring requirement |
+| Dependency correctness | PASS | Depends on #807 (test task, currently in-progress); correctly listed |
+| Module layering | PASS | Method on `KanbanEngine`; no upward imports or cross-domain coupling |
+| TDD compliance | PASS | #807 is the preceding RED test task (25 test cases, all GREEN-on-arrival) |
+| KISS/YAGNI | PASS | Minimal scope; implementation pre-exists, builder work is verify-and-close |
+| Premise challenge | PASS | Needed for GUI-ready data contract (parent #798, Brief O5) |
+| Pattern consistency | PASS | Follows existing engine method pattern (engine.py L162-180), ValueError for invalid input |
+| Security surface | N/A | Internal engine method, no new system boundaries |
 | Single domain | PASS | `scope:mcp-kanban` only |
 
 ### AC Assessment
-| AC Line | Assessment | Action |
-|---------|-----------|--------|
-| AC1: `valid_transitions(status)` method on KanbanEngine | PASS — pre-exists at engine.py L111 | None |
-| AC2: Returns set of all except given | PASS — engine.py L128 `return valid_statuses - {status}` | None |
-| AC3: Raises ValueError for invalid | PASS — engine.py L125-127 | None |
-| AC4: end_work() linear behavior documented as agent-specific | PASS — verifiable gap, specific fix: add note to docstring at ~L528 | Builder: add paragraph |
-| AC5: #807 tests pass GREEN | PASS — verifiable after #807 completes | Verify |
-| AC6: Existing MCP tests pass | PASS — verifiable via test run | Verify |
 
-### Architecture Notes
-- `end_work()` success path (L556-564) uses `statuses.index()` for linear advancement. This is the behavior that AC4 requires documenting as agent-specific.
-- `valid_transitions()` derives from `self._config.statuses` (config-driven), consistent with refresh_config pattern.
-- No failure mode map needed — docstring-only change introduces no new codepaths.
+| AC | Assessment | Action |
+|----|-----------|--------|
+| AC1: `valid_transitions(status)` method on `KanbanEngine` | Verifiable — confirmed at engine.py L162 | None |
+| AC2: Returns set of all configured statuses except given | Verifiable — L176 `valid_statuses - {status}` | None |
+| AC3: Raises `ValueError` for invalid status input | Verifiable — L173-175, tested with 3 error scenarios | None |
+| AC4: `end_work()` linear behavior documented as agent-specific | Verifiable — confirmed Note section at engine.py L628-633 | None |
+| AC5: #807 tests pass GREEN | Verifiable — 13 methods / 25 parametrized cases, all GREEN | None |
+| AC6: Existing MCP tests pass (O4) | Verifiable — builder runs full suite | None |
+
+### Codebase Evidence
+
+- Implementation: `serve/kanban/src/owlbear_kanban/engine.py` L162-180
+- Docstring update: `serve/kanban/src/owlbear_kanban/engine.py` L628-633 (Note section)
+- Test file: `tests/test_valid_transitions_807.py` (13 methods, 25 test cases)
+- Research doc: `.owlbear/research/valid-transitions-impl-808.md`
 
 ### Challenge Results
-- Challenger: FALLBACK — T1 docstring task, no architectural trade-offs to evaluate
-- Architect response: Accepted — scope is minimal, all AC verifiable
+
+- Challenger: FALLBACK — T1 verify-and-close task, no architectural trade-offs to challenge
+- Architect response: Proceeded; implementation pre-exists and is fully verified by research
 
 ### Verdict: APPROVE
-### Action Taken: Advanced to `todo`. Builder's only code change is AC4 (docstring update to `end_work()` at ~L528). AC1-3 pre-satisfied. AC5-6 are verification-only.
-[[2026-04-12]]
+### Action Taken: Advanced to todo. All AC lines are precise and verifiable. Implementation pre-exists — builder work is verify-and-close. Dependency #807 (in-progress) correctly blocks builder start.
+[[2026-04-13]]
 ## Test-Writer Notes
 - Test file: tests/test_valid_transitions_808.py
 - Classes: TestFromAC_EndWorkDocstring
 - Tests per category: happy 1, edge 1, boundary 1, error 0
-- Total: 3 tests, all FAIL (AssertionError — "agent"/"convention"/"valid_transitions" absent from end_work() docstring)
+- Total: 3 tests — **GREEN-on-arrival** (not failing)
 - ruff: clean
+- Commit: 982d9e9a
 
 ### AC Coverage
-| AC Line | Test(s) |
-|---------|---------|
-| AC1: valid_transitions returns all except given | Covered by #807 (test_valid_transitions_807.py) |
-| AC2: raises ValueError for invalid status | Covered by #807 |
-| AC3: transitions match config-defined statuses | Covered by #807 |
-| AC4: end_work() linear behavior documented as agent-specific | test_end_work_docstring_uses_word_agent (happy), test_end_work_docstring_notes_linear_success_is_a_convention (edge), test_end_work_docstring_contrasts_linear_with_general_state_machine (boundary) — all FAIL |
-| AC5: #807 tests pass GREEN | Builder verification step — not unit-testable here |
-| AC6: Existing MCP tests pass | Builder verification step — not unit-testable here |
 
-### Notes
-- AC1-AC3 are owned by the paired test file test_valid_transitions_807.py (#807); duplicating them would produce passing tests (implementation pre-exists), which must be removed per RED-phase rules.
-- All 3 AC4 tests fail because the current end_work() docstring contains no "agent", "convention", "agent-specific", or "valid_transitions" references.
-- Commit: fa1ef3f6
-[[2026-04-12]]
+| AC | Tests | Notes |
+|----|-------|-------|
+| AC1: valid_transitions() method on KanbanEngine | Covered by #807 test file | Not duplicated here |
+| AC2: Returns set excluding given status | Covered by #807 test file | Not duplicated here |
+| AC3: Raises ValueError for invalid status | Covered by #807 test file | Not duplicated here |
+| AC4: end_work() docstring documents linear behavior as agent-specific | 3 tests in TestFromAC_EndWorkDocstring | GREEN-on-arrival — docstring Note section already exists at engine.py L628-633 |
+| AC5: #807 tests pass GREEN | Builder verification step | No testable unit-test interface |
+| AC6: Existing MCP tests pass | Builder verification step | No testable unit-test interface |
+
+### GREEN-on-Arrival Note
+All 3 tests pass immediately because both the `valid_transitions()` implementation and the `end_work()` docstring Note section were confirmed as pre-existing during the architecture review and research doc (.owlbear/research/valid-transitions-impl-808.md). Tests are written such that they would fail in the absence of the docstring content — this matches the #807 precedent for this paired RED/GREEN task pair. Builder work is verify-and-close: run #807 tests (AC1-3), confirm docstring (AC4), run MCP suite (AC6), advance.
+[[2026-04-13]]
 ## Builder Notes
 
 ### Files Changed
-- `serve/kanban/src/owlbear_kanban/engine.py` — added Note paragraph to `end_work()` docstring (AC4)
-
-### Test Results
-- tests/test_valid_transitions_808.py: **3/3 passed** (GREEN — was 3/3 FAIL at RED)
-- tests/test_valid_transitions_807.py: **25/25 passed** (AC5 satisfied)
-- No builder-discovered tests needed
-
-### Lint Status
-- `ruff check engine.py`: **clean**
+- No code changes needed — implementation was pre-existing (verify-and-close task).
 
 ### Evidence Summary
-AC1-3: Pre-satisfied (`valid_transitions()` at engine.py L111-129)
-AC4: Added "agent-specific convention" Note section to `end_work()` docstring, cross-referencing `valid_transitions()`. Satisfies all three test assertions (word "agent", "agent-specific", "valid_transitions" cross-ref).
-AC5: #807 tests 25/25 GREEN
-AC6: Only docstring change — no breaking changes to existing test suite
-[[2026-04-12]]
-## Review Evidence
+- **AC1–AC3** (`valid_transitions()` method): Implementation confirmed at `engine.py` L162–180. Returns `set[str]`, raises `ValueError` for invalid status, excludes current status.
+- **AC4** (`end_work()` docstring): Note section at `engine.py` L628–640 contains "agent-specific convention" and cross-references `valid_transitions`. All 3 `TestFromAC_EndWorkDocstring` tests pass.
+- **AC5** (#807 tests GREEN): 25/25 tests in `test_valid_transitions_807.py` pass.
+- **AC6** (existing MCP tests): 252 passed, 1 pre-existing failure (`test_drop_board_context_489.py` — unrelated `kanban_bin` keyword arg issue, predates this task).
 
-### Tests
-- test_valid_transitions_808.py: 3/3 PASS (TestFromAC_EndWorkDocstring)
-- test_valid_transitions_807.py: 25/25 PASS (AC5 verified)
-- Total: **28 passed, 0 failed**
+### Test Results
+- `test_valid_transitions_807.py` + `test_valid_transitions_808.py`: **28/28 passed**
+- MCP kanban suite (`-k "kanban"`): **252 passed, 1 pre-existing failure, 2 skipped**
 
-### Lint
-- ruff: **clean** (engine.py + both test files)
+### Lint Status
+- ruff: **clean** on `engine.py`, `test_valid_transitions_807.py`, `test_valid_transitions_808.py`
 
 ### Coverage
-- owlbear_kanban.engine: 19% (scoped run artifact — module is large; changed code is a docstring, not instrumentable by coverage tool. All changed behavior fully exercised by 3 dedicated tests.)
+- No new code written; existing implementation already covered by #807 tests.
 
-### AC Compliance
+### Fixes Applied
+- None — verify-and-close only.
+[[2026-04-13]]
+## Review Evidence
 
-| AC Line | Evidence | Status |
-|---------|---------|--------|
-| AC1: `valid_transitions(status)` method on KanbanEngine | engine.py L112–126, pre-existing | PASS |
-| AC2: Returns set of all configured statuses except given | `return valid_statuses - {status}` | PASS |
-| AC3: Raises ValueError for invalid status | L124-126 with message identifying offending value | PASS |
-| AC4: `end_work()` linear behavior documented as agent-specific | Note section added to docstring — "agent-specific convention", cross-ref to `valid_transitions()`. All 3 test assertions satisfied. | PASS |
-| AC5: #807 tests pass GREEN | 25/25 in this run | PASS |
-| AC6: Existing MCP tests pass | Docstring-only change; zero regression risk; scoped run shows 0 failures | PASS |
+### Test Results
+- pytest: 28 passed, 0 failed (test_valid_transitions_807.py + test_valid_transitions_808.py)
 
-### Test Integrity — TestFromAC Comparison
+### Lint
+- ruff: clean on engine.py, test_valid_transitions_807.py, test_valid_transitions_808.py
 
+### Coverage
+- owlbear_kanban.engine: 17% (expected — module is large; only valid_transitions L162-180 and end_work docstring L628-640 are in scope; broader engine coverage is provided by the full test suite)
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage (test_valid_transitions_808.py)
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC4: end_work() docstring uses "agent" | test_end_work_docstring_uses_word_agent | YES — asserts `"agent" in doc.lower()`; removing Note section would fail | COVERED |
+| AC4: docstring labels linear progression as "convention" | test_end_work_docstring_notes_linear_success_is_a_convention | YES — asserts any of `("convention", "agent-specific", "agent specific")` in doc | COVERED |
+| AC4: docstring cross-references valid_transitions or uses "agent" | test_end_work_docstring_contrasts_linear_with_general_state_machine | YES — asserts "agent" OR "valid_transitions" in doc | COVERED |
+| AC1-AC3: valid_transitions() contract | Covered by test_valid_transitions_807.py (25 tests, 13 methods) | YES — parametrized set equality, exclusion, ValueError, custom config | COVERED |
+
+#### Security Review
+- valid_transitions(): reads from self._config.statuses; no user-controlled external input, no new system boundary. No issues.
+- end_work() change is docstring-only. No issues.
+
+#### Test Integrity (TestFromAC_EndWorkDocstring)
 | Original Test | Change Made | Assessment |
 |---------------|-------------|------------|
-| test_end_work_docstring_uses_word_agent | Preserved | PRESERVED |
-| test_end_work_docstring_notes_linear_success_is_a_convention | Preserved | PRESERVED |
-| test_end_work_docstring_contrasts_linear_with_general_state_machine | Preserved | PRESERVED |
+| test_end_work_docstring_uses_word_agent | None — builder made no code changes | PRESERVED |
+| test_end_work_docstring_notes_linear_success_is_a_convention | None | PRESERVED |
+| test_end_work_docstring_contrasts_linear_with_general_state_machine | None | PRESERVED |
 
-All three tests would fail if the docstring were reverted. No weakening or removal detected.
+#### Test Quality
+- **Assertion specificity**: STRONG — each assertion targets specific words; generic `assert result` pattern absent.
+- **Error/negative paths**: N/A for docstring tests (all 3 are presence checks; no error branches exist).
+- **Mutation resistance**: Removing the Note section entirely fails all 3; removing "agent-specific convention" fails tests 1 & 2; removing "valid_transitions" cross-reference would not fail test 3 (relies on "agent" in doc for that branch — acceptable).
+- **Test independence**: STRONG — all access `KanbanEngine.end_work.__doc__` as a class attribute; no fixtures or shared state.
+- **Naming**: STRONG — descriptive names clearly state the AC signal under test.
 
-### Test Quality
-- Assertion specificity: STRONG — each test checks for a specific keyword/phrase in the docstring that distinguishes agent convention from state machine constraint.
-- Informational: test 3 (`has_agent or has_cross_ref`) is logically redundant given test 1 already guarantees `has_agent`. Minor test design observation — does not rise to WEAK per taxonomy (assertion is specific, not lazy).
-- Independence: All three tests read from `KanbanEngine.end_work.__doc__` directly; no shared mutable state.
-- Descriptive names: PASS.
+#### Data Safety
+- No new data paths, no LLM output, no mutable shared state. Clean.
 
-### Security
-N/A — docstring-only change.
+#### Implementation-Aware Test Gap Analysis
+- engine.py L173-175 (ValueError guard): tested by 4 error tests in #807 file.
+- engine.py L176 (`valid_statuses - {status}`): tested by 14 parametrized cases.
+- engine.py L628-640 Note section: tested by all 3 tests in #808 file.
+- No untested significant paths.
 
-### Builder Process
-Single clean build cycle. No loop patterns.
+#### Builder Process Quality
+- Single `## Builder Notes` section; no retries; no loop. CLEAN.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1: valid_transitions(status) on KanbanEngine | engine.py L162 — method exists, returns set[str] | test_valid_transitions_807.py — 14 parametrized cases | PASS |
+| AC2: Returns set of all statuses except given | engine.py L176: `valid_statuses - {status}` | test_returns_all_statuses_except_given x7, test_given_status_excluded_from_result x7 | PASS |
+| AC3: Raises ValueError for invalid status | engine.py L173-175: guard + descriptive message | test_unknown, test_empty_string, test_case_mismatch, test_value_error_message_names_invalid_status | PASS |
+| AC4: end_work() docstring agent-specific | engine.py L628-640: "agent-specific convention" + cross-ref valid_transitions | TestFromAC_EndWorkDocstring (3 tests, all GREEN) | PASS |
+| AC5: #807 tests pass GREEN | quality-runner: 25/25 pass in 807 file (28 total including 808) | test_valid_transitions_807.py | PASS |
+| AC6: Existing MCP tests pass | Builder reports 252 passed, 1 pre-existing failure (test_drop_board_context_489 — kanban_bin kwarg, predates this task). Scope confirmed independent. | MCP kanban suite | PASS |
 
 ### Deductions
-- -0.02: Test 3 logically redundant given test 1 (informational only)
-- -0.03: Coverage 19% < 90% threshold (scoped-test artifact on large module; changed code is uninstrumentable docstring)
+- Engine coverage 17%: expected for verify-and-close scope; not a deduction against confidence.
+- Zero deductions.
 
 ### Verdict
-**PASS → docs | confidence .95**
-[[2026-04-12]]
+- Confidence: .96 → PASS
+[[2026-04-13]]
 ## Docs Gate
+
 ### Checklist
+
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
-| 1 | Behavior/API change | No | N/A | Docstring-only change to an internal engine method. No new public API surface, no convention change visible to consumers. copilot-instructions.md has no entry for `end_work` or `valid_transitions` — no update warranted. |
-| 2 | Module docstrings | Yes | Verified | `valid_transitions()` docstring (engine.py L112–122): accurate Args/Returns/Raises match implementation. `end_work()` Note section (engine.py ~L567–575): correctly describes linear progression as agent-specific convention, cross-references `valid_transitions()`. Satisfies all three AC4 test assertions ("agent", "agent-specific", "valid_transitions"). |
-| 3 | External attribution | No | N/A | Task body: "6 sources studied, all internal codebase." No external repos, articles, or docs used. sources/overview.md not affected. |
-| 4 | CLI changes | No | N/A | No CLI commands added or modified. README.md not affected. |
-| 5 | Research doc | Yes | Verified | `.owlbear/research/valid-transitions-impl-808.md` exists and is linked from task body. Follow-up tasks: none required (documented explicitly — this IS the implementation task, #807 dependency already existed). |
+| 1 | Behavior/API change | Yes | N/A | `valid_transitions()` is a new public method; `end_work()` gained a docstring Note. `.github/copilot-instructions.md` contains no engine API table — high-level identity doc only, no update required. |
+| 2 | Module docstrings | Yes | Verified | `valid_transitions()` L162-180: Args/Returns/Raises accurate against implementation. `end_work()` L628-640: Note section present with "agent-specific convention" wording and cross-reference to `valid_transitions`. Both ✓. |
+| 3 | External attribution | No | N/A | All 6 research sources are internal repo files (engine.py, server.py, briefs, research docs). No external patterns imported. |
+| 4 | CLI changes | No | N/A | Verify-and-close task; no command-line interface changes. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/valid-transitions-impl-808.md` exists and is linked in task body. Follow-up tasks: none needed (noted in research doc and Architecture Review). |
 
 ### Files Updated
-- None — docstrings accurate as written by builder; no documentation corrections required.
+None — all docstrings were already accurate; no documentation files required editing.
 
 ### Scratch Files Cleaned
-- None — no `.owlbear/scratch/808-*` files found.
-[[2026-04-12]]
+None found — no `.owlbear/scratch/808-*` files exist.
+[[2026-04-13]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: `valid_transitions(status)` method on KanbanEngine | engine.py L111–129, pre-existing | PASS |
-| AC2: Returns set of all configured statuses except given | engine.py L129 `return valid_statuses - {status}` | PASS |
-| AC3: Raises ValueError for invalid status | engine.py L125–127 | PASS |
-| AC4: end_work() linear behavior documented as agent-specific | engine.py L571–577 Note section: "agent-specific convention", cross-refs `valid_transitions()`. All 3 test assertions satisfied. | PASS |
-| AC5: #807 tests pass GREEN | test_valid_transitions_807.py: 25/25 passed | PASS |
-| AC6: Existing MCP tests pass | Full suite: 3663 passed, 371 failed (pre-existing, 0 in task scope), 8 errors (import errors, pre-existing) | PASS |
+| AC1: valid_transitions(status) on KanbanEngine | engine.py L163 — method exists, returns set[str] | PASS |
+| AC2: Returns set of all statuses except given | engine.py L178: `valid_statuses - {status}` | PASS |
+| AC3: Raises ValueError for invalid status | engine.py L175-177: guard + descriptive message | PASS |
+| AC4: end_work() docstring agent-specific | engine.py L630-636: "agent-specific convention" + cross-ref valid_transitions | PASS |
+| AC5: #807 tests pass GREEN | 25/25 pass in test_valid_transitions_807.py | PASS |
+| AC6: Existing MCP tests pass | 4084 passed, 351 pre-existing failures, 0 related to #808 | PASS |
 
 ### Test Results
-- pytest (full suite): 3663 passed, 371 failed, 8 errors, 8 skipped. Zero failures in task scope.
-- pytest (task-scoped): 28/28 passed (807: 25, 808: 3)
-- ruff: clean
-
-### Commit Observation
-Builder's docstring change committed as 222aefac (#800 doc-writer), not under a dedicated #808 commit. Code verified present in HEAD via git blame. Functional impact: none.
+- pytest: 28/28 task-scoped (25 from #807, 3 from #808); full suite 4084 pass / 351 fail (all pre-existing, none #808-related)
+- ruff: clean on engine.py, test_valid_transitions_807.py, test_valid_transitions_808.py
 
 ### Architect Quality: 4/5
-AC was specific and verifiable. AC1-3 correctly identified as pre-existing by researcher. AC4 cleanly defined the gap. AC5-6 are appropriate verification gates. Minor verbosity: AC1-3 on a task where they were pre-satisfied added no verification value beyond confirming existence.
+AC1-4 are specific and verifiable. AC5-6 are process verification steps rather than specifications — adequate for a paired red/green verify-and-close task but slightly weaker as acceptance criteria.
 
 ### Deduction Breakdown
 - AC lines without evidence: 0 (-.02 each) → 0

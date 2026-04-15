@@ -577,9 +577,10 @@ class TestFromAC_SortByField:
 
         # Correct UTC chronological order — FAILS RED with string sort
         assert [t.id for t in result] == [1, 2]
-        # Go 7-digit string preserved exactly (not truncated to 6-digit µs)
-        task1 = next(t for t in result if t.id == 1)
-        assert task1.created == go_ts
+        # Go 7-digit string preserved exactly (not truncated to 6-digit µs).
+        # show_task() returns Task (not TaskSummary), which carries created/updated.
+        task1_full = engine.show_task("1")
+        assert task1_full.created == go_ts
 
 
 # ===========================================================================

@@ -1,10 +1,10 @@
 ---
 id: 781
 title: Tests — Content safety predicate inversion
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:30:43.995109+00:00'
-updated: '2026-04-11T14:47:03.730114+00:00'
+updated: '2026-04-14T09:37:41.997925+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -28,171 +28,161 @@ claimed_at: null
 - Scope item 8 from #775
 - See research F4: defense-in-depth, safe to ship independently
 
-[[2026-04-11]]
+[[2026-04-12]]
 ## Architecture Review
 
-### AC Corrections (for downstream reference)
-- AC1/AC2 name `wrap_untrusted_content()` but that function has no `source_type` parameter. The actual predicate is `should_wrap(source_type)` in `content_safety.py`. The existing tests correctly test `should_wrap()`.
-- AC3 idempotency: `wrap_untrusted_content()` idempotency is already tested in `test_content_safety_735.py` (`test_idempotency_guard_no_double_wrap`). If the test-writer wants to add it to this file, fine, but it's not missing coverage.
-
 ### Evaluation
+
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Single responsibility | PASS | Tests `should_wrap()` predicate inversion only |
-| Interface clarity | PASS | AC intent clear despite function name imprecision; tests already correct |
-| Dependency correctness | PASS | No dependencies, standalone test task |
-| Module layering | PASS | Tests import from `owlbear_knowledge.content_safety` |
-| TDD compliance | N/A | This IS the test task |
-| KISS/YAGNI | PASS | Minimal, focused tests |
-| Premise challenge | PASS | Tests validate security-critical predicate inversion |
-| Pattern consistency | PASS | Follows patterns from `test_content_safety_735.py` |
-| Security surface | PASS | Strengthens security posture |
-| Single domain | PASS | knowledge domain only |
+| Single responsibility | PASS | Tests only the content safety predicate inversion behavior |
+| Interface clarity | PASS (minor note) | AC references `wrap_untrusted_content()` but the source-type predicate is actually `should_wrap(source_type)` in `content_safety.py`; `wrap_untrusted_content()` takes no `source_type` param. Intent is clear — test-writer should verify via `should_wrap()` for AC1/AC2 and `wrap_untrusted_content()` for AC3 (idempotency). |
+| Dependency correctness | PASS | No deps — this is the TDD test task. No upstream implementation dependency needed. |
+| Module layering | PASS | Tests import from `owlbear_knowledge.content_safety` — correct layer |
+| TDD compliance | PASS | This IS the test task |
+| KISS/YAGNI | PASS | Minimal, focused scope |
+| Premise challenge | PASS (note) | Tests already exist at `tests/test_content_safety_inversion_775.py` (10 tests for `should_wrap()`). Idempotency covered in `tests/test_content_safety_735.py:test_idempotency_guard_no_double_wrap`. Test-writer should verify existing coverage is adequate rather than writing duplicate tests. |
+| Pattern consistency | PASS | Uses `TestFromAC_*` class pattern consistent with codebase |
+| Security surface | N/A | Test file only |
+| Single domain | PASS | Knowledge domain only |
+
+### Codebase Evidence
+
+- Implementation: `serve/knowledge/src/owlbear_knowledge/content_safety.py` — `should_wrap()` (L26-43), `wrap_untrusted_content()` (L46-69), `_TRUSTED_SOURCE_TYPES = frozenset({"file", "file_glob", "text"})` (L23)
+- Existing tests: `tests/test_content_safety_inversion_775.py` — 10 tests covering should_wrap for url_list, authenticated_web, unknown types (AC1), and file, text, file_glob, None, empty (AC2)
+- Idempotency: `tests/test_content_safety_735.py:test_idempotency_guard_no_double_wrap` (AC3)
+- Integration point: `serve/knowledge/src/owlbear_knowledge/ingest.py` L207-235 — calls both `should_wrap()` and `wrap_untrusted_content()` in the pipeline
+
+### AC Precision Note
+
+AC1/AC2 name `wrap_untrusted_content()` but the function under test for source-type decisions is `should_wrap(source_type)`. The existing test file correctly tests `should_wrap()`. AC3 (idempotency) correctly applies to `wrap_untrusted_content()`.
 
 ### Challenge Results
-- Challenger: reconsider (0.65)
-- Concerns: AC names wrong function, AC3 redundant, integration gap
-- Architect response: REBUTTED — tests already exist and are correct; AC imprecision is documentation-level, not behavioral; integration tested in #735; predicate inversion is the correct scope boundary
+- Challenger: FALLBACK — no challenger agent available
+- Architect response: N/A
 
 ### Verdict: APPROVE
-### Action Taken: Advanced to todo. AC corrections noted for downstream reference. Tests in `tests/test_content_safety_inversion_775.py` correctly cover `should_wrap()` deny-list predicate.
-[[2026-04-11]]
+### Action Taken: Advanced to todo. Tests already exist and pass — test-writer should verify existing coverage is adequate for all 3 AC lines rather than writing duplicates.
+[[2026-04-12]]
 ## Test-Writer Notes
-- Test file: tests/test_content_safety_inversion_775.py
-- Classes: `TestFromAC_ShouldWrapPredicate`
-- Tests per category: happy 6, edge 2, error 0, boundary 3
-- Total: 11 tests
-- ruff: clean (removed unused `pytest` import)
-- Commit: 045aa682
+- Non-implementation pass-through: task tagged `type:test`, tests already exist and are verified adequate.
+- Test file: `tests/test_content_safety_inversion_775.py` (11 tests, all PASS)
+- Idempotency (AC3): `tests/test_content_safety_735.py::test_idempotency_guard_no_double_wrap` (PASS)
 
-### AC Coverage
-| AC | Tests |
-|----|-------|
-| AC1: `should_wrap()` returns True for `url_list`, `authenticated_web`, unknown types | `test_url_list_returns_true`, `test_authenticated_web_returns_true`, `test_unknown_future_type_returns_true`, `test_arbitrary_invented_string_returns_true` |
-| AC2: `should_wrap()` returns False for `file`, `text`, `file_glob` | `test_file_returns_false`, `test_text_returns_false`, `test_file_glob_returns_false` |
-| AC2 boundary: `None` and empty string backward compat | `test_none_returns_false`, `test_empty_string_returns_false` |
-| Return-type strictness (`is True` / `is False`) | `test_return_type_is_bool_for_truthy_input`, `test_return_type_is_bool_for_falsy_input` |
+### AC Coverage Table
 
-### Note on RED Phase
-`should_wrap()` was fully implemented as part of #775 prior to this task advancing. All 11 tests pass against the existing implementation — RED phase was bypassed by pipeline ordering. Tests are valid regression coverage and correctly specify the contract. Builder can skip GREEN phase for this file.
-[[2026-04-11]]
+| AC | Tests | File | Result |
+|----|-------|------|--------|
+| AC1 — url_list, authenticated_web, unknown → `True` | `test_url_list_returns_true`, `test_authenticated_web_returns_true`, `test_unknown_future_type_returns_true`, `test_arbitrary_invented_string_returns_true` | `test_content_safety_inversion_775.py` | ✓ |
+| AC2 — file, text, file_glob → `False` | `test_file_returns_false`, `test_text_returns_false`, `test_file_glob_returns_false` (+None+empty boundary) | `test_content_safety_inversion_775.py` | ✓ |
+| AC3 — idempotency (no double-wrap) | `test_idempotency_guard_no_double_wrap` | `test_content_safety_735.py` | ✓ |
+
+- Total: 27 tests across both files — 27 passed, 0 failed.
+- Existing coverage is adequate; no duplicate tests written per arch review verdict (APPROVE with note).
+- Arch review note verified: `should_wrap()` is the correct function under test for AC1/AC2; `wrap_untrusted_content()` is tested for AC3 idempotency.
+[[2026-04-12]]
 ## Builder Notes
-- Non-implementation pass-through — `should_wrap()` was fully implemented as part of #775 prior to this task advancing.
-- No code changes made.
-- Test verification: `uv run pytest tests/test_content_safety_inversion_775.py` → **11 passed, 0 failed**.
-- Ruff: not applicable (test-writer already cleaned, no new code added).
-- Coverage: all 11 `TestFromAC_ShouldWrapPredicate` tests confirm the existing implementation satisfies AC1, AC2, and return-type strictness.
-[[2026-04-11]]
+- Non-implementation task — no code changes needed.
+- Passing through to review.
+[[2026-04-13]]
 ## Review Evidence
 
-### Test Results
-- pytest: **11 passed, 0 failed** (independently run via quality-runner)
+### Quality-Runner Execution
+- Invocation: `mode: scoped, task_id: 781, test_paths: [test_content_safety_inversion_775.py, test_content_safety_735.py], coverage_modules: [owlbear_knowledge.content_safety], lint_paths: [test_content_safety_inversion_775.py]`
+- Result: FATAL ERROR — pytest import chain interrupted by KeyboardInterrupt during anyio module load (2 consecutive attempts). Process cleanup also hanging. Possible Windows asyncio/execnet deadlock.
+- pytest exit code: 1, 0 tests run, lint not executed.
 
-### Lint
-- ruff: **clean** (0 violations)
+### Pre-Read Static Analysis (performed before test execution)
 
-### Coverage
-- `owlbear_knowledge.content_safety`: **62%**
-- Note: 62% is expected. This task's test file covers `should_wrap()` only. `wrap_untrusted_content()` is covered by `test_content_safety_735.py`. `should_wrap()` itself has 100% line coverage from these 11 tests (3 paths: falsy guard → False, in trusted set → False, not in trusted set → True — all exercised).
+**Test file read:** `tests/test_content_safety_inversion_775.py` — 11 tests in `TestFromAC_ShouldWrapPredicate`. Structure well-formed. `TestFromAC_*` class present. All assertions use `is True` / `is False` (strict bool, not truthy). Descriptive test names. No shared mutable state.
 
-### Pass 1 — CRITICAL
+**AC3 test read:** `tests/test_content_safety_735.py::test_idempotency_guard_no_double_wrap` — wraps once, wraps twice, asserts `wrapped_twice == wrapped_once`. Strong assertion.
 
-#### Test-Writer AC Coverage
-| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
-|---------|-------------|---------------------------|---------|
-| AC1: `should_wrap()` returns True for `url_list` | `test_url_list_returns_true` | Yes — `is True` assertion catches False | COVERED |
-| AC1: returns True for `authenticated_web` | `test_authenticated_web_returns_true` | Yes | COVERED |
-| AC1: returns True for unknown/future types | `test_unknown_future_type_returns_true`, `test_arbitrary_invented_string_returns_true` | Yes — two cases: named (`rss_feed`) and arbitrary string | COVERED |
-| AC2: returns False for `file` | `test_file_returns_false` | Yes — `is False` catches True | COVERED |
-| AC2: returns False for `text` | `test_text_returns_false` | Yes | COVERED |
-| AC2: returns False for `file_glob` | `test_file_glob_returns_false` | Yes | COVERED |
-| AC3: idempotency | N/A — architect-approved: already covered in `test_content_safety_735.py` (`test_idempotency_guard_no_double_wrap`). Not missing coverage. | N/A | N/A |
-| Return-type strictness | `test_return_type_is_bool_for_truthy_input`, `test_return_type_is_bool_for_falsy_input` | Yes — catches truthy-not-True (e.g. `1`), falsy-not-False (e.g. `0`) | COVERED |
-| Boundary: None backward compat | `test_none_returns_false` | Yes — catches removal of falsy guard | COVERED |
-| Boundary: empty string | `test_empty_string_returns_false` | Yes | COVERED |
+**What could not be verified due to environment failure:**
+- Tests actually pass (cannot trust builder self-report)
+- Lint clean (ruff not run)
+- Coverage on `owlbear_knowledge.content_safety`
 
-#### Security Review
-- No hardcoded secrets, injection surfaces, path traversal, insecure deserialization, dependency risk, or secret leakage. The file under review is a pure predicate test. Clean.
+### Verdict
+BLOCKED — environment failure prevents independent test execution. Per critical rules, cannot issue PASS without running tests myself.
+[[2026-04-13]]
+## Environment Restored
+pytest environment recovered (WMI hang resolved). Quality-Runner confirmed operational. Test results: all tests passed in batch run (`test_content_safety_inversion_775.py`). Unblocked for review continuation.
+[[2026-04-14]]
+## Review Evidence
 
-#### Test Integrity (TestFromAC Modification Check)
-- Builder made zero code changes. Test file committed prior by test-writer at commit `045aa682`. No modifications to `TestFromAC_ShouldWrapPredicate` tests — all assertions intact and strict (`is True` / `is False`).
+### Quality-Runner Results
+- **Tests:** 27 passed, 0 failed, 0 skipped (exit 0)
+- **Lint:** clean, 0 violations (ruff exit 0)
+- **Coverage:** `owlbear_knowledge.content_safety` = **100%**
 
-#### Test Quality
-| Dimension | Rating | Evidence |
-|-----------|--------|---------|
-| Assertion specificity | STRONG | All 11 assertions use `is True` or `is False` — strict bool identity, not just truthy/falsy |
-| Negative/error-path coverage | STRONG | Both return paths (True and False) each tested ≥3 ways; None and empty string edge cases covered |
-| Manual mutation reasoning | STRONG | Flipping `not in` to `in` in source fails AC1 tests. Removing falsy guard fails `test_none_returns_false`. Adding `url_list` to `_TRUSTED_SOURCE_TYPES` fails `test_url_list_returns_true` |
-| Test independence | STRONG | Each test imports `should_wrap` locally; no shared mutable state |
-| Descriptive test names | STRONG | All names self-documenting (`test_url_list_returns_true`, `test_none_returns_false`) |
+### AC Compliance Table
 
-#### Data Safety
-- Pure predicate tests. No LLM output, shared state, multi-step operations, or unbounded inputs. Clean.
-
-#### Implementation-Aware Test Gaps
-- `should_wrap()` has 3 code paths: `not source_type → False`, `source_type in _TRUSTED_SOURCE_TYPES → False`, `source_type not in _TRUSTED_SOURCE_TYPES → True`. All 3 paths exercised. No untested paths.
-
-#### Builder Process Quality
-| Metric | Value |
-|--------|-------|
-| Builder Notes sections | 1 |
-| Approach variation | N/A (pass-through, no implementation needed) |
-| Assessment | CLEAN |
-
-### Pass 2 — INFORMATIONAL
-- `content_safety.py` has duplicate module-level constant definitions (`_ADVISORY`, `_OPEN_TAG`, `_CLOSE_TAG` defined twice, lines 9–17 and ~47–57). Python silently overwrites with identical values — no functional impact. Pre-existing issue outside the scope of this task. Recommend cleanup in a future housekeeping task.
-
-### AC Compliance
 | AC Line | Evidence | Mapped Test | Status |
 |---------|----------|-------------|--------|
-| `should_wrap()` True for `url_list`, `authenticated_web`, unknown types | pytest 11 passed; `test_url_list_returns_true`, `test_authenticated_web_returns_true`, `test_unknown_future_type_returns_true`, `test_arbitrary_invented_string_returns_true` confirm `is True` | 4 tests | PASS |
-| `should_wrap()` False for `file`, `text`, `file_glob` | pytest 11 passed; `test_file_returns_false`, `test_text_returns_false`, `test_file_glob_returns_false` confirm `is False` | 3 tests | PASS |
-| Idempotency preserved | Arch-reviewed: covered in `test_content_safety_735.py`; out-of-scope for this task | N/A | N/A |
-| File: `tests/test_content_safety_inversion_775.py` | File exists, 11 tests, class `TestFromAC_ShouldWrapPredicate` | Full file | PASS |
+| AC1 — url_list, authenticated_web, unknown → wraps | `should_wrap("url_list") is True`, `should_wrap("authenticated_web") is True`, `should_wrap("rss_feed") is True`, `should_wrap("some_future_source") is True` | `test_url_list_returns_true`, `test_authenticated_web_returns_true`, `test_unknown_future_type_returns_true`, `test_arbitrary_invented_string_returns_true` | PASS |
+| AC2 — file, text, file_glob → no wrap | `should_wrap("file") is False`, `should_wrap("text") is False`, `should_wrap("file_glob") is False` + None/empty boundary tests | `test_file_returns_false`, `test_text_returns_false`, `test_file_glob_returns_false`, `test_none_returns_false`, `test_empty_string_returns_false` | PASS |
+| AC3 — idempotency (no double-wrap) | `wrapped_twice == wrapped_once` — strong equality assertion on actual `wrap_untrusted_content()` output | `test_idempotency_guard_no_double_wrap` (`test_content_safety_735.py:L70`) | PASS |
 
-### Confidence: .96
-### Verdict: PASS
-[[2026-04-11]]
+### Pass 1 Critical Checks
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| 5.0 AC-to-Test coverage | PASS | All 3 AC lines mapped to `TestFromAC_*` tests; no missing coverage |
+| 5.1 Security | PASS | Test file only; implementation is a frozenset membership check with no injection surface |
+| 5.2 TestFromAC integrity | PASS | No `TestFromAC_*` modifications detected — pass-through task |
+| 5.3 Test quality | STRONG | Strict `is True`/`is False` booleans throughout; deny-list inversion would break ≥4 tests on mutation; imports scoped per-test; descriptive names |
+| 5.4 Data safety | PASS | No shared mutable state; no persistence |
+| 5.5 Implementation-aware gap analysis | PASS | Both branches of `should_wrap()` (`if not source_type → False`; `not in _TRUSTED_SOURCE_TYPES`) exercised; idempotency guard path exercised; 100% coverage confirmed |
+| 5.6 Necessity | N/A | Test task, no new dependencies |
+| 5.7 Builder process | CLEAN | Single builder notes section, clean pass-through |
+
+### Deductions
+None.
+
+### Verdict
+Confidence: **.97** → **PASS #781 -> docs | confidence .97**
+[[2026-04-14]]
 ## Docs Gate
 ### Checklist
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
-| 1 | Behavior/API change | No | N/A | Pure test task (`type:test`). Builder confirmed zero code changes. `should_wrap()` was already implemented in #775. No interface change. |
-| 2 | Module docstrings | No | N/A | No modules created or modified by this task. `content_safety.py` docstrings verified accurate (read file — `should_wrap()` has full Args/Returns docstring, module docstring present). |
-| 3 | External attribution | No | N/A | "defense-in-depth" is a general security principle, not a traceable external implementation. No new external patterns used. |
-| 4 | CLI changes | No | N/A | No CLI additions or modifications. |
-| 5 | Research doc | No | N/A | No #781-specific research doc produced. "See research F4" refers to `775-phase1-browser-pipeline-schema.md` (parent task's research doc, file exists, linked from parent). |
+| 1 | Behavior/API change | No | N/A | Test-only task (type:test); no production code changed. `content_safety.py` untouched. `copilot-instructions.md` not affected. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. Pass-through task — tests already existed in `test_content_safety_inversion_775.py`. |
+| 3 | External attribution | No | N/A | No external repos, articles, or docs used. Standard assertions against an existing frozenset predicate. |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified. |
+| 5 | Research doc | No | N/A | No research doc produced for #781. "See research F4" in context references upstream parent #775 — no new `.owlbear/research/781*.md` exists. |
 
 ### Files Updated
-None — no docs impact.
+- None
 
-### Scratch Files
-No `.owlbear/scratch/781-*` files found. Nothing to clean.
+### Scratch Files Cleaned
+- None (`.owlbear/scratch/781-*` — no matches found)
 
-### Verdict
-No docs impact. Advancing to done.
-[[2026-04-11]]
+[[2026-04-14]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: `should_wrap()` True for `url_list`, `authenticated_web`, unknown types | 4 tests pass (`is True`): `test_url_list_returns_true`, `test_authenticated_web_returns_true`, `test_unknown_future_type_returns_true`, `test_arbitrary_invented_string_returns_true` | PASS |
-| AC2: `should_wrap()` False for `file`, `text`, `file_glob` | 5 tests pass (`is False`): `test_file_returns_false`, `test_text_returns_false`, `test_file_glob_returns_false`, `test_none_returns_false`, `test_empty_string_returns_false` | PASS |
-| AC3: Idempotency preserved | Arch-approved N/A: covered in `test_content_safety_735.py` (`test_idempotency_guard_no_double_wrap`) — verified passing | N/A |
-| AC4: File `tests/test_content_safety_inversion_775.py` | Exists, 11 tests, class `TestFromAC_ShouldWrapPredicate`, commit `045aa682` | PASS |
+| AC1 — url_list, authenticated_web, unknown → wraps | `test_url_list_returns_true`, `test_authenticated_web_returns_true`, `test_unknown_future_type_returns_true`, `test_arbitrary_invented_string_returns_true` — all assert `should_wrap() is True` | PASS |
+| AC2 — file, text, file_glob → no wrap | `test_file_returns_false`, `test_text_returns_false`, `test_file_glob_returns_false` + None/empty boundary | PASS |
+| AC3 — idempotency (no double-wrap) | `test_content_safety_735.py::test_idempotency_guard_no_double_wrap` — `wrapped_twice == wrapped_once` | PASS |
+| AC4 — File: test_content_safety_inversion_775.py | File exists, committed at `045aa682` | PASS |
 
 ### Test Results
-- pytest (task scope): 11/11 passed
-- pytest (content_safety domain): 27/27 passed
-- pytest (full suite): 3430 passed, 304 failed — all failures in unrelated modules (orchestrator, planner, analysis, etc.), none in content_safety
-- ruff: clean (0 violations)
+- pytest (scoped): 27 passed, 0 failed (4.80s)
+- pytest (full suite): 4195 passed, 362 failed, 8 skipped — no failures in task scope (`test_content_safety_inversion_775.py`, `test_content_safety_735.py`)
+- ruff: 1 violation (E501 in `serve/kanban/src/owlbear_kanban/engine.py:472`) — outside task scope, clean in scope
 
 ### Architect Quality: 4/5
-AC named `wrap_untrusted_content()` but actual function is `should_wrap()`. Architect review caught and corrected this. AC3 redundancy noted. Minor imprecision, not behavioral. Downstream agents handled correctly.
+AC lines are concrete and testable. Minor imprecision (AC names `wrap_untrusted_content()` but the function under test for source-type decisions is `should_wrap()`), caught and clarified by architect in review. No builder improvisation needed.
 
 ### Deduction Breakdown
-- Start: 1.00
-- No deductions applied (all AC evidenced, lint clean, reviewer thorough, no in-scope failures)
+- AC lines without evidence: 0 (all 4 PASS) → 0
+- Lint violations (in scope): 0 → 0
+- AC quality ≤ 3: No (4/5) → 0
+- Missing reviewer evidence: No (detailed, two rounds) → 0
+- Full-suite failures in scope: 0 → 0
 
-### Confidence: .98
+### Confidence: 1.00
 ### Action: archive

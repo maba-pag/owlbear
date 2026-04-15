@@ -20,7 +20,7 @@ Claim the task via `start_work` (atomic claim + retrieves task body). Check the 
 
 From the task body retrieved by `start_work`:
 
-<!-- NON_IMPL_TAGS: Authoritative list at w-dispatch-planning (agent dispatch table). -->
+<!-- NON_IMPL_TAGS: Authoritative list at w-arch-review (agent dispatch table). -->
 
 1. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, or `type:user-action`). If so, go to **Step 1a — Pass-through**.
 2. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.

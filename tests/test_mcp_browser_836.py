@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import inspect
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -42,6 +42,30 @@ def _make_mcp_ctx(allowlist=None) -> MagicMock:  # type: ignore[no-untyped-def]
     ctx = MagicMock()
     ctx.request_context.lifespan_context = AppContext(
         allowlist=allowlist if allowlist is not None else DomainAllowlist(domains=[])
+    )
+    return ctx
+
+
+def _make_mcp_ctx_with_mock_page() -> MagicMock:
+    """Return a MagicMock ctx with AppContext wired to a mock Playwright page.
+
+    Used by click/type_input/select tests — these tools require a real page object
+    and must not be called with page=None (they raise ToolError in that case).
+    """
+    from owlbear_mcp_browser.allowlist import DomainAllowlist
+    from owlbear_mcp_browser.server import AppContext
+
+    mock_locator = MagicMock()
+    mock_locator.click = AsyncMock()
+    mock_locator.fill = AsyncMock()
+    mock_locator.select_option = AsyncMock()
+    mock_page = MagicMock()
+    mock_page.locator = MagicMock(return_value=mock_locator)
+
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = AppContext(
+        allowlist=DomainAllowlist(domains=[]),
+        page=mock_page,
     )
     return ctx
 
@@ -190,28 +214,28 @@ class TestFromAC_AllToolsCallableWithCtx:
 
     @pytest.mark.asyncio
     async def test_click_called_with_ctx_and_selector(self) -> None:
-        """click(ctx, selector=...) returns a string result without error."""
+        """click(ctx, selector=...) with a mock page returns a string result without error."""
         from owlbear_mcp_browser.server import click
 
-        ctx = _make_mcp_ctx()
+        ctx = _make_mcp_ctx_with_mock_page()
         result = await click(ctx, selector="#submit-button")
         assert isinstance(result, str)
 
     @pytest.mark.asyncio
     async def test_type_input_called_with_ctx_selector_and_text(self) -> None:
-        """type_input(ctx, selector=..., text=...) returns a string result without error."""
+        """type_input(ctx, selector=..., text=...) with a mock page returns a string result without error."""
         from owlbear_mcp_browser.server import type_input
 
-        ctx = _make_mcp_ctx()
+        ctx = _make_mcp_ctx_with_mock_page()
         result = await type_input(ctx, selector="#search", text="hello world")
         assert isinstance(result, str)
 
     @pytest.mark.asyncio
     async def test_select_called_with_ctx_selector_and_value(self) -> None:
-        """select(ctx, selector=..., value=...) returns a string result without error."""
+        """select(ctx, selector=..., value=...) with a mock page returns a string result without error."""
         from owlbear_mcp_browser.server import select
 
-        ctx = _make_mcp_ctx()
+        ctx = _make_mcp_ctx_with_mock_page()
         result = await select(ctx, selector="#dropdown", value="option-a")
         assert isinstance(result, str)
 

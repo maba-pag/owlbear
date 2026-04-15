@@ -209,6 +209,6 @@ class KanbanEngine:
 ## Context
 
 - Prior research: `.owlbear/research/kanban-replacement-options.md` — recommended keep kanban-md at .90 confidence; overridden by distribution ambition growth
-- Voice deliberation: `.owlbear/briefs/draft-kanban-native/voices/` — architect (.82), data (.82), security (.88) confidence
+- Voice deliberation: `.owlbear/briefs/draft-kanban-native/opinions/` — architect (.82), data (.82), security (.88) confidence
 - Synthesis: `.owlbear/briefs/draft-kanban-native/synthesis.md` — .78 combined confidence
 - Board config: `.owlbear/kanban/config.yml` — 7 statuses, 5 priorities, next_id=704, claim_timeout=1h

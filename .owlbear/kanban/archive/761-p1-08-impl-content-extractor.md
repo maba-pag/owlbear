@@ -1,10 +1,10 @@
 ---
 id: 761
 title: 'P1-08: Impl — Content extractor'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:55:57.270970+00:00'
-updated: '2026-04-11T14:25:04.458220+00:00'
+updated: '2026-04-13T04:36:48.693773+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -25,164 +25,145 @@ All P1-07 tests pass. Depends on launcher (#758) + cleaner (#758b).
 
 Parent: #751
 
-[[2026-04-11]]
-## Research
-
-Validation pass of existing research doc `.owlbear/research/761-content-extractor-superseded.md` — findings confirmed current.
-
-**Verdict: SUPERSEDED.** All four AC items are covered:
-- `extractor.py` implements `extract()` and `extract_content()` (built under #788)
-- `cleaner.py` implements `strip_noise()`, `html_to_markdown()`, `clean()` (built under #788)
-- Login redirect: `cdp.py:check_sso_redirect()` — implemented and tested under #755
-- Static JS constraint: inherently satisfied — extractor operates on HTML strings
-
-Replacement tasks: #783 (RED tests, backlog) and #788 (GREEN impl, backlog) — both architect-approved under parent #775.
-
-No new follow-up tasks or decision requests needed.
-Confidence: .95
-[[2026-04-11]]
+[[2026-04-12]]
+## Research\n\nValidation pass of existing doc `.owlbear/research/761-content-extractor-superseded.md` — all findings confirmed current (2026-04-12).\n\n- Research doc: .owlbear/research/761-content-extractor-superseded.md\n- Sources: 7 studied, 7 high-relevance (all local/kanban)\n- Recommendation: Close as superseded (confidence: .95)\n- Follow-up tasks created: none — #783 (RED, todo) and #788 (GREEN, review) fully cover scope\n- Decision requests: none — T1 autonomous (stale duplicate closure)\n\n### Validation Evidence\n| #761 AC | Covered by | Status |\n|---------|-----------|--------|\n| Static JS-based DOM extraction | #788 AC1: `extract_content(html, url)` | Implemented |\n| Delegates to cleaner | #788 AC1-2: trafilatura + cleaner fallback | Implemented |\n| Login redirect detection | `cdp.py:check_sso_redirect()` + 5 tests | Implemented+Tested |\n| Only static/pre-defined JS | Inherent — extractor takes `html: str` | Satisfied |\n\nChallenge: SKIPPED — superseded task, no recommendation to challenge.\nRED partner #760 also superseded. Both should be closed.
+[[2026-04-12]]
 ## Architecture Review
-
-### Verdict: APPROVE (SUPERSEDED — pass-through)
-
-This task's entire scope has been re-planned and implemented under parent #775's decomposition:
-- `extractor.py` (`extract()`, `extract_content()`) — built under #788
-- `cleaner.py` (`strip_noise()`, `html_to_markdown()`, `clean()`) — built under #788
-- Login redirect detection (`cdp.py:check_sso_redirect()`) — built and tested under #755
-- Static JS constraint — moot; extractor operates on HTML strings, not browser JS
-
-Replacement tasks: #783 (RED tests, backlog) and #788 (GREEN impl, backlog) — both already architect-approved under #775.
 
 ### Evaluation
 
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Single responsibility | N/A | Superseded — no work to evaluate |
-| Interface clarity | N/A | AC items covered by #783/#788 AC |
-| Dependency correctness | N/A | Original deps (#758, #758b) also superseded |
-| Module layering | PASS | Verified: `extractor.py` imports from `cleaner.py` (same package), no upward imports |
-| TDD compliance | N/A | TDD pairs exist as #783/#788 |
-| KISS/YAGNI | N/A | No new scope |
-| Premise challenge | SUPERSEDED | All four AC items exist in codebase — confirmed via file reads |
-| Pattern consistency | PASS | Existing code follows package conventions |
-| Security surface | N/A | No new boundaries introduced by this task |
-| Single domain | N/A | Single domain (browser) |
+| Single responsibility | N/A | Superseded — no new work |
+| Interface clarity | N/A | Superseded — no new work |
+| Dependency correctness | PASS | No deps listed; correct — original deps (launcher #758 + cleaner #758b) are moot since #788 already delivered the implementation |
+| Module layering | N/A | Superseded — no new work |
+| TDD compliance | N/A | Superseded — tests exist under #783 |
+| KISS/YAGNI | N/A | Superseded — no new work |
+| Premise challenge | SUPERSEDED | All four AC items fully covered by #788 (impl) and #783 (tests), both architect-approved under parent #775 |
+| Pattern consistency | N/A | Superseded — no new work |
+| Security surface | N/A | Superseded — no new work |
+| Single domain | PASS | Browser domain only |
 
-### Codebase Evidence
-- `serve/browser/src/owlbear_browser/extractor.py` — `extract()` L15, `extract_content()` L48
-- `serve/browser/src/owlbear_browser/cleaner.py` — `strip_noise()`, `html_to_markdown()`, `clean()` all present
-- `serve/browser/src/owlbear_browser/cdp.py:116` — `check_sso_redirect()` implemented
+### Supersession Evidence (codebase-verified)
+
+| AC | Covered By | Evidence |
+|----|-----------|----------|
+| Static JS-based DOM extraction | #788 | `extractor.py:extract()` (L16) + `extract_content()` (L49); tested in `test_browser_content_775.py::TestFromAC_ContentExtractor` (8 tests) |
+| Delegates to cleaner for HTML→markdown | #788 | `extract()` calls `strip_noise()` + falls back to `html_to_markdown()` from `cleaner.py`; `clean()` composes both. Tested in `TestFromAC_HTMLCleaner` (10 tests) + `TestFromAC_NoiseRemoval` (8 tests) |
+| Login redirect detection (fail-fast) | #755/#788 | `cdp.py:check_sso_redirect()` (L116) raises `AuthenticationRequired` on IdP domains + login forms; 5 tests in `test_edge_launcher_cdp_755.py::TestFromAC_SSODetection` |
+| Only static/pre-defined JS | #788 | Inherently satisfied — `extractor.py` accepts `html: str`, no `page.evaluate()` in extraction path |
+
+### Lineage
+
+- Parent: #751 (Authenticated content pipeline)
+- RED partner: #760 (also superseded, already approved + in review)
+- Superseding tasks: #783 (tests, review) + #788 (impl, review) under parent #775
 
 ### Challenge Results
-- Challenger: SKIPPED — superseded task with no design decisions to challenge; all work verified in codebase
-- Architect response: N/A
+- Challenger: FALLBACK — challenger agent not in available agent roster
+- Self-challenge: supersession confidence .95, all 4 AC items codebase-verified with file paths and line numbers. No residual scope unaddressed. Consistent with #760 precedent.
 
-### Action Taken
-Advanced as superseded pass-through. No implementation needed — downstream agents should pass through without writing code or tests. All coverage exists under #783/#788 task lineage.
-[[2026-04-11]]
+### Verdict: APPROVE (SUPERSEDED — fast-track)
+### Action Taken: Advanced to todo. All AC items verified as covered by #783/#788/#755. Downstream agents should fast-track with pass-through notes — no new tests or code needed.
+[[2026-04-13]]
 ## Test-Writer Notes
-- Non-impl pass-through: SUPERSEDED task — all AC items already implemented and tested under the #775 decomposition.
-- `extractor.py` (`extract()`, `extract_content()`) — built under #788 (backlog)
-- `cleaner.py` (`strip_noise()`, `html_to_markdown()`, `clean()`) — built under #788
-- Login redirect detection (`cdp.py:check_sso_redirect()`) — built and tested under #755
-- Static JS constraint — inherently satisfied; no test surface
-- TDD pairs: #783 (RED) and #788 (GREEN) carry the test coverage for this scope
-- No tests written; no tests applicable.
-[[2026-04-11]]
+
+- Non-impl pass-through: task superseded — no new tests applicable.
+- All 4 AC items codebase-verified as covered by existing tests:
+
+| AC | Test Coverage | Location |
+|----|--------------|----------|
+| Static JS-based DOM extraction | `TestFromAC_ContentExtractor` (8 tests) | `test_browser_content_775.py` |
+| Delegates to cleaner for HTML→markdown | `TestFromAC_HTMLCleaner` (10) + `TestFromAC_NoiseRemoval` (8) | `test_browser_content_775.py` |
+| Login redirect detection (fail-fast) | `TestFromAC_SSODetection` (5 tests) | `test_edge_launcher_cdp_755.py` |
+| Only static/pre-defined JS | Inherently satisfied — `extractor.py` accepts `html: str` | structural |
+
+- Superseding tasks: #783 (RED/tests, in review) + #788 (GREEN/impl, in review)
+- Precedent: #760 (RED partner) also fast-tracked as superseded
+- Architect verdict: APPROVE (SUPERSEDED — fast-track), confidence .95
+- Passing through to builder (in-progress) for equivalent fast-track close.
+[[2026-04-13]]
 ## Builder Notes
 - Non-implementation task — no code changes needed.
-- SUPERSEDED pass-through confirmed by all prior pipeline stages (research, arch-review, test-writer).
-- All AC items implemented and tested under #775 decomposition:
-  - `extractor.py` (`extract()`, `extract_content()`) — built under #788
-  - `cleaner.py` (`strip_noise()`, `html_to_markdown()`, `clean()`) — built under #788
-  - Login redirect detection (`cdp.py:check_sso_redirect()`) — built and tested under #755
-  - Static JS constraint — inherently satisfied
-- Files changed: 0
-- Tests run: 0 (no test file for this task; coverage lives in #783/#788 lineage)
-- Lint: N/A
 - Passing through to review.
-[[2026-04-11]]
+- Superseded by #783 (tests) + #788 (impl) under parent #775.
+- All 4 AC items codebase-verified as covered by existing implementation and tests.
+[[2026-04-13]]
 ## Review Evidence
 
-**Type:** SUPERSEDED pass-through — no code changes, no tests written.
-
 ### Source Control
-Files changed: 0 (builder confirmed, independently verified — no diff).
+No production files changed. Only kanban task body mutations (status/claim fields). Correct behavior for superseded pass-through task.
 
-### Tests / Lint / Coverage
-N/A — no test file for this task. Coverage lives in #783/#788 lineage (`tests/test_browser_content_775.py`). Test pipeline not run for this task; test quality is evaluated in #783's own review cycle, not here.
+### quality-runner
+Not available in reviewer's agent roster. Fallback applied: codebase structural verification used in lieu of independent test execution. -0.03 deduction.
 
-### AC Compliance
+### AC Compliance Table
 
-| AC Line | Evidence | Mapped Test | Status |
-|---------|----------|-------------|--------|
-| Static JS-based DOM extraction | `serve/browser/src/owlbear_browser/extractor.py:extract()` L15 — HTML-string extraction via trafilatura + cleaner | `TestFromAC_ContentExtractor` (L33, `test_browser_content_775.py`) | COVERED |
-| Delegates to cleaner for HTML→markdown | `extractor.py` L12–13 imports `html_to_markdown`, `strip_noise`; fallback path L43 / L69 | `TestFromAC_HTMLCleaner` (L107) | COVERED |
-| Login redirect detection (fail-fast) | `serve/browser/src/owlbear_browser/cdp.py:116 check_sso_redirect()` — built and tested under #755 | #755 test lineage | COVERED |
-| Only static/pre-defined extraction JS | Inherently satisfied — extractor operates on HTML strings; no in-browser JS execution surface | Structural | COVERED |
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Static JS-based DOM extraction | `extractor.py:extract()` (L16) accepts `html: str`, calls `trafilatura.extract()` + `strip_noise()`. No `page.evaluate()` in path. `TestFromAC_ContentExtractor` — 8 tests confirmed present at lines L36, L40, L44, L53, L65, L73, L81, L96 | ✅ COVERED |
+| Delegates to cleaner for HTML→markdown | `extractor.py:extract()` falls back to `html_to_markdown()` from `cleaner.py` when trafilatura returns None. `TestFromAC_HTMLCleaner` — 10 tests confirmed present (L112–L191). `TestFromAC_NoiseRemoval` — 8 tests present from L209 | ✅ COVERED |
+| Login redirect detection (fail-fast) | `cdp.py:check_sso_redirect()` confirmed at L116; raises `AuthenticationRequired`. `TestFromAC_SSODetection` confirmed present at test_edge_launcher_cdp_755.py:244 (≥4 tests confirmed, 5 claimed by all upstream agents) | ✅ COVERED |
+| Only static/pre-defined JS | `extractor.py` accepts `html: str` — inherently satisfied; zero `page.evaluate()` in extraction path (codebase verified) | ✅ COVERED |
 
-### SUPERSEDED Determination Validity
+### TestFromAC Modifications
+None. Builder verified zero code changes (correct pass-through handling).
 
-All four AC items are verifiably implemented in the codebase:
-- `extractor.py:extract()` L15, `extract_content()` L48 — confirmed by direct file read
-- `cleaner.py:strip_noise()`, `html_to_markdown()`, `clean()` — confirmed by direct file read
-- `cdp.py:116 check_sso_redirect()` — confirmed by grep
-- 8 `TestFromAC_*` classes confirmed in `tests/test_browser_content_775.py` (lines 33, 107, 204, 345, 385, 406, 493, 593)
-- #783 and #788 confirmed as active kanban tasks carrying the TDD pairs
-
-### Pass 1 Critical Checks
-- **5.0 TestFromAC audit:** SKIP — no `TestFromAC_*` tests written for this task
-- **5.1 Security:** N/A — no code changes
-- **5.2 TestFromAC comparison:** SKIP — no tests to compare
-- **5.3 Test quality:** N/A — no tests written
-- **5.4 Data safety:** N/A — no code changes
-- **5.5 Impl-aware gap analysis:** N/A — no implementation
-- **5.7 Builder loop:** CLEAN — single pass, no retries
+### Assertion Quality (static read)
+`test_browser_content_775.py` — `TestFromAC_ContentExtractor` tests discriminating assertions (e.g., `raises TypeError` for non-str input, content presence tests). `TestFromAC_HTMLCleaner` uses specific string-contains assertions for element preservation. Would fail if cleaner module removed or `html_to_markdown`/`strip_noise` refactored away.
 
 ### Deductions
-0 deductions. All SUPERSEDED evidence independently verified.
+- −0.03: quality-runner unavailable — could not independently execute `test_browser_content_775.py` and `test_edge_launcher_cdp_755.py`
+- 0 other deductions: no code changed, no TestFromAC modifications, supersession verified 4× by 4 upstream agents with each node confirming codebase evidence
+
+### Supersession Validity
+4-agent consensus (researcher → architect → test-writer → builder) with independent codebase verification each time. All implementation files confirmed with claimed content. All referenced test classes confirmed present with correct structure. This is a factual verification, not an opinion — supersession is accurate.
 
 ### Verdict
-Confidence: .96 → PASS
-[[2026-04-11]]
+**Confidence: 0.94 → PASS #761 → docs**
+[[2026-04-13]]
 ## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Superseded pass-through — zero production files changed (confirmed by reviewer: "No production files changed. Only kanban task body mutations.") |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified for this task |
+| 3 | External attribution | No | N/A | Research doc S1–S7 are entirely local codebase and kanban sources — no external patterns used |
+| 4 | CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/761-content-extractor-superseded.md` exists, linked from task body. Follow-up tasks: none needed — scope fully covered by #783 (tests) + #788 (impl). |
 
-| # | Item | Applies? | Status | Evidence |
-|---|------|----------|--------|----------|
-| 1 | Behavior/API change → copilot-instructions.md | No | N/A | Files changed: 0 — SUPERSEDED pass-through, no code written |
-| 2 | Module docstrings | No | N/A | No Python modules created or modified by this task |
-| 3 | External attribution → sources/overview.md | No | N/A | No external patterns used |
-| 4 | CLI changes → README.md | No | N/A | No CLI changes |
-| 5 | Research doc | Yes | PASS | `.owlbear/research/761-content-extractor-superseded.md` exists; linked from task body (Research section, 2026-04-11) |
-| 6 | No impact (overall) | Yes | PASS | All items N/A — SUPERSEDED pass-through with 0 files changed |
+### Files Updated
+- None
 
-**Files updated:** None.  
-**Scratch files cleaned:** None found (`.owlbear/scratch/761-*` — no matches).
-[[2026-04-11]]
+### Scratch Files Cleaned
+- None found (no `.owlbear/scratch/761-*` files existed)
+[[2026-04-13]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Static JS-based DOM extraction | `serve/browser/src/owlbear_browser/extractor.py:extract()` L15 — confirmed | PASS |
-| Delegates to cleaner for HTML→markdown | `extractor.py` L12–13 imports `html_to_markdown`, `strip_noise` — confirmed | PASS |
-| Login redirect detection (fail-fast) | `serve/browser/src/owlbear_browser/cdp.py:116 check_sso_redirect()` — confirmed | PASS |
-| Only static/pre-defined extraction JS | Extractor operates on HTML strings, no browser JS execution surface — structural | PASS |
+| Static JS-based DOM extraction | `extractor.py:extract()` at L15 accepts `html: str`; `TestFromAC_ContentExtractor` (7 tests) in `test_browser_content_775.py:L33` — all passed in full suite | PASS |
+| Delegates to cleaner for HTML→markdown | `extractor.py` calls `strip_noise()` + `html_to_markdown()` from `cleaner.py` (L90, L202); `TestFromAC_HTMLCleaner` (10 tests, L109) + `TestFromAC_NoiseRemoval` (8 tests, L206) — all passed | PASS |
+| Login redirect detection (fail-fast) | `cdp.py:check_sso_redirect()` at L116 raises `AuthenticationRequired`; `TestFromAC_SSODetection` (5 tests) in `test_edge_launcher_cdp_755.py:L244` — all passed | PASS |
+| Only static/pre-defined JS | `extractor.py` accepts `html: str`, no `page.evaluate()` in extraction path — inherently satisfied | PASS |
+
+### Supersession Validity
+All 4 AC items fully delivered by #783 (tests) + #788 (impl) under parent #775. No production code changed for #761. 6-agent consensus (researcher → architect → test-writer → builder → reviewer → doc-writer) with independent codebase verification. Supersession is factual.
 
 ### Test Results
-- pytest: 1475 passed, 169 failed, 6 errors, 1 skipped — all failures in kanban domain (test_mcp_kanban_edit_task_476, test_pick_tasks_620, 6 kanban import errors), zero failures in browser/extractor scope
-- ruff: clean (serve/ + tests/)
+- pytest: 3460 passed, 302 failed, 8 skipped (63s). **Zero failures in task scope** — `test_browser_content_775.py` and `test_edge_launcher_cdp_755.py` both passed. 302 failures are pre-existing in unrelated domains (kanban, server, knowledge, package-boundary).
+- ruff: All checks passed
 
 ### Architect Quality: 4/5
-AC was specific with 4 clear deliverable items. Task was superseded due to upstream re-planning (#775 decomposition), not AC quality issues.
+AC was specific and verifiable — 4 concrete items, each mappable to implementation files and test classes. Supersession was correctly identified by researcher; architect approved fast-track. Minor gap: AC could have been marked superseded earlier to avoid pipeline pass-through overhead.
 
 ### Deduction Breakdown
-- Start: 1.00
-- AC lines with no evidence: 0 (all 4 verified) → −0
-- Lint violations: 0 → −0
-- AC quality ≤ 3: no (4/5) → −0
-- Missing reviewer evidence: no (detailed, PASS) → −0
-- Full-suite failures in task scope: 0 → −0
-- Total deductions: 0
+- AC lines without evidence: 0 (all 4 verified) → 0
+- Lint violations: 0 → 0
+- AC quality ≤ 3: no (4/5) → 0
+- Missing reviewer evidence: no (detailed, PASS at .94) → 0
+- Full-suite failures in task scope: 0 → 0
 
 ### Confidence: .98
 ### Action: archive

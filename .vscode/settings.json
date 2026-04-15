@@ -57,7 +57,6 @@
     "uv run python": true,
     "uv run ruff": true
   },
-  "chat.tools.terminal.backgroundNotifications": true,
   "chat.tools.terminal.blockDetectedFileWrites": "never",
   "chat.tools.urls.autoApprove": {
     "*": true
@@ -74,6 +73,7 @@
     "charliermarsh.ruff": 3,
     "ms-python.vscode-pylance": 2
   },
+  "files.eol": "\n",
   "files.exclude": {
     ".venv": true,
     "**/__pycache__": true,

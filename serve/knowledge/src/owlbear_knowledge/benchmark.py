@@ -34,21 +34,16 @@ _MIN_DIFFERING_QUERIES = 3
 _TOP_K = 3
 
 
-def main(args: list[str] | None = None) -> int:
-    """Run the search quality benchmark.
+def run_benchmark(db_path: Path) -> int:
+    """Execute the search quality benchmark against the knowledge DB at *db_path*.
 
     Args:
-        args: Command-line arguments (defaults to ``sys.argv[1:]``).
+        db_path: Directory containing ``local.db`` and a ``vectors/`` sub-directory.
 
     Returns:
-        0 on success, 1 when any assertion fails, 2 for argument parse errors.
+        0 on success, 1 when any assertion fails.
     """
-    parser = argparse.ArgumentParser(description="OwlBear search quality benchmark")
-    parser.add_argument("--db-path", required=True, help="Path to the knowledge DB directory")
-    parsed = parser.parse_args(args)
-
-    db_path = Path(parsed.db_path)
-    conn = sqlite3.connect(str(db_path / "knowledge.db"))
+    conn = sqlite3.connect(str(db_path / "local.db"))
     graph = GraphStore(conn)
     vector_store = QdrantVectorStore(str(db_path / "vectors"))
     provider = BgeM3EmbeddingProvider()
@@ -91,6 +86,22 @@ def main(args: list[str] | None = None) -> int:
         return 1
 
     return 0
+
+
+def main(args: list[str] | None = None) -> int:
+    """Run the search quality benchmark.
+
+    Args:
+        args: Command-line arguments (defaults to ``sys.argv[1:]``).
+
+    Returns:
+        0 on success, 1 when any assertion fails, 2 for argument parse errors.
+    """
+    parser = argparse.ArgumentParser(description="OwlBear search quality benchmark")
+    parser.add_argument("--db-path", required=True, help="Path to the knowledge DB directory")
+    parsed = parser.parse_args(args)
+
+    return run_benchmark(Path(parsed.db_path))
 
 
 if __name__ == "__main__":

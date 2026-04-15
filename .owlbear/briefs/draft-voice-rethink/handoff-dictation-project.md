@@ -142,7 +142,7 @@ The following OwlBear voice I/O research documents have been archived to `resear
 | `voice-addon-stt-moonshine.md` | Moonshine STT integration for voice addon |
 | `voice-channel-import.md` | Voice channel import/adapter patterns |
 | `voice-io.md` | Voice I/O subsystem overview |
-| `voice-panel-handbook.md` | Voice panel integration handbook |
+| `ideation-panel-handbook.md` | Ideation panel integration handbook |
 | `voice-process-manager.md` | Voice process manager design |
 | `voice-protocol-models.md` | Voice protocol data models |
 | `voice-stdio-protocol.md` | Voice stdio protocol specification |

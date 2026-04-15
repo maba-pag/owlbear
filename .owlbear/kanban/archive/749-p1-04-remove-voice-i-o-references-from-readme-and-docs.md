@@ -1,10 +1,10 @@
 ---
 id: 749
 title: 'P1-04: Remove voice I/O references from README and docs'
-status: done
+status: archived
 priority: important
 created: '2026-04-10T10:36:47.149977+00:00'
-updated: '2026-04-12T12:49:59.954074+00:00'
+updated: '2026-04-13T12:14:26.475658+00:00'
 tags:
 - phase-1
 - type:docs
@@ -43,76 +43,71 @@ The README.md directory layout table includes a `serve/voice/` row that must be 
 - No files changed
 [[2026-04-11]]
 Verification pass — all AC satisfied (already noted in Builder Notes above).
-[[2026-04-12]]
+[[2026-04-13]]
 ## Review Evidence
 
-**Type:** docs-only task — no code changes, no tests applicable.
+**Type:** Docs-only review — no code changes, no tests.
 
-**Changed files (builder report):** none — builder passed through as already satisfied by #747.
+**Source control check:** Zero files changed — builder correctly identified pass-through dependency on #747.
 
-**Independent verification (direct file reads):**
+**AC Compliance:**
 
-| AC | Criterion | Evidence | Status |
-|----|-----------|----------|--------|
-| AC1 | `serve/voice/` row absent from README.md layout table | README.md lines 31–46 read directly: rows are `serve/orchestrator/`, `serve/knowledge/`, `serve/mcp-kanban/`, `serve/mcp-knowledge/`, `serve/mcp-memory/` — no `serve/voice/` row | PASS |
-| AC2 | No other voice I/O references in README.md | Full 145-line read: zero "voice" occurrences anywhere | PASS |
-| AC3 | README-consumer.md has zero voice references | Full 130-line read: zero "voice" occurrences anywhere | PASS |
-| AC4 | Ideation domain voice references untouched | No files edited by #749; `.owlbear/briefs/README.md` ideation voice references intact and out of scope | PASS |
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1 — `serve/voice/` row absent from README.md | Direct file read (lines 1–250) + grep: zero matches for "serve/voice" | PASS |
+| AC2 — No other voice I/O refs in README.md | grep "voice" scoped to README.md: zero matches | PASS |
+| AC3 — README-consumer.md clean | Direct file read (lines 1–150) + grep "voice": zero matches | PASS |
+| AC4 — Ideation domain voice refs untouched | Only "voice" matches in README*.md glob are in `.owlbear/briefs/README.md` (out-of-scope); contain expected ideation domain terms (architect, critic, etc.) — not voice I/O; neither target file was touched | PASS |
 
-**Test coverage:** None required — `type:docs` scratch-tier task with no code paths.
-**Security:** No code changes, no attack surface introduced.
-**Deductions:** 0
+**Deductions:** 0  
+**Confidence:** .97
 
-**Verdict:** PASS #749 -> docs | confidence .97
-[[2026-04-12]]
+**Verdict:** PASS #749 → docs | confidence .97
+[[2026-04-13]]
 ## Docs Gate
 ### Checklist
 | # | Check | Applies? | Status | Evidence |
 |---|-------|----------|--------|----------|
-| 1 | Behavior/API change | No | N/A | Docs-only removal task; no behavior, API, or convention changed |
-| 2 | Module docstrings | No | N/A | Zero Python files touched by this task |
+| 1 | Behavior/API change | No | N/A | Pure README cleanup; no behavior or API surface changed |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
 | 3 | External attribution | No | N/A | No external patterns used |
 | 4 | CLI changes | No | N/A | No CLI commands added or modified |
-| 5 | Research doc | No | N/A | Scratch-tier `type:docs` task; no research doc produced |
+| 5 | Research doc | No | N/A | Scratch-tier docs task; no research doc produced |
 
 ### Independent Verification
-- `grep "voice" README.md` (root) → 0 matches confirmed
-- `grep "serve/voice" README.md` → 0 matches confirmed
-- `grep "voice" README-consumer.md` → 0 matches confirmed
-- All "voice" grep hits resolve to `.owlbear/briefs/README.md` (ideation domain, AC4 out-of-scope)
-- `## Review Evidence` section present and complete
+- grep "voice" scoped to `README.md`: zero matches (all hits are in `.owlbear/briefs/README.md` — ideation domain, out of scope) ✓
+- grep "voice" scoped to `README-consumer.md`: zero matches ✓
+- No scratch files found matching `749-*`
+- Review Evidence section present and accurate
 
 ### Files Updated
-- None
+None. Pass-through — AC satisfied by #747 builder; no changes required.
 
-### Scratch Files Cleaned
-- None (no `749-*` files found in `.owlbear/scratch/`)
-[[2026-04-12]]
+### Scratch Cleaned
+No scratch files found.
+[[2026-04-13]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: `serve/voice/` row removed from README.md layout table | grep "serve/voice" README.md → 0 matches; reviewer read lines 31-46 confirming no row | PASS |
-| AC2: No other voice I/O references in README.md | grep "voice" README.md → 0 matches in root README.md | PASS |
-| AC3: README-consumer.md checked for voice references | grep "voice" README-consumer.md → 0 matches | PASS |
-| AC4: Ideation domain voice references untouched | All "voice" hits resolve to `.owlbear/briefs/README.md` (ideation domain, out-of-scope); zero files edited by #749 | PASS |
+| AC1 — `serve/voice/` row removed from README.md | grep "serve/voice" in README.md: zero matches | PASS |
+| AC2 — No other voice I/O refs in README.md | grep "voice" in README.md: zero matches (all hits in share/agents/README.md and .owlbear/briefs/README.md — ideation domain, out-of-scope) | PASS |
+| AC3 — README-consumer.md clean | grep "voice" in README-consumer.md: zero matches | PASS |
+| AC4 — Ideation domain voices untouched | All "voice" matches are ideation domain refs (architect-voice, critic-voice, etc.) in share/agents/ and .owlbear/briefs/ — correctly preserved | PASS |
 
 ### Test Results
-- pytest: 4021 passed, 315 failed, 3 errors, 8 skipped (175s). All failures pre-existing across unrelated modules (kanban, pick_tasks, analysis, contentfetcher, lint_guard). Zero files changed by #749 → no regressions possible.
-- ruff: clean (0 violations in serve/ and tests/)
+- pytest: 4083 passed, 335 failed, 8 skipped — all failures pre-existing, none in task scope (zero code changes)
+- ruff: clean
 
 ### Architect Quality: 4/5
-AC lines are specific and verifiable with clear file targets. AC4 guard rail against over-removal is good design. Minor gap: "voice I/O" vs "ideation domain voice" distinction could be more precise, but AC4 compensates.
+AC was specific, verifiable, and well-scoped. The pass-through scenario (dependency #747 already satisfied AC) wasn't anticipated but AC remained clearly testable.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (all 4 verified) → 0
-- Lint violations: none → 0
+- AC lines with no evidence: 0 (all 4 verified) → 0
+- Lint violations: 0 → 0
 - AC quality ≤ 3: no (4/5) → 0
-- Missing reviewer evidence: no (detailed, PASS) → 0
-- Full-suite failures in task scope: none → 0
+- Missing reviewer evidence: no (present, detailed, PASS) → 0
+- Full-suite failures in task scope: 0 → 0
 
-### Confidence: 1.00
+### Confidence: .98
 ### Action: archive
-
-### Commits
-No commits — docs-only pass-through task; AC already satisfied by #747 builder.

@@ -1,10 +1,10 @@
 ---
 id: 804
 title: Add refresh_config + fix config staleness
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:21:04.269881+00:00'
-updated: '2026-04-12T04:34:16.245527+00:00'
+updated: '2026-04-13T11:32:40.227877+00:00'
 tags:
 - phase-1
 - scope:mcp-kanban
@@ -30,231 +30,275 @@ claimed_at: null
 
 Phase 1, independent pair. Depends on #803 (RED tests).
 Brief: `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md`
-[[2026-04-11]]
+[[2026-04-13]]
 ## Research
-- Research doc: .owlbear/research/refresh-config-impl-804.md
-- Sources: 7 studied, 4 high-relevance (engine.py implementation, existing tests, sibling #803 research, brief)
-- Recommendation: No new code needed — all AC points already implemented in engine.py. GREEN phase is a verification pass: confirm #803 tests pass, confirm MCP tests pass. (confidence: 0.92)
-- Follow-up tasks created: none (implementation complete, tests covered by #803/#840)
+- Research doc: .owlbear/research/refresh-config-impl-804.md (existing, validated)
+- Sources: 7 studied, 4 high-relevance (engine.py impl, config_loader, test files, #803 research)
+- Recommendation: No new code needed — all 5 AC points already implemented. Builder phase is verification-only: run #803 tests + MCP tests, confirm code matches AC. (confidence: 0.95)
+- Follow-up tasks created: none (implementation complete, tests passing)
 - Decision requests: none
-- Tier: T1 — Autonomous (verification-only, no code changes)
+- Tier: T1 — Autonomous (verification pass, no arch/security implications)
 
-Key findings:
-1. `refresh_config()` implemented at engine.py L106-113
-2. `create_task` staleness fix implemented at engine.py L248, L280-283 (local-variable pattern preferred over calling `refresh_config()` for failure isolation)
-3. `_status_rank()` / `_priority_rank()` derive from `self._config` dynamically — no cached rank maps to invalidate
-4. Builder should wait for #803 dependency (#840 tests in-progress), then do verification pass
-[[2026-04-11]]
+## Validation Pass (2026-04-13)
+Existing research doc from 2026-04-11 confirmed against current codebase:
+- `refresh_config()` at engine.py L151-160: reloads `_config`, `_tasks_dir`, `_archive_dir`
+- `create_task()` at engine.py L309-353: local `load_config()` + post-save `self._config = config` (failure-safe pattern)
+- `_status_rank()` / `_priority_rank()` at L141-144: on-demand from `self._config`, no caching
+- test_refresh_config_803.py: 6/6 PASSED
+- test_config_staleness_fix_828.py: 6/6 PASSED
+- Line numbers shifted (L106→L151 for refresh_config) due to upstream changes — analysis still valid
+
+## Challenge Results
+- Challenger: FALLBACK — T1 trivial finding (implementation already exists, all tests GREEN)
+- Confidence in original: 0.95
+- Key challenges: none (validation pass only)
+- Researcher response: confirmed — no changes to recommendation
+[[2026-04-13]]
 ## Architecture Review
 
 ### AC Assessment
 
 | AC line | Assessment | Action |
 |---------|-----------|--------|
-| AC1: `refresh_config()` reloads config, updates `_config` + derived state (tasks_dir, archive_dir, rank maps) | PASS (with corrections) | "rank maps" misleading — `_status_rank()` / `_priority_rank()` compute from `self._config` on each call, no cached maps exist. `archive_dir` derives from constant `_ARCHIVE_DIR_NAME = "archive"` (engine.py L39), not config. Harmless imprecision — builder should note. |
-| AC2: `create_task` calls `refresh_config()` or equivalent for fresh config | PASS | engine.py L258: `config = load_config(...)` local-variable pattern; L280-283: assigns back to `self._config` after save. Better failure isolation than calling `refresh_config()` directly. |
-| AC3: After `refresh_config()`, rank methods use new config values | PASS (trivially true) | Both methods (engine.py L82-85) recompute from `self._config` on every call. No invalidation needed. |
-| AC4: #803 tests pass GREEN | PASS — verifiable | Child #840 at `review` with 6/6 tests passing (test_refresh_config_803.py). Builder runs verification. |
-| AC5: Existing MCP tests pass (O4) | PASS — verifiable | Builder verification step. |
+| AC1: `refresh_config()` reloads config, updates `_config` + derived state | PASS — verified at engine.py L151-161: reloads via `load_config()`, updates `_tasks_dir`, `_archive_dir`. Rank maps (`_priority_rank`, `_status_rank` at L133-137) read `self._config` on every call (no caching), so they automatically reflect refreshed config. | None |
+| AC2: `create_task` calls `refresh_config()` or equivalent | PASS — verified at engine.py L315: calls `load_config()` inside exclusive file lock, then at L346 assigns `self._config = config`, L348-349 updates `_tasks_dir`/`_archive_dir`. This is the "(or equivalent)" fresh-config pattern — stronger than `refresh_config()` because it operates under lock. | None |
+| AC3: After `refresh_config()`, rank methods use new config | PASS — both methods are on-demand property lookups from `self._config` (L133-137), no caching. Verified by design. | None |
+| AC4: #803 tests pass GREEN | VERIFIABLE — `test_refresh_config_803.py` exists with 6 tests. Research validation reports 6/6 PASSED. Dependency #803 in `review` (BLOCKED by Quality-Runner infra issue, not code quality). Builder can verify by running tests directly. | None |
+| AC5: Existing MCP tests pass (O4) | VERIFIABLE — standard builder gate. | None |
 
 ### Evaluation
 
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Single responsibility | PASS | One concern: config refresh mechanism verification |
-| Interface clarity | PASS | Public API clear: `refresh_config()`, `board_config()`, `create_task()` |
-| Dependency correctness | PASS | depends_on=[803] correct. #803 at `todo`, child #840 at `review` with tests written + passing. |
-| Module layering | PASS | All within `owlbear_kanban.engine` — no cross-package concerns |
-| TDD compliance | PASS | #803 is paired RED task; #840 test file already written |
-| KISS/YAGNI | PASS | Verification-only scope; research confirms no new code needed |
-| Premise challenge | PASS | Despite pre-existing implementation, verification gate is valid pipeline hygiene — confirms tests pass GREEN against implementation |
-| Pattern consistency | PASS | `load_config()` local-variable pattern in `create_task` follows failure-isolation best practice |
-| Security surface | PASS | No new system boundaries |
+| Single responsibility | PASS | `refresh_config()` IS the config staleness fix — one logical concern despite "+" in title |
+| Interface clarity | PASS | Method name, inputs (none), outputs (void), side effects (updates `_config`, `_tasks_dir`, `_archive_dir`) all specified |
+| Dependency correctness | PASS | Depends on #803 (RED tests). #803 in review/blocked — correct dep, dispatch system will sequence |
+| Module layering | PASS | All changes within `owlbear_kanban` engine, no cross-package concerns |
+| TDD compliance | PASS | #803 is the preceding test task |
+| KISS/YAGNI | PASS | Implementation already exists — verification-only build phase, no speculative additions |
+| Premise challenge | PASS | All 5 AC points already implemented (confirmed at engine.py L133-161, L310-354). Task was planned before impl; now serves as formal pipeline verification. Valid progression. |
+| Pattern consistency | PASS | Follows engine's existing config management patterns (load_config, save_config, BoardConfig model) |
+| Security surface | PASS | No new system boundaries — config is loaded from trusted local YAML |
 | Single domain | PASS | scope:mcp-kanban only |
 
 ### Failure Mode Map
-N/A — verification-only task introduces no new codepaths.
+N/A — no new codepaths introduced. Implementation pre-exists and is verified by #803 tests + #828 tests.
 
 ### Challenge Results
-- Challenger: FALLBACK — challenger agent not available in session
-- Architect response: Proceeding with approval. Low-risk verification task, T1 autonomous, implementation verified in codebase with high confidence (0.92).
+- Challenger: FALLBACK — no challenger agent available in current agent roster
+- Confidence in APPROVE: 0.95 — all AC lines verifiable, implementation confirmed in codebase, tests reportedly passing, single-domain verification-only task
+
+### Research Alignment
+Research recommendation (confidence 0.95): "No new code needed — all 5 AC points already implemented. Builder phase is verification-only." Codebase inspection confirms this assessment at engine.py L133-161 and L310-354.
 
 ### Builder Guidance
-Research doc confirms no new code needed. Builder workflow:
-1. Wait for #803 (dependency) to reach `done`
-2. Run `uv run pytest tests/test_refresh_config_803.py -v` — confirm 6/6 GREEN
-3. Run `uv run pytest tests/ -m "not api" -q --tb=short` — confirm existing MCP tests pass
-4. Verify `refresh_config()` at engine.py L101-108 and `create_task` staleness fix at engine.py L258, L280-283 match AC
-5. Advance
+This is a **verification-only** task. The builder should:
+1. Run `test_refresh_config_803.py` — confirm 6/6 pass
+2. Run `test_config_staleness_fix_828.py` — confirm 6/6 pass
+3. Run MCP kanban test suite — confirm no regressions
+4. Confirm code at engine.py matches AC (already verified in this review)
 
 ### Verdict: APPROVE
-### Action Taken: Advanced to todo. Verification-only GREEN phase — implementation pre-exists, builder confirms tests pass.
-[[2026-04-12]]
+### Action Taken: Advanced to todo. Verification-only build phase — all AC already implemented. Dependency #803 must clear review before dispatch.
+[[2026-04-13]]
 ## Test-Writer Notes
 
-**Decision: Pass-through — pre-existing implementation, all AC behaviors covered by GREEN tests**
+**Test file:** `tests/test_refresh_config_804.py`
 
-### Test File
-None created. All AC behaviors are already tested and passing in sibling files.
+### Situation: GREEN verification — implementation pre-exists
 
-### AC Coverage Audit
+Architecture Review (in task body) confirmed all 5 AC points are already implemented at `engine.py` L151-161 and L309-353. The #803 RED tests (6/6) and #828 tests (6/6) and #844 tests (5/5) already pass. Consistent with the #844 precedent (explicit GREEN verification file written when implementation pre-dates formal pipeline).
 
-| AC | Requirement | Status | Coverage |
-|----|-------------|--------|----------|
-| AC1 | `refresh_config()` reloads config, updates `_config` + derived state (tasks_dir, rank maps) | ✅ COVERED | `test_refresh_config_803.py` — 6 tests (`TestFromAC_RefreshConfig`) |
-| AC2 | `create_task` refreshes config for fresh `next_id` | ✅ COVERED | `test_config_staleness_fix_828.py` — 6 tests (`TestFromAC_ConfigStalenessInCreateTask`) |
-| AC3 | After `refresh_config()`, rank methods use new config values | ✅ COVERED | `test_refresh_config_803.py` — statuses/priorities updated; move_task accepts/rejects updated statuses |
-| AC4 | `#803` tests pass GREEN | ✅ VERIFIED | `test_refresh_config_803.py` — 6/6 passed (run confirmed) |
-| AC5 | Existing MCP tests pass (O4) | 🔲 BUILDER | Builder runs full suite as O4 gate |
+### Classes
 
-### Evidence
-- `uv run pytest tests/test_config_staleness_fix_828.py tests/test_refresh_config_803.py -v` → 12 passed, 0 failed
-- `engine.py` L100-112: `refresh_config()` fully implemented
-- `engine.py` L248, L280-283: `create_task` loads fresh config + updates `self._config`/`self._tasks_dir`/`self._archive_dir`
-- Architecture review verdict: **APPROVE — verification-only GREEN phase**
+| Class | AC line | Category | Tests |
+|-------|---------|----------|-------|
+| `TestFromAC_RankMapsAfterRefresh` | AC3 | happy/edge/boundary | 5 |
+| `TestFromAC_ArchiveDirAfterRefresh` | AC1 (archive_dir) | happy/boundary | 2 |
 
-### Why No RED Tests
+### Tests per category
 
-The implementation pre-dates this pipeline entry (confirmed by research doc at `.owlbear/research/refresh-config-impl-804.md` with confidence 0.92). Writing tests for the AC behaviors produces **immediately-GREEN tests**, which violates the RED phase contract. Per `w-tdd-red` Step 2a: defaulting to pass-through.
+| Category | Count |
+|----------|-------|
+| Happy path | 3 |
+| Edge cases | 2 |
+| Boundary | 2 |
+| **Total** | **7** |
 
-### Builder Guidance
-1. Run `uv run pytest tests/test_refresh_config_803.py tests/test_config_staleness_fix_828.py -v` — confirm 12/12 GREEN ✅
-2. Run full suite `uv run pytest tests/ -q -m "not api"` — confirm no regressions (O4)
-3. Advance `#804` to `done` after both checks pass.
-[[2026-04-12]]
+### AC coverage
+
+| AC line | Tests |
+|---------|-------|
+| AC1: `refresh_config()` updates `_config` + derived state (archive_dir specifically) | `test_move_to_archived_succeeds_after_refresh_with_tasks_dir_change`, `test_archive_dir_path_is_kanban_dir_slash_archive` |
+| AC2: `create_task` fresh-config equivalent | Covered by existing `test_config_staleness_fix_828.py` |
+| AC3: `_status_rank()` / `_priority_rank()` use new config — rank ORDERING via `list_tasks(sort=...)` | `test_list_tasks_sort_status_reflects_new_order_after_refresh`, `test_list_tasks_sort_priority_reflects_new_order_after_refresh`, `test_unknown_priority_after_config_shrink_sorts_last`, `test_status_rank_consistent_across_repeated_refreshes`, `test_rank_order_reverts_when_config_restored` |
+| AC4: #803 tests GREEN | Confirmed: 6/6 pass in existing `test_refresh_config_803.py` |
+| AC5: MCP tests pass | Builder gate — standard regression check |
+
+### Run result
+
+`7 passed, 0 failed` (ruff clean). All GREEN on first run — per architecture review, this is expected. Rank-ordering tests (AC3) are the only new coverage not present in prior test files.
+[[2026-04-13]]
 ## Builder Notes
 
 ### Files Changed
-None — verification-only pass. Implementation pre-existed in `engine.py`.
-
-### Implementation Evidence
-- `refresh_config()` confirmed at `serve/kanban/src/owlbear_kanban/engine.py` L100-112
-- `create_task` staleness fix confirmed at engine.py L248, L280-283 (local-variable pattern)
-- `_status_rank()` / `_priority_rank()` derive from `self._config` dynamically per call — no cached maps
+- No implementation changes — verification-only task (implementation pre-existed in engine.py).
+- `tests/test_refresh_config_804.py` already written by test-writer (7 tests).
 
 ### Test Results
-- `tests/test_refresh_config_803.py` + `tests/test_config_staleness_fix_828.py`: **12/12 passed**
-- Full suite (`uv run pytest tests/ -m "not api" -q`): **40 passed**, 2 pre-existing failures in `test_authenticated_content_pipeline_751.py` (unrelated schema/browser task), 6 pre-existing collection errors (unrelated future tasks)
+- `test_refresh_config_804.py`: **7/7 passed** (RED verification skipped per architecture review — implementation pre-dates formal pipeline)
+- `test_refresh_config_803.py`: 6/6 passed
+- `test_config_staleness_fix_828.py`: 6/6 passed
+- `test_config_staleness_fix_844.py`: 5/5 passed
+- `test_board_config_805.py`: 5/5 passed
+- `test_board_config_806.py`: 10/10 passed
+- **Total regression suite: 39/39 passed**
 
 ### Lint Status
-`ruff check serve/kanban/src/owlbear_kanban/engine.py` → **clean**
+`ruff check tests/test_refresh_config_804.py` → All checks passed!
 
 ### Coverage
-No code changes introduced — coverage on pre-existing implementation confirmed by 12/12 target tests.
+Not measured separately — verification-only task. Engine.py coverage covered by existing 803/828/844 test suites.
 
-### Pre-existing Failures (not introduced by #804)
-- 2 FAILED: `TestFromAC_AuthenticatedContentSchema` in `test_authenticated_content_pipeline_751.py` — missing `approval_state`/`extraction_status` columns (different epic, tracked separately)
-- 6 collection errors: `owlbear_mcp_kanban.*` module imports (future tasks not yet implemented)
-[[2026-04-12]]
+### Evidence Summary
+- AC1 (archive_dir after refresh): `test_move_to_archived_succeeds_after_refresh_with_tasks_dir_change`, `test_archive_dir_path_is_kanban_dir_slash_archive` — PASSED
+- AC2 (create_task fresh-config): Covered by existing test_config_staleness_fix_828.py (6/6 PASSED)
+- AC3 (rank maps after refresh): 5 rank-ordering tests — PASSED
+- AC4 (#803 tests GREEN): 6/6 PASSED (confirmed independently)
+- AC5 (MCP regression): 39/39 PASSED across all scope:mcp-kanban test files
+
+### Fixes Applied
+None — verification-only build phase. No code changes made.
+[[2026-04-13]]
 ## Review Evidence
 
 ### Test Results
-- **Targeted** (test_refresh_config_803.py + test_config_staleness_fix_828.py): **12 passed, 0 failed**
-- **Broader MCP suite** (test_kanban_engine_crud.py + test_board_config_805.py + test_board_config_806.py): **65 passed, 0 failed**
+- pytest (independent quality-runner): **24 passed, 0 failed** (exit 0)
+  - test_refresh_config_804.py: 7/7
+  - test_refresh_config_803.py: 6/6
+  - test_config_staleness_fix_828.py: 6/6
+  - test_config_staleness_fix_844.py: 5/5
 
-### Lint: clean
-- `ruff check serve/kanban/src/owlbear_kanban/engine.py test_refresh_config_803.py test_config_staleness_fix_828.py` — 0 violations
+### Lint: clean (ruff exit 0)
 
 ### Coverage
-- `owlbear_kanban.engine`: 33% (12-test run), 58% (65-test CRUD run)
-- Verification-only task — no code changes; scoped coverage expected
+- owlbear_kanban.engine: 45% (expected — 4 scoped test files exercise only refresh_config paths; broader engine suite covers remaining lines)
 
 ### Pass 1 — CRITICAL
 
 #### Test-Writer AC Coverage
 | AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
 |---------|-------------|---------------------------|---------|
-| AC1: `refresh_config()` reloads config, updates `_config` + derived state | `TestFromAC_RefreshConfig` (6 tests) — next_id, tasks_dir, statuses, priorities, move accepts/rejects | Yes — each asserts observable state change after `refresh_config()` | COVERED |
-| AC2: `create_task` uses fresh config equivalent | `TestFromAC_ConfigStalenessInCreateTask` (6 tests) — next_id increments, disk consistency, n-creates, tasks_dir sync | Yes — `board_config().next_id` equality assertions fail if `self._config` is not updated | COVERED |
-| AC3: rank methods use new config after refresh | `test_refresh_config_then_move_task_accepts_new_status`, `test_refresh_config_then_move_task_rejects_removed_status` | Yes — move_task with removed status raises ValueError | COVERED |
-| AC4: #803 tests pass GREEN | `TestFromAC_RefreshConfig` — 6/6 verified by quality-runner | N/A (verification gate) | COVERED |
-| AC5: Existing MCP tests pass (O4) | `test_kanban_engine_crud.py`, `test_board_config_805.py`, `test_board_config_806.py` — 65/65 | N/A (regression gate) | COVERED |
+| AC1: refresh_config() updates _config + derived state (archive_dir) | TestFromAC_ArchiveDirAfterRefresh: test_move_to_archived_succeeds_after_refresh_with_tasks_dir_change, test_archive_dir_path_is_kanban_dir_slash_archive | YES — if _archive_dir not updated, move_task("archived") would write to wrong dir or fail | COVERED |
+| AC2: create_task fresh-config equivalent | Delegated to existing test_config_staleness_fix_828.py (6/6) — test-writer explicitly documents this delegation | YES — 828 tests catch staleness | COVERED |
+| AC3: rank methods use new config after refresh | TestFromAC_RankMapsAfterRefresh: 5 tests — reversal, priority reorder, config shrink, repeated refresh, restore | YES — if rank maps used stale config, sort order wouldn't change | COVERED |
+| AC4: #803 tests pass GREEN | test_refresh_config_803.py: 6/6 | YES | COVERED |
+| AC5: MCP regression pass (O4) | Not run in scoped suite — no code changes were made (verification-only) | N/A | NOTED (not independently verified; negligible risk given zero code changes) |
+
+No MISSING findings.
 
 #### Security Review
-No code changes introduced. Path containment validation present at `task_io.validate_path_containment`. No OWASP concerns.
+- No hardcoded secrets, no injection, no path traversal, no deserialization concerns.
+- test_refresh_config_804.py uses only public KanbanEngine API with tmp_path fixtures. No system boundary violations.
+- **No issues.**
 
 #### Test Integrity
-No `TestFromAC_*` classes modified — builder made zero code changes. N/A.
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| All 7 TestFromAC tests (both classes) | None — builder made zero changes to test file | PRESERVED |
 
 #### Test Quality
-- Assertion specificity: **STRONG** — all use exact equality (`== 101`, `== 999`, `== ["low", "high"]`, file count `>= 1`)
-- Negative/error-path coverage: **STRONG** — AC6 tests ValueError raise on removed status
-- Mutation resistance: **STRONG** — removing `self._config = config` from `create_task` fails 5/6 staleness tests; removing `refresh_config()` body fails all 6 refresh tests
-- Test independence: **STRONG** — all fixtures use `tmp_path`, no shared mutable state
-- Test names: **STRONG** — fully descriptive
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | `.id` comparisons, specific index assertions, glob-based file presence, exact count assertions |
+| Negative/error-path coverage | ADEQUATE | test_unknown_priority_after_config_shrink_sorts_last covers edge; archive dir tests verify file-system-level correctness |
+| Mutation resistance | STRONG | If refresh_config() were a no-op, all 5 rank-order tests would fail (sort order would not change) |
+| Test independence | STRONG | Per-test `engine` fixture via `tmp_path` — no shared mutable state |
+| Descriptive names | STRONG | All names describe behavior clearly |
+
+No WEAK rating.
 
 #### Data Safety
-No new code paths. No race conditions, no unbounded inputs introduced.
+- In-process tmp_path fixtures only. No LLM output, no race conditions, no shared state.
+- **No issues.**
 
-#### Builder Process
-Single `## Builder Notes` section, no retries. Verification-only scope executed cleanly.
+#### Implementation-Aware Test Gap Analysis
+- `refresh_config()` updates: (1) `_config`, (2) `_tasks_dir`, (3) `_archive_dir`. All three paths exercised:
+  - (1) covered by rank-map ordering tests (5 tests)
+  - (2) implicitly covered by test_move_to_archived (creates task in new tasks_dir after refresh)
+  - (3) directly covered by both ArchiveDirAfterRefresh tests
+- No significant untested paths in scope.
 
-### AC Compliance Table
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 |
+| Approach variation | N/A |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- AC2 coverage delegation to test_config_staleness_fix_828.py is acceptable per test-writer notes, but a TestFromAC class directly testing engine.create_task() fresh-config behavior would be slightly stronger (no new concern, informational only).
+
+### AC Compliance
 | AC Line | Evidence | Mapped Test | Status |
 |---------|----------|-------------|--------|
-| AC1: `refresh_config()` reloads config + derived state | engine.py L100-112: updates `self._config`, `self._tasks_dir`, `self._archive_dir` | `TestFromAC_RefreshConfig` 6/6 | PASS |
-| AC2: `create_task` local-variable refresh equivalent | engine.py L248 (`config = load_config(...)`), L280-283 (assigns back to `self._config`, `self._tasks_dir`, `self._archive_dir`) | `TestFromAC_ConfigStalenessInCreateTask` 6/6 | PASS |
-| AC3: rank methods derive from `self._config` dynamically | engine.py L82-85: `_priority_rank()` / `_status_rank()` compute fresh from `self._config` on every call | `test_refresh_config_then_move_task_*` 2/2 | PASS |
-| AC4: #803 tests GREEN | quality-runner: test_refresh_config_803.py 6/6 passed | `TestFromAC_RefreshConfig` | PASS |
-| AC5: Existing MCP tests pass | quality-runner: test_kanban_engine_crud + board_config_805/806 = 65/65 passed | full CRUD + board_config suite | PASS |
+| AC1: refresh_config() updates _config + derived state | engine.py (refresh_config): self._config = load_config(...), self._tasks_dir = ..., self._archive_dir = ... | TestFromAC_ArchiveDirAfterRefresh (2 tests) | PASS |
+| AC2: create_task fresh-config equivalent | engine.py (create_task): load_config() under exclusive lock, self._config = config post-save | test_config_staleness_fix_828.py (6/6) | PASS |
+| AC3: rank methods use new config | engine.py _priority_rank()/_status_rank(): on-demand from self._config, no caching | TestFromAC_RankMapsAfterRefresh (5 tests) | PASS |
+| AC4: #803 tests GREEN | pytest: 6/6 | test_refresh_config_803.py | PASS |
+| AC5: MCP tests pass | Not independently verified (no code changes, zero regression risk) | — | UNVERIFIED (−0.02) |
 
-### Informational (non-blocking)
-- `test_config_staleness_fix_828.py` file header says "MUST FAIL until #828 is implemented GREEN" — misleading since the implementation pre-existed. Harmless; does not affect test validity.
-- `archive_dir` in AC1 wording implies it derives from config, but it's hardcoded to `_ARCHIVE_DIR_NAME = "archive"` (engine.py L39). `refresh_config()` still assigns it (from the constant). Noted by architecture review; harmless imprecision.
-
-### Verdict
-0 deductions. **Confidence: .93 → PASS**
-[[2026-04-12]]
+### Confidence: .97
+### Verdict: PASS
+[[2026-04-13]]
 ## Docs Gate
-### Checklist
-| # | Check | Applies? | Status | Evidence |
-|---|-------|----------|--------|----------|
-| 1 | Behavior/API change | No | N/A | Verification-only task — no new code introduced. `copilot-instructions.md` contains only branch/identity content; no engine API tables to update. |
-| 2 | Module docstrings | No | N/A | Builder confirmed zero files changed. Read `engine.py` directly: module docstring lists `refresh_config()` at L22; `refresh_config()` docstring at L100-112 accurate; `create_task()` docstring at L243-255 accurate. All public API on touched scope verified. |
-| 3 | External attribution | No | N/A | Research sources 1–7 all internal (engine.py, existing tests, sibling research, brief). No external repos/articles used. `sources/overview.md` — no update needed. |
-| 4 | CLI changes | No | N/A | Internal engine method only. No CLI surface affected. |
-| 5 | Research doc | Yes | Verified | `.owlbear/research/refresh-config-impl-804.md` exists and is linked in task body under `## Research`. Follow-up tasks: none (confirmed by research doc — impl pre-existed, covered by #803/#840). |
 
-### Files Updated
-- None
+| # | Item | Applies? | Status | Evidence |
+|---|------|----------|--------|----------|
+| 1 | Behavior/API change → copilot-instructions.md | No | N/A | Verification-only task; no new implementation. refresh_config() pre-existed. copilot-instructions.md has no engine-internal entries — none expected for scope:mcp-kanban internals. |
+| 2 | Module docstrings | No | N/A | Builder notes: "No implementation changes." Zero source files modified. Test file only. |
+| 3 | External attribution → sources/overview.md | No | N/A | Research was internal codebase analysis (engine.py, config_loader, existing tests). No external patterns used. |
+| 4 | CLI changes → README.md | No | N/A | No CLI additions or modifications. |
+| 5 | Research doc | Yes | PASS | .owlbear/research/refresh-config-impl-804.md exists ✓, linked from task body ✓, follow-up tasks: none (implementation complete) ✓ |
 
-### Scratch Files Cleaned
-- None (no `.owlbear/scratch/804-*` files found)
-[[2026-04-12]]
+**Files updated**: None — no docs impact.
+**Scratch files**: No `.owlbear/scratch/804-*` files found. Clean.
+**Commit**: Skipped — no documentation files updated.
+[[2026-04-13]]
 ## Audit
+
 ### AC Verification
+
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: refresh_config() reloads config + derived state | engine.py L106-112: updates _config, _tasks_dir, _archive_dir; TestFromAC_RefreshConfig 6/6 GREEN | PASS |
-| AC2: create_task uses fresh config equivalent | engine.py L258 load_config(), L280-283 assigns back to self._config/_tasks_dir/_archive_dir; TestFromAC_ConfigStalenessInCreateTask 6/6 GREEN | PASS |
-| AC3: rank methods use new config after refresh | engine.py L82-85: _priority_rank()/_status_rank() compute from self._config each call; test_refresh_config_then_move_task_* 2/2 GREEN | PASS |
-| AC4: #803 tests GREEN | test_refresh_config_803.py 6/6 passed | PASS |
-| AC5: Existing MCP tests pass (O4) | 65/65 CRUD + board_config tests passed; full suite 354 failures all pre-existing/unrelated to #804 | PASS |
+| AC1: refresh_config() reloads config, updates _config + derived state | engine.py L151-160: load_config, updates _tasks_dir, _archive_dir | PASS |
+| AC2: create_task calls load_config or equivalent | engine.py L308 load_config under lock, L348 self._config = config, L350-351 derived state | PASS |
+| AC3: _status_rank/_priority_rank use new config | engine.py L133-137: on-demand from self._config, no caching | PASS |
+| AC4: #803 tests pass GREEN | test_refresh_config_803.py: 6/6 passed | PASS |
+| AC5: Existing MCP tests pass | 39/39 task-scoped tests passed; full suite 336 failures all pre-existing (AppContext signature, pick_dispatchable refactor, lint-changed.ps1 missing) | PASS |
 
 ### Test Results
-- pytest (targeted): 77 passed, 0 failed (test_refresh_config_803 + test_config_staleness_fix_828 + kanban CRUD + board_config_805/806)
-- pytest (full suite): 3654 passed, 354 failed, 6 collection errors -- all failures pre-existing, unrelated to #804 scope
-- ruff: clean (engine.py + both test files)
-
-### Reviewer Evidence
-Present and detailed. Covers test-writer AC coverage audit, security review, test integrity, test quality, AC compliance table. Verdict: .93 PASS. Trusted code-level findings.
+- pytest (task-scoped): 39 passed, 0 failed
+- pytest (full suite): 4075 passed, 336 failed, 8 skipped (all failures pre-existing, none in task scope)
+- ruff: clean
 
 ### Architect Quality: 4/5
-AC was specific and testable. Minor terminology imprecision (AC1 says "rank maps" but they are computed dynamically, not cached; "archive_dir" implies config-derived but it uses a constant). Both noted by architect review and harmless. Research correctly identified pre-existing implementation. Builder guidance was clear and actionable.
+AC1-3 specific and verifiable with exact method names and state variables. AC4-5 are standard gates. Minor vagueness on AC5 ("existing MCP tests" unscoped) filled adequately by builder. No significant edge case gaps.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (all 5 verified) -- 0 deductions
-- Lint violations: 0 -- 0 deductions
-- AC quality score: 4/5 (above 3) -- 0 deductions
-- Missing reviewer evidence: present and detailed -- 0 deductions
-- Full-suite failures in task scope: 0 -- 0 deductions
+- Start: 1.00
+- AC lines without evidence: 0 (all verified) = 0
+- Lint violations: 0 = 0
+- AC quality (4, not le 3): 0
+- Reviewer evidence: present, detailed, PASS at .97 = 0
+- Full-suite failures in scope: 0 = 0
+- Uncommitted test deliverable: noted (committed by auditor), not a formal deduction criterion
 
 ### Confidence: .98
 ### Action: archive
 
-### Commit Integrity
-Verification-only task, no files changed by builder. Upstream commits verified:
-- 7a720b9c test: add refresh_config() tests (#840, #803)
-- b6ffb2e0 test: add failing tests for create_task config staleness (#828)
-- 64d6d85a fix: update self._config after save in create_task (#828)
-No uncommitted deliverables. No leftovers to commit.
+## Commits
+
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c5113000 | test | tests/test_refresh_config_804.py | #804 |

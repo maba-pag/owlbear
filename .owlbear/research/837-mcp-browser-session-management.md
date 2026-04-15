@@ -98,13 +98,13 @@ async def app_lifespan(server: FastMCP):
 | type(selector, text) | `page.locator(selector).fill(text)` | ToolError on no page |
 | select(selector, value) | `page.locator(selector).select_option(value)` | ToolError on no page |
 | read_text() | `extract_content(await page.content(), page.url)` | ToolError on no page |
-| snapshot() | `page.aria_snapshot()` | ToolError on no page; needs Playwright ≥1.59 |
+| snapshot() | `page.locator("body").aria_snapshot()` | ToolError on no page; needs Playwright ≥1.49 |
 
 Note: `click`, `type`, `select` use the locator-based API (recommended by Playwright over deprecated `page.click(selector)` etc.).
 
 ### 3f. Snapshot API
 
-Playwright v1.59+ provides `page.aria_snapshot()` which returns a structured ARIA tree as a string. It supports `mode="ai"` for AI-optimized output with element references. The `owlbear-browser` pyproject.toml already has `playwright>=1.40.0` — should bump to `>=1.59.0` for `aria_snapshot`.
+`locator.aria_snapshot()` (available since Playwright v1.49) returns a structured ARIA tree as a string. `page.aria_snapshot()` (v1.59 convenience alias) is equivalent to `page.locator('body').aria_snapshot()`. We use the locator form for compatibility with current Playwright releases. The `owlbear-browser` pyproject.toml has been bumped to `playwright>=1.49`.
 
 ### 3g. Test Strategy
 

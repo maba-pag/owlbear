@@ -1,7 +1,7 @@
 ---
 id: 789
 title: Tests — LLM extraction prompt corporate entity examples
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:31:33.658191+00:00'
 updated: '2026-04-13T05:00:12.707123+00:00'

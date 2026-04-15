@@ -1,7 +1,7 @@
 ---
 id: 776
 title: 'P0-01: Implement cdp-spike.py per research #752'
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T11:45:19.715661+00:00'
 updated: '2026-04-10T19:04:35.715928+00:00'

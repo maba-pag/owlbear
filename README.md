@@ -33,6 +33,7 @@ Open VS Code with `code .`.
 |---------------------------|--------------------------------------------------------|
 | `serve/orchestrator/`     | ACP client, dispatch planning, orchestration CLI hooks |
 | `serve/knowledge/`        | Knowledge engine (graph + vector)                      |
+| `serve/kanban/`           | Kanban engine (transport-free; used by mcp-kanban)     |
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
 | `serve/mcp-memory/`       | MCP server for persistent agent memory (SQLite-backed) |
@@ -89,7 +90,7 @@ Populate the knowledge base from a sources manifest:
 uv run python -m owlbear_knowledge.loader --manifest store/knowledge/general/sources.yaml --root .
 ```
 
-The manifest at `store/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_KB_PATH` to override the default `store/knowledge/knowledge.db` location.
+The manifest at `store/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_LOCAL_KB_PATH` to override the default `.owlbear/knowledge/local.db` location (`OWLBEAR_KB_PATH` is still accepted as a fallback).
 
 ## Memory Migration
 

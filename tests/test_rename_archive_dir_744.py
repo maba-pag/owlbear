@@ -16,8 +16,8 @@ import pytest
 
 from owlbear_kanban.engine import (
     KanbanEngine,
-    _ARCHIVE_DIR_NAME,
 )
+from owlbear_kanban.models import BoardConfig
 
 # ---------------------------------------------------------------------------
 # Shared config content — mirrors real .owlbear/kanban/config.yml
@@ -111,16 +111,17 @@ def _write_task_file(directory: Path, task_id: int, title: str) -> Path:
 
 
 class TestFromAC_ArchiveDirConstant:
-    """Tests for AC1: _ARCHIVE_DIR_NAME constant equals 'archive'."""
+    """Tests for AC1: BoardConfig.archive_dir defaults to 'archive'."""
 
-    def test_archive_dir_name_constant_is_archive(self) -> None:
-        """Module-level _ARCHIVE_DIR_NAME must equal 'archive', not 'v1-archive'."""
-        assert _ARCHIVE_DIR_NAME == "archive"
+    def test_archive_dir_default_is_archive(self) -> None:
+        """BoardConfig.archive_dir default must equal 'archive', not 'v1-archive'."""
+        assert BoardConfig.model_fields["archive_dir"].default == "archive"
 
-    def test_archive_dir_name_constant_not_v1_archive(self) -> None:
-        """_ARCHIVE_DIR_NAME must not contain the legacy 'v1-archive' value."""
-        assert _ARCHIVE_DIR_NAME != "v1-archive"
-        assert "v1" not in _ARCHIVE_DIR_NAME
+    def test_archive_dir_default_not_v1_archive(self) -> None:
+        """BoardConfig.archive_dir default must not contain the legacy 'v1-archive' value."""
+        default = BoardConfig.model_fields["archive_dir"].default
+        assert default != "v1-archive"
+        assert "v1" not in default
 
 
 # ===========================================================================

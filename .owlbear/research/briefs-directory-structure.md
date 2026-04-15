@@ -58,7 +58,7 @@ The spec fully defines the directory tree (S1 L378–397). Implementation is:
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | File proliferation | Medium | Low | Lifecycle cleanup: auditor removes when parent task archived (spec S1 §lifecycle item 7) |
-| Write conflicts during voice deliberation | Low | Low | Each voice writes to `voices/{name}.md` — no shared files during parallel phase |
+| Write conflicts during voice deliberation | Low | Low | Each voice writes to `opinions/{name}.md` — no shared files during parallel phase |
 | `draft-new/` collision (two concurrent invocations) | Very Low | Medium | VS Code = single user; ideator is user-invocable interactive agent |
 | Stale briefs accumulate | Medium | Low | Same cleanup rule as scratch — auditor or curation job |
 

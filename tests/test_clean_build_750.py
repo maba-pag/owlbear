@@ -9,7 +9,7 @@ AC coverage (TDD RED phase — targeted failing tests for remaining cleanup work
   AC8: README.md contains no serve/voice/ reference
 
 CRITICAL (regression guard):
-  share/ domain voice agents (architect-voice.agent.md, critic-voice.agent.md, etc.)
+  share/ domain opinion agents (ideation-architect.agent.md, ideation-critic.agent.md, etc.)
   MUST still exist after removal — these are NOT part of the voice I/O addon.
 
 Note: AC1 (pytest suite passes) and AC2 (ruff passes workspace-wide) are verified
@@ -165,8 +165,8 @@ class TestFromAC_ReadmeCleanup:
 
 # ---------------------------------------------------------------------------
 # CRITICAL (builder reminder — not testable in RED phase):
-# share/agents/architect-voice.agent.md, share/agents/critic-voice.agent.md,
-# and all other share/ domain voice agents MUST NOT be deleted.
+# share/agents/ideation-architect.agent.md, share/agents/ideation-critic.agent.md,
+# and all other share/ domain opinion agents MUST NOT be deleted.
 # Only serve/voice/ (the I/O hardware addon) is being removed.
 # The builder must manually verify share/ is untouched after performing the cleanup.
 # ---------------------------------------------------------------------------

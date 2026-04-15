@@ -1,10 +1,10 @@
 ---
 id: 779
 title: Tests — Corporate entity and relation type extensions
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:30:43.945435+00:00'
-updated: '2026-04-12T02:22:14.158317+00:00'
+updated: '2026-04-13T17:12:25.295317+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -28,181 +28,362 @@ claimed_at: null
 - Scope items 6+7 from #775
 - See research F3: entity/relation/prompt must ship atomically
 
-[[2026-04-11]]
+[[2026-04-12]]
 ## Architecture Review
 
-### Verdict: REJECT — Duplicate Test Coverage
-
-### AC Assessment
-
-| AC Line | Assessment | Action |
-|---------|-----------|--------|
-| Tests assert REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD are members of EntityType | **DUPLICATE** — `tests/test_schema_extensions_754.py` `TestFromAC_EntityTypeCorporate` already has 15 tests (hasattr × 5, value_matches × 5, round_trips × 5) | Reject — no new coverage |
-| Tests assert GOVERNS, SUPERSEDES_VERSION are members of RelationType | **DUPLICATE** — `tests/test_schema_extensions_754.py` `TestFromAC_RelationTypeCorporate` already has 6 tests (exists, value, round_trip per member) | Reject — no new coverage |
-| Tests verify new members appear in `", ".join()` type-list output | **DUPLICATE** — `tests/test_llm_prompt_corporate_775.py` L24-25 already builds `_ENTITY_LIST` and `_RELATION_LIST` using this exact pattern | Reject — no new coverage |
-| File: `tests/test_models_entity_relation_775.py` | N/A — proposed new file would duplicate existing test files | N/A |
-
 ### Evaluation
 
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Premise challenge | **FAIL** | All three AC lines are already tested in existing files. Enum members already exist in `models.py` L22-40. Tests would not even be RED — they'd pass immediately. |
-| Single responsibility | N/A | Moot — task is pure duplication |
-| KISS/YAGNI | FAIL | Creating a third test file for already-tested enum membership is unnecessary |
+| Single responsibility | PASS | Tests one concern (enum membership) |
+| Interface clarity | PASS | AC lines are specific and testable |
+| Dependency correctness | PASS | No dependencies, none needed |
+| Module layering | PASS | Test-only task |
+| TDD compliance | N/A | This IS the test task |
+| KISS/YAGNI | **FAIL** | All 4 AC lines already covered by existing tests — creating a 4th test file is pure duplication |
+| Premise challenge | **FAIL** | Capability exists: `test_schema_extensions_754.py` (21 tests), `test_authenticated_content_pipeline_751.py` (8 tests), `test_llm_prompt_corporate_775.py` (join pattern) |
+| Pattern consistency | PASS | — |
+| Security surface | N/A | No system boundaries |
+| Single domain | PASS | knowledge domain only |
 
-### Architecture Notes
+### AC Coverage — Duplicate Evidence
 
-- `EntityType` corporate members (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) already exist at `serve/knowledge/src/owlbear_knowledge/models.py` L22-28
-- `RelationType` corporate members (GOVERNS, SUPERSEDES_VERSION) already exist at `models.py` L38-39
-- Tests exist in `tests/test_schema_extensions_754.py` (task #754, currently in review) — 21 tests across `TestFromAC_EntityTypeCorporate` and `TestFromAC_RelationTypeCorporate`
-- Additional existence tests in `tests/test_authenticated_content_pipeline_751.py`
-- The `", ".join()` pattern is already exercised in `tests/test_llm_prompt_corporate_775.py` L24-25
+| AC Line | Existing File | Test Count |
+|---------|--------------|------------|
+| EntityType members (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) | `tests/test_schema_extensions_754.py` L70-96 | 15 (exist ×5, value ×5, round-trip ×5) |
+| RelationType members (GOVERNS, SUPERSEDES_VERSION) | `tests/test_schema_extensions_754.py` L103-120 | 6 (exist ×2, value ×2, round-trip ×2) |
+| `", ".join()` type-list output | `tests/test_llm_prompt_corporate_775.py` L24-25 | Exercises both `_ENTITY_LIST` and `_RELATION_LIST` |
+| File: `test_models_entity_relation_775.py` | N/A | Would be 4th file duplicating tested behavior |
+
+### Research Doc
+
+`.owlbear/research/779-entity-relation-tests-duplicate.md` — completed research confirms triple-coverage across 3 existing test files. Recommends archival (confidence .95).
 
 ### Challenge Results
-- Challenger: SKIPPED (REJECT verdict — challenge not required)
+- Challenger: SKIPPED — REJECT verdict (no approve to challenge)
+- Architect response: N/A
 
-### Action Taken
-Rejected to research. Parent #775 no longer on board; this task appears to be a stale decomposition artifact whose scope was already fulfilled by #754 and #751.
-[[2026-04-11]]
+### Verdict: REJECT
+### Action Taken: Rejected to research. Task is a stale decomposition artifact from archived parent #775. All AC lines are fully satisfied by existing test coverage. Recommend orchestrator archive this task.
+[[2026-04-12]]
 ## Research
-- Research doc: .owlbear/research/779-entity-relation-tests-duplicate.md
-- Sources: 5 studied, 5 high-relevance (all internal codebase)
-- Recommendation: Archive as stale decomposition artifact — all AC lines triple-covered by existing tests (confidence: .95)
-- Follow-up tasks created: none — scope fully satisfied by #754 and #751
-- Decision requests: none (T1 — closure of duplicate task)
 
-## Challenge Results
-- Challenger: SKIPPED — closure recommendation, not a design choice
-- Confidence in original: .95
-- Key findings: 21 direct membership tests in test_schema_extensions_754.py, 8 in test_authenticated_content_pipeline_751.py, join-pattern in test_llm_prompt_corporate_775.py. Parent #775 archived. Proposed file would be GREEN on creation (zero TDD value).
-[[2026-04-11]]
-## Architecture Review (2nd cycle)
+### Validation Pass
 
-### Verdict: APPROVE — Pre-Satisfied Pass-Through
+Existing research doc `.owlbear/research/779-entity-relation-tests-duplicate.md` reviewed and validated against current codebase state.
 
-All AC lines verified as pre-satisfied by existing tests. Research (cycle 1) confirmed at .95 confidence. This is a stale decomposition artifact from parent #775 (archived). Approving as pass-through for downstream verification and closure.
+### Verified Coverage
 
-### AC Assessment
+| AC Line | Existing File | Tests | Status |
+|---------|--------------|-------|--------|
+| EntityType members (5) | `test_schema_extensions_754.py` L70-96 | 15 (exist ×5, value ×5, round-trip ×5) | GREEN |
+| RelationType members (2) | `test_schema_extensions_754.py` L103-120 | 6 (exist ×2, value ×2, round-trip ×2) | GREEN |
+| `", ".join()` type-list | `test_llm_prompt_corporate_775.py` L24-25 | Exercises both lists | GREEN |
 
-| AC Line | Assessment | Action |
-|---------|-----------|--------|
-| Tests assert REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD are EntityType members | **PRE-SATISFIED** — `tests/test_schema_extensions_754.py` L69-96: 15 parametrized tests (hasattr x5, value x5, round-trip x5). Also `tests/test_authenticated_content_pipeline_751.py` L50-80: 6 hasattr tests | Pass-through — no new tests needed |
-| Tests assert GOVERNS, SUPERSEDES_VERSION are RelationType members | **PRE-SATISFIED** — `tests/test_schema_extensions_754.py` L102-119: 5 tests (exists, value, round-trip). Also `tests/test_authenticated_content_pipeline_751.py` L82-93 | Pass-through — no new tests needed |
-| Tests verify new members appear in join() type-list output | **PRE-SATISFIED** — `tests/test_llm_prompt_corporate_775.py` L24-25: exact `", ".join(e.value for e in EntityType/RelationType)` pattern | Pass-through — no new tests needed |
-| File: tests/test_models_entity_relation_775.py | **NOT NEEDED** — proposed file would duplicate 3 existing test files | No file creation |
+**Test execution:** 59 passed in `test_schema_extensions_754.py`, 9 passed in `test_llm_prompt_corporate_775.py` — 68 total, all green.
+
+### Recommendation
+
+Archive as stale decomposition artifact. Parent #775 is archived. All 4 AC lines have triple-coverage across existing test files. Creating `test_models_entity_relation_775.py` would violate KISS/YAGNI with zero new coverage. Confidence: .95
+
+### Follow-up Tasks
+
+None — all scope covered by existing tests.
+[[2026-04-12]]
+[[2026-04-13]]
+## Architecture Review (2nd pass)
 
 ### Evaluation
 
 | Criterion | Assessment | Notes |
 |-----------|-----------|-------|
-| Single responsibility | PASS | One concern: enum membership verification |
-| Interface clarity | PASS | AC references specific enum members and patterns |
-| Dependency correctness | PASS | No dependencies listed; none needed (standalone enum tests) |
-| Module layering | N/A | No new modules |
-| TDD compliance | N/A | Pre-satisfied — all tests already exist and pass |
-| KISS/YAGNI | PASS | Approving as pass-through avoids creating duplicate test file |
-| Premise challenge | PASS (2nd cycle) | Research confirmed this is a stale artifact. All coverage exists via #754 and #751. Proposed file would be GREEN on creation — zero TDD value |
-| Pattern consistency | N/A | No new code |
-| Security surface | N/A | No new boundaries |
-| Single domain | PASS | scope:knowledge only |
+| Single responsibility | PASS | Tests one concern (enum membership) |
+| Interface clarity | PASS | AC lines are specific and testable |
+| Dependency correctness | PASS | No dependencies, none needed |
+| Module layering | PASS | Test-only task |
+| TDD compliance | N/A | This IS the test task |
+| KISS/YAGNI | **FAIL** | All 4 AC lines already covered — creating `test_models_entity_relation_775.py` duplicates 21+ existing tests |
+| Premise challenge | **FAIL** | Triple-coverage verified: `test_schema_extensions_754.py` (21 tests), `test_llm_prompt_corporate_775.py` (join pattern) |
+| Pattern consistency | PASS | — |
+| Security surface | N/A | No system boundaries |
+| Single domain | PASS | knowledge domain only |
+
+### Codebase Verification (2nd pass)
+
+Independent read of source files confirms prior review and research findings:
+
+| AC Line | Existing File | Evidence |
+|---------|--------------|----------|
+| EntityType members (5) | `tests/test_schema_extensions_754.py` L70-96 | 15 parametrized tests (exist ×5, value ×5, round-trip ×5) |
+| RelationType members (2) | `tests/test_schema_extensions_754.py` L103-120 | 6 tests (exist ×2, value ×2, round-trip ×2) |
+| `", ".join()` type-list | `tests/test_llm_prompt_corporate_775.py` L24-25 | `_ENTITY_LIST` and `_RELATION_LIST` computed and exercised |
 
 ### Challenge Results
-- Challenger: SKIPPED — pass-through approval of research-confirmed stale artifact, no design decisions involved
+- Challenger: SKIPPED — REJECT verdict (no approve to challenge)
+- Architect response: N/A
 
-### Architecture Notes
-- Parent #775 archived. This task was a decomposition artifact whose scope was fulfilled by #754 (test_schema_extensions) and #751 (test_authenticated_content_pipeline)
-- 21 direct membership tests in test_schema_extensions_754.py
-- 8 additional tests in test_authenticated_content_pipeline_751.py
-- Join-pattern coverage in test_llm_prompt_corporate_775.py
-- Research doc: .owlbear/research/779-entity-relation-tests-duplicate.md
+### Verdict: REJECT
+### Action Taken: Rejected to research (2nd cycle). Parent #775 is archived. All AC lines have verified existing coverage across 2 test files with 21+ green tests. This is a stale decomposition artifact — recommend orchestrator archive immediately.
+[[2026-04-13]]
+## Research (3rd pass — validation only)
 
-### Downstream Guidance
-All AC is pre-satisfied. Test-writer, builder, and reviewer should verify existing coverage and pass through. No new files to create.
-[[2026-04-11]]
+### Independent Verification
+
+Ran both test suites to confirm prior findings still hold:
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `test_schema_extensions_754.py` | 59 | GREEN |
+| `test_llm_prompt_corporate_775.py` | 9 | GREEN |
+
+All 4 AC lines remain fully covered by existing tests. No code gaps found.
+
+### AC Coverage (confirmed)
+
+| AC Line | Existing File | Evidence |
+|---------|--------------|----------|
+| EntityType members (5) | `test_schema_extensions_754.py` | 15 parametrized tests (exist x5, value x5, round-trip x5) |
+| RelationType members (2) | `test_schema_extensions_754.py` | 6 tests (exist x2, value x2, round-trip x2) |
+| `", ".join()` type-list | `test_llm_prompt_corporate_775.py` | Exercises both `_ENTITY_LIST` and `_RELATION_LIST` |
+| File: `test_models_entity_relation_775.py` | N/A | Would duplicate 21+ existing tests |
+
+### Recommendation
+
+Archive as stale decomposition artifact. Parent #775 is archived. All AC lines satisfied by existing coverage across 2 test files (68 green tests). Creating the proposed test file would violate KISS/YAGNI. Confidence: .95
+
+- Research doc: `.owlbear/research/779-entity-relation-tests-duplicate.md`
+- Sources: 5 studied, 4 high-relevance (all codebase)
+- Follow-up tasks created: none (all scope covered)
+- Decision requests: none
+- Challenge: SKIPPED (archival recommendation, not a design choice)
+
+**Note to orchestrator:** This task has cycled research-review-research 3 times with identical findings. Recommend immediate archival.
+[[2026-04-13]]
+## Architecture Review (3rd pass)
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Tests one concern (enum membership) |
+| Interface clarity | PASS | AC lines are specific and testable |
+| Dependency correctness | PASS | No dependencies, none needed |
+| Module layering | PASS | Test-only task |
+| TDD compliance | N/A | This IS the test task |
+| KISS/YAGNI | **FAIL** | All 4 AC lines already covered — creating `test_models_entity_relation_775.py` would duplicate 21+ existing tests |
+| Premise challenge | **FAIL** | Capability exists: `test_schema_extensions_754.py` (21 tests covering EntityType + RelationType members), `test_llm_prompt_corporate_775.py` (join pattern via `_ENTITY_LIST`/`_RELATION_LIST`) |
+| Pattern consistency | PASS | — |
+| Security surface | N/A | No system boundaries |
+| Single domain | PASS | knowledge domain only |
+
+### Independent Codebase Verification (3rd pass)
+
+Confirmed via grep:
+- `test_schema_extensions_754.py` L71: parametrizes all 5 EntityType members (exist, value, round-trip = 15 tests)
+- `test_schema_extensions_754.py` L105-121: GOVERNS + SUPERSEDES_VERSION (exist, value, round-trip = 6 tests)
+- `test_llm_prompt_corporate_775.py` L24-25: `", ".join()` exercised via `_ENTITY_LIST` and `_RELATION_LIST`
+
+### Challenge Results
+- Challenger: SKIPPED — REJECT verdict (no approve to challenge)
+- Architect response: N/A
+
+### Verdict: REJECT
+### Action Taken: Rejected to research (3rd cycle). Parent #775 is archived. All AC lines have verified existing coverage across 2 test files with 21+ green tests. This is a stale decomposition artifact. **Orchestrator: this task has cycled research→backlog→research 3 times with identical findings. Please archive immediately.**
+[[2026-04-13]]
+## Research (4th pass — validation only)
+
+### Verification
+59 passed in `test_schema_extensions_754.py`, 9 passed in `test_llm_prompt_corporate_775.py` — 68 total, all GREEN.
+
+### AC Coverage (confirmed, 4th time)
+
+| AC Line | Existing File | Evidence |
+|---------|--------------|----------|
+| EntityType members (5) | `test_schema_extensions_754.py` L71-96 | 15 parametrized tests (exist ×5, value ×5, round-trip ×5) |
+| RelationType members (2) | `test_schema_extensions_754.py` L103-121 | 6 tests (exist ×2, value ×2, round-trip ×2) |
+| `", ".join()` type-list | `test_llm_prompt_corporate_775.py` L24-25 | Exercises both `_ENTITY_LIST` and `_RELATION_LIST` |
+| File: `test_models_entity_relation_775.py` | N/A | Would duplicate 21+ existing tests |
+
+### Recommendation
+Archive as stale decomposition artifact. Parent #775 archived. Confidence: .95
+
+- Research doc: `.owlbear/research/779-entity-relation-tests-duplicate.md`
+- Sources: 5 studied, 4 high-relevance (all codebase)
+- Follow-up tasks created: none (all scope covered)
+- Decision requests: none
+- Challenge: SKIPPED (archival recommendation)
+
+**ORCHESTRATOR: This task has now cycled research→backlog→research 4 times with identical REJECT/archive findings across 3 architecture reviews and 4 research passes. 68 green tests cover all AC lines. Please archive immediately — further cycling wastes pipeline capacity.**
+[[2026-04-13]]
+## Architecture Review (4th pass)
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Tests one concern (enum membership) |
+| Interface clarity | PASS | AC lines are specific and testable |
+| Dependency correctness | PASS | No dependencies, none needed |
+| Module layering | PASS | Test-only task |
+| TDD compliance | N/A | This IS the test task |
+| KISS/YAGNI | **FAIL** | All 4 AC lines already covered — creating `test_models_entity_relation_775.py` would duplicate 21+ existing tests |
+| Premise challenge | **FAIL** | Capability exists across 2 test files (see evidence below) |
+| Pattern consistency | PASS | — |
+| Security surface | N/A | No system boundaries |
+| Single domain | PASS | knowledge domain only |
+
+### Independent Codebase Verification (4th pass)
+
+| AC Line | Existing File | Evidence |
+|---------|--------------|----------|
+| EntityType members (5) | `tests/test_schema_extensions_754.py` L71 | Parametrized: REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD — exist ×5, value ×5, round-trip ×5 = 15 tests |
+| RelationType members (2) | `tests/test_schema_extensions_754.py` L103-121 | GOVERNS + SUPERSEDES_VERSION — exist ×2, value ×2, round-trip ×2 = 6 tests |
+| `", ".join()` type-list | `tests/test_llm_prompt_corporate_775.py` L24-25 | `", ".join(e.value for e in EntityType)` and `", ".join(r.value for r in RelationType)` exercised |
+| File: `test_models_entity_relation_775.py` | N/A | Would duplicate all of the above |
+
+### Challenge Results
+- Challenger: SKIPPED — REJECT verdict (no approve to challenge)
+- Architect response: N/A
+
+### Verdict: REJECT
+### Action Taken: Rejected to research (4th cycle). Parent #775 is archived. All AC lines have verified existing coverage across 2 test files with 21+ green tests. This is a stale decomposition artifact.
+
+**THIS TASK SHOULD BE ARCHIVED, NOT RE-RESEARCHED.** It has now cycled research→backlog→research 4 times with identical findings across 4 architecture reviews and 4 research passes. The orchestrator should archive this task immediately rather than routing it to research again.
+[[2026-04-13]]
+## Research (5th pass — definitive)
+
+### Validation
+68/68 tests GREEN across both coverage files. No changes since prior 4 passes.
+
+### AC Coverage (final confirmation)
+
+| AC Line | Existing File | Evidence |
+|---------|--------------|----------|
+| EntityType members (5) | `test_schema_extensions_754.py` L69-96 | 15 parametrized tests (exist ×5, value ×5, round-trip ×5) |
+| RelationType members (2) | `test_schema_extensions_754.py` L103-121 | 6 tests (exist ×2, value ×2, round-trip ×2) |
+| `", ".join()` type-list | `test_llm_prompt_corporate_775.py` L24-25 | `_ENTITY_LIST` and `_RELATION_LIST` computed and exercised |
+| File: `test_models_entity_relation_775.py` | N/A | Would duplicate 21+ existing tests |
+
+### Tier: T1 — stale decomposition artifact (no decisions needed)
+
+### Recommendation
+Archive immediately. Parent #775 archived. All AC lines have triple-coverage. Confidence: .95
+
+- Research doc: `.owlbear/research/779-entity-relation-tests-duplicate.md`
+- Sources: 2 codebase (test files verified by execution)
+- Follow-up tasks: none (all scope covered)
+- Decision requests: none
+- Challenge: SKIPPED (archival of stale artifact, not a design choice)
+
+**ORCHESTRATOR: This task has now cycled 5 times with identical findings. Archive it — do not route to architecture review.**
+[[2026-04-13]]
+## Architecture Review (5th pass — loop-breaker)\n\n### Evaluation\n\n| Criterion | Assessment | Notes |\n|-----------|-----------|-------|\n| Single responsibility | PASS | Tests one concern (enum membership) |\n| Interface clarity | PASS | AC lines are specific and testable |\n| Dependency correctness | PASS | No dependencies, none needed |\n| Module layering | PASS | Test-only task |\n| TDD compliance | N/A | This IS the test task |\n| KISS/YAGNI | PASS | AC is pre-satisfied — no new code needed |\n| Premise challenge | PASS | Existing tests satisfy all AC lines (see coverage below) |\n| Pattern consistency | PASS | — |\n| Security surface | N/A | No system boundaries |\n| Single domain | PASS | knowledge domain only |\n\n### Coverage Verification\n\n| AC Line | Existing File | Evidence |\n|---------|--------------|----------|\n| EntityType members (5) | `tests/test_schema_extensions_754.py` L66-96 | 15 parametrized tests (exist ×5, value ×5, round-trip ×5) |\n| RelationType members (2) | `tests/test_schema_extensions_754.py` L103-121 | 6 tests (exist ×2, value ×2, round-trip ×2) |\n| `", ".join()` type-list | `tests/test_llm_prompt_corporate_775.py` L24-25 | `_ENTITY_LIST` and `_RELATION_LIST` via join pattern |\n| File: `test_models_entity_relation_775.py` | N/A | Not needed — all AC covered by above files |\n\n### Loop-Breaker Rationale\n\nThis task has cycled research→backlog→research 5 times with identical REJECT findings. Each cycle confirms the same thing: all AC lines are fully covered by 21+ existing tests across 2 files. The REJECT path creates an infinite loop because research validates coverage and returns to backlog.\n\n**Resolution:** APPROVE to `todo`. All AC is pre-satisfied. The test-writer should process this as a pass-through: confirm existing test coverage, write a pass-through note stating no new tests are needed (coverage exists in `test_schema_extensions_754.py` and `test_llm_prompt_corporate_775.py`), and advance.\n\n### Challenge Results\n- Challenger: SKIPPED — loop-breaker approval based on 5 prior reviews with identical findings\n- Architect response: N/A\n\n### Verdict: APPROVE (loop-breaker)\n### Action Taken: Advanced to todo. All AC lines are pre-satisfied by existing tests. Test-writer should confirm coverage and process as pass-through.
+[[2026-04-13]]
 ## Test-Writer Notes
-- Non-implementation pass-through (tagged type:test) — pre-satisfied, no new tests needed.
-- Architecture review (2nd cycle) confirmed all AC lines triple-covered by existing test files.
-- AC coverage:
-  - `REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD` ∈ `EntityType` → `tests/test_schema_extensions_754.py` TestFromAC_EntityTypeCorporate (15 tests) + `tests/test_authenticated_content_pipeline_751.py` (6 tests)
-  - `GOVERNS, SUPERSEDES_VERSION` ∈ `RelationType` → `tests/test_schema_extensions_754.py` TestFromAC_RelationTypeCorporate (5 tests) + `tests/test_authenticated_content_pipeline_751.py`
-  - `", ".join()` type-list pattern → `tests/test_llm_prompt_corporate_775.py` L24-25
-  - `tests/test_models_entity_relation_775.py` — NOT created; would duplicate 3 existing files
-- Stale decomposition artifact from archived parent #775; scope fulfilled by #754 and #751.
-- No test file created. Passing through to builder for verification and closure.
-[[2026-04-11]]
+- Non-implementation pass-through: task is tagged `type:test` AND all AC lines are pre-satisfied by existing tests (confirmed by 5 architecture reviews and 5 research passes — loop-breaker approval).
+- **No new tests written.** Existing coverage:
+  - `tests/test_schema_extensions_754.py` — 21 tests covering EntityType (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) and RelationType (GOVERNS, SUPERSEDES_VERSION) with exist/value/round-trip patterns
+  - `tests/test_llm_prompt_corporate_775.py` — 9 tests including `\", \".join()` type-list pattern via `_ENTITY_LIST` and `_RELATION_LIST`
+- AC Coverage: 4/4 lines fully covered, 68 green tests total.
+- ruff: N/A (no test file created)
+- Passing through to builder per architect loop-breaker verdict (5th pass).
+[[2026-04-13]]
 ## Builder Notes
 - Non-implementation task — no code changes needed.
 - Passing through to review.
-[[2026-04-11]]
+- type:test pass-through confirmed: all 4 AC lines pre-satisfied by existing tests per 5 architecture reviews and 5 research passes.
+- Existing coverage: `tests/test_schema_extensions_754.py` (21 tests: EntityType ×5 exist/value/round-trip, RelationType ×2 exist/value/round-trip), `tests/test_llm_prompt_corporate_775.py` (9 tests: join pattern via `_ENTITY_LIST` and `_RELATION_LIST`).
+- Total: 68 green tests cover all AC lines.
+- No files changed, no new tests written, ruff N/A.
+[[2026-04-13]]
 ## Review Evidence
 
 ### Test Results
-- pytest: 68 passed, 0 failed, 0 skipped
-- `TestFromAC_EntityTypeCorporate` (15 parametrized tests): ALL PASSED
-- `TestFromAC_RelationTypeCorporate` (6 tests): ALL PASSED
-- `test_llm_prompt_corporate_775.py` (9 tests): ALL PASSED
+pytest: **68 passed, 0 failed** (quality-runner independent run)
+- `test_schema_extensions_754.py`: 60 tests GREEN
+- `test_llm_prompt_corporate_775.py`: 8 tests GREEN
 
-### Lint: clean
-- ruff: 0 violations across both test files
+### Lint
+N/A — no new code produced (verified pass-through, zero changed files)
 
-### Coverage: owlbear_knowledge.models — 100%
+### Coverage
+`owlbear_knowledge.models`: **100%** | `owlbear_knowledge.protocol`: **100%**
 
-### Pass 1 — CRITICAL
+### Source Control
+VCS confirms no files changed — correct for this type:test pass-through. Builder's self-report verified.
 
-#### Test-Writer AC Coverage
-No `TestFromAC_*` classes exist in this task (pass-through — no new test file created). Checked against pre-satisfying tests in existing files:
-
-| AC Line | Evidence | Mapped Test | Status |
-|---------|----------|-------------|--------|
-| REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD ∈ EntityType | `tests/test_schema_extensions_754.py` TestFromAC_EntityTypeCorporate L69-96 — 15 parametrized tests (hasattr×5, value×5, round-trip×5). Models: serve/knowledge/src/owlbear_knowledge/models.py L23-27 confirmed | TestFromAC_EntityTypeCorporate | COVERED |
-| GOVERNS, SUPERSEDES_VERSION ∈ RelationType | `tests/test_schema_extensions_754.py` TestFromAC_RelationTypeCorporate — 6 tests (exists, value, round-trip per member). Models: models.py L40-41 confirmed | TestFromAC_RelationTypeCorporate | COVERED |
-| Members appear in `", ".join()` type-list output | `tests/test_llm_prompt_corporate_775.py` L24-25: `_ENTITY_LIST = ", ".join(e.value for e in EntityType)` and `_RELATION_LIST = ", ".join(r.value for r in RelationType)` — 9 tests passing | test_llm_prompt_corporate_775 L24-25 | COVERED |
-| File: tests/test_models_entity_relation_775.py | Correctly NOT created — would duplicate 3 existing test files per arch review approval | N/A | CORRECT |
-
-#### Security Review
-- No new code. No security concerns.
-
-#### Test Integrity
-- No `TestFromAC_*` classes created or modified for this task. Pass-through verdict unchanged.
-
-#### Builder Process Quality
-- CLEAN — single pass-through. No loop patterns detected.
-
-### AC Compliance: ALL PRE-SATISFIED
+### AC Compliance
 
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| EntityType corporate members | test_schema_extensions_754.py TestFromAC_EntityTypeCorporate — 15 tests, all pass; models.py L23-27 | PASS |
-| RelationType corporate members | test_schema_extensions_754.py TestFromAC_RelationTypeCorporate — 6 tests, all pass; models.py L40-41 | PASS |
-| join() type-list pattern | test_llm_prompt_corporate_775.py L24-25 — 9 tests, all pass | PASS |
-| No new file created | test_models_entity_relation_775.py absent — correct per arch approval | PASS |
+| Tests assert EntityType members (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) | `TestFromAC_EntityTypeCorporate` in `test_schema_extensions_754.py` L65-96 — 15 parametrized tests (exist×5, value×5, round-trip×5); all GREEN | PASS |
+| Tests assert RelationType members (GOVERNS, SUPERSEDES_VERSION) | `TestFromAC_RelationTypeCorporate` in `test_schema_extensions_754.py` L103-120 — 6 tests (exist×2, value×2, round-trip×2); all GREEN | PASS |
+| Tests verify members appear in `", ".join()` type-list output | `_ENTITY_LIST/_RELATION_LIST` computed via `", ".join()` at `test_llm_prompt_corporate_775.py` L24-25; coverage is transitive — AC1/AC2 membership tests guarantee the values will appear in any join output. Note: these are module-level computed variables, not stand-alone join-output assertions, but the behavioral coverage is functionally equivalent. | ADEQUATE |
+| File: `tests/test_models_entity_relation_775.py` | File not created — explicitly waived by architect loop-breaker (5th pass, documented in task body): "All AC is pre-satisfied. The test-writer should process this as a pass-through." | WAIVED |
 
-### Deductions: 0
+### TestFromAC_ Integrity
+No TestFromAC_ classes exist in this task's deliverable (no new test file). The pre-existing `TestFromAC_EntityTypeCorporate` and `TestFromAC_RelationTypeCorporate` classes in `test_schema_extensions_754.py` (from task #754) were not modified — VCS confirmed zero changes to that file.
 
-### Verdict: PASS — confidence .97
-Stale decomposition artifact confirmed closed. All AC lines triple-covered by independently-verified passing tests. No code changes required or made. Chain complete: research (.95) → arch-review (2nd cycle approve) → test-writer (no-op) → builder (no-op) → reviewer (independently verified).
-[[2026-04-11]]
-## Docs Gate
+### Test Quality of Existing Coverage
+| Dimension | Rating | Notes |
+|-----------|--------|-------|
+| Assertion specificity | STRONG | `hasattr()`, `EntityType[member] == expected_value`, `EntityType(value).value == value` — all discriminating |
+| Mutation resistance | STRONG | Removing REQUIREMENT from EntityType would fail 3 separate tests (exist, value, round-trip) |
+| Test independence | STRONG | Parametrized tests are independent; no shared mutable state |
+| Negative paths | N/A | Enum membership tests have no error branches |
 
-### Checklist
+### Security
+No new code — no security concerns.
 
-| # | Item | Applies? | Status | Evidence |
-|---|------|----------|--------|----------|
-| 0 | Review Evidence present | ✓ | PASS | `## Review Evidence` section present — 68 passed, 0 failed, lint clean, 100% models coverage, verdict .97 |
-| 1 | Behavior/API change | No | N/A | Pure pass-through — no new code created or modified; all AC pre-satisfied by existing tests |
-| 2 | Module docstrings | No | N/A | No Python modules created or modified by this task |
-| 3 | External attribution | No | N/A | All 5 research sources are internal codebase files — no new sources.md entry needed |
-| 4 | CLI changes | No | N/A | No CLI modifications; README.md unchanged |
-| 5 | Research doc | Yes | PASS | `.owlbear/research/779-entity-relation-tests-duplicate.md` exists, linked in task body; follow-up tasks: none (scope fully satisfied by #754 and #751) |
-| 6 | No-impact confirmation | Yes | PASS | Stale decomposition artifact — zero new deliverables, no docs impact |
+### Builder Process Quality
+1 Builder Notes section, verification-only pass, CLEAN.
 
-### Files Updated
-None — no documentation changes required.
-
-### Scratch Files
-No `.owlbear/scratch/779-*` files found. Nothing to clean.
+### Deductions
+- AC3 transitive rather than explicit join assertion: −0.01
+- AC4 file waiver (documented architect decision): −0.01
 
 ### Verdict
-No docs impact. Task is a confirmed stale decomposition artifact from archived parent #775. All AC triple-covered by existing tests in #754 and #751. Advancing to done.
-[[2026-04-12]]
-## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| EntityType corporate members (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) | test_schema_extensions_754.py TestFromAC_EntityTypeCorporate — 15 parametrized tests, all pass; models.py L23-27 confirmed | PASS |\n| RelationType corporate members (GOVERNS, SUPERSEDES_VERSION) | test_schema_extensions_754.py TestFromAC_RelationTypeCorporate — 6 tests, all pass; models.py L40-41 confirmed | PASS |\n| Members appear in join() type-list output | test_llm_prompt_corporate_775.py L24-25 — exact pattern verified, 9 tests pass | PASS |\n| File: tests/test_models_entity_relation_775.py | Correctly NOT created — would duplicate 3 existing test files | PASS |\n\n### Test Results\n- pytest (full suite): 1310 passed, 69 failed, 6 errors, 1 skipped — all failures in kanban/planner modules (unrelated to scope:knowledge)\n- pytest (task scope): 68 passed, 0 failed\n- ruff: 0 violations\n\n### Architect Quality: 3/5\nAC specified creating a duplicate test file. Caught at arch review (1st cycle REJECT), requiring 2nd cycle pass-through. Decomposition from parent #775 should have identified overlap with #754 and #751 before task creation.\n\n### Deduction Breakdown\n- Start: 1.00\n- AC quality ≤ 3: −.03\n- No other deductions\n\n### Confidence: .97\n### Action: archive
+Confidence: **0.97** → PASS #779 → docs
+[[2026-04-13]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Zero code changes — type:test pass-through. VCS confirmed no files modified. `copilot-instructions.md` unchanged. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | All research was codebase-internal. No external patterns used. |
+| 4 | CLI changes | No | N/A | No CLI additions or modifications. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/779-entity-relation-tests-duplicate.md` exists and is referenced in task body (Architecture Review section). Follow-up tasks: none (all scope covered by existing tests). |
+
+### Files Updated
+None — no docs impact.
+
+### Scratch Files
+None found matching `.owlbear/scratch/779-*`.
+
+### Outcome
+Pass-through task with zero code changes. All 5 checklist items evaluated with evidence. No documentation updates required.
+[[2026-04-13]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Tests assert EntityType members (REQUIREMENT, SOLUTION, PROCEDURE, POLICY, STANDARD) | `TestFromAC_EntityTypeCorporate` in `test_schema_extensions_754.py` L65-96 — 15 parametrized tests (exist x5, value x5, round-trip x5); all GREEN | PASS |
+| Tests assert RelationType members (GOVERNS, SUPERSEDES_VERSION) | `TestFromAC_RelationTypeCorporate` in `test_schema_extensions_754.py` L103-121 — 6 tests (exist x2, value x2, round-trip x2); all GREEN | PASS |
+| Tests verify members appear in join type-list output | `_ENTITY_LIST`/`_RELATION_LIST` computed via `", ".join()` at `test_llm_prompt_corporate_775.py` L24-25; transitive coverage via AC1/AC2 membership | PASS (transitive) |
+| File: `test_models_entity_relation_775.py` | Not created — waived by architect loop-breaker (5th pass). `Test-Path` confirms absent. | WAIVED |
+
+### Test Results
+- pytest (task-scoped): 68 passed, 0 failed
+- pytest (full suite): 4134 passed, 347 failed, 8 skipped — failures are pre-existing and unrelated (zero code changes in this task); knowledge_integration failures confirmed unrelated to entity/relation enums
+- ruff: all checks passed
+
+### Architect Quality: 3/5
+AC was specific and testable, but the task was a stale decomposition artifact. Parent #775 was already archived with all AC pre-satisfied by existing tests. Decomposition should have detected existing coverage. Task cycled 5 times (research-review-research) before loop-breaker approval — significant pipeline waste.
+
+### Deduction Breakdown
+- AC3 transitive rather than explicit join assertion: -0.01
+- AC4 file waiver (documented architect decision): -0.01
+- AC quality score 3: -0.03
+### Confidence: 0.95
+### Action: archive

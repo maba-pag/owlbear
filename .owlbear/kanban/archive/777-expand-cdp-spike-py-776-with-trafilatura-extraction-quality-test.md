@@ -1,10 +1,10 @@
 ---
 id: 777
 title: Expand cdp-spike.py (#776) with trafilatura extraction quality test
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:16:53.902954+00:00'
-updated: '2026-04-12T01:23:43.170325+00:00'
+updated: '2026-04-15T11:16:45.092344+00:00'
 tags:
 - phase-0
 - scope:browser
@@ -246,36 +246,35 @@ None — no documentation impact.
 
 ### Scratch Files Cleaned
 None found — no `.owlbear/scratch/777-*` files existed.
-[[2026-04-12]]
+[[2026-04-15]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: trafilatura extraction after CDP text extraction | `_extract_trafilatura()` at cdp-spike.py:201, called from `main()` after `_extract_text()`; tests: test_extract_trafilatura_function_exists, test_extract_trafilatura_calls_page_content_for_raw_html | PASS |
-| AC2: both standard and favor_precision modes | Standard call at cdp-spike.py:226-231, favor_precision=True at 232-238; tests: test_favor_precision_true_mode_called, test_both_modes_use_output_format_markdown | PASS |
-| AC3: quality metrics logged | `_log_metrics()` at cdp-spike.py:240-263 logs length, paragraphs, boilerplate (9 patterns); tests: test_quality_metrics_log_text_length, test_quality_metrics_log_boilerplate_indicators | PASS |
-| AC4: ≥5 URLs (3 SP, 2 Confluence) | DEFAULT_URLS at cdp-spike.py:39-44 (3 contoso.sharepoint.com + 2 contoso.atlassian.net); --urls argparse added; tests: test_default_urls_include_at_least_five_entries, test_default_urls_include_three_sharepoint_entries | PASS |
+| AC1: trafilatura extraction after CDP text extraction | `_extract_trafilatura()` at cdp-spike.py:201, called from main() after `_extract_text()`; 5 tests in TestFromAC_TrafilaturaExtraction | PASS |
+| AC2: both standard and favor_precision modes tested | Two `trafilatura.extract()` calls at cdp-spike.py:225,232 (standard + favor_precision=True); 6 tests in TestFromAC_ExtractionModes | PASS |
+| AC3: quality metrics logged | `_log_metrics()` at cdp-spike.py:240 logs length, paragraph count, boilerplate indicators (9 regex patterns); 5 tests in TestFromAC_QualityMetrics | PASS |
+| AC4: at least 5 URLs (3 SharePoint, 2 Confluence) | DEFAULT_URLS at cdp-spike.py:39-44: 3x contoso.sharepoint.com + 2x contoso.atlassian.net; 5 tests in TestFromAC_URLConfiguration | PASS |
 
 ### Test Results
-- pytest (full suite): 6 pre-existing collection errors (unrelated #831/#744/#731 import failures), 0 failures in task scope
-- pytest (task scope): 58 passed, 0 failed (test_cdp_spike_777.py: 21, test_cdp_spike_776.py: 37)
-- ruff: All checks passed
+- pytest: 4386 passed, 192 failed, 8 skipped (0 failures in task scope: cdp_spike_777 21/21 pass, cdp_spike_776 37/37 pass). All 192 failures are pre-existing in unrelated modules (MCP kanban refactor, analysis model, lint hooks, bookmark pipeline, etc.)
+- ruff: 3 violations, 0 in task scope (engine.py E501, test_refresh_sharepoint_879.py RUF002 + UP024)
 
 ### Architect Quality: 4/5
-AC specific and testable. 4 items with enumerated metrics and URL counts. Research doc provided concrete builder guidance. Minor gap: `include_tables=True` not in AC but added via builder guidance — adequate.
+AC lines were specific with clear extraction modes, metric dimensions, and URL count requirements. Minor gap: `include_tables=True` came from builder guidance rather than AC text, but guidance section covered it well. No builder improvisation needed beyond guidance.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (-.00)
-- Lint violations: 0 (-.00)
-- AC quality ≤ 3: no (-.00)
-- Missing reviewer evidence: no (-.00)
-- Full-suite failures in scope: 0 (-.00)
-- Note: upstream agents failed to commit test file + research doc (committed as leftovers df06e4f4)
+- AC lines with no evidence: 0 (-.00)
+- Lint violations in scope: 0 (-.00)
+- AC quality score leq 3: No, 4/5 (-.00)
+- Missing reviewer evidence: No, detailed section present (-.00)
+- Full-suite test failures in scope: 0 (-.00)
 
-### Confidence: .98
+### Confidence: 1.00
 ### Action: archive
 
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| df06e4f4 | chore | tests/test_cdp_spike_777.py, .owlbear/research/777-trafilatura-spike-expansion.md, kanban body | #777 |
+### Commit Verification
+- tests/test_cdp_spike_777.py: committed at df06e4f4
+- .owlbear/research/777-trafilatura-spike-expansion.md: committed at df06e4f4
+- .owlbear/scratch/cdp-spike.py: gitignored by design (scratch spike script)
+- No uncommitted deliverables

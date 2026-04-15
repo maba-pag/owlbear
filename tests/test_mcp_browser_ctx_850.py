@@ -21,7 +21,7 @@ All tests MUST FAIL at RED phase:
 from __future__ import annotations
 
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -59,7 +59,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """click() accepts ctx as first positional arg and returns the selector string."""
         from owlbear_mcp_browser.server import click  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.click = AsyncMock()
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await click(ctx, selector="#submit-btn")
         assert result == "#submit-btn"
 
@@ -68,7 +73,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """type_input() accepts ctx as first positional arg and returns 'selector:text'."""
         from owlbear_mcp_browser.server import type_input  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.fill = AsyncMock()
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await type_input(ctx, selector="#search", text="hello world")
         assert result == "#search:hello world"
 
@@ -77,7 +87,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """select() accepts ctx as first positional arg and returns 'selector:value'."""
         from owlbear_mcp_browser.server import select  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.select_option = AsyncMock()
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await select(ctx, selector="#dropdown", value="option-1")
         assert result == "#dropdown:option-1"
 
@@ -86,7 +101,11 @@ class TestFromAC_CtxParameterOnAllTools:
         """read_text() accepts ctx as first positional arg and returns a string."""
         from owlbear_mcp_browser.server import read_text  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_page = MagicMock()
+        mock_page.url = "https://example.com/"
+        mock_page.content = AsyncMock(return_value="<html><body>Hello world</body></html>")
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await read_text(ctx)
         assert isinstance(result, str)
 
@@ -95,7 +114,12 @@ class TestFromAC_CtxParameterOnAllTools:
         """snapshot() accepts ctx as first positional arg and returns a string."""
         from owlbear_mcp_browser.server import snapshot  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx([]))
+        mock_locator = MagicMock()
+        mock_locator.aria_snapshot = AsyncMock(return_value="- heading: Hello\n")
+        mock_page = MagicMock()
+        mock_page.locator = MagicMock(return_value=mock_locator)
+        app_ctx = AppContext(allowlist=DomainAllowlist(domains=[]), page=mock_page)
+        ctx = _make_mcp_ctx(app_ctx)
         result = await snapshot(ctx)
         assert isinstance(result, str)
 
@@ -127,7 +151,13 @@ class TestFromAC_NavigateUsesLifespanCtx:
         """navigate() does not raise when ctx allowlist contains the domain, even if BROWSER_ALLOWED_DOMAINS is unset."""
         from owlbear_mcp_browser.server import navigate  # type: ignore[attr-defined]
 
-        ctx = _make_mcp_ctx(_make_app_ctx(["trusted.example.com"]))  # ctx has the domain
+        mock_fetcher = MagicMock()
+        mock_fetcher.fetch = AsyncMock(return_value="# Page")
+        app_ctx = AppContext(
+            allowlist=DomainAllowlist(domains=["trusted.example.com"]),
+            fetcher=mock_fetcher,
+        )
+        ctx = _make_mcp_ctx(app_ctx)
         env_without = {k: v for k, v in os.environ.items() if k != "BROWSER_ALLOWED_DOMAINS"}
         with patch.dict(os.environ, env_without, clear=True):
             # must not raise — ctx allowlist permits the domain

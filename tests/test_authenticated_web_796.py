@@ -370,3 +370,41 @@ class TestFromAC_ContentFetcherInjection:
             content_fetcher=mock_fetcher,
         )
         assert mock_fetcher in vars(orch).values()
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered: content_fetcher=None + non-empty URLs should be no-op
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered_NullFetcherBehavior:
+    """Builder-discovered: _handle_authenticated_web with content_fetcher=None and URLs present is a no-op."""
+
+    def test_null_fetcher_with_urls_returns_zero_counts(self) -> None:
+        """When content_fetcher=None and source has URLs, refresh returns zero counts (no-op per docstring)."""
+        import asyncio
+
+        from owlbear_knowledge.models import KnowledgeSource, SourceType
+        from owlbear_knowledge.refresh import RefreshOrchestrator, RefreshResult
+
+        source = KnowledgeSource(
+            name="null-fetcher-with-urls",
+            source_type=SourceType.AUTHENTICATED_WEB,
+            config={"urls": ["https://example.com/page1", "https://example.com/page2"]},
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        )
+        orch = RefreshOrchestrator(
+            store=MagicMock(),
+            pipeline=MagicMock(),
+            content_fetcher=None,
+        )
+        result = asyncio.get_event_loop().run_until_complete(
+            orch._handle_authenticated_web(source)
+        )
+
+        assert isinstance(result, RefreshResult)
+        assert result.refreshed == 0
+        assert result.skipped == 0
+        assert result.failed == 0
+        assert result.errors == []

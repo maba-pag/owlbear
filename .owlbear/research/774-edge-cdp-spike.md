@@ -25,7 +25,7 @@ is needed for the empirical validation that can't be done by an agent?
 | 5 | CDP spike execution research (#753) | .owlbear/research/cdp-spike-execution-753.md | .90 |
 | 6 | Existing `compute_content_hash()` | serve/knowledge/src/owlbear_knowledge/status_store.py | .85 |
 | 7 | Content hashing research (#253) | .owlbear/research/content-hashing.md | .85 |
-| 8 | Brief data-person voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/data-person.md | .90 |
+| 8 | Brief data-person voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/data-person.md | .90 |
 | 9 | #751 parent research | .owlbear/research/751-authenticated-content-pipeline.md | .85 |
 | 10 | Centralize trafilatura research (#537, #868) | .owlbear/research/centralize-trafilatura.md, leaf-markdown-extraction-helper.md | .75 |
 

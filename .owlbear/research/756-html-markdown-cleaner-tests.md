@@ -22,7 +22,7 @@ or does it carry unique scope that must be preserved?
 | 4 | #760/#761 task bodies | kanban board | .90 |
 | 5 | trafilatura evaluation benchmarks | trafilatura.readthedocs.io/en/latest/evaluation.html | .90 |
 | 6 | trafilatura Python API docs | trafilatura.readthedocs.io/en/latest/usage-python.html | .90 |
-| 7 | Data-person voice (Gap 1, Gap 2) | .owlbear/briefs/draft-browser-knowledge-extraction/voices/data-person.md | .95 |
+| 7 | Data-person voice (Gap 1, Gap 2) | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/data-person.md | .95 |
 | 8 | Brief D1 decision | .owlbear/briefs/draft-browser-knowledge-extraction/decisions.md | .90 |
 | 9 | compute_content_hash() | serve/knowledge/src/owlbear_knowledge/status_store.py | .85 |
 | 10 | #774 research (hash stability) | .owlbear/research/774-edge-cdp-spike.md §3.3 | .85 |

@@ -19,7 +19,7 @@ Task #758 is the GREEN phase for `serve/browser/` — implement `launcher.py` an
 | 2 | Chrome 136 remote-debugging-port restriction | developer.chrome.com/blog/remote-debugging-port | .95 |
 | 3 | #755 research (test strategy) | .owlbear/research/edge-launcher-cdp-tests-755.md | .95 |
 | 4 | #752 research (CDP spike design) | .owlbear/research/cdp-spike-752.md | .90 |
-| 5 | Brief — architect voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/architect.md | .90 |
+| 5 | Brief — architect voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/architect.md | .90 |
 | 6 | Brief — security voice | .owlbear/briefs/draft-browser-knowledge-extraction/ | .90 |
 | 7 | Existing package patterns | serve/knowledge/pyproject.toml, serve/orchestrator/src/ | .85 |
 | 8 | ProcessSupervisor | serve/orchestrator/src/owlbear_orchestrator/process_supervisor.py | .80 |

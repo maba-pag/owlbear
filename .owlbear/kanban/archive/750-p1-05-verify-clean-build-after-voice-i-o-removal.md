@@ -1,7 +1,7 @@
 ---
 id: 750
 title: 'P1-05: Verify clean build after voice I/O removal'
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T10:36:47.180806+00:00'
 updated: '2026-04-10T14:35:58.132094+00:00'

@@ -1,7 +1,7 @@
 ---
 id: 783
 title: Tests — owlbear_browser content extractor and HTML-to-MD cleaner
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:30:44.046816+00:00'
 updated: '2026-04-13T03:04:57.608243+00:00'

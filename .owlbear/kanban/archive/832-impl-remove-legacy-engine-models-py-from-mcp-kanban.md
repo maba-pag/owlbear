@@ -1,7 +1,7 @@
 ---
 id: 832
 title: Impl — Remove legacy engine_models.py from mcp-kanban
-status: done
+status: archived
 priority: needed
 created: '2026-04-11T11:41:14.187673+00:00'
 updated: '2026-04-11T20:14:51.501648+00:00'

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +14,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
 
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.dispatch import pick_dispatchable
 from owlbear_kanban.models import TaskSummary
 from owlbear_mcp_kanban.models import KanbanTask
 
@@ -95,6 +95,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     kanban_dir: Path = _DEFAULT_KANBAN_DIR
     _apply_tool_exclusions(_server)
     engine = KanbanEngine(kanban_dir)
+    engine.sweep()
     yield AppContext(engine=engine, kanban_dir=kanban_dir)
 
 
@@ -326,53 +327,6 @@ async def end_work(  # noqa: PLR0913
 # pick_tasks — gate-filtered dispatch list
 # ---------------------------------------------------------------------------
 
-_PICK_AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
-_PICK_CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
-_PICK_NON_IMPL_TAGS = frozenset(
-    {
-        "research",
-        "docs",
-        "type:config",
-        "type:docs",
-        "test",
-        "type:test",
-        "agent",
-        "quality",
-        "type:user-action",
-    }
-)
-
-_PICK_PRIORITY_RANK: dict[str, int] = {
-    "critical": 0,
-    "needed": 1,
-    "important": 2,
-    "nice-to-have": 3,
-    "someday": 4,
-}
-_PICK_STATUS_RANK: dict[str, int] = {
-    "done": 0,
-    "docs": 1,
-    "review": 2,
-    "in-progress": 3,
-    "todo": 4,
-    "backlog": 5,
-    "research": 6,
-}
-_PICK_MAX_PRIORITY_RANK = max(_PICK_PRIORITY_RANK.values())
-_PICK_MAX_STATUS_RANK = max(_PICK_STATUS_RANK.values())
-
-
-def _check_pick_gates(task: dict) -> bool:
-    """Return True if task passes TDD and clarity gates."""
-    status: str = task.get("status", "")
-    body: str = task.get("body") or ""
-
-    if status == "in-progress" and "## Test-Writer Notes" not in body:
-        tags: list[str] = task.get("tags") or []
-        if not _PICK_NON_IMPL_TAGS.intersection(tags):
-            return False
-    return not (status in _PICK_CLARITY_STATUSES and not _PICK_AC_PATTERN.search(body))
-
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
@@ -381,22 +335,8 @@ async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
     Optional tag pre-filters candidates before gating (e.g. 'phase-2').
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    kw: dict[str, object] = {"blocked": False, "unclaimed": True}
-    if tag:
-        kw["tag"] = tag
-    records = app_ctx.engine.list_tasks(**kw)
-    tasks: list[dict] = [r.model_dump() for r in records]
-
-    passing = [t for t in tasks if _check_pick_gates(t)]
-
-    def _sort_key(task: dict) -> tuple[int, int]:
-        prank = _PICK_PRIORITY_RANK.get(task.get("priority", ""), _PICK_MAX_PRIORITY_RANK + 1)
-        srank = _PICK_STATUS_RANK.get(task.get("status", ""), _PICK_MAX_STATUS_RANK + 1)
-        return (prank, srank)
-
-    passing.sort(key=_sort_key)
-    capped = passing[:limit]
-    return {"dispatch": [{"task_id": int(t["id"]), "status": str(t["status"])} for t in capped]}
+    tasks = pick_dispatchable(app_ctx.engine, limit=limit, tag=tag)
+    return {"dispatch": [{"task_id": int(t.id), "status": str(t.status)} for t in tasks]}
 
 
 # Override outputSchema for tools that return KanbanTask. This ensures the

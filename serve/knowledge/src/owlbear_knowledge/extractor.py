@@ -56,21 +56,17 @@ class EntityExtractor:
 
     When ``extractor`` is provided, non-empty input is forwarded to it (with
     an optional metadata prefix).  When omitted, the extractor behaves as a
-    no-op stub (backward-compatible with ``EntityExtractor(model=...)``) .
+    no-op stub returning empty :class:`ExtractionResult`.
 
     Args:
-        model: Ignored — kept for backward compatibility.
-        extractor: Injected :class:`StructuredExtractor` for LLM extraction.
+        extractor: Injected :class:`StructuredExtractor` for structured extraction.
     """
 
     def __init__(
         self,
-        model: str | object | None = None,
         *,
         extractor: StructuredExtractor | None = None,
-        **_kwargs: object,
     ) -> None:
-        self._model = model
         self._extractor = extractor
 
     async def extract(

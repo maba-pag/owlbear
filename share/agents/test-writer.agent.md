@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/awaitTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: [scribe, quality-runner]
 hooks:
   SessionStart:
@@ -60,6 +60,7 @@ in it must fail when you hand it off.
 
 | Agent | When | Example |
 |-------|------|---------|
+| quality-runner | Run test suite to confirm all new tests fail (RED phase) | `quality-runner: mode=full, task_id=42` |
 | scribe | Cannot proceed — AC too vague or missing dependencies | `Scribe: task_id=42, mode=check-or-create, concern="AC has no testable interface — needs clarification"` |
 
 </subagents>

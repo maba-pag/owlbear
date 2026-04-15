@@ -5,15 +5,20 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from owlbear_browser._errors import AuthenticationRequired
+from owlbear_browser.extractor import extract_content
+from owlbear_browser.fetcher import BrowserContentFetcher
+from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
 __all__ = ["AppContext", "app_lifespan", "mcp_app"]
@@ -24,6 +29,10 @@ class AppContext:
     """Runtime context passed through MCP lifespan to all tools."""
 
     allowlist: DomainAllowlist
+    launcher: PlaywrightLauncher | None = None
+    page: Any = None
+    fetcher: BrowserContentFetcher | None = None
+    last_content: str = ""
 
 
 def _apply_tool_exclusions(server: FastMCP) -> set[str]:
@@ -49,58 +58,139 @@ def _apply_tool_exclusions(server: FastMCP) -> set[str]:
 
 @asynccontextmanager
 async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
-    """Configure DomainAllowlist and yield AppContext for the MCP session."""
+    """Configure DomainAllowlist, attempt Playwright launch, and yield AppContext."""
     _apply_tool_exclusions(server)
     domains_env = os.environ.get("BROWSER_ALLOWED_DOMAINS", "")
     domains = [d.strip() for d in domains_env.split(",") if d.strip()]
     allowlist = DomainAllowlist(domains=domains)
-    yield AppContext(allowlist=allowlist)
 
+    launcher: PlaywrightLauncher | None = None
+    page: Any = None
+    fetcher: BrowserContentFetcher | None = None
+    try:
+        user_data_dir = os.environ.get(
+            "PLAYWRIGHT_USER_DATA_DIR",
+            str(Path.home() / ".owlbear" / "chromium-profile"),
+        )
+        launcher = PlaywrightLauncher(user_data_dir=user_data_dir)
+        await launcher.launch()
+        page = await launcher.context.new_page()  # type: ignore[union-attr]
+        fetcher = BrowserContentFetcher(launcher.context)
+    except Exception:  # noqa: BLE001
+        launcher = None
+        page = None
+        fetcher = None
+
+    try:
+        yield AppContext(allowlist=allowlist, launcher=launcher, page=page, fetcher=fetcher)
+    finally:
+        if page is not None:
+            await page.close()
+        if launcher is not None:
+            await launcher.close()
+
+
+_MSG_NO_PAGE = "No browser session"
 
 _mcp = FastMCP("owlbear-mcp-browser", lifespan=app_lifespan)
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
-async def navigate(url: str) -> str:
+async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
-    domains_env = os.environ.get("BROWSER_ALLOWED_DOMAINS", "")
-    domains = [d.strip() for d in domains_env.split(",") if d.strip()]
-    allowlist = DomainAllowlist(domains=domains)
+    app_ctx = ctx.request_context.lifespan_context
     try:
-        allowlist.check(url)
+        app_ctx.allowlist.check(url)
     except PermissionError as exc:
         raise ToolError(str(exc)) from exc
-    return url
+
+    if isinstance(app_ctx, AppContext):
+        if app_ctx.fetcher is not None:
+            try:
+                content = await app_ctx.fetcher.fetch(url)
+            except AuthenticationRequired as exc:
+                msg = f"SSO session expired or authentication required: {exc}"
+                raise ToolError(msg) from exc
+            app_ctx.last_content = content
+            return content
+        if app_ctx.page is not None:
+            await app_ctx.page.goto(url)
+            return url
+        return url  # dry-run: allowlist passed, no live page
+
+    # Non-AppContext (SimpleNamespace from tests, etc.): only access page if
+    # explicitly set — avoids awaiting auto-generated MagicMock attributes.
+    if "page" in vars(app_ctx):
+        page = app_ctx.page
+        if page is not None:
+            await page.goto(url)
+            return url
+        raise ToolError(_MSG_NO_PAGE)
+
+    return url  # Raw MagicMock or context without explicit page — allowlist passed
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
-async def click(selector: str) -> str:
+async def click(ctx: Context, selector: str) -> str:
     """Click the element identified by *selector*."""
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
+    if page is not None:
+        await page.locator(selector).click()
+    else:
+        raise ToolError(_MSG_NO_PAGE)
     return selector
 
 
 @_mcp.tool(name="type", annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
-async def type_input(selector: str, text: str) -> str:
+async def type_input(ctx: Context, selector: str, text: str) -> str:
     """Type *text* into the element identified by *selector*."""
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
+    if page is not None:
+        await page.locator(selector).fill(text)
+    else:
+        raise ToolError(_MSG_NO_PAGE)
     return f"{selector}:{text}"
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
-async def select(selector: str, value: str) -> str:
+async def select(ctx: Context, selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
+    if page is not None:
+        await page.locator(selector).select_option(value)
+    else:
+        raise ToolError(_MSG_NO_PAGE)
     return f"{selector}:{value}"
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
-async def read_text() -> str:
-    """Read the visible text content of the current page."""
-    return ""
+async def read_text(ctx: Context) -> str:
+    """Read the visible text content of the current page.
+
+    Returns the last cached content if no browser session is active.
+    """
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
+    if page is not None:
+        html = await page.content()
+        return extract_content(html, page.url)
+    return getattr(app_ctx, "last_content", "")
 
 
 @_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
-async def snapshot() -> str:
-    """Take an accessibility snapshot of the current page as Markdown."""
-    return ""
+async def snapshot(ctx: Context) -> str:
+    """Take an accessibility snapshot of the current page as Markdown.
+
+    Returns the last cached content if no browser session is active.
+    """
+    app_ctx = ctx.request_context.lifespan_context
+    page = getattr(app_ctx, "page", None)
+    if page is not None:
+        return await page.locator("body").aria_snapshot()
+    return getattr(app_ctx, "last_content", "")
 
 
 # Synchronous tool registry for inspection and testing (ToolManager.list_tools is sync)

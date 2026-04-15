@@ -1,6 +1,7 @@
 """OwlBear kanban engine package.
 
-Exports the transport-free kanban engine and its public models.
+Exports the transport-free kanban engine, its public models, and the
+dispatch selector (pick_dispatchable).
 """
 
 from __future__ import annotations

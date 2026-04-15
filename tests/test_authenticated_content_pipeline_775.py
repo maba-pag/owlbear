@@ -1,8 +1,7 @@
-"""RED-phase tests for Phase 1: Browser Package + Pipeline Quality + Schema (#775).
+"""Tests for Phase 1: Browser Package + Pipeline Quality + Schema (#775).
 
-Covers testable interfaces from the 10 scope items:
+Covers testable interfaces from the scope items:
 
-  SC1  - owlbear_browser: EdgeCDPLauncher with launch/connect/close, Edge binary resolution
   SC2  - owlbear_mcp_browser: navigate, click, type, select, read_text, snapshot tools
          with URL domain allowlist enforcement
   SC3  - RefreshOrchestrator dispatches AUTHENTICATED_WEB source type to new handler
@@ -10,97 +9,16 @@ Covers testable interfaces from the 10 scope items:
   SC8  - Content safety predicate INVERSION — wrap all except file/text source types
   SC10 - replace-on-change: delete prior document data before re-ingesting
 
+SC1 (EdgeCDPLauncher) was removed in cleanup task #870 — Edge/CDP approach superseded by Playwright.
 SC5 (schema v9), SC6 (EntityType extensions), SC7 (RelationType extensions), and
 SC9 (LLM prompt examples) are each covered by dedicated Layer-0 subtask test files.
-
-All tests MUST FAIL at RED phase — none of these interfaces exist yet.
 """
 
 from __future__ import annotations
 
-import inspect
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-
-# ---------------------------------------------------------------------------
-# SC1: owlbear_browser — EdgeCDPLauncher interface
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_BrowserPackage:
-    """owlbear_browser package exists with an Edge CDP launcher (SC1)."""
-
-    def test_owlbear_browser_has_cdp_module(self) -> None:
-        """owlbear_browser.cdp sub-module is importable."""
-        from owlbear_browser import cdp  # type: ignore[import-not-found]  # noqa: F401
-
-    def test_edge_cdp_launcher_class_importable(self) -> None:
-        """EdgeCDPLauncher class is importable from owlbear_browser."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]  # noqa: F401
-
-    def test_edge_cdp_launcher_has_launch_method(self) -> None:
-        """EdgeCDPLauncher exposes a launch() method."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        assert hasattr(EdgeCDPLauncher, "launch")
-
-    def test_edge_cdp_launcher_launch_is_coroutine(self) -> None:
-        """EdgeCDPLauncher.launch is an async method."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        assert inspect.iscoroutinefunction(EdgeCDPLauncher.launch)
-
-    def test_edge_cdp_launcher_has_connect_method(self) -> None:
-        """EdgeCDPLauncher exposes a connect() method."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        assert hasattr(EdgeCDPLauncher, "connect")
-
-    def test_edge_cdp_launcher_connect_is_coroutine(self) -> None:
-        """EdgeCDPLauncher.connect is an async method."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        assert inspect.iscoroutinefunction(EdgeCDPLauncher.connect)
-
-    def test_edge_cdp_launcher_has_close_method(self) -> None:
-        """EdgeCDPLauncher exposes a close() method."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        assert hasattr(EdgeCDPLauncher, "close")
-
-    def test_edge_cdp_launcher_close_is_coroutine(self) -> None:
-        """EdgeCDPLauncher.close is an async method."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        assert inspect.iscoroutinefunction(EdgeCDPLauncher.close)
-
-    def test_edge_binary_path_resolver_returns_windows_default(self) -> None:
-        """resolve_edge_binary() returns the Windows default Edge executable path."""
-        from owlbear_browser import resolve_edge_binary  # type: ignore[import-not-found]
-
-        path = resolve_edge_binary()
-        # Windows default install path for Microsoft Edge
-        assert "msedge.exe" in str(path).lower() or "edge" in str(path).lower()
-
-    @pytest.mark.asyncio
-    async def test_launch_raises_for_missing_binary(self) -> None:
-        """EdgeCDPLauncher.launch raises FileNotFoundError when binary is absent."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        launcher = EdgeCDPLauncher(binary_path="/nonexistent/msedge.exe")
-        with pytest.raises((FileNotFoundError, OSError)):
-            await launcher.launch()
-
-    @pytest.mark.asyncio
-    async def test_close_before_launch_is_safe(self) -> None:
-        """EdgeCDPLauncher.close() does not raise when called without a prior launch()."""
-        from owlbear_browser import EdgeCDPLauncher  # type: ignore[import-not-found]
-
-        launcher = EdgeCDPLauncher(binary_path="/nonexistent/msedge.exe")
-        # Must not raise
-        await launcher.close()
 
 
 # ---------------------------------------------------------------------------

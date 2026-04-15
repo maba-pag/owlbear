@@ -1,7 +1,7 @@
 ---
 id: 830
 title: Concrete ContentFetcher implementations (BrowserContentFetcher + HttpxContentFetcher)
-status: done
+status: archived
 priority: needed
 created: '2026-04-11T02:05:09.693123+00:00'
 updated: '2026-04-12T21:34:46.234801+00:00'

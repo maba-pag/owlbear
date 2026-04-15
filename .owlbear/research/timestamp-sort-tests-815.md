@@ -66,7 +66,30 @@ Confidence: **0.92** — straightforward TDD RED with well-understood bug.
 
 Challenge: FALLBACK — researcher mode, no challenger subagent configured.
 
-## 5. Follow-up Tasks
+## 5. Validation Pass (2026-04-13)
+
+Research doc validated against current codebase. Key findings:
+
+| Item | Status | Detail |
+|------|--------|--------|
+| Engine fix | Already implemented | `engine.py` L252-255 uses `datetime.fromisoformat()` — matches recommendation |
+| Tests exist | 4 tests present | In `test_kanban_engine_listing.py`, class `TestFromAC_SortByField` |
+| AC1 (created mixed TZ) | PASS GREEN | `test_sort_by_created_mixed_tz_offsets` |
+| AC2 (updated mixed TZ) | PASS GREEN | `test_sort_by_updated_mixed_tz_offsets` |
+| AC3 (mixed Go/Python precision) | PASS GREEN | `test_sort_by_created_mixed_precision_formats` |
+| AC4 (round-trip fidelity) | FAIL (defect) | `test_sort_round_trip_string_fidelity` — `AttributeError: 'TaskSummary' has no attribute 'created'` |
+| AC5 (TDD RED) | Bypassed | Fix was implemented before/alongside tests; 3 tests pass GREEN immediately |
+| Real Go 7-digit timestamps | None found | All 146 task files use Python 6-digit µs format; defensive handling correct |
+
+### Test Defect — `test_sort_round_trip_string_fidelity`
+
+`list_tasks()` returns `TaskSummary` (via `TaskSummary.model_validate(t.model_dump())` at L261).
+`TaskSummary` has `extra="ignore"` and excludes `created`/`updated` fields.
+Test accesses `task1.created` on a `TaskSummary` → `AttributeError`.
+
+**Fix:** Use `engine.show_task(str(task1.id))` to get the full `Task` object for round-trip verification, or restructure the test to read back via `read_task()`.
+
+## 6. Follow-up Tasks
 
 - #816 (existing) — Fix timestamp sort (depends on #815, already created)
-- No additional follow-up tasks needed; the test/impl pair is complete.
+- No new follow-up tasks needed — the test defect is in-scope for #815 itself
