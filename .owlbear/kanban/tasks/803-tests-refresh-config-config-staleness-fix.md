@@ -4,7 +4,7 @@ title: Tests — refresh_config + config staleness fix
 status: done
 priority: needed
 created: '2026-04-10T21:20:57.293478+00:00'
-updated: '2026-04-15T08:18:34.257676+00:00'
+updated: '2026-04-15T13:31:40.051610+00:00'
 tags:
 - phase-1
 - type:test
@@ -14,8 +14,8 @@ parent: 798
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: low-owl
+claimed_at: '2026-04-15T13:31:40.051610+00:00'
 ---
 ## Acceptance Criteria
 

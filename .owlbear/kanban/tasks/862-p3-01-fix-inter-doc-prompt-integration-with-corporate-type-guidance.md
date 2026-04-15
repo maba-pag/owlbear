@@ -4,16 +4,15 @@ title: 'P3-01: Fix inter-doc prompt integration with corporate type guidance'
 status: todo
 priority: nice-to-have
 created: '2026-04-13T19:16:55.084666+00:00'
-updated: '2026-04-14T14:10:36.831265+00:00'
+updated: '2026-04-15T13:34:47.597165+00:00'
 tags:
 - phase-3
 - scope:knowledge
 - deferred
 parent: 772
 depends_on: []
-blocked: true
-block_reason: LLMExtractor removed — task premise invalidated, needs re-scoping before
-  work can proceed
+blocked: false
+block_reason: null
 claimed_by: null
 claimed_at: null
 ---
