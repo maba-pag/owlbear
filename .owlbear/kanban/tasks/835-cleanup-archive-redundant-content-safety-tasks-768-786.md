@@ -1,10 +1,10 @@
 ---
 id: 835
 title: 'Cleanup: archive redundant content safety tasks (#768, #786)'
-status: in-progress
+status: done
 priority: nice-to-have
 created: '2026-04-11T15:24:19.483409+00:00'
-updated: '2026-04-13T20:59:45.304908+00:00'
+updated: '2026-04-15T00:08:58.625159+00:00'
 tags:
 - phase-1
 - scope:knowledge
@@ -13,8 +13,8 @@ parent: 751
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: red-wolf
+claimed_at: '2026-04-15T00:08:58.625159+00:00'
 ---
 ## Acceptance Criteria
 
@@ -95,3 +95,87 @@ Task produces no testable Python code. Tagged `cleanup` but not a canonical pass
 - No `implement`, `function`, `class`, `src/`, or `.py` references in AC.
 - Architect review confirms: "Task produces no testable Python code — pass-through."
 - No test file created.
+[[2026-04-14]]
+## Builder Notes
+
+**Non-impl pass-through — kanban archival only. No code changes, no tests.**
+
+### AC Verification
+
+| Target | AC Requirement | Status | Action Taken |
+|--------|---------------|--------|-------------|
+| #768 (P1-15: Tests — Content safety) | Archive — fully superseded, AC1+AC2 covered by 21 existing tests, AC3 carved to #833/#834 | done → archived | start_work + end_work(success) |
+| #786 (Content safety predicate inversion) | Archive — duplicate of work shipped in commit 2dfae28b | not found (already archived) | Treated as satisfied per architect instruction |
+| #781 (Tests — Content safety predicate inversion) | Archive — redundant tests, blocked by QR env error | not found (already archived/removed) | Treated as satisfied — same as above |
+
+### Evidence
+- 141 content safety tests passing across 6 test files (verified by research stage)
+- All 3 archival targets confirmed redundant: work already implemented and tested
+- No files changed — kanban-only cleanup
+
+### Lint / Tests
+- N/A — no code modified
+[[2026-04-14]]
+## Review Evidence
+
+**Reviewer:** Copilot reviewer mode | **Date:** 2026-04-15  
+**Task type:** Non-impl pass-through — kanban archival only. No code, no tests.
+
+### Step 1 — Source Control Changes
+`get_changed_files` (staged + unstaged) shows no modifications to #768, #781, or #786 task files. This is expected: the builder's archival was committed in a prior commit and is therefore absent from the uncommitted diff (deletions are part of git history, not working tree changes).
+
+### Step 2 — Test Evidence
+Full-suite `pytest_results.txt` (in working tree): 4220 passed, 288 failed. The 288 failures are all unrelated tasks (orchestrator loop, analysis, bookmark pipeline, mcp-kanban, etc.). Content safety test files (`test_content_safety_735.py`, `test_content_safety_inversion_775.py`, `test_content_safety_inversion_786.py`, `test_authenticated_content_pipeline_751.py`, `test_authenticated_content_pipeline_775.py`) are absent from the failure list — consistent with the research-stage finding of 141 passing content safety tests.
+
+### Step 3 — Kanban Board Verification (Primary Evidence)
+
+| Task | Builder Claim | Verification Method | Result |
+|------|--------------|--------------------|----|
+| #768 (P1-15: Tests — Content safety) | Archived via start_work + end_work(success) | `show_task(768)` | **"Task '768' not found"** → Archived ✓ |
+| #781 (Tests — CS predicate inversion) | Not found / already archived | `show_task(781)` | **"Task '781' not found"** → Archived ✓ |
+| #786 (Content safety predicate inversion) | Not found / already archived | Prior architect note + confirmed "not found" | **Pre-authorized** — architect explicitly noted "treat as satisfied if unreachable" ✓ |
+
+Secondary: `list_tasks(archived=true, search="content safety")` shows all three at status `done` in the archive store — confirming they are archived (visible only with archived=true flag, inaccessible via show_task).
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Archive #768 — fully superseded, AC1+AC2 covered by 21 existing tests, AC3 carved to #833/#834 | show_task(768) → "not found"; architect confirmed #833/#834 both done | ✅ PASS |
+| Archive #786 — duplicate of commit 2dfae28b; verify board accessibility | show_task returns "not found" since architect review; pre-authorized treating as satisfied | ✅ PASS |
+| Archive #781 — redundant predicate inversion tests, QR env error irrelevant | show_task(781) → "not found" | ✅ PASS |
+
+### TestFromAC Integrity
+N/A — test-writer confirmed pass-through, no test file created. No TestFromAC_ classes exist for this task.
+
+### Security
+N/A — no code changes, no new interfaces.
+
+### Deductions
+None.
+
+### Verdict
+Confidence: **0.95 → PASS**
+
+`PASS #835 -> docs | confidence .95`
+[[2026-04-14]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Kanban archival only — no code, no behavior change |
+| 2 | Module docstrings | No | N/A | No `.py` files created or modified |
+| 3 | External attribution | No | N/A | All 9 sources are internal (kanban, codebase, git commits, test files) |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/835-archive-redundant-content-safety.md` exists and linked in task body |
+
+### Files Updated
+None — no documentation impact.
+
+### Scratch Files
+No `.owlbear/scratch/835-*` files found.
+
+### Upstream Review Evidence
+`## Review Evidence` section present in task body — reviewer confirmed confidence 0.95 PASS, all 3 archival targets verified archived (show_task → "not found" for #768, #781; #786 pre-authorized by architect).
+
+Docs gate passed.
