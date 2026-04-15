@@ -5,7 +5,7 @@ AC coverage:
   AC2 — TDD gate: in-progress task without test-writer notes or non-impl tag is excluded
   AC3 — Clarity gate: active-status task without bullet/numbered AC is excluded
   AC4 — Priority ranking: critical > needed > important > nice-to-have > someday
-  AC5 — Status ranking: done > docs > review > in-progress > todo > backlog > research
+  AC5 — Status ranking: done > docs > review > in-progress > todo > backlog > research (archived excluded)
   AC6 — Result capping at limit
   AC7 — Tag filtering
   AC8 — Importable without MCP dependency
@@ -329,14 +329,14 @@ class TestFromAC_PickDispatchableClarityGate:
         ids = {t.id for t in result}
         assert 6 in ids
 
-    def test_done_without_bullets_excluded(self, tmp_path: Path) -> None:
-        """done status is in the active set; prose-only body fails clarity gate."""
+    def test_done_with_bullets_dispatched(self, tmp_path: Path) -> None:
+        """done tasks with AC bullets are dispatchable (auditor needs them)."""
         kdir = _make_kanban_dir(tmp_path)
-        _add_task(kdir, 7, "Done no bullets", status="done", body="Some prose, no bullets")
+        _add_task(kdir, 7, "Done with bullets", status="done", body="- AC item")
         engine = KanbanEngine(kdir)
         result = pick_dispatchable(engine)
         ids = {t.id for t in result}
-        assert 7 not in ids
+        assert 7 in ids
 
     def test_review_without_bullets_excluded(self, tmp_path: Path) -> None:
         """review status is in the active set; prose-only body fails clarity gate."""
@@ -390,7 +390,8 @@ class TestFromAC_PickDispatchablePriorityRanking:
 
 
 # ===========================================================================
-# AC5 — Status ranking: done > docs > review > in-progress > todo > backlog > research
+# AC5 — Status ranking: done > docs > review > in-progress > todo > backlog > research (archived excluded)
+#         (done/archived are terminal — excluded from dispatch)
 # ===========================================================================
 
 
@@ -405,8 +406,16 @@ class TestFromAC_PickDispatchableStatusRanking:
         ids = [t.id for t in result]
         assert ids.index(2) < ids.index(1)
 
+    def test_archived_excluded_from_dispatch(self, tmp_path: Path) -> None:
+        """archived is a terminal status and must not appear in dispatch results."""
+        kdir = _make_kanban_dir(tmp_path)
+        _add_task(kdir, 1, "Archived task", status="archived", priority="critical", body="- AC item")
+        engine = KanbanEngine(kdir)
+        result = pick_dispatchable(engine)
+        assert all(t.status != "archived" for t in result)
+
     def test_all_statuses_in_dispatch_order(self, tmp_path: Path) -> None:
-        """All 7 statuses ordered: done, docs, review, in-progress, todo, backlog, research."""
+        """All 7 active statuses ordered: done, docs, review, in-progress, todo, backlog, research."""
         kdir = _make_kanban_dir(tmp_path)
         # in-progress needs ## Test-Writer Notes + bullet to pass both gates
         bodies: dict[str, str] = {
