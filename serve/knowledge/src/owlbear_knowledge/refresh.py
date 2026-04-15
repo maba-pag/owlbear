@@ -57,10 +57,6 @@ class RefreshOrchestrator:
         content_fetcher: Optional protocol object with an async ``fetch(url)``
             method used to retrieve content for ``AUTHENTICATED_WEB`` sources.
             When ``None``, authenticated web refresh is a no-op.
-        graph_content_fetcher: Optional protocol object with an async ``fetch(url)``
-            method used to retrieve content for ``SHAREPOINT_API`` sources.
-            When ``None``, SharePoint refresh is a no-op.  Canonical parameter name;
-            ``graph_fetcher`` is a deprecated alias accepted for backward compatibility.
         inter_doc_builder: Optional ``InterDocGraphBuilder`` used to build
             cross-document edges after each successful ingest. When ``None``
             (the default), inter-doc graph building is disabled.
@@ -77,8 +73,6 @@ class RefreshOrchestrator:
         pipeline: IngestPipeline | object,
         workspace_root: Path | None = None,
         content_fetcher: object | None = None,
-        graph_content_fetcher: object | None = None,
-        graph_fetcher: object | None = None,
         inter_doc_builder: InterDocGraphBuilder | None = None,
         graph_store: GraphStore | None = None,
     ) -> None:
@@ -86,7 +80,6 @@ class RefreshOrchestrator:
         self._pipeline = pipeline
         self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
         self._content_fetcher = content_fetcher
-        self._graph_content_fetcher = graph_content_fetcher if graph_content_fetcher is not None else graph_fetcher
         self._inter_doc_builder = inter_doc_builder
         self._graph_store = graph_store
 
@@ -117,8 +110,6 @@ class RefreshOrchestrator:
             result = await self._handle_file_glob(source, cancel=cancel)
         elif source.source_type == SourceType.AUTHENTICATED_WEB:
             result = await self._handle_authenticated_web(source, cancel=cancel)
-        elif source.source_type == SourceType.SHAREPOINT_API:
-            result = await self._handle_sharepoint_api(source, cancel=cancel)
         else:
             msg = f"Unsupported source type: {source.source_type}"
             raise ValueError(msg)
@@ -283,68 +274,6 @@ class RefreshOrchestrator:
                     content=content,
                     source=url,
                     metadata={"source_type": "authenticated_web"},
-                )
-                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
-                if ingest_result.status == "ok":
-                    refreshed += 1
-                    self._schedule_inter_doc_build(source, ingest_result.document_id)
-                elif ingest_result.status == "skipped":
-                    skipped += 1
-                else:
-                    failed += 1
-            except Exception as exc:  # noqa: BLE001
-                failed += 1
-                errors.append(str(exc))
-
-        return RefreshResult(
-            source_id=str(source.id),
-            refreshed=refreshed,
-            skipped=skipped,
-            failed=failed,
-            errors=errors,
-        )
-
-    async def _handle_sharepoint_api(
-        self,
-        source: KnowledgeSource,
-        cancel: CancelSignal | None = None,
-    ) -> RefreshResult:
-        """Refresh a SHAREPOINT_API source via the injected graph_content_fetcher.
-
-        For each URL in ``source.config["urls"]``, calls
-        ``self._graph_content_fetcher.fetch(url)`` to retrieve page content and
-        ingests it through the pipeline.
-
-        Args:
-            source: The knowledge source to refresh.
-            cancel: Optional CancelSignal; checked between URLs.
-
-        Returns:
-            RefreshResult with per-status counters.  Zero counts when no
-            graph_content_fetcher has been injected.
-        """
-        if self._graph_content_fetcher is None:
-            return RefreshResult(
-                source_id=str(source.id),
-                refreshed=0,
-                skipped=0,
-                failed=0,
-                errors=[],
-            )
-
-        urls: list[str] = source.config.get("urls", [])
-        refreshed = skipped = failed = 0
-        errors: list[str] = []
-
-        for url in urls:
-            if cancel is not None and cancel.is_set():
-                break
-            try:
-                content: str = await self._graph_content_fetcher.fetch(url)  # type: ignore[union-attr]
-                intake_result = _intake.IntakeResult(
-                    content=content,
-                    source=url,
-                    metadata={"source_type": "sharepoint_api"},
                 )
                 ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
                 if ingest_result.status == "ok":

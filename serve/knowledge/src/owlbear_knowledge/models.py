@@ -48,7 +48,6 @@ class SourceType(StrEnum):
     URL_LIST = "url_list"
     FILE_GLOB = "file_glob"
     AUTHENTICATED_WEB = "authenticated_web"
-    SHAREPOINT_API = "sharepoint_api"
 
 
 # -- Helpers -----------------------------------------------------------------
