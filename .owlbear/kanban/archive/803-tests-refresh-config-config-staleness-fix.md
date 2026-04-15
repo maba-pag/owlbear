@@ -4,7 +4,7 @@ title: Tests — refresh_config + config staleness fix
 status: done
 priority: needed
 created: '2026-04-10T21:20:57.293478+00:00'
-updated: '2026-04-15T13:31:40.051610+00:00'
+updated: '2026-04-15T13:48:18.176519+00:00'
 tags:
 - phase-1
 - type:test
@@ -14,8 +14,8 @@ parent: 798
 depends_on: []
 blocked: false
 block_reason: null
-claimed_by: low-owl
-claimed_at: '2026-04-15T13:31:40.051610+00:00'
+claimed_by: null
+claimed_at: null
 ---
 ## Acceptance Criteria
 
@@ -249,3 +249,32 @@ Confidence: **0.99 → PASS**
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/803-*` files found)
+
+[[2026-04-15]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: refresh_config() reloads YAML from disk | test_refresh_config_reloads_yaml_from_disk — next_id 100→999, asserts board_config().next_id == 999 | PASS |
+| AC2: updates _config, tasks_dir, rank maps (archive_dir excluded per arch review) | Tests 1-4: exact equality, glob, set membership assertions | PASS |
+| AC3: create_task staleness | SKIP — arch-approved; covered by test_config_staleness_fix_828.py | PASS (skip) |
+| AC4: move_task validates new statuses after refresh | Tests 5-6: status equality + pytest.raises(ValueError, match="backlog") | PASS |
+| AC5: Tests fail RED before implementation | MOOT — impl pre-existed (arch-approved) | PASS (moot) |
+
+### Test Results
+- pytest (task-scoped): 6 passed, 0 failed — exit 0
+- pytest (full suite): 4385 passed, 193 failed, 8 skipped — all 193 failures in unrelated modules (pre-existing debt); zero failures in test_refresh_config_803.py
+- ruff: clean — 0 violations
+
+### Architect Quality: 4/5
+AC was adequate. Arch review caught and corrected AC2 (archive_dir from constant, not config), properly skipped redundant AC3 (already covered by #828), and acknowledged AC5 as moot. Challenger cycle exercised. Minor gaps resolved during review, not improvised by builder.
+
+### Deduction Breakdown
+- AC lines: all evidenced or arch-approved exceptions — no deduction
+- Lint: clean — no deduction
+- AC quality 4/5 (> 3) — no deduction
+- Reviewer evidence: present, detailed, PASS verdict — no deduction
+- Full-suite failures in task scope: 0 — no deduction
+
+### Confidence: 0.98
+### Action: archive

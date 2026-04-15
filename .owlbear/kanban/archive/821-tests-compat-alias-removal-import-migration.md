@@ -4,7 +4,7 @@ title: Tests — Compat alias removal + import migration
 status: done
 priority: needed
 created: '2026-04-10T21:22:46.872069+00:00'
-updated: '2026-04-12T08:16:37.463240+00:00'
+updated: '2026-04-15T12:49:15.109707+00:00'
 tags:
 - phase-2
 - type:test
@@ -204,36 +204,36 @@ PASS #821 → docs | confidence .96
 
 ### Scratch Files Cleaned
 - None found (.owlbear/scratch/821-* — no matches)
-[[2026-04-12]]
+[[2026-04-15]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1 — Tests verify no TaskRecord refs remain | 3 tests: `test_no_taskrecord_in_engine_source`, `test_no_taskrecord_in_mcp_adapter_source`, `test_no_taskrecord_in_tests` — grep scan with self-exclusion, all FAIL RED detecting 5/3/144 refs respectively | PASS |
-| AC2 — Tests verify engine imports use owlbear_kanban namespace | 2 tests: `test_server_no_taskrecord_import` (AST, detects TYPE_CHECKING import), `test_no_stale_mcp_namespace_imports_in_tests` (AST, detects 6 stale namespace files) — both FAIL RED | PASS |
-| AC3 — Tests verify test files import from correct package | 2 tests: `test_target_files_do_not_import_taskrecord` (6 target files), `test_target_files_import_task` (4 target files) — both FAIL RED | PASS |
-| AC4 — Tests fail RED before migration | 7/7 FAIL, 0 passed — meta-criterion satisfied | PASS |
+| AC1 — no TaskRecord refs in workspace | 3 tests in `TestFromAC_NoTaskRecordReferences`: grep with self-exclusion across engine src, MCP src, tests/ | PASS |
+| AC2 — engine imports use owlbear_kanban namespace | 2 tests in `TestFromAC_EngineImportsOwlbearKanban`: AST inspection of server.py + stale namespace detection | PASS |
+| AC3 — test files import from correct package | 2 tests in `TestFromAC_TestFileImports`: AST import check on 6 target files (negative + positive assertions) | PASS |
+| AC4 — tests fail RED before migration | Reviewer verified 7 failed / 0 passed at commit time; now 7 pass (GREEN completed downstream) | PASS |
 
 ### Test Results
-- pytest (task-scoped): 0 passed, 7 failed — all RED as designed
-- pytest (full suite): 3783 passed, 351 failed, 8 skipped — 7 failures from #821 (expected RED); remaining 344 failures + 8 collection errors are pre-existing (content_guard module missing, pick_tasks API changes, engine module relocation, planner gates import) — no cross-task regressions from #821
-- ruff: All checks passed
+- pytest (task-scoped): 7 passed, 0 failed (tests now GREEN — downstream migration completed)
+- pytest (full suite): 192 failed, 4386 passed, 8 skipped — 0 failures in #821 scope (192 are pre-existing)
+- ruff: 3 violations, none in #821 scope
 
 ### Architect Quality: 4/5
-AC lines slightly vague ("workspace", "engine imports") but architect provided precise builder guidance (file scopes, target counts, self-exclusion requirement). Research doc comprehensive at .92 confidence. Minor gap: "engine imports" in AC2 is ambiguous — tests cover server.py and stale namespace imports, which is the correct interpretation but required builder guidance to clarify.
+AC1-3 specific enough for verification. Minor scope clarification ("workspace" → specific dirs) provided by architect builder guidance. AC4 meta-criterion clear.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 (all 4 AC lines verified) → -0.00
-- Lint violations: 0 → -0.00
-- AC quality ≤ 3: no (score 4) → -0.00
-- Missing reviewer evidence: no (present, detailed, PASS at .96) → -0.00
-- Full-suite failures in task scope: 0 (7 RED failures are the deliverable) → -0.00
-- Uncommitted deliverable (test file was untracked): noted but addressed — committed as `218dd103`
+- No AC lines without evidence: 0
+- Lint violations in scope: 0
+- AC quality > 3: no deduction
+- Reviewer evidence present and detailed: no deduction
+- Full-suite failures in task scope: 0
 
-### Confidence: .98
+### Confidence: 1.00
 ### Action: archive
 
 ## Commits
 | Commit | Type | Files | Tasks |
 |--------|------|-------|-------|
-| 218dd103 | test | tests/test_compat_alias_removal_821.py, .owlbear/kanban/tasks/821-*.md | #821 |
+| 218dd103 | test | tests/test_compat_alias_removal_821.py | #821 |
+| c70caaef | chore | kanban task file | #821 |
