@@ -6,10 +6,14 @@ and the :class:`LLMExtractor` concrete implementation using the openai SDK.
 
 from __future__ import annotations
 
+import time
+
 from openai import AsyncOpenAI
 
 from owlbear_knowledge.extractor import ExtractionResult
 from owlbear_knowledge.models import EntityType, RelationType
+
+_RPM_WINDOW_SECONDS = 60.0
 
 _ENTITY_VALUES = ", ".join(e.value for e in EntityType)
 _RELATION_VALUES = ", ".join(r.value for r in RelationType)
@@ -73,18 +77,31 @@ class LLMExtractor:
     Gracefully degrades to an empty :class:`ExtractionResult` on any LLM failure.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         model: str,
         api_key: str | None = None,
         base_url: str | None = None,
         system_prompt: str = LLM_EXTRACTION_PROMPT,
+        default_headers: dict | None = None,
+        requests_per_minute: int | None = None,
     ) -> None:
         self._model = model
         self._system_prompt = system_prompt
-        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url, default_headers=default_headers)
+        self._requests_per_minute = requests_per_minute
+        self._rpm_window_start: float = 0.0
+        self._rpm_count: int = 0
 
     async def extract(self, prompt: str) -> ExtractionResult:
+        if self._requests_per_minute is not None:
+            now = time.monotonic()
+            if now - self._rpm_window_start >= _RPM_WINDOW_SECONDS:
+                self._rpm_window_start = now
+                self._rpm_count = 0
+            if self._rpm_count >= self._requests_per_minute:
+                return ExtractionResult()
+            self._rpm_count += 1
         try:
             response = await self._client.chat.completions.parse(
                 model=self._model,

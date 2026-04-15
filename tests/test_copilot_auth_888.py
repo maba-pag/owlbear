@@ -549,3 +549,57 @@ class TestFromAC_PyprojectTomlDeps:
             assert any("httpx" in d for d in deps), (
                 f"Group with truststore must also include httpx. Got: {deps}"
             )
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered — coverage gaps found during GREEN phase
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests: private helpers and error paths not covered by AC suite."""
+
+    def test_ssl_context_returns_default_ssl_context_when_truststore_unavailable(self) -> None:
+        """_ssl_context() returns a standard SSLContext when truststore cannot be imported."""
+        import ssl
+        import sys
+        from owlbear_knowledge.copilot_auth import _ssl_context
+
+        with patch.dict(sys.modules, {"truststore": None}):
+            ctx = _ssl_context()
+        assert isinstance(ctx, ssl.SSLContext)
+
+    def test_detect_editor_versions_returns_dynamic_version_when_vscode_found(self) -> None:
+        """detect_editor_versions() returns headers with detected version on success."""
+        with patch("owlbear_knowledge.copilot_auth._find_vscode_version", return_value="1.100.0"):
+            result = detect_editor_versions()
+        assert result["Editor-Version"] == "vscode/1.100.0"
+        assert "Editor-Plugin-Version" in result
+
+    @pytest.mark.asyncio
+    async def test_poll_raises_runtime_error_on_unrecognised_oauth_error_code(self) -> None:
+        """poll_for_access_token() raises RuntimeError on unexpected OAuth error codes."""
+        resp = _MockResponse({"error": "expired_token"})
+        http_mock = _make_http_mock(post_responses=resp)
+        with (
+            patch("owlbear_knowledge.copilot_auth._http_client", return_value=http_mock),
+            patch("builtins.print"),
+            pytest.raises(RuntimeError, match="OAuth error"),
+        ):
+            await poll_for_access_token("dc-abc")
+
+    def test_http_client_returns_async_client_from_httpx(self) -> None:
+        """_http_client() calls httpx.AsyncClient with ssl context and editor headers."""
+        import sys
+        from owlbear_knowledge.copilot_auth import _http_client
+
+        mock_httpx = MagicMock()
+        mock_httpx.AsyncClient.return_value = MagicMock()
+        with (
+            patch.dict(sys.modules, {"httpx": mock_httpx}),
+            patch("owlbear_knowledge.copilot_auth._ssl_context", return_value=MagicMock()),
+        ):
+            result = _http_client()
+        assert result is not None
+        mock_httpx.AsyncClient.assert_called_once()
+

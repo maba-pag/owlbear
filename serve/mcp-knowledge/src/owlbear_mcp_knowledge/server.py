@@ -171,7 +171,7 @@ async def _web_read(url: str) -> str | None:
 
 
 @asynccontextmanager
-async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
+async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  # noqa: PLR0915
     """Initialise knowledge-base services; close the DB connection on exit."""
     global _app_context  # noqa: PLW0603
     path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
@@ -190,6 +190,22 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
                 base_url = os.environ.get("OWLBEAR_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
                 structured_extractor = LLMExtractor(model=model, api_key=api_key, base_url=base_url)
             except ImportError:
+                structured_extractor = None
+        else:
+            try:
+                from owlbear_knowledge.copilot_auth import detect_editor_versions, get_copilot_token  # noqa: PLC0415
+                from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
+
+                copilot_token = await get_copilot_token()
+                model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
+                editor_versions = detect_editor_versions()
+                headers = {**editor_versions, "Copilot-Integration-Id": "vscode-chat"}
+                structured_extractor = LLMExtractor(
+                    model=model,
+                    api_key=copilot_token,
+                    default_headers=headers,
+                )
+            except Exception:  # noqa: BLE001
                 structured_extractor = None
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
