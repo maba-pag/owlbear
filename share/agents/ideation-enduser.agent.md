@@ -7,6 +7,10 @@ disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools: [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, read/viewImage, search, vscode/memory, agent]
 agents: [ideation-critic]
+hooks:
+  PreToolUse:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/allow-stances-only.ps1
 ---
 
 <persona>

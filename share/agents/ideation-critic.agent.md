@@ -7,6 +7,10 @@ disable-model-invocation: true
 model: GPT-5.4 (copilot)
 tools: [read/readFile, read/viewImage, read/problems, search, vscode/memory]
 agents: []
+hooks:
+  PreToolUse:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-writes.ps1
 ---
 
 <persona>
