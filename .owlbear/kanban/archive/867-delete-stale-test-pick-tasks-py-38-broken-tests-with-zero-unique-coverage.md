@@ -1,7 +1,7 @@
 ---
 id: 867
 title: Delete stale test_pick_tasks.py — 38 broken tests with zero unique coverage
-status: done
+status: archived
 priority: nice-to-have
 created: '2026-04-13T20:51:15.145212+00:00'
 updated: '2026-04-15T02:27:55.260041+00:00'

@@ -1,7 +1,7 @@
 ---
 id: 744
 title: Rename v1-archive to archive in kanban engine and config
-status: done
+status: archived
 priority: nice-to-have
 created: '2026-04-10T06:55:30.179602+00:00'
 updated: '2026-04-10T08:31:59.236647+00:00'

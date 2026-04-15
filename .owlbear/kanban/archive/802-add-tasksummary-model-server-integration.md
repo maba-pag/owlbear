@@ -1,7 +1,7 @@
 ---
 id: 802
 title: Add TaskSummary model + server integration
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:20:49.680606+00:00'
 updated: '2026-04-13T10:35:18.417920+00:00'

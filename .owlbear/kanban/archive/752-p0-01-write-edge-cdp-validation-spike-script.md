@@ -1,7 +1,7 @@
 ---
 id: 752
 title: 'P0-01: Write Edge CDP validation spike script'
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T10:55:04.342033+00:00'
 updated: '2026-04-10T15:02:32.994897+00:00'

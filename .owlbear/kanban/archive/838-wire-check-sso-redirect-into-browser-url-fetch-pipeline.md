@@ -1,7 +1,7 @@
 ---
 id: 838
 title: Wire check_sso_redirect() into browser URL-fetch pipeline
-status: done
+status: archived
 priority: important
 created: '2026-04-11T17:45:57.821416+00:00'
 updated: '2026-04-12T16:46:39.579621+00:00'

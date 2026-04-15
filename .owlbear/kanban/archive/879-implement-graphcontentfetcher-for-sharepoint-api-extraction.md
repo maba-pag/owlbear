@@ -1,7 +1,7 @@
 ---
 id: 879
 title: Implement GraphContentFetcher for SharePoint API extraction
-status: done
+status: archived
 priority: someday
 created: '2026-04-14T19:30:42.990575+00:00'
 updated: '2026-04-15T03:04:33.434966+00:00'

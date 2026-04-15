@@ -1,7 +1,7 @@
 ---
 id: 849
 title: 'RED: Update test_mcp_browser_775 AC3 tests for ctx: Context parameter'
-status: done
+status: archived
 priority: important
 created: '2026-04-12T12:52:52.072571+00:00'
 updated: '2026-04-14T01:00:19.099043+00:00'

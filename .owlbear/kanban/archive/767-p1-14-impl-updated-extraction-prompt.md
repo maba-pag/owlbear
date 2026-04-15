@@ -1,7 +1,7 @@
 ---
 id: 767
 title: 'P1-14: Impl — Updated extraction prompt'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:56:34.222398+00:00'
 updated: '2026-04-15T10:34:09.480281+00:00'

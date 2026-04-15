@@ -1,7 +1,7 @@
 ---
 id: 843
 title: Implement task_io.py PyYAML to ruamel.yaml migration
-status: done
+status: archived
 priority: nice-to-have
 created: '2026-04-12T02:24:30.617737+00:00'
 updated: '2026-04-15T01:11:21.147413+00:00'

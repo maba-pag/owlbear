@@ -1,7 +1,7 @@
 ---
 id: 794
 title: owlbear_mcp_browser MCP server and domain allowlist
-status: done
+status: archived
 priority: important
 created: '2026-04-10T12:31:51.889527+00:00'
 updated: '2026-04-13T20:11:29.017851+00:00'

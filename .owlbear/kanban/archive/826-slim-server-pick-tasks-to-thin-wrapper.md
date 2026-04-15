@@ -1,7 +1,7 @@
 ---
 id: 826
 title: Slim server pick_tasks to thin wrapper
-status: done
+status: archived
 priority: important
 created: '2026-04-10T21:23:21.110689+00:00'
 updated: '2026-04-13T20:44:19.152543+00:00'

@@ -1,10 +1,10 @@
 ---
 id: 836
 title: 'Refactor mcp-browser tools to use ctx: Context + AppContext pattern'
-status: todo
+status: archived
 priority: important
 created: '2026-04-11T15:28:49.513238+00:00'
-updated: '2026-04-15T09:23:50.838885+00:00'
+updated: '2026-04-15T19:27:59.197415+00:00'
 tags:
 - phase-1
 - scope:mcp-browser
@@ -672,3 +672,177 @@ COMPLETE. All 19 tests pass (19 passed in 6.64s). ruff clean. The navigate() dry
 
 ### Verdict: APPROVE
 ### Action Taken: Re-approved to todo. Implementation is complete and all tests verified passing. Pipeline should proceed to final review/verification.
+
+[[2026-04-15]]
+## Test-Writer Notes (retry pass-through — loop-breaker pass 2)
+
+**Test file:** tests/test_mcp_browser_836.py
+**19 tests — independently verified by execution (19 passed, 0 failed, 8.82s)**
+
+### Run Results
+- 19 PASS, 0 FAIL
+- All TestFromAC_* classes pass after builder pass 4 + Architecture Review (loop-breaker pass 2) confirmed implementation complete
+
+### Pass-Through Justification
+Step 1b applies — body contains `## Test-Writer Notes` and `## Review Evidence`. Architecture Review (loop-breaker pass 2, 2026-04-15) confirmed all 19 tests passing via live execution. No missing tests cited by any reviewer. Prior reviewer FAILs were builder implementation bugs (navigate `raise ToolError` instead of `return url`) now confirmed fixed. Tests are correct and mutation-resistant — no modifications needed.
+
+### AC Coverage (verified by execution)
+| AC Line | Tests | Status |
+|---------|-------|--------|
+| AC1: 6 tools accept ctx | 6 signature tests | 6 PASS |
+| AC2: navigate uses lifespan allowlist | 4 tests | 4 PASS |
+| AC3: all tools callable with ctx | 6 tests | 6 PASS |
+| AC4: allowed → URL | 3 tests | 3 PASS |
+| AC5: ruff clean | verified | PASS |
+[[2026-04-15]]
+## Builder Notes (pass 5 — verification only)
+
+### Files Changed
+- No changes made — implementation was complete from builder pass 4 (commit 167d6f06 + prior passes)
+
+### Verification
+Prior architecture review (loop-breaker pass 2, 2026-04-15) confirmed all 19 tests pass. This pass independently verified:
+
+- **test_mcp_browser_836.py: 19 passed, 0 failed** ✓
+- **Adjacent suites (test_mcp_browser_775.py + 836.py): 44 passed, 0 failed** — no regression
+- **ruff: 0 violations** (clean)
+
+### Current server.py State (verified on disk)
+- All 6 tools accept `ctx: Context` as first parameter (AC1 ✓)
+- `navigate()` uses `ctx.request_context.lifespan_context.allowlist` — no env read (AC2 ✓)
+- `navigate()` returns `url` dry-run on `isinstance(app_ctx, AppContext)` with `page=None, fetcher=None` (AC3/AC4 ✓)
+- `click/type_input/select` use `_make_mcp_ctx_with_mock_page()` in tests → ToolError path not hit (AC3 ✓)
+- `read_text/snapshot` return `getattr(app_ctx, "last_content", "")` when `page=None` (AC3 ✓)
+- All TestFromAC_* classes untouched
+[[2026-04-15]]
+## Review Evidence
+
+### Tests
+**Status: NO INDEPENDENT EXECUTION** — quality-runner not in available agents. Static code path trace applied; all paths are unambiguous and deterministic.
+
+Adjacent test file: tests/test_mcp_browser_775.py passes per builder notes (no reason to doubt given no server.py regressions).
+
+### Lint: Not independently run — code scan clean, no ruff issues visible, all ctx params used in function bodies, no `# noqa: ARG001` present or needed.
+
+### Coverage: Not run.
+
+---
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: 6 tools accept ctx | TestFromAC_ToolsAcceptContext ×6 — `params[0] == "ctx"` assertion | Yes — signature assertion fails if ctx not first | COVERED |
+| AC2: navigate uses lifespan allowlist | TestFromAC_NavigateUsesLifespanAllowlist ×4 — env-vs-ctx inversion proofs | Yes — env says allow, ctx says block → must ToolError | COVERED |
+| AC3: all tools callable with ctx | TestFromAC_AllToolsCallableWithCtx ×6 | Yes — TypeError if ctx not accepted | COVERED |
+| AC4: allowed → URL returned | TestFromAC_AllowlistBehaviorPreservedViaCtx ×3 — exact URL string assertion | Yes — ToolError instead of URL string fails `assert result == URL` | COVERED |
+| AC5: ruff clean | code scan | Yes | COVERED |
+
+#### Security Review
+No issues. `allowlist.check(url)` fires before any isinstance/page/fetcher branch — bypass is not possible. PermissionError wrapped with `str(exc)` — no internal detail leakage. No hardcoded secrets, injection vectors, path traversal, or insecure deserialization.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| All 19 TestFromAC_* tests | Unmodified (test-writer pass-through confirms, architecture review live-run confirms) | PRESERVED |
+
+Note: prior pass-1 reviewer error — claimed click/type/select AC3 tests used `_make_mcp_ctx()` (page=None). Actual file uses `_make_mcp_ctx_with_mock_page()` for those 3 tests. All 19 RED failures were due to missing `ctx` parameter (TypeError), not page=None behavior. The `_make_mcp_ctx_with_mock_page()` helper was always in the original test file.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|---------|
+| Assertion specificity | STRONG | `assert result == "https://..."` exact URL strings; `pytest.raises(ToolError)` for error paths |
+| Negative/error coverage | STRONG | ToolError paths tested with pytest.raises; env-inversion proofs for AC2 |
+| Mutation resistance | STRONG | `assert result == "https://corp.intranet/home"` fails on ToolError; allowlist inversion tests fail if env is used instead of ctx |
+| Test independence | STRONG | Each test creates fresh ctx via `_make_mcp_ctx()` or `_make_mcp_ctx_with_mock_page()` |
+| Descriptive names | STRONG | All prefixed `TestFromAC_`, names describe exact behavior tested |
+
+#### Data Safety
+No issues. No shared mutable state, no unbounded input, no LLM output persistence.
+
+#### Implementation-Aware Gaps
+No significant untested paths. Code paths exercised:
+- navigate: allowlist-block → ToolError (AC4); allowlist-pass + AppContext(page=None, fetcher=None) → `return url` (AC3/AC4); raw MagicMock ctx → `return url` (AC3); fetcher path tested in test_mcp_browser_775.py (adjacent)
+- click/type/select: page=not-None → execute + return string (AC3); page=None → ToolError (correct, consistent with architecture review)
+- read_text/snapshot: page=not-None → html/aria content; page=None → `last_content` fallback (AC3)
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 5 |
+| Approach variation | Yes |
+| Assessment | LOOP (5 passes, same fix) — loop-breaker was invoked twice (backlog escalations) per pipeline protocol; resolved in pass 5 |
+
+---
+
+### Pass 2 — INFORMATIONAL
+- `navigate()` has two `return url` statements (one in AppContext block, one at end for raw-MagicMock path). The comment `# dry-run: allowlist passed, no live page` on the first is clear. The second `# Raw MagicMock or context without explicit page — allowlist passed` is clear. No confusion.
+- `mcp_app = _mcp._tool_manager  # noqa: SLF001` — expected pattern for inspection/testing. No flag.
+
+---
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1: All 6 tools accept ctx: Context | server.py L100 `navigate(ctx: Context, url: str)`, L134 `click(ctx: Context, selector: str)`, L145 `type_input(ctx: Context, selector: str, text: str)`, L157 `select(ctx: Context, selector: str, value: str)`, L169 `read_text(ctx: Context)`, L181 `snapshot(ctx: Context)` | TestFromAC_ToolsAcceptContext ×6 | PASS |
+| AC2: navigate uses lifespan allowlist not env | `app_ctx.allowlist.check(url)` — no `os.environ` read in navigate() | TestFromAC_NavigateUsesLifespanAllowlist ×4 | PASS |
+| AC3: tools callable with ctx/page | navigate: AppContext(page=None,fetcher=None) → `return url` L119; click/type/select: `_make_mcp_ctx_with_mock_page()` → returns string; read_text/snapshot: `getattr(app_ctx, "last_content", "")` → "" | TestFromAC_AllToolsCallableWithCtx ×6 | PASS |
+| AC4: allowlist behavior preserved | blocked domain → PermissionError → ToolError; allowed domain + no page/fetcher → `return url` | TestFromAC_AllowlistBehaviorPreservedViaCtx ×3 | PASS |
+| AC5: ruff clean | code scan clean; all ctx params used; no noqa:ARG001 | N/A | PASS |
+
+### Deductions
+- No independent test execution (quality-runner unavailable): -0.10
+
+### Verdict
+Confidence: **0.90** → **PASS**
+[[2026-04-15]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | `ctx: Context` added to all 6 tool signatures, but FastMCP auto-injects and excludes from schema — no MCP API surface change. `copilot-instructions.md` has no mcp-browser entries; no update needed |
+| 2 | Module docstrings | Yes | Verified | `server.py` read in full: `AppContext` docstring accurate; all 6 tools have correct docstrings; `read_text`/`snapshot` include accurate "last cached content" fallback description |
+| 3 | External attribution | Yes | Updated | `gofastmcp.com/servers/dependency-injection` (source #7 in research doc) was absent from `sources/overview.md`; added new "MCP Browser ctx Refactor (Task #836)" section (commit `c34ae575`) |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/836-mcp-browser-ctx-refactor.md` exists and is linked from task body; follow-up tasks #849 and #850 were created |
+
+### Files Updated
+- `.owlbear/sources/overview.md` — added attribution section for task #836 (commit `c34ae575`)
+
+### Scratch Files
+- No `.owlbear/scratch/836-*` files found.
+
+**DONE #836 -> done | docs gate passed**
+[[2026-04-15]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: All 6 tools accept ctx: Context | server.py L100/L134/L145/L157/L169/L181 — all sigs confirmed; 6 signature tests PASS | PASS |
+| AC2: navigate uses lifespan allowlist not env | `app_ctx.allowlist.check(url)` from ctx, no `os.environ` in navigate(); 4 tests PASS | PASS |
+| AC3: Tests updated to pass ctx | `_make_mcp_ctx()` and `_make_mcp_ctx_with_mock_page()` helpers; 6 callable tests PASS | PASS |
+| AC4: Existing assertions unchanged | All 19 TestFromAC tests unmodified from RED phase; blocked→ToolError, allowed→URL; 3 behavior tests PASS | PASS |
+| AC5: ruff clean | 0 violations in mcp-browser scope | PASS |
+
+### Test Results
+- pytest (full suite): 4331 passed, 190 failed (all pre-existing, 0 in scope:mcp-browser), 9 skipped
+- test_mcp_browser_836.py: 19 passed, 0 failed
+- ruff: 0 violations in task scope (1 pre-existing E501 in serve/kanban/engine.py)
+
+### Reviewer Evidence
+Final reviewer (pass 5) gave confidence 0.90 PASS with detailed static code path trace. All AC lines mapped. Prior reviewer FAILs (passes 1-4) were builder implementation bugs, not test or AC issues — confirmed resolved by execution.
+
+### Architect Quality: 3/5
+AC lines were specific and verifiable, but omitted the page=None dry-run behavior for navigate() (should it return url or raise ToolError?). This ambiguity caused a 4-cycle builder/reviewer loop. AC should have specified: "when no page/fetcher available, navigate returns the validated URL (dry-run)". The other 5 tools' page=None behavior (click/type/select raise ToolError; read_text/snapshot return last_content) was also unspecified, though these were less problematic.
+
+### Deduction Breakdown
+- AC quality score 3/5: -0.03
+- All 5 AC lines have specific evidence: no deduction
+- Lint clean in scope: no deduction
+- Reviewer evidence present and detailed (PASS verdict): no deduction
+- Full-suite failures: 0 in task scope: no deduction
+
+### Confidence: .97
+### Action: archive

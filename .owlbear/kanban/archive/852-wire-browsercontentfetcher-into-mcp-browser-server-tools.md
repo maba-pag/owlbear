@@ -1,10 +1,10 @@
 ---
 id: 852
 title: Wire BrowserContentFetcher into MCP browser server tools
-status: docs
+status: archived
 priority: important
 created: '2026-04-12T14:03:06.606752+00:00'
-updated: '2026-04-15T09:38:52.240889+00:00'
+updated: '2026-04-15T14:50:15.581798+00:00'
 tags:
 - phase-1
 - scope:browser
@@ -388,3 +388,65 @@ No new security surface. Domain allowlist check precedes fetcher.fetch() call (`
 
 ### Verdict
 **Confidence: 0.90 → PASS**
+
+[[2026-04-15]]
+## Docs Gate
+
+### Checklist
+
+| # | Item | Applies? | Status | Evidence |
+|---|------|----------|--------|----------|
+| 1 | Behavior/API change → copilot-instructions.md | No | N/A | copilot-instructions.md contains only Project Identity + Repository Branches. No mcp-browser API surface or AppContext descriptions exist there to update. |
+| 2 | Module docstrings | Yes | PASS | Verified all public symbols in `server.py`: `AppContext` ("Runtime context passed through MCP lifespan to all tools.") ✓; `app_lifespan` ("Configure DomainAllowlist, attempt Playwright launch, and yield AppContext.") ✓ — still accurate after fetcher creation added to lifespan block; `navigate` ("Navigate the browser to *url*.") ✓; `read_text` ("Read the visible text content of the current page. / Returns the last cached content if no browser session is active.") ✓ — accurate for fetcher-populated `last_content`. No inaccurate docstrings found. |
+| 3 | External attribution → sources/overview.md | No | N/A | Research doc §2 lists 11 sources — all internal workspace files and kanban task bodies. No external repos, articles, or documentation sites were used. No attribution row needed. |
+| 4 | CLI changes → README.md | No | N/A | Pure MCP server wiring task. No CLI commands added or modified. |
+| 5 | Research doc | Yes | PASS | `.owlbear/research/852-wire-browserfetcher-mcp-tools.md` exists and is linked from task body. Follow-up tasks #856 (RED) and #857 (GREEN) confirmed created. |
+
+### Files Updated
+None — no documentation impact found.
+
+### Scratch Files
+No `.owlbear/scratch/852-*` files found.
+
+### Commit
+No docs commit — nothing to update.
+[[2026-04-15]]
+## Audit
+
+### AC Verification
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: AppContext.fetcher + last_content, initialized in app_lifespan() | server.py L34 fetcher field, L35 last_content field, L77 `fetcher = BrowserContentFetcher(launcher.context)` in lifespan | PASS |
+| AC2: navigate(url) calls fetcher.fetch(url), stores result, returns markdown | server.py L109-116 delegation chain; 857 TestBuilderDiscovered tests passing | PASS |
+| AC3: AuthenticationRequired caught, converted to ToolError | server.py L112-114 except clause with descriptive message; auth error tests passing | PASS |
+| AC4: read_text() returns last_content or empty string | server.py L183 `return getattr(app_ctx, "last_content", "")` when page=None; 853 tests passing | PASS |
+| AC5: Integration test with stub fetcher for success + auth error | 857 TestBuilderDiscovered tests cover full chain with MagicMock fetcher; original 852 test file deleted by #870, replacement coverage confirmed | PASS |
+
+### Test Results
+- Full suite: 4,386 passed, 192 failed, 8 skipped
+- 192 failures all outside #852 scope (mcp_kanban, deny_code_writes, lint_feedback, etc.)
+- #852-scoped mcp-browser tests (97 across 5 files): 97/97 PASS
+- pytest: no in-scope regressions
+- ruff: 3 errors in test_refresh_sharepoint_879.py (outside scope), clean in mcp-browser
+
+### Reviewer Evidence
+Present, detailed, PASS at 0.90. Two review cycles documented. Second review after builder fix. Deductions for combined-mode gap and deleted-test gap (both mitigated). Accepted.
+
+### Upstream Commits
+- server.py: committed at 01f58c35 (feat: wire BrowserContentFetcher) and subsequent fixups
+- test_mcp_browser_775.py: committed (conflict resolution)
+- git status: clean for both deliverable files
+
+### Architect Quality: 4/5
+AC lines are specific and verifiable. All 5 map to testable assertions. Minor gap: AC1 wording slightly loose on Optional typing (refined by children #856/#857). Edge cases covered (auth required, fetcher=None). Design direction (eager creation with Optional fallback) was sound.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 5 verified)
+- Lint violations in scope: 0
+- AC quality score (4, above threshold): 0
+- Missing reviewer evidence: 0
+- Full-suite failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive

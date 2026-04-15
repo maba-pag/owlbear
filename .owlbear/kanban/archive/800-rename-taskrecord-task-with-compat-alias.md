@@ -1,7 +1,7 @@
 ---
 id: 800
 title: Rename TaskRecord → Task with compat alias
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:20:34.453928+00:00'
 updated: '2026-04-13T05:44:22.208853+00:00'

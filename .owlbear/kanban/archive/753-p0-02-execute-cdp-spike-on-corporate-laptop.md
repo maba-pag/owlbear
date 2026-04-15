@@ -1,7 +1,7 @@
 ---
 id: 753
 title: 'P0-02: Execute CDP spike on corporate laptop'
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T10:55:24.83012Z'
 updated: '2026-04-14T00:01:05.026692+00:00'

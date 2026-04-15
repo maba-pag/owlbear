@@ -1,7 +1,7 @@
 ---
 id: 855
 title: Bump playwright dependency to >=1.59.0 for aria_snapshot support
-status: done
+status: archived
 priority: important
 created: '2026-04-12T14:03:37.182864+00:00'
 updated: '2026-04-14T23:13:11.309568+00:00'

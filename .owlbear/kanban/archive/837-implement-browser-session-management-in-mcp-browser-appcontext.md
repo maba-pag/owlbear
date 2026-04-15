@@ -1,10 +1,10 @@
 ---
 id: 837
 title: Implement browser session management in mcp-browser AppContext
-status: done
+status: archived
 priority: important
 created: '2026-04-11T15:28:49.551640+00:00'
-updated: '2026-04-15T17:02:05.997102+00:00'
+updated: '2026-04-15T17:24:11.362826+00:00'
 tags:
 - phase-2
 - scope:mcp-browser
@@ -13,8 +13,8 @@ depends_on:
 - 771
 blocked: false
 block_reason: null
-claimed_by: quiet-heath
-claimed_at: '2026-04-15T17:02:05.997102+00:00'
+claimed_by: null
+claimed_at: null
 ---
 Add browser session state to mcp-browser AppContext: CDPConnectionManager and Playwright Page lifecycle.
 
@@ -431,3 +431,38 @@ Prior review failure (3 regressions in test_mcp_browser_836.py) is resolved. The
 
 ### Scratch Files Cleaned
 - None (no `837-*` scratch files found)
+[[2026-04-15]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AppContext includes CDPConnectionManager and optional Page fields | server.py:28–35 — `launcher: PlaywrightLauncher | None`, `page: Any` (pivot from CDP) | PASS |
+| Lifespan opens CDP connection or fails gracefully | server.py:63–81 — PlaywrightLauncher try/except degrades to None | PASS |
+| Lifespan cleanup disconnects browser and terminates subprocess | server.py:82–86 — finally block: page.close(), launcher.close() | PASS |
+| navigate() uses Page.goto() | server.py:119–120 — page.goto(url) after allowlist check | PASS |
+| click/type/select use Page locator methods | server.py:138, 149, 160 — locator().click/fill/select_option() | PASS |
+| read_text uses owlbear_browser.extract_content() | server.py:174 — extract_content(html, page.url) | PASS |
+| snapshot returns accessibility tree as markdown | server.py:188 — page.locator("body").aria_snapshot() | PASS |
+| Tests mock Playwright at CDP boundary | test file patches owlbear_mcp_browser.server.PlaywrightLauncher | PASS |
+| ruff clean | verified independently | PASS |
+
+### Test Results
+- pytest (task-scoped): 67/67 passed (test_mcp_browser_session_837: 23, test_mcp_browser_836: 21, test_mcp_browser_775: 23)
+- pytest (all mcp-browser): 184/184 passed across 12 test files — zero regressions
+- pytest (full suite): 4385 passed, 193 failed — all failures pre-existing, none in mcp-browser scope
+- ruff: clean
+
+### Architect Quality: 4/5
+AC lines were specific and testable. Minor gap: AC text still says "CDPConnectionManager" after CDP Pivot Notice changed implementation to PlaywrightLauncher. Pipeline navigated correctly via documented pivot, but AC was never formally amended. One edge case (page crash recovery) noted in research but absent from AC — acceptable given task scope.
+
+### Deduction Breakdown
+- page.close() untested in cleanup tests (reviewer noted): -0.02
+- Stale AC text (CDPConnectionManager vs PlaywrightLauncher): -0.02
+
+### Confidence: .96
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 6809822f | chore | kanban/837 task file | #837 |

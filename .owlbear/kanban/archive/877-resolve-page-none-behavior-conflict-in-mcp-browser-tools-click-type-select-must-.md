@@ -2,7 +2,7 @@
 id: 877
 title: Resolve page=None behavior conflict in mcp-browser tools (click/type/select
   must ToolError, read_text/snapshot keep last_content fallback)
-status: done
+status: archived
 priority: needed
 created: '2026-04-14T15:28:40.305402+00:00'
 updated: '2026-04-14T21:29:43.189194+00:00'

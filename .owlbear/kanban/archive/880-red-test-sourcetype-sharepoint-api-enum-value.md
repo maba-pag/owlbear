@@ -1,7 +1,7 @@
 ---
 id: 880
 title: RED — Test SourceType.SHAREPOINT_API enum value
-status: done
+status: archived
 priority: someday
 created: '2026-04-14T20:25:52.797396+00:00'
 updated: '2026-04-15T03:42:35.149088+00:00'

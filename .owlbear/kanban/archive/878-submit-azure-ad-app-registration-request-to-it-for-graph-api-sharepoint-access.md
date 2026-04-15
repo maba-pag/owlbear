@@ -4,7 +4,7 @@ title: Submit Azure AD app registration request to IT for Graph API SharePoint a
 status: backlog
 priority: someday
 created: '2026-04-14T19:30:42.941518+00:00'
-updated: '2026-04-14T20:22:23.873336+00:00'
+updated: '2026-04-15T20:28:25.222321+00:00'
 tags:
 - phase-4
 - scope:knowledge
@@ -96,3 +96,6 @@ Non-code prerequisite for Graph API SharePoint extraction.
 
 ### Verdict: BLOCK
 ### Action Taken: Blocked as type:user-action. All AC items require human physical action (submit Azure AD app registration to IT, record tracking ID, monitor approval). Research doc §3.3–§3.4 provide complete specification and justification template ready for submission. User should: (1) add `type:user-action` tag, (2) identify IT intake process, (3) submit request, (4) record ticket ID in task body under `## Action Completed`.
+
+[[2026-04-15]]
+## Archived — Won't Do\nGraph API SharePoint code path was fully removed in task #886 (dead path per v1 auth failure). Azure AD app registration is no longer needed. Archiving as won't-do.

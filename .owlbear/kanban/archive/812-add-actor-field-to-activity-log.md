@@ -1,7 +1,7 @@
 ---
 id: 812
 title: Add actor field to activity log
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:21:49.300844+00:00'
 updated: '2026-04-13T20:01:04.602539+00:00'

@@ -1,7 +1,7 @@
 ---
 id: 778
 title: Add hash stability validation protocol to CDP spike execution (#753)
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:16:54.010932+00:00'
 updated: '2026-04-13T04:51:33.836800+00:00'

@@ -1,7 +1,7 @@
 ---
 id: 883
 title: GREEN — Implement GraphContentFetcher
-status: done
+status: archived
 priority: someday
 created: '2026-04-14T20:26:07.450055+00:00'
 updated: '2026-04-15T04:41:12.041738+00:00'

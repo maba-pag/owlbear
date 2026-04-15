@@ -1,7 +1,7 @@
 ---
 id: 760
 title: 'P1-07: Tests — Content extractor + login redirect detection'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:55:57.241623+00:00'
 updated: '2026-04-14T09:29:17.864198+00:00'

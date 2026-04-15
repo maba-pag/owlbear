@@ -1,7 +1,7 @@
 ---
 id: 871
 title: Pivot MCP browser server from CDPConnectionManager to PlaywrightLauncher
-status: done
+status: archived
 priority: critical
 created: '2026-04-13T23:22:45.535455+00:00'
 updated: '2026-04-14T22:11:54.446438+00:00'

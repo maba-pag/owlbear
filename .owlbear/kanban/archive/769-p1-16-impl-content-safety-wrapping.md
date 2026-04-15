@@ -1,7 +1,7 @@
 ---
 id: 769
 title: 'P1-16: Impl — Content safety wrapping'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:56:34.284918+00:00'
 updated: '2026-04-12T01:17:51.734576+00:00'

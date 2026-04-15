@@ -1,10 +1,10 @@
 ---
 id: 824
 title: Create dispatch.py with pick_dispatchable()
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:23:09.122392+00:00'
-updated: '2026-04-15T08:24:35.529425+00:00'
+updated: '2026-04-15T14:38:23.518126+00:00'
 tags:
 - phase-3
 - scope:kanban
@@ -217,3 +217,42 @@ PASS #824 → docs | confidence .97
 
 ### Scratch Files
 No `.owlbear/scratch/824-*` files found.
+
+[[2026-04-15]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `dispatch.py` in `owlbear_kanban` package | File exists at `serve/kanban/src/owlbear_kanban/dispatch.py` | PASS |
+| `pick_dispatchable(engine, *, limit=25, tag="") → list[Task]` | Signature confirmed, dispatch.py L133 | PASS |
+| Owns gate predicates (TDD + clarity) | `_passes_tdd_gate()` L93, `_passes_clarity_gate()` L110 | PASS |
+| Owns priority/status rank maps (hardcoded) | `PRIORITY_RANK` L33, `STATUS_RANK` L40 — module constants | PASS |
+| Result capping at `limit` | `return passing[:limit]` at L178 | PASS |
+| Tag filtering | Tag check at L167 before gate predicates | PASS |
+| Rank maps documented: execution priority ≠ display order | Module docstring lines 6–11 | PASS |
+| #823 tests pass GREEN | 76/76 passed (37 #823 + 38 #824 + 1) | PASS |
+
+### Test Results
+- pytest (task scope): 76 passed, 0 failed
+- pytest (full suite): 4386 passed, 192 failed, 8 skipped — all 192 failures outside task scope (test_orchestrator_loop, test_analysis, test_planner_gates_selector, etc.)
+- ruff (task scope): clean — 0 violations
+- ruff (full suite): 3 violations in test_refresh_sharepoint_879.py — unrelated to #824
+
+### Architect Quality: 5/5
+All 8 AC lines specific, verifiable, testable. Research doc provided clear implementation guidance (Option A for data access, separate gate functions). No builder improvisation needed. Clean design with proper separation of concerns.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (−.00)
+- Lint violations in scope: 0 (−.00)
+- AC quality ≤ 3: No (−.00)
+- Missing reviewer evidence: No (−.00)
+- Full-suite failures in scope: 0 (−.00)
+
+### Confidence: 1.00
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 92d30124 | feat | dispatch.py, __init__.py | #824 |
+| a784ce6e | docs | __init__.py docstring | #824 |

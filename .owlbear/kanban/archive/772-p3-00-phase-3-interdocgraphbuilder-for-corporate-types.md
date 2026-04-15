@@ -1,7 +1,7 @@
 ---
 id: 772
 title: 'P3-00: Phase 3 — InterDocGraphBuilder for corporate types'
-status: done
+status: archived
 priority: nice-to-have
 created: '2026-04-10T10:56:34.377861+00:00'
 updated: '2026-04-14T20:52:28.059134+00:00'

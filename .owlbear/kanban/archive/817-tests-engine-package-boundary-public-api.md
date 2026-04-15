@@ -1,7 +1,7 @@
 ---
 id: 817
 title: Tests — Engine package boundary + public API
-status: done
+status: archived
 priority: critical
 created: '2026-04-10T21:22:21.043519+00:00'
 updated: '2026-04-13T09:39:42.802492+00:00'

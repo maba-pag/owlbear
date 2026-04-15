@@ -1,7 +1,7 @@
 ---
 id: 847
 title: Add file locking to engine.create_task() to prevent TOCTOU race on next_id
-status: done
+status: archived
 priority: needed
 created: '2026-04-12T12:05:01.757978+00:00'
 updated: '2026-04-13T03:44:34.996813+00:00'

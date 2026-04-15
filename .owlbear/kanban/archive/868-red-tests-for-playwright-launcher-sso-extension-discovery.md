@@ -1,7 +1,7 @@
 ---
 id: 868
 title: 'RED: Tests for Playwright launcher + SSO extension discovery'
-status: done
+status: archived
 priority: critical
 created: '2026-04-13T23:21:28.944487+00:00'
 updated: '2026-04-14T16:19:52.365993+00:00'

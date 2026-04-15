@@ -1,7 +1,7 @@
 ---
 id: 764
 title: 'P1-11: Tests — Cleaned-content hash + replace-on-change cascade'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:55:57.357680+00:00'
 updated: '2026-04-15T10:14:24.389418+00:00'

@@ -1,7 +1,7 @@
 ---
 id: 864
 title: 'P3-03: Wire InterDocGraphBuilder into refresh pipeline'
-status: done
+status: archived
 priority: nice-to-have
 created: '2026-04-13T19:16:55.201306+00:00'
 updated: '2026-04-15T13:29:40.858529+00:00'

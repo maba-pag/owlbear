@@ -1,7 +1,7 @@
 ---
 id: 792
 title: Tests — AUTHENTICATED_WEB source type and ContentFetcher protocol
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:31:33.745249+00:00'
 updated: '2026-04-13T05:34:12.108212+00:00'

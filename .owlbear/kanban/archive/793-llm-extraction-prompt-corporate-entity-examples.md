@@ -1,7 +1,7 @@
 ---
 id: 793
 title: LLM extraction prompt corporate entity examples
-status: done
+status: archived
 priority: important
 created: '2026-04-10T12:31:51.861669+00:00'
 updated: '2026-04-13T11:11:22.999452+00:00'

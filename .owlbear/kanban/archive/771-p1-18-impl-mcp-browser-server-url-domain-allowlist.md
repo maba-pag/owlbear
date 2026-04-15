@@ -1,7 +1,7 @@
 ---
 id: 771
 title: 'P1-18: Impl — MCP browser server + URL domain allowlist'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:56:34.350906+00:00'
 updated: '2026-04-12T01:00:08.032266+00:00'

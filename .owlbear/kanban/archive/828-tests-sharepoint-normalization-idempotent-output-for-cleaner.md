@@ -1,7 +1,7 @@
 ---
 id: 828
 title: Tests — SharePoint normalization + idempotent output for cleaner
-status: done
+status: archived
 priority: needed
 created: '2026-04-11T01:38:58.499932+00:00'
 updated: '2026-04-12T12:43:22.134361+00:00'

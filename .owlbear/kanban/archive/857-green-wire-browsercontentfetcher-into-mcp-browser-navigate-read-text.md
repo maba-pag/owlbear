@@ -1,7 +1,7 @@
 ---
 id: 857
 title: 'GREEN: Wire BrowserContentFetcher into MCP browser navigate/read_text'
-status: done
+status: archived
 priority: important
 created: '2026-04-12T15:15:50.852819+00:00'
 updated: '2026-04-14T21:54:17.494583+00:00'

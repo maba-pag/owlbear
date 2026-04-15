@@ -1,7 +1,7 @@
 ---
 id: 859
 title: 'Reconcile #852 fetcher tests after Phase 2 CDP session management (#854)'
-status: done
+status: archived
 priority: important
 created: '2026-04-13T13:53:00.035906+00:00'
 updated: '2026-04-14T14:51:42.974462+00:00'

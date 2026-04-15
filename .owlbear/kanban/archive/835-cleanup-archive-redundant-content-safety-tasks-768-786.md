@@ -1,7 +1,7 @@
 ---
 id: 835
 title: 'Cleanup: archive redundant content safety tasks (#768, #786)'
-status: done
+status: archived
 priority: nice-to-have
 created: '2026-04-11T15:24:19.483409+00:00'
 updated: '2026-04-15T00:29:34.814418+00:00'

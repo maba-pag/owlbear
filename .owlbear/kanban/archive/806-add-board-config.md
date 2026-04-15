@@ -1,7 +1,7 @@
 ---
 id: 806
 title: Add board_config()
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:21:14.299574+00:00'
 updated: '2026-04-13T12:03:30.903291+00:00'

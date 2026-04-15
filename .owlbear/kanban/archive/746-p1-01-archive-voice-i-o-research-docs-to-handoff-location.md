@@ -1,7 +1,7 @@
 ---
 id: 746
 title: 'P1-01: Archive voice I/O research docs to handoff location'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:36:20.117217+00:00'
 updated: '2026-04-12T20:58:38.404528+00:00'

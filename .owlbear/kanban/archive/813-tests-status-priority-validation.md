@@ -1,7 +1,7 @@
 ---
 id: 813
 title: Tests — status/priority validation
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T21:21:54.982332+00:00'
 updated: '2026-04-13T17:25:41.295200+00:00'

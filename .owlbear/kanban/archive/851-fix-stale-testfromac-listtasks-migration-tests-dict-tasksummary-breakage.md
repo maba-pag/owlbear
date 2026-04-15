@@ -1,7 +1,7 @@
 ---
 id: 851
 title: Fix stale TestFromAC_ListTasks migration tests (dict→TaskSummary breakage)
-status: done
+status: archived
 priority: needed
 created: '2026-04-12T13:42:43.908315+00:00'
 updated: '2026-04-13T03:51:00.208680+00:00'

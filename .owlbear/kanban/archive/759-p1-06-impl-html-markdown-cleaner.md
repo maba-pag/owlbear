@@ -1,7 +1,7 @@
 ---
 id: 759
 title: 'P1-06: Impl — HTML→markdown cleaner'
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T10:55:57.210371+00:00'
 updated: '2026-04-13T04:27:46.632250+00:00'

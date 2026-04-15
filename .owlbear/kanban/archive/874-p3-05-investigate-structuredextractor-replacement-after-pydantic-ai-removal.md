@@ -1,7 +1,7 @@
 ---
 id: 874
 title: 'P3-05: Investigate StructuredExtractor replacement after pydantic-ai removal'
-status: done
+status: archived
 priority: important
 created: '2026-04-14T14:25:52.404434+00:00'
 updated: '2026-04-14T22:20:28.228377+00:00'

@@ -1,7 +1,7 @@
 ---
 id: 856
 title: 'RED: Tests for BrowserContentFetcher wiring in MCP browser navigate/read_text'
-status: done
+status: archived
 priority: important
 created: '2026-04-12T15:15:37.708042+00:00'
 updated: '2026-04-14T14:34:48.248359+00:00'

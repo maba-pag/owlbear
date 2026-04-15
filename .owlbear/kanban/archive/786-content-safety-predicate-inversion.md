@@ -1,7 +1,7 @@
 ---
 id: 786
 title: Content safety predicate inversion
-status: done
+status: archived
 priority: important
 created: '2026-04-10T12:31:05.221180+00:00'
 updated: '2026-04-13T10:47:04.123286+00:00'

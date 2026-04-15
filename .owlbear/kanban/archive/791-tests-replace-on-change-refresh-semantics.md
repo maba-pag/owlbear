@@ -1,7 +1,7 @@
 ---
 id: 791
 title: Tests — Replace-on-change refresh semantics
-status: done
+status: archived
 priority: needed
 created: '2026-04-10T12:31:33.717159+00:00'
 updated: '2026-04-13T05:22:06.078388+00:00'

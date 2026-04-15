@@ -2,7 +2,7 @@
 id: 854
 title: 'GREEN: Implement mcp-browser session management (AppContext CDP/Page, lifespan,
   tool bodies)'
-status: done
+status: archived
 priority: important
 created: '2026-04-12T14:03:37.150978+00:00'
 updated: '2026-04-15T02:17:19.487570+00:00'
