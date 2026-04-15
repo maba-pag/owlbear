@@ -441,11 +441,65 @@ class TestFromAC_GraphContentFetcher:
 
         assert isinstance(result, str)
 
+    # --- AC2: URL parsing specificity ---
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_url_site_path_excludes_sitepages_and_page_filename(self) -> None:
+        """AC2: Site-resolution URL strips SitePages and the page filename from the SharePoint URL.
+
+        For _SP_URL = '.../sites/Engineering/SitePages/Overview.aspx'
+        the first Graph call must encode '/sites/Engineering', NOT 'SitePages' or 'Overview.aspx'.
+        """
+        from owlbear_knowledge.graph_fetcher import GraphContentFetcher
+
+        mock_app = _make_mock_msal_app()
+        mock_client = _make_httpx_client_mock()
+
+        with (
+            patch("owlbear_knowledge.graph_fetcher.PublicClientApplication", return_value=mock_app),
+            patch("owlbear_knowledge.graph_fetcher.httpx.AsyncClient", return_value=mock_client),
+        ):
+            fetcher = GraphContentFetcher(client_id="app-id", tenant_id="tenant-id")
+            await fetcher.fetch(_SP_URL)
+
+        first_call_url: str = mock_client.get.call_args_list[0].args[0]
+        assert "SitePages" not in first_call_url
+        assert "Overview.aspx" not in first_call_url
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_page_filename_from_url_used_in_page_lookup(self) -> None:
+        """AC2/AC4: Page filename ('Overview.aspx') extracted from SharePoint URL appears in pages-lookup call."""
+        from owlbear_knowledge.graph_fetcher import GraphContentFetcher
+
+        mock_app = _make_mock_msal_app()
+        mock_client = _make_httpx_client_mock()
+
+        with (
+            patch("owlbear_knowledge.graph_fetcher.PublicClientApplication", return_value=mock_app),
+            patch("owlbear_knowledge.graph_fetcher.httpx.AsyncClient", return_value=mock_client),
+        ):
+            fetcher = GraphContentFetcher(client_id="app-id", tenant_id="tenant-id")
+            await fetcher.fetch(_SP_URL)
+
+        # _SP_URL ends with 'Overview.aspx'; it must appear in at least one call after site resolution
+        subsequent_urls = [call.args[0] for call in mock_client.get.call_args_list[1:]]
+        assert any("Overview.aspx" in url for url in subsequent_urls)
+
     # --- AC8: dependency constraints ---
 
     def test_msal_package_is_importable(self) -> None:
         """AC8: msal is available as a project dependency."""
         import msal  # noqa: F401
+
+    def test_graph_fetcher_uses_httpx_not_msgraph(self) -> None:
+        """AC8: graph_fetcher module imports httpx, not msgraph-sdk."""
+        import inspect
+
+        import owlbear_knowledge.graph_fetcher as gf_mod
+
+        source = inspect.getsource(gf_mod)
+        assert "httpx" in source
+        assert "msgraph" not in source.lower()
 
 
 # ---------------------------------------------------------------------------
