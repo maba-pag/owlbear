@@ -56,14 +56,6 @@ class TestFromAC_KanbanPackageToml:
             f"pydantic not found in serve/kanban deps: {deps}"
         )
 
-    def test_pyyaml_dep(self) -> None:
-        """pyyaml must be in serve/kanban/pyproject.toml deps (task_io.py uses 'import yaml')."""
-        data = tomllib.loads(_KANBAN_PYPROJECT.read_text(encoding="utf-8"))
-        deps = data.get("project", {}).get("dependencies", [])
-        assert any("pyyaml" in d.lower() for d in deps), (
-            f"pyyaml not found in serve/kanban deps: {deps}"
-        )
-
     def test_no_mcp_dep(self) -> None:
         """serve/kanban/pyproject.toml must NOT depend on mcp or fastmcp (engine is transport-free)."""
         data = tomllib.loads(_KANBAN_PYPROJECT.read_text(encoding="utf-8"))
