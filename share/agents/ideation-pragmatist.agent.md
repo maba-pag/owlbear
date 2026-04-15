@@ -5,7 +5,7 @@ argument-hint: Synthesize: {working directory path}
 user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
-tools: [read/readFile, edit/createFile, search, vscode/memory]
+tools: [read/readFile, edit/createFile, edit/editFiles, search, vscode/memory]
 agents: []
 ---
 
