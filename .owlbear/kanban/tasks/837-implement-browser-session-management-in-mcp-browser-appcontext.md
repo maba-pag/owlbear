@@ -1,10 +1,10 @@
 ---
 id: 837
 title: Implement browser session management in mcp-browser AppContext
-status: review
+status: done
 priority: important
 created: '2026-04-11T15:28:49.551640+00:00'
-updated: '2026-04-15T09:27:49.569392+00:00'
+updated: '2026-04-15T17:02:05.997102+00:00'
 tags:
 - phase-2
 - scope:mcp-browser
@@ -13,8 +13,8 @@ depends_on:
 - 771
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: quiet-heath
+claimed_at: '2026-04-15T17:02:05.997102+00:00'
 ---
 Add browser session state to mcp-browser AppContext: CDPConnectionManager and Playwright Page lifecycle.
 
@@ -334,3 +334,100 @@ No new code changes required. Prior builder's work (b1795c20) already satisfies 
 | snapshot returns page.locator("body").aria_snapshot() | PASS (server.py:178–181) |
 | All tools raise ToolError when page=None | PASS |
 | ruff clean | PASS |
+
+[[2026-04-15]]
+## Review Evidence
+
+### Test Results (independent run)
+- `test_mcp_browser_session_837.py`: **23 passed, 0 failed** ✓
+- `test_mcp_browser_836.py`: **21 passed, 0 failed** ✓ (prior 3 failures resolved)
+- `test_mcp_browser_775.py`: **23 passed, 0 failed** ✓
+- **Total: 67/67 passed** — pytest exit 0
+
+### Lint
+ruff: **clean** ✓
+
+### Coverage
+`owlbear_mcp_browser/server.py`: **96%** (lines 111–113, 117–118 — fetcher-delegation path, #852 scope)
+
+---
+
+### AC Compliance Table
+
+| AC Line | Evidence | Mapped Test(s) | Status |
+|---------|----------|----------------|--------|
+| AppContext includes CDPConnectionManager and optional Page fields | server.py:28–35 — `launcher: PlaywrightLauncher | None`, `page: Any` (pivot per task body CDP Pivot Notice; AC text not formally amended) | TestFromAC_AppContextFields (4 tests) | PASS |
+| Lifespan opens CDP connection or fails gracefully | server.py:63–81 — `PlaywrightLauncher().launch()`, degrades to launcher=None, page=None on exception | TestFromAC_LifespanCDPConnect (4 tests) | PASS |
+| Lifespan cleanup disconnects browser | server.py:82–86 — finally block: `await page.close()`, `await launcher.close()` | TestFromAC_LifespanCleanup (2 tests) | PASS |
+| navigate() uses Page.goto() | server.py:119–120 — allowlist check then `await app_ctx.page.goto(url)` | TestFromAC_NavigateTool::test_navigate_calls_page_goto_with_url | PASS |
+| click/type/select use Page locator methods | server.py:138,149,160 — `page.locator(s).click/fill/select_option()` | TestFromAC_ClickTool, TestFromAC_TypeTool, TestFromAC_SelectTool | PASS |
+| read_text uses owlbear_browser.extract_content() | server.py:174 — `extract_content(html, page.url)` | TestFromAC_ReadTextTool (2 tests) | PASS |
+| snapshot returns accessibility tree as markdown | server.py:188 — `await page.locator("body").aria_snapshot()` | TestFromAC_SnapshotTool (2 tests) | PASS |
+| Tests mock Playwright at CDP boundary | test file line 122+ — `patch("owlbear_mcp_browser.server.PlaywrightLauncher", ...)` | All lifespan tests | PASS |
+| ruff clean | verified independently | — | PASS |
+
+### 5.0 AC-to-Test Coverage
+All 9 AC lines have mapped TestFromAC tests with assertions that would fail on violation. AC10 extension (test-writer added "all tools raise ToolError when page=None") is ADEQUATE: navigate() deliberately returns url for AppContext(page=None) per backward-compat design; the #836 tests cover that path; the #837 test covers the SimpleNamespace(page=None) path that raises ToolError. Both paths verified.
+
+### 5.1 Security Review
+No hardcoded secrets, injection vectors, or path traversal risks. `PLAYWRIGHT_USER_DATA_DIR` env var controls browser profile path — scoped to a well-known home dir location by default. Domain allowlist check precedes all navigation. No issues.
+
+### 5.2 TestFromAC Comparison
+
+| Class | Modification | Assessment |
+|-------|-------------|------------|
+| TestFromAC_AppContextFields::test_appcontext_has_cdp_field | Tests `launcher` field (not `cdp`). Docstring: "updated for #871 Playwright pivot" | ADAPTED (pivot) |
+| TestFromAC_LifespanCDPConnect | Tests PlaywrightLauncher, not CDPConnectionManager. Docstring documents pivot | ADAPTED (pivot) |
+| TestFromAC_LifespanCleanup | Tests `mock_launcher.close.assert_called_once()` — correct for pivot | PRESERVED |
+| All other TestFromAC_* | No modifications detected | PRESERVED |
+
+All modifications are documented pivot adaptations (citing #871). Assertions remain behavioral and specific. No weakening.
+
+### 5.3 Test Quality
+**STRONG** overall. Specific assertions (`.assert_awaited_once_with(url)`, field presence via `dataclasses.fields()`, exact return value assertions). Error paths tested for all 6 tools. One LAX gap: TestFromAC_LifespanCleanup verifies `launcher.close()` but not `page.close()` — page teardown sequence is correct in implementation but partially unverified.
+
+### 5.5 Implementation-Aware Test Gap Analysis
+- `page.close()` call in lifespan finally block (server.py:83) — not asserted in cleanup tests. If removed, tests still pass. Implementation is correct; test is incomplete for this line. Informational.
+- navigate() asymmetric behavior (AppContext(page=None) → return url vs SimpleNamespace(page=None) → ToolError) is fully tested across #836 and #837 suites. No gap.
+- fetcher delegation path (lines 111–113, 117–118) — out of scope for #837, covered by #852 suite.
+
+### 5.7 Builder Process Quality
+3 × `## Builder Notes` sections. Classification: **FRICTION** — not LOOP.
+- Cycle 1 (f0867899): 22/23, documented the indentation bug, correct handoff to test-writer
+- Cycle 2 (b1795c20): Restructured 5 handlers — varied approach vs cycle 1
+- Cycle 3: Post-review-failure verification after reviewer rejected back to in-progress — no code changes claimed, 67/67 confirmed. This is a legitimate pipeline return, not an identical retry.
+
+### Prior Review Resolution
+Prior review failure (3 regressions in test_mcp_browser_836.py) is resolved. The navigate() backward-compat `return url` at server.py:121 (`# dry-run: allowlist passed, no live page`) correctly handles AppContext(page=None, fetcher=None) → returns URL. Previously failing tests now pass: `test_navigate_permitted_by_ctx_allowlist_even_when_env_is_empty`, `test_navigate_called_with_ctx_and_allowed_domain`, `test_navigate_returns_url_for_domain_in_ctx_allowlist`.
+
+### Informational Findings (non-blocking)
+1. **Stale AC text**: AC still says "CDPConnectionManager" — implementation uses PlaywrightLauncher per CDP Pivot Notice (2026-04-14 in task body). AC text was never formally amended. No functional impact; next task touching this AC should update wording.
+2. **Stale test names**: `test_appcontext_has_cdp_field`, `TestFromAC_LifespanCDPConnect` — pre-pivot names retained. Docstrings note the pivot. Cosmetic only.
+3. **page.close() not verified** in TestFromAC_LifespanCleanup — launcher.close() is the primary resource, page teardown is defensive. Low risk.
+
+### Deductions
+- -0.04: page.close() untested in cleanup path
+- -0.03: AC text stale (CDPConnectionManager vs PlaywrightLauncher) — process documentation gap
+- -0.02: Stale test identifiers from pre-pivot
+
+**Confidence: .91 → PASS**
+
+### Verdict: PASS → docs | advance
+[[2026-04-15]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | Yes | N/A | AppContext gained `launcher`/`page` fields; 6 tools fully implemented. `.github/copilot-instructions.md` contains only Project Identity + Repository Branches sections — no component or API tables to update. |
+| 2 | Module docstrings | Yes | Verified | All public API in `server.py` has accurate docstrings: `AppContext` ✓, `app_lifespan` ✓, `navigate` ✓, `click` ✓, `type_input` ✓, `select` ✓, `read_text` ✓ (with fallback note), `snapshot` ✓ (with fallback note). No changes required. |
+| 3 | External attribution | Yes | Updated | Research doc §2 cites Playwright Page API (`playwright.dev/python/docs/api/class-page`) as source #10 for page interaction patterns (`page.goto`, `page.locator`, `page.content`, `page.aria_snapshot`). No prior #837 entry in sources/overview.md. Added new `## MCP Browser Session Management (Task #837)` section. Committed: 9779302. |
+| 4 | CLI changes | No | N/A | MCP server implementation only — no CLI commands added or modified. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/837-mcp-browser-session-management.md` exists. Linked in task body under `## Research`. Follow-up tasks #853 (RED), #854 (GREEN), #855 (playwright bump) created. |
+
+### Files Updated
+- `.owlbear/sources/overview.md` — added `## MCP Browser Session Management (Task #837)` section with Playwright Page API attribution
+
+### Scratch Files Cleaned
+- None (no `837-*` scratch files found)
