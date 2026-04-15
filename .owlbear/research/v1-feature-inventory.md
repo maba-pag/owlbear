@@ -259,7 +259,7 @@
 | 103 | **Text-to-speech (pyttsx3)** | pyttsx3 wrapper. Async via asyncio.to_thread. Configurable rate/volume. | `v2:exists` |
 | 104 | **Streaming STT** | Live transcription during recording. Open-ended sessions. | `v2:exists` |
 | 105 | **Voice channel** | Microphone + speaker I/O via sounddevice. Two modes: quick (fixed-duration batch) + brainstorm (open-ended streaming). | `v2:exists` |
-| 106 | **Voice panel (v2 extension)** | Voice characterizations (architect-voice, critic-voice, data-voice, enduser-voice, pragmatist-voice, security-voice). Multi-voice deliberation. | `v2:exists` |
+| 106 | **Ideation panel (v2 extension)** | Voice characterizations (ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-pragmatist, ideation-security). Multi-voice deliberation. | `v2:exists` |
 
 ---
 

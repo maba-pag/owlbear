@@ -25,7 +25,7 @@ not created); tests must exercise the contract in #824 AC.
 | 5 | `tests/test_kanban_engine_listing.py` | .90 | Engine test fixture pattern: real engine, tmp dirs, task files |
 | 6 | `tests/test_pick_tasks.py` | .85 | Existing MCP-level pick_tasks tests (mock-based) |
 | 7 | `.owlbear/briefs/draft-kanban-web-gui-prep/brief.md` | 1.0 | Phase 3 spec, package topology, dispatch design |
-| 8 | `.owlbear/briefs/.../voices/architect.md` L95-130 | .95 | Dispatch policy design: hardcoded rank maps rationale |
+| 8 | `.owlbear/briefs/.../opinions/architect.md` L95-130 | .95 | Dispatch policy design: hardcoded rank maps rationale |
 | 9 | `tests/test_kanban_mcp_migration.py` L595-834 | .85 | Engine-backed `pick_tasks` tests, mock engine pattern |
 
 ## 3. Analysis

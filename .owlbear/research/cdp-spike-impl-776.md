@@ -19,7 +19,7 @@ This is a **validation pass** — the primary research was completed in #752.
 | 1 | Playwright `connect_over_cdp` API | playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp | .95 |
 | 2 | Chrome 136 blog post | developer.chrome.com/blog/remote-debugging-port | .95 |
 | 3 | CDP spike research #752 | .owlbear/research/cdp-spike-752.md | .95 |
-| 4 | Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/security.md | .90 |
+| 4 | Brief security voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/security.md | .90 |
 | 5 | Edge launcher research #755 | .owlbear/research/edge-launcher-cdp-tests-755.md | .85 |
 | 6 | Edge impl research #758 | .owlbear/research/edge-launcher-cdp-impl-758.md | .85 |
 | 7 | Existing scratch scripts | .owlbear/scratch/*.py | .70 |

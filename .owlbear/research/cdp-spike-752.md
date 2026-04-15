@@ -20,7 +20,7 @@ SSO-protected SharePoint page, and extract cleaned text? What blockers exist?
 | 5 | Prior research #264 (browser automation) | .owlbear/research/browser-automation.md | .90 |
 | 6 | Prior research #495 (CDP context isolation) | .owlbear/research/cdp-context-isolation.md | .85 |
 | 7 | Prior research #684 (Playwright v2 integration) | .owlbear/research/playwright-browser-integration-v2.md | .85 |
-| 8 | Brief security voice (#751) | .owlbear/briefs/draft-browser-knowledge-extraction/voices/security.md | .90 |
+| 8 | Brief security voice (#751) | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/security.md | .90 |
 
 ## 3. Analysis
 

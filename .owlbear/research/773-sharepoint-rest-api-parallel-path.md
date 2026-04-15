@@ -27,7 +27,7 @@ worth pursuing given that Playwright already works for SharePoint, Jira, and Con
 | 7 | #751 pipeline research | .owlbear/research/751-authenticated-content-pipeline.md | .90 |
 | 8 | Existing ContentFetcher protocol | serve/knowledge/src/owlbear_knowledge/protocol.py | 1.0 |
 | 9 | Existing BrowserContentFetcher | serve/browser/src/owlbear_browser/fetcher.py | .95 |
-| 10 | Brief architect voice (Phase 4 risk) | .owlbear/briefs/draft-browser-knowledge-extraction/voices/architect.md | .85 |
+| 10 | Brief architect voice (Phase 4 risk) | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/architect.md | .85 |
 
 ## 3. Analysis
 

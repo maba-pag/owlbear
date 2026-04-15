@@ -5,7 +5,7 @@
 
 ## 1. Context and Question
 
-Task #645 requires creating the central ideator agent — the Mediator that drives the 6-moment thinking process, manages the Working Directory (Blackboard), invokes voice subagents, and hands off to the planner. The spec is `thinking-companion-framework.md` §6, §7, §12. Dependencies resolved: #641 (archived, kanban rename), #644 (done, critic-voice.agent.md).
+Task #645 requires creating the central ideator agent — the Mediator that drives the 6-moment thinking process, manages the Working Directory (Blackboard), invokes voice subagents, and hands off to the planner. The spec is `thinking-companion-framework.md` §6, §7, §12. Dependencies resolved: #641 (archived, kanban rename), #644 (done, ideation-critic.agent.md).
 
 **Key questions:** What frontmatter structure, tool set, subagent list, and agent tier apply? What AC refinements are needed?
 
@@ -15,7 +15,7 @@ Task #645 requires creating the central ideator agent — the Mediator that driv
 |---|--------|------|-----------|
 | 1 | `thinking-companion-framework.md` §6, §7, §12 | Spec | 1.0 — primary design authority |
 | 2 | `share/agents/orchestrator.agent.md` | Codebase | 0.9 — closest pattern (user-invocable, multi-subagent) |
-| 3 | `share/agents/critic-voice.agent.md` | Codebase | 0.8 — first voice agent built (#644), structural reference |
+| 3 | `share/agents/ideation-critic.agent.md` | Codebase | 0.8 — first voice agent built (#644), structural reference |
 | 4 | `share/skills/h-agent-structure/SKILL.md` | Codebase | 0.9 — structural standards for agent files |
 | 5 | `tests/test_grant_vscode_askquestions_to_user_invocable.py` | Codebase | 0.9 — blanket ban on vscode/askQuestions (task #123) |
 | 6 | `share/agents/planner.agent.md` | Codebase | 0.7 — user-invocable agent pattern with kanban tools |
@@ -56,12 +56,12 @@ The ideator is a conversational agent — it asks questions through the chat int
 
 | Agent | When invoked | Spec reference |
 |-------|-------------|----------------|
-| critic-voice | After M1, M2, M4, M5 (standalone checks) | §7 Critic invocation points |
-| pragmatist-voice | Between M3 and M4 (synthesis) | §7 Structural voices |
-| architect-voice | Voice deliberation phase | §7 Domain voices |
-| data-voice | Voice deliberation phase | §7 Domain voices |
-| enduser-voice | Voice deliberation phase | §7 Domain voices |
-| security-voice | Voice deliberation phase | §7 Domain voices |
+| ideation-critic | After M1, M2, M4, M5 (standalone checks) | §7 Critic invocation points |
+| ideation-pragmatist | Between M3 and M4 (synthesis) | §7 Structural voices |
+| ideation-architect | Voice deliberation phase | §7 Domain opinions |
+| ideation-data | Voice deliberation phase | §7 Domain opinions |
+| ideation-enduser | Voice deliberation phase | §7 Domain opinions |
+| ideation-security | Voice deliberation phase | §7 Domain opinions |
 | planner | M6 handoff (task decomposition) | §6 Moment 6 |
 | Explore | M3 landscape scan (codebase + ecosystem) | §6 Moment 3 |
 
@@ -109,7 +109,7 @@ Self-challenge findings: (a) first-of-kind MCP namespaces are low risk — serve
 No new follow-up tasks needed. Existing board coverage:
 - #646-#650: voice agent files (depend on #645)
 - #651: `w-ideation/SKILL.md` workflow (depends on #646-#650)
-- #652: `h-voice-panel/SKILL.md` handbook (depends on #646-#650)
+- #652: `h-ideation-panel/SKILL.md` handbook (depends on #646-#650)
 
 ### AC Refinements for Architect
 

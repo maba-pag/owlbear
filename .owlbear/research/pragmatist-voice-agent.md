@@ -1,11 +1,11 @@
 # Pragmatist Voice Agent — Research
 
-> **Owning task:** #646 — P4-06: Create pragmatist-voice.agent.md
+> **Owning task:** #646 — P4-06: Create ideation-pragmatist.agent.md
 > **Date:** 2026-04-06  **Status:** Complete
 
 ## 1. Context and Question
 
-Task #646 requires creating the Pragmatist voice — a synthesis subagent that reads all domain voice outputs + context and produces `synthesis.md` for the Mediator. The spec is `thinking-companion-framework.md` §7, §12. Dependency: #645 (done — ideator.agent.md created, lists `pragmatist-voice` in its agents array).
+Task #646 requires creating the Pragmatist voice — a synthesis subagent that reads all domain opinion outputs + context and produces `synthesis.md` for the Mediator. The spec is `thinking-companion-framework.md` §7, §12. Dependency: #645 (done — ideator.agent.md created, lists `ideation-pragmatist` in its agents array).
 
 **Key questions:** What tool set (read + write), frontmatter structure, and I/O contract? What AC items need refinement? Does `disable-model-invocation` apply?
 
@@ -14,8 +14,8 @@ Task #646 requires creating the Pragmatist voice — a synthesis subagent that r
 | # | Source | Type | Relevance |
 |---|--------|------|-----------|
 | 1 | `thinking-companion-framework.md` §7, §12 | Spec | 1.0 — defines Pragmatist role, I/O contract, Blackboard read/write rules |
-| 2 | `share/agents/critic-voice.agent.md` | Codebase | 0.9 — closest structural pattern (voice subagent, disable-model-invocation, dual-scope prompt) |
-| 3 | `share/agents/ideator.agent.md` | Codebase | 0.9 — invoking agent, confirms pragmatist-voice in agents list + tool set context |
+| 2 | `share/agents/ideation-critic.agent.md` | Codebase | 0.9 — closest structural pattern (voice subagent, disable-model-invocation, dual-scope prompt) |
+| 3 | `share/agents/ideator.agent.md` | Codebase | 0.9 — invoking agent, confirms ideation-pragmatist in agents list + tool set context |
 | 4 | `share/skills/h-agent-structure/SKILL.md` | Codebase | 0.8 — structural standards for agent files |
 | 5 | de Bono, *Six Thinking Hats* (1985) — Blue Hat role | External | 0.7 — prior art for synthesis/facilitator role aggregating multiple perspective outputs |
 | 6 | `tests/test_grant_vscode_askquestions_to_user_invocable.py` | Codebase | 0.8 — blanket ban applies to all .agent.md files (glob-based) |
@@ -28,7 +28,7 @@ Task #646 requires creating the Pragmatist voice — a synthesis subagent that r
 |-----------|--------|------------|
 | Purpose | Adversarial challenge | Convergence synthesis |
 | Model | GPT-5.4 (diversity) | Claude Opus 4.6 (same as other voices) |
-| Reads | Position + context.md | context.md, decisions.md, ALL voices/*.md |
+| Reads | Position + context.md | context.md, decisions.md, ALL opinions/*.md |
 | Writes | None (returns text) | synthesis.md (file write) |
 | Subagents | None | None |
 | Invocation scope | Dual (standalone + embedded) | Single (post-deliberation only) |
@@ -38,7 +38,7 @@ Task #646 requires creating the Pragmatist voice — a synthesis subagent that r
 
 | Tool | Needed? | Justification |
 |------|---------|---------------|
-| `read/readFile` | **Yes** | Read context.md, decisions.md, voices/*.md from Working Dir |
+| `read/readFile` | **Yes** | Read context.md, decisions.md, opinions/*.md from Working Dir |
 | `edit/createFile` | **Yes** | Write synthesis.md to Working Dir |
 | `search` | **Yes** | Discover which voice files exist (not all voices are always activated) |
 | `vscode/memory` | **Yes** | Standard agent learning |
@@ -54,7 +54,7 @@ Task #646 requires creating the Pragmatist voice — a synthesis subagent that r
 | Property | Value | Rationale |
 |----------|-------|-----------|
 | `user-invocable` | `false` | AC states this; subagent only |
-| `disable-model-invocation` | `true` | Follows critic-voice pattern (voice subagent, only ideator should invoke) |
+| `disable-model-invocation` | `true` | Follows ideation-critic pattern (voice subagent, only ideator should invoke) |
 | `model` | `Claude Opus 4.6 (copilot)` | Spec §7: all voices except Critic use Claude Opus 4.6 |
 | `agents` | `[]` | No subagent delegation |
 | `argument-hint` | `"Synthesize: {working directory path}"` | Mediator passes Working Dir path |
@@ -84,7 +84,7 @@ The Pragmatist maps to de Bono's **Blue Hat** (1985): "The Big Picture & Managin
 
 ## 4. Recommendation
 
-**Build the pragmatist-voice agent file** (~65 lines) following the critic-voice structural pattern with these key differences:
+**Build the ideation-pragmatist agent file** (~65 lines) following the ideation-critic structural pattern with these key differences:
 
 1. **Claude Opus 4.6** model (NOT GPT-5.4 — only Critic uses different model family)
 2. **4 tools** including `edit/createFile` for synthesis.md (Critic is read-only; Pragmatist writes)
@@ -97,7 +97,7 @@ The Pragmatist maps to de Bono's **Blue Hat** (1985): "The Big Picture & Managin
 Challenge: FALLBACK — challenger agent not in available roster. Self-challenge performed:
 - (a) `edit/createFile` vs `edit/editFiles` for loop-back: accepted as low risk — Mediator clears Working Dir per spec §12
 - (b) `search` tool for voice discovery: pragmatic — Mediator passes names in prompt, but search is a safety net
-- (c) 65-line estimate is smaller than critic-voice: expected — Pragmatist has simpler scope (no dual invocation)
+- (c) 65-line estimate is smaller than ideation-critic: expected — Pragmatist has simpler scope (no dual invocation)
 
 ## 5. Follow-up Tasks
 
@@ -105,7 +105,7 @@ Challenge: FALLBACK — challenger agent not in available roster. Self-challenge
 
 | AC# | Issue | Recommended Refinement |
 |-----|-------|----------------------|
-| — | Missing `disable-model-invocation` statement | Add: `disable-model-invocation: true` (follows critic-voice pattern) |
+| — | Missing `disable-model-invocation` statement | Add: `disable-model-invocation: true` (follows ideation-critic pattern) |
 | — | Missing exact tool set specification | Add: `tools: [read/readFile, edit/createFile, search, vscode/memory]` |
 | — | Missing `agents: []` requirement | Add: `agents: []` (no subagent delegation) |
 | — | Missing `argument-hint` | Add: `argument-hint: "Synthesize: {working directory path}"` |

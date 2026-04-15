@@ -7,7 +7,7 @@
 
 Task #651 creates `share/skills/w-ideation/SKILL.md` — the primary workflow skill invoked by the ideator agent (Mediator). Equivalent to `w-orchestration` for the execution pipeline. The spec is `.owlbear/research/thinking-companion-framework.md` (Sections 6, 7, 8, 10, 12). All dependency tasks (#646–#650: voice agents) are archived.
 
-**Key question:** What structure and content should the SKILL.md use, given that (a) the spec is 600+ lines but the skill must be concise, and (b) voice panel details belong in the sibling `h-voice-panel` (#652)?
+**Key question:** What structure and content should the SKILL.md use, given that (a) the spec is 600+ lines but the skill must be concise, and (b) ideation panel details belong in the sibling `h-ideation-panel` (#652)?
 
 ## 2. Sources Studied
 
@@ -33,9 +33,9 @@ The AC says M0–M5 but both the spec and the live agent use M1–M6 + unnamed s
 
 **Risk:** AC literal compliance says M0–M5. Mitigation: the architect can override to M1–M6 if alignment with the spec and agent outweighs literal AC wording.
 
-### 3.2 Content Split: w-ideation vs. h-voice-panel (#652)
+### 3.2 Content Split: w-ideation vs. h-ideation-panel (#652)
 
-| Content | w-ideation | h-voice-panel |
+| Content | w-ideation | h-ideation-panel |
 |---------|------------|---------------|
 | 6-moment process flow | ✓ | — |
 | Entry/exit criteria per moment | ✓ | — |
@@ -69,7 +69,7 @@ YAML frontmatter
 ## Verification Checklist
 ```
 
-**Line budget estimate:** ~180–220 lines. Tables keep it concise. Cross-references to `h-voice-panel` for voice details and `h-mcp-kanban` for kanban operations.
+**Line budget estimate:** ~180–220 lines. Tables keep it concise. Cross-references to `h-ideation-panel` for voice details and `h-mcp-kanban` for kanban operations.
 
 ### 3.4 Key Builder Decisions
 
@@ -83,7 +83,7 @@ YAML frontmatter
 
 ## 4. Recommendation
 
-**Structure the SKILL.md following the w-orchestration step-based pattern.** Use Step 0 (setup) + Steps 1–6 for M1–M6, with tables for Blackboard contract, adaptive depth, voice selection, and Brief structure. Cross-reference h-voice-panel (#652) for voice mechanics. Target ~200 lines.
+**Structure the SKILL.md following the w-orchestration step-based pattern.** Use Step 0 (setup) + Steps 1–6 for M1–M6, with tables for Blackboard contract, adaptive depth, voice selection, and Brief structure. Cross-reference h-ideation-panel (#652) for voice mechanics. Target ~200 lines.
 
 **Overall confidence: .88**
 

@@ -120,16 +120,16 @@ The Mediator invokes a research subagent (Explore or custom scout) with a focuse
 
 The Mediator presents the landscape summary to the user. For existing projects: "Here's how this change interacts with what's already built."
 
-**Output:** Landscape Summary presented to user + landscape appended to `context.md` (which now contains problem, outcomes, tier, and landscape). This triggers voice deliberation. Domain voices can read `research-notes.md` for deeper detail.
+**Output:** Landscape Summary presented to user + landscape appended to `context.md` (which now contains problem, outcomes, tier, and landscape). This triggers voice deliberation. Domain opinions can read `research-notes.md` for deeper detail.
 
-**[Voice Deliberation Phase]** — Between Moment 3 and Moment 4, the Mediator pauses the user conversation and invokes the domain voice panel. Before invoking, it tells the user which voices it's consulting and why: "I'll run this past the Architect and Data Person — your problem is structural and data-heavy. Security isn't relevant at Tool tier. Want to add or remove anyone?" Each domain voice reads `context.md`, forms a position through Critic-loop refinement, and publishes to the Working Directory. The Pragmatist then synthesizes all voice results into `synthesis.md`.
+**[Voice Deliberation Phase]** — Between Moment 3 and Moment 4, the Mediator pauses the user conversation and invokes the domain ideation panel. Before invoking, it tells the user which voices it's consulting and why: "I'll run this past the Architect and Data Person — your problem is structural and data-heavy. Security isn't relevant at Tool tier. Want to add or remove anyone?" Each domain opinion reads `context.md`, forms a position through Critic-loop refinement, and publishes to the Working Directory. The Pragmatist then synthesizes all voice results into `synthesis.md`.
 
 ### Moment 4: Decision — "What are we doing and why?"
 
 **Lead:** Mediator (presenting voice synthesis). **Active:** The Critic (after decision).
 
 The Mediator reads `synthesis.md` and presents the panel's findings with attribution:
-- 2-4 concrete approaches with trade-offs (surfaced by domain voices)
+- 2-4 concrete approaches with trade-offs (surfaced by domain opinions)
 - Each option: what it is, effort/complexity cost, what it buys, what it gives up
 - Investment tier filters options (at Scratch, only the simplest matters)
 - Voice perspectives attributed: "[Architect] favors A because..." "[Data Person] warns B because..."
@@ -167,7 +167,7 @@ User reviews, adjusts, approves. This is the **contract** between thinking and b
 
 **Output:** Tasks on the project's kanban board, decomposed from the Brief.
 
-## 7. The Voice Panel
+## 7. The Ideation Panel
 
 The Ideator uses a **Mediator + Subagent Panel** architecture. The user talks to the Mediator (the ideator agent) — a single orchestrating entity that coordinates subagent voices with distinct perspectives. All voices except the Investigator (which is an internal Mediator mode) are implemented as **separate subagents**, invoked via `runSubagent`.
 
@@ -199,11 +199,11 @@ The Mediator is the main agent the user interacts with:
 3. After Moment 4: "Here's the chosen approach. What will fail?"
 4. After Moment 5: "Here's the Brief. What are we sweeping under the rug?"
 
-These are **in addition to** the Critic loops inside each domain voice (see Section 12). The standalone checks catch meta-level issues (wrong problem, wrong scope). The voice-embedded loops catch domain-level issues (weak position, missing trade-off).
+These are **in addition to** the Critic loops inside each domain opinion (see Section 12). The standalone checks catch meta-level issues (wrong problem, wrong scope). The voice-embedded loops catch domain-level issues (weak position, missing trade-off).
 
-### Domain Voice Subagents
+### Domain Opinion Subagents
 
-All domain voices are **always implemented as subagents** — never internally simulated. They are invoked between Moments 3 and 4 (the Voice Deliberation Phase), when `context.md` has been written and there is enough context for informed opinions.
+All domain opinions are **always implemented as subagents** — never internally simulated. They are invoked between Moments 3 and 4 (the Voice Deliberation Phase), when `context.md` has been written and there is enough context for informed opinions.
 
 | Voice | Domain | Activated For | Example Opinion |
 |-------|--------|--------------|-----------------|
@@ -221,7 +221,7 @@ All domain voices are **always implemented as subagents** — never internally s
 | Automation / scripting | Architect, Data Person (if data involved) |
 | Sensitive data / multi-user | Security Mind + relevant domain |
 | High investment tier (Shared/Production) | Security Mind added to any combination |
-| Novel / uncharted territory | All available domain voices |
+| Novel / uncharted territory | All available domain opinions |
 
 ### Multi-Model Diversity
 
@@ -357,16 +357,16 @@ User ←→ ideator.agent.md (Mediator)
          ├── Invokes research subagent (M3 — codebase + ecosystem scan):
          │   └── Writes research-notes.md, returns summary to Mediator
          │
-         ├── Invokes domain voice subagents (each voice internally invokes critic):
-         │   ├── architect-voice → reads/writes Working Dir
-         │   ├── data-voice → reads/writes Working Dir
-         │   ├── enduser-voice → reads/writes Working Dir
-         │   └── security-voice → reads/writes Working Dir
+         ├── Invokes domain opinion subagents (each voice internally invokes critic):
+         │   ├── ideation-architect → reads/writes Working Dir
+         │   ├── ideation-data → reads/writes Working Dir
+         │   ├── ideation-enduser → reads/writes Working Dir
+         │   └── ideation-security → reads/writes Working Dir
          │
-         ├── Invokes pragmatist-voice (synthesizer):
+         ├── Invokes ideation-pragmatist (synthesizer):
          │   └── Reads all voice results → writes synthesis.md
          │
-         ├── Optional: final critic-voice on synthesis.md
+         ├── Optional: final ideation-critic on synthesis.md
          │
          ├── Invokes planner (Moment 6 — task decomposition)
          │
@@ -385,7 +385,7 @@ User ←→ ideator.agent.md (Mediator)
                                (written by research subagent during M3)
   decisions.md              ← User decisions as they're made
                                (created empty at start, populated by Mediator after each user choice)
-  voices/
+  opinions/
     architect.md            ← Architect final position (after Critic cycles)
     architect-debate.md     ← Architect ↔ Critic debate log
     data-person.md          ← Data Person final position
@@ -404,10 +404,10 @@ User ←→ ideator.agent.md (Mediator)
 |-------|-------|--------|
 | **Mediator** | `input/*`, `context.md`, `decisions.md`, `synthesis.md` | `context.md` (incremental), `decisions.md`, `brief.md` |
 | **Research subagent** | `context.md`, `input/*`, codebase (via tools), ecosystem (via web fetch) | `research-notes.md` (returns summary to Mediator) |
-| **Domain Voice** | `context.md`, `decisions.md`, optionally `research-notes.md` | `voices/{name}.md`, `voices/{name}-debate.md` |
+| **Domain Opinion** | `context.md`, `decisions.md`, optionally `research-notes.md` | `opinions/{name}.md`, `opinions/{name}-debate.md` |
 | **Critic** (standalone, after M1/M2/M4/M5) | `context.md` | Returns response to Mediator (not direct file write) |
 | **Critic** (invoked by voice) | Voice's current draft (passed in prompt) + `context.md` reference | Returns response to invoking voice (not direct file write) |
-| **Pragmatist** | `context.md`, `decisions.md`, ALL `voices/*.md` results | `synthesis.md` |
+| **Pragmatist** | `context.md`, `decisions.md`, ALL `opinions/*.md` results | `synthesis.md` |
 | **Final Critic** (optional) | `context.md`, `synthesis.md` | Appends challenges to `synthesis.md` |
 | **Planner** | `brief.md` | Kanban tasks |
 
@@ -415,22 +415,22 @@ User ←→ ideator.agent.md (Mediator)
 
 ### Voice Reasoning Cycle (with Embedded Critic)
 
-Each domain voice is a self-contained reasoning unit. The Critic is invoked as a **subagent of the voice**, not as a separate panel member. This produces deep, thorough critique of each voice's position.
+Each domain opinion is a self-contained reasoning unit. The Critic is invoked as a **subagent of the voice**, not as a separate panel member. This produces deep, thorough critique of each voice's position.
 
 ```
-Domain Voice invoked by Mediator:
+Domain Opinion invoked by Mediator:
   1. Read context.md + decisions.md
   2. Form initial opinion
 
   CRITIC LOOP (≤5 cycles):
-    3. Invoke critic-voice: "My position is [X]. Context in context.md. Challenge me."
+    3. Invoke ideation-critic: "My position is [X]. Context in context.md. Challenge me."
     4. Critic returns adversarial challenges
     5. Voice evaluates: accept challenge → refine position, OR reject → stand firm
     6. If refined: loop back to step 3 with updated position
     7. If Critic says "position is solid" or 5 cycles reached: exit loop
 
-  8. Write voices/{name}.md (final, hardened position)
-  9. Write voices/{name}-debate.md (full Critic dialogue log)
+  8. Write opinions/{name}.md (final, hardened position)
+  9. Write opinions/{name}-debate.md (full Critic dialogue log)
 ```
 
 **Critic exit behavior:** The Critic's prompt includes: "If after honest examination you genuinely cannot find material flaws, say the position is solid and exit. Do not manufacture objections."
@@ -458,20 +458,20 @@ PHASE 1 — User Conversation (Mediator ↔ User, internal)
   Appends landscape to context.md (from research summary)
 
 PHASE 2 — Voice Deliberation (parallel)
-  Mediator invokes relevant domain voices in parallel:
+  Mediator invokes relevant domain opinions in parallel:
     Each voice: read context.md → think → Critic loop → publish
-  All voices write: voices/{name}.md + voices/{name}-debate.md
+  All voices write: opinions/{name}.md + opinions/{name}-debate.md
 
 PHASE 3 — Synthesis (Pragmatist subagent)
-  Mediator invokes pragmatist-voice:
-    Reads: context.md + decisions.md + all voices/*.md
+  Mediator invokes ideation-pragmatist:
+    Reads: context.md + decisions.md + all opinions/*.md
     Identifies: convergences, disagreements, recommendation
     Writes: synthesis.md
     Disagreements are flagged with attribution, NOT resolved algorithmically.
     Resolution is the user's job (Phase 5).
 
 PHASE 4 — Optional Final Critic
-  Mediator invokes critic-voice on the combined result:
+  Mediator invokes ideation-critic on the combined result:
     Reads: context.md + synthesis.md
     Catches contradictions BETWEEN voices (individual critique wouldn't find)
     Appends: challenges to synthesis.md
@@ -505,7 +505,7 @@ PHASE 6 — Brief & Handoff
 |-------|-----------------|-----------------|
 | **Mediator** | User conversation + input files + research summary + Working Dir summary files (context, decisions, synthesis) | Voice debates, Critic challenges, raw research data, domain arguments |
 | **Research subagent** | context.md + input files + codebase/web tool results | User conversation, voice results |
-| **Domain Voice** | context.md + optionally research-notes.md + its own critic debate | Other voices' debates, user conversation, input files |
+| **Domain Opinion** | context.md + optionally research-notes.md + its own critic debate | Other voices' debates, user conversation, input files |
 | **Critic** (standalone) | context.md (read from file, grows per moment) | Other voices, user conversation |
 | **Critic** (voice-embedded) | Voice's current position + context reference | Other voices, user conversation |
 | **Pragmatist** | All voice results + context + decisions | Voice debate logs, user conversation, raw research, input files |
@@ -533,17 +533,17 @@ The user selects **ideator** in the VS Code agent picker, or invokes by name.
 ```
 share/agents/
   ideator.agent.md             ← main agent (user-invocable, Mediator)
-  critic-voice.agent.md        ← adversarial subagent (not user-invocable)
-  pragmatist-voice.agent.md    ← synthesis subagent (not user-invocable)
-  architect-voice.agent.md     ← domain subagent (not user-invocable)
-  data-voice.agent.md          ← domain subagent (not user-invocable)
-  enduser-voice.agent.md       ← domain subagent (not user-invocable)
-  security-voice.agent.md      ← domain subagent (not user-invocable)
+  ideation-critic.agent.md        ← adversarial subagent (not user-invocable)
+  ideation-pragmatist.agent.md    ← synthesis subagent (not user-invocable)
+  ideation-architect.agent.md     ← domain subagent (not user-invocable)
+  ideation-data.agent.md          ← domain subagent (not user-invocable)
+  ideation-enduser.agent.md       ← domain subagent (not user-invocable)
+  ideation-security.agent.md      ← domain subagent (not user-invocable)
 
 share/skills/
   w-ideation/
     SKILL.md                   ← workflow skill: 6-moment process + deliberation flow
-  h-voice-panel/
+  h-ideation-panel/
     SKILL.md                   ← handbook: voice characterizations, invocation patterns, Critic-loop rules
 ```
 
@@ -551,7 +551,7 @@ share/skills/
 
 1. **On invocation:** Working Directory created at `.owlbear/briefs/draft-new/` with `input/`, empty `context.md`, empty `decisions.md`
 2. **After M1:** Renamed to `.owlbear/briefs/draft-{project-name}/`
-3. **During ideation:** `context.md` populated incrementally, voices write to `voices/`, Pragmatist writes `synthesis.md`
+3. **During ideation:** `context.md` populated incrementally, voices write to `opinions/`, Pragmatist writes `synthesis.md`
 4. **At approval:** Mediator writes `brief.md` from context + decisions + synthesis
 5. **At handoff (new project):** Brief content transferred into a **parent kanban task** (problem, outcomes, approach, scope as the task body). Planner decomposes into subtasks. Downstream agents work from kanban tasks, not from the Brief file. The Brief file is preserved as audit trail.
 6. **At handoff (feature change):** For trivial changes: new task added directly to existing board, no Brief needed. For complex changes: voice deliberation produces a change brief in a new Working Directory → new parent task + subtasks.
@@ -569,14 +569,14 @@ When the user wants to modify direction mid-execution:
 
 1. **Rename kanban status** "ideation" → "research" (frees the term "ideator"; more accurate for what the researcher does)
 2. **Create `ideator.agent.md`** with Mediator behavior, Investigator mode, Working Directory management
-3. **Create `critic-voice.agent.md`** with purely adversarial system prompt, designed to be invoked BY other voices
-4. **Create `pragmatist-voice.agent.md`** with synthesis behavior, reads all voice results
-5. **Create domain voice agents** (architect, data, enduser, security) with embedded Critic invocation
+3. **Create `ideation-critic.agent.md`** with purely adversarial system prompt, designed to be invoked BY other voices
+4. **Create `ideation-pragmatist.agent.md`** with synthesis behavior, reads all voice results
+5. **Create domain opinion agents** (architect, data, enduser, security) with embedded Critic invocation
 6. **Create `w-ideation/SKILL.md`** workflow skill defining the 6-moment process and deliberation flow
-7. **Create `h-voice-panel/SKILL.md`** handbook for voice characterizations, invocation patterns, Critic-loop rules
+7. **Create `h-ideation-panel/SKILL.md`** handbook for voice characterizations, invocation patterns, Critic-loop rules
 8. **Create `.owlbear/briefs/` directory structure** for Working Directories and Brief artifacts
 9. **Update `w-project-scoping`** — deprecate or refactor to delegate to ideator
-10. **Configure multi-model** — set `model:` key in each voice agent's YAML frontmatter (Opus for domain voices + Pragmatist, GPT for Critic)
+10. **Configure multi-model** — set `model:` key in each voice agent's YAML frontmatter (Opus for domain opinions + Pragmatist, GPT for Critic)
 11. **Update pipeline agents** to optionally read Brief artifacts from `.owlbear/briefs/` for deeper context/intent (primary context comes from kanban tasks)
 
 ## 14. Resolved Design Decisions
@@ -584,12 +584,12 @@ When the user wants to modify direction mid-execution:
 Questions raised during design, now resolved:
 
 1. **Re-entry:** Context-aware. Mediator loads Working Directory + board state, enters at relevant Moment. See Brief Lifecycle section.
-2. **Panel extensibility:** Fixed panel (4 domain voices + Critic + Pragmatist). If new voices are needed, they are added through development, not user configuration.
+2. **Panel extensibility:** Fixed panel (4 domain opinions + Critic + Pragmatist). If new voices are needed, they are added through development, not user configuration.
 3. **Voice agent model configuration:** Specified via `model:` key in agent YAML frontmatter. Example: `model: [Claude Opus 4.6 (copilot), GPT-5.4 (copilot)]`
 4. **Duplicate-voice pattern:** Removed. Voices run on Opus, Critic on GPT. This provides sufficient model diversity without the cost of dual-model runs.
 5. **Brief versioning:** Brief content is transferred into a parent kanban task at handoff. Downstream agents work from kanban tasks, not Brief files. The Brief file is preserved in the Working Directory as audit trail. On re-entry, the Mediator reads the current board state + Working Directory to understand what's changed.
 6. **Working Directory cleanup:** Draft artifacts preserved after handoff for audit trail. Cleaned up when parent task is completed/archived.
-7. **Parallelism:** Confirmed — VS Code Copilot supports concurrent `runSubagent` calls (tested up to 6). Domain voices can run in parallel during the deliberation phase.
+7. **Parallelism:** Confirmed — VS Code Copilot supports concurrent `runSubagent` calls (tested up to 6). Domain opinions can run in parallel during the deliberation phase.
 
 ---
 

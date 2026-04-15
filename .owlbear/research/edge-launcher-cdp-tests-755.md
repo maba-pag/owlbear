@@ -21,8 +21,8 @@ verify?
 | 1 | Playwright `connect_over_cdp` API | playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp | .95 |
 | 2 | Chrome 136 `--remote-debugging-port` restriction | developer.chrome.com/blog/remote-debugging-port | .95 |
 | 3 | CDP spike research #752 | .owlbear/research/cdp-spike-752.md | .90 |
-| 4 | Brief — architect voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/architect.md | .90 |
-| 5 | Brief — security voice | .owlbear/briefs/draft-browser-knowledge-extraction/voices/security.md | .90 |
+| 4 | Brief — architect voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/architect.md | .90 |
+| 5 | Brief — security voice | .owlbear/briefs/draft-browser-knowledge-extraction/opinions/security.md | .90 |
 | 6 | Browser automation research #264 | .owlbear/research/browser-automation.md | .85 |
 | 7 | Existing test patterns | tests/test_process_supervisor.py, tests/test_voice_process_manager.py | .95 |
 | 8 | v1 feature inventory | .owlbear/research/v1-feature-inventory.md §4.3 | .80 |

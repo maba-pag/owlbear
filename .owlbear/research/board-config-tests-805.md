@@ -17,7 +17,7 @@ Task #805 requires tests for `KanbanEngine.board_config()` covering three behavi
 | 2 | `models.py` L39-57 — `BoardConfig` schema | 1.0 | `statuses: list[dict[str, Any]]`, `priorities: list[str]`, `extra='allow'` |
 | 3 | Pydantic v2 `model_copy()` behavior (verified empirically) | 1.0 | Shallow copy: nested lists/dicts share references with original |
 | 4 | `test_config_staleness_fix_828.py` — existing tests | 0.9 | Fixture pattern: `_BASE_CONFIG_YAML`, `kanban_dir`, `engine` fixtures |
-| 5 | Brief: `draft-kanban-web-gui-prep/voices/architect.md` L91 | 0.8 | Design intent: "defensive copy preventing consumers from mutating engine state" |
+| 5 | Brief: `draft-kanban-web-gui-prep/opinions/architect.md` L91 | 0.8 | Design intent: "defensive copy preventing consumers from mutating engine state" |
 
 ## 3. Analysis
 

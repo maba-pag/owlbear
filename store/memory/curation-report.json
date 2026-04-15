@@ -1,5 +1,47 @@
 ﻿[
   {
+    "cycle": "2026-04-15T-periodic-24",
+    "note": "Periodic curation cycle 24. Channel A: MCP DB empty (0 rows, no entries in any state). Channel B: inbox empty. Repo memory root clean. Task body scan: #765 (done), #836 (done), #886 (review), #887 (done). No Channel A entries to process. 2 MEDIUM carries pruned (3rd carry, no recurrence): wip-preservation-selective-staging, msal-sync-blocks-async-event-loop (MSAL code deleted in #886 — doubly confirmed dead). 1 MEDIUM carry continued (3rd carry, borderline recurrence in #836 AC3 test-spec conflict): cross-task-testfromac-contract-conflict. 1 new MEDIUM added from #836 (static-analysis reviewer misread test fixture helper for 4 cycles). 0 promotions (no HIGH-threshold findings). SECURITY-URGENT (18th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 8,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "carry:cycle23:852-builder+test-writer:cross-task-testfromac-contract-conflict",
+        "content_preview": "New #852 AC (fetcher=None → ToolError) contradicted existing #775 TestFromAC_* test. #836 AC3: click/type/select test-spec expected str return but impl raised ToolError; needed arch re-eval via task #877.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 3rd carry. Partial recurrence in #836: AC3 tests (click/type/select) used _make_mcp_ctx_with_mock_page(), not _make_mcp_ctx(), creating test-spec vs implementation tension resolved via architecture review escalation (task #877). Pattern: TestFromAC design conflicts with implementation requirements require arch review, not builder override. Promote at 4th carry if recurs again."
+      },
+      {
+        "entry_id": "inline:#836-reviewer:static-analysis-test-fixture-misread",
+        "content_preview": "4 consecutive reviewer passes incorrectly identified click/type/select AC3 tests as using _make_mcp_ctx() (page=None) when actual file used _make_mcp_ctx_with_mock_page(). Caused false FAIL verdicts; resolved only by live test execution.",
+        "recommendation": "keep",
+        "reason": "MEDIUM — 1st carry. Static-only reviewers without test execution systematically misidentify fixture helpers when there are multiple helpers with similar names. The error persisted through 4 review cycles (passes 1-4) until architecture review ran tests live. Non-obvious (static path trace looks identical). Keep one cycle; promote if recurs in another task."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "carry:cycle23:882-builder:wip-preservation-selective-staging",
+        "content_preview": "Builder had uncommitted WIP (#865) while needing to commit a one-line change (#882). Used backup/restore + selective staging.",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry (cycles 22-24), no recurrence in #765/#836/#886/#887. Single task-specific workaround. Pruning."
+      },
+      {
+        "entry_id": "carry:cycle23:883-reviewer:msal-sync-blocks-async-event-loop",
+        "content_preview": "_acquire_token() is synchronous inside async def fetch(); MSAL network calls block the event loop. Tests pass because MSAL is mocked.",
+        "recommendation": "reject",
+        "reason": "MEDIUM → NOISE — 3rd carry (cycles 22-24), no recurrence. MSAL code deleted entirely in #886 (graph_fetcher.py removed, msal dep removed from pyproject.toml). Doubly confirmed dead. Pruning."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-18TH-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 18 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
     "cycle": "2026-04-15T-periodic-23",
     "note": "Periodic curation cycle 23 (user label: cycle 15). Channel A: MCP DB 0 pending entries. Channel B: inbox empty. Task body scan: #884–#885 (SHAREPOINT_API dispatch, both done). 3 MEDIUM carries from cycle 22 hit 2nd occurrence — promoted: (1) TestFromAC lint errors propagate (promoted to h-pytest-and-linting Known Gotchas); (2) parent TestFromAC freezes child API kwarg names (promoted to r-pipeline-protocol § TestFromAC API-Name Freeze); (3) pre-existing GREEN impl contaminates RED baseline (promoted to r-pipeline-protocol § Child GREEN Builders). 2 MEDIUM carries hit 3rd carry with no recurrence — pruned: 829-auditor-ac-copy-paste, 846-arch-redundant-without-test-run. 3 MEDIUM entries continue to 2nd carry: wip-preservation-selective-staging, msal-sync-blocks-async-event-loop, cross-task-testfromac-contract-conflict. SECURITY-URGENT (17th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
     "entries_processed": 8,
