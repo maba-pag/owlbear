@@ -187,6 +187,7 @@ def save_token(token_data: dict[str, Any], path: Path | None = None) -> None:
     p = path or _DEFAULT_TOKEN_PATH
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(token_data))
+    p.chmod(0o600)
 
 
 def load_token(path: Path | None = None) -> dict[str, Any] | None:
