@@ -33,6 +33,7 @@ Open VS Code with `code .`.
 |---------------------------|--------------------------------------------------------|
 | `serve/orchestrator/`     | ACP client, dispatch planning, orchestration CLI hooks |
 | `serve/knowledge/`        | Knowledge engine (graph + vector)                      |
+| `serve/kanban/`           | Kanban engine (transport-free; used by mcp-kanban)     |
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
 | `serve/mcp-memory/`       | MCP server for persistent agent memory (SQLite-backed) |

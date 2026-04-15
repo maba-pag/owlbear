@@ -1,14 +1,14 @@
 ---
 name: w-ideation
-description: "Workflow: Ideation — 6-moment thinking companion process for problem definition, voice deliberation, and Brief handoff to pipeline"
+description: "Workflow: Ideation — 6-moment thinking companion process for problem definition, panelist deliberation, and Brief handoff to pipeline"
 user-invocable: false
 ---
 
 # Ideation Workflow
 
-Six-moment process for transforming fuzzy ideas into approved Briefs. The Mediator (ideator agent) drives the conversation with the user while coordinating subagent voices and managing the Working Directory (Blackboard). Equivalent to w-orchestration for the execution pipeline.
+Six-moment process for transforming fuzzy ideas into approved Briefs. The Mediator (ideator agent) drives the conversation with the user while coordinating subagent panelists and managing the Working Directory (Blackboard). Equivalent to w-orchestration for the execution pipeline.
 
-See `h-voice-panel` for voice characterizations, Critic-loop rules, and invocation prompts.
+See `h-ideation-panel` for panelist characterizations, Critic-loop rules, and invocation prompts.
 
 ## Step 0 — Setup and Entry
 
@@ -39,7 +39,7 @@ The Mediator is in **Investigator mode** for Moments 1–3 — restates what it 
 4. Narrow from vague to specific ("what's really going wrong?").
 5. Catch disguised solutions ("that's a solution — what's the need underneath?").
 6. Write Problem Statement to `context.md` once stable.
-7. Invoke `critic-voice` standalone: "Here's the stated problem. Is this the real problem?"
+7. Invoke `ideation-critic` standalone: "Here's the stated problem. Is this the real problem?"
 8. If Critic surfaces a material issue, loop back with the user.
 
 **Investment Tier Check (between M1 and M2):** Propose a tier (Scratch / Tool / Shared / Production) with rationale, then use askQuestions with the four tiers as options and your recommendation marked. Record confirmed tier in `decisions.md`. The tier calibrates depth for all moments that follow.
@@ -49,7 +49,7 @@ The Mediator is in **Investigator mode** for Moments 1–3 — restates what it 
 
 ## Step 2 — M2: Outcomes — "What does winning look like?"
 
-**Mediator mode:** Investigator. **Active subagents:** `critic-voice` standalone (after conversation).
+**Mediator mode:** Investigator. **Active subagents:** `ideation-critic` standalone (after conversation).
 
 1. Shift from problem to desired future state.
 2. Ask: "If this existed tomorrow, what's different about your day?"
@@ -57,7 +57,7 @@ The Mediator is in **Investigator mode** for Moments 1–3 — restates what it 
 4. Identify best realistic outcome vs. minimum viable win.
 5. Challenge scope against the tier: at Tool tier, 6 outcomes is 4 too many.
 6. Write 2–5 concrete outcomes with success indicators to `context.md`.
-7. Invoke `critic-voice` standalone: "Here are the proposed outcomes. What's wrong with them?"
+7. Invoke `ideation-critic` standalone: "Here are the proposed outcomes. What's wrong with them?"
 
 **Entry criteria:** `context.md` has Problem Statement + Tier.
 **Exit criteria:** `context.md` has 2–5 outcomes with success indicators; Critic check passed.
@@ -73,42 +73,42 @@ The Mediator is in **Investigator mode** for Moments 1–3 — restates what it 
 2. Present the landscape summary to the user.
 3. Append landscape summary to `context.md` (which now contains: problem, tier, outcomes, landscape).
 
-**Voice Deliberation Phase (between M3 and M4):**
+**Panelist Deliberation Phase (between M3 and M4):**
 
-The Mediator pauses the user conversation and invokes the domain voice panel. Before invoking, it tells the user which voices it is consulting and why, and gives them a lightweight veto. Domain voices are invoked in **parallel** (concurrent subagent calls).
+The Mediator pauses the user conversation and invokes the domain ideation panel. Before invoking, it tells the user which panelists it is consulting and why, and gives them a lightweight veto. Domain panelists are invoked in **parallel** (concurrent subagent calls).
 
-See [Voice Deliberation Flow](#voice-deliberation-flow) below.
+See [Panelist Deliberation Flow](#panelist-deliberation-flow) below.
 
 **Entry criteria:** `context.md` has problem + tier + outcomes.
-**Exit criteria:** `context.md` has landscape appended; `synthesis.md` written by `pragmatist-voice`.
+**Exit criteria:** `context.md` has landscape appended; `synthesis.md` written by `ideation-pragmatist`.
 
 ## Step 4 — M4: Decision — "What are we doing and why?"
 
-**Mediator mode:** Facilitative (presenting synthesis). **Active subagents:** `critic-voice` standalone (after decision).
+**Mediator mode:** Facilitative (presenting synthesis). **Active subagents:** `ideation-critic` standalone (after decision).
 
 The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting synthesis, supporting decisions, writing the Brief.
 
-1. Read `synthesis.md` (only this, not voice debate logs or raw research).
-2. Present the panel's findings with attribution:
-   - 2–4 concrete approaches with trade-offs (surfaced by domain voices)
+1. Read `synthesis.md` (only this, not panelist debate logs or raw research).
+2. Present the panel’s findings with attribution:
+   - 2–4 concrete approaches with trade-offs (surfaced by domain panelists)
    - Each option: what it is, effort/complexity, what it buys, what it gives up
-   - Voice perspectives attributed: `[architect-voice] favors A because…`
+   - Panelist perspectives attributed: `[ideation-architect] favors A because…`
    - Points of convergence and disagreement highlighted
 3. **User decides.** Present approaches as askQuestions options with your confidence and recommendation per option. Capture the chosen approach with rationale in `decisions.md`.
-4. Invoke `critic-voice` standalone: "Here's the chosen approach. What will fail?"
-5. If Critic surfaces significant concerns, be transparent with the user. They decide whether to re-invoke voices with updated context.
-   On loop-back: voices are stateless — they read updated `context.md` + `decisions.md` and form fresh positions.
+4. Invoke `ideation-critic` standalone: "Here's the chosen approach. What will fail?"
+5. If Critic surfaces significant concerns, be transparent with the user. They decide whether to re-invoke panelists with updated context.
+   On loop-back: panelists are stateless — they read updated `context.md` + `decisions.md` and form fresh positions.
 
 **Entry criteria:** `synthesis.md` written.
 **Exit criteria:** Decision Record written to `decisions.md`; Critic check passed.
 
 ## Step 5 — M5: The Brief — "Here's the plan"
 
-**Mediator mode:** Facilitative (synthesis → Brief). **Active subagents:** `critic-voice` standalone (final check).
+**Mediator mode:** Facilitative (synthesis → Brief). **Active subagents:** `ideation-critic` standalone (final check).
 
 1. Synthesise `context.md` + `decisions.md` + `synthesis.md` into the Brief structure (see [Brief Artifact](#brief-artifact) below).
 2. Optionally open with a success narrative: "A month from now, you run one command and…"
-3. Invoke `critic-voice` standalone: "Here's the Brief. What are we sweeping under the rug?"
+3. Invoke `ideation-critic` standalone: "Here's the Brief. What are we sweeping under the rug?"
 4. Address any Critic findings with the user.
 5. Use askQuestions for Brief approval (approve / adjust / rework options). The Brief is the **contract** between thinking and building.
 6. Write approved Brief to `brief.md`.
@@ -132,38 +132,38 @@ For **feature changes** (non-trivial): Brief content from Working Directory beco
 
 ---
 
-## Voice Deliberation Flow
+## Panelist Deliberation Flow
 
 Invoked by the Mediator between M3 and M4 after `context.md` has been written.
 
-### Voice Selection
+### Panelist Selection
 
-| Problem Signal | Voices Activated |
+| Problem Signal | Panelists Activated |
 |----------------|-----------------|
-| Data processing / ETL / analytics | `data-voice`, `architect-voice` |
-| User-facing tool / interface | `enduser-voice`, `architect-voice` |
-| Automation / scripting | `architect-voice`, `data-voice` (if data-heavy) |
-| Sensitive data / multi-user | `security-voice` + relevant domain |
-| High tier (Shared/Production) | `security-voice` added to any combination |
-| Novel / uncharted territory | All available domain voices |
+| Data processing / ETL / analytics | `ideation-data`, `ideation-architect` |
+| User-facing tool / interface | `ideation-enduser`, `ideation-architect` |
+| Automation / scripting | `ideation-architect`, `ideation-data` (if data-heavy) |
+| Sensitive data / multi-user | `ideation-security` + relevant domain |
+| High tier (Shared/Production) | `ideation-security` added to any combination |
+| Novel / uncharted territory | All available domain panelists |
 
-Voice agents: `architect-voice`, `data-voice`, `enduser-voice`, `security-voice`, `pragmatist-voice`, `critic-voice`.
+Panelists: `ideation-architect`, `ideation-data`, `ideation-enduser`, `ideation-security`, `ideation-pragmatist`, `ideation-critic`.
 
 ### Deliberation Steps
 
-1. Tell the user which voices are being consulted and why. Use askQuestions for a lightweight veto before proceeding.
-2. Invoke all relevant domain voices in **parallel** (concurrent subagent calls). Each voice:
+1. Tell the user which panelists are being consulted and why. Use askQuestions for a lightweight veto before proceeding.
+2. Invoke all relevant domain panelists in **parallel** (concurrent subagent calls). Each panelist:
    a. Reads `context.md` + `decisions.md` (+ optionally `research-notes.md` for deep context).
    b. Forms an initial position.
-   c. Invokes `critic-voice` internally (Critic loop ≤ 5 cycles — see `h-voice-panel` for protocol).
-   d. Writes hardened final position to `voices/{name}.md`.
-   e. Writes full debate log to `voices/{name}-debate.md`.
-3. Invoke `pragmatist-voice` (synthesizer):
-   - Reads: `context.md` + `decisions.md` + all `voices/*.md` results.
+   c. Invokes `ideation-critic` internally (Critic loop ≤ 5 cycles — see `h-ideation-panel` for protocol).
+   d. Writes hardened final stance to `stances/{name}.md`.
+   e. Writes full debate log to `stances/{name}-debate.md`.
+3. Invoke `ideation-pragmatist` (synthesizer):
+   - Reads: `context.md` + `decisions.md` + all `stances/*.md` results.
    - Identifies: convergences, disagreements, recommendation.
    - Writes `synthesis.md` — the convergence artifact.
    - Disagreements are **flagged with attribution**, not resolved. Resolution is the user's job in M4.
-4. (Optional) Invoke `critic-voice` on the combined result: reads `context.md` + `synthesis.md`, catches contradictions between voices. Appends challenges to `synthesis.md`.
+4. (Optional) Invoke `ideation-critic` on the combined result: reads `context.md` + `synthesis.md`, catches contradictions between panelists. Appends challenges to `synthesis.md`.
 
 ---
 
@@ -179,16 +179,16 @@ The Working Directory is the shared communication channel between all agents. No
   context.md              ← Problem, Outcomes, Tier, Landscape summary (incremental)
   research-notes.md       ← Detailed codebase/ecosystem findings (written by research subagent)
   decisions.md            ← User decisions as they are made (created empty at start)
-  voices/
-    architect.md          ← architect-voice final position (after Critic cycles)
-    architect-debate.md   ← architect-voice ↔ critic-voice debate log
-    data-person.md        ← data-voice final position
-    data-person-debate.md ← data-voice ↔ critic-voice debate log
-    enduser.md            ← enduser-voice final position
-    enduser-debate.md     ← enduser-voice ↔ critic-voice debate log
-    security.md           ← security-voice final position (if activated)
-    security-debate.md    ← security-voice ↔ critic-voice debate log
-  synthesis.md            ← pragmatist-voice synthesis of all voice results
+  stances/
+    architect.md          ← ideation-architect final stance (after Critic cycles)
+    architect-debate.md   ← ideation-architect ↔ ideation-critic debate log
+    data.md               ← ideation-data final stance
+    data-debate.md        ← ideation-data ↔ ideation-critic debate log
+    enduser.md            ← ideation-enduser final stance
+    enduser-debate.md     ← ideation-enduser ↔ ideation-critic debate log
+    security.md           ← ideation-security final stance (if activated)
+    security-debate.md    ← ideation-security ↔ ideation-critic debate log
+  synthesis.md            ← ideation-pragmatist synthesis of all panelist stances
   brief.md                ← Final Brief (written at user approval in M5)
 ```
 
@@ -198,14 +198,14 @@ The Working Directory is the shared communication channel between all agents. No
 |-------|-------|--------|
 | **Mediator** | `input/*`, `context.md`, `decisions.md`, `synthesis.md` | `context.md` (incremental), `decisions.md`, `brief.md` |
 | **Research subagent** | `context.md`, `input/*`, codebase + web tools | `research-notes.md` (returns summary to Mediator) |
-| **Domain Voice** | `context.md`, `decisions.md`, optionally `research-notes.md` | `voices/{name}.md`, `voices/{name}-debate.md` |
-| **critic-voice** (standalone) | `context.md` | Returns response to invoking agent (no direct file write) |
-| **critic-voice** (voice-embedded) | Voice's current draft + `context.md` reference | Returns response to invoking voice (no direct file write) |
-| **pragmatist-voice** | `context.md`, `decisions.md`, all `voices/*.md` | `synthesis.md` |
-| **critic-voice** (optional final) | `context.md`, `synthesis.md` | Appends challenges to `synthesis.md` |
+| **Domain panelist** | `context.md`, `decisions.md`, optionally `research-notes.md` | `stances/{name}.md`, `stances/{name}-debate.md` |
+| **ideation-critic** (standalone) | `context.md` | Returns response to invoking agent (no direct file write) |
+| **ideation-critic** (panelist-embedded) | Panelist's current draft + `context.md` reference | Returns response to invoking panelist (no direct file write) |
+| **ideation-pragmatist** | `context.md`, `decisions.md`, all `stances/*.md` | `synthesis.md` |
+| **ideation-critic** (optional final) | `context.md`, `synthesis.md` | Appends challenges to `synthesis.md` |
 | **planner** | `brief.md` | Kanban tasks |
 
-**Context economy rule:** The Mediator reads **only** `input/*` (at start) and the Working Directory summary files (`context.md`, `decisions.md`, `synthesis.md`) — never raw `research-notes.md`, debate logs, or individual voice arguments. The Mediator's context window stays clean throughout the conversation.
+**Context economy rule:** The Mediator reads **only** `input/*` (at start) and the Working Directory summary files (`context.md`, `decisions.md`, `synthesis.md`) — never raw `research-notes.md`, debate logs, or individual panelist arguments. The Mediator's context window stays clean throughout the conversation.
 
 ---
 
@@ -267,19 +267,19 @@ The Mediator **always tells the user** how it is calibrating depth: "This feels 
 | Signal | System Response |
 |--------|----------------|
 | Simple/clear problem + low tier | Compress moments. Combine M1–M4 into a short focused exchange. Brief is a paragraph. |
-| **Trivial** change to existing project | **Skip voice deliberation entirely.** Mediator handles problem → recommendation → task creation in one exchange. |
+| **Trivial** change to existing project | **Skip panelist deliberation entirely.** Mediator handles problem → recommendation → task creation in one exchange. |
 | Feature change to existing project | Load project context. M1–M2 compressed. Focus on M3–M4. |
-| Novel/ambiguous problem + high tier | Full depth. Multiple exchanges per moment. Extended research. All available domain voices. |
+| Novel/ambiguous problem + high tier | Full depth. Multiple exchanges per moment. Extended research. All available domain panelists. |
 | "Just do it" | Quick restate (M1) + recommendation (M4). Protects against misalignment without forcing full depth. |
 
 ### Investment Tier Calibration
 
 | Tier | Mindset | Depth Effect |
 |------|---------|-------------|
-| **Scratch** | "Just make it work for me right now" | Compressed. Minimal voice deliberation. Brief is a paragraph. |
-| **Tool** | "I'll use this regularly, it should be solid" | Standard depth. 2–3 relevant voices. |
-| **Shared** | "Others will use this" | Full depth. Security voice added. More approach options explored. |
-| **Production** | "Real environment, real stakes" | Full depth. All applicable voices. Extended research. |
+| **Scratch** | "Just make it work for me right now" | Compressed. Minimal panelist deliberation. Brief is a paragraph. |
+| **Tool** | "I'll use this regularly, it should be solid" | Standard depth. 2–3 relevant panelists. |
+| **Shared** | "Others will use this" | Full depth. Skeptic added. More approach options explored. |
+| **Production** | "Real environment, real stakes" | Full depth. All applicable panelists. Extended research. |
 
 The system proposes a tier based on conversational signals between M1 and M2. Use askQuestions with tier options for confirmation.
 
@@ -294,7 +294,7 @@ When the user returns to an existing Working Directory (mid-execution modificati
 3. **Determine scope of change:** use askQuestions with options — narrow (re-enter at M4 for implementation pivots) or broad (re-enter at M1 for problem reframing).
 4. **Enter at the relevant moment:** re-enter at M1 for significant problem/outcome changes; re-enter at M4 for approach/scope pivots.
 5. On re-deliberation: **update** `decisions.md` with the new direction. Archive obsolete tasks from the kanban board. Create new tasks for the changed direction.
-6. Voices are **stateless** on re-entry — they read updated `context.md` + `decisions.md` and form fresh positions without anchoring to prior stance.
+6. Panelists are **stateless** on re-entry — they read updated `context.md` + `decisions.md` and form fresh positions without anchoring to prior stance.
 
 **Re-entry entry criteria:** An existing Working Directory is found in `.owlbear/briefs/`; user references an existing project or the system detects `draft-{name}/` on start.
 
@@ -305,10 +305,10 @@ When the user returns to an existing Working Directory (mid-execution modificati
 - [ ] Step 0 completed: Working Directory initialised, `input/*` read, project type determined
 - [ ] M1 complete: Problem Statement in `context.md`; Investment Tier set; standalone Critic check done
 - [ ] M2 complete: 2–5 outcomes in `context.md`; standalone Critic check done
-- [ ] M3 complete: landscape in `context.md`; `research-notes.md` written; voice deliberation complete; `synthesis.md` present
+- [ ] M3 complete: landscape in `context.md`; `research-notes.md` written; panelist deliberation complete; `synthesis.md` present
 - [ ] M4 complete: Decision written to `decisions.md`; standalone Critic check done; user has decided
 - [ ] M5 complete: `brief.md` written; user has approved
 - [ ] M6 complete: planner invoked; kanban tasks created; user confirmed
 - [ ] User informed of depth calibration at each tier decision
 - [ ] Mediator never reads raw `research-notes.md` or debate logs directly
-- [ ] All voice perspectives attributed to the user with voice name
+- [ ] All panelist perspectives attributed to the user with panelist name
