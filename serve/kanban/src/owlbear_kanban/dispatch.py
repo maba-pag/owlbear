@@ -14,6 +14,7 @@ the config.yml display order:
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from owlbear_kanban.task_io import read_task
@@ -69,10 +70,22 @@ _NON_IMPL_TAGS = frozenset(
 _MAX_PRIORITY_RANK = max(PRIORITY_RANK.values())
 _MAX_STATUS_RANK = max(STATUS_RANK.values())
 
+_TERMINAL_STATUSES = frozenset({"archived"})
+
 
 # ---------------------------------------------------------------------------
 # Gate predicates
 # ---------------------------------------------------------------------------
+
+
+def _claim_is_active(task: Task, timeout: timedelta) -> bool:
+    """Return True if the task's claim has not expired."""
+    if not task.claimed_at:
+        return True  # no timestamp — treat as active defensively
+    claimed_dt = datetime.fromisoformat(task.claimed_at)
+    if claimed_dt.tzinfo is None:
+        claimed_dt = claimed_dt.replace(tzinfo=UTC)
+    return datetime.now(tz=UTC) < claimed_dt + timeout
 
 
 def _passes_tdd_gate(task: Task) -> bool:
@@ -118,11 +131,12 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
     body-stripped TaskSummary returned by engine.list_tasks().
 
     Gates applied (in order):
-    1. Blocked exclusion — blocked=True tasks are excluded.
-    2. Claimed exclusion — claimed_by is not null tasks are excluded.
-    3. Tag filter — when tag is non-empty, only tasks carrying that tag pass.
-    4. TDD gate — in-progress tasks need ## Test-Writer Notes or a non-impl tag.
-    5. Clarity gate — active-status tasks need at least one bullet/numbered AC line.
+    1. Terminal status exclusion — archived/done tasks are excluded.
+    2. Blocked exclusion — blocked=True tasks are excluded.
+    3. Claimed exclusion — tasks with an active (non-expired) claim are excluded.
+    4. Tag filter — when tag is non-empty, only tasks carrying that tag pass.
+    5. TDD gate — in-progress tasks need ## Test-Writer Notes or a non-impl tag.
+    6. Clarity gate — active-status tasks need at least one bullet/numbered AC line.
 
     Results are sorted by (PRIORITY_RANK, STATUS_RANK) ascending and capped at limit.
 
@@ -138,11 +152,15 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
         read_task(path) for path in sorted(engine._tasks_dir.glob("*.md"))  # noqa: SLF001
     ]
 
+    claim_timeout = engine._parse_claim_timeout()  # noqa: SLF001
+
     passing: list[Task] = []
     for task in tasks:
+        if task.status in _TERMINAL_STATUSES:
+            continue
         if task.blocked:
             continue
-        if task.claimed_by is not None:
+        if task.claimed_by is not None and _claim_is_active(task, claim_timeout):
             continue
         if tag and tag not in (task.tags or []):
             continue

@@ -48,11 +48,20 @@ class BoardConfig(BaseModel):
     version: int
     board: BoardInfo
     tasks_dir: str
+    archive_dir: str = "archive"
     statuses: list[dict[str, Any]]
     priorities: list[str]
     defaults: BoardDefaults
     next_id: int
     claim_timeout: str
+    activity_log: bool = False
+
+    @model_validator(mode="after")
+    def _validate_dirs(self) -> BoardConfig:
+        if self.tasks_dir == self.archive_dir:
+            msg = f"tasks_dir and archive_dir must differ, both are {self.tasks_dir!r}"
+            raise ValueError(msg)
+        return self
 
 
 class Task(BaseModel):

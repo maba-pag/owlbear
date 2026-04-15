@@ -39,9 +39,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
-_ARCHIVE_DIR_NAME = "archive"
-
-
 def _move_file(src: Path, dest: Path) -> None:
     """Move *src* to *dest*, preferring ``git mv`` when inside a git repo.
 
@@ -102,7 +99,8 @@ class KanbanEngine:
                        ``{adjective}-{noun}`` from the ``agent_names`` pool if
                        omitted; stable across all calls on the same instance.
         activity_log:  When ``True``, append entries to ``activity.jsonl`` on
-                       every mutation.  Defaults to ``False``.
+                       every mutation.  When ``None`` (default), reads from
+                       ``config.yml`` ``activity_log`` field.
     """
 
     def __init__(
@@ -110,19 +108,20 @@ class KanbanEngine:
         kanban_dir: Path,
         *,
         agent_name: str | None = None,
-        activity_log: bool = False,
+        activity_log: bool | None = None,
     ) -> None:
         self._kanban_dir = kanban_dir
         self._config: BoardConfig = load_config(kanban_dir)
         self._tasks_dir = kanban_dir / self._config.tasks_dir
-        self._archive_dir = kanban_dir / _ARCHIVE_DIR_NAME
+        self._archive_dir = kanban_dir / self._config.archive_dir
         self._agent_name: str = (
             agent_name
             if agent_name is not None
             else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
+        effective_activity_log = activity_log if activity_log is not None else self._config.activity_log
         self._activity_log_path: Path | None = (
-            kanban_dir / "activity.jsonl" if activity_log else None
+            kanban_dir / "activity.jsonl" if effective_activity_log else None
         )
         self._revision: int = 0
 
@@ -167,7 +166,7 @@ class KanbanEngine:
         """
         self._config = load_config(self._kanban_dir)
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
-        self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME
+        self._archive_dir = self._kanban_dir / self._config.archive_dir
 
     def valid_transitions(self, status: str) -> set[str]:
         """Return the set of all configured statuses except *status*.
@@ -360,7 +359,7 @@ class KanbanEngine:
             self._config = config
 
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
-        self._archive_dir = self._kanban_dir / _ARCHIVE_DIR_NAME
+        self._archive_dir = self._kanban_dir / self._config.archive_dir
 
         if self._activity_log_path:
             log_activity(self._activity_log_path, "create", record.id, record.title, actor=self._agent_name)
@@ -682,6 +681,60 @@ class KanbanEngine:
 
         msg = f"Unknown outcome: {outcome!r}"
         raise ValueError(msg)
+
+    # ------------------------------------------------------------------
+    # Maintenance
+    # ------------------------------------------------------------------
+
+    def sweep(self) -> dict[str, int]:
+        """Clean up orphaned archives and expired claims.
+
+        1. Move task files with ``status: archived`` still in tasks_dir
+           to archive_dir (using ``git mv`` when possible).
+        2. Release claims that have exceeded the configured timeout.
+
+        Returns:
+            Dict with ``archived_moved`` and ``claims_released`` counts.
+        """
+        archived_moved = 0
+        claims_released = 0
+        timeout = self._parse_claim_timeout()
+        now = datetime.now(tz=UTC)
+
+        for path in sorted(self._tasks_dir.glob("*.md")):
+            record = read_task(path)
+
+            if record.status == "archived":
+                self._archive_dir.mkdir(parents=True, exist_ok=True)
+                dest = self._archive_dir / path.name
+                if dest.exists():
+                    path.unlink()  # archive already has this file, just remove orphan
+                else:
+                    _move_file(path, dest)
+                archived_moved += 1
+                if self._activity_log_path:
+                    log_activity(
+                        self._activity_log_path, "sweep-archive", record.id,
+                        "orphaned archived task moved to archive dir",
+                        actor=self._agent_name,
+                    )
+                continue  # no need to check claim on already-archived task
+
+            if record.claimed_by is not None and record.claimed_at:
+                claimed_dt = datetime.fromisoformat(record.claimed_at)
+                if claimed_dt.tzinfo is None:
+                    claimed_dt = claimed_dt.replace(tzinfo=UTC)
+                if now >= claimed_dt + timeout:
+                    self.release_task(str(record.id))
+                    claims_released += 1
+                    if self._activity_log_path:
+                        log_activity(
+                            self._activity_log_path, "sweep-release", record.id,
+                            f"expired claim by {record.claimed_by} released",
+                            actor=self._agent_name,
+                        )
+
+        return {"archived_moved": archived_moved, "claims_released": claims_released}
 
     # ------------------------------------------------------------------
     # Private helpers

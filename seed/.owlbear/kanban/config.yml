@@ -1,7 +1,6 @@
 version: 10
-board:
-  name: Project
 tasks_dir: tasks
+archive_dir: archive
 statuses:
   - name: research
   - name: backlog
@@ -21,7 +20,5 @@ defaults:
   priority: important
   class: standard
 claim_timeout: 1h
-tui:
-  title_lines: 2
-  hide_empty_columns: true
+activity_log: false
 next_id: 1
