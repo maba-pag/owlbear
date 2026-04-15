@@ -4,7 +4,7 @@ title: 'P3-03: Wire InterDocGraphBuilder into refresh pipeline'
 status: done
 priority: nice-to-have
 created: '2026-04-13T19:16:55.201306+00:00'
-updated: '2026-04-15T02:00:34.628635+00:00'
+updated: '2026-04-15T13:29:40.858529+00:00'
 tags:
 - phase-3
 - scope:knowledge
@@ -286,7 +286,7 @@ All 23 tests fail: TypeError: RefreshOrchestrator.__init__() got an unexpected k
 - AC2 mechanism deviation (documented, equivalent behavior): −.03
 
 ### Verdict
-Confidence: .95 → **PASS**  
+Confidence: .95 → **PASS**
 Target: docs
 [[2026-04-15]]
 ## Docs Gate
@@ -307,32 +307,34 @@ Target: docs
 
 ### Commit
 - c5b20455 — docs: update RefreshOrchestrator docstring for inter_doc_builder and graph_store params (#864, doc-writer)
+
 [[2026-04-15]]
 ## Audit
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
 | AC1: entity retrieval via list_entities_for_document + build() | refresh.py:382-383 — `list_entities_for_document(document_id)`, `builder.build(entities, scope=source.scope)` | PASS |
-| AC2: non-blocking + error logging | refresh.py:375-390 — `asyncio.create_task(_run())`, try/except with `logger.error()` | PASS |
-| AC3: scoped list_documents < 2 | refresh.py:379 — `len(graph_store.list_documents(scopes=[source.scope])) < _MIN_SCOPE_DOCS` | PASS |
+| AC2: asyncio.create_task + error logging, no silent swallow | refresh.py:378-390 — `asyncio.create_task(_run())`, `try/except logger.error()` | PASS |
+| AC3: skip if scoped list_documents < 2 | refresh.py:380 — `len(graph_store.list_documents(scopes=[source.scope])) < _MIN_SCOPE_DOCS` | PASS |
 | AC4: inter_doc_builder=None DI toggle | refresh.py:82 — `inter_doc_builder: InterDocGraphBuilder | None = None` | PASS |
-| AC5: persist edges via insert_edge per edge | refresh.py:384-385 — `for edge in result.edges: graph_store.insert_edge(edge)` | PASS |
+| AC5: persist edges via graph_store.insert_edge per edge | refresh.py:384-385 — `for edge in result.edges: graph_store.insert_edge(edge)` | PASS |
 | AC6: graph_store=None DI param | refresh.py:83 — `graph_store: GraphStore | None = None` | PASS |
-| AC7: integration test with mock extractor | tests/test_wire_interdoc_graph_builder_864.py — TestFromAC_InterDocWiringIntegration class (3 tests) | PASS |
+| AC7: integration test with mock StructuredExtractor | test_wire_interdoc_graph_builder_864.py:570-655 — 3 integration tests | PASS |
 
 ### Test Results
-- pytest: 2886 passed, 135 failed (all pre-existing in test_lint_guard_hook_210.py — missing lint-changed.ps1), 1 skipped. Zero task-scope failures.
-- ruff: 3 violations, all outside task scope (engine.py:472 E501, test_refresh_sharepoint_879.py RUF002/UP024). Task files clean.
+- pytest (task): 23 passed, 0 failed
+- pytest (full suite): 4383 passed, 195 failed (all pre-existing, none in task scope)
+- ruff: 3 violations (none in task files — engine.py:471 E501, test_refresh_sharepoint_879.py:67 RUF002, :399 UP024)
 
 ### Architect Quality: 4/5
-AC required one REFINE cycle (vague entity retrieval, missing error handling spec, global vs scoped count, no edge persistence AC). Architect corrected well on retry — produced 7 specific, testable AC lines. Builder followed AC closely. Minor: AC2 said "done-callback" but implementation used try/except (functionally equivalent, reviewer accepted with rationale).
+First review correctly identified 4 AC gaps (entity retrieval method, error handling, scoped count, edge persistence). REFINE→APPROVE cycle produced 7 precise, testable ACs. Minor: builder discovered offline safety gap (autouse fixture for _intake.read_url) — test infrastructure, not AC gap.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 → -.00
-- Lint violations in task scope: 0 → -.00
-- AC quality ≤ 3: No (4/5) → -.00
-- Missing reviewer evidence section: No (detailed, PASS at .95) → -.00
-- Full-suite test failures in task scope: 0 → -.00
+- AC lines without evidence: 0 (all 7 verified) → 0
+- Lint violations in task scope: 0 → 0
+- AC quality ≤ 3: no (4/5) → 0
+- Missing reviewer evidence: no (detailed, PASS) → 0
+- Full-suite failures in task scope: 0 → 0
 
 ### Confidence: 1.00
 ### Action: archive
