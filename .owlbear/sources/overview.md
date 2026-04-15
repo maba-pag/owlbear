@@ -2,6 +2,30 @@
 
 External repos and resources studied during OwlBear development.
 
+## Copilot SDK vs OpenAI-Compat Endpoint Research (Task #887)
+
+| Source | URL | License | What we studied | Where Used | Date |
+|--------|-----|---------|-----------------|------------|------|
+| github-copilot-sdk PyPI | <https://pypi.org/project/github-copilot-sdk/> | MIT | SDK API surface (v0.2.2): session-based event-driven chat, no `response_format` support, BYOK, auth methods, tool definitions | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| GitHub Copilot SDK repo | <https://github.com/github/copilot-sdk> | MIT | Architecture (JSON-RPC ↔ Copilot CLI), models, FAQ (auth, billing, BYOK), getting-started guide | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| copilot-api (ericc-ch) | <https://github.com/ericc-ch/copilot-api> | MIT | Reverse-engineered OpenAI-compat proxy for Copilot: endpoints (`/v1/chat/completions`, `/v1/models`), auth flow, rate-limit controls, GitHub ToS/abuse-detection warnings | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+| GitHub Copilot Requests docs | <https://docs.github.com/en/copilot/concepts/billing/copilot-requests> | N/A | Premium request model, model multipliers (GPT-4.1 = 0×, GPT-5 mini = 0× on paid plans), rate limits, quota behavior | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` | 2026-04-15 |
+
+## Copilot SDK Monitoring Check (Task #889)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Copilot SDK CHANGELOG.md | <https://github.com/github/copilot-sdk/blob/main/CHANGELOG.md> | v0.2.0–v0.2.2 changelog: confirmed no `response_format` or completions API added | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+| Copilot SDK Issue #857 | <https://github.com/github/copilot-sdk/issues/857> | "Force structured output" — open feature request, no milestone | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+| PyPI github-copilot-sdk v0.2.2 | <https://pypi.org/project/github-copilot-sdk/> | SDK API surface: session-based, no `response_format`, BYOK `wire_api` field (custom providers only) | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
+
+## Copilot Auth Port Feasibility (Task #888)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| github-copilot-sdk PyPI (v0.2.2 recheck) | <https://pypi.org/project/github-copilot-sdk/> | Confirmed: still no `response_format`, BYOK routes through CLI subprocess, session/event API only | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
+| copilot-api proxy (ericc-ch, recheck) | <https://github.com/ericc-ch/copilot-api> | 3.7k stars, explicit abuse-detection warnings added, confirms risk is actively enforced | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
+
 ## Entity Name Canonicalization (Task #865)
 
 | Source | URL | What | Where Used | Date |
@@ -94,6 +118,12 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | FastMCP Tools Documentation | <https://gofastmcp.com/servers/tools> | ToolAnnotations API, Context access, error handling patterns, tool decorator args | .owlbear/research/771-mcp-browser-server.md | 2026-04-11 |
+
+## MCP Browser ctx Refactor (Task #836)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastMCP Dependency Injection Documentation | <https://gofastmcp.com/servers/dependency-injection> | `ctx: Context` auto-injection pattern, `request_context.lifespan_context` access for tools | .owlbear/research/836-mcp-browser-ctx-refactor.md | 2026-04-12 |
 
 ## Playwright Dep Bump for aria_snapshot (Task #855)
 
