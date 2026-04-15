@@ -1,10 +1,11 @@
 """Inter-document graph builder — DI-based implementation.
 
-:class:`InterDocGraphBuilder` uses vector pre-filtering to find candidate
-entity pairs across documents, prioritises cross-source pairs, deduplicates
-against existing graph edges, batches pairs for LLM inference via an
-injected :class:`StructuredExtractor`, and stamps all returned edges with
-``weight=0.4``, ``metadata["source"]="inter_doc_inference"``,
+:class:`InterDocGraphBuilder` uses vector pre-filtering and canonical-name
+blocking to find candidate entity pairs across documents, prioritises
+cross-source pairs, deduplicates against existing graph edges, batches pairs
+for LLM inference via an injected :class:`StructuredExtractor`, and stamps all
+returned edges with ``weight=0.4``,
+``metadata["source"]="inter_doc_inference"``,
 ``metadata["doc_pair"]=[doc_a_id, doc_b_id]``, and
 ``metadata["source_pair"]=[source_a_id, source_b_id]``.
 """
@@ -90,8 +91,16 @@ class InterDocGraphBuilder:
 
     1. Building a source map via ``graph_store.get_document`` to resolve
        each entity's ``source_id`` from its ``document_id``.
-    2. Calling ``vector_store.get_embedding`` + ``search_similar`` per entity
-       to find candidate similar entities across documents.
+    2. Collecting candidates from two parallel paths:
+
+       a. **Canonical-name blocking** — groups entities by
+          ``Entity.canonical_name`` (lowercase, whitespace-collapsed,
+          article/punct-stripped) and pairs those sharing the same canonical
+          form across different documents.
+       b. **Vector similarity** — calls ``vector_store.get_embedding`` +
+          ``search_similar`` per entity and filters by cosine ≥ 0.70.
+
+       Candidates from both paths are unioned (deduplicated).
     3. Prioritising cross-source candidate pairs (both source IDs known and
        distinct) before same-source cross-document pairs.
     4. Filtering out same-document pairs and pairs with existing edges.
