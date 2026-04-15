@@ -57,6 +57,10 @@ class RefreshOrchestrator:
         content_fetcher: Optional protocol object with an async ``fetch(url)``
             method used to retrieve content for ``AUTHENTICATED_WEB`` sources.
             When ``None``, authenticated web refresh is a no-op.
+        graph_content_fetcher: Optional protocol object with an async ``fetch(url)``
+            method used to retrieve content for ``SHAREPOINT_API`` sources.
+            When ``None``, SharePoint refresh is a no-op.  Canonical parameter name;
+            ``graph_fetcher`` is a deprecated alias accepted for backward compatibility.
         inter_doc_builder: Optional ``InterDocGraphBuilder`` used to build
             cross-document edges after each successful ingest. When ``None``
             (the default), inter-doc graph building is disabled.
@@ -73,6 +77,7 @@ class RefreshOrchestrator:
         pipeline: IngestPipeline | object,
         workspace_root: Path | None = None,
         content_fetcher: object | None = None,
+        graph_content_fetcher: object | None = None,
         graph_fetcher: object | None = None,
         inter_doc_builder: InterDocGraphBuilder | None = None,
         graph_store: GraphStore | None = None,
@@ -81,7 +86,7 @@ class RefreshOrchestrator:
         self._pipeline = pipeline
         self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
         self._content_fetcher = content_fetcher
-        self._graph_fetcher = graph_fetcher
+        self._graph_content_fetcher = graph_content_fetcher if graph_content_fetcher is not None else graph_fetcher
         self._inter_doc_builder = inter_doc_builder
         self._graph_store = graph_store
 
@@ -304,10 +309,10 @@ class RefreshOrchestrator:
         source: KnowledgeSource,
         cancel: CancelSignal | None = None,
     ) -> RefreshResult:
-        """Refresh a SHAREPOINT_API source via the injected graph_fetcher.
+        """Refresh a SHAREPOINT_API source via the injected graph_content_fetcher.
 
         For each URL in ``source.config["urls"]``, calls
-        ``self._graph_fetcher.fetch(url)`` to retrieve page content and
+        ``self._graph_content_fetcher.fetch(url)`` to retrieve page content and
         ingests it through the pipeline.
 
         Args:
@@ -318,7 +323,7 @@ class RefreshOrchestrator:
             RefreshResult with per-status counters.  Zero counts when no
             graph_fetcher has been injected.
         """
-        if self._graph_fetcher is None:
+        if self._graph_content_fetcher is None:
             return RefreshResult(
                 source_id=str(source.id),
                 refreshed=0,
@@ -335,7 +340,7 @@ class RefreshOrchestrator:
             if cancel is not None and cancel.is_set():
                 break
             try:
-                content: str = await self._graph_fetcher.fetch(url)  # type: ignore[union-attr]
+                content: str = await self._graph_content_fetcher.fetch(url)  # type: ignore[union-attr]
                 intake_result = _intake.IntakeResult(
                     content=content,
                     source=url,
