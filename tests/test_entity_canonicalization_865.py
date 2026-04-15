@@ -208,3 +208,48 @@ class TestFromAC_CanonicalPreFilter:
         assert extractor.extract.called, (
             "extractor.extract must be called because (e1,e2) canonical-match across docs"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered — edge cases found during GREEN phase
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered edge cases in _canonical_candidates()."""
+
+    def _builder(self) -> InterDocGraphBuilder:
+        return InterDocGraphBuilder(
+            extractor=_async_extractor(),
+            vector_store=_vector_store_no_matches(),
+            graph_store=_mock_graph_store(),
+        )
+
+    def test_same_document_canonical_pair_excluded(self) -> None:
+        """Two entities with the same canonical_name in the SAME document are NOT candidates.
+
+        Canonical blocking must skip intra-document pairs — only cross-doc matching is intended.
+        """
+        e1 = _entity("Data Classification", doc_id="doc1")
+        e2 = _entity("data classification", doc_id="doc1")  # same doc
+        entity_by_id = {e1.id: e1, e2.id: e2}
+        builder = self._builder()
+
+        candidates = builder._collect_candidates([e1, e2], entity_by_id, set())
+
+        assert len(candidates) == 0, "Same-document canonical pair must not be included"
+
+    def test_canonical_pair_in_existing_pairs_excluded(self) -> None:
+        """A canonical-match cross-doc pair that already has a recorded edge is NOT returned.
+
+        Canonical blocking must respect existing_pairs to avoid re-inferring known edges.
+        """
+        e1 = _entity("Data Classification", doc_id="doc1")
+        e2 = _entity("data classification", doc_id="doc2")
+        entity_by_id = {e1.id: e1, e2.id: e2}
+        existing: set[tuple[str, str]] = {(e1.id, e2.id)}
+        builder = self._builder()
+
+        candidates = builder._collect_candidates([e1, e2], entity_by_id, existing)
+
+        assert len(candidates) == 0, "Canonical pair already in existing_pairs must be excluded"

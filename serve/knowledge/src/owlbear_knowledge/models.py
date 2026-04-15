@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 # -- Enums -------------------------------------------------------------------
 
@@ -52,17 +53,29 @@ class SourceType(StrEnum):
 
 # -- Helpers -----------------------------------------------------------------
 
+_WHITESPACE_RE = re.compile(r"\s+")
+_PUNCT_LEAD_TRAIL_RE = re.compile(r"^[^\w\s]+|[^\w\s]+$")
+_ARTICLES_RE = re.compile(r"^(the|a|an)(\s+|$)")
+
 
 def _uuid_hex() -> str:
     """Generate a uuid4 hex string (32 alphanumeric characters)."""
     return uuid4().hex
 
 
+def _canonicalize(name: str) -> str:
+    """Return lowercase, whitespace-collapsed, article/punct-stripped form of *name*."""
+    s = name.lower()
+    s = _WHITESPACE_RE.sub(" ", s).strip()
+    s = _PUNCT_LEAD_TRAIL_RE.sub("", s).strip()
+    return _ARTICLES_RE.sub("", s).strip()
+
+
 # -- Models ------------------------------------------------------------------
 
 
 class KnowledgeSource(BaseModel):
-    """A registered knowledge source ÔÇö where content comes from."""
+    """A registered knowledge source — where content comes from."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -93,6 +106,12 @@ class Entity(BaseModel):
     document_id: str | None = None
     chunk_id: str | None = None
     importance: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    @computed_field
+    @property
+    def canonical_name(self) -> str:
+        """Derived canonical form: lowercase, whitespace-collapsed, article/punct-stripped."""
+        return _canonicalize(self.name)
 
 
 class Edge(BaseModel):
