@@ -4,7 +4,7 @@ title: Tests — Compat alias removal + import migration
 status: done
 priority: needed
 created: '2026-04-10T21:22:46.872069+00:00'
-updated: '2026-04-12T07:35:35.123877+00:00'
+updated: '2026-04-15T12:38:56.013039+00:00'
 tags:
 - phase-2
 - type:test
@@ -15,8 +15,8 @@ depends_on:
 - 820
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: low-owl
+claimed_at: '2026-04-15T12:38:56.013039+00:00'
 ---
 ## Acceptance Criteria
 
