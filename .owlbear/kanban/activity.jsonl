@@ -11127,3 +11127,16 @@
 {"timestamp": "2026-04-15T13:48:18.168470+00:00", "action": "edit", "task_id": 803, "detail": "append_body"}
 {"timestamp": "2026-04-15T13:48:18.180218+00:00", "action": "release", "task_id": 803, "detail": "low-owl"}
 {"timestamp": "2026-04-15T13:48:18.188552+00:00", "action": "move", "task_id": 803, "detail": "done -> archived"}
+{"timestamp": "2026-04-15T13:49:08.155255+00:00", "action": "claim", "task_id": 852, "detail": "low-owl"}
+{"timestamp": "2026-04-15T13:51:10.820485+00:00", "action": "edit", "task_id": 852, "detail": "append_body"}
+{"timestamp": "2026-04-15T13:51:10.844667+00:00", "action": "release", "task_id": 852, "detail": "low-owl"}
+{"timestamp": "2026-04-15T13:51:10.876485+00:00", "action": "move", "task_id": 852, "detail": "docs -> done"}
+{"timestamp": "2026-04-15T13:51:41.337158+00:00", "action": "claim", "task_id": 820, "detail": "low-owl"}
+{"timestamp": "2026-04-15T13:53:56.171325+00:00", "action": "edit", "task_id": 820, "detail": "append_body"}
+{"timestamp": "2026-04-15T13:53:56.184029+00:00", "action": "release", "task_id": 820, "detail": "low-owl"}
+{"timestamp": "2026-04-15T13:53:56.196006+00:00", "action": "move", "task_id": 820, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-15T13:54:23.890609+00:00", "action": "claim", "task_id": 886, "detail": "low-owl"}
+{"timestamp": "2026-04-15T13:58:06.926889+00:00", "action": "edit", "task_id": 886, "detail": "append_body"}
+{"timestamp": "2026-04-15T13:58:06.941360+00:00", "action": "release", "task_id": 886, "detail": "low-owl"}
+{"timestamp": "2026-04-15T13:58:06.954939+00:00", "action": "move", "task_id": 886, "detail": "backlog -> todo"}
+{"timestamp": "2026-04-15T13:58:53.728441+00:00", "action": "claim", "task_id": 814, "detail": "low-owl"}

@@ -4,7 +4,7 @@ title: Add status/priority validation
 status: done
 priority: needed
 created: '2026-04-10T21:22:01.275308+00:00'
-updated: '2026-04-15T08:21:35.306709+00:00'
+updated: '2026-04-15T13:58:53.718345+00:00'
 tags:
 - phase-1
 - scope:mcp-kanban
@@ -14,8 +14,8 @@ depends_on:
 - 813
 blocked: false
 block_reason: null
-claimed_by: null
-claimed_at: null
+claimed_by: low-owl
+claimed_at: '2026-04-15T13:58:53.718345+00:00'
 ---
 ## Acceptance Criteria
 
