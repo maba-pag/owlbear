@@ -321,7 +321,7 @@ class RefreshOrchestrator:
 
         Returns:
             RefreshResult with per-status counters.  Zero counts when no
-            graph_fetcher has been injected.
+            graph_content_fetcher has been injected.
         """
         if self._graph_content_fetcher is None:
             return RefreshResult(
