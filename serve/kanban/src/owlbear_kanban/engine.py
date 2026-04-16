@@ -43,18 +43,19 @@ def _move_file(src: Path, dest: Path) -> None:
     """Move *src* to *dest*, preferring ``git mv`` when inside a git repo.
 
     Falls back to :meth:`Path.replace` when ``git`` is unavailable, the file
-    is not tracked, or the repo check fails for any reason.
+    is not tracked, the repo check fails, or ``git mv`` times out.
     """
     try:
         result = subprocess.run(  # noqa: S603
             ["git", "mv", str(src), str(dest)],  # noqa: S607
             capture_output=True,
             check=False,
+            timeout=5,
         )
         if result.returncode == 0:
             return
-    except FileNotFoundError:
-        # git not installed
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        # git not installed, or timed out (e.g. waiting for index.lock)
         pass
     src.replace(dest)
 
@@ -619,6 +620,28 @@ class KanbanEngine:
         """
         return self.claim_task(task_id, now=now)
 
+    def _apply_outcome(
+        self, record: Task, outcome: str, block_reason: str, move_to: str,
+    ) -> bool:
+        """Apply outcome-specific mutations to *record* in-place.
+
+        Returns ``True`` when the task should be moved to the archive directory.
+        """
+        if outcome == "success":
+            statuses = [s["name"] for s in self._config.statuses]
+            current_idx = statuses.index(record.status) if record.status in statuses else -1
+            if current_idx == len(statuses) - 1:
+                record.status = "archived"
+                return True
+            record.status = statuses[current_idx + 1]
+        elif outcome == "block":
+            record.blocked = True
+            record.block_reason = block_reason
+        elif outcome == "reject":
+            record.status = move_to
+        # outcome == "fail": no status change
+        return False
+
     def end_work(
         self,
         task_id: str,
@@ -629,6 +652,9 @@ class KanbanEngine:
         move_to: str = "research",
     ) -> Task:
         """Finalise a work session: append note, update task state, release claim.
+
+        All mutations are applied in a single read→mutate→write cycle to avoid
+        partial-state failures from multiple independent I/O operations.
 
         Args:
             task_id:      Numeric task ID as a string.
@@ -641,7 +667,8 @@ class KanbanEngine:
             Updated :class:`Task` reflecting the new state.
 
         Raises:
-            ValueError:        *outcome* is ``"block"`` but *block_reason* is empty.
+            ValueError:        *outcome* is ``"block"`` but *block_reason* is empty,
+                               or *outcome*/*move_to* is invalid.
             FileNotFoundError: No task matching ``task_id``.
 
         Note:
@@ -655,36 +682,59 @@ class KanbanEngine:
             msg = "block_reason is required when outcome='block'"
             raise ValueError(msg)
 
-        # Append timestamped note first (before any status/claim mutation).
-        self.edit_task(task_id, append_body=note, timestamp=True)
-
-        if outcome == "success":
-            statuses = [s["name"] for s in self._config.statuses]
-            record = self.show_task(task_id)
-            current_idx = statuses.index(record.status) if record.status in statuses else -1
-            is_last = current_idx == len(statuses) - 1
-
-            if is_last:
-                self.release_task(task_id)
-                return self.move_task(task_id, "archived")
-
-            next_status = statuses[current_idx + 1]
-            self.release_task(task_id)
-            return self.move_task(task_id, next_status)
-
-        if outcome == "fail":
-            return self.release_task(task_id)
-
-        if outcome == "block":
-            self.edit_task(task_id, blocked=True, block_reason=block_reason)
-            return self.release_task(task_id)
+        valid_outcomes = {"success", "fail", "block", "reject"}
+        if outcome not in valid_outcomes:
+            msg = f"Unknown outcome: {outcome!r}"
+            raise ValueError(msg)
 
         if outcome == "reject":
-            self.release_task(task_id)
-            return self.move_task(task_id, move_to)
+            valid_statuses = {s["name"] for s in self._config.statuses}
+            if move_to not in valid_statuses:
+                msg = f"Invalid move_to status {move_to!r}. Valid options: {sorted(valid_statuses)}"
+                raise ValueError(msg)
 
-        msg = f"Unknown outcome: {outcome!r}"
-        raise ValueError(msg)
+        # --- Single read ---
+        task_path = self._find_task_path(task_id, self._tasks_dir)
+        record = read_task(task_path)
+        old_status = record.status
+
+        # --- Append timestamped note ---
+        date_str = datetime.now(tz=UTC).strftime("%Y-%m-%d")
+        record.body = record.body + "\n" + f"[[{date_str}]]\n" + note
+
+        # --- Release claim ---
+        record.claimed_by = None
+        record.claimed_at = None
+
+        # --- Apply outcome-specific mutations ---
+        needs_archive = self._apply_outcome(record, outcome, block_reason, move_to)
+
+        record.updated = datetime.now(tz=UTC).isoformat()
+
+        # --- Single write ---
+        write_task(task_path, record)
+
+        # --- Archive move (only after successful write) ---
+        if needs_archive:
+            self._archive_dir.mkdir(parents=True, exist_ok=True)
+            dest = self._archive_dir / task_path.name
+            _move_file(task_path, dest)
+
+        # --- Activity logging ---
+        if self._activity_log_path:
+            details = {
+                "success": f"{old_status} -> {record.status}",
+                "fail": "outcome=fail",
+                "block": f"blocked: {block_reason}",
+                "reject": f"{old_status} -> {move_to}",
+            }
+            log_activity(
+                self._activity_log_path, "end_work", record.id,
+                details[outcome], actor=self._agent_name,
+            )
+
+        self._revision += 1
+        return record
 
     # ------------------------------------------------------------------
     # Maintenance
