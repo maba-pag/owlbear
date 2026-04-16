@@ -79,6 +79,7 @@ Field reference for Excalidraw JSON elements. See `element-templates.md` for com
 Used in `startBinding`, `endBinding` on arrows, and in `boundElements` on shapes.
 
 **Arrow-side** (`startBinding` / `endBinding`):
+
 ```json
 {
   "elementId": "rect1",
@@ -88,6 +89,7 @@ Used in `startBinding`, `endBinding` on arrows, and in `boundElements` on shapes
 ```
 
 **Shape-side** (`boundElements`):
+
 ```json
 [
   { "id": "text1", "type": "text" },

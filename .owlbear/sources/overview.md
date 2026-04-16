@@ -25,7 +25,7 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | github-copilot-sdk PyPI (v0.2.2 recheck) | <https://pypi.org/project/github-copilot-sdk/> | Confirmed: still no `response_format`, BYOK routes through CLI subprocess, session/event API only | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
 | copilot-api proxy (ericc-ch, recheck) | <https://github.com/ericc-ch/copilot-api> | 3.7k stars, explicit abuse-detection warnings added, confirms risk is actively enforced | `.owlbear/research/888-copilot-auth-port-feasibility.md` | 2026-04-15 |
-| Graphicator | `C:\Users\p362329\OneDrive\Coding\Projects\tool.graphicator` | (own project) | Device-flow OAuth implementation ported to `copilot_auth.py`: `request_device_code`, `poll_for_access_token`, `exchange_for_copilot_token`, token cache, editor headers | `serve/knowledge/src/owlbear_knowledge/copilot_auth.py` | 2026-04-15 |
+| Graphicator | `C:\Users\p362329\OneDrive\Coding\Projects\tool.graphicator` | (own project) \ Device-flow OAuth implementation ported to `copilot_auth.py`: `request_device_code`, `poll_for_access_token`, `exchange_for_copilot_token`, token cache, editor headers | `serve/knowledge/src/owlbear_knowledge/copilot_auth.py` | 2026-04-15 |
 
 ## Entity Name Canonicalization (Task #865)
 

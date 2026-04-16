@@ -141,15 +141,19 @@ Ordered by impact. For each step:
 For each finding:
 
 ### 1. Facts
+
 State what was found — specific text, file, line number. No interpretation.
 
 ### 2. Options
+
 Present viable approaches including "do nothing." For each: description, pros, cons/risks.
 
 ### 3. Recommendation
+
 State recommendation with confidence score (.0–1.0). Cite the `h-agent-structure` rule if applicable.
 
 ### 4. Approval
+
 Collect the user's choice before implementing. Include free-text for feedback.
 
 Present ONE finding at a time. After approval + implementation + verification, move to the next.

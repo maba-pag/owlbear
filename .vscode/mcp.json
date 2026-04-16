@@ -30,7 +30,7 @@
         "python",
         "-m",
         "owlbear_mcp_knowledge"
-      ],
+      ]
     },
     "ddgs": {
       "type": "stdio",
