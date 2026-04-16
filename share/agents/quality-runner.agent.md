@@ -10,7 +10,7 @@ agents: []
 hooks:
   PreToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-scratch-only-writes.ps1
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-writes.ps1
 ---
 
 <persona>
