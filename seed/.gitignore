@@ -63,3 +63,6 @@ htmlcov/
 # Knowledge and memory databases
 .owlbear/knowledge/*.db
 .owlbear/memory/*.db
+
+# Lock files (transient runtime artifacts)
+.owlbear/kanban/.next_id.lock
