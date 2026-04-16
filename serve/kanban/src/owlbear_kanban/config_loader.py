@@ -18,7 +18,7 @@ from ruamel.yaml.comments import CommentedMap, CommentedSeq
 if TYPE_CHECKING:
     from pathlib import Path
 
-from owlbear_mcp_kanban.engine_models import BoardConfig
+from owlbear_kanban.models import BoardConfig
 
 _TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
 
@@ -119,19 +119,15 @@ def _merge_into(target: CommentedMap, source: dict[str, Any]) -> None:
             target[key] = new_value
             continue
 
-        old_value = target[key]
-
-        if isinstance(new_value, dict) and isinstance(old_value, CommentedMap):
-            _merge_into(old_value, new_value)
-        elif isinstance(new_value, list) and isinstance(old_value, CommentedSeq):
-            if len(new_value) == len(old_value):
-                for i, new_item in enumerate(new_value):
-                    old_item = old_value[i]
-                    if isinstance(new_item, dict) and isinstance(old_item, CommentedMap):
-                        _merge_into(old_item, new_item)
-                    elif old_item != new_item:
-                        old_value[i] = new_item
-            else:
-                target[key] = new_value
+        existing = target[key]
+        if isinstance(existing, CommentedMap) and isinstance(new_value, dict):
+            _merge_into(existing, new_value)
+        elif (
+            isinstance(existing, CommentedSeq)
+            and isinstance(new_value, list)
+            and len(existing) == len(new_value)
+        ):
+            for i, item in enumerate(new_value):
+                existing[i] = item
         else:
             target[key] = new_value

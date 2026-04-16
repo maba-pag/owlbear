@@ -7,7 +7,7 @@ Exported constants:
 Usage::
 
     import random
-    from owlbear_mcp_kanban.agent_names import ADJECTIVES, NOUNS
+    from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 
     name = f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"
 """

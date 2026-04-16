@@ -133,7 +133,8 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 | mcp-kanban | `serve/mcp-kanban/` |
 | mcp-knowledge | `serve/mcp-knowledge/` |
 | mcp-memory | `serve/mcp-memory/` |
-| voice | `serve/voice/` |
+| browser | `serve/browser/` |
+| mcp-browser | `serve/mcp-browser/` |
 | agent-config | `agents/`, `skills/`, `instructions/`, `.github/copilot-instructions.md` |
 | test-infra | shared conftest, fixtures, factories (not individual test files) |
 | docs | `docs/`, `README.md`, `SECURITY.md` |

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,13 +13,15 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
 
-from owlbear_mcp_kanban.engine import KanbanEngine
+from owlbear_kanban import KanbanEngine
+from owlbear_kanban.dispatch import pick_dispatchable
+from owlbear_kanban.models import TaskSummary
 from owlbear_mcp_kanban.models import KanbanTask
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from owlbear_mcp_kanban.engine_models import TaskRecord
+    from owlbear_kanban.models import Task
 
 
 def _coerce_to_str(v: str | int) -> str:
@@ -94,6 +95,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     kanban_dir: Path = _DEFAULT_KANBAN_DIR
     _apply_tool_exclusions(_server)
     engine = KanbanEngine(kanban_dir)
+    engine.sweep()
     yield AppContext(engine=engine, kanban_dir=kanban_dir)
 
 
@@ -114,7 +116,7 @@ async def list_tasks(  # noqa: PLR0913
     limit: int = 0,
     reverse: bool = False,
     blocked: bool | None = None,
-) -> list[dict]:
+) -> list[TaskSummary]:
     """List kanban tasks with optional filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     records = app_ctx.engine.list_tasks(
@@ -129,27 +131,7 @@ async def list_tasks(  # noqa: PLR0913
         reverse=reverse,
         blocked=blocked,
     )
-    _strip = {
-        "body",
-        "file",
-        "created",
-        "updated",
-        "class",
-        "started",
-        "completed",
-        "assignee",
-        "claimed_by",
-        "claimed_at",
-        "due",
-        "estimate",
-    }
-    lean = []
-    for record in records:
-        raw = record.model_dump()
-        row = {k: v for k, v in raw.items() if k not in _strip}
-        row["claimed"] = record.claimed_by is not None
-        lean.append(row)
-    return lean
+    return [TaskSummary.model_validate(record.model_dump()) for record in records]
 
 
 # Set outputSchema for list_tasks (lean task array)
@@ -163,29 +145,15 @@ _list_tasks_tool_obj.fn_metadata.output_schema = {
     "properties": {
         "result": {
             "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "id": {"type": "integer"},
-                    "title": {"type": "string"},
-                    "status": {"type": "string"},
-                    "priority": {"type": "string"},
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                    "blocked": {"type": "boolean"},
-                    "block_reason": {"type": ["string", "null"]},
-                    "claimed": {"type": "boolean"},
-                    "parent": {"type": ["integer", "null"]},
-                    "depends_on": {"type": "array", "items": {"type": "integer"}},
-                },
-            },
+            "items": TaskSummary.model_json_schema(),
         },
     },
     "required": ["result"],
 }
 
 
-def _record_to_task(record: TaskRecord) -> KanbanTask:
-    """Convert a TaskRecord to a KanbanTask (claimed_by → claimed bool)."""
+def _record_to_task(record: Task) -> KanbanTask:
+    """Convert a Task to a KanbanTask (claimed_by → claimed bool)."""
     return KanbanTask.model_validate(record.model_dump())
 
 
@@ -222,15 +190,18 @@ async def create_task(  # noqa: PLR0913
     app_ctx: AppContext = ctx.request_context.lifespan_context
     tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
     deps_list = [int(d.strip()) for d in depends_on.split(",") if d.strip()] if depends_on else []
-    record = app_ctx.engine.create_task(
-        title,
-        body=body,
-        tags=tags_list or None,
-        priority=priority,
-        status=status,
-        parent=parent if parent > 0 else None,
-        depends_on=deps_list or None,
-    )
+    try:
+        record = app_ctx.engine.create_task(
+            title,
+            body=body,
+            tags=tags_list or None,
+            priority=priority,
+            status=status,
+            parent=parent if parent > 0 else None,
+            depends_on=deps_list or None,
+        )
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
     return _record_to_task(record)
 
 
@@ -305,7 +276,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["parent"] = parent
     try:
         record = app_ctx.engine.edit_task(task_id, **kwargs)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
     return _record_to_task(record)
@@ -356,53 +327,6 @@ async def end_work(  # noqa: PLR0913
 # pick_tasks — gate-filtered dispatch list
 # ---------------------------------------------------------------------------
 
-_PICK_AC_PATTERN = re.compile(r"(?m)^\s*(-\s|\d+\.\s)")
-_PICK_CLARITY_STATUSES = frozenset({"todo", "in-progress", "review", "docs", "done"})
-_PICK_NON_IMPL_TAGS = frozenset(
-    {
-        "research",
-        "docs",
-        "type:config",
-        "type:docs",
-        "test",
-        "type:test",
-        "agent",
-        "quality",
-        "type:user-action",
-    }
-)
-
-_PICK_PRIORITY_RANK: dict[str, int] = {
-    "critical": 0,
-    "needed": 1,
-    "important": 2,
-    "nice-to-have": 3,
-    "someday": 4,
-}
-_PICK_STATUS_RANK: dict[str, int] = {
-    "done": 0,
-    "docs": 1,
-    "review": 2,
-    "in-progress": 3,
-    "todo": 4,
-    "backlog": 5,
-    "research": 6,
-}
-_PICK_MAX_PRIORITY_RANK = max(_PICK_PRIORITY_RANK.values())
-_PICK_MAX_STATUS_RANK = max(_PICK_STATUS_RANK.values())
-
-
-def _check_pick_gates(task: dict) -> bool:
-    """Return True if task passes TDD and clarity gates."""
-    status: str = task.get("status", "")
-    body: str = task.get("body") or ""
-
-    if status == "in-progress" and "## Test-Writer Notes" not in body:
-        tags: list[str] = task.get("tags") or []
-        if not _PICK_NON_IMPL_TAGS.intersection(tags):
-            return False
-    return not (status in _PICK_CLARITY_STATUSES and not _PICK_AC_PATTERN.search(body))
-
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
@@ -411,22 +335,8 @@ async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
     Optional tag pre-filters candidates before gating (e.g. 'phase-2').
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    kw: dict[str, object] = {"blocked": False, "unclaimed": True}
-    if tag:
-        kw["tag"] = tag
-    records = app_ctx.engine.list_tasks(**kw)
-    tasks: list[dict] = [r.model_dump() for r in records]
-
-    passing = [t for t in tasks if _check_pick_gates(t)]
-
-    def _sort_key(task: dict) -> tuple[int, int]:
-        prank = _PICK_PRIORITY_RANK.get(task.get("priority", ""), _PICK_MAX_PRIORITY_RANK + 1)
-        srank = _PICK_STATUS_RANK.get(task.get("status", ""), _PICK_MAX_STATUS_RANK + 1)
-        return (prank, srank)
-
-    passing.sort(key=_sort_key)
-    capped = passing[:limit]
-    return {"dispatch": [{"task_id": int(t["id"]), "status": str(t["status"])} for t in capped]}
+    tasks = pick_dispatchable(app_ctx.engine, limit=limit, tag=tag)
+    return {"dispatch": [{"task_id": int(t.id), "status": str(t.status)} for t in tasks]}
 
 
 # Override outputSchema for tools that return KanbanTask. This ensures the

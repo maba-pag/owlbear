@@ -1,9 +1,9 @@
 """Engine-internal Pydantic models for the native kanban engine.
 
-BoardConfig — schema for .owlbear/kanban/config.yml
-TaskRecord  — schema for task file frontmatter + markdown body
+BoardConfig  — schema for .owlbear/kanban/config.yml
+Task         — schema for task file frontmatter + markdown body
+TaskSummary  — lightweight projection for list_tasks() results
 
-These are distinct from the MCP-boundary KanbanTask in models.py.
 Timestamps are stored as plain strings to avoid Go nanosecond → Python
 microsecond precision drift on round-trips.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class BoardInfo(BaseModel):
@@ -48,14 +48,23 @@ class BoardConfig(BaseModel):
     version: int
     board: BoardInfo
     tasks_dir: str
+    archive_dir: str = "archive"
     statuses: list[dict[str, Any]]
     priorities: list[str]
     defaults: BoardDefaults
     next_id: int
     claim_timeout: str
+    activity_log: bool = False
+
+    @model_validator(mode="after")
+    def _validate_dirs(self) -> BoardConfig:
+        if self.tasks_dir == self.archive_dir:
+            msg = f"tasks_dir and archive_dir must differ, both are {self.tasks_dir!r}"
+            raise ValueError(msg)
+        return self
 
 
-class TaskRecord(BaseModel):
+class Task(BaseModel):
     """Schema for a kanban task file — frontmatter fields plus markdown body.
 
     Timestamp fields (created, updated, claimed_at) are stored as ``str``
@@ -84,3 +93,41 @@ class TaskRecord(BaseModel):
     block_reason: str | None = None
     claimed_by: str | None = None
     claimed_at: str | None = None
+
+
+
+class TaskSummary(BaseModel):
+    """Lightweight task summary for list operations.
+
+    Excludes ``body``, ``claimed_by``, ``created``, and ``updated`` from the
+    full :class:`Task` schema.  ``claimed_by`` is coerced to a boolean
+    ``claimed`` field; temporal fields are silently dropped via
+    ``extra="ignore"``.  Dict-style read access (``summary["field"]``) is
+    supported for MCP serialisation consumers.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+    title: str
+    status: str
+    priority: str
+    tags: list[str] = Field(default_factory=list)
+    blocked: bool = False
+    block_reason: str | None = None
+    claimed: bool = False
+    parent: int | None = None
+    depends_on: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_claimed(cls, data: object) -> object:
+        """Convert claimed_by string to a boolean claimed flag."""
+        if isinstance(data, dict) and "claimed_by" in data:
+            data = dict(data)
+            data["claimed"] = data.pop("claimed_by") is not None
+        return data
+
+    def __getitem__(self, key: str) -> object:
+        """Allow dict-style read access for MCP serialisation consumers."""
+        return getattr(self, key)

@@ -1,5 +1,5 @@
 ---
-name: critic-voice
+name: ideation-critic
 description: "Adversarial critic subagent — challenges the current position, claim, or stance by exposing weaknesses and blind spots"
 argument-hint: "Critique: {position or claim to challenge}"
 user-invocable: false
@@ -7,6 +7,10 @@ disable-model-invocation: true
 model: GPT-5.4 (copilot)
 tools: [read/readFile, read/viewImage, read/problems, search, vscode/memory]
 agents: []
+hooks:
+  PreToolUse:
+    - type: command
+      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-writes.ps1
 ---
 
 <persona>
@@ -38,7 +42,7 @@ You receive the invoker's current position via the prompt. Additionally, read `c
 This agent handles both invocation scopes from a single prompt — no scope-specific configuration or branching required:
 
 - **Standalone (Mediator):** The Mediator passes a problem statement, proposed outcome, or approach claim. The Critic challenges the overall framing at meta-level after key milestones.
-- **Embedded (domain voice):** A domain voice passes its current working position or intermediate claim. The Critic challenges the domain-level stance before the voice commits to it.
+- **Embedded (panelist):** A panelist passes its current working position or intermediate claim. The Critic challenges the domain-level stance before the panelist commits to it.
 
 The input context determines the scope. No scope-specific frontmatter or conditional logic is required.
 

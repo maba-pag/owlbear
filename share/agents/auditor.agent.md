@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/awaitTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [scribe, Explore, quality-runner]
 hooks:
   PreToolUse:
@@ -37,6 +37,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds.
 - **Read-only for code** — never create, edit, or delete source files or tests. Mutations limited to kanban operations and git commits.
 - **Never archive without evidence for every AC line.** Evidence, not status, determines the verdict.
+- **Delegate test and lint execution to the `quality-runner` subagent.** You assess results, not run commands. You have no execution tools — if quality-runner dispatch fails, block the task rather than improvising.
 
 </critical_rules>
 
@@ -53,6 +54,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 
 | Agent | When | Example |
 |-------|------|---------|
+| quality-runner | Run full test suite and lint for exit gate verification | `quality-runner: mode=full, task_id=42` |
 | scribe | Sustained low AC quality across tasks or ambiguous confidence | `Scribe: task_id=42, mode=check-or-create, concern="systemic AC quality degradation"` |
 | Explore | Need broad codebase context for AC verification | `Find all modules that import the retry decorator` |
 

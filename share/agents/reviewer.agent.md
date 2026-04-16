@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
-  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search, 'owlbear-kanban/*', 'owlbear-memory/*']
+  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [code-reader, scribe, quality-runner]
 hooks:
   PreToolUse:
@@ -38,7 +38,7 @@ the builder can fix it without guessing.
 - **Follow the `w-code-review` skill** for the review process (test execution, lint check, code reading, AC compliance, confidence scoring).
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds (≥ .90 = PASS).
 - **NEVER create, edit, or delete files.** You are read-only. The PreToolUse hook enforces this.
-- **Always run tests yourself.** Never trust self-reports from the builder.
+- **Delegate test and lint execution to the `quality-runner` subagent.** Assess the report, not the commands. Never trust builder self-reports.
 - **Binary verdict only.** ≥ .90 = PASS, below = FAIL. No "conditional pass."
 
 </critical_rules>

@@ -5,7 +5,7 @@ argument-hint: "Run: mode={scoped|full}, test_paths=[...], task_id={id}, coverag
 user-invocable: false
 disable-model-invocation: true
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
-tools: [execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/awaitTerminal, execute/killTerminal, read/readFile, vscode/memory, read/terminalLastCommand, execute/testFailure]
+tools: [execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, read/readFile, vscode/memory, read/terminalLastCommand, execute/testFailure]
 agents: []
 hooks:
   PreToolUse:
@@ -48,7 +48,7 @@ If `h-pytest-and-linting` does not auto-load in this subagent context, these 5 c
 
 2. **Use bare `--cov` only (no `--cov=module.path`).** `--cov=dotted.module.name` causes a pydantic MRO crash. `--cov=serve/path/` reports 0% due to src-layout issues. Only `--cov` (bare) reads `[tool.coverage.run] source_pkgs` from `pyproject.toml` and covers all installed packages correctly.
 
-3. **Use `isBackground=true` for full-suite runs.** Long-lived VS Code terminal sessions corrupt output from blocking commands. Always run full suite as a background terminal. With `backgroundNotifications` enabled, the agent is automatically notified when the command finishes — no need to poll with `execute/awaitTerminal`. Use `execute/getTerminalOutput` to retrieve the final output after notification. If a background terminal hangs or requires input, use `execute/sendToTerminal` to interact with it.
+3. **Use `mode=async` for full-suite runs.** Long-lived sync terminal sessions can truncate output. Run full suite in async mode — the agent is automatically notified when the command finishes. Use `execute/getTerminalOutput` to retrieve the final output after notification. If the terminal needs input, use `execute/sendToTerminal` to interact with it.
 
 4. **File-capture fallback for truncated output.** If terminal output is truncated (60 KB limit), use:
 
@@ -65,6 +65,8 @@ If `h-pytest-and-linting` does not auto-load in this subagent context, these 5 c
    ```
 
    The `conftest.py` pre-populates the `platform.uname()` cache, but the fix only works within a single process.
+
+6. **Rely on default addopts from pyproject.toml.** The project configures xdist parallelism (`-n auto --dist loadfile`), import mode, logfire plugin exclusion, and e2e exclusion via `addopts`. Add markers additively with `-m`; do not override or clear addopts. For scoped runs, pass `-n 0` to disable xdist (single-file runs don't benefit from workers).
 
 ## Input Contract
 
@@ -83,16 +85,18 @@ All fields are provided in the caller's `runSubagent` prompt.
 ### Scoped run (mode=scoped)
 
 ```powershell
-uv run pytest {test_paths} --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
+uv run pytest {test_paths} --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short -n 0
 uv run ruff check {lint_paths|serve/ tests/}
 ```
+
+`-n 0` disables xdist parallelism for scoped runs (single-file runs don't benefit from workers, and it avoids xdist+cov coordination overhead).
 
 Timeout: 2 minutes per command. If exceeded, kill terminal and report timeout error.
 
 ### Full run (mode=full)
 
 ```powershell
-# Use isBackground=true — backgroundNotifications will signal completion
+# Use mode=async — agent is auto-notified on completion
 uv run pytest tests/ serve/ -m "not api" -q --tb=short --cov --cov-report=term-missing --cov-fail-under=0
 uv run ruff check serve/ tests/
 ```

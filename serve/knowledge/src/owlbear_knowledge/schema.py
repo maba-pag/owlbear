@@ -2,7 +2,7 @@
 
 Creates all relational tables required by the knowledge graph: documents,
 entities, edges, chunks, document_status, knowledge_sources, bookmarks,
-consolidations, and a schema version tracker.
+consolidations, source_pages, and a schema version tracker.
 Calling ``init_db`` multiple times is safe (idempotent).
 """
 
@@ -25,6 +25,7 @@ _SCOPE_TABLES: tuple[str, ...] = (
     "edges",
     "chunks",
     "document_status",
+    "source_pages",
 )
 """Tables that carry a ``scope`` column (added in v3)."""
 
@@ -324,6 +325,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     for table in _SCOPE_TABLES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_scope ON {table}(scope)")
 
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")

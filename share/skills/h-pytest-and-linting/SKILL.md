@@ -24,10 +24,10 @@ uv run pytest tests/test_{module}.py -q --tb=short
 uv run pytest tests/ serve/ -m "not api" -q --tb=short
 ```
 
-For full suite runs, use `isBackground=true` to avoid terminal corruption from long-lived VS Code sessions. With `backgroundNotifications` enabled, the agent is automatically notified when the command finishes — no manual polling needed:
+For full suite runs, use `mode=async` to avoid output truncation in long-lived terminal sessions. The agent is automatically notified when the command finishes — no manual polling needed:
 
 ```powershell
-run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", isBackground=true)
+run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", mode=async)
 # Agent receives automatic notification on completion
 # Then: get_terminal_output(id=...) to retrieve the output
 # If the terminal needs input: send_to_terminal(id=..., data="...")
@@ -126,14 +126,26 @@ If scoped pytest runs show plugin-load errors or incorrect async behavior, disab
 
 ```powershell
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
-uv run pytest tests/test_{module}.py -q --tb=short -p pytest_asyncio.plugin
+uv run pytest tests/test_{module}.py -q --tb=short -p pytest_asyncio.plugin -p xdist -n 0
 # With coverage:
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q -p pytest_asyncio.plugin -p pytest_cov
+uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q -p pytest_asyncio.plugin -p pytest_cov -p xdist -n 0
 ```
+
+`-p xdist` is required because `addopts` contains `-n auto --dist loadfile` — without the plugin loaded those flags cause `unrecognized arguments`. `-n 0` overrides xdist parallelism for scoped runs.
 
 Restore before returning the terminal: `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=''`
 
+> **Preferred alternative:** Instead of disabling all plugins, selectively disable the known-bad logfire plugins:
+>
+> ```powershell
+> uv run pytest tests/test_{module}.py -p no:logfire -p no:pytest_logfire -q --tb=short
+> ```
+>
+> This keeps all other plugins (xdist, cov, asyncio) working from autoload.
+
 ## Known Gotchas
+
+- **Stale pytest cache in retry cycles.** When running tests in a 2nd or 3rd builder/reviewer attempt, `.pytest_cache` can return cached results from prior runs, causing agents to report incorrect totals — e.g., "0 failed" when a test is actually failing. Two independent occurrences observed in the same sprint (#857 reviewer pass 2, #871 builder cycles 2–3). **Mitigation:** In any retry cycle, clear the cache before running: `Remove-Item -Recurse -Force .pytest_cache -ErrorAction SilentlyContinue; uv run pytest ...` — or add `-p no:cacheprovider` to the pytest command. Never trust a self-reported "N passed, 0 failed" in a retry cycle without cross-checking against terminal output.
 
 - **WMI + logfire pydantic plugin hang on Windows.** CPython 3.12+ calls `_wmi.exec_query()` inside `platform.uname()`. WMI has no timeout and blocks indefinitely when degraded. logfire triggers this via `platform.system()` at pydantic import. **Mitigation:** `tests/conftest.py` pre-populates the `platform.uname()` cache in a daemon thread with a 3-second timeout. If pytest hangs despite the fix, the WMI cache only works within a single process — check for zombie processes: `Get-Process python*,pytest* -ErrorAction SilentlyContinue | Stop-Process -Force`.
 - **Rich Console flags for CLI ANSI tests.** When testing CLI commands with Rich styling via `CliRunner`, the console must be created inside the command function with `Console(force_terminal=True, color-system="256")`. Module-level `Console()` ignores `FORCE_COLOR` from `CliRunner.invoke(env=...)`.

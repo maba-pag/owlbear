@@ -87,11 +87,24 @@ The architect retains final authority.
 | **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
 | **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via scribe (`Scribe: task_id={id}, mode=check-or-create`), tag task `type:user-action` if missing, `end_work(outcome="block")` |
 
-<!-- NON_IMPL_TAGS: Authoritative list at w-dispatch-planning. -->
+<!-- NON_IMPL_TAGS: This is the authoritative list. Secondary copy:
+     skills/w-tdd-red/SKILL.md (Step 1 item 3) -->
 
-> **Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action`. Add the bare tag if missing.
->
-> **Always move to `todo`, never to `in-progress`.** The test-writer must process every task to write a pass-through note. Skipping causes Gate 4 violations downstream.
+| Task status   | Dispatch agent | Pipeline action                                          | Non-impl pass-through? |
+| ------------- | -------------- | -------------------------------------------------------- | ---------------------- |
+| `research`    | researcher     | Research investigation, move to `backlog`                | No                     |
+| `backlog`     | architect      | Architecture review, move to `todo`                      | No                     |
+| `todo`        | test-writer    | Write failing tests (RED phase), move to `in-progress`   | Yes — tags `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action` |
+| `in-progress` | builder        | GREEN phase, move to `review`                            | Yes — if test-writer passed through |
+| `review`      | reviewer       | Quality verification, move to `docs`                     | No                     |
+| `docs`        | doc-writer     | Documentation gate, move to `done`                       | No                     |
+| `done`        | auditor        | Exit gate verification, archive                          | No                     |
+
+**Non-implementation tasks:** Tasks tagged with pass-through tags still flow through the standard pipeline. The test-writer recognizes them and passes through without writing tests (see `w-tdd-red` Step 1a). The architect is responsible for tagging tasks correctly during backlog approval.
+
+**Non-implementation tagging:** Before approving, verify tasks producing no testable Python code carry at least one pass-through tag: `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, `type:user-action`. Add the bare tag if missing.
+
+**Always move to `todo`, never to `in-progress`.** The test-writer must process every task to write a pass-through note. Skipping causes Gate 4 violations downstream.
 
 Include the architecture review in your `end_work` note.
 

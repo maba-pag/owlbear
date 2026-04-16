@@ -23,35 +23,52 @@ Timestamps are preserved as plain strings to avoid Go 7-digit nanosecond
 from __future__ import annotations
 
 import contextlib
+import io
 import os
 import re
 import tempfile
 from pathlib import Path
 from typing import Any
 
-import yaml
+from ruamel.yaml import YAML
 
-from owlbear_mcp_kanban.engine_models import TaskRecord
+from owlbear_kanban.models import Task
 
 # ---------------------------------------------------------------------------
-# YAML loader that keeps timestamps as plain strings
+# YAML instance that keeps timestamps as plain strings
 # ---------------------------------------------------------------------------
 
-# Copy SafeLoader resolvers but strip the timestamp resolver so that Go-style
-# 7-digit nanosecond timestamps (e.g. 2026-04-09T03:24:26.6974428+02:00) are
-# preserved verbatim instead of being parsed to Python datetime objects.
+# Strip the timestamp resolver so that Go-style 7-digit nanosecond timestamps
+# (e.g. 2026-04-09T03:24:26.6974428+02:00) are preserved verbatim instead of
+# being parsed to Python datetime / ruamel TimeStamp objects.
 _TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
 
 
-class _NoTimestampLoader(yaml.SafeLoader):
-    """SafeLoader variant that does not auto-resolve timestamp strings."""
+def _make_yaml() -> YAML:
+    """Return a ruamel.yaml YAML instance (round-trip) with timestamp resolver off."""
+    y = YAML(typ="rt")
+    # ruamel.yaml's VersionedResolver uses _version_implicit_resolver (keyed by YAML
+    # version tuple) rather than the legacy yaml_implicit_resolvers dict.  Access the
+    # versioned_resolver property to force the (1, 2) entry to be built, then strip the
+    # timestamp tag in-place so timestamp-like strings are kept as plain Python str.
+    _ = y.resolver.versioned_resolver  # forces (1, 2) entry to be populated
+    for resolver_dict in y.resolver._version_implicit_resolver.values():  # noqa: SLF001
+        for char_key in list(resolver_dict.keys()):
+            resolver_dict[char_key] = [
+                (tag, regexp)
+                for tag, regexp in resolver_dict[char_key]
+                if tag != _TIMESTAMP_TAG
+            ]
+    return y
 
 
-# Rebuild the implicit resolver table without the timestamp tag.
-_NoTimestampLoader.yaml_implicit_resolvers = {
-    key: [(tag, regexp) for tag, regexp in resolvers if tag != _TIMESTAMP_TAG]
-    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
-}
+def _to_plain(obj: Any) -> Any:  # noqa: ANN401
+    """Recursively convert ruamel.yaml containers to plain Python types."""
+    if isinstance(obj, dict):
+        return {k: _to_plain(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_to_plain(item) for item in obj]
+    return obj
 
 # ---------------------------------------------------------------------------
 # Windows reserved filename set (case-folded)
@@ -144,18 +161,18 @@ def validate_path_containment(tasks_dir: Path, path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def read_task(path: Path) -> TaskRecord:
-    """Parse a task file into a :class:`TaskRecord`.
+def read_task(path: Path) -> Task:
+    """Parse a task file into a :class:`Task`.
 
     The file must follow the ``---``-delimited YAML frontmatter format.
     The markdown body (everything after the closing ``---`` line) is stored
-    in :attr:`TaskRecord.body`.
+    in :attr:`Task.body`.
 
     Args:
         path: Path to the task ``.md`` file.
 
     Returns:
-        Populated :class:`TaskRecord` including any unknown frontmatter fields.
+        Populated :class:`Task` including any unknown frontmatter fields.
 
     Raises:
         FileNotFoundError: *path* does not exist.
@@ -186,14 +203,14 @@ def read_task(path: Path) -> TaskRecord:
     frontmatter_str = "\n".join(lines[1:closing_idx])
     body = "\n".join(lines[closing_idx + 1 :])
 
-    data: dict[str, Any] = yaml.load(frontmatter_str, Loader=_NoTimestampLoader) or {}  # noqa: S506
+    data: dict[str, Any] = _to_plain(_make_yaml().load(frontmatter_str) or {})
     data["body"] = body
 
-    return TaskRecord.model_validate(data)
+    return Task.model_validate(data)
 
 
-def write_task(path: Path, record: TaskRecord) -> None:
-    """Serialise a :class:`TaskRecord` to a task file.
+def write_task(path: Path, record: Task) -> None:
+    """Serialise a :class:`Task` to a task file.
 
     Produces the canonical format::
 
@@ -214,12 +231,9 @@ def write_task(path: Path, record: TaskRecord) -> None:
     data = record.model_dump()
     body: str = data.pop("body", "") or ""
 
-    yaml_str: str = yaml.dump(
-        data,
-        allow_unicode=True,
-        default_flow_style=False,
-        sort_keys=False,
-    )
+    _stream = io.StringIO()
+    _make_yaml().dump(data, _stream)
+    yaml_str = _stream.getvalue()
 
     content = f"---\n{yaml_str}---\n{body}"
 

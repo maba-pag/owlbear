@@ -37,14 +37,11 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 
   ### Fallback: Quality-Runner Unavailable
 
-  If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+  If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
 
-  ```powershell
-  uv run pytest tests/ -m "not api" -q --tb=short
-  uv run ruff check serve/ tests/
   ```
-
-  See `h-pytest-and-linting` for flags and known pitfalls.
+  end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run full suite independently")
+  ```
 
 - **Lint:** Included in Quality-Runner `mode=full` report. If running fallback, use `uv run ruff check serve/ tests/`.
 - **AC deviations:** Flag missing functionality or incomplete features. Minor deviations the reviewer already accepted are fine.

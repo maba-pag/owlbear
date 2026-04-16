@@ -77,8 +77,8 @@ Project-wide conventions (commit format, file placement, attribution, tags) live
 - Signal mapping in `r-pipeline-protocol` doesn't match agent `<output_format>`
 - Agent tier assignment doesn't match its pipeline-protocol needs
 - Agent `tools:` allowlist missing tools it needs or including tools outside its tier
-- **Rejection flow consistency:** reviewer's `<pipeline_position>` targets must match `w-code-review` Step 8 (severity-based: impl issue → in-progress, test gap → todo, test/AC quality → backlog, 3rd+ FAIL → backlog). Builder routes rejections by cause (test assumption → todo, AC wrong → backlog). Architect uses REJECT to ideation. Auditor rejects always → backlog. No agent uses BLOCK/BLOCKED as a verdict — blocking is reserved for DR-pending tasks (scribe) and stale triage (dispatcher).
-- Agent renames: verify `dispatcher` (for dispatch), `planner` (for decomposition), `doc-writer` (for docs gate) are used consistently everywhere
+- **Rejection flow consistency:** reviewer's `<pipeline_position>` targets must match `w-code-review` Step 8 (severity-based: impl issue → in-progress, test gap → todo, test/AC quality → backlog, 3rd+ FAIL → backlog). Builder routes rejections by cause (test assumption → todo, AC wrong → backlog). Architect uses REJECT to ideation. Auditor rejects always → backlog. No agent uses BLOCK/BLOCKED as a verdict — blocking is reserved for DR-pending tasks (scribe).
+- Agent renames: verify `planner` (for decomposition), `doc-writer` (for docs gate) are used consistently everywhere
 
 ### 6. Signal-to-noise ratio
 
@@ -141,15 +141,19 @@ Ordered by impact. For each step:
 For each finding:
 
 ### 1. Facts
+
 State what was found — specific text, file, line number. No interpretation.
 
 ### 2. Options
+
 Present viable approaches including "do nothing." For each: description, pros, cons/risks.
 
 ### 3. Recommendation
+
 State recommendation with confidence score (.0–1.0). Cite the `h-agent-structure` rule if applicable.
 
 ### 4. Approval
+
 Collect the user's choice before implementing. Include free-text for feedback.
 
 Present ONE finding at a time. After approval + implementation + verification, move to the next.

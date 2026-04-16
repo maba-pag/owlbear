@@ -36,9 +36,9 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 | Tier | Agents | Pipeline protocol needed? |
 |------|--------|--------------------------|
 | T1 — Orchestrator | orchestrator, ideator | From agent critical_rules |
-| T2 — Pipeline | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor, dispatcher (DEPRECATED — see #619/#621) | Yes — critical_rules reference |
+| T2 — Pipeline | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor | Yes — critical_rules reference |
 | T3 — Support | scribe, planner, curator | If applicable — from critical_rules |
-| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, architect-voice, critic-voice, data-voice, enduser-voice, pragmatist-voice, security-voice | Not needed |
+| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-pragmatist, ideation-security | Not needed |
 
 ## Principles
 
@@ -179,7 +179,7 @@ user-invocable: {true|false}
 
 - `name` — **required.** Must match the parent directory name exactly. Lowercase, hyphens for spaces. VS Code uses this for discovery and slash-command routing.
 - `description` — **required.** Starts with category label (`Workflow:`, `Rules:`, or `Handbook:`).
-- `user-invocable` — **required.** Default `false` for pipeline/internal skills. Set `true` only for skills users invoke directly via `/` menu (e.g., `w-retro`, `h-excalidraw-diagram`).
+- `user-invocable` — **required.** Default `false` for pipeline/internal skills. Set `true` only for skills users invoke directly via `/` menu (e.g., `h-excalidraw-diagram`).
 
 ### Three Categories
 
@@ -224,7 +224,7 @@ exists for "Evidence," the agent must find evidence to fill it.}
 
 **Step 0 without claiming:** w-task-decomposition (creates tasks, doesn't claim one).
 
-**No Step 0:** w-orchestration, w-dispatch-planning (these don't follow the pipeline lifecycle — they have their own dispatch patterns).
+**No Step 0:** w-orchestration (this doesn't follow the pipeline lifecycle — it has its own dispatch pattern).
 
 **Workflow skills must NOT contain:**
 

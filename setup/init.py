@@ -156,13 +156,12 @@ def _write_project_json(
     dest: Path,
     owlbear_path: str,
     name: str,
-    project_type: str,
 ) -> None:
     """Write owlbear-project.json with computed fields.  Skips if dest already exists."""
     if dest.exists():
         return
     template = src.read_text(encoding="utf-8")
-    template = _replace_placeholders(template, {"name": name, "type": project_type})
+    template = _replace_placeholders(template, {"name": name})
     data: dict = json.loads(template)
     data["owlbear_path"] = owlbear_path
     data["created_at"] = datetime.now(tz=UTC).isoformat()
@@ -224,7 +223,6 @@ def init(
     owlbear_dir: Path,
     *,
     name: str | None = None,
-    project_type: str = "bare",
 ) -> None:
     """Initialise an OwlBear workspace in *target_dir*.
 
@@ -240,7 +238,6 @@ def init(
         target_dir: Destination project directory.
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
         name: Project name.  Defaults to *target_dir.name*.
-        project_type: Project type string.  Defaults to ``"bare"``.
     """
     seed_dir = owlbear_dir / "seed"
     owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
@@ -274,7 +271,7 @@ def init(
             continue
 
         if rel_posix == "owlbear-project.json":
-            _write_project_json(src, dest, owlbear_path, resolved_name, project_type)
+            _write_project_json(src, dest, owlbear_path, resolved_name)
             continue
 
         if rel_posix in _SKIP_IF_EXISTS_REL and dest.exists():
@@ -297,15 +294,9 @@ if __name__ == "__main__":  # pragma: no cover
 
     parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
     parser.add_argument("--name", default=None, help="Project name (default: directory name)")
-    parser.add_argument(
-        "--type",
-        dest="project_type",
-        default="bare",
-        help="Project type (default: bare)",
-    )
     args = parser.parse_args()
 
     _target = Path.cwd()
     _owlbear = Path(__file__).resolve().parent.parent
-    init(_target, _owlbear, name=args.name, project_type=args.project_type)
+    init(_target, _owlbear, name=args.name)
     print(f"OwlBear workspace initialised in '{_target.name}'.")
