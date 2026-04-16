@@ -5,7 +5,7 @@ argument-hint: "Data: {problem and outcome context for data quality analysis}"
 user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
-tools: [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, read/viewImage, search, vscode/memory, agent]
+tools: [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, read/viewImage, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory, agent]
 agents: [ideation-critic]
 hooks:
   PreToolUse:

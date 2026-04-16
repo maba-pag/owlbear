@@ -5,7 +5,7 @@ argument-hint: "Challenge: task_id={task_id}, proposed_verdict={verdict}, reason
 user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
-tools: [read/readFile, read/viewImage, read/problems, search, vscode/memory]
+tools: [read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
 agents: []
 hooks:
   PreToolUse:
