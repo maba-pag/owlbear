@@ -20,6 +20,17 @@ max_line_length = unset
 [.owlbear/kanban/**]
 max_line_length = unset
 
+# Test files — long assertion messages are acceptable (ruff E501 also suppressed)
+[tests/**/*.py]
+max_line_length = unset
+
+[serve/*/tests/**/*.py]
+max_line_length = unset
+
+# MegaLinter config — regex patterns cannot be split
+[.mega-linter.yml]
+max_line_length = unset
+
 # Keep data files minified — do not reformat
 [store/**]
 indent_size = unset
