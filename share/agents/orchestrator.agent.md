@@ -16,7 +16,7 @@ agents:
   - reviewer
   - doc-writer
   - auditor
-  - curator
+  - memory-curator
   - Explore
 ---
 
@@ -61,7 +61,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 | reviewer | Dispatched per plan — reviews implementations | (dispatched via plan, not directly) |
 | doc-writer | Dispatched per plan — updates documentation | (dispatched via plan, not directly) |
 | auditor | Dispatched per plan — exit gate verification | (dispatched via plan, not directly) |
-| curator | Dispatched per plan — memory curation | (dispatched via plan, not directly) |
+| memory-curator | Dispatched per plan — memory curation | (dispatched via plan, not directly) |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 
 </subagents>

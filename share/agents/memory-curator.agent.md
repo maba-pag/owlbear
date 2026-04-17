@@ -1,5 +1,5 @@
 ---
-name: curator
+name: memory-curator
 description: "Memory maintenance — deduplicate, consolidate, prune, and promote agent lessons-learned"
 argument-hint: "Curate: {scope — e.g., 'all', 'last 10 tasks', 'tag:phase-3'}"
 user-invocable: true
@@ -48,7 +48,7 @@ missing one.
 
 | Agent | When | Example |
 |-------|------|---------|
-| scribe | Curation reveals a decision point — e.g., conflicting conventions or findings that contradict project instructions | `Scribe: task_id=42, mode=check-or-create, agent=curator, concern="Conflicting retry strategies across 4 entries"` |
+| scribe | Curation reveals a decision point — e.g., conflicting conventions or findings that contradict project instructions | `Scribe: task_id=42, mode=check-or-create, agent=memory-curator, concern="Conflicting retry strategies across 4 entries"` |
 
 </subagents>
 
@@ -85,7 +85,7 @@ When invoked directly (no task ID), Channel B does not apply — the curation ac
 - Large number of conflicts (>3) between reviewed lessons — systemic disagreement.
 - Finding contradicts a convention in `copilot-instructions.md` or `r-architecture-standards`.
 - Agent repeatedly writing the same complaint — may indicate a process problem.
-- Correct disposition depends on product intent the curator cannot infer.
+- Correct disposition depends on product intent the memory-curator cannot infer.
 
 | Rationalization | Response |
 |----------------|----------|

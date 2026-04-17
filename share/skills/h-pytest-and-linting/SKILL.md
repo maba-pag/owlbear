@@ -14,19 +14,19 @@ For Python coding conventions and test patterns, see `h-python-conventions`.
 
 ### Scoped runs (builder, reviewer, test-writer)
 
-```powershell
+```shell
 uv run pytest tests/test_{module}.py -q --tb=short
 ```
 
 ### Full suite (auditor)
 
-```powershell
+```shell
 uv run pytest tests/ serve/ -m "not api" -q --tb=short
 ```
 
 For full suite runs, use `mode=async` to avoid output truncation in long-lived terminal sessions. The agent is automatically notified when the command finishes — no manual polling needed:
 
-```powershell
+```shell
 run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", mode=async)
 # Agent receives automatic notification on completion
 # Then: get_terminal_output(id=...) to retrieve the output
@@ -55,7 +55,7 @@ run_in_terminal(command="uv run pytest tests/ -m 'not api' -q --tb=short", mode=
 
 ### Common `-m` filter recipes
 
-```powershell
+```shell
 # Skip API tests (standard builder run)
 uv run pytest tests/ serve/ -m "not api" -q --tb=short
 
@@ -80,7 +80,7 @@ uv run pytest -m e2e -q --tb=short
 
 ## Coverage
 
-```powershell
+```shell
 uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 ```
 
@@ -98,7 +98,7 @@ Only bare `--cov` works. It reads `[tool.coverage.run] source_pkgs` from `pyproj
 
 ## ruff
 
-```powershell
+```shell
 uv run ruff check serve/ tests/
 ```
 
@@ -114,7 +114,7 @@ PS 5.1 wraps stderr from `2>&1` in ErrorRecord objects. Every pipe combination c
 
 If the terminal truncates output, use Python as the I/O layer:
 
-```powershell
+```shell
 uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','serve/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
 ```
 
@@ -124,7 +124,7 @@ Then `read_file` on `.owlbear/scratch/pytest-output.txt`. Delete after use.
 
 If scoped pytest runs show plugin-load errors or incorrect async behavior, disable auto-loading:
 
-```powershell
+```shell
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD='1'
 uv run pytest tests/test_{module}.py -q --tb=short -p pytest_asyncio.plugin -p xdist -n 0
 # With coverage:
@@ -137,7 +137,7 @@ Restore before returning the terminal: `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=''`
 
 > **Preferred alternative:** Instead of disabling all plugins, selectively disable the known-bad logfire plugins:
 >
-> ```powershell
+> ```shell
 > uv run pytest tests/test_{module}.py -p no:logfire -p no:pytest_logfire -q --tb=short
 > ```
 >

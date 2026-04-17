@@ -84,7 +84,7 @@ none
 
 If Quality-Runner is unavailable (not listed in the calling agent's `agents:` array, or subagent dispatch fails), callers should run quality checks directly per the `h-pytest-and-linting` skill:
 
-```powershell
+```shell
 # Scoped
 uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short -n 0
 uv run ruff check serve/ tests/

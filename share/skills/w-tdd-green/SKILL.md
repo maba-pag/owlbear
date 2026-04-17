@@ -38,7 +38,7 @@ For function signature or interface changes, use `vscode_listCodeUsages` to find
 
 ## Step 2 — Read Existing Tests
 
-The test-writer has already created `TestFromAC_*` classes in `tests/test_{module}.py`.
+The test-writer has already created `TestFromAC_*` classes in `tests/test_{module}_{task_id}.py`.
 
 1. Read the test file — identify every `TestFromAC_*` class.
 2. Extract expected interfaces: function signatures, class names, error types, return values, and import paths.
@@ -54,8 +54,8 @@ agentName: quality-runner
 prompt: |
   mode: scoped
   task_id: {id}
-  test_paths: ["tests/test_{module}.py"]
-  lint_paths: ["tests/test_{module}.py"]
+  test_paths: ["tests/test_{module}_{task_id}.py"]
+  lint_paths: ["tests/test_{module}_{task_id}.py"]
 ```
 
 Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, investigate before implementing.
@@ -64,13 +64,23 @@ Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, inve
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
-uv run pytest tests/test_{module}.py -q --tb=short
+```shell
+uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
 ```
 
 See `h-pytest-and-linting` for flags and known pitfalls.
 
 > **Backward compatibility:** When no `TestFromAC_*` classes exist (old-style single-agent TDD), fall back to the full RED+GREEN workflow — write failing tests yourself, then implement.
+
+### Module-Level Test Visibility
+
+After confirming the task-scoped tests fail, also run the module's durable test file (if it exists) to establish a regression baseline:
+
+```shell
+uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
+```
+
+This gives early cross-task regression signal without full-suite cost. If `tests/test_{module}.py` does not exist, skip with a note — module-level files are test-curator-managed.
 
 ## Step 3 — Implement Minimal Code (GREEN)
 
@@ -89,8 +99,8 @@ agentName: quality-runner
 prompt: |
   mode: scoped
   task_id: {id}
-  test_paths: ["tests/test_{module}.py"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
+  test_paths: ["tests/test_{module}_{task_id}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All tests must pass (`failed: []`), zero failures.
@@ -99,15 +109,15 @@ All tests must pass (`failed: []`), zero failures.
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
-uv run pytest tests/test_{module}.py -q --tb=short
+```shell
+uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
 ```
 
 See `h-pytest-and-linting` for flags and known pitfalls.
 
 ## Step 4 — Add Builder-Discovered Tests (Optional)
 
-During implementation you may discover edge cases not covered by the test-writer's `TestFromAC_*` tests. Add these in a **separate** `TestBuilderDiscovered` class. Never add to `TestFromAC_*` classes.
+During implementation you may discover edge cases not covered by the test-writer's `TestFromAC_*` tests. Add these in a **separate** `TestBuilderDiscovered` class in the same task-scoped file. Never add to `TestFromAC_*` classes.
 
 Each builder-discovered test follows RED-GREEN within this step:
 
@@ -134,20 +144,26 @@ agentName: quality-runner
 prompt: |
   mode: scoped
   task_id: {id}
-  test_paths: ["tests/test_{module}.py"]
+  test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modules.
+
+Also run the module-level durable tests (if they exist) to catch cross-task regressions:
+
+```shell
+uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
+```
 
 ### Fallback: Quality-Runner Unavailable
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
-uv run pytest tests/test_{module}.py -q --tb=short
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
+```shell
+uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
+uv run pytest tests/test_{module}_{task_id}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 uv run ruff check serve/ tests/
 ```
 
@@ -155,8 +171,8 @@ See `h-pytest-and-linting` for exact flags and known pitfalls.
 
 **Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:
 
-```powershell
-Select-String -Path "tests/*.py" -Pattern "old_name"
+```shell
+grep -r "old_name" tests/*.py
 ```
 
 ### Step 6.1 — Pass: Continue
@@ -186,7 +202,7 @@ Construct and invoke the fix-attempt subagent. Fields must conform to the Input 
 agentName: fix-attempt
 prompt: |
   task_id: {id}
-  test_file: tests/test_{module}.py
+  test_file: tests/test_{module}_{task_id}.py
   source_files: serve/{package}/src/{namespace}/{module}.py
   retry_hint: {extract specific errors from error output; identify which failing tests produced them; provide Reflexion-style verbal diagnosis — what went wrong, which failing test(s) are blocked, and the suggested fix direction. Not generic "tests failed".}
   error_summary: {condensed pytest failure output, max 500 tokens}
@@ -205,8 +221,8 @@ Include builder notes in your `end_work` note.
 
 Commit per `r-project-standards` → Commit Discipline:
 
-```powershell
-git add serve/{package}/src/{namespace}/{module}.py tests/test_{module}.py
+```shell
+git add serve/{package}/src/{namespace}/{module}.py tests/test_{module}_{task_id}.py
 git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 

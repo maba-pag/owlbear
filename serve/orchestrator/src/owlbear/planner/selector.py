@@ -33,7 +33,7 @@ STATUS_AGENT_MAP: dict[str, str] = {
     "todo": "test-writer",
     "in-progress": "builder",
     "review": "reviewer",
-    "docs": "writer",
+    "docs": "doc-writer",
     "done": "auditor",
 }
 
@@ -86,7 +86,7 @@ def select_tasks(
     entries = []
     for task in sorted_tasks:
         if "Needs decomposition:" in task.body:
-            agent = "kanban-planner"
+            agent = "planner"
         else:
             agent = STATUS_AGENT_MAP.get(task.status, "architect")
         target = _TARGET_STATUS.get(task.status, task.status)

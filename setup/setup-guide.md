@@ -18,24 +18,30 @@ Before running setup, ensure the following are installed on your machine:
 > `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
 > resolving paths across different Windows drive letters (e.g., `C:\` vs `D:\`).
 
+> **macOS and Linux:** No additional prerequisites — Python, uv, VS Code, and Git work
+> natively on all platforms.
+
 ---
 
 ## Quick Start
 
-```powershell
+```shell
 # 1. Clone owlbear alongside your project directory
 git clone https://github.com/your-org/owlbear.git
 
-# 2. Create your project directory (must be on the same drive as owlbear)
+# 2. Create your project directory
 mkdir my-project
 
 # 3. Bootstrap the OwlBear workspace from inside your project directory
 cd my-project
-python ..\owlbear\setup\init.py
+python ../owlbear/setup/init.py
 
 # 4. Open the project in VS Code
 code .
 ```
+
+> **Windows:** use backslashes: `python ..\owlbear\setup\init.py`. owlbear and your
+> project must be on the same drive.
 
 ---
 
@@ -48,8 +54,13 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/settings.json` | Points VS Code at owlbear agents, skills, and instructions; enables `mermaid-chat.enabled` for Mermaid diagram rendering in chat | Merged (owlbear keys as defaults; your existing keys are preserved) |
 | `.vscode/mcp.json` | Registers 6 MCP servers (GitHub remote + 4 owlbear stdio + ddgs web search) | Skipped if file already exists |
 | `.owlbear/kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Always written |
-| `.owlbear/hooks/deny-writes.ps1` | Reviewer write guard hook | Always written |
-| `.owlbear/hooks/lint-changed.ps1` | Builder lint feedback hook | Always written |
+| `.owlbear/hooks/allow-stances-only.py` | Restricts agents to approved stances | Always written |
+| `.owlbear/hooks/deny-code-writes.py` | Blocks writes to source code files | Always written |
+| `.owlbear/hooks/deny-scratch-only-writes.py` | Blocks writes outside scratch directories | Always written |
+| `.owlbear/hooks/deny-src-writes.py` | Blocks writes to `src/` directories | Always written |
+| `.owlbear/hooks/deny-writes.py` | Reviewer write guard hook | Always written |
+| `.owlbear/hooks/lint-changed.py` | Builder lint feedback hook | Always written |
+| `.owlbear/hooks/session-context.py` | Injects session context into agent prompts | Always written |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Created if missing |
 | `owlbear-project.json` | Project metadata (name, type, owlbear path) | Skipped if file already exists |
 
@@ -123,7 +134,7 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 }
 ```
 
-> Note: `mcp.json` is not updated on subsequent `setup.py` runs (skipped if the file
+> Note: `mcp.json` is not updated on subsequent `init.py` runs (skipped if the file
 > exists). Edit it manually to add or update server entries.
 
 ### Configuring the kanban MCP server

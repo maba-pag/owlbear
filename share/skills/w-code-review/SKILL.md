@@ -33,8 +33,8 @@ agentName: quality-runner
 prompt: |
   mode: scoped
   task_id: {id}
-  test_paths: ["tests/test_{module}.py"]
-  lint_paths: ["tests/test_{module}.py"]
+  test_paths: ["tests/test_{module}_{task_id}.py"]
+  lint_paths: ["tests/test_{module}_{task_id}.py"]
 ```
 
 Record: passed/failed counts from the `## Tests` section of the Quality-Runner report.
@@ -58,9 +58,9 @@ agentName: quality-runner
 prompt: |
   mode: scoped
   task_id: {id}
-  test_paths: ["tests/test_{module}.py"]
+  test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 ```
@@ -69,7 +69,7 @@ prompt: |
   task_id: {id}
   ac_lines: ["{ac line 1}", "{ac line 2}"]
   changed_files: ["{file1}", "{file2}"]
-  test_files: ["tests/test_{module}.py"]
+  test_files: ["tests/test_{module}_{task_id}.py"]
 ```
 
 Collect both reports before continuing to Step 8. If either subagent returns an **execution error** (crash, timeout, exception — not a FAIL verdict), run the full sequential workflow (steps 3–7). Note in Channel B: "Parallel fan-out failed: {reason}. Fell back to sequential."
@@ -84,7 +84,7 @@ prompt: |
   mode: scoped
   task_id: {id}
   test_paths: []
-  lint_paths: ["serve/{package}/src/", "tests/test_{module}.py"]
+  lint_paths: ["serve/{package}/src/", "tests/test_{module}_{task_id}.py"]
 ```
 
 Record: `clean: true/false` and any `violations` from the `## Lint` section.
@@ -106,7 +106,7 @@ agentName: quality-runner
 prompt: |
   mode: scoped
   task_id: {id}
-  test_paths: ["tests/test_{module}.py"]
+  test_paths: ["tests/test_{module}_{task_id}.py"]
   coverage_modules: ["{module}"]
   lint_paths: []
 ```
@@ -156,6 +156,8 @@ Any vulnerability = FAIL.
 ### 5.2 Test Integrity — TestFromAC Comparison
 
 > **Conditional:** Only when `TestFromAC_*` classes exist.
+
+**Immutability scope:** TestFromAC immutability applies during the active pipeline (task creation through archive). The reviewer enforces this — any builder modification to `TestFromAC_*` assertions is a FAIL. Post-archive, the test-curator agent has authority to promote, consolidate, or remove assertions.
 
 Compare each `TestFromAC_*` test method against the test-writer's original intent. Produce a comparison table:
 

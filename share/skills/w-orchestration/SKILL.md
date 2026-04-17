@@ -78,7 +78,7 @@ If `pick_tasks` returns an empty array, report to user and stop.
 
 | Agent   | Trigger condition |
 | ------- | ----------------- |
-| curator | Every 5th cycle (handled in Step 3) |
+| memory-curator | Every 5th cycle (handled in Step 3) |
 
 **Stale detection:** Compare each pick_tasks result task against `last_dispatched`. If a task appears at the same status as its last_dispatched entry and is NOT in `stale_retried`:
 
@@ -111,7 +111,7 @@ Dispatch the `dispatch` array in parallel waves. Take tasks in priority order.
 |------------|----------|---------------------|------------|
 | auditor | restricted | light flex | builders, heavy flex, other auditors |
 | builder | restricted | light flex, heavy flex | auditors, other builders |
-| researcher, doc-writer, architect, planner, curator | light flex | any | — |
+| researcher, doc-writer, architect, planner, memory-curator | light flex | any | — |
 | reviewer, test-writer | heavy flex | builders, other flex | auditors |
 
 **Assembly algorithm (four-bucket, minimize wave count):**
@@ -122,7 +122,7 @@ Dispatch the `dispatch` array in parallel waves. Take tasks in priority order.
 2. **Auditor waves.** One auditor per wave. Fill remaining slots with light flex.
 3. **Builder waves.** One builder per wave. Fill with light flex first, then heavy flex.
 4. **Overflow waves.** Remaining light + heavy flex in new waves.
-5. **Periodic curator.** Every 5th cycle, add curator to a wave with a remaining slot.
+5. **Periodic memory-curator.** Every 5th cycle, add memory-curator to a wave with a remaining slot.
 6. **Consolidation.** DEACTIVATED. Skip this step.
 7. **Drop rule.** Solo non-auditor waves get dropped. Exception: keep the first if dropping would eliminate all non-auditor waves.
 
@@ -140,10 +140,10 @@ Dispatch the `dispatch` array in parallel waves. Take tasks in priority order.
 runSubagent("builder", "Build: #103\nRetry context: {hint}", "Builder #103")
 ```
 
-**Exception — curator:** No task ID:
+**Exception — memory-curator:** No task ID:
 
 ```
-runSubagent("curator", "Curate: Periodic curation", "Curation")
+runSubagent("memory-curator", "Curate: Periodic curation", "Curation")
 ```
 
 **Error handling:**

@@ -10,7 +10,7 @@ agents: [ideation-critic]
 hooks:
   PreToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/allow-stances-only.ps1
+      command: uv run python .owlbear/hooks/allow-stances-only.py
 ---
 
 <persona>

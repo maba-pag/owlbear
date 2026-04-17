@@ -35,6 +35,8 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 
   Confirm `failed: []` and `clean: true` from the Quality-Runner report. Unlike the reviewer (who scopes tests), the auditor runs the FULL suite to catch cross-task regressions. This is the auditor's primary unique value.
 
+  **Two-tier awareness:** Task-scoped tests (`test_{module}_{task_id}.py`) are verified during the active pipeline. Module-level tests (`test_{module}.py`) are managed by the test-curator post-archive. The auditor does not gate on module-level test existence — if a module-level file doesn’t exist yet for the module, that’s expected.
+
   ### Fallback: Quality-Runner Unavailable
 
   If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:

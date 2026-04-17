@@ -74,7 +74,7 @@ Map each AC line to test categories:
 
 ## Step 4 — Write Tests
 
-Create or extend `tests/test_{module}.py` with class `TestFromAC_{Feature}`:
+Create `tests/test_{module}_{task_id}.py` with class `TestFromAC_{Feature}`:
 
 - Each AC line gets at least one test.
 - Test the **contract** described in AC, not a specific implementation.
@@ -82,10 +82,14 @@ Create or extend `tests/test_{module}.py` with class `TestFromAC_{Feature}`:
 - `from __future__ import annotations` at top of new files.
 - Type hints on test helper functions.
 
+**File naming:** Task-scoped tests use `test_{module}_{task_id}.py` (transient — removed by test-curator post-archive). Module-level `test_{module}.py` files are test-curator-managed and must not be created or edited by the test-writer.
+
 **Class naming convention:**
 
 - `TestFromAC_{Feature}` — tests written by the test-writer from AC.
 - Never use `TestBuilderDiscovered` — that is the builder's convention.
+
+**TestFromAC immutability:** During the active pipeline (task creation through archive), `TestFromAC_*` classes are immutable — the builder cannot weaken, remove, or modify them. Post-archive, the test-curator gains authority to promote, consolidate, or remove assertions.
 
 ## Step 5 — Verify RED
 
@@ -96,8 +100,8 @@ agentName: quality-runner
 prompt: |
   mode: scoped
   task_id: {id}
-  test_paths: ["tests/test_{module}.py"]
-  lint_paths: ["tests/test_{module}.py"]
+  test_paths: ["tests/test_{module}_{task_id}.py"]
+  lint_paths: ["tests/test_{module}_{task_id}.py"]
 ```
 
 Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runner report.
@@ -106,9 +110,9 @@ Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runn
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
-uv run pytest tests/test_{module}.py -q --tb=short
-uv run ruff check tests/test_{module}.py
+```shell
+uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
+uv run ruff check tests/test_{module}_{task_id}.py
 ```
 
 See `h-pytest-and-linting` for flags and known pitfalls.
@@ -119,8 +123,8 @@ See `h-pytest-and-linting` for flags and known pitfalls.
 
 Then run ruff:
 
-```powershell
-uv run ruff check tests/test_{module}.py
+```shell
+uv run ruff check tests/test_{module}_{task_id}.py
 ```
 
 Must be clean.
@@ -131,7 +135,7 @@ Include the test summary in your `end_work` note:
 
 ```
 ## Test-Writer Notes
-- Test file: tests/test_{module}.py
+- Test file: tests/test_{module}_{task_id}.py
 - Classes: {list of TestFromAC_ classes}
 - Tests per category: happy {h}, edge {e}, error {r}, boundary {b}
 - Total: {N} tests, all FAIL
@@ -140,8 +144,8 @@ Include the test summary in your `end_work` note:
 
 Commit per `r-project-standards` → Commit Discipline:
 
-```powershell
-git add tests/test_{module}.py
+```shell
+git add tests/test_{module}_{task_id}.py
 git commit -m "test: add failing tests for {feature} (#{id}, test-writer)"
 ```
 
@@ -159,7 +163,7 @@ Append to task body before advancing:
 
 ```
 ## Test-Writer Notes
-- Test file: tests/test_{module}.py
+- Test file: tests/test_{module}_{task_id}.py
 - Classes: {list of TestFromAC_ classes}
 - Tests per category: happy {h}, edge {e}, error {r}, boundary {b}
 - Total: {N} tests, all FAIL

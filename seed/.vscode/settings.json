@@ -15,9 +15,6 @@
   "[markdown]": {
     "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
   },
-  "[powershell]": {
-    "editor.defaultFormatter": "ms-vscode.powershell"
-  },
   "[toml]": {
     "editor.defaultFormatter": "tamasfe.even-better-toml"
   },
@@ -149,14 +146,7 @@
   "task.problemMatchers.neverPrompt": true,
   "telemetry.editStats.enabled": false,
   "telemetry.feedback.enabled": false,
-  "terminal.integrated.defaultProfile.windows": "pwsh",
   "terminal.integrated.enableFileLinks": "off",
-  "terminal.integrated.profiles.windows": {
-    "pwsh": {
-      "icon": "terminal-powershell",
-      "path": "${env:HOMEDRIVE}${env:HOMEPATH}\\Coding\\pwsh\\pwsh.exe"
-    }
-  },
   "terminal.integrated.wordSeparators": "",
   "workbench.settings.alwaysShowAdvancedSettings": true,
   "workbench.startupEditor": "none"

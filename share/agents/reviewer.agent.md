@@ -11,7 +11,7 @@ agents: [code-reader, scribe, quality-runner]
 hooks:
   PreToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-writes.ps1
+      command: uv run python .owlbear/hooks/deny-writes.py
 ---
 
 <persona>

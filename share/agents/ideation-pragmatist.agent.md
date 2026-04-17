@@ -1,7 +1,7 @@
 ---
 name: ideation-pragmatist
 description: "Pragmatist synthesis subagent — reads all panelist stances and produces a convergence/divergence synthesis with recommendation for the Mediator"
-argument-hint: Synthesize: {working directory path}
+argument-hint: "Synthesize: {working directory path}"
 user-invocable: false
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)

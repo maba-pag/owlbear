@@ -13,6 +13,8 @@ import json
 import os
 import re
 import shutil
+import warnings
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -139,8 +141,6 @@ def _write_settings(src: Path, dest: Path, owlbear_path: str) -> None:
         except json.JSONDecodeError:
             # Unparseable even after stripping comments — treat as empty but
             # warn so the user notices rather than silently losing settings.
-            import warnings
-
             warnings.warn(
                 f"Could not parse existing {dest} as JSON(C); owlbear settings will be written without merging.",
                 stacklevel=2,
@@ -181,10 +181,8 @@ def _write_mcp(src: Path, dest: Path, owlbear_path: str) -> None:
     existing: dict = {}
     if dest.exists():
         raw = dest.read_text(encoding="utf-8")
-        try:
+        with suppress(json.JSONDecodeError):
             existing = json.loads(_strip_jsonc_comments(raw))
-        except json.JSONDecodeError:
-            pass  # treat as empty — owlbear entries will be written fresh
 
     # Merge servers: owlbear defaults first, user entries override on conflict
     owlbear_servers = owlbear_mcp.get("servers", {})
@@ -198,6 +196,13 @@ def _write_mcp(src: Path, dest: Path, owlbear_path: str) -> None:
 
 def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
     """Write .vscode/mcp.json, merging owlbear servers with existing entries.
+
+    Writes five MCP server entries from the seed template:
+      - owlbear-kanban (owlbear_mcp_kanban)
+      - owlbear-knowledge (owlbear_mcp_knowledge)
+      - owlbear-memory (owlbear_mcp_memory)
+      - ddgs (DuckDuckGo search)
+      - microsoft/markitdown
 
     Standalone entry point for callers that only need the MCP config written.
     Delegates to ``_write_mcp``.
