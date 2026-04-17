@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, vscode/askQuestions, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/list_tasks, owlbear-kanban/show_task, 'ddgs/search_text']
+  [vscode/memory, vscode/askQuestions, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/list_tasks, owlbear-kanban/show_task, 'ddgs/search_text']
 agents:
   - ideation-critic
   - ideation-pragmatist

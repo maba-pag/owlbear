@@ -5,7 +5,7 @@ argument-hint: "Critique: {position or claim to challenge}"
 user-invocable: false
 disable-model-invocation: true
 model: GPT-5.4 (copilot)
-tools: [read/readFile, read/viewImage, read/problems, search, vscode/memory]
+tools: [read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
 agents: []
 hooks:
   PreToolUse:

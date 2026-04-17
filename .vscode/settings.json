@@ -81,6 +81,9 @@
     "**/.ruff_cache": true,
     "**/*.egg-info": true
   },
+  "files.watcherExclude": {
+    ".owlbear/kanban/**": true
+  },
   "git.autorefresh": false,
   "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,

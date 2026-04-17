@@ -76,9 +76,6 @@ megalinter-reports/
 /task-list*.json
 /builder-notes-*.md
 
-# Portable tools (downloaded binaries)
-.owlbear/kanban/*.exe
-
 # v2 package artifacts
 serve/*/dist/
 
@@ -101,3 +98,6 @@ store/audit/
 # Knowledge and memory databases
 .owlbear/knowledge/*.db
 .owlbear/memory/*.db
+
+# Lock files (transient runtime artifacts)
+.owlbear/kanban/.next_id.lock

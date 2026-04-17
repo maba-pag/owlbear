@@ -5,7 +5,7 @@ argument-hint: "Fix: task_id={task_id} test_file={test_file} source_files={sourc
 user-invocable: false
 disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.3-Codex (copilot)]
-tools: [execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, read/readFile, edit/editFiles, edit/createFile, search]
+tools: [execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, read/readFile, edit/editFiles, edit/createFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages]
 agents: []
 hooks:
   PostToolUse:

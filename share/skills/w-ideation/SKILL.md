@@ -110,8 +110,9 @@ The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting sy
 2. Optionally open with a success narrative: "A month from now, you run one command and…"
 3. Invoke `ideation-critic` standalone: "Here's the Brief. What are we sweeping under the rug?"
 4. Address any Critic findings with the user.
-5. Use askQuestions for Brief approval (approve / adjust / rework options). The Brief is the **contract** between thinking and building.
-6. Write approved Brief to `brief.md`.
+5. Use askQuestions to offer the user a choice: read the Brief on their own, or be walked through it section by section. See [Brief Walkthrough Protocol](#brief-walkthrough-protocol) below.
+6. After walkthrough or self-review: use askQuestions for Brief approval (approve / adjust / rework options). The Brief is the **contract** between thinking and building.
+7. Write approved Brief to `brief.md`.
 
 **Entry criteria:** `decisions.md` has chosen approach + rationale.
 **Exit criteria:** `brief.md` written; user has approved.
@@ -260,6 +261,55 @@ At M6, the planner decomposes `brief.md` into kanban tasks. Brief content (probl
 
 ---
 
+## Brief Walkthrough Protocol
+
+When the user opts for a guided walkthrough (M5 step 5), the Mediator presents each Brief section one at a time with inline metrics. This replaces the "read and approve" flow with an interactive review.
+
+### Walkthrough Choice
+
+Use askQuestions with two options:
+
+- **"I'll read it myself"** — user reviews `brief.md` directly. Proceed to approval question.
+- **"Walk me through it"** — Mediator presents each section with metrics. Proceed to walkthrough loop.
+
+### Walkthrough Loop
+
+For each Brief section (Problem, Approach, Outcomes, Scope, Decisions, Implementation Sequence, Follow-ups):
+
+1. **Present the section text** in the conversation — blockquote or inline. Never rely on the user reading a file edit or tool output. The content being discussed must always be visible in the chat message itself.
+2. **Management summary** — 1–2 sentences: what this section says and why it matters.
+3. **Mediator opinion** — brief assessment: is this section strong, weak, or notable in any way? What came from the user vs. what came from research/panel?
+4. **Metrics** — score three dimensions (see [Walkthrough Metrics](#walkthrough-metrics) below).
+5. **askQuestions** — present metrics in the question text, with options: "Good, next section" / "Needs adjustment". Always allow freeform input.
+6. If the user says "needs adjustment" or provides freeform feedback: address the concern, update the Brief section, re-present the updated text, re-score, and ask again.
+
+**Critical rule:** Always present the section content inline in the conversation message before using askQuestions. The user must see what they're being asked about without opening a separate file. This applies to all askQuestions uses, not just Brief walkthroughs.
+
+### Walkthrough Metrics
+
+Three metrics scored per section:
+
+| Metric | Scale | Definition |
+|--------|-------|------------|
+| **Fidelity** | 0.0–1.0 | Does this section accurately reflect what was discussed? High = directly from user's words or confirmed research. Low = paraphrased, inferred, or invented. |
+| **Readiness** | 0.0–1.0 | Can a builder implement from this section without coming back to ask questions? Combines completeness (is anything missing?) and actionability (is it specific enough?). |
+| **Risk** | low / medium / high | How much could go wrong if this section is slightly off? High = security, architecture, scope boundaries. Low = documentation, follow-ups. |
+
+Present metrics in a compact single line: `Fidelity: 0.92 | Readiness: 0.85 | Risk: medium`
+
+### Post-Walkthrough Summary
+
+After all sections are reviewed, present a summary table of metrics across all sections. Highlight the weakest Readiness score and highest Risk section — these are the areas most likely to cause implementation questions.
+
+| Section | Fidelity | Readiness | Risk |
+|---------|----------|-----------|------|
+| Problem | 0.90 | 0.85 | low |
+| ... | ... | ... | ... |
+
+Then proceed to the approval askQuestions (approve / adjust / rework).
+
+---
+
 ## Adaptive Depth
 
 The Mediator **always tells the user** how it is calibrating depth: "This feels straightforward at Tool tier — I'll keep the exploration light unless something unexpected comes up." Transparency is required.
@@ -308,6 +358,8 @@ When the user returns to an existing Working Directory (mid-execution modificati
 - [ ] M3 complete: landscape in `context.md`; `research-notes.md` written; panelist deliberation complete; `synthesis.md` present
 - [ ] M4 complete: Decision written to `decisions.md`; standalone Critic check done; user has decided
 - [ ] M5 complete: `brief.md` written; user has approved
+- [ ] M5 walkthrough: if user chose walkthrough, all sections presented inline with Fidelity/Readiness/Risk metrics; summary table shown before approval
+- [ ] All askQuestions uses: content being discussed is visible in the chat message (blockquote or inline), never only in a file edit or tool output
 - [ ] M6 complete: planner invoked; kanban tasks created; user confirmed
 - [ ] User informed of depth calibration at each tier decision
 - [ ] Mediator never reads raw `research-notes.md` or debate logs directly
