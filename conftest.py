@@ -26,6 +26,10 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "slow: tests that are long-running (subprocess-heavy tests)",
     )
+    config.addinivalue_line(
+        "filterwarnings",
+        "ignore::pluggy.PluggyTeardownRaisedWarning",
+    )
 
 
 def pytest_xdist_auto_num_workers(config: pytest.Config) -> int:

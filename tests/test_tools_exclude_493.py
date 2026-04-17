@@ -43,6 +43,7 @@ def _make_mock_server() -> MagicMock:
 def _knowledge_patches() -> list:
     """Patch objects for knowledge server heavyweight deps (DB, vector store, embeddings)."""
     return [
+        patch.dict(os.environ, {"OWLBEAR_LLM_API_KEY": "test-key"}),
         patch("owlbear_mcp_knowledge.server.init_db", return_value=MagicMock()),
         patch("owlbear_mcp_knowledge.server.GraphStore"),
         patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
@@ -209,6 +210,7 @@ class TestFromAC_KnowledgeLifespanExclusion:
         """With no KNOWLEDGE_TOOLS_EXCLUDE set, no tools are removed during lifespan startup."""
         mock_server = _make_mock_server()
         env_without = {k: v for k, v in os.environ.items() if k != "KNOWLEDGE_TOOLS_EXCLUDE"}
+        env_without["OWLBEAR_LLM_API_KEY"] = "test-key"
         with ExitStack() as stack:
             for p in _knowledge_patches():
                 stack.enter_context(p)
