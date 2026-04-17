@@ -23,6 +23,7 @@ Architecture:
 from __future__ import annotations
 
 import contextlib
+import os
 import random
 import subprocess
 import sys
@@ -131,6 +132,8 @@ class KanbanEngine:
         effective_activity_log = activity_log if activity_log is not None else self._config.activity_log
         self._activity_log_path: Path | None = kanban_dir / "activity.jsonl" if effective_activity_log else None
         self._revision: int = 0
+        self._task_cache: dict[str, tuple[int, Task]] = {}
+        self._archive_cache: dict[str, tuple[int, Task]] = {}
 
     @property
     def agent_name(self) -> str:
@@ -174,6 +177,8 @@ class KanbanEngine:
         self._config = load_config(self._kanban_dir)
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
         self._archive_dir = self._kanban_dir / self._config.archive_dir
+        self._task_cache = {}
+        self._archive_cache = {}
 
     def valid_transitions(self, status: str) -> set[str]:
         """Return the set of all configured statuses except *status*.
@@ -197,7 +202,7 @@ class KanbanEngine:
     # Read operations
     # ------------------------------------------------------------------
 
-    def list_tasks(  # noqa: PLR0912, PLR0913, C901
+    def list_tasks(  # noqa: PLR0912, PLR0913, PLR0915, C901
         self,
         *,
         status: str = "",
@@ -228,11 +233,37 @@ class KanbanEngine:
         Returns:
             Filtered, sorted list of :class:`TaskSummary` objects.
         """
+        cache = self._archive_cache if archived else self._task_cache
         source_dir = self._archive_dir if archived else self._tasks_dir
         tasks: list[Task] = []
-        for path in source_dir.glob("*.md"):
-            with contextlib.suppress(ValueError, KeyError):
-                tasks.append(read_task(path))
+        seen: set[str] = set()
+        try:
+            scan_iter = os.scandir(source_dir)
+        except FileNotFoundError:
+            cache.clear()
+            return []
+        with scan_iter:
+            for entry in scan_iter:
+                if not entry.name.endswith(".md"):
+                    continue
+                seen.add(entry.name)
+                mtime_ns: int = entry.stat().st_mtime_ns
+                if entry.name in cache and cache[entry.name][0] == mtime_ns:
+                    tasks.append(cache[entry.name][1])
+                else:
+                    path = source_dir / entry.name
+                    try:
+                        task = read_task(path)
+                    except FileNotFoundError:
+                        cache.pop(entry.name, None)
+                        continue
+                    except (ValueError, KeyError):
+                        continue
+                    cache[entry.name] = (mtime_ns, task)
+                    tasks.append(task)
+        for name in list(cache):
+            if name not in seen:
+                del cache[name]
 
         # --- Filters ---
         if status:
