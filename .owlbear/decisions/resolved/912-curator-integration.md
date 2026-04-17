@@ -1,8 +1,8 @@
 ---
 # >> Your action: set response to approved, needs-info, or rejected
-response: pending
-decision: "A: Archive-triggered dispatch"
-notes: ""
+response: approved
+decision: "C: Coverage-gap mining + manual prompt invocation"
+notes: "Approach C confirmed. Invocation: manual prompt (user-invocable, like agent-audit). Not task-scoped — operates on the test suite as a whole. Scans for archived task-tests, measures module coverage without them, mines gaps, deletes rest."
 # >> Agent metadata
 task_id: 912
 agent: orchestrator

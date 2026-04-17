@@ -39,11 +39,11 @@ user-invocable: false
 
 | Tier | File naming | Lifespan | Authority |
 |------|------------|----------|-----------|
-| **Task-scoped** (transient) | `test_{module}_{task_id}.py` | Active pipeline only | Test-writer creates, builder implements, reviewer validates. Immutable during pipeline. Test-curator deletes post-archive. |
-| **Module-level** (durable) | `test_{module}.py` | Permanent | Test-curator promotes contract-level assertions from task-scoped files. Subject to future lifecycle. |
+| **Task-scoped** (transient) | `test_{module}_{task_id}.py` | Active pipeline only | Test-writer creates, builder implements, reviewer validates. Immutable during pipeline. Test-curator cleans up post-archive. |
+| **Module-level** (durable) | `test_{module}.py` | Permanent | Test-curator mines coverage gaps from task-scoped tests and writes new module-level assertions. |
 
 - **Task-scoped tests** are scaffolding. They verify acceptance criteria for a single task and are removed by the test-curator after the task is archived.
-- **Module-level tests** are the durable test suite. They contain contract-level assertions (public API behavior, integration contracts) promoted from task-scoped tests by the test-curator.
+- **Module-level tests** are the durable test suite. The test-curator measures module coverage without task-tests, mines gap-closing assertions from task-tests, and deletes the rest.
 - Builders run both the task-scoped file and the module's durable file (if it exists) during GREEN phase.
 
 ## Known Gotchas

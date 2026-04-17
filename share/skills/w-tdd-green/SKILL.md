@@ -64,7 +64,7 @@ Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, inve
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
+```shell
 uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
 ```
 
@@ -76,7 +76,7 @@ See `h-pytest-and-linting` for flags and known pitfalls.
 
 After confirming the task-scoped tests fail, also run the module's durable test file (if it exists) to establish a regression baseline:
 
-```powershell
+```shell
 uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
 ```
 
@@ -109,7 +109,7 @@ All tests must pass (`failed: []`), zero failures.
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
+```shell
 uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
 ```
 
@@ -153,7 +153,7 @@ All must pass (`failed: []`, `clean: true`). Target 90% coverage on touched modu
 
 Also run the module-level durable tests (if they exist) to catch cross-task regressions:
 
-```powershell
+```shell
 uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
 ```
 
@@ -161,7 +161,7 @@ uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No modul
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
+```shell
 uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
 uv run pytest tests/test_{module}_{task_id}.py --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short
 uv run ruff check serve/ tests/
@@ -171,7 +171,7 @@ See `h-pytest-and-linting` for exact flags and known pitfalls.
 
 **Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:
 
-```powershell
+```shell
 grep -r "old_name" tests/*.py
 ```
 
@@ -221,7 +221,7 @@ Include builder notes in your `end_work` note.
 
 Commit per `r-project-standards` → Commit Discipline:
 
-```powershell
+```shell
 git add serve/{package}/src/{namespace}/{module}.py tests/test_{module}_{task_id}.py
 git commit -m "feat: implement {feature} (#{id}, builder)"
 ```

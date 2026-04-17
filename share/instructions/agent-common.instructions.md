@@ -20,7 +20,6 @@ Append your agent section to the task body via the `note` parameter of `end_work
 | auditor | ARCHIVED / REJECTED | ## Audit |
 | planner | DONE | ## Planning |
 | memory-curator | DONE | ## Curation |
-| test-curator | DONE | ## Test Curation |
 
 ## User-Action Detection Responsibilities
 

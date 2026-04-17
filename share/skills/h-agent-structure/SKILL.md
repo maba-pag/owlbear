@@ -37,8 +37,8 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 |------|--------|--------------------------|
 | T1 — Orchestrator | orchestrator, ideator | From agent critical_rules |
 | T2 — Pipeline | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor | Yes — critical_rules reference |
-| T3 — Support | scribe, planner, memory-curator, test-curator | If applicable — from critical_rules |
-| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-pragmatist, ideation-security | Not needed |
+| T3 — Support | scribe, planner, memory-curator | If applicable — from critical_rules |
+| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, test-curator, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-pragmatist, ideation-security | Not needed |
 
 ## Principles
 
@@ -224,7 +224,7 @@ exists for "Evidence," the agent must find evidence to fill it.}
 
 **Step 0 without claiming:** w-task-decomposition (creates tasks, doesn't claim one).
 
-**No Step 0:** w-orchestration (this doesn't follow the pipeline lifecycle — it has its own dispatch pattern).
+**No Step 0:** w-orchestration (own dispatch pattern), w-test-curation (suite-scoped inventory, not task-scoped).
 
 **Workflow skills must NOT contain:**
 

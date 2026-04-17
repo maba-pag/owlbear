@@ -1,127 +1,141 @@
 ---
 name: w-test-curation
-description: "Workflow: Post-archive test lifecycle — promote contract assertions, remove task-scoped tests"
+description: "Workflow: Test suite curation — coverage-gap mining, task-test cleanup, module-test improvement"
 user-invocable: false
 ---
 
 # Test Curation
 
-Post-archive workflow for the test-curator agent. Processes task-scoped test files (`test_{module}_{task_id}.py`) after a task is archived, promoting contract-level assertions to the module's durable test file (`test_{module}.py`) and removing the transient file.
+Suite-scoped workflow for the test-curator agent. Scans for task-scoped test files (`test_{module}_{task_id}.py`) with archived tasks, measures module coverage without them, mines assertions that close coverage gaps, and cleans up the rest.
 
-**Non-blocking:** This workflow never gates the next task dispatch. It runs asynchronously after archival.
+**Non-blocking:** This workflow never gates task dispatch. It runs on demand via prompt.
 
-## Step 0 — Setup
+## Step 0 — Inventory
 
-Read `r-pipeline-protocol` skill if not already loaded.
+1. List all `tests/test_*_*.py` files (task-scoped pattern: `test_{module}_{task_id}.py`).
+2. For each, extract the task ID and check status via `show_task`. Keep only files whose task is **archived**.
+3. Group by module: `{module: [task_id_1, task_id_2, ...]}`.
+4. If no archived task-tests exist, report "nothing to curate" and stop.
 
-Claim the task via `start_work` (atomic claim + retrieves task body).
+## Step 1 — Baseline Coverage per Module
 
-Identify the task-scoped test file from the `## Test-Writer Notes` section: `tests/test_{module}_{task_id}.py`.
+For each module in the inventory:
 
-## Step 1 — Read and Classify Assertions
+1. Measure coverage using **only** the module-level test file (exclude task-tests):
 
-Read the task-scoped test file. For each `TestFromAC_*` class and its test methods, classify assertions:
+```shell
+uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing -q --tb=short 2>/dev/null || echo "No module-level test file yet"
+```
 
-### Classification Heuristics
+2. Record baseline coverage. If no `test_{module}.py` exists, baseline is 0%.
 
-| Classification | Criteria | Examples | Action |
-|---------------|----------|----------|--------|
-| **Contract-level** | Tests public API surface, documented behavior, AC-derived assertions | Function returns expected type, error raised on invalid input, public method contracts | **Promote** |
-| **Implementation-coupled** | Tests internal state, private methods, specific mock configurations, import paths | `_private_method` called N times, specific mock.call_args, internal data structure shape | **Discard** |
-| **Ambiguous** | Not clearly contract or implementation | | **Promote** (conservative default) |
+## Step 2 — Classify Modules
 
-**Conservative default:** When in doubt, promote. Missing a durable contract assertion is worse than keeping a borderline one.
+| Module state | Coverage | Action |
+|-------------|----------|--------|
+| At or above target (≥ 90%) | Good | **Fast path** — delete all archived task-tests for this module (Step 4) |
+| Below target | Gap | **Mine path** — proceed to Step 3 for this module |
+| No module-level file (0%) | Missing | **Mine path** — create `test_{module}.py`, proceed to Step 3 |
 
-### Builder-Discovered Tests
+## Step 3 — Mine Coverage Gaps
 
-`TestBuilderDiscovered` classes follow the same classification. Promote contract-level, discard implementation-coupled.
+For modules below target:
 
-## Step 2 — Promote to Module-Level File
+1. Read the coverage report from Step 1. Identify uncovered lines/branches.
+2. Read all archived task-tests for this module.
+3. Find assertions in the task-tests that exercise the uncovered paths.
+4. Write those assertions into `test_{module}.py`:
+   - Use descriptive class/method names (not `TestFromAC_` — those are task-scoped).
+   - Add provenance comment: `# From task #{task_id}: {behavior description}`.
+   - Adjust imports/fixtures for the module-level context.
+   - Deduplicate against existing assertions in the module file.
+5. If no task-test assertions cover the gap, write new tests based on the source code to close it.
 
-For each contract-level assertion:
+**Conservative default:** When unsure whether an assertion covers a gap, include it. Removing a useful test is worse than keeping a borderline one.
 
-1. Open or create `tests/test_{module}.py`.
-2. Add the assertion to an appropriate test class. Use descriptive class names (not `TestFromAC_` — those are task-scoped naming).
-3. Add AC provenance comment: `# From task #{task_id}: AC-{N} — {description}`.
-4. Preserve the assertion's intent but adjust imports/fixtures as needed for the module-level context.
+### Verify
 
-**Atomic processing:** Work module-by-module. Each module-batch must leave the full suite green.
+After writing tests for a module:
 
-## Step 3 — Verify Hard Gates
+```shell
+uv run pytest tests/test_{module}.py --cov=serve --cov-report=term-missing --cov-fail-under=90 -q --tb=short
+```
 
-After promoting assertions for a module:
+**Gate failure:** Revert the module file (`git checkout -- tests/test_{module}.py`), log the failure, move to the next module. Do not block.
 
-### Gate 1 — Green Suite
+## Step 4 — Clean Up Task-Tests
 
-```powershell
+For each module that passed its gate (or was fast-pathed):
+
+```shell
+git rm tests/test_{module}_{task_id_1}.py tests/test_{module}_{task_id_2}.py ...
+```
+
+Remove all archived task-tests for this module.
+
+## Step 5 — Full Suite Gate
+
+After all modules are processed:
+
+```shell
 uv run pytest tests/ serve/ -n auto -q --tb=short
 ```
 
-All tests must pass (`failed: []`).
+All tests must pass. If the full suite fails, identify the breaking module and revert it:
 
-### Gate 2 — Coverage
-
-```powershell
-uv run pytest tests/test_{module}.py --cov --cov-report=term-missing --cov-fail-under=90 -q --tb=short
-```
-
-Coverage on touched modules must be ≥ 90%.
-
-### Gate Failure — Revert
-
-If either gate fails:
-
-```powershell
+```shell
 git checkout -- tests/test_{module}.py
 ```
 
-Log the failure in the lifecycle log and skip this module. Do not block — move to the next module.
+Re-add its task-tests and log the failure.
 
-## Step 4 — Remove Task-Scoped File
+## Step 6 — Lifecycle Log
 
-After successful promotion and gate verification:
-
-```powershell
-git rm tests/test_{module}_{task_id}.py
-```
-
-## Step 5 — Lifecycle Log
-
-Append an entry to `.owlbear/scratch/curator-log.jsonl`:
+Append one entry per module to `.owlbear/scratch/curator-log.jsonl`:
 
 ```json
 {
-  "task_id": 123,
   "module": "bookmark_pipeline",
-  "action": "promote",
-  "assertions_promoted": 5,
-  "assertions_discarded": 3,
-  "coverage_before": 88.5,
-  "coverage_after": 92.1,
+  "action": "curate",
+  "task_tests_removed": 3,
+  "assertions_mined": 5,
+  "coverage_before": 72.0,
+  "coverage_after": 93.1,
+  "fast_path": false,
   "timestamp": "2026-04-17T12:00:00Z"
 }
 ```
 
-**Actions:** `promote` (assertions moved to module-level), `discard` (all assertions implementation-coupled, file removed), `skip` (gate failure, no changes).
+**Actions:** `curate` (gaps mined + task-tests removed), `fast_path` (already at target, task-tests removed), `skip` (gate failure, no changes).
 
-## Step 6 — Commit and Advance
+## Step 7 — Commit
 
 Commit per `r-project-standards` → Commit Discipline:
 
-```powershell
-git add tests/test_{module}.py
-git commit -m "test: curate {module} tests from #{task_id} (test-curator)"
+```shell
+git add tests/
+git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
 ```
-
-Advance via `end_work` with curation summary.
 
 ## Output Template
 
 ```
-## Curation
-- Task-scoped file: tests/test_{module}_{task_id}.py
-- Assertions: {N} promoted, {M} discarded
-- Module-level file: tests/test_{module}.py
-- Coverage: {X}% → {Y}%
-- Suite: green
+## Test Curation
+### Summary
+- Modules scanned: {N}
+- Fast-pathed (already ≥ 90%): {F}
+- Gaps mined: {G}
+- Skipped (gate failure): {S}
+- Task-tests removed: {T}
+
+### Per Module
+| Module | Before | After | Task-tests removed | Action |
+|--------|--------|-------|--------------------|--------|
+| {name} | {X}% | {Y}% | {count} | {curate/fast_path/skip} |
 ```
+
+## Known Pitfalls
+
+- **Coverage ≠ correctness.** A module at 95% coverage might still lack tests for important edge cases. Coverage is the gate, but read the task-test assertions before discarding — they may test behaviors not visible in line coverage.
+- **Shared fixtures.** Task-tests may rely on fixtures defined in `conftest.py` or their own file. When mining assertions, ensure the target module file has access to the same fixtures.
+- **Import collisions.** Multiple task-tests for the same module may define identically-named test classes. Dedup when mining.

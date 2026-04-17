@@ -67,7 +67,7 @@ Look for `.owlbear/scratch/{task-id}-*` files and delete any that exist.
 
 If you updated any files in Step 1, commit per `r-project-standards` → Commit Discipline:
 
-```powershell
+```shell
 git add {updated_files}
 git commit -m "docs: update docs for {feature} (#{id}, doc-writer)"
 ```

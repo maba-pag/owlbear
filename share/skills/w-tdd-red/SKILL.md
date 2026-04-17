@@ -110,7 +110,7 @@ Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runn
 
 If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
 
-```powershell
+```shell
 uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
 uv run ruff check tests/test_{module}_{task_id}.py
 ```
@@ -123,7 +123,7 @@ See `h-pytest-and-linting` for flags and known pitfalls.
 
 Then run ruff:
 
-```powershell
+```shell
 uv run ruff check tests/test_{module}_{task_id}.py
 ```
 
@@ -144,7 +144,7 @@ Include the test summary in your `end_work` note:
 
 Commit per `r-project-standards` → Commit Discipline:
 
-```powershell
+```shell
 git add tests/test_{module}_{task_id}.py
 git commit -m "test: add failing tests for {feature} (#{id}, test-writer)"
 ```
