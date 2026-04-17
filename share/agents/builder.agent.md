@@ -11,10 +11,10 @@ agents: [scribe, fix-attempt, quality-runner]
 hooks:
   SessionStart:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/session-context.ps1
+      command: uv run python .owlbear/hooks/session-context.py
   PostToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/lint-changed.ps1
+      command: uv run python .owlbear/hooks/lint-changed.py
 ---
 
 <persona>

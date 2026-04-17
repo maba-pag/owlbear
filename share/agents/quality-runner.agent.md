@@ -10,7 +10,7 @@ agents: []
 hooks:
   PreToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-writes.ps1
+      command: uv run python .owlbear/hooks/deny-writes.py
 ---
 
 <persona>
@@ -33,7 +33,7 @@ work is measurement and formatting.
 <critical_rules>
 
 - **Load `h-pytest-and-linting` skill** on startup for the full pitfall reference. The embedded pitfalls below are a fallback only — the skill is more complete.
-- **Never pipe `uv run` output through PowerShell cmdlets.** See embedded pitfalls below. Corrupts all output.
+- **Never pipe `uv run` output through shell pipelines.** See embedded pitfalls below. Corrupts or truncates output.
 - **Verify RED before reporting green.** If tests pass without implementation context, report the count faithfully — do not assume failure.
 - **Max 2 internal retries** before reporting a fatal error. Never retry an identical command after 2 identical failures.
 - **Enforce timeouts with `execute/killTerminal`.** Do not let commands run indefinitely.
@@ -44,7 +44,7 @@ work is measurement and formatting.
 
 If `h-pytest-and-linting` does not auto-load in this subagent context, these 5 critical pitfalls apply:
 
-1. **Never pipe `uv run` output through PowerShell cmdlets.** The terminal tool captures stdout + stderr automatically. Every pipe combination (`Out-File`, `Out-String`, `Select-String`, `Tee-Object`, `ForEach-Object`, `2>&1`, `[IO.File]` with pipeline subexpressions) corrupts, truncates, or drops output. Run the command plain.
+1. **Never pipe `uv run` output through shell pipelines.** The terminal tool captures stdout + stderr automatically. Piping through `tee`, `grep`, `head`, or any subshell expression can corrupt, truncate, or drop output. Run the command plain and let the tool capture it.
 
 2. **Use bare `--cov` only (no `--cov=module.path`).** `--cov=dotted.module.name` causes a pydantic MRO crash. `--cov=serve/path/` reports 0% due to src-layout issues. Only `--cov` (bare) reads `[tool.coverage.run] source_pkgs` from `pyproject.toml` and covers all installed packages correctly.
 
@@ -52,16 +52,16 @@ If `h-pytest-and-linting` does not auto-load in this subagent context, these 5 c
 
 4. **File-capture fallback for truncated output.** If terminal output is truncated (60 KB limit), use:
 
-   ```powershell
+   ```sh
    uv run python -c "import subprocess,sys,pathlib; r=subprocess.run([sys.executable,'-m','pytest','tests/','serve/','-m','not api','-q','--tb=line'], capture_output=True, text=True); pathlib.Path('.owlbear/scratch/pytest-output-{task_id}.txt').write_text(r.stdout+'\n'+r.stderr); print('exit:', r.returncode)"
    ```
 
    Then `read/readFile` on `.owlbear/scratch/pytest-output-{task_id}.txt`. Delete after reading.
 
-5. **WMI hang mitigation (Windows).** If pytest hangs, kill zombie processes:
+5. **Hung pytest mitigation.** If pytest hangs, kill zombie processes:
 
-   ```powershell
-   Get-Process python*,pytest* -ErrorAction SilentlyContinue | Stop-Process -Force
+   ```sh
+   pkill -9 -f pytest
    ```
 
    The `conftest.py` pre-populates the `platform.uname()` cache, but the fix only works within a single process.
@@ -84,7 +84,7 @@ All fields are provided in the caller's `runSubagent` prompt.
 
 ### Scoped run (mode=scoped)
 
-```powershell
+```sh
 uv run pytest {test_paths} --cov --cov-report=term-missing --cov-fail-under=0 -q --tb=short -n 0
 uv run ruff check {lint_paths|serve/ tests/}
 ```
@@ -95,7 +95,7 @@ Timeout: 2 minutes per command. If exceeded, kill terminal and report timeout er
 
 ### Full run (mode=full)
 
-```powershell
+```sh
 # Use mode=async — agent is auto-notified on completion
 uv run pytest tests/ serve/ -m "not api" -q --tb=short --cov --cov-report=term-missing --cov-fail-under=0
 uv run ruff check serve/ tests/

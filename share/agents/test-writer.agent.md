@@ -11,10 +11,10 @@ agents: [scribe, quality-runner]
 hooks:
   SessionStart:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/session-context.ps1
+      command: uv run python .owlbear/hooks/session-context.py
   PreToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/deny-src-writes.ps1
+      command: uv run python .owlbear/hooks/deny-src-writes.py
 ---
 
 <persona>

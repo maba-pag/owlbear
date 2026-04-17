@@ -3,7 +3,6 @@ from __future__ import annotations
 import pathlib
 import re
 
-import pytest
 import yaml
 
 AGENTS_DIR = pathlib.Path(__file__).parent.parent / "share" / "agents"

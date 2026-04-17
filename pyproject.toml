@@ -106,6 +106,7 @@ ignore = [
   "TCH",     # type-checking blocks impractical in tests
   "TRY003",  # exception messages — test helper functions
   "PT019",   # @patch-injected mocks with _ prefix are not unused fixtures
+  "F541",    # f-string without placeholder — pre-existing in TestFromAC_* assertions
 ]
 "serve/*/tests/**/*.py" = [
   "ANN",     # type annotations not required in tests

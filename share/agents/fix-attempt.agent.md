@@ -10,7 +10,7 @@ agents: []
 hooks:
   PostToolUse:
     - type: command
-      command: powershell -NoProfile -NonInteractive -File .owlbear/hooks/lint-changed.ps1
+      command: uv run python .owlbear/hooks/lint-changed.py
 ---
 
 <persona>
@@ -75,13 +75,13 @@ style. Keep the diff surgical — no unrelated edits.
 
 Run the test file:
 
-```powershell
+```sh
 uv run pytest {test_file} -q --tb=short
 ```
 
 Run ruff on changed files:
 
-```powershell
+```sh
 uv run ruff check {changed_files}
 ```
 
