@@ -44,6 +44,10 @@ def _move_file(src: Path, dest: Path) -> None:
 
     Falls back to :meth:`Path.replace` when ``git`` is unavailable, the file
     is not tracked, the repo check fails, or ``git mv`` times out.
+
+    ``stdin`` is explicitly closed (``DEVNULL``) to prevent the child process
+    from inheriting the MCP stdin pipe — if ``git`` ever prompted for input it
+    would steal bytes from the protocol stream and deadlock both sides.
     """
     try:
         result = subprocess.run(  # noqa: S603
@@ -51,6 +55,7 @@ def _move_file(src: Path, dest: Path) -> None:
             capture_output=True,
             check=False,
             timeout=5,
+            stdin=subprocess.DEVNULL,
         )
         if result.returncode == 0:
             return
