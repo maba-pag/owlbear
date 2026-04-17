@@ -46,9 +46,10 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
 # Auto-discovers pyproject.toml from project root; no explicit config path needed.
 PYTHON_RUFF_CLI_LINT_MODE: project
 
-# Ruff format — must point at project config; MegaLinter defaults to its own
-# bundled .ruff.toml which disagrees with the project's formatting settings.
-PYTHON_RUFF_FORMAT_CONFIG_FILE: pyproject.toml
+# Ruff format — project mode lets ruff auto-discover pyproject.toml from root.
+# Without this, MegaLinter uses its own bundled .ruff.toml (different settings).
+PYTHON_DEFAULT_STYLE: ruff
+PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 
 # Actionlint — restrict to workflow files
 ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
