@@ -2,7 +2,8 @@
 
 Refined AC (Architecture Review approved):
 - Dead code removed from server.py: _run_kanban(), _ForwardSlashPath, _parse_task_json(),
-  _DEFAULT_KANBAN_BIN, asyncio import, stale __all__ entries (_run_kanban, _parse_task_json)
+  _DEFAULT_KANBAN_BIN, stale __all__ entries (_run_kanban, _parse_task_json)
+- asyncio remains — now used by asyncio.to_thread(), not _run_kanban()
 - Old subprocess test files removed: serve/mcp-kanban/tests/test_server.py,
   serve/mcp-kanban/tests/test_integration.py
 - No import of _run_kanban or kanban_bin remains in serve/mcp-kanban/ tree
@@ -44,9 +45,9 @@ class TestFromAC_DeadCodeRemoval:
             "_DEFAULT_KANBAN_BIN should be removed from server.py but is still present"
         )
 
-    def test_asyncio_not_imported_in_server(self) -> None:
-        """asyncio import removed — becomes unused after _run_kanban() deletion."""
-        assert not hasattr(_srv, "asyncio"), "asyncio is still imported in server.py — remove it with _run_kanban()"
+    def test_asyncio_used_only_for_to_thread(self) -> None:
+        """asyncio remains — but only for asyncio.to_thread(), not _run_kanban()."""
+        assert hasattr(_srv, "asyncio"), "asyncio should still be imported (used by asyncio.to_thread)"
 
     def test_all_excludes_run_kanban(self) -> None:
         """__all__ no longer contains the stale _run_kanban entry."""

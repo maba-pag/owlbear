@@ -114,7 +114,7 @@ class TestFromAC_Constants:
         assert STATUS_AGENT_MAP["todo"] == "test-writer"
         assert STATUS_AGENT_MAP["in-progress"] == "builder"
         assert STATUS_AGENT_MAP["review"] == "reviewer"
-        assert STATUS_AGENT_MAP["docs"] == "writer"
+        assert STATUS_AGENT_MAP["docs"] == "doc-writer"
         assert STATUS_AGENT_MAP["done"] == "auditor"
 
     def test_dispatch_cap_is_twenty(self) -> None:
