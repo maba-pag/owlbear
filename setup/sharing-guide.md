@@ -14,8 +14,8 @@ This means sharing owlbear with a teammate means they clone <strong>both</strong
 1. The **owlbear** repository (shared tooling)
 2. The **project** repository (their actual project)
 
-Both repos must sit on the same drive and in a sibling layout for the relative paths to
-work.
+Both repos must sit in a sibling layout for the relative paths to work. On Windows,
+they must also be on the same drive.
 
 > **Windows limitation:** owlbear and the project must be on the **same drive**.
 Cross-drive relative paths raise a `ValueError` in `init.py` before any files are
@@ -27,20 +27,23 @@ Cross-drive relative paths raise a `ValueError` in `init.py` before any files ar
 
 Walk the teammate through these steps:
 
-```powershell
-# 1. Clone owlbear to a convenient parent directory (same drive as the project)
-git clone https://github.com/your-org/owlbear.git C:\Dev\owlbear
+```shell
+# 1. Clone owlbear to a convenient parent directory
+git clone https://github.com/your-org/owlbear.git ~/Dev/owlbear
 
 # 2. Clone the project repository as a sibling
-git clone https://github.com/your-org/my-project.git C:\Dev\my-project
+git clone https://github.com/your-org/my-project.git ~/Dev/my-project
 
 # 3. Bootstrap owlbear into the project workspace
-cd C:\Dev\my-project
-python ..\owlbear\setup\init.py
+cd ~/Dev/my-project
+python ../owlbear/setup/init.py
 
 # 4. Open the project in VS Code
 code .
 ```
+
+> **Windows:** use `C:\Dev\...` paths and backslashes: `python ..\owlbear\setup\init.py`.
+> owlbear and the project must be on the same drive.
 
 After VS Code opens, have the teammate verify the setup using the **Diagnostics view**
 (right-click the Chat panel → "Diagnostics") — it should show owlbear agents, skills,
@@ -48,6 +51,22 @@ and instructions loaded from the shared installation.
 
 See [setup-guide.md](setup-guide.md) for the full verification checklist and
 troubleshooting reference.
+
+---
+
+## Platform Notes
+
+### macOS and Linux
+
+No platform-specific configuration is required:
+
+- **Hooks** — all 7 hooks are Python scripts (`allow-stances-only.py`, `deny-code-writes.py`, `deny-scratch-only-writes.py`, `deny-src-writes.py`, `deny-writes.py`, `lint-changed.py`, `session-context.py`) executed by VS Code's extension host — no shell dependency
+- **MCP servers** — started via `uv run`, which works identically on macOS, Linux, and Windows
+
+### Windows
+
+- owlbear and the project must be on the **same drive** (e.g., both on `C:\`)
+- Use backslashes in the bootstrap command: `python ..\owlbear\setup\init.py`
 
 ---
 
@@ -113,7 +132,7 @@ organization agent registry as a complement to the local installation.
 
 | Symptom | Resolution |
 |---------|------------|
-| `ValueError` during `setup.py` | Ensure owlbear and project are on the same Windows drive |
-| Agents missing after setup | Run `setup.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
+| `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
+| Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
-| Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `setup.py` to update |
+| Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `init.py` to update |
