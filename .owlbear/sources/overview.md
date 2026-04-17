@@ -4025,3 +4025,9 @@ External repos and resources studied during OwlBear development.
 | Graph API `sitePage.Get` permissions | <https://learn.microsoft.com/en-us/graph/api/sitepage-get> | Confirmed `Sites.Read.All` (delegated) as least privileged permission for sitePage read; verified `$expand=canvasLayout` query parameter | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
 | Entra ID app registration quickstart | <https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app> | App registration steps, supported account types, admin consent process | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
 | OAuth 2.0 device authorization grant | <https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code> | Device-code flow protocol: `/devicecode` endpoint, polling, token response format, Conditional Access considerations | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
+
+## PreToolUse Guard Hooks Test Approach (Task #891)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse stdin/stdout JSON contract, permissionDecision output format, exit codes, editFiles tool_input schema | .owlbear/research/891-pretooluse-hooks-test-approach.md | 2026-04-17 |
