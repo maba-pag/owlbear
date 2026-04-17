@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -210,7 +211,9 @@ async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
-        record = app_ctx.engine.move_task(task_id, status)
+        record = await asyncio.to_thread(
+            app_ctx.engine.move_task, task_id, status,
+        )
     except (FileNotFoundError, ValueError) as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
@@ -311,7 +314,8 @@ async def end_work(  # noqa: PLR0913
         raise ToolError(msg)
 
     try:
-        record = app_ctx.engine.end_work(
+        record = await asyncio.to_thread(
+            app_ctx.engine.end_work,
             task_id,
             note=note,
             outcome=outcome,
