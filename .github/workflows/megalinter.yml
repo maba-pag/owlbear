@@ -52,7 +52,9 @@ jobs:
             echo "All linters passed." >> "$GITHUB_STEP_SUMMARY"
           else
             ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            echo "Some linters reported issues. See the [megalinter-reports artifact](${ARTIFACT_URL}) for details." >> "$GITHUB_STEP_SUMMARY"
+            echo "Some linters reported issues." \
+              "See [megalinter-reports artifact](${ARTIFACT_URL})" \
+              >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Fail if lint failed

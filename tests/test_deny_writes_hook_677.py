@@ -11,9 +11,11 @@ AC coverage:
   AC2: code-reader.agent.md frontmatter contains hooks: with PreToolUse entry (type: command, deny-writes.ps1)
   AC3: challenger.agent.md frontmatter contains hooks: with PreToolUse entry (type: command, deny-writes.ps1)
   AC4a: .owlbear/hooks/deny-writes.ps1 comment header does not reference a specific agent name
-  AC4b+AC4c: .owlbear/hooks/deny-writes.ps1 permissionDecisionReason contains "read-only" AND does not contain "reviewer"
+  AC4b+AC4c: .owlbear/hooks/deny-writes.ps1 permissionDecisionReason
+           contains "read-only" AND does not contain "reviewer"
   AC4d: seed/.owlbear/hooks/deny-writes.ps1 comment header does not reference a specific agent name
-  AC4e+AC4f: seed/.owlbear/hooks/deny-writes.ps1 permissionDecisionReason contains "read-only" AND does not contain "reviewer"
+  AC4e+AC4f: seed/.owlbear/hooks/deny-writes.ps1 permissionDecisionReason
+           contains "read-only" AND does not contain "reviewer"
   AC6:  Each agent's frontmatter parses as valid YAML containing a hooks.PreToolUse section
 """
 

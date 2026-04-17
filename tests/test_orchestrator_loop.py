@@ -527,7 +527,9 @@ class TestFromAC_DispatchWave:  # noqa: N801
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_sequential_mode_uncaught_exception_recorded_as_failure(self) -> None:
-        """Sequential mode: uncaught exception in dispatch_entry is caught by _dispatch_sequential and recorded as failure."""
+        """Sequential mode: uncaught exception in dispatch_entry is caught
+        by _dispatch_sequential and recorded as failure.
+        """
         client = _make_client()
         client.new_session = AsyncMock(side_effect=RuntimeError("upstream crash"))
         state = LoopState(sequential_remaining=2)
@@ -639,7 +641,9 @@ class TestFromAC_RunLoop:  # noqa: N801
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_crash_failures_pre_filtered_not_passed_as_kwarg(self) -> None:
-        """AC: run_loop pre-filters crash_failures from task list — must NOT pass crash_failures kwarg to select_tasks."""
+        """AC: run_loop pre-filters crash_failures from task list —
+        must NOT pass crash_failures kwarg to select_tasks.
+        """
         client = _make_client()
         client.new_session = AsyncMock(side_effect=Exception("crash"))
         call_count = 0

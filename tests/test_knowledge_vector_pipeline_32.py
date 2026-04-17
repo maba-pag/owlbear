@@ -103,7 +103,9 @@ class TestFromAC_ProtocolDefinitions:
         from owlbear_knowledge.protocol import VectorStoreProtocol  # noqa: PLC0415
 
         class _Stub:
-            def store_embedding(self, entity_or_doc_id, embedding, embedding_type, scope="global") -> None: ...  # noqa: ANN001
+            def store_embedding(  # noqa: ANN001, PLR0913
+                self, entity_or_doc_id, embedding, embedding_type, scope="global",
+            ) -> None: ...
             def get_embedding(self, entity_or_doc_id) -> list[float] | None: ...  # noqa: ANN001
             def search_similar(  # noqa: PLR0913
                 self,

@@ -428,7 +428,9 @@ class TestFromAC_TestWriterAgentHooks:
         return _extract_frontmatter(self._content(), "test-writer")
 
     def test_test_writer_hooks_section_has_both_events(self) -> None:
-        """AC4b: test-writer.agent.md hooks: must contain both SessionStart (new) and PreToolUse (preserved, from #589)."""
+        """AC4b: test-writer.agent.md hooks: must contain both
+        SessionStart (new) and PreToolUse (preserved, from #589).
+        """
         import yaml  # noqa: PLC0415
 
         fm = self._frontmatter()

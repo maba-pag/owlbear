@@ -375,7 +375,10 @@ class TestFromAC_CreateTask:
         """create_task forwards priority, tags, body, status to engine.create_task."""
         app_ctx = _make_engine_app_ctx(create_task=_MINIMAL_TASK_RECORD)
         mcp_ctx = _make_mcp_ctx(app_ctx)
-        await create_task(mcp_ctx, title="Parameterised", priority="critical", tags="phase-3,kanban", body="some body", status="todo")
+        await create_task(
+            mcp_ctx, title="Parameterised", priority="critical",
+            tags="phase-3,kanban", body="some body", status="todo",
+        )
         call_kwargs = app_ctx.engine.create_task.call_args[1]  # type: ignore[attr-defined]
         assert call_kwargs.get("priority") == "critical"
         assert call_kwargs.get("status") == "todo"

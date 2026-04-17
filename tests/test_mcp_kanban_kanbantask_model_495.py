@@ -234,7 +234,9 @@ class TestFromAC_KanbanTaskOptionalFields:
         """depends_on must default to [] when absent."""
         assert _KanbanTask is not None
         task = _KanbanTask.model_validate(_MINIMAL_TASK_JSON)
-        assert task.depends_on == [], f"depends_on must default to [], got {task.depends_on}"  # type: ignore[union-attr]
+        assert task.depends_on == [], (  # type: ignore[union-attr]
+            f"depends_on must default to [], got {task.depends_on}"
+        )
 
     # AC: blocked (bool = False)
     def test_optional_blocked_defaults_to_false(self) -> None:

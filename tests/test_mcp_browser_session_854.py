@@ -103,7 +103,10 @@ class TestFromAC_LifespanCDPPort:
         mock_server = MagicMock()
 
         env = {k: v for k, v in os.environ.items() if k != "BROWSER_CDP_PORT"}
-        with patch.dict(os.environ, env, clear=True), patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher) as mock_launcher_cls:
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher) as mock_launcher_cls,
+        ):
             async with app_lifespan(mock_server) as _:
                 pass
 
@@ -118,7 +121,10 @@ class TestFromAC_LifespanCDPPort:
         mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        with patch.dict(os.environ, {"BROWSER_CDP_PORT": str(_CUSTOM_PORT)}), patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher) as mock_launcher_cls:
+        with (
+            patch.dict(os.environ, {"BROWSER_CDP_PORT": str(_CUSTOM_PORT)}),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher) as mock_launcher_cls,
+        ):
             async with app_lifespan(mock_server) as _:
                 pass
 
@@ -134,7 +140,10 @@ class TestFromAC_LifespanCDPPort:
         mock_launcher = _make_mock_launcher(mock_page)
         mock_server = MagicMock()
 
-        with patch.dict(os.environ, {"BROWSER_CDP_PORT": "99999"}), patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher) as mock_launcher_cls:
+        with (
+            patch.dict(os.environ, {"BROWSER_CDP_PORT": "99999"}),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher) as mock_launcher_cls,
+        ):
             async with app_lifespan(mock_server) as ctx:
                 # Lifespan must succeed despite invalid port (port is ignored)
                 assert ctx.launcher is not None
@@ -160,7 +169,10 @@ class TestFromAC_LifespanCleanupOnException:
         mock_server = MagicMock()
         err_msg = "simulated server error"
 
-        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher), pytest.raises(RuntimeError):
+        with (
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher),
+            pytest.raises(RuntimeError),
+        ):
             async with app_lifespan(mock_server) as _:
                 raise RuntimeError(err_msg)
 
@@ -176,7 +188,10 @@ class TestFromAC_LifespanCleanupOnException:
         mock_server = MagicMock()
         err_msg = "simulated server error"
 
-        with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher), pytest.raises(RuntimeError):
+        with (
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher),
+            pytest.raises(RuntimeError),
+        ):
             async with app_lifespan(mock_server) as _:
                 raise RuntimeError(err_msg)
 

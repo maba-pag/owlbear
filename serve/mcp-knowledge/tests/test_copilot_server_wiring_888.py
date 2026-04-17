@@ -166,7 +166,7 @@ class TestFromAC_CopilotServerFallback:
         with patch.dict(sys.modules, {"owlbear_knowledge.copilot_auth": copilot_mod}):
             async with app_lifespan(MagicMock()) as ctx:
                 # Both: Copilot was attempted AND gracefully degraded to None
-                copilot_mod.get_copilot_token.assert_called_once()  # noqa: S101  # RED: not called yet  # type: ignore[attr-defined]
+                copilot_mod.get_copilot_token.assert_called_once()  # noqa: S101  # type: ignore[attr-defined]
                 assert ctx.structured_extractor is None  # noqa: S101
 
     @pytest.mark.asyncio

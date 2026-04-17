@@ -30,7 +30,9 @@ class TestFromAC_ContentGuardImportable:
 
     def test_content_injection_guard_importable(self) -> None:
         """ContentInjectionGuard class is importable from owlbear_knowledge.content_guard."""
-        from owlbear_knowledge.content_guard import ContentInjectionGuard  # type: ignore[import-not-found]  # noqa: F401
+        from owlbear_knowledge.content_guard import (  # type: ignore[import-not-found]
+            ContentInjectionGuard,  # noqa: F401
+        )
 
     def test_check_result_importable(self) -> None:
         """CheckResult dataclass is importable from owlbear_knowledge.content_guard."""

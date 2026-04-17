@@ -297,7 +297,8 @@ def _do_import(
         if entity_ids:
             eid_placeholder = ",".join("?" * len(entity_ids))
             edges = src_conn.execute(
-                f"SELECT * FROM edges WHERE source_id IN ({eid_placeholder}) AND target_id IN ({eid_placeholder})",  # noqa: S608
+                f"SELECT * FROM edges WHERE source_id IN ({eid_placeholder})"
+                f" AND target_id IN ({eid_placeholder})",  # noqa: S608
                 entity_ids + entity_ids,
             ).fetchall()
         else:

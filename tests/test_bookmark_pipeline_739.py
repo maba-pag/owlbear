@@ -296,7 +296,10 @@ class TestFromAC_UpdateBookmarkTagsErrorPaths:  # noqa: N801
         store.get_by_url = MagicMock(return_value=None)
         ctx = _make_ctx(bookmark_store=store)
 
-        with patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda fn, *a, **kw: fn(*a, **kw))), pytest.raises(ToolError):
+        with (
+            patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda fn, *a, **kw: fn(*a, **kw))),
+            pytest.raises(ToolError),
+        ):
             await update_bookmark_tags(ctx, url="https://notfound.example.com", tags=["x"])
 
     @pytest.mark.asyncio
@@ -309,7 +312,10 @@ class TestFromAC_UpdateBookmarkTagsErrorPaths:  # noqa: N801
         store.update_tags = MagicMock()
         ctx = _make_ctx(bookmark_store=store)
 
-        with patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda fn, *a, **kw: fn(*a, **kw))), pytest.raises(ToolError):
+        with (
+            patch("asyncio.to_thread", new=AsyncMock(side_effect=lambda fn, *a, **kw: fn(*a, **kw))),
+            pytest.raises(ToolError),
+        ):
             await update_bookmark_tags(ctx, url="https://notfound.example.com", tags=["x"])
 
         store.update_tags.assert_not_called()

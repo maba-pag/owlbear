@@ -87,7 +87,9 @@ class TestFromAC_EdgeCDPCleanup:
         assert not hasattr(owlbear_browser, "build_launch_args")
 
     def test_init_no_resolve_edge_binary_export(self) -> None:
-        """resolve_edge_binary alias (for find_edge_binary) must not be exported from the owlbear_browser package root."""
+        """resolve_edge_binary alias (for find_edge_binary) must not be
+        exported from the owlbear_browser package root.
+        """
         import owlbear_browser
         assert not hasattr(owlbear_browser, "resolve_edge_binary")
 
@@ -119,5 +121,7 @@ class TestFromAC_EdgeCDPCleanup:
         The 4 non-CDP classes (BrowserMCPServer, AuthWebRefreshHandler,
         ContentSafetyInversion, ReplaceOnChangeRefresh) must be retained.
         """
-        content = (_TESTS_DIR / "test_authenticated_content_pipeline_775.py").read_text(encoding="utf-8")
+        content = (
+            _TESTS_DIR / "test_authenticated_content_pipeline_775.py"
+        ).read_text(encoding="utf-8")
         assert "class TestFromAC_BrowserPackage" not in content

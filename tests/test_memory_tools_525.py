@@ -16,7 +16,8 @@ AC coverage table:
 |---------|---------|----------|
 | check_same_thread=False | test_server_sqlite_connect_uses_check_same_thread_false | error |
 | asyncio.to_thread | test_tools_wraps_sqlite_calls_in_asyncio_to_thread | error |
-| _apply_tool_exclusions called at module level | test_apply_tool_exclusions_called_at_module_level | error |
+| _apply_tool_exclusions called at module level |
+    test_apply_tool_exclusions_called_at_module_level | error |
 | __all__ in server.py | test_server_all_exports_tool_functions | error |
 | error: confidence ... got {value} | test_confidence_error_includes_got_value, test_confidence_error_value_matches_input | boundary |
 | error: invalid category ... Valid: | test_invalid_category_error_uses_valid_prefix, test_invalid_category_error_lists_categories_in_ac_order | error |

@@ -143,7 +143,10 @@ class TestFromAC_NavigateUsesLifespanCtx:
 
         ctx = _make_mcp_ctx(_make_app_ctx([]))  # empty ctx allowlist — deny by default
         # env var allows the domain, but navigate must NOT consult it
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "trusted.example.com"}), pytest.raises(ToolError):
+        with (
+            patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "trusted.example.com"}),
+            pytest.raises(ToolError),
+        ):
             await navigate(ctx, url="https://trusted.example.com/page")
 
     @pytest.mark.asyncio

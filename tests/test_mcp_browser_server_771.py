@@ -63,7 +63,8 @@ class TestFromAC_ToolAnnotations:
         annotations = _get_tool_annotations("navigate")
         assert annotations is not None, "navigate has no ToolAnnotations; idempotentHint=True must be set"
         assert annotations.idempotentHint is True, (  # type: ignore[union-attr]
-            f"Expected idempotentHint=True for navigate, got: {annotations.idempotentHint!r}"  # type: ignore[union-attr]
+            "Expected idempotentHint=True for navigate,"
+            f" got: {annotations.idempotentHint!r}"  # type: ignore[union-attr]
         )
 
     def test_select_has_idempotent_hint_true(self) -> None:

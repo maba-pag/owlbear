@@ -340,10 +340,14 @@ class TestFromAC_NoEntityAccumulationOnRefresh:
         source = "test://entity-accumulation"
 
         # Fails: content_cleaner kwarg not accepted
-        await pipeline.ingest(_make_intake("content v1", source=source), content_cleaner=_strip_tags)  # type: ignore[call-arg]
+        await pipeline.ingest(
+            _make_intake("content v1", source=source), content_cleaner=_strip_tags,
+        )  # type: ignore[call-arg]
         count_after_first = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
 
-        await pipeline.ingest(_make_intake("content v2", source=source), content_cleaner=_strip_tags)  # type: ignore[call-arg]
+        await pipeline.ingest(
+            _make_intake("content v2", source=source), content_cleaner=_strip_tags,
+        )  # type: ignore[call-arg]
         count_after_second = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
 
         assert count_after_first > 0  # entities were actually stored
@@ -359,9 +363,15 @@ class TestFromAC_NoEntityAccumulationOnRefresh:
         source = "test://multi-refresh"
 
         # Fails: content_cleaner kwarg not accepted
-        await pipeline.ingest(_make_intake("version one", source=source), content_cleaner=_strip_tags)  # type: ignore[call-arg]
-        await pipeline.ingest(_make_intake("version two", source=source), content_cleaner=_strip_tags)  # type: ignore[call-arg]
-        await pipeline.ingest(_make_intake("version three", source=source), content_cleaner=_strip_tags)  # type: ignore[call-arg]
+        await pipeline.ingest(
+            _make_intake("version one", source=source), content_cleaner=_strip_tags,
+        )  # type: ignore[call-arg]
+        await pipeline.ingest(
+            _make_intake("version two", source=source), content_cleaner=_strip_tags,
+        )  # type: ignore[call-arg]
+        await pipeline.ingest(
+            _make_intake("version three", source=source), content_cleaner=_strip_tags,
+        )  # type: ignore[call-arg]
 
         total_entities = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         # Must equal 1 (from the last ingest cycle), not 3 (accumulated across all cycles)
@@ -377,10 +387,14 @@ class TestFromAC_NoEntityAccumulationOnRefresh:
         source = "test://edge-refresh"
 
         # Fails: content_cleaner kwarg not accepted
-        await pipeline.ingest(_make_intake("edge content v1", source=source), content_cleaner=_strip_tags)  # type: ignore[call-arg]
+        await pipeline.ingest(
+            _make_intake("edge content v1", source=source), content_cleaner=_strip_tags,
+        )  # type: ignore[call-arg]
         edge_count_first = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
 
-        await pipeline.ingest(_make_intake("edge content v2", source=source), content_cleaner=_strip_tags)  # type: ignore[call-arg]
+        await pipeline.ingest(
+            _make_intake("edge content v2", source=source), content_cleaner=_strip_tags,
+        )  # type: ignore[call-arg]
         edge_count_second = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
 
         assert edge_count_first > 0  # edges were actually stored
