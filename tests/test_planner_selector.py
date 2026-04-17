@@ -198,8 +198,8 @@ class TestFromAC_SelectTasks:
         result = select_tasks(tasks)
         assert len(result.entries) <= DISPATCH_CAP
 
-    def test_decomp_override_maps_to_kanban_planner(self) -> None:
-        """Task with 'Needs decomposition:' in body dispatches to 'kanban-planner' agent."""
+    def test_decomp_override_maps_to_planner(self) -> None:
+        """Task with 'Needs decomposition:' in body dispatches to 'planner' agent."""
         task = _task(
             id=99,
             status="todo",

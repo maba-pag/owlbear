@@ -536,7 +536,7 @@ class TestFromAC_URLConfiguration:
 
     def test_default_urls_include_at_least_five_entries(
         self,
-        trafilatura_stub: MagicMock,
+        trafilatura_stub: MagicMock,  # noqa: ARG002
         monkeypatch: pytest.MonkeyPatch,  # noqa: ARG002
     ) -> None:
         """Default URL list must have at least 5 entries when no env/CLI override is given."""

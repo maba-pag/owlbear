@@ -258,7 +258,7 @@ class TestFromAC_TaskSelector:
         assert STATUS_AGENT_MAP["todo"] == "test-writer"
         assert STATUS_AGENT_MAP["in-progress"] == "builder"
         assert STATUS_AGENT_MAP["review"] == "reviewer"
-        assert STATUS_AGENT_MAP["docs"] == "writer"
+        assert STATUS_AGENT_MAP["docs"] == "doc-writer"
         assert STATUS_AGENT_MAP["done"] == "auditor"
 
     # -- DISPATCH_CAP constant ----------------------------------------------
@@ -368,7 +368,7 @@ class TestFromAC_TaskSelector:
 
     # -- select_tasks DECOMP routing override ------------------------------
 
-    def test_decomp_override_routes_agent_to_kanban_planner(self) -> None:
+    def test_decomp_override_routes_agent_to_planner(self) -> None:
         task = _make_task(
             title="Feature",
             status="todo",

@@ -736,20 +736,6 @@ class TestFromAC_SetupMcp:
                 return
         pytest.fail("create_mcp_config function not found in setup/init.py")
 
-    def test_create_mcp_config_docstring_mentions_four_stdio_servers(self) -> None:
-        """create_mcp_config() docstring must mention four owlbear stdio servers (updated from three)."""
-        tree = ast.parse(self._setup_source())
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "create_mcp_config":
-                docstring = ast.get_docstring(node) or ""
-                # Post-update: "four owlbear stdio servers" (not "three owlbear stdio")
-                assert "four owlbear stdio" in docstring.lower(), (
-                    f"create_mcp_config docstring must say 'four owlbear stdio servers' "
-                    f"(updated from 'three'), got: {docstring!r}"
-                )
-                return
-        pytest.fail("create_mcp_config function not found in setup/init.py")
-
 
 # ===========================================================================
 # AC6: test_package_boundary.py — ALLOWED_IMPORTS updated

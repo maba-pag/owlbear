@@ -65,9 +65,9 @@ AGENT_PROMPT_PREFIX: dict[str, str] = {
     "reviewer": "Review",
     "test-writer": "Write tests",
     "researcher": "Research",
-    "writer": "Docs Gate",
+    "doc-writer": "Docs Gate",
     "auditor": "Audit",
-    "kanban-planner": "Plan",
+    "planner": "Plan",
     "curator": "Curate: Periodic curation",
 }
 

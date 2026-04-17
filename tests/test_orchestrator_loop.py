@@ -102,7 +102,7 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         agents = _wave_agents(waves[0])
         assert agents[0] == "auditor"
         assert "researcher" in agents
-        assert "writer" in agents
+        assert "doc-writer" in agents
 
     def test_builder_wave_fills_with_heavy_flex_when_no_light(self) -> None:
         """Builder wave fills slots with heavy flex when no light flex remains."""
@@ -131,10 +131,10 @@ class TestFromAC_WaveAssembly:  # noqa: N801
         assert len(waves) == 1
         agents = _wave_agents(waves[0])
         assert "builder" in agents
-        assert "writer" in agents
+        assert "doc-writer" in agents
         assert "reviewer" in agents
-        # light flex (writer) must come before heavy flex (reviewer) within the wave
-        assert agents.index("writer") < agents.index("reviewer")
+        # light flex (doc-writer) must come before heavy flex (reviewer) within the wave
+        assert agents.index("doc-writer") < agents.index("reviewer")
 
     def test_multiple_builders_one_per_wave(self) -> None:
         """No two builders ever share a wave."""
