@@ -157,7 +157,7 @@ Any vulnerability = FAIL.
 
 > **Conditional:** Only when `TestFromAC_*` classes exist.
 
-**Immutability scope:** TestFromAC immutability applies during the active pipeline (task creation through archive). The reviewer enforces this — any builder modification to `TestFromAC_*` assertions is a FAIL. Post-archive, the curator agent has authority to promote, consolidate, or remove assertions.
+**Immutability scope:** TestFromAC immutability applies during the active pipeline (task creation through archive). The reviewer enforces this — any builder modification to `TestFromAC_*` assertions is a FAIL. Post-archive, the test-curator agent has authority to promote, consolidate, or remove assertions.
 
 Compare each `TestFromAC_*` test method against the test-writer's original intent. Produce a comparison table:
 

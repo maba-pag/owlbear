@@ -80,7 +80,7 @@ After confirming the task-scoped tests fail, also run the module's durable test 
 uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
 ```
 
-This gives early cross-task regression signal without full-suite cost. If `tests/test_{module}.py` does not exist, skip with a note — module-level files are curator-managed.
+This gives early cross-task regression signal without full-suite cost. If `tests/test_{module}.py` does not exist, skip with a note — module-level files are test-curator-managed.
 
 ## Step 3 — Implement Minimal Code (GREEN)
 

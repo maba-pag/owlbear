@@ -82,14 +82,14 @@ Create `tests/test_{module}_{task_id}.py` with class `TestFromAC_{Feature}`:
 - `from __future__ import annotations` at top of new files.
 - Type hints on test helper functions.
 
-**File naming:** Task-scoped tests use `test_{module}_{task_id}.py` (transient — removed by curator post-archive). Module-level `test_{module}.py` files are curator-managed and must not be created or edited by the test-writer.
+**File naming:** Task-scoped tests use `test_{module}_{task_id}.py` (transient — removed by test-curator post-archive). Module-level `test_{module}.py` files are test-curator-managed and must not be created or edited by the test-writer.
 
 **Class naming convention:**
 
 - `TestFromAC_{Feature}` — tests written by the test-writer from AC.
 - Never use `TestBuilderDiscovered` — that is the builder's convention.
 
-**TestFromAC immutability:** During the active pipeline (task creation through archive), `TestFromAC_*` classes are immutable — the builder cannot weaken, remove, or modify them. Post-archive, the curator gains authority to promote, consolidate, or remove assertions.
+**TestFromAC immutability:** During the active pipeline (task creation through archive), `TestFromAC_*` classes are immutable — the builder cannot weaken, remove, or modify them. Post-archive, the test-curator gains authority to promote, consolidate, or remove assertions.
 
 ## Step 5 — Verify RED
 
