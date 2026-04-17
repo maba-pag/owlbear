@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## PreToolUse Guard Hooks Test Approach (Task #891)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse hook I/O contract: stdin JSON schema, stdout allow/deny format, exit code semantics, fail-open spec | `.owlbear/research/891-pretooluse-hooks-test-approach.md` | 2026-04-17 |
+
 ## Copilot SDK vs OpenAI-Compat Endpoint Research (Task #887)
 
 | Source | URL | License | What we studied | Where Used | Date |
