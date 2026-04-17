@@ -23,6 +23,12 @@ import pytest
 from owlbear_mcp_knowledge.server import app_lifespan, mcp  # type: ignore[import]
 
 
+@pytest.fixture(autouse=True)
+def _bypass_copilot_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set a fake LLM API key so app_lifespan skips the Copilot device-auth flow."""
+    monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "test-key")
+
+
 # ---------------------------------------------------------------------------
 # Test classes
 # ---------------------------------------------------------------------------
@@ -161,7 +167,7 @@ class TestFromAC_ServerLifespan:
             patch("owlbear_mcp_knowledge.server.QdrantVectorStore"),
             patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
             patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
-            patch.dict("os.environ", {}, clear=True),
+            patch.dict("os.environ", {"OWLBEAR_LLM_API_KEY": "test-key"}, clear=True),
         ):
             fake_server = MagicMock()
             async with app_lifespan(fake_server):
