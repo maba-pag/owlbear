@@ -134,6 +134,7 @@ class KanbanEngine:
         self._revision: int = 0
         self._task_cache: dict[str, tuple[int, Task]] = {}
         self._archive_cache: dict[str, tuple[int, Task]] = {}
+        self._id_to_filename: dict[int, str] = {}
 
     @property
     def agent_name(self) -> str:
@@ -181,6 +182,7 @@ class KanbanEngine:
         self._archive_dir = self._kanban_dir / self._config.archive_dir
         self._task_cache = {}
         self._archive_cache = {}
+        self._id_to_filename = {}
 
     def valid_transitions(self, status: str) -> set[str]:
         """Return the set of all configured statuses except *status*.
@@ -267,6 +269,14 @@ class KanbanEngine:
             if name not in seen:
                 del cache[name]
 
+        if not archived:
+            self._id_to_filename = dict(
+                sorted(
+                    (cached_task.id, filename)
+                    for filename, (_, cached_task) in self._task_cache.items()
+                )
+            )
+
         # --- Filters ---
         if status:
             tasks = [t for t in tasks if t.status == status]
@@ -316,6 +326,27 @@ class KanbanEngine:
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md`` in tasks_dir.
         """
+        try:
+            int_id = int(task_id)
+        except ValueError:
+            int_id = None
+
+        if int_id is not None and int_id in self._id_to_filename:
+            filename = self._id_to_filename[int_id]
+            path = self._tasks_dir / filename
+            try:
+                mtime_ns = path.stat().st_mtime_ns
+            except FileNotFoundError:
+                self._task_cache.pop(filename, None)
+                del self._id_to_filename[int_id]
+                msg = f"Task {task_id!r} not found in {self._tasks_dir}"
+                raise FileNotFoundError(msg) from None
+            if filename in self._task_cache and self._task_cache[filename][0] == mtime_ns:
+                return self._task_cache[filename][1]
+            task = read_task(path)
+            self._task_cache[filename] = (mtime_ns, task)
+            return task
+
         matches = list(self._tasks_dir.glob(f"{task_id}-*.md"))
         if not matches:
             msg = f"Task {task_id!r} not found in {self._tasks_dir}"
@@ -880,6 +911,14 @@ class KanbanEngine:
         Raises:
             FileNotFoundError: No matching file found.
         """
+        if search_dir == self._tasks_dir and self._id_to_filename:
+            try:
+                int_id = int(task_id)
+            except ValueError:
+                int_id = None
+            if int_id is not None and int_id in self._id_to_filename:
+                return self._tasks_dir / self._id_to_filename[int_id]
+
         matches = list(search_dir.glob(f"{task_id}-*.md"))
         if not matches:
             msg = f"Task {task_id!r} not found in {search_dir}"
