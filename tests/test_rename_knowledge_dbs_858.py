@@ -237,6 +237,7 @@ class TestFromAC_EnvVarRenameServer:
         custom_path = "/custom/local/mydb.db"
         monkeypatch.setenv("OWLBEAR_LOCAL_KB_PATH", custom_path)
         monkeypatch.delenv("OWLBEAR_KB_PATH", raising=False)
+        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "test-key")
 
         with (
             patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn) as mock_init,
@@ -262,6 +263,7 @@ class TestFromAC_EnvVarRenameServer:
         old_path = "/old/kb_path.db"
         monkeypatch.setenv("OWLBEAR_LOCAL_KB_PATH", local_path)
         monkeypatch.setenv("OWLBEAR_KB_PATH", old_path)
+        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "test-key")
 
         with (
             patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn) as mock_init,
@@ -286,6 +288,7 @@ class TestFromAC_EnvVarRenameServer:
         mock_conn = MagicMock()
         monkeypatch.delenv("OWLBEAR_LOCAL_KB_PATH", raising=False)
         monkeypatch.delenv("OWLBEAR_KB_PATH", raising=False)
+        monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "test-key")
 
         with (
             patch("owlbear_mcp_knowledge.server.init_db", return_value=mock_conn) as mock_init,
