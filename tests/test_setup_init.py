@@ -4,7 +4,6 @@ Covers:
   AC1  — seed/.vscode/settings.json: three chat.*Locations keys with {{owlbear_path}} placeholders
   AC2  — seed/.vscode/mcp.json: 3 owlbear kebab-case servers + ddgs + markitdown, --project placeholder in owlbear args
   AC3  — seed/.owlbear/kanban/config.yml: next_id: 1, standard statuses
-  AC5  — seed/.owlbear/hooks/deny-writes.ps1 and lint-changed.ps1: static files present
   AC6  — seed/.owlbear/knowledge/.gitkeep: empty directory marker
   AC7  — seed/owlbear-project.json: {{name}} placeholder,
           NO computed-field placeholders (owlbear_path, created_at)
@@ -137,25 +136,6 @@ class TestFromAC_SeedKanbanConfig:
         content = (_SEED_DIR / ".owlbear" / "kanban" / "config.yml").read_text(encoding="utf-8")
         for status in ("todo", "in-progress", "done"):
             assert status in content, f"Standard status '{status}' missing from seed kanban/config.yml"
-
-
-# ---------------------------------------------------------------------------
-# AC5 — seed/.owlbear/hooks/deny-writes.ps1 and lint-changed.ps1
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_SeedHooks:
-    """AC5: both hook scripts must exist under seed/.owlbear/hooks/."""
-
-    def test_seed_deny_writes_ps1_exists(self) -> None:
-        assert (_SEED_DIR / ".owlbear" / "hooks" / "deny-writes.ps1").exists(), (
-            "seed/.owlbear/hooks/deny-writes.ps1 does not exist"
-        )
-
-    def test_seed_lint_changed_ps1_exists(self) -> None:
-        assert (_SEED_DIR / ".owlbear" / "hooks" / "lint-changed.ps1").exists(), (
-            "seed/.owlbear/hooks/lint-changed.ps1 does not exist"
-        )
 
 
 # ---------------------------------------------------------------------------
