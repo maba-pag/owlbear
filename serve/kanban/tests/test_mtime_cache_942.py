@@ -394,10 +394,18 @@ class TestFromAC_MtimeCache:
         """If read_task() raises FileNotFoundError for a cached file, evict that cache entry."""
         tasks_dir = board / "tasks"
         eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
-        eng.list_tasks()  # populate cache
+        eng.list_tasks()  # cold call — populate cache
 
         md_files = sorted(tasks_dir.glob("*.md"))
-        target_name = md_files[0].name
+        target = md_files[0]
+        target_name = target.name
+        assert target_name in eng._task_cache, "pre-condition: target in cache"
+
+        # Force mtime change so next scandir sees the entry as modified (cache miss),
+        # causing read_task() to be called — without this the warm call is a cache hit
+        # and read_task() is never invoked, making the FileNotFoundError unreachable.
+        time.sleep(0.01)
+        target.write_bytes(target.read_bytes())
 
         original_read_task = __import__(
             "owlbear_kanban.task_io", fromlist=["read_task"]
