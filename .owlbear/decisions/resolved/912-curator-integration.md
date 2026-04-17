@@ -1,7 +1,7 @@
 ---
 # >> Your action: set response to approved, needs-info, or rejected
 response: approved
-decision: "C: Coverage-gap mining + manual prompt invocation"
+decision: "D: Manual dispatch only — with coverage-gap mining workflow"
 notes: "Approach C confirmed. Invocation: manual prompt (user-invocable, like agent-audit). Not task-scoped — operates on the test suite as a whole. Scans for archived task-tests, measures module coverage without them, mines gaps, deletes rest."
 # >> Agent metadata
 task_id: 912
@@ -28,7 +28,7 @@ The orchestrator dispatches the test-curator immediately when `end_work` archive
 
 - Effort: ~0.5 day — add one dispatch call to the orchestrator's archive path in `w-orchestration`
 - Trade-off: simplest integration; immediate curation with minimal infrastructure
-- Risk: if the next task reaches test-writer before curator finishes, both touch `tests/` — but different files (`test_{module}.py` vs `test_{module}_{task_id}.py`), so no conflict
+- Risk: if the next task reaches test-writer before test-curator finishes, both touch `tests/` — but different files (`test_{module}.py` vs `test_{module}_{task_id}.py`), so no conflict
 - Confidence: .85
 
 ### B: Parallel dispatch with next wave

@@ -103,3 +103,5 @@ one caused an import error (fixture not available in module context). Coverage
 gate failed. Reverted test_moduleD.py, kept task-tests in place, logged as
 "skip" in curator-log.jsonl. Moved to next module. Suite stayed green.
 </good_example>
+
+</examples>

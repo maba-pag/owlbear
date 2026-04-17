@@ -163,7 +163,7 @@ Append to task body before advancing:
 
 ```
 ## Test-Writer Notes
-- Test file: tests/test_{module}.py
+- Test file: tests/test_{module}_{task_id}.py
 - Classes: {list of TestFromAC_ classes}
 - Tests per category: happy {h}, edge {e}, error {r}, boundary {b}
 - Total: {N} tests, all FAIL
