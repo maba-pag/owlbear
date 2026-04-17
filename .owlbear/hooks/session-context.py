@@ -1,7 +1,6 @@
 """session-context.py — SessionStart hook for pipeline agents.
 
 Reads stdin JSON, runs git branch/log, outputs SessionStart additionalContext.
-Python port of session-context.ps1 — bug-for-bug equivalent.
 Returns {} on any failure (non-blocking, fail-open).
 Usage: invoked automatically by VS Code as a SessionStart hook.
 """
