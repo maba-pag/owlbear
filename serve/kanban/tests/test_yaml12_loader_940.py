@@ -481,3 +481,34 @@ class TestFromAC_WriteReadRoundTrip:
         assert validated.claimed_by == "builder"
         assert validated.block_reason is None
         assert "Some body text." in validated.body
+
+    def test_write_task_calls_make_yaml_for_ruamel_output(self, tmp_path: Path) -> None:
+        """write_task() must call _make_yaml() — asserts ruamel.yaml is used, not pyyaml.dump.
+
+        Replacing _make_yaml() with yaml.dump() would pass the data-equivalence round-trip
+        tests but would silently break comment/formatting fidelity for human-edited tasks.
+        This test catches that swap mechanistically.
+        """
+        from unittest.mock import patch
+
+        from owlbear_kanban.models import Task
+        from owlbear_kanban.task_io import write_task
+
+        task = Task(
+            id=3,
+            title="Write Task Mechanism",
+            status="todo",
+            priority="needed",
+            created="2026-04-09T03:24:26.6974428+02:00",
+            updated="2026-04-17T20:16:32.171661+00:00",
+            blocked=False,
+        )
+        task_file = tmp_path / "3-mechanism.md"
+
+        with patch("owlbear_kanban.task_io._make_yaml") as mock_make_yaml:
+            write_task(task_file, task)
+
+        assert mock_make_yaml.called, (
+            "_make_yaml() must be called in write_task() — "
+            "write path must use ruamel.yaml for round-trip fidelity, not pyyaml"
+        )
