@@ -31,11 +31,7 @@ def _read_entries(log_path: Path) -> list[dict]:
     """Parse a JSONL file into a list of dicts. Returns [] if file is missing."""
     if not log_path.exists():
         return []
-    return [
-        json.loads(line)
-        for line in log_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def _reset_log(kanban_dir: Path) -> None:
@@ -128,16 +124,12 @@ class TestFromAC_ActorFieldPresent:
         entry = _read_entries(log_path)[0]
         assert len(entry["actor"]) > 0
 
-    def test_existing_fields_still_present_alongside_actor(
-        self, tmp_path: Path
-    ) -> None:
+    def test_existing_fields_still_present_alongside_actor(self, tmp_path: Path) -> None:
         """Adding actor does not drop timestamp, action, task_id, or detail."""
         log_path = tmp_path / "activity.jsonl"
         log_activity(log_path, "create", 7, "task title", actor="engine")
         entry = _read_entries(log_path)[0]
-        assert {"timestamp", "action", "task_id", "detail", "actor"} <= set(
-            entry.keys()
-        )
+        assert {"timestamp", "action", "task_id", "detail", "actor"} <= set(entry.keys())
 
 
 # ===========================================================================
@@ -155,12 +147,14 @@ class TestFromAC_BackwardCompat:
     def test_old_and_new_entries_coexist_in_same_log(self, tmp_path: Path) -> None:
         """Old-format entry followed by new actor-carrying entry both parse OK."""
         log_path = tmp_path / "activity.jsonl"
-        old_entry = json.dumps({
-            "timestamp": "2025-01-01T00:00:00+00:00",
-            "action": "create",
-            "task_id": 1,
-            "detail": "pre-actor entry",
-        })
+        old_entry = json.dumps(
+            {
+                "timestamp": "2025-01-01T00:00:00+00:00",
+                "action": "create",
+                "task_id": 1,
+                "detail": "pre-actor entry",
+            }
+        )
         log_path.write_text(old_entry + "\n", encoding="utf-8")
         # Append new entry — fails RED because log_activity lacks actor kwarg
         log_activity(log_path, "edit", 2, "post-actor entry", actor="engine")
@@ -170,29 +164,33 @@ class TestFromAC_BackwardCompat:
     def test_old_entry_actor_key_absent_not_key_error(self, tmp_path: Path) -> None:
         """Old entry has no actor key while new entry has one — both parse fine."""
         log_path = tmp_path / "activity.jsonl"
-        old_entry = json.dumps({
-            "timestamp": "2025-06-01T12:00:00+00:00",
-            "action": "move",
-            "task_id": 10,
-            "detail": "todo -> in-progress",
-        })
+        old_entry = json.dumps(
+            {
+                "timestamp": "2025-06-01T12:00:00+00:00",
+                "action": "move",
+                "task_id": 10,
+                "detail": "todo -> in-progress",
+            }
+        )
         log_path.write_text(old_entry + "\n", encoding="utf-8")
         # Append new entry — fails RED: TypeError
         log_activity(log_path, "create", 11, "new entry", actor="orchestrator")
         entries = _read_entries(log_path)
-        assert "actor" not in entries[0]   # old entry: no actor
-        assert "actor" in entries[1]       # new entry: actor present
+        assert "actor" not in entries[0]  # old entry: no actor
+        assert "actor" in entries[1]  # new entry: actor present
 
     def test_bulk_legacy_entries_followed_by_new_entry(self, tmp_path: Path) -> None:
         """Many old-format entries followed by one new-format entry all load fine."""
         log_path = tmp_path / "activity.jsonl"
         lines = [
-            json.dumps({
-                "timestamp": "2025-01-01T00:00:00+00:00",
-                "action": "edit",
-                "task_id": i,
-                "detail": f"legacy detail {i}",
-            })
+            json.dumps(
+                {
+                    "timestamp": "2025-01-01T00:00:00+00:00",
+                    "action": "edit",
+                    "task_id": i,
+                    "detail": f"legacy detail {i}",
+                }
+            )
             for i in range(5)
         ]
         log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -206,12 +204,14 @@ class TestFromAC_BackwardCompat:
     def test_legacy_entry_actor_get_returns_none(self, tmp_path: Path) -> None:
         """Old entries where actor is absent: .get('actor') returns None gracefully."""
         log_path = tmp_path / "activity.jsonl"
-        old_entry = json.dumps({
-            "timestamp": "2024-12-31T00:00:00+00:00",
-            "action": "claim",
-            "task_id": 42,
-            "detail": "test-agent",
-        })
+        old_entry = json.dumps(
+            {
+                "timestamp": "2024-12-31T00:00:00+00:00",
+                "action": "claim",
+                "task_id": 42,
+                "detail": "test-agent",
+            }
+        )
         log_path.write_text(old_entry + "\n", encoding="utf-8")
         # Append new entry — fails RED: TypeError
         log_activity(log_path, "release", 42, "test-agent", actor="engine")
@@ -230,9 +230,7 @@ class TestFromAC_BackwardCompat:
 class TestFromAC_DefaultActorEngine:
     """Tests for AC3: omitting the actor kwarg produces actor='engine' in entry."""
 
-    def test_default_actor_is_engine_when_kwarg_omitted(
-        self, tmp_path: Path
-    ) -> None:
+    def test_default_actor_is_engine_when_kwarg_omitted(self, tmp_path: Path) -> None:
         """Calling log_activity without actor kwarg produces actor='engine'."""
         log_path = tmp_path / "activity.jsonl"
         log_activity(log_path, "create", 1, "no actor kwarg")
@@ -265,9 +263,7 @@ class TestFromAC_DefaultActorEngine:
         "verb",
         ["create", "edit", "move", "claim", "release", "block", "unblock"],
     )
-    def test_default_actor_engine_for_all_verbs(
-        self, tmp_path: Path, verb: str
-    ) -> None:
+    def test_default_actor_engine_for_all_verbs(self, tmp_path: Path, verb: str) -> None:
         """Default actor='engine' applies regardless of action verb."""
         log_path = tmp_path / f"activity_{verb}.jsonl"
         log_activity(log_path, verb, 10, f"{verb} detail")
@@ -293,9 +289,7 @@ class TestFromAC_ActorInAllActionTypes:
         "verb",
         ["create", "edit", "move", "claim", "release", "block", "unblock"],
     )
-    def test_actor_field_present_for_verb(
-        self, tmp_path: Path, verb: str
-    ) -> None:
+    def test_actor_field_present_for_verb(self, tmp_path: Path, verb: str) -> None:
         """Actor field present in log entry for every supported action verb."""
         log_path = tmp_path / f"activity_{verb}.jsonl"
         log_activity(log_path, verb, 10, f"{verb} detail", actor="engine")
@@ -306,9 +300,7 @@ class TestFromAC_ActorInAllActionTypes:
         "verb",
         ["create", "edit", "move", "claim", "release", "block", "unblock"],
     )
-    def test_actor_value_correct_for_verb(
-        self, tmp_path: Path, verb: str
-    ) -> None:
+    def test_actor_value_correct_for_verb(self, tmp_path: Path, verb: str) -> None:
         """Actor value matches kwarg for every supported action verb."""
         log_path = tmp_path / f"activity_{verb}.jsonl"
         log_activity(log_path, verb, 10, f"{verb} detail", actor="test-agent")
@@ -317,9 +309,7 @@ class TestFromAC_ActorInAllActionTypes:
 
     # --- Integration-level: KanbanEngine wiring ---
 
-    def test_engine_create_logs_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_engine_create_logs_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """KanbanEngine.create_task produces a log entry with actor field."""
         engine.create_task(title="Actor test task")
         log_path = kanban_dir / "activity.jsonl"
@@ -328,9 +318,7 @@ class TestFromAC_ActorInAllActionTypes:
         assert len(create_entries) >= 1
         assert "actor" in create_entries[0]
 
-    def test_engine_edit_logs_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_engine_edit_logs_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """KanbanEngine.edit_task produces a log entry with actor field."""
         task = engine.create_task(title="Task to edit")
         _reset_log(kanban_dir)
@@ -340,9 +328,7 @@ class TestFromAC_ActorInAllActionTypes:
         assert len(edit_entries) >= 1
         assert "actor" in edit_entries[0]
 
-    def test_engine_move_logs_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_engine_move_logs_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """KanbanEngine.move_task produces a log entry with actor field."""
         task = engine.create_task(title="Task to move")
         _reset_log(kanban_dir)
@@ -352,9 +338,7 @@ class TestFromAC_ActorInAllActionTypes:
         assert len(move_entries) >= 1
         assert "actor" in move_entries[0]
 
-    def test_engine_claim_logs_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_engine_claim_logs_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """KanbanEngine.claim_task produces a log entry with actor field."""
         task = engine.create_task(title="Task to claim")
         _reset_log(kanban_dir)
@@ -364,9 +348,7 @@ class TestFromAC_ActorInAllActionTypes:
         assert len(claim_entries) >= 1
         assert "actor" in claim_entries[0]
 
-    def test_engine_release_logs_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_engine_release_logs_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """KanbanEngine.release_task produces a log entry with actor field."""
         task = engine.create_task(title="Task to release")
         engine.claim_task(str(task.id))
@@ -377,9 +359,7 @@ class TestFromAC_ActorInAllActionTypes:
         assert len(release_entries) >= 1
         assert "actor" in release_entries[0]
 
-    def test_engine_block_logs_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_engine_block_logs_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """KanbanEngine.edit_task(blocked=True) produces a log entry with actor field."""
         task = engine.create_task(title="Task to block")
         _reset_log(kanban_dir)
@@ -389,9 +369,7 @@ class TestFromAC_ActorInAllActionTypes:
         assert len(block_entries) >= 1
         assert "actor" in block_entries[0]
 
-    def test_engine_unblock_logs_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_engine_unblock_logs_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """KanbanEngine.edit_task(blocked=False) from blocked state logs actor."""
         task = engine.create_task(title="Task to unblock")
         engine.edit_task(str(task.id), blocked=True, block_reason="blocked")

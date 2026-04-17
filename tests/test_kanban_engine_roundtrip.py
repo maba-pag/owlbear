@@ -76,9 +76,7 @@ class TestFromAC_LiveBoardRoundTrip:
                 read_task(path)
             except Exception as exc:  # noqa: BLE001
                 parse_errors.append(f"{path.name}: {type(exc).__name__}: {exc}")
-        assert not parse_errors, (
-            f"{len(parse_errors)} file(s) failed to parse:\n" + "\n".join(parse_errors[:30])
-        )
+        assert not parse_errors, f"{len(parse_errors)} file(s) failed to parse:\n" + "\n".join(parse_errors[:30])
 
     def test_all_task_files_yield_non_zero_id(self) -> None:
         """Every parsed Task has id > 0 — no zero or negative IDs in live board."""
@@ -118,9 +116,8 @@ class TestFromAC_LiveBoardRoundTrip:
                 roundtrip_dump = roundtripped.model_dump()
                 diffs = [k for k in original_dump if original_dump[k] != roundtrip_dump.get(k)]
                 mismatches.append(f"{path.name}: differing keys={diffs}")
-        assert not mismatches, (
-            f"model_dump() mismatch after round-trip in {len(mismatches)} file(s):\n"
-            + "\n".join(mismatches[:20])
+        assert not mismatches, f"model_dump() mismatch after round-trip in {len(mismatches)} file(s):\n" + "\n".join(
+            mismatches[:20]
         )
 
     # -----------------------------------------------------------------------
@@ -153,9 +150,7 @@ class TestFromAC_LiveBoardRoundTrip:
         roundtripped_config = load_config(tmp_path)
         roundtripped_dump = roundtripped_config.model_dump()
         # tui is a top-level vendor field in the live .owlbear/kanban/config.yml
-        assert roundtripped_dump.get("tui") == original_dump.get("tui"), (
-            "Vendor field 'tui' lost in config round-trip"
-        )
+        assert roundtripped_dump.get("tui") == original_dump.get("tui"), "Vendor field 'tui' lost in config round-trip"
         # defaults.class is a vendor field set on BoardDefaults
         orig_defaults = original_config.defaults.model_dump()
         rt_defaults = roundtripped_config.defaults.model_dump()
@@ -215,12 +210,10 @@ class TestFromAC_LiveBoardRoundTrip:
             roundtripped = read_task(tmp_file)
             if roundtripped.body != original.body:
                 body_mismatches.append(
-                    f"{path.name}: original={len(original.body)}b "
-                    f"roundtripped={len(roundtripped.body)}b"
+                    f"{path.name}: original={len(original.body)}b roundtripped={len(roundtripped.body)}b"
                 )
-        assert not body_mismatches, (
-            f"Body content changed in {len(body_mismatches)} file(s):\n"
-            + "\n".join(body_mismatches[:20])
+        assert not body_mismatches, f"Body content changed in {len(body_mismatches)} file(s):\n" + "\n".join(
+            body_mismatches[:20]
         )
 
     def test_body_field_is_never_none(self) -> None:
@@ -237,6 +230,4 @@ class TestFromAC_LiveBoardRoundTrip:
                 continue
             if record.body is None:
                 none_body.append(path.name)
-        assert not none_body, (
-            f"body is None (not '') in {len(none_body)} file(s):\n" + "\n".join(none_body)
-        )
+        assert not none_body, f"body is None (not '') in {len(none_body)} file(s):\n" + "\n".join(none_body)

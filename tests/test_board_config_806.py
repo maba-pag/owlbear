@@ -130,9 +130,7 @@ class TestFromAC_BoardConfig_806:
     # AC2 — repeated calls return equal but distinct objects
     # ------------------------------------------------------------------
 
-    def test_board_config_repeated_calls_return_equal_objects(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_repeated_calls_return_equal_objects(self, engine: KanbanEngine) -> None:
         """Two successive calls with no writes between them return equivalent configs.
 
         This verifies that the engine's cached _config remains stable and that
@@ -144,9 +142,7 @@ class TestFromAC_BoardConfig_806:
         assert copy1.priorities == copy2.priorities
         assert copy1.version == copy2.version
 
-    def test_board_config_repeated_calls_return_distinct_objects(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_repeated_calls_return_distinct_objects(self, engine: KanbanEngine) -> None:
         """Two successive calls must return distinct objects, not the same identity.
 
         If board_config() returned engine._config directly (no copy), mutating
@@ -162,9 +158,7 @@ class TestFromAC_BoardConfig_806:
     # engine._config.board, so mutating copy.board.name corrupts engine state.
     # ------------------------------------------------------------------
 
-    def test_board_config_board_submodel_mutation_does_not_leak_to_engine(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_board_submodel_mutation_does_not_leak_to_engine(self, engine: KanbanEngine) -> None:
         """Mutating board.name on the returned copy must not affect engine state.
 
         With model_copy() (shallow), copy.board is the same BoardInfo instance
@@ -182,9 +176,7 @@ class TestFromAC_BoardConfig_806:
     # With shallow model_copy(), copy.defaults is the same BoardDefaults object.
     # ------------------------------------------------------------------
 
-    def test_board_config_defaults_submodel_mutation_does_not_leak_to_engine(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_defaults_submodel_mutation_does_not_leak_to_engine(self, engine: KanbanEngine) -> None:
         """Mutating defaults.status on the returned copy must not affect engine state.
 
         With model_copy() (shallow), copy.defaults is the same BoardDefaults

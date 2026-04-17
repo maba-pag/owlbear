@@ -86,8 +86,7 @@ class TestFromAC_LifespanBrowserFetcherWiring:
         with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(MagicMock()) as ctx:
                 assert isinstance(ctx.fetcher, BrowserContentFetcher), (
-                    f"AppContext.fetcher must be a BrowserContentFetcher instance;"
-                    f" got {type(ctx.fetcher)!r}"
+                    f"AppContext.fetcher must be a BrowserContentFetcher instance; got {type(ctx.fetcher)!r}"
                 )
 
     # ------------------------------------------------------------------
@@ -128,9 +127,7 @@ class TestFromAC_LifespanBrowserFetcherWiring:
 
         assert fetcher1 is not None, "First lifespan invocation must provide a non-None fetcher"
         assert fetcher2 is not None, "Second lifespan invocation must provide a non-None fetcher"
-        assert fetcher1 is not fetcher2, (
-            "Each lifespan invocation must create an independent BrowserContentFetcher"
-        )
+        assert fetcher1 is not fetcher2, "Each lifespan invocation must create an independent BrowserContentFetcher"
 
 
 # ===========================================================================
@@ -162,8 +159,7 @@ class TestBuilderDiscovered:
         with patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=mock_launcher):
             async with app_lifespan(MagicMock()) as ctx:
                 assert ctx.fetcher is None, (
-                    "fetcher must be None when PlaywrightLauncher.launch() raises;"
-                    f" got {ctx.fetcher!r}"
+                    f"fetcher must be None when PlaywrightLauncher.launch() raises; got {ctx.fetcher!r}"
                 )
 
     # ------------------------------------------------------------------
@@ -207,9 +203,7 @@ class TestBuilderDiscovered:
 
         await navigate(ctx, url="https://corp.example.com/report")
 
-        assert app_ctx.last_content == fetched, (
-            f"last_content must equal fetched content; got {app_ctx.last_content!r}"
-        )
+        assert app_ctx.last_content == fetched, f"last_content must equal fetched content; got {app_ctx.last_content!r}"
 
     @pytest.mark.asyncio
     async def test_navigate_returns_fetched_markdown_content(self) -> None:

@@ -183,17 +183,19 @@ class TestFromAC_CrossSourcePriority:
     @pytest.mark.asyncio
     async def test_cross_source_pair_precedes_same_source_cross_doc_in_prompt(self) -> None:
         """In a single batch, cross-source pair appears before same-source cross-doc pair."""
-        e_main = _entity("main", "doc_1")       # src_1
-        e_same = _entity("same_src", "doc_2")   # src_1 — same source, different doc
-        e_diff = _entity("diff_src", "doc_3")   # src_2 — different source
+        e_main = _entity("main", "doc_1")  # src_1
+        e_same = _entity("same_src", "doc_2")  # src_1 — same source, different doc
+        e_diff = _entity("diff_src", "doc_3")  # src_2 — different source
 
         mock_gs = _graph_store({"doc_1": "src_1", "doc_2": "src_1", "doc_3": "src_2"})
         # Only e_main finds similar entities; their order in the similar list has same_src first
-        mock_vs = _ordered_vector_store([
-            [(e_same.id, 0.95), (e_diff.id, 0.92)],  # e_main: same_src listed before diff_src
-            [],  # e_same finds nothing
-            [],  # e_diff finds nothing
-        ])
+        mock_vs = _ordered_vector_store(
+            [
+                [(e_same.id, 0.95), (e_diff.id, 0.92)],  # e_main: same_src listed before diff_src
+                [],  # e_same finds nothing
+                [],  # e_diff finds nothing
+            ]
+        )
         mock_ext = _async_extractor()
         builder = InterDocGraphBuilder(extractor=mock_ext, vector_store=mock_vs, graph_store=mock_gs)
         await builder.build([e_main, e_same, e_diff], scope="global")
@@ -207,7 +209,7 @@ class TestFromAC_CrossSourcePriority:
     async def test_same_source_cross_doc_pairs_included_with_doc_pair_metadata(self) -> None:
         """Same-source cross-doc pairs are included (not filtered) and receive doc_pair metadata."""
         e1 = _entity("alpha", "doc_1")  # src_1
-        e2 = _entity("beta", "doc_2")   # src_1 — same source, different doc
+        e2 = _entity("beta", "doc_2")  # src_1 — same source, different doc
         raw = _raw_edge(e1.id, e2.id)
         mock_gs = _graph_store({"doc_1": "src_1", "doc_2": "src_1"})
         builder = InterDocGraphBuilder(
@@ -385,17 +387,19 @@ class TestFromAC_NoneSourceHandling:
     @pytest.mark.asyncio
     async def test_none_document_id_entity_not_prioritized_over_real_cross_source(self) -> None:
         """Entity with document_id=None is not treated as cross-source and appears after real cross-source."""
-        e_main = _entity("main", "doc_1")          # src_1
+        e_main = _entity("main", "doc_1")  # src_1
         e_no_doc = _entity("no_doc_ent", doc_id=None)  # unknown source
-        e_cross = _entity("cross_ent", "doc_3")    # src_2 — real cross-source
+        e_cross = _entity("cross_ent", "doc_3")  # src_2 — real cross-source
 
         mock_gs = _graph_store({"doc_1": "src_1", "doc_3": "src_2"})
         # no_doc_ent has higher similarity score but must not be prioritized over cross_ent
-        mock_vs = _ordered_vector_store([
-            [(e_no_doc.id, 0.97), (e_cross.id, 0.92)],  # e_main finds both; no_doc listed first
-            [],  # e_no_doc finds nothing
-            [],  # e_cross finds nothing
-        ])
+        mock_vs = _ordered_vector_store(
+            [
+                [(e_no_doc.id, 0.97), (e_cross.id, 0.92)],  # e_main finds both; no_doc listed first
+                [],  # e_no_doc finds nothing
+                [],  # e_cross finds nothing
+            ]
+        )
         mock_ext = _async_extractor()
         builder = InterDocGraphBuilder(extractor=mock_ext, vector_store=mock_vs, graph_store=mock_gs)
         await builder.build([e_main, e_no_doc, e_cross], scope="global")
@@ -408,17 +412,19 @@ class TestFromAC_NoneSourceHandling:
     @pytest.mark.asyncio
     async def test_none_source_id_entity_not_prioritized_over_real_cross_source(self) -> None:
         """Entity whose document has source_id=None is not treated as cross-source."""
-        e_main = _entity("main", "doc_1")          # src_1
+        e_main = _entity("main", "doc_1")  # src_1
         e_no_src = _entity("no_src_ent", "doc_2")  # document.source_id = None
-        e_cross = _entity("cross_ent", "doc_3")    # src_2 — real cross-source
+        e_cross = _entity("cross_ent", "doc_3")  # src_2 — real cross-source
 
         mock_gs = _graph_store({"doc_1": "src_1", "doc_2": None, "doc_3": "src_2"})
         # no_src_ent has higher similarity but must not be prioritized over cross_ent
-        mock_vs = _ordered_vector_store([
-            [(e_no_src.id, 0.97), (e_cross.id, 0.92)],  # e_main finds both; no_src listed first
-            [],  # e_no_src finds nothing
-            [],  # e_cross finds nothing
-        ])
+        mock_vs = _ordered_vector_store(
+            [
+                [(e_no_src.id, 0.97), (e_cross.id, 0.92)],  # e_main finds both; no_src listed first
+                [],  # e_no_src finds nothing
+                [],  # e_cross finds nothing
+            ]
+        )
         mock_ext = _async_extractor()
         builder = InterDocGraphBuilder(extractor=mock_ext, vector_store=mock_vs, graph_store=mock_gs)
         await builder.build([e_main, e_no_src, e_cross], scope="global")

@@ -92,9 +92,7 @@ class TestFromAC_BoardConfig:
     # If mutation leaks, the second call returns the mutated (wrong) list.
     # ------------------------------------------------------------------
 
-    def test_board_config_statuses_display_order_survives_consumer_mutation(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_statuses_display_order_survives_consumer_mutation(self, engine: KanbanEngine) -> None:
         """board_config() statuses order is stable after a consumer clears a prior copy.
 
         With a shallow copy, clearing copy1.statuses also clears engine's
@@ -113,9 +111,7 @@ class TestFromAC_BoardConfig:
     # Designed RED: same isolation-via-ordering proof for priorities.
     # ------------------------------------------------------------------
 
-    def test_board_config_priorities_display_order_survives_consumer_mutation(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_priorities_display_order_survives_consumer_mutation(self, engine: KanbanEngine) -> None:
         """board_config() priorities order is stable after a consumer clears a prior copy.
 
         With a shallow copy, clearing copy1.priorities also clears the engine's
@@ -131,9 +127,7 @@ class TestFromAC_BoardConfig:
     # AC3a — appending to returned statuses list must not leak to engine
     # ------------------------------------------------------------------
 
-    def test_board_config_statuses_append_does_not_leak_to_engine(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_statuses_append_does_not_leak_to_engine(self, engine: KanbanEngine) -> None:
         """Appending a status to the returned copy must not be visible in a second call.
 
         With model_copy() (shallow), copy.statuses is the same list object as
@@ -150,9 +144,7 @@ class TestFromAC_BoardConfig:
     # AC3b — appending to returned priorities list must not leak to engine
     # ------------------------------------------------------------------
 
-    def test_board_config_priorities_append_does_not_leak_to_engine(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_priorities_append_does_not_leak_to_engine(self, engine: KanbanEngine) -> None:
         """Appending a priority to the returned copy must not be visible in a second call.
 
         With model_copy() (shallow), copy.priorities is the same list object
@@ -169,9 +161,7 @@ class TestFromAC_BoardConfig:
     # AC3c — mutating a nested status dict must not leak to engine
     # ------------------------------------------------------------------
 
-    def test_board_config_nested_status_dict_mutation_does_not_leak_to_engine(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_nested_status_dict_mutation_does_not_leak_to_engine(self, engine: KanbanEngine) -> None:
         """Mutating a dict inside the returned statuses list must not affect engine state.
 
         With model_copy() (shallow), copy.statuses[0] is the same dict object

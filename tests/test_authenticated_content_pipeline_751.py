@@ -418,45 +418,31 @@ class TestFromAC_AuthenticatedContentSchema:
     def test_init_db_creates_source_pages_table(self) -> None:
         """init_db creates the source_pages table."""
         conn = self._make_conn()
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'").fetchone()
         assert row is not None
 
     def test_source_pages_has_source_id_column(self) -> None:
         """source_pages table has a source_id column for linking to knowledge_sources."""
         conn = self._make_conn()
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()}
         assert "source_id" in cols
 
     def test_source_pages_has_url_column(self) -> None:
         """source_pages table has a url column."""
         conn = self._make_conn()
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()}
         assert "url" in cols
 
     def test_source_pages_has_status_column(self) -> None:
         """source_pages table has a unified status column."""
         conn = self._make_conn()
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()}
         assert "status" in cols
 
     def test_documents_table_has_source_id_column(self) -> None:
         """documents table gains a source_id column in v9 (enables cascade delete)."""
         conn = self._make_conn()
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(documents)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)").fetchall()}
         assert "source_id" in cols
 
     def test_schema_v8_migrates_to_v9(self) -> None:
@@ -464,12 +450,8 @@ class TestFromAC_AuthenticatedContentSchema:
         conn = sqlite3.connect(":memory:")
 
         # Bootstrap a v8 schema manually without calling init_db fully
-        conn.execute(
-            "CREATE TABLE schema_version (version INTEGER, applied_at TEXT)"
-        )
-        conn.execute(
-            "INSERT INTO schema_version (version, applied_at) VALUES (8, '2026-01-01')"
-        )
+        conn.execute("CREATE TABLE schema_version (version INTEGER, applied_at TEXT)")
+        conn.execute("INSERT INTO schema_version (version, applied_at) VALUES (8, '2026-01-01')")
         conn.execute(
             "CREATE TABLE documents (id TEXT PRIMARY KEY, title TEXT, content TEXT, "
             "metadata TEXT, created_at TEXT, scope TEXT DEFAULT 'global')"

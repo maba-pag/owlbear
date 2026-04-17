@@ -103,41 +103,31 @@ class TestFromAC_CreateTaskValidation:
 
     # --- AC1: invalid status rejected ----------------------------------------
 
-    def test_create_task_invalid_status_raises_value_error(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_invalid_status_raises_value_error(self, engine: KanbanEngine) -> None:
         """create_task with a status not in config.statuses raises ValueError."""
         with pytest.raises(ValueError, match=r"badstatus"):
             engine.create_task("Bad status task", status="badstatus")
 
-    def test_create_task_invalid_status_near_valid_raises_value_error(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_invalid_status_near_valid_raises_value_error(self, engine: KanbanEngine) -> None:
         """create_task with a near-miss status string ('tdo' vs 'todo') raises ValueError."""
         with pytest.raises(ValueError, match=r"tdo"):
             engine.create_task("Typo status", status="tdo")
 
     # --- AC2: invalid priority rejected --------------------------------------
 
-    def test_create_task_invalid_priority_raises_value_error(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_invalid_priority_raises_value_error(self, engine: KanbanEngine) -> None:
         """create_task with a priority not in config.priorities raises ValueError."""
         with pytest.raises(ValueError, match=r"extreme"):
             engine.create_task("Bad priority task", priority="extreme")
 
-    def test_create_task_invalid_priority_near_valid_raises_value_error(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_invalid_priority_near_valid_raises_value_error(self, engine: KanbanEngine) -> None:
         """create_task with a capitalized priority ('Important' not 'important') raises ValueError."""
         with pytest.raises(ValueError, match=r"Important"):
             engine.create_task("Capitalized priority", priority="Important")
 
     # --- AC5: valid values accepted — boundary test (doubles as AC1 edge) ----
 
-    def test_create_task_valid_status_in_progress_accepted_underscore_rejected(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_create_task_valid_status_in_progress_accepted_underscore_rejected(self, engine: KanbanEngine) -> None:
         """'in-progress' (hyphen) is valid; 'in_progress' (underscore) is not.
         Fails RED: pytest.raises(ValueError) block not satisfied — engine does not yet validate."""
         with pytest.raises(ValueError, match=r"in_progress"):
@@ -163,41 +153,31 @@ class TestFromAC_EditTaskValidation:
 
     # --- AC3: invalid status rejected ----------------------------------------
 
-    def test_edit_task_invalid_status_raises_value_error(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_task_invalid_status_raises_value_error(self, engine: KanbanEngine, task_id: str) -> None:
         """edit_task with a status not in config.statuses raises ValueError."""
         with pytest.raises(ValueError, match=r"bogus"):
             engine.edit_task(task_id, status="bogus")
 
-    def test_edit_task_invalid_status_near_valid_raises_value_error(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_task_invalid_status_near_valid_raises_value_error(self, engine: KanbanEngine, task_id: str) -> None:
         """edit_task with near-miss status 'todos' (not 'todo') raises ValueError."""
         with pytest.raises(ValueError, match=r"todos"):
             engine.edit_task(task_id, status="todos")
 
     # --- AC4: invalid priority rejected --------------------------------------
 
-    def test_edit_task_invalid_priority_raises_value_error(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_task_invalid_priority_raises_value_error(self, engine: KanbanEngine, task_id: str) -> None:
         """edit_task with a priority not in config.priorities raises ValueError."""
         with pytest.raises(ValueError, match=r"super-high"):
             engine.edit_task(task_id, priority="super-high")
 
-    def test_edit_task_invalid_priority_near_valid_raises_value_error(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_task_invalid_priority_near_valid_raises_value_error(self, engine: KanbanEngine, task_id: str) -> None:
         """edit_task with near-miss priority 'someday!' raises ValueError."""
         with pytest.raises(ValueError, match=r"someday!"):
             engine.edit_task(task_id, priority="someday!")
 
     # --- AC5: valid values accepted — boundary test (doubles as AC3 edge) ----
 
-    def test_edit_task_valid_status_done_accepted_typo_rejected(
-        self, engine: KanbanEngine, task_id: str
-    ) -> None:
+    def test_edit_task_valid_status_done_accepted_typo_rejected(self, engine: KanbanEngine, task_id: str) -> None:
         """Valid status 'done' is accepted; typo 'donne' raises ValueError.
         Fails RED: pytest.raises(ValueError) block not satisfied — no validation exists."""
         with pytest.raises(ValueError, match=r"donne"):
@@ -227,9 +207,7 @@ class TestFromAC_MCPAdapterValidation:
     async def test_mcp_create_task_invalid_status_raises_tool_error(self) -> None:
         """MCP create_task wraps engine ValueError (invalid status) as ToolError.
         Fails RED: adapter has no try/except for ValueError — raw ValueError propagates."""
-        mock_engine = _make_raising_engine(
-            "create_task", ValueError("Invalid status 'badstatus'")
-        )
+        mock_engine = _make_raising_engine("create_task", ValueError("Invalid status 'badstatus'"))
         mcp_ctx = _make_mcp_ctx(mock_engine)
         with pytest.raises(ToolError):
             await create_task(mcp_ctx, title="Bad status task", status="badstatus")
@@ -238,9 +216,7 @@ class TestFromAC_MCPAdapterValidation:
     async def test_mcp_create_task_invalid_priority_raises_tool_error(self) -> None:
         """MCP create_task wraps engine ValueError (invalid priority) as ToolError.
         Fails RED: adapter has no try/except for ValueError — raw ValueError propagates."""
-        mock_engine = _make_raising_engine(
-            "create_task", ValueError("Invalid priority 'extreme'")
-        )
+        mock_engine = _make_raising_engine("create_task", ValueError("Invalid priority 'extreme'"))
         mcp_ctx = _make_mcp_ctx(mock_engine)
         with pytest.raises(ToolError):
             await create_task(mcp_ctx, title="Bad priority task", priority="extreme")
@@ -251,9 +227,7 @@ class TestFromAC_MCPAdapterValidation:
     async def test_mcp_edit_task_invalid_status_raises_tool_error(self) -> None:
         """MCP edit_task wraps engine ValueError (invalid status) as ToolError.
         Fails RED: adapter catches only FileNotFoundError, not ValueError."""
-        mock_engine = _make_raising_engine(
-            "edit_task", ValueError("Invalid status 'bogus'")
-        )
+        mock_engine = _make_raising_engine("edit_task", ValueError("Invalid status 'bogus'"))
         mcp_ctx = _make_mcp_ctx(mock_engine)
         with pytest.raises(ToolError):
             await edit_task(mcp_ctx, task_id="1", status="bogus")
@@ -262,9 +236,7 @@ class TestFromAC_MCPAdapterValidation:
     async def test_mcp_edit_task_invalid_priority_raises_tool_error(self) -> None:
         """MCP edit_task wraps engine ValueError (invalid priority) as ToolError.
         Fails RED: adapter catches only FileNotFoundError, not ValueError."""
-        mock_engine = _make_raising_engine(
-            "edit_task", ValueError("Invalid priority 'super-high'")
-        )
+        mock_engine = _make_raising_engine("edit_task", ValueError("Invalid priority 'super-high'"))
         mcp_ctx = _make_mcp_ctx(mock_engine)
         with pytest.raises(ToolError):
             await edit_task(mcp_ctx, task_id="1", priority="super-high")

@@ -30,11 +30,13 @@ _SERVER_PY = _MCP_ADAPTER_SRC_DIR / "owlbear_mcp_kanban" / "server.py"
 _SELF = Path(__file__)
 
 # Stale module namespaces that must be removed from test imports
-_STALE_MODULES: frozenset[str] = frozenset({
-    "owlbear_mcp_kanban.engine",
-    "owlbear_mcp_kanban.task_io",
-    "owlbear_mcp_kanban.config_loader",
-})
+_STALE_MODULES: frozenset[str] = frozenset(
+    {
+        "owlbear_mcp_kanban.engine",
+        "owlbear_mcp_kanban.task_io",
+        "owlbear_mcp_kanban.config_loader",
+    }
+)
 
 # Test files whose TaskRecord imports must be replaced with Task
 _TARGET_TEST_FILES: tuple[str, ...] = (
@@ -60,9 +62,7 @@ def _taskrecord_refs(root: Path, *, exclude_self: bool = False) -> list[str]:
             continue
         if exclude_self and py_file == _SELF:
             continue
-        for lineno, line in enumerate(
-            py_file.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        for lineno, line in enumerate(py_file.read_text(encoding="utf-8").splitlines(), start=1):
             if "TaskRecord" in line:
                 rel = py_file.relative_to(_PROJECT_ROOT)
                 hits.append(f"{rel}:{lineno}: {line.strip()}")
@@ -105,10 +105,7 @@ class TestFromAC_NoTaskRecordReferences:
         and task_io.py no longer mention it.
         """
         hits = _taskrecord_refs(_ENGINE_SRC_DIR)
-        assert not hits, (
-            f"Engine source still has {len(hits)} TaskRecord reference(s):\n"
-            + "\n".join(hits[:15])
-        )
+        assert not hits, f"Engine source still has {len(hits)} TaskRecord reference(s):\n" + "\n".join(hits[:15])
 
     def test_no_taskrecord_in_mcp_adapter_source(self) -> None:
         """No .py file under serve/mcp-kanban/src/ references TaskRecord.
@@ -118,10 +115,7 @@ class TestFromAC_NoTaskRecordReferences:
         uses Task, and the docstring is updated accordingly.
         """
         hits = _taskrecord_refs(_MCP_ADAPTER_SRC_DIR)
-        assert not hits, (
-            f"MCP adapter source still has {len(hits)} TaskRecord reference(s):\n"
-            + "\n".join(hits[:15])
-        )
+        assert not hits, f"MCP adapter source still has {len(hits)} TaskRecord reference(s):\n" + "\n".join(hits[:15])
 
     def test_no_taskrecord_in_tests(self) -> None:
         """No .py file under tests/ — excluding this file — references TaskRecord.
@@ -131,9 +125,8 @@ class TestFromAC_NoTaskRecordReferences:
         files that describe the old name must also be updated.
         """
         hits = _taskrecord_refs(_TESTS_DIR, exclude_self=True)
-        assert not hits, (
-            f"Test files still have {len(hits)} TaskRecord reference(s) "
-            f"(first 15 shown):\n" + "\n".join(hits[:15])
+        assert not hits, f"Test files still have {len(hits)} TaskRecord reference(s) (first 15 shown):\n" + "\n".join(
+            hits[:15]
         )
 
 
@@ -155,8 +148,7 @@ class TestFromAC_EngineImportsOwlbearKanban:
         source = _SERVER_PY.read_text(encoding="utf-8")
         names = _imports_from(source, "owlbear_kanban.models")
         assert "TaskRecord" not in names, (
-            f"server.py still imports TaskRecord from owlbear_kanban.models; "
-            f"found imports: {names}"
+            f"server.py still imports TaskRecord from owlbear_kanban.models; found imports: {names}"
         )
 
     def test_no_stale_mcp_namespace_imports_in_tests(self) -> None:
@@ -173,10 +165,7 @@ class TestFromAC_EngineImportsOwlbearKanban:
             source = py_file.read_text(encoding="utf-8")
             for mod in _stale_module_imports(source):
                 violations.append(f"{py_file.name}: imports from {mod!r}")
-        assert not violations, (
-            "Test files still use stale owlbear_mcp_kanban.* namespaces:\n"
-            + "\n".join(violations)
-        )
+        assert not violations, "Test files still use stale owlbear_mcp_kanban.* namespaces:\n" + "\n".join(violations)
 
 
 # ===========================================================================
@@ -201,9 +190,7 @@ class TestFromAC_TestFileImports:
                 continue
             names = _imports_from(fpath.read_text(encoding="utf-8"), "owlbear_kanban.models")
             if "TaskRecord" in names:
-                violations.append(
-                    f"{fname}: still imports TaskRecord from owlbear_kanban.models"
-                )
+                violations.append(f"{fname}: still imports TaskRecord from owlbear_kanban.models")
         assert not violations, "\n".join(violations)
 
     def test_target_files_import_task(self) -> None:
@@ -229,7 +216,5 @@ class TestFromAC_TestFileImports:
                 continue
             names = _imports_from(fpath.read_text(encoding="utf-8"), "owlbear_kanban.models")
             if "Task" not in names:
-                violations.append(
-                    f"{fname}: must import Task from owlbear_kanban.models (currently imports {names})"
-                )
+                violations.append(f"{fname}: must import Task from owlbear_kanban.models (currently imports {names})")
         assert not violations, "\n".join(violations)

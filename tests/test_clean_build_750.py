@@ -29,9 +29,7 @@ README = ROOT / "README.md"
 
 # Matches only actual Python import statements (anchored at line start, optional indent).
 # Does NOT match string literals, comments, or regex patterns that contain the substrings.
-_VOICE_IMPORT_PATTERN = re.compile(
-    r"^\s*(?:from owlbear[._]voice|import owlbear[._]voice)"
-)
+_VOICE_IMPORT_PATTERN = re.compile(r"^\s*(?:from owlbear[._]voice|import owlbear[._]voice)")
 
 _THIS_FILE = Path(__file__).name
 
@@ -46,9 +44,7 @@ class TestFromAC_VoiceDirectoryRemoval:
 
     def test_serve_voice_dir_does_not_exist(self) -> None:
         """serve/voice/ must be absent after voice I/O addon removal."""
-        assert not (SERVE_DIR / "voice").exists(), (
-            "serve/voice/ still exists — builder must delete this directory"
-        )
+        assert not (SERVE_DIR / "voice").exists(), "serve/voice/ still exists — builder must delete this directory"
 
     def test_orchestrator_voice_subdir_does_not_exist(self) -> None:
         """serve/orchestrator/src/owlbear/voice/ must be absent after removal."""
@@ -100,16 +96,12 @@ class TestFromAC_OrphanImportCleanup:
     def test_no_voice_imports_in_serve(self) -> None:
         """No owlbear.voice or owlbear_voice import statements may remain in serve/."""
         matches = self._collect_matches(SERVE_DIR)
-        assert matches == [], (
-            "Orphan voice import statements found in serve/:\n" + "\n".join(matches)
-        )
+        assert matches == [], "Orphan voice import statements found in serve/:\n" + "\n".join(matches)
 
     def test_no_voice_imports_in_tests(self) -> None:
         """No owlbear.voice or owlbear_voice import statements may remain in tests/."""
         matches = self._collect_matches(TESTS_DIR)
-        assert matches == [], (
-            "Orphan voice import statements found in tests/:\n" + "\n".join(matches)
-        )
+        assert matches == [], "Orphan voice import statements found in tests/:\n" + "\n".join(matches)
 
     def test_no_voice_references_in_serve_toml_files(self) -> None:
         """No owlbear_voice or owlbear-voice references in any serve/ pyproject.toml files."""
@@ -119,9 +111,7 @@ class TestFromAC_OrphanImportCleanup:
             for lineno, line in enumerate(content.splitlines(), start=1):
                 if re.search(r"owlbear[_-]voice", line):
                     matches.append(f"{toml_file.relative_to(ROOT)}:{lineno}: {line.strip()}")
-        assert matches == [], (
-            "Voice references remain in serve/ pyproject.toml files:\n" + "\n".join(matches)
-        )
+        assert matches == [], "Voice references remain in serve/ pyproject.toml files:\n" + "\n".join(matches)
 
 
 # ---------------------------------------------------------------------------
@@ -158,9 +148,7 @@ class TestFromAC_ReadmeCleanup:
     def test_readme_no_serve_voice_reference(self) -> None:
         """serve/voice/ path reference must be absent from README.md."""
         content = README.read_text(encoding="utf-8")
-        assert "serve/voice/" not in content, (
-            "README.md still references serve/voice/ — builder must remove that entry"
-        )
+        assert "serve/voice/" not in content, "README.md still references serve/voice/ — builder must remove that entry"
 
 
 # ---------------------------------------------------------------------------

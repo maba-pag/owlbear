@@ -181,6 +181,7 @@ class TestFromAC_CreateTask:
     def test_create_task_persisted_to_disk_and_readable(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Task file written to disk can be parsed back to a Task."""
         from owlbear_kanban.task_io import read_task
+
         engine.create_task("Persistence check", body="## AC\n- [ ] AC line")
         tasks_dir = kanban_dir / "tasks"
         (path,) = tasks_dir.glob("*.md")
@@ -362,15 +363,11 @@ class TestFromAC_EditTask:
         time.sleep(0.01)  # ensure wall-clock advances before write
         result = engine.edit_task(task_id, title="Timestamp change probe")
         assert result.updated is not None
-        assert result.updated != before_updated, (
-            "edit_task must update the 'updated' field to a newer timestamp"
-        )
+        assert result.updated != before_updated, "edit_task must update the 'updated' field to a newer timestamp"
 
     # --- AC: slug frozen at creation — filename unchanged after title edit --
 
-    def test_edit_title_does_not_rename_task_file(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_edit_title_does_not_rename_task_file(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Slug frozen at creation: editing the title must not rename the task file."""
         record = engine.create_task("Slug Freeze Original")
         tasks_dir = kanban_dir / "tasks"

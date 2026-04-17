@@ -92,19 +92,13 @@ class TestFromAC_EngineListTasksReturn:
         origin = getattr(ret, "__origin__", None)
         args = getattr(ret, "__args__", ())
 
-        assert origin is list, (
-            f"KanbanEngine.list_tasks annotation origin must be list, got {origin!r}"
-        )
-        assert len(args) == 1, (
-            f"KanbanEngine.list_tasks annotation must have exactly one type arg, got {args!r}"
-        )
+        assert origin is list, f"KanbanEngine.list_tasks annotation origin must be list, got {origin!r}"
+        assert len(args) == 1, f"KanbanEngine.list_tasks annotation must have exactly one type arg, got {args!r}"
         assert args[0] is TaskSummary, (
             f"KanbanEngine.list_tasks must be annotated list[TaskSummary], got list[{args[0]!r}]"
         )
 
-    def test_engine_list_tasks_runtime_returns_tasksummary_instances(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_engine_list_tasks_runtime_returns_tasksummary_instances(self, engine: KanbanEngine) -> None:
         """Each item returned by engine.list_tasks() must be a TaskSummary instance.
 
         RED: currently returns Task instances.
@@ -114,13 +108,9 @@ class TestFromAC_EngineListTasksReturn:
 
         assert len(results) >= 1, "Expected at least one task from list_tasks"
         for item in results:
-            assert isinstance(item, TaskSummary), (
-                f"Expected TaskSummary instance, got {type(item).__name__!r}"
-            )
+            assert isinstance(item, TaskSummary), f"Expected TaskSummary instance, got {type(item).__name__!r}"
 
-    def test_engine_list_tasks_claimed_is_bool_not_string_attribute(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_engine_list_tasks_claimed_is_bool_not_string_attribute(self, engine: KanbanEngine) -> None:
         """Items from engine.list_tasks() must expose claimed (bool), not claimed_by (str).
 
         RED: Task has claimed_by: str | None — no claimed bool attribute.
@@ -134,9 +124,7 @@ class TestFromAC_EngineListTasksReturn:
         assert hasattr(item, "claimed"), (
             "Item from engine.list_tasks() has no 'claimed' attribute — TaskSummary must expose it"
         )
-        assert isinstance(item.claimed, bool), (
-            f"Item.claimed must be bool, got {type(item.claimed).__name__!r}"
-        )
+        assert isinstance(item.claimed, bool), f"Item.claimed must be bool, got {type(item.claimed).__name__!r}"
         assert not hasattr(item, "claimed_by") or "claimed_by" not in item.model_dump(), (
             "claimed_by must not appear in TaskSummary — replaced by claimed (bool)"
         )

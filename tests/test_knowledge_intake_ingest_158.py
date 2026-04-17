@@ -675,8 +675,7 @@ class TestFromAC_StoreExtractionsProvenance:
         # Provenance: document_id must be stamped — Entity has a first-class document_id field
         assert hasattr(inserted, "document_id"), "inserted entity must have a document_id attribute"
         assert inserted.document_id == "doc-provenance-test", (  # type: ignore[union-attr]
-            f"entity.document_id must equal 'doc-provenance-test',"
-            f" got {inserted.document_id!r}"  # type: ignore[union-attr]
+            f"entity.document_id must equal 'doc-provenance-test', got {inserted.document_id!r}"  # type: ignore[union-attr]
         )
 
     def test_store_extractions_stamps_pipeline_name_on_entity_metadata(self) -> None:

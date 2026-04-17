@@ -161,9 +161,7 @@ class TestFromAC_BrowserContentFetcher:
         page = _make_mock_page()
         ctx = _make_mock_context(page)
 
-        with patch(
-            "owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN
-        ) as mock_extract:
+        with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN) as mock_extract:
             fetcher = BrowserContentFetcher(ctx)
             await fetcher.fetch(_TEST_URL)
 
@@ -305,9 +303,7 @@ class TestFromAC_HttpxContentFetcher:
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_response.raise_for_status = MagicMock(
-            side_effect=httpx.HTTPStatusError(
-                "404 Not Found", request=mock_request, response=mock_response
-            )
+            side_effect=httpx.HTTPStatusError("404 Not Found", request=mock_request, response=mock_response)
         )
 
         mock_client = AsyncMock()

@@ -139,9 +139,7 @@ class TestFromAC_PickDispatchableImport:
         mcp_names = {"mcp", "fastmcp", "owlbear_mcp_kanban"}
         module_globals = vars(_dispatch_mod)
         for name in mcp_names:
-            assert name not in module_globals, (
-                f"dispatch module imports {name!r} — must have no MCP dependency"
-            )
+            assert name not in module_globals, f"dispatch module imports {name!r} — must have no MCP dependency"
 
 
 # ===========================================================================
@@ -203,7 +201,9 @@ class TestFromAC_PickDispatchableTDDGate:
         kdir = _make_kanban_dir(tmp_path)
         # Body has bullets (passes clarity gate) but no notes (fails TDD gate)
         _add_task(
-            kdir, 1, "Impl task",
+            kdir,
+            1,
+            "Impl task",
             status="in-progress",
             body="- implement the feature\n- write tests",
         )
@@ -216,7 +216,9 @@ class TestFromAC_PickDispatchableTDDGate:
         """in-progress task containing ## Test-Writer Notes in body passes TDD gate."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 2, "Ready impl",
+            kdir,
+            2,
+            "Ready impl",
             status="in-progress",
             body="## Test-Writer Notes\n- 5 tests written, all fail",
         )
@@ -229,7 +231,9 @@ class TestFromAC_PickDispatchableTDDGate:
         """in-progress task with a non-impl tag is exempt from the TDD gate."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 3, "Doc task",
+            kdir,
+            3,
+            "Doc task",
             status="in-progress",
             tags=["type:docs"],
             body="- update the README section",
@@ -251,14 +255,23 @@ class TestFromAC_PickDispatchableTDDGate:
     def test_all_non_impl_tags_exempt_from_tdd_gate(self, tmp_path: Path) -> None:
         """Every non-impl tag value exempts an in-progress task from the TDD gate."""
         non_impl_tags = [
-            "research", "docs", "type:config", "type:docs", "test",
-            "type:test", "agent", "quality", "type:user-action",
+            "research",
+            "docs",
+            "type:config",
+            "type:docs",
+            "test",
+            "type:test",
+            "agent",
+            "quality",
+            "type:user-action",
         ]
         for i, tag_value in enumerate(non_impl_tags, start=10):
             board_dir = tmp_path / f"board_{i}"
             kdir = _make_kanban_dir(board_dir)
             _add_task(
-                kdir, i, f"Task {i}",
+                kdir,
+                i,
+                f"Task {i}",
                 status="in-progress",
                 tags=[tag_value],
                 body="- AC item",
@@ -451,7 +464,9 @@ class TestFromAC_PickDispatchableStatusRanking:
         """docs ranks before in-progress when priority is equal."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "In-progress task",
+            kdir,
+            1,
+            "In-progress task",
             status="in-progress",
             priority="critical",
             body="## Test-Writer Notes\n- tests written",
@@ -543,7 +558,9 @@ class TestFromAC_PickDispatchableTagFilter:
         """A task with multiple tags is included when filtering by any of its tags."""
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "Multi-tag task",
+            kdir,
+            1,
+            "Multi-tag task",
             tags=["phase-3", "scope:kanban"],
             status="todo",
             body="- AC",

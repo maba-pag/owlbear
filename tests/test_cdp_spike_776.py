@@ -86,10 +86,7 @@ def _load_spike() -> Any:  # noqa: ANN401
     and with AttributeError when a required helper function is missing.
     """
     if not _SPIKE_PATH.exists():
-        pytest.fail(
-            f"cdp-spike.py not found at {_SPIKE_PATH} — AC1 not satisfied; "
-            "builder must create the script."
-        )
+        pytest.fail(f"cdp-spike.py not found at {_SPIKE_PATH} — AC1 not satisfied; builder must create the script.")
 
     # Pre-stub playwright so the script can be imported in a test environment
     # that does not have playwright installed.
@@ -157,8 +154,7 @@ class TestFromAC_ScriptExists:
 
     def test_script_file_exists_at_expected_path(self) -> None:
         assert _SPIKE_PATH.exists(), (
-            f"Script not found at {_SPIKE_PATH}. "
-            "Builder must create .owlbear/scratch/cdp-spike.py."
+            f"Script not found at {_SPIKE_PATH}. Builder must create .owlbear/scratch/cdp-spike.py."
         )
 
 
@@ -196,9 +192,7 @@ class TestFromAC_Runnable:
         text = _SPIKE_PATH.read_text(encoding="utf-8")
         # File must start with triple-quote docstring (possibly after shebang/encoding)
         stripped = text.lstrip()
-        assert stripped.startswith(('"""', "'''")), (
-            "Script must have a module-level docstring."
-        )
+        assert stripped.startswith(('"""', "'''")), "Script must have a module-level docstring."
 
 
 # ---------------------------------------------------------------------------
@@ -323,8 +317,7 @@ class TestFromAC_LaunchArgs:
         args = build_args(port=_DEFAULT_PORT, user_data_dir=str(_PROFILE_DIR))
         combined = " ".join(str(a) for a in args)
         assert "--remote-allow-origins" in combined, (
-            f"--remote-allow-origins not found in: {args}. "
-            "Required by brief HR#4 (Gap A from research #776)."
+            f"--remote-allow-origins not found in: {args}. Required by brief HR#4 (Gap A from research #776)."
         )
 
     def test_remote_allow_origins_binds_to_127_0_0_1_port(self) -> None:
@@ -343,9 +336,7 @@ class TestFromAC_LaunchArgs:
         build_args = self._get_build_args(spike)
         args = build_args(port=_DEFAULT_PORT, user_data_dir=str(_PROFILE_DIR))
         combined = " ".join(str(a) for a in args)
-        assert "cdp-spike-profile" in combined, (
-            f"Args must reference cdp-spike-profile directory. Got: {args}"
-        )
+        assert "cdp-spike-profile" in combined, f"Args must reference cdp-spike-profile directory. Got: {args}"
 
 
 # ---------------------------------------------------------------------------
@@ -393,7 +384,7 @@ class TestFromAC_CDPConnection:
         assert call_args is not None
         # is_local=True must appear either as keyword arg or positional
         kw_is_local = call_args.kwargs.get("is_local")
-        positional_is_local = (len(call_args.args) > 1 and call_args.args[1] is True)
+        positional_is_local = len(call_args.args) > 1 and call_args.args[1] is True
         assert kw_is_local is True or positional_is_local, (
             f"connect_over_cdp must be called with is_local=True. call_args={call_args}"
         )
@@ -429,9 +420,7 @@ class TestFromAC_URLConfig:
         parse_args = self._get_parse_args(spike)
         ns = parse_args(["--url", "https://example.sharepoint.com/page"])
         url = getattr(ns, "url", None) or getattr(ns, "target_url", None)
-        assert url == "https://example.sharepoint.com/page", (
-            f"--url flag not parsed correctly. Namespace: {ns}"
-        )
+        assert url == "https://example.sharepoint.com/page", f"--url flag not parsed correctly. Namespace: {ns}"
 
     def test_target_url_env_var_used_as_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """TARGET_URL env var must be used when --url is not provided (Gap B)."""
@@ -445,9 +434,7 @@ class TestFromAC_URLConfig:
             f"TARGET_URL env var not used as default. url={url!r}. Namespace: {ns}"
         )
 
-    def test_hardcoded_default_url_when_no_arg_and_no_env(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_hardcoded_default_url_when_no_arg_and_no_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A sensible SharePoint default must exist when neither --url nor TARGET_URL is set."""
         spike = _load_spike()
         parse_args = self._get_parse_args(spike)
@@ -501,11 +488,7 @@ class TestFromAC_SSODetection:
         page = _make_mock_page(url=_TARGET_URL)
         page.query_selector = MagicMock(return_value=None)
         result = detect_sso(page, target_url=_TARGET_URL)
-        assert (
-            "auth" in str(result).lower()
-            or "success" in str(result).lower()
-            or "ok" in str(result).lower()
-        ), (
+        assert "auth" in str(result).lower() or "success" in str(result).lower() or "ok" in str(result).lower(), (
             f"Expected authenticated classification, got: {result!r}"
         )
 
@@ -563,9 +546,7 @@ class TestFromAC_TextExtraction:
 class TestFromAC_ErrorHandling:
     """AC9: Handles all error cases from research §3.4 with clear messages."""
 
-    def test_cdp_timeout_message_mentions_cdp_or_connection(
-        self, capsys: pytest.CaptureFixture[str]
-    ) -> None:
+    def test_cdp_timeout_message_mentions_cdp_or_connection(self, capsys: pytest.CaptureFixture[str]) -> None:
         """TimeoutError from connect_over_cdp must produce a 'CDP connection failed' message."""
         spike = _load_spike()
         connect_cdp = getattr(spike, "_connect_cdp", None) or getattr(spike, "connect_cdp", None)
@@ -575,9 +556,7 @@ class TestFromAC_ErrorHandling:
         timeout_error_cls = getattr(spike, "PlaywrightTimeoutError", None) or TimeoutError
 
         mock_pw = MagicMock()
-        mock_pw.chromium.connect_over_cdp = MagicMock(
-            side_effect=timeout_error_cls("CDP endpoint did not respond")
-        )
+        mock_pw.chromium.connect_over_cdp = MagicMock(side_effect=timeout_error_cls("CDP endpoint did not respond"))
 
         with contextlib.suppress(SystemExit, RuntimeError, TimeoutError):
             connect_cdp(mock_pw, port=_DEFAULT_PORT)
@@ -611,9 +590,7 @@ class TestFromAC_ErrorHandling:
             mock_sock_cls.return_value = inst
             result = check_port(_DEFAULT_PORT)
 
-        assert result, (
-            f"check_port({_DEFAULT_PORT}) must return truthy when port is already bound. Got: {result!r}"
-        )
+        assert result, f"check_port({_DEFAULT_PORT}) must return truthy when port is already bound. Got: {result!r}"
 
     def test_port_not_in_use_detected_by_helper(self) -> None:
         """check_port must return falsy when port is free."""
@@ -634,9 +611,7 @@ class TestFromAC_ErrorHandling:
             mock_sock_cls.return_value = inst
             result = check_port(_DEFAULT_PORT)
 
-        assert not result, (
-            f"check_port({_DEFAULT_PORT}) must return falsy when port is free. Got: {result!r}"
-        )
+        assert not result, f"check_port({_DEFAULT_PORT}) must return falsy when port is free. Got: {result!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -660,9 +635,7 @@ class TestFromAC_TimestampLogging:
         captured = capsys.readouterr()
         output = captured.out + captured.err
         # Timestamp must contain at minimum a 4-digit year
-        assert re.search(r"\d{4}", output), (
-            f"No timestamp found in log_step output. Got: {output!r}"
-        )
+        assert re.search(r"\d{4}", output), f"No timestamp found in log_step output. Got: {output!r}"
 
     def test_log_step_includes_the_message(self, capsys: pytest.CaptureFixture[str]) -> None:
         """log_step must echo the step message alongside the timestamp."""
@@ -671,9 +644,7 @@ class TestFromAC_TimestampLogging:
         sentinel = "UNIQUE_SENTINEL_MESSAGE_42"
         log_step(sentinel)
         captured = capsys.readouterr()
-        assert sentinel in (captured.out + captured.err), (
-            f"log_step did not echo the message. Got: {captured.out!r}"
-        )
+        assert sentinel in (captured.out + captured.err), f"log_step did not echo the message. Got: {captured.out!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -705,9 +676,7 @@ class TestFromAC_Cleanup:
         browser = _make_mock_browser()
         proc = _make_mock_process()
         cleanup(browser=browser, process=proc)
-        assert proc.terminate.called or proc.kill.called, (
-            "cleanup must call process.terminate() or process.kill()."
-        )
+        assert proc.terminate.called or proc.kill.called, "cleanup must call process.terminate() or process.kill()."
 
     def test_cleanup_handles_none_browser_without_raising(self) -> None:
         """cleanup must guard against None browser (e.g., connect_over_cdp failed)."""
@@ -733,6 +702,5 @@ class TestFromAC_Cleanup:
             "(AC11, Gap C from research #776)."
         )
         assert has_finally, (
-            "Script must contain 'finally:' block for guaranteed cleanup "
-            "(AC11, Gap C from research #776)."
+            "Script must contain 'finally:' block for guaranteed cleanup (AC11, Gap C from research #776)."
         )

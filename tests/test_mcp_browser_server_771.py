@@ -51,11 +51,7 @@ class TestFromAC_ToolAnnotations:
         """Every registered tool must have a non-None annotations object."""
         from owlbear_mcp_browser.server import mcp_app
 
-        missing = [
-            t.name
-            for t in mcp_app.list_tools()
-            if getattr(t, "annotations", None) is None
-        ]
+        missing = [t.name for t in mcp_app.list_tools() if getattr(t, "annotations", None) is None]
         assert missing == [], f"Tools missing ToolAnnotations: {missing}"
 
     def test_navigate_has_idempotent_hint_true(self) -> None:
@@ -63,8 +59,7 @@ class TestFromAC_ToolAnnotations:
         annotations = _get_tool_annotations("navigate")
         assert annotations is not None, "navigate has no ToolAnnotations; idempotentHint=True must be set"
         assert annotations.idempotentHint is True, (  # type: ignore[union-attr]
-            "Expected idempotentHint=True for navigate,"
-            f" got: {annotations.idempotentHint!r}"  # type: ignore[union-attr]
+            f"Expected idempotentHint=True for navigate, got: {annotations.idempotentHint!r}"  # type: ignore[union-attr]
         )
 
     def test_select_has_idempotent_hint_true(self) -> None:
@@ -128,11 +123,7 @@ class TestFromAC_MainEntryPoint:
 
         # main must reference the same server object (directly or via import)
         # Checking the module's namespace rather than any specific attribute name
-        server_found = any(
-            val is expected_server
-            for name, val in vars(main).items()
-            if not name.startswith("__")
-        )
+        server_found = any(val is expected_server for name, val in vars(main).items() if not name.startswith("__"))
         assert server_found, "__main__ must import or reference the _mcp FastMCP server instance"
 
 
@@ -148,16 +139,10 @@ class TestFromAC_PublicExports:
         """AppContext must appear in owlbear_mcp_browser.server.__all__."""
         from owlbear_mcp_browser import server
 
-        assert "AppContext" in server.__all__, (
-            f"AppContext not in server.__all__: {server.__all__!r}"
-        )
+        assert "AppContext" in server.__all__, f"AppContext not in server.__all__: {server.__all__!r}"
 
     def test_app_lifespan_in_dunder_all(self) -> None:
         """app_lifespan must appear in owlbear_mcp_browser.server.__all__."""
         from owlbear_mcp_browser import server
 
-        assert "app_lifespan" in server.__all__, (
-            f"app_lifespan not in server.__all__: {server.__all__!r}"
-        )
-
-
+        assert "app_lifespan" in server.__all__, f"app_lifespan not in server.__all__: {server.__all__!r}"

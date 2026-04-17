@@ -205,9 +205,7 @@ class TestFromAC_CanonicalPreFilter:
 
         await builder.build([e1, e2], scope="global")
 
-        assert extractor.extract.called, (
-            "extractor.extract must be called because (e1,e2) canonical-match across docs"
-        )
+        assert extractor.extract.called, "extractor.extract must be called because (e1,e2) canonical-match across docs"
 
 
 # ---------------------------------------------------------------------------

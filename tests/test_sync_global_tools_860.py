@@ -100,9 +100,7 @@ class TestFromAC_DoImportSourceScope:
         sig = inspect.signature(_do_import)
         param = sig.parameters.get("source_scope")
         assert param is not None, "_do_import missing source_scope parameter"
-        assert param.default is None, (
-            f"source_scope default must be None, got: {param.default!r}"
-        )
+        assert param.default is None, f"source_scope default must be None, got: {param.default!r}"
 
     def test_source_scope_none_imports_all_docs(self) -> None:
         """source_scope=None (default) imports ALL documents regardless of their scope."""
@@ -130,9 +128,7 @@ class TestFromAC_DoImportSourceScope:
         _do_import(src, dest, target_scope="global", source_scope="global")
 
         count = dest.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-        assert count == 1, (
-            f"Expected 1 doc when source_scope='global', got {count} — check WHERE scope=? filter"
-        )
+        assert count == 1, f"Expected 1 doc when source_scope='global', got {count} — check WHERE scope=? filter"
         title = dest.execute("SELECT title FROM documents").fetchone()[0]
         assert title == "GlobalOnly"
 
@@ -147,9 +143,7 @@ class TestFromAC_DoImportSourceScope:
         _do_import(src, dest, target_scope="global", source_scope="global")
 
         count = dest.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
-        assert count == 0, (
-            f"Expected 0 docs when source_scope='global' but source has only 'project:bar', got {count}"
-        )
+        assert count == 0, f"Expected 0 docs when source_scope='global' but source has only 'project:bar', got {count}"
 
     def test_source_scope_multi_scope_copies_only_matching(self) -> None:
         """With multiple scopes in source, only docs matching source_scope are copied."""
@@ -165,9 +159,7 @@ class TestFromAC_DoImportSourceScope:
         _do_import(src, dest, target_scope="dest_scope", source_scope="global")
 
         titles = {r[0] for r in dest.execute("SELECT title FROM documents").fetchall()}
-        assert titles == {"A", "B"}, (
-            f"Expected only {{A, B}} (scope='global'), got: {titles!r}"
-        )
+        assert titles == {"A", "B"}, f"Expected only {{A, B}} (scope='global'), got: {titles!r}"
 
     def test_source_scope_child_rows_excluded_for_filtered_docs(self) -> None:
         """Child rows (chunks, entities) for filtered-out docs are NOT copied."""
@@ -188,9 +180,7 @@ class TestFromAC_DoImportSourceScope:
         _do_import(src, dest, target_scope="global", source_scope="global")
 
         chunk_count = dest.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
-        assert chunk_count == 0, (
-            f"Expected 0 chunks when source doc was filtered out, got {chunk_count}"
-        )
+        assert chunk_count == 0, f"Expected 0 chunks when source doc was filtered out, got {chunk_count}"
 
 
 # ===========================================================================
@@ -221,17 +211,13 @@ class TestFromAC_SyncToolRegistration:
         """sync_from_global must appear in server.__all__."""
         from owlbear_mcp_knowledge import server as srv  # noqa: PLC0415
 
-        assert "sync_from_global" in srv.__all__, (
-            "'sync_from_global' missing from server.__all__"
-        )
+        assert "sync_from_global" in srv.__all__, "'sync_from_global' missing from server.__all__"
 
     def test_sync_to_global_in_all(self) -> None:
         """sync_to_global must appear in server.__all__."""
         from owlbear_mcp_knowledge import server as srv  # noqa: PLC0415
 
-        assert "sync_to_global" in srv.__all__, (
-            "'sync_to_global' missing from server.__all__"
-        )
+        assert "sync_to_global" in srv.__all__, "'sync_to_global' missing from server.__all__"
 
     def test_sync_from_global_zero_user_facing_params(self) -> None:
         """sync_from_global has exactly one parameter (ctx) — zero user-facing parameters."""
@@ -239,9 +225,7 @@ class TestFromAC_SyncToolRegistration:
 
         sig = inspect.signature(sync_from_global)
         params = list(sig.parameters.keys())
-        assert params == ["ctx"], (
-            f"sync_from_global must have only 'ctx' parameter; got: {params!r}"
-        )
+        assert params == ["ctx"], f"sync_from_global must have only 'ctx' parameter; got: {params!r}"
 
     def test_sync_to_global_zero_user_facing_params(self) -> None:
         """sync_to_global has exactly one parameter (ctx) — zero user-facing parameters."""
@@ -249,9 +233,7 @@ class TestFromAC_SyncToolRegistration:
 
         sig = inspect.signature(sync_to_global)
         params = list(sig.parameters.keys())
-        assert params == ["ctx"], (
-            f"sync_to_global must have only 'ctx' parameter; got: {params!r}"
-        )
+        assert params == ["ctx"], f"sync_to_global must have only 'ctx' parameter; got: {params!r}"
 
 
 # ===========================================================================
@@ -265,9 +247,7 @@ class TestFromAC_SyncToolAnnotations:
     def test_sync_from_global_not_read_only(self) -> None:
         """sync_from_global ToolAnnotations.readOnlyHint must be False."""
         ann = _get_tool_annotations("sync_from_global")
-        assert ann is not None, (
-            "sync_from_global not registered in mcp._tool_manager or has no ToolAnnotations"
-        )
+        assert ann is not None, "sync_from_global not registered in mcp._tool_manager or has no ToolAnnotations"
         assert ann.readOnlyHint is False, (  # type: ignore[union-attr]
             f"sync_from_global readOnlyHint must be False, got: {ann.readOnlyHint!r}"  # type: ignore[union-attr]
         )
@@ -283,9 +263,7 @@ class TestFromAC_SyncToolAnnotations:
     def test_sync_to_global_not_read_only(self) -> None:
         """sync_to_global ToolAnnotations.readOnlyHint must be False."""
         ann = _get_tool_annotations("sync_to_global")
-        assert ann is not None, (
-            "sync_to_global not registered in mcp._tool_manager or has no ToolAnnotations"
-        )
+        assert ann is not None, "sync_to_global not registered in mcp._tool_manager or has no ToolAnnotations"
         assert ann.readOnlyHint is False, (  # type: ignore[union-attr]
             f"sync_to_global readOnlyHint must be False, got: {ann.readOnlyHint!r}"  # type: ignore[union-attr]
         )
@@ -326,9 +304,7 @@ class TestFromAC_SyncFromGlobal:
         )
 
     @pytest.mark.asyncio
-    async def test_returns_error_when_global_db_file_missing(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_returns_error_when_global_db_file_missing(self, tmp_path: Path) -> None:
         """Returns 'error: global DB not found at {path}' when resolved path doesn't exist."""
         from owlbear_mcp_knowledge.server import sync_from_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -345,14 +321,10 @@ class TestFromAC_SyncFromGlobal:
         assert result.startswith("error: global DB not found at"), (
             f"Expected 'error: global DB not found at ...' for missing file, got: {result!r}"
         )
-        assert str(missing) in result, (
-            f"Error message must include the missing path; got: {result!r}"
-        )
+        assert str(missing) in result, f"Error message must include the missing path; got: {result!r}"
 
     @pytest.mark.asyncio
-    async def test_happy_path_returns_imported_count_string(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_happy_path_returns_imported_count_string(self, tmp_path: Path) -> None:
         """Happy path: returns 'Imported N documents (skipped M duplicates) from global ...' string."""
         from owlbear_mcp_knowledge.server import sync_from_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -379,14 +351,10 @@ class TestFromAC_SyncFromGlobal:
             result = await sync_from_global(ctx)
 
         assert isinstance(result, str), f"Expected str result, got: {type(result)}"
-        assert "Imported 2" in result, (
-            f"Expected 'Imported 2 ...' in result, got: {result!r}"
-        )
+        assert "Imported 2" in result, f"Expected 'Imported 2 ...' in result, got: {result!r}"
 
     @pytest.mark.asyncio
-    async def test_happy_path_return_string_format_matches_ac(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_happy_path_return_string_format_matches_ac(self, tmp_path: Path) -> None:
         """Return string must match AC format: '... from global into local under scope 'global''."""
         from owlbear_mcp_knowledge.server import sync_from_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -413,14 +381,10 @@ class TestFromAC_SyncFromGlobal:
         assert "from global into local" in result, (
             f"Return string must contain 'from global into local'; got: {result!r}"
         )
-        assert "scope 'global'" in result, (
-            f"Return string must contain \"scope 'global'\"; got: {result!r}"
-        )
+        assert "scope 'global'" in result, f"Return string must contain \"scope 'global'\"; got: {result!r}"
 
     @pytest.mark.asyncio
-    async def test_content_hash_dedup_skips_already_present_docs(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_content_hash_dedup_skips_already_present_docs(self, tmp_path: Path) -> None:
         """Content-hash dedup: doc already in local under scope='global' is skipped."""
         from owlbear_mcp_knowledge.server import sync_from_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -449,14 +413,10 @@ class TestFromAC_SyncFromGlobal:
         ):
             result = await sync_from_global(ctx)
 
-        assert "skipped 1" in result, (
-            f"Expected 'skipped 1' for duplicate doc, got: {result!r}"
-        )
+        assert "skipped 1" in result, f"Expected 'skipped 1' for duplicate doc, got: {result!r}"
 
     @pytest.mark.asyncio
-    async def test_imported_docs_land_in_local_under_scope_global(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_imported_docs_land_in_local_under_scope_global(self, tmp_path: Path) -> None:
         """Documents imported from global land in local DB under scope='global'."""
         from owlbear_mcp_knowledge.server import sync_from_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -480,13 +440,9 @@ class TestFromAC_SyncFromGlobal:
         ):
             await sync_from_global(ctx)
 
-        row = local_conn.execute(
-            "SELECT scope FROM documents WHERE title=?", ("Incoming",)
-        ).fetchone()
+        row = local_conn.execute("SELECT scope FROM documents WHERE title=?", ("Incoming",)).fetchone()
         assert row is not None, "Imported doc must appear in local DB"
-        assert row[0] == "global", (
-            f"Imported doc must have scope='global', got: {row[0]!r}"
-        )
+        assert row[0] == "global", f"Imported doc must have scope='global', got: {row[0]!r}"
 
 
 # ===========================================================================
@@ -511,14 +467,10 @@ class TestFromAC_SyncToGlobal:
         ):
             result = await sync_to_global(ctx)
 
-        assert result.startswith("error:"), (
-            f"Expected 'error: ...' when path unresolvable, got: {result!r}"
-        )
+        assert result.startswith("error:"), f"Expected 'error: ...' when path unresolvable, got: {result!r}"
 
     @pytest.mark.asyncio
-    async def test_creates_global_db_file_if_not_exists(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_creates_global_db_file_if_not_exists(self, tmp_path: Path) -> None:
         """sync_to_global creates global DB file (with init_db schema) when it doesn't exist."""
         from owlbear_mcp_knowledge.server import sync_to_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -541,14 +493,10 @@ class TestFromAC_SyncToGlobal:
         ):
             await sync_to_global(ctx)
 
-        assert global_db_path.exists(), (
-            f"sync_to_global must create global DB at {global_db_path} if it doesn't exist"
-        )
+        assert global_db_path.exists(), f"sync_to_global must create global DB at {global_db_path} if it doesn't exist"
 
     @pytest.mark.asyncio
-    async def test_only_exports_global_scope_docs_not_other_scopes(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_only_exports_global_scope_docs_not_other_scopes(self, tmp_path: Path) -> None:
         """Only documents with scope='global' in local are exported; other scopes are excluded."""
         from owlbear_mcp_knowledge.server import sync_to_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -574,14 +522,10 @@ class TestFromAC_SyncToGlobal:
         titles = {r[0] for r in global_conn.execute("SELECT title FROM documents").fetchall()}
         global_conn.close()
         assert "ShouldExport" in titles, "scope='global' doc must be exported"
-        assert "ShouldSkip" not in titles, (
-            "'project:xyz' scoped doc must NOT be exported by sync_to_global"
-        )
+        assert "ShouldSkip" not in titles, "'project:xyz' scoped doc must NOT be exported by sync_to_global"
 
     @pytest.mark.asyncio
-    async def test_returns_exported_count_string(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_returns_exported_count_string(self, tmp_path: Path) -> None:
         """Returns 'Exported N documents (skipped M duplicates) from local scope 'global' to global DB'."""
         from owlbear_mcp_knowledge.server import sync_to_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -603,14 +547,10 @@ class TestFromAC_SyncToGlobal:
             result = await sync_to_global(ctx)
 
         assert isinstance(result, str), f"Expected str result, got: {type(result)}"
-        assert "Exported 1" in result, (
-            f"Expected 'Exported 1 ...' in result, got: {result!r}"
-        )
+        assert "Exported 1" in result, f"Expected 'Exported 1 ...' in result, got: {result!r}"
 
     @pytest.mark.asyncio
-    async def test_return_string_format_says_exported_not_imported(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_return_string_format_says_exported_not_imported(self, tmp_path: Path) -> None:
         """Return string must say 'Exported' (not 'Imported') and reference 'global DB'."""
         from owlbear_mcp_knowledge.server import sync_to_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -634,14 +574,10 @@ class TestFromAC_SyncToGlobal:
         assert result.startswith("Exported"), (
             f"sync_to_global return string must start with 'Exported'; got: {result!r}"
         )
-        assert "to global DB" in result, (
-            f"sync_to_global return string must contain 'to global DB'; got: {result!r}"
-        )
+        assert "to global DB" in result, f"sync_to_global return string must contain 'to global DB'; got: {result!r}"
 
     @pytest.mark.asyncio
-    async def test_dedup_skips_docs_already_in_global(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_dedup_skips_docs_already_in_global(self, tmp_path: Path) -> None:
         """Docs already in global DB (same content hash) are skipped — not duplicated."""
         from owlbear_mcp_knowledge.server import sync_to_global  # type: ignore[attr-defined]  # noqa: PLC0415
 
@@ -670,6 +606,4 @@ class TestFromAC_SyncToGlobal:
         ):
             result = await sync_to_global(ctx)
 
-        assert "skipped 1" in result, (
-            f"Expected 'skipped 1' for duplicate doc already in global, got: {result!r}"
-        )
+        assert "skipped 1" in result, f"Expected 'skipped 1' for duplicate doc already in global, got: {result!r}"

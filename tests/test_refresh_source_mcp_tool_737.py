@@ -99,8 +99,7 @@ class TestFromAC_RefreshSourceMcpTool:
     def test_refresh_source_is_importable(self) -> None:
         """refresh_source must be importable from owlbear_mcp_knowledge.server."""
         assert callable(refresh_source), (
-            "refresh_source not found in owlbear_mcp_knowledge.server. "
-            "Builder must define and register it."
+            "refresh_source not found in owlbear_mcp_knowledge.server. Builder must define and register it."
         )
 
     # -- AC2: AppContext has refresh_orchestrator field -------------------------
@@ -134,9 +133,7 @@ class TestFromAC_RefreshSourceMcpTool:
     def test_refresh_source_accepts_source_id_parameter(self) -> None:
         """refresh_source must accept a source_id parameter."""
         sig = inspect.signature(refresh_source)
-        assert "source_id" in sig.parameters, (
-            f"refresh_source signature {sig} missing 'source_id' parameter"
-        )
+        assert "source_id" in sig.parameters, f"refresh_source signature {sig} missing 'source_id' parameter"
 
     # -- AC5: calls store.get with source_id ------------------------------------
 

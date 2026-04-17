@@ -18,9 +18,7 @@ import importlib.util
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).parent.parent
-_ENGINE_MODELS_PATH = (
-    _REPO_ROOT / "serve" / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "engine_models.py"
-)
+_ENGINE_MODELS_PATH = _REPO_ROOT / "serve" / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "engine_models.py"
 
 _8_TOOLS = frozenset(
     {
@@ -137,9 +135,7 @@ class TestFromAC_ServerToolsAfterEngineModelsRemoval:
         missing = _8_TOOLS - registered
         extra = registered - _8_TOOLS
 
-        assert not missing, (
-            f"These tools were lost after engine_models removal: {sorted(missing)}"
-        )
+        assert not missing, f"These tools were lost after engine_models removal: {sorted(missing)}"
         assert not extra, (
             f"Unexpected extra tools registered: {sorted(extra)}. "
             "Verify the migration did not introduce phantom tool registrations."

@@ -73,8 +73,7 @@ class TestFromAC_PackageExports:  # noqa: N801
     def test_sso_error_exported_from_package(self) -> None:
         """SSOExtensionNotFoundError must be accessible as owlbear_browser.SSOExtensionNotFoundError."""
         assert hasattr(owlbear_browser, "SSOExtensionNotFoundError"), (
-            "SSOExtensionNotFoundError not exported from owlbear_browser — "
-            "add it to __init__.py imports and __all__"
+            "SSOExtensionNotFoundError not exported from owlbear_browser — add it to __init__.py imports and __all__"
         )
 
     # -- __all__ membership -----------------------------------------------
@@ -82,15 +81,13 @@ class TestFromAC_PackageExports:  # noqa: N801
     def test_playwright_launcher_in_dunder_all(self) -> None:
         """'PlaywrightLauncher' must appear in owlbear_browser.__all__."""
         assert "PlaywrightLauncher" in owlbear_browser.__all__, (
-            f"'PlaywrightLauncher' missing from owlbear_browser.__all__; "
-            f"current __all__: {owlbear_browser.__all__}"
+            f"'PlaywrightLauncher' missing from owlbear_browser.__all__; current __all__: {owlbear_browser.__all__}"
         )
 
     def test_find_sso_extension_in_dunder_all(self) -> None:
         """'find_sso_extension' must appear in owlbear_browser.__all__."""
         assert "find_sso_extension" in owlbear_browser.__all__, (
-            f"'find_sso_extension' missing from owlbear_browser.__all__; "
-            f"current __all__: {owlbear_browser.__all__}"
+            f"'find_sso_extension' missing from owlbear_browser.__all__; current __all__: {owlbear_browser.__all__}"
         )
 
     def test_sso_error_in_dunder_all(self) -> None:

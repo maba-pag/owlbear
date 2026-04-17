@@ -41,13 +41,7 @@ from owlbear_mcp_kanban.server import (
 # Module-level constants
 # ---------------------------------------------------------------------------
 
-_MCP_KANBAN_SRC: Path = (
-    Path(__file__).parent.parent
-    / "serve"
-    / "mcp-kanban"
-    / "src"
-    / "owlbear_mcp_kanban"
-)
+_MCP_KANBAN_SRC: Path = Path(__file__).parent.parent / "serve" / "mcp-kanban" / "src" / "owlbear_mcp_kanban"
 
 # Engine files that must NOT exist inside mcp-kanban after slimming (#818)
 _REMOVED_ENGINE_FILES: list[str] = [
@@ -110,8 +104,7 @@ class TestFromAC_AdapterImportBoundary:
         """Each engine file must be absent from serve/mcp-kanban/src/owlbear_mcp_kanban/."""
         path = _MCP_KANBAN_SRC / filename
         assert not path.exists(), (
-            f"{filename} still present in mcp-kanban — "
-            f"should have been moved to owlbear_kanban during #818"
+            f"{filename} still present in mcp-kanban — should have been moved to owlbear_kanban during #818"
         )
 
     def test_server_imports_from_owlbear_kanban(self) -> None:
@@ -158,8 +151,7 @@ class TestFromAC_AdapterImportBoundary:
 
         assert not violations, (
             "server.py imports from local engine paths — "
-            "pre-slimming failure: engine was a local module: "
-            + ", ".join(violations)
+            "pre-slimming failure: engine was a local module: " + ", ".join(violations)
         )
 
 
@@ -181,12 +173,10 @@ class TestFromAC_AllToolsDelegateToEngine:
 
         engine.list_tasks.assert_called_once()
         assert isinstance(result, list), (
-            "list_tasks must return a list — "
-            "pre-slimming failure: engine.list_tasks() was not callable on AppContext"
+            "list_tasks must return a list — pre-slimming failure: engine.list_tasks() was not callable on AppContext"
         )
         assert all(isinstance(item, TaskSummary) for item in result), (
-            "list_tasks items must be TaskSummary — "
-            "pre-slimming failure: engine not yet wired to AppContext"
+            "list_tasks items must be TaskSummary — pre-slimming failure: engine not yet wired to AppContext"
         )
 
     @pytest.mark.asyncio
@@ -199,8 +189,7 @@ class TestFromAC_AllToolsDelegateToEngine:
 
         engine.show_task.assert_called_once_with("1")
         assert isinstance(result, KanbanTask), (
-            "show_task must return KanbanTask — "
-            "pre-slimming failure: engine.show_task() was not callable from server"
+            "show_task must return KanbanTask — pre-slimming failure: engine.show_task() was not callable from server"
         )
 
     @pytest.mark.asyncio
@@ -227,8 +216,7 @@ class TestFromAC_AllToolsDelegateToEngine:
 
         engine.move_task.assert_called_once()
         assert isinstance(result, KanbanTask), (
-            "move_task must return KanbanTask — "
-            "pre-slimming failure: engine.move_task() was not callable from server"
+            "move_task must return KanbanTask — pre-slimming failure: engine.move_task() was not callable from server"
         )
 
     @pytest.mark.asyncio
@@ -241,8 +229,7 @@ class TestFromAC_AllToolsDelegateToEngine:
 
         engine.edit_task.assert_called_once()
         assert isinstance(result, KanbanTask), (
-            "edit_task must return KanbanTask — "
-            "pre-slimming failure: engine.edit_task() was not callable from server"
+            "edit_task must return KanbanTask — pre-slimming failure: engine.edit_task() was not callable from server"
         )
 
     @pytest.mark.asyncio
@@ -255,8 +242,7 @@ class TestFromAC_AllToolsDelegateToEngine:
 
         engine.start_work.assert_called_once_with("1")
         assert isinstance(result, KanbanTask), (
-            "start_work must return KanbanTask — "
-            "pre-slimming failure: engine.start_work() was not callable from server"
+            "start_work must return KanbanTask — pre-slimming failure: engine.start_work() was not callable from server"
         )
 
     @pytest.mark.asyncio
@@ -269,8 +255,7 @@ class TestFromAC_AllToolsDelegateToEngine:
 
         engine.end_work.assert_called_once()
         assert isinstance(result, KanbanTask), (
-            "end_work must return KanbanTask — "
-            "pre-slimming failure: engine.end_work() was not callable from server"
+            "end_work must return KanbanTask — pre-slimming failure: engine.end_work() was not callable from server"
         )
 
     @pytest.mark.asyncio
@@ -285,8 +270,7 @@ class TestFromAC_AllToolsDelegateToEngine:
             mock_pd.assert_called_once()
 
         assert isinstance(result, dict), (
-            "pick_tasks must return a dict — "
-            "pre-slimming failure: pick_dispatchable not wired into server pick_tasks"
+            "pick_tasks must return a dict — pre-slimming failure: pick_dispatchable not wired into server pick_tasks"
         )
         assert "dispatch" in result, (
             "pick_tasks result must have 'dispatch' key — "
@@ -322,9 +306,12 @@ class TestFromAC_EngineCreation:
 
         with patch("owlbear_mcp_kanban.server.KanbanEngine", return_value=fake_engine) as mock_cls:
             async with app_lifespan(mock_server) as ctx:
-                mock_cls.assert_called_once(), (
-                    "app_lifespan must call KanbanEngine() — "
-                    "pre-slimming failure: lifespan used subprocess calls instead"
+                (
+                    mock_cls.assert_called_once(),
+                    (
+                        "app_lifespan must call KanbanEngine() — "
+                        "pre-slimming failure: lifespan used subprocess calls instead"
+                    ),
                 )
                 assert ctx.engine is fake_engine, (
                     "AppContext.engine must be the KanbanEngine created in lifespan — "

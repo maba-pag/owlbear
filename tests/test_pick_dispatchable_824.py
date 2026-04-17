@@ -141,9 +141,7 @@ class TestFromAC_RankMapConstants:
 
     def test_status_rank_covers_all_seven_statuses(self) -> None:
         """STATUS_RANK contains exactly the 7 canonical status names."""
-        assert set(STATUS_RANK) == {
-            "done", "docs", "review", "in-progress", "todo", "backlog", "research"
-        }
+        assert set(STATUS_RANK) == {"done", "docs", "review", "in-progress", "todo", "backlog", "research"}
 
     def test_priority_rank_values_are_unique(self) -> None:
         """Each priority level has a distinct rank integer — no ties."""
@@ -251,9 +249,7 @@ class TestFromAC_ExecutionPriorityNotDisplayOrder:
         kdir = _make_kanban_dir(tmp_path)
         engine = KanbanEngine(kdir)
         # Config-derived rank puts research=0, done=6 (reversed from dispatch)
-        config_status_rank = {
-            s["name"]: i for i, s in enumerate(engine.board_config().statuses)
-        }
+        config_status_rank = {s["name"]: i for i, s in enumerate(engine.board_config().statuses)}
         assert config_status_rank["research"] < config_status_rank["done"]  # config order
         assert STATUS_RANK["done"] < STATUS_RANK["research"]  # execution order (inverse)
 
@@ -307,7 +303,9 @@ class TestFromAC_BlockedExclusion:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "Blocked task",
+            kdir,
+            1,
+            "Blocked task",
             status="todo",
             body="- AC item",
             blocked=True,
@@ -333,7 +331,9 @@ class TestFromAC_BlockedExclusion:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 3, "Blocked with AC",
+            kdir,
+            3,
+            "Blocked with AC",
             status="todo",
             body="- implement feature\n- write tests\n1. verify output",
             blocked=True,
@@ -369,7 +369,9 @@ class TestFromAC_UnclaimedExclusion:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "Claimed task",
+            kdir,
+            1,
+            "Claimed task",
             status="in-progress",
             body="## Test-Writer Notes\n- 5 tests",
             claimed_by="builder-agent",
@@ -384,7 +386,9 @@ class TestFromAC_UnclaimedExclusion:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 2, "Unclaimed task",
+            kdir,
+            2,
+            "Unclaimed task",
             status="in-progress",
             body="## Test-Writer Notes\n- 5 tests",
             claimed_by=None,
@@ -399,7 +403,9 @@ class TestFromAC_UnclaimedExclusion:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 3, "Claimed with notes",
+            kdir,
+            3,
+            "Claimed with notes",
             status="in-progress",
             body="## Test-Writer Notes\n- 10 tests, all fail",
             claimed_by="test-writer-agent",
@@ -414,13 +420,17 @@ class TestFromAC_UnclaimedExclusion:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "Claimed",
+            kdir,
+            1,
+            "Claimed",
             status="in-progress",
             body="## Test-Writer Notes\n- tests",
             claimed_by="agent-x",
         )
         _add_task(
-            kdir, 2, "Unclaimed",
+            kdir,
+            2,
+            "Unclaimed",
             status="in-progress",
             body="## Test-Writer Notes\n- tests",
             claimed_by=None,

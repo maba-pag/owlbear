@@ -28,9 +28,7 @@ class TestFromAC_VoicePackageRemoval:
 
     def test_serve_voice_dir_does_not_exist(self) -> None:
         """serve/voice/ must be absent after deletion."""
-        assert not (ROOT / "serve" / "voice").exists(), (
-            "serve/voice/ still exists — builder must delete this directory"
-        )
+        assert not (ROOT / "serve" / "voice").exists(), "serve/voice/ still exists — builder must delete this directory"
 
     def test_serve_voice_pyproject_does_not_exist(self) -> None:
         """serve/voice/pyproject.toml must be absent after deletion."""
@@ -67,41 +65,31 @@ class TestFromAC_OrchestratorVoiceRemoval:
 
     def test_orchestrator_voice_dir_does_not_exist(self) -> None:
         """serve/orchestrator/src/owlbear/voice/ must be absent after deletion."""
-        assert not (
-            ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice"
-        ).exists(), (
+        assert not (ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice").exists(), (
             "serve/orchestrator/src/owlbear/voice/ still exists — builder must delete this directory"
         )
 
     def test_orchestrator_voice_init_does_not_exist(self) -> None:
         """serve/orchestrator/src/owlbear/voice/__init__.py must be absent."""
-        assert not (
-            ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "__init__.py"
-        ).exists(), (
+        assert not (ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "__init__.py").exists(), (
             "voice/__init__.py still exists — builder must delete this file"
         )
 
     def test_orchestrator_voice_channel_does_not_exist(self) -> None:
         """serve/orchestrator/src/owlbear/voice/channel.py must be absent."""
-        assert not (
-            ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "channel.py"
-        ).exists(), (
+        assert not (ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "channel.py").exists(), (
             "voice/channel.py still exists — builder must delete this file"
         )
 
     def test_orchestrator_voice_process_does_not_exist(self) -> None:
         """serve/orchestrator/src/owlbear/voice/process.py must be absent."""
-        assert not (
-            ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "process.py"
-        ).exists(), (
+        assert not (ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "process.py").exists(), (
             "voice/process.py still exists — builder must delete this file"
         )
 
     def test_orchestrator_voice_protocol_does_not_exist(self) -> None:
         """serve/orchestrator/src/owlbear/voice/protocol.py must be absent."""
-        assert not (
-            ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "protocol.py"
-        ).exists(), (
+        assert not (ROOT / "serve" / "orchestrator" / "src" / "owlbear" / "voice" / "protocol.py").exists(), (
             "voice/protocol.py still exists — builder must delete this file"
         )
 
@@ -156,9 +144,7 @@ class TestFromAC_VoiceTestFileRemoval:
 # ---------------------------------------------------------------------------
 
 
-_VOICE_IMPORT_PATTERN = re.compile(
-    r"from owlbear\.voice|from owlbear_voice|import owlbear\.voice|import owlbear_voice"
-)
+_VOICE_IMPORT_PATTERN = re.compile(r"from owlbear\.voice|from owlbear_voice|import owlbear\.voice|import owlbear_voice")
 
 _SCAN_DIRS = ["serve", "tests"]
 
@@ -174,9 +160,7 @@ def _collect_voice_import_matches() -> list[tuple[Path, int, str]]:
             # Skip this test file itself
             if py_file.name == "test_delete_voice_io_747.py":
                 continue
-            for lineno, line in enumerate(
-                py_file.read_text(encoding="utf-8").splitlines(), start=1
-            ):
+            for lineno, line in enumerate(py_file.read_text(encoding="utf-8").splitlines(), start=1):
                 if _VOICE_IMPORT_PATTERN.search(line):
                     matches.append((py_file, lineno, line.strip()))
     return matches
@@ -188,14 +172,8 @@ class TestFromAC_NoVoiceImportsRemaining:
     def test_no_voice_imports_in_serve_or_tests(self) -> None:
         """grep for voice imports across serve/ and tests/ must return no matches."""
         matches = _collect_voice_import_matches()
-        formatted = "\n".join(
-            f"  {path.relative_to(ROOT)}:{lineno}: {line}"
-            for path, lineno, line in matches
-        )
-        assert not matches, (
-            f"Found {len(matches)} voice import(s) still present — builder must remove:\n"
-            f"{formatted}"
-        )
+        formatted = "\n".join(f"  {path.relative_to(ROOT)}:{lineno}: {line}" for path, lineno, line in matches)
+        assert not matches, f"Found {len(matches)} voice import(s) still present — builder must remove:\n{formatted}"
 
     def test_no_owlbear_voice_subpackage_imports_in_serve(self) -> None:
         """No file under serve/ may import from owlbear.voice sub-modules."""
@@ -204,12 +182,7 @@ class TestFromAC_NoVoiceImportsRemaining:
             return  # serve/ already gone — this AC is satisfied
         bad: list[str] = []
         for py_file in serve_root.rglob("*.py"):
-            for lineno, line in enumerate(
-                py_file.read_text(encoding="utf-8").splitlines(), start=1
-            ):
+            for lineno, line in enumerate(py_file.read_text(encoding="utf-8").splitlines(), start=1):
                 if re.search(r"owlbear\.voice\.|owlbear_voice\.", line):
                     bad.append(f"  {py_file.relative_to(ROOT)}:{lineno}: {line.strip()}")
-        assert not bad, (
-            f"Found {len(bad)} owlbear.voice sub-module reference(s) in serve/:\n"
-            + "\n".join(bad)
-        )
+        assert not bad, f"Found {len(bad)} owlbear.voice sub-module reference(s) in serve/:\n" + "\n".join(bad)

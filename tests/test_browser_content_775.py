@@ -54,11 +54,7 @@ class TestFromAC_ContentExtractor:
         """extract() includes text from the page's primary content area."""
         from owlbear_browser.extractor import extract  # type: ignore[import-not-found]
 
-        html = (
-            "<html><body>"
-            "<article><p>Main article text here.</p></article>"
-            "</body></html>"
-        )
+        html = "<html><body><article><p>Main article text here.</p></article></body></html>"
         result = extract(html)
         assert "Main article text here" in result
 
@@ -82,12 +78,7 @@ class TestFromAC_ContentExtractor:
         """extract() on a page containing only nav/footer does not include those texts."""
         from owlbear_browser.extractor import extract  # type: ignore[import-not-found]
 
-        html = (
-            "<html><body>"
-            "<nav>Nav link 1 | Nav link 2</nav>"
-            "<footer>Footer boilerplate</footer>"
-            "</body></html>"
-        )
+        html = "<html><body><nav>Nav link 1 | Nav link 2</nav><footer>Footer boilerplate</footer></body></html>"
         result = extract(html)
         assert isinstance(result, str)
         assert "Nav link 1" not in result
@@ -141,9 +132,7 @@ class TestFromAC_HTMLCleaner:
         result = clean(html)
         assert "Alpha" in result
         assert "Beta" in result
-        assert re.search(r"[-*]\s+\w", result) is not None, (
-            f"Expected bullet marker in result; got: {result!r}"
-        )
+        assert re.search(r"[-*]\s+\w", result) is not None, f"Expected bullet marker in result; got: {result!r}"
 
     def test_clean_preserves_ordered_list_items(self) -> None:
         """<ol><li> items are preserved as markdown numbered list items."""
@@ -153,20 +142,13 @@ class TestFromAC_HTMLCleaner:
         result = clean(html)
         assert "First" in result
         assert "Second" in result
-        assert re.search(r"\d+\.", result) is not None, (
-            f"Expected numbered list marker in result; got: {result!r}"
-        )
+        assert re.search(r"\d+\.", result) is not None, f"Expected numbered list marker in result; got: {result!r}"
 
     def test_clean_preserves_table_cell_content(self) -> None:
         """Table header and cell text is preserved in the markdown output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            "<table>"
-            "<tr><th>Name</th><th>Value</th></tr>"
-            "<tr><td>Alpha</td><td>1</td></tr>"
-            "</table>"
-        )
+        html = "<table><tr><th>Name</th><th>Value</th></tr><tr><td>Alpha</td><td>1</td></tr></table>"
         result = clean(html)
         assert "Name" in result
         assert "Value" in result
@@ -247,10 +229,7 @@ class TestFromAC_NoiseRemoval:
         """Element with class 'cookie-banner' is stripped from the output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div class="cookie-banner">We use cookies. Accept?</div>'
-            "<p>Article body</p>"
-        )
+        html = '<div class="cookie-banner">We use cookies. Accept?</div><p>Article body</p>'
         result = clean(html)
         assert "We use cookies" not in result
         assert "Article body" in result
@@ -259,10 +238,7 @@ class TestFromAC_NoiseRemoval:
         """Element with id 'cookie-consent' is stripped from the output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div id="cookie-consent">Please accept cookies.</div>'
-            "<p>Content here</p>"
-        )
+        html = '<div id="cookie-consent">Please accept cookies.</div><p>Content here</p>'
         result = clean(html)
         assert "Please accept cookies" not in result
         assert "Content here" in result
@@ -271,11 +247,7 @@ class TestFromAC_NoiseRemoval:
         """Nav removed but paragraphs before and after it are preserved."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            "<p>Before nav</p>"
-            "<nav>Site navigation links</nav>"
-            "<p>After nav</p>"
-        )
+        html = "<p>Before nav</p><nav>Site navigation links</nav><p>After nav</p>"
         result = clean(html)
         assert "Site navigation links" not in result
         assert "Before nav" in result
@@ -359,9 +331,7 @@ class TestFromAC_TrafilaturaDep:  # noqa: N801
         deps = _get_browser_deps()
         dep = _find_dep(deps, "trafilatura")
         assert dep is not None, "trafilatura not found — cannot verify version operator"
-        assert ">=" in dep or "~=" in dep, (
-            f"trafilatura dep must use >= or ~= operator; got: {dep!r}"
-        )
+        assert ">=" in dep or "~=" in dep, f"trafilatura dep must use >= or ~= operator; got: {dep!r}"
 
     def test_trafilatura_min_version_is_at_least_1_6(self) -> None:
         """trafilatura minimum version must be 1.6 or higher per AC."""
@@ -369,13 +339,10 @@ class TestFromAC_TrafilaturaDep:  # noqa: N801
         dep = _find_dep(deps, "trafilatura")
         assert dep is not None, "trafilatura not found — cannot verify version"
         m = re.search(r"[>~]=\s*(\d+)\.(\d+)", dep)
-        assert m is not None, (
-            f"Could not parse '>=X.Y' or '~=X.Y' from trafilatura dep: {dep!r}"
-        )
+        assert m is not None, f"Could not parse '>=X.Y' or '~=X.Y' from trafilatura dep: {dep!r}"
         major, minor = int(m.group(1)), int(m.group(2))
         assert (major, minor) >= _MIN_TRAFILATURA_VERSION, (
-            f"trafilatura minimum must be >= {_MIN_TRAFILATURA_VERSION}; "
-            f"got ({major}, {minor}) from: {dep!r}"
+            f"trafilatura minimum must be >= {_MIN_TRAFILATURA_VERSION}; got ({major}, {minor}) from: {dep!r}"
         )
 
 
@@ -469,9 +436,7 @@ class TestFromAC_ExtractContent:  # noqa: N801
             mock_traf.extract.return_value = None
             result = extract_content(html)
         assert isinstance(result, str)
-        assert "Fallback paragraph text" in result, (
-            f"Cleaner fallback content not found in result: {result!r}"
-        )
+        assert "Fallback paragraph text" in result, f"Cleaner fallback content not found in result: {result!r}"
 
     def test_extract_content_falls_back_when_trafilatura_returns_empty(self) -> None:
         """When trafilatura.extract returns '', extract_content uses cleaner fallback."""
@@ -482,9 +447,7 @@ class TestFromAC_ExtractContent:  # noqa: N801
             mock_traf.extract.return_value = ""
             result = extract_content(html)
         assert isinstance(result, str)
-        assert "Another fallback text" in result, (
-            f"Cleaner fallback content not found in result: {result!r}"
-        )
+        assert "Another fallback text" in result, f"Cleaner fallback content not found in result: {result!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -539,16 +502,9 @@ class TestFromAC_StripNoise:  # noqa: N801
         """strip_noise strips element with id='cookie-consent'."""
         from owlbear_browser.cleaner import strip_noise  # type: ignore[import-not-found]
 
-        html = (
-            "<html><body>"
-            "<div id='cookie-consent'>Accept cookies</div>"
-            "<p>Main content here</p>"
-            "</body></html>"
-        )
+        html = "<html><body><div id='cookie-consent'>Accept cookies</div><p>Main content here</p></body></html>"
         result = strip_noise(html)
-        assert "Accept cookies" not in result, (
-            f"Cookie banner content still present after strip_noise: {result!r}"
-        )
+        assert "Accept cookies" not in result, f"Cookie banner content still present after strip_noise: {result!r}"
 
     def test_strip_noise_preserves_content_outside_noise(self) -> None:
         """strip_noise preserves main body content after removing noise elements."""
@@ -562,9 +518,7 @@ class TestFromAC_StripNoise:  # noqa: N801
             "</body></html>"
         )
         result = strip_noise(html)
-        assert "Keep this content" in result, (
-            f"Main content missing from stripped output: {result!r}"
-        )
+        assert "Keep this content" in result, f"Main content missing from stripped output: {result!r}"
 
     def test_strip_noise_returns_str(self) -> None:
         """strip_noise returns a str."""
@@ -647,9 +601,7 @@ class TestFromAC_HtmlToMarkdown:  # noqa: N801
         result = html_to_markdown(html)
         assert "First" in result
         assert "Second" in result
-        assert re.search(r"\d+[.)]\s", result), (
-            f"No numbered list markers found in result: {result!r}"
-        )
+        assert re.search(r"\d+[.)]\s", result), f"No numbered list markers found in result: {result!r}"
 
     def test_html_to_markdown_preserves_links(self) -> None:
         """html_to_markdown converts <a href> to markdown [text](url) syntax."""
@@ -658,20 +610,13 @@ class TestFromAC_HtmlToMarkdown:  # noqa: N801
         html = '<a href="https://example.com">Click here</a>'
         result = html_to_markdown(html)
         assert "Click here" in result
-        assert "https://example.com" in result, (
-            f"Link URL not preserved in markdown output: {result!r}"
-        )
+        assert "https://example.com" in result, f"Link URL not preserved in markdown output: {result!r}"
 
     def test_html_to_markdown_preserves_table_structure(self) -> None:
         """html_to_markdown converts <table> to a markdown table with pipe separators."""
         from owlbear_browser.cleaner import html_to_markdown  # type: ignore[import-not-found]
 
-        html = (
-            "<table>"
-            "<tr><th>Name</th><th>Value</th></tr>"
-            "<tr><td>Row1</td><td>Data1</td></tr>"
-            "</table>"
-        )
+        html = "<table><tr><th>Name</th><th>Value</th></tr><tr><td>Row1</td><td>Data1</td></tr></table>"
         result = html_to_markdown(html)
         assert "Name" in result
         assert "Value" in result
@@ -766,10 +711,7 @@ class TestFromAC_SharePointPatterns:
         """clean() removes <div class='ms-Breadcrumb'> breadcrumb chrome from output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div class="ms-Breadcrumb">Home &gt; Site &gt; Docs</div>'
-            "<p>Article body text</p>"
-        )
+        html = '<div class="ms-Breadcrumb">Home &gt; Site &gt; Docs</div><p>Article body text</p>'
         result = clean(html)
         assert "Home" not in result or "Site" not in result, (
             f"ms-Breadcrumb content still present after clean(): {result!r}"
@@ -780,38 +722,25 @@ class TestFromAC_SharePointPatterns:
         """clean() removes <div class='ms-Persona'> user avatar containers from output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div class="ms-Persona"><span>John Doe</span></div>'
-            "<p>Document content</p>"
-        )
+        html = '<div class="ms-Persona"><span>John Doe</span></div><p>Document content</p>'
         result = clean(html)
-        assert "John Doe" not in result, (
-            f"ms-Persona content still present after clean(): {result!r}"
-        )
+        assert "John Doe" not in result, f"ms-Persona content still present after clean(): {result!r}"
         assert "Document content" in result
 
     def test_clean_strips_ms_live_persona_class(self) -> None:
         """clean() removes <div class='ms-LivePersona'> live persona containers from output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div class="ms-LivePersona"><span>Jane Smith</span></div>'
-            "<p>Page body</p>"
-        )
+        html = '<div class="ms-LivePersona"><span>Jane Smith</span></div><p>Page body</p>'
         result = clean(html)
-        assert "Jane Smith" not in result, (
-            f"ms-LivePersona content still present after clean(): {result!r}"
-        )
+        assert "Jane Smith" not in result, f"ms-LivePersona content still present after clean(): {result!r}"
         assert "Page body" in result
 
     def test_clean_strips_ms_datetime_field_class(self) -> None:
         """clean() removes <div class='ms-DateTimeField'> dynamic timestamp widgets from output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div class="ms-DateTimeField">Modified: 3 hours ago</div>'
-            "<p>Main content text</p>"
-        )
+        html = '<div class="ms-DateTimeField">Modified: 3 hours ago</div><p>Main content text</p>'
         result = clean(html)
         assert "Modified: 3 hours ago" not in result, (
             f"ms-DateTimeField content still present after clean(): {result!r}"
@@ -824,10 +753,7 @@ class TestFromAC_SharePointPatterns:
         """clean() removes <div id='SuiteNavPlaceHolder'> SharePoint suite nav from output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div id="SuiteNavPlaceHolder">Suite nav content here</div>'
-            "<p>Real article text</p>"
-        )
+        html = '<div id="SuiteNavPlaceHolder">Suite nav content here</div><p>Real article text</p>'
         result = clean(html)
         assert "Suite nav content here" not in result, (
             f"SuiteNavPlaceHolder content still present after clean(): {result!r}"
@@ -838,10 +764,7 @@ class TestFromAC_SharePointPatterns:
         """clean() removes <div id='O365_NavHeader'> Office 365 nav header from output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div id="O365_NavHeader">Office 365 navigation header</div>'
-            "<p>Actual page content</p>"
-        )
+        html = '<div id="O365_NavHeader">Office 365 navigation header</div><p>Actual page content</p>'
         result = clean(html)
         assert "Office 365 navigation header" not in result, (
             f"O365_NavHeader content still present after clean(): {result!r}"
@@ -852,14 +775,9 @@ class TestFromAC_SharePointPatterns:
         """clean() removes <div id='s4-ribbonrow'> SharePoint ribbon toolbar from output."""
         from owlbear_browser.cleaner import clean  # type: ignore[import-not-found]
 
-        html = (
-            '<div id="s4-ribbonrow">Edit | Share | Follow</div>'
-            "<p>Content below ribbon</p>"
-        )
+        html = '<div id="s4-ribbonrow">Edit | Share | Follow</div><p>Content below ribbon</p>'
         result = clean(html)
-        assert "Edit | Share | Follow" not in result, (
-            f"s4-ribbonrow content still present after clean(): {result!r}"
-        )
+        assert "Edit | Share | Follow" not in result, f"s4-ribbonrow content still present after clean(): {result!r}"
         assert "Content below ribbon" in result
 
 
@@ -877,9 +795,7 @@ class TestFromAC_ContentNormalization:
 
         html = "<p>Hello\u200bworld</p>"
         result = clean(html)
-        assert "\u200b" not in result, (
-            f"U+200B (zero-width space) still present in clean() output: {result!r}"
-        )
+        assert "\u200b" not in result, f"U+200B (zero-width space) still present in clean() output: {result!r}"
 
     def test_clean_strips_zero_width_nonjoiner_u200c(self) -> None:
         """clean() removes U+200C (ZERO WIDTH NON-JOINER) from HTML text content."""
@@ -887,9 +803,7 @@ class TestFromAC_ContentNormalization:
 
         html = "<p>Content\u200cwith\u200cnon-joiners</p>"
         result = clean(html)
-        assert "\u200c" not in result, (
-            f"U+200C (zero-width non-joiner) still present in clean() output: {result!r}"
-        )
+        assert "\u200c" not in result, f"U+200C (zero-width non-joiner) still present in clean() output: {result!r}"
 
     def test_clean_strips_zero_width_joiner_u200d(self) -> None:
         """clean() removes U+200D (ZERO WIDTH JOINER) from HTML text content."""
@@ -897,9 +811,7 @@ class TestFromAC_ContentNormalization:
 
         html = "<p>Text\u200dwith\u200djoiners</p>"
         result = clean(html)
-        assert "\u200d" not in result, (
-            f"U+200D (zero-width joiner) still present in clean() output: {result!r}"
-        )
+        assert "\u200d" not in result, f"U+200D (zero-width joiner) still present in clean() output: {result!r}"
 
     def test_clean_strips_bom_ufeff(self) -> None:
         """clean() removes U+FEFF (BOM / ZERO WIDTH NO-BREAK SPACE) from HTML text content."""
@@ -907,9 +819,7 @@ class TestFromAC_ContentNormalization:
 
         html = "<p>\ufeffDocument with BOM artifact</p>"
         result = clean(html)
-        assert "\ufeff" not in result, (
-            f"U+FEFF (BOM) still present in clean() output: {result!r}"
-        )
+        assert "\ufeff" not in result, f"U+FEFF (BOM) still present in clean() output: {result!r}"
 
     def test_normalize_content_strips_carriage_returns(self) -> None:
         """_normalize_content() removes \\r from text that contains mid-line carriage returns."""
@@ -917,9 +827,7 @@ class TestFromAC_ContentNormalization:
 
         text = "Line one\r\nLine two\rLine three"
         result = _normalize_content(text)
-        assert "\r" not in result, (
-            f"Carriage return still present in _normalize_content() output: {result!r}"
-        )
+        assert "\r" not in result, f"Carriage return still present in _normalize_content() output: {result!r}"
 
 
 # ---------------------------------------------------------------------------

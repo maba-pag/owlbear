@@ -242,9 +242,7 @@ class TestFromAC_DocumentsSourceIdFK:  # noqa: N801
 
     def test_source_pages_table_exists_after_init_db(self) -> None:
         conn = _make_db()
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'").fetchone()
         assert row is not None
 
     def test_source_pages_table_has_source_id_column(self) -> None:
@@ -423,9 +421,7 @@ class TestFromAC_CascadeDelete:  # noqa: N801
         store = KnowledgeSourceStore(conn)
         store.delete_cascade(source_id)
 
-        count = conn.execute(
-            "SELECT count(*) FROM knowledge_sources WHERE id = ?", (source_id,)
-        ).fetchone()[0]
+        count = conn.execute("SELECT count(*) FROM knowledge_sources WHERE id = ?", (source_id,)).fetchone()[0]
         assert count == 0
 
     def test_cascade_delete_nonexistent_source_returns_false(self) -> None:
@@ -456,8 +452,7 @@ class TestFromAC_CascadeDelete:  # noqa: N801
         # Insert a document NOT linked to the source
         now = _now()
         conn.execute(
-            "INSERT INTO documents (id, title, content, metadata, created_at, scope)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
             ("other-doc", "Unrelated", "body", "{}", now, "global"),
         )
         conn.commit()

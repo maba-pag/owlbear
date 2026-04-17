@@ -133,9 +133,7 @@ class TestFromAC_BrowserContentFetcherPlaywright:
         page = _make_mock_page()
         ctx = _make_mock_context(page)
 
-        with patch(
-            "owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN
-        ) as mock_extract:
+        with patch("owlbear_browser.fetcher.extract_content", return_value=_SAMPLE_MARKDOWN) as mock_extract:
             await BrowserContentFetcher(ctx).fetch(_TEST_URL)
 
         # FAILS: TypeError on new_page before extract_content is reached

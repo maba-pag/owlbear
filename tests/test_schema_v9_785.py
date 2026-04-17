@@ -41,9 +41,7 @@ def _fresh_db() -> sqlite3.Connection:
 
 
 def _index_names(conn: sqlite3.Connection) -> set[str]:
-    rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='index'"
-    ).fetchall()
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()
     return {row[0] for row in rows}
 
 
@@ -69,9 +67,7 @@ class TestFromAC_SchemaV9FreshInit:  # noqa: N801
     def test_fresh_init_source_pages_table_exists(self) -> None:
         """source_pages table is present after fresh init_db."""
         conn = _fresh_db()
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'").fetchone()
         assert row is not None
 
     def test_fresh_init_source_pages_url_is_not_null(self) -> None:
@@ -79,8 +75,7 @@ class TestFromAC_SchemaV9FreshInit:  # noqa: N801
         conn = _fresh_db()
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
-                "INSERT INTO source_pages (id, source_id, status, scope)"
-                " VALUES (?, ?, ?, ?)",
+                "INSERT INTO source_pages (id, source_id, status, scope) VALUES (?, ?, ?, ?)",
                 ("sp-1", None, "discovered", "global"),
             )
 
@@ -88,14 +83,11 @@ class TestFromAC_SchemaV9FreshInit:  # noqa: N801
         """source_id column is nullable — inserting NULL source_id must not raise."""
         conn = _fresh_db()
         conn.execute(
-            "INSERT INTO source_pages (id, url, status, scope)"
-            " VALUES (?, ?, ?, ?)",
+            "INSERT INTO source_pages (id, url, status, scope) VALUES (?, ?, ?, ?)",
             ("sp-2", "https://example.com", "discovered", "global"),
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT source_id FROM source_pages WHERE id='sp-2'"
-        ).fetchone()
+        row = conn.execute("SELECT source_id FROM source_pages WHERE id='sp-2'").fetchone()
         assert row is not None
         assert row[0] is None
 
@@ -107,9 +99,7 @@ class TestFromAC_SchemaV9FreshInit:  # noqa: N801
             ("sp-3", "https://example.com", "global"),
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT status FROM source_pages WHERE id='sp-3'"
-        ).fetchone()
+        row = conn.execute("SELECT status FROM source_pages WHERE id='sp-3'").fetchone()
         assert row is not None
         assert row[0] == "discovered"
 
@@ -121,9 +111,7 @@ class TestFromAC_SchemaV9FreshInit:  # noqa: N801
             ("sp-4", "https://example.com", "discovered"),
         )
         conn.commit()
-        row = conn.execute(
-            "SELECT scope FROM source_pages WHERE id='sp-4'"
-        ).fetchone()
+        row = conn.execute("SELECT scope FROM source_pages WHERE id='sp-4'").fetchone()
         assert row is not None
         assert row[0] == "global"
 
@@ -134,10 +122,7 @@ class TestFromAC_SchemaV9FreshInit:  # noqa: N801
     def test_fresh_init_documents_has_source_id_column(self) -> None:
         """documents table has source_id column after fresh init_db."""
         conn = _fresh_db()
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(documents)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)").fetchall()}
         assert "source_id" in cols
 
     # ===========================================================================
@@ -167,8 +152,7 @@ class TestFromAC_SchemaV9FreshInit:  # noqa: N801
         """idx_source_pages_scope is bound to the source_pages table."""
         conn = _fresh_db()
         row = conn.execute(
-            "SELECT tbl_name FROM sqlite_master"
-            " WHERE type='index' AND name='idx_source_pages_scope'"
+            "SELECT tbl_name FROM sqlite_master WHERE type='index' AND name='idx_source_pages_scope'"
         ).fetchone()
         assert row is not None, "idx_source_pages_scope index missing"
         assert row[0] == "source_pages"

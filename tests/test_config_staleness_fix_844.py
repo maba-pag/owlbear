@@ -115,9 +115,7 @@ class TestFromAC_CreateTaskImplicitConfigRefresh:
         implicit config reload, self._config must hold the FULL updated config —
         not merely have its next_id incremented from the stale copy.
         """
-        (kanban_dir / "config.yml").write_text(
-            _config_with_extra_status("blocked"), encoding="utf-8"
-        )
+        (kanban_dir / "config.yml").write_text(_config_with_extra_status("blocked"), encoding="utf-8")
 
         engine.create_task("Trigger implicit refresh")
 
@@ -132,9 +130,7 @@ class TestFromAC_CreateTaskImplicitConfigRefresh:
         Guards against a partial fix that only updates next_id but leaves the
         statuses list stale at the original seven entries.
         """
-        (kanban_dir / "config.yml").write_text(
-            _config_with_extra_status("blocked"), encoding="utf-8"
-        )
+        (kanban_dir / "config.yml").write_text(_config_with_extra_status("blocked"), encoding="utf-8")
 
         engine.create_task("Statuses count check")
 
@@ -151,9 +147,7 @@ class TestFromAC_CreateTaskImplicitConfigRefresh:
         identical whether produced by create_task's implicit reload or an
         explicit refresh_config() call on the same disk state.
         """
-        (kanban_dir / "config.yml").write_text(
-            _config_with_extra_status("blocked"), encoding="utf-8"
-        )
+        (kanban_dir / "config.yml").write_text(_config_with_extra_status("blocked"), encoding="utf-8")
 
         engine.create_task("Rank consistency check")
         statuses_after_create = engine.board_config().statuses
@@ -173,9 +167,7 @@ class TestFromAC_CreateTaskImplicitConfigRefresh:
         the valid-statuses set (rank map input) is derived from the updated
         self._config rather than the stale initial copy.
         """
-        (kanban_dir / "config.yml").write_text(
-            _config_with_extra_status("blocked"), encoding="utf-8"
-        )
+        (kanban_dir / "config.yml").write_text(_config_with_extra_status("blocked"), encoding="utf-8")
 
         engine.create_task("Trigger implicit reload")
 

@@ -55,9 +55,7 @@ def _make_yaml() -> YAML:
     for resolver_dict in y.resolver._version_implicit_resolver.values():  # noqa: SLF001
         for char_key in list(resolver_dict.keys()):
             resolver_dict[char_key] = [
-                (tag, regexp)
-                for tag, regexp in resolver_dict[char_key]
-                if tag != _TIMESTAMP_TAG
+                (tag, regexp) for tag, regexp in resolver_dict[char_key] if tag != _TIMESTAMP_TAG
             ]
     return y
 
@@ -69,6 +67,7 @@ def _to_plain(obj: Any) -> Any:  # noqa: ANN401
     if isinstance(obj, list):
         return [_to_plain(item) for item in obj]
     return obj
+
 
 # ---------------------------------------------------------------------------
 # Windows reserved filename set (case-folded)

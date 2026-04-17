@@ -56,9 +56,7 @@ _SAMPLE_HTML = (
 def _make_trafilatura_stub() -> MagicMock:
     """Return a MagicMock stub for the trafilatura package."""
     stub = MagicMock()
-    stub.extract = MagicMock(
-        return_value="# Welcome to the Team Site\n\nFirst content paragraph.\n\nSecond paragraph."
-    )
+    stub.extract = MagicMock(return_value="# Welcome to the Team Site\n\nFirst content paragraph.\n\nSecond paragraph.")
     return stub
 
 
@@ -84,8 +82,7 @@ def _load_spike() -> Any:  # noqa: ANN401
     """
     if not _SPIKE_PATH.exists():
         pytest.fail(
-            f"cdp-spike.py not found at {_SPIKE_PATH} — "
-            "builder must implement the script before tests can run."
+            f"cdp-spike.py not found at {_SPIKE_PATH} — builder must implement the script before tests can run."
         )
 
     pw_stub = MagicMock()
@@ -125,10 +122,7 @@ def _make_mock_page(url: str = _SAMPLE_URL) -> MagicMock:
 
 def _get_extract_fn(spike: Any) -> Any:  # noqa: ANN401
     """Locate the trafilatura extraction helper in the spike module."""
-    return (
-        getattr(spike, "_extract_trafilatura", None)
-        or getattr(spike, "extract_trafilatura", None)
-    )
+    return getattr(spike, "_extract_trafilatura", None) or getattr(spike, "extract_trafilatura", None)
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +134,8 @@ class TestFromAC_TrafilaturaExtraction:
     """AC1: Spike script includes trafilatura extraction after CDP text extraction."""
 
     def test_extract_trafilatura_function_exists(
-        self, trafilatura_stub: MagicMock  # noqa: ARG002
+        self,
+        trafilatura_stub: MagicMock,  # noqa: ARG002
     ) -> None:
         """Script must expose _extract_trafilatura() or extract_trafilatura() helper."""
         spike = _load_spike()
@@ -151,7 +146,8 @@ class TestFromAC_TrafilaturaExtraction:
         )
 
     def test_extract_trafilatura_calls_page_content_for_raw_html(
-        self, trafilatura_stub: MagicMock  # noqa: ARG002
+        self,
+        trafilatura_stub: MagicMock,  # noqa: ARG002
     ) -> None:
         """Must call page.content() to capture raw HTML — not just page.inner_text()."""
         spike = _load_spike()
@@ -166,9 +162,7 @@ class TestFromAC_TrafilaturaExtraction:
             "AC1 specifies 'capture raw page.content() (full HTML)' — inner_text() is insufficient."
         )
 
-    def test_extract_trafilatura_passes_html_to_trafilatura(
-        self, trafilatura_stub: MagicMock
-    ) -> None:
+    def test_extract_trafilatura_passes_html_to_trafilatura(self, trafilatura_stub: MagicMock) -> None:
         """Must pass HTML from page.content() into trafilatura.extract()."""
         spike = _load_spike()
         fn = _get_extract_fn(spike)
@@ -186,8 +180,7 @@ class TestFromAC_TrafilaturaExtraction:
         first_call = trafilatura_stub.extract.call_args_list[0]
         html_arg = first_call.args[0] if first_call.args else first_call.kwargs.get("text")
         assert html_arg == _SAMPLE_HTML, (
-            f"trafilatura.extract() must receive the HTML from page.content(). "
-            f"Got: {repr(html_arg)[:120]}"
+            f"trafilatura.extract() must receive the HTML from page.content(). Got: {repr(html_arg)[:120]}"
         )
 
     def test_extract_trafilatura_handles_none_from_trafilatura_without_raising(
@@ -216,9 +209,7 @@ class TestFromAC_TrafilaturaExtraction:
         fn = _get_extract_fn(spike)
         assert callable(fn), "Script must expose _extract_trafilatura() helper."
 
-        trafilatura_stub.extract = MagicMock(
-            return_value="Content paragraph one.\n\nContent paragraph two."
-        )
+        trafilatura_stub.extract = MagicMock(return_value="Content paragraph one.\n\nContent paragraph two.")
         page = _make_mock_page()
         fn(page, _SAMPLE_URL)
 
@@ -237,9 +228,7 @@ class TestFromAC_TrafilaturaExtraction:
 class TestFromAC_ExtractionModes:
     """AC2: Both standard and favor_precision modes tested per extraction."""
 
-    def test_trafilatura_called_at_least_twice_per_extraction(
-        self, trafilatura_stub: MagicMock
-    ) -> None:
+    def test_trafilatura_called_at_least_twice_per_extraction(self, trafilatura_stub: MagicMock) -> None:
         """Must invoke trafilatura.extract at least twice: once standard, once with favor_precision."""
         spike = _load_spike()
         fn = _get_extract_fn(spike)
@@ -256,9 +245,7 @@ class TestFromAC_ExtractionModes:
             "AC2 requires both modes be exercised."
         )
 
-    def test_standard_mode_call_does_not_set_favor_precision_true(
-        self, trafilatura_stub: MagicMock
-    ) -> None:
+    def test_standard_mode_call_does_not_set_favor_precision_true(self, trafilatura_stub: MagicMock) -> None:
         """At least one call must NOT have favor_precision=True (standard mode)."""
         spike = _load_spike()
         fn = _get_extract_fn(spike)
@@ -268,18 +255,14 @@ class TestFromAC_ExtractionModes:
         fn(page, _SAMPLE_URL)
 
         calls = trafilatura_stub.extract.call_args_list
-        has_standard = any(
-            not c.kwargs.get("favor_precision", False) for c in calls
-        )
+        has_standard = any(not c.kwargs.get("favor_precision", False) for c in calls)
         assert has_standard, (
             f"_extract_trafilatura must invoke trafilatura.extract() in standard mode "
             f"(without favor_precision=True). AC2 requires both modes. "
             f"Recorded calls: {calls}"
         )
 
-    def test_favor_precision_true_mode_called(
-        self, trafilatura_stub: MagicMock
-    ) -> None:
+    def test_favor_precision_true_mode_called(self, trafilatura_stub: MagicMock) -> None:
         """At least one call must pass favor_precision=True."""
         spike = _load_spike()
         fn = _get_extract_fn(spike)
@@ -295,9 +278,7 @@ class TestFromAC_ExtractionModes:
             f"AC2 explicitly requires this mode. Recorded calls: {calls}"
         )
 
-    def test_both_modes_use_output_format_markdown(
-        self, trafilatura_stub: MagicMock
-    ) -> None:
+    def test_both_modes_use_output_format_markdown(self, trafilatura_stub: MagicMock) -> None:
         """Both extraction calls must specify output_format='markdown'."""
         spike = _load_spike()
         fn = _get_extract_fn(spike)
@@ -307,9 +288,7 @@ class TestFromAC_ExtractionModes:
         fn(page, _SAMPLE_URL)
 
         calls = trafilatura_stub.extract.call_args_list
-        assert len(calls) >= 2, (
-            f"Expected at least 2 trafilatura.extract() calls, got {len(calls)}."
-        )
+        assert len(calls) >= 2, f"Expected at least 2 trafilatura.extract() calls, got {len(calls)}."
         for i, c in enumerate(calls):
             fmt = c.kwargs.get("output_format")
             assert fmt == "markdown", (
@@ -317,9 +296,7 @@ class TestFromAC_ExtractionModes:
                 f"Specified in AC2 call signature. Got output_format={fmt!r}. Call: {c}"
             )
 
-    def test_both_modes_pass_include_links_true(
-        self, trafilatura_stub: MagicMock
-    ) -> None:
+    def test_both_modes_pass_include_links_true(self, trafilatura_stub: MagicMock) -> None:
         """Both extraction calls must pass include_links=True per AC2 spec."""
         spike = _load_spike()
         fn = _get_extract_fn(spike)
@@ -329,9 +306,7 @@ class TestFromAC_ExtractionModes:
         fn(page, _SAMPLE_URL)
 
         calls = trafilatura_stub.extract.call_args_list
-        assert len(calls) >= 2, (
-            f"Expected at least 2 trafilatura.extract() calls, got {len(calls)}."
-        )
+        assert len(calls) >= 2, f"Expected at least 2 trafilatura.extract() calls, got {len(calls)}."
         for i, c in enumerate(calls):
             include_links = c.kwargs.get("include_links")
             assert include_links is True, (
@@ -339,9 +314,7 @@ class TestFromAC_ExtractionModes:
                 f"AC2 specifies this parameter. Got include_links={include_links!r}. Call: {c}"
             )
 
-    def test_both_modes_pass_url_parameter(
-        self, trafilatura_stub: MagicMock
-    ) -> None:
+    def test_both_modes_pass_url_parameter(self, trafilatura_stub: MagicMock) -> None:
         """Both extraction calls must pass the page URL to trafilatura (url= parameter)."""
         spike = _load_spike()
         fn = _get_extract_fn(spike)
@@ -351,9 +324,7 @@ class TestFromAC_ExtractionModes:
         fn(page, _SAMPLE_URL)
 
         calls = trafilatura_stub.extract.call_args_list
-        assert len(calls) >= 2, (
-            f"Expected at least 2 trafilatura.extract() calls, got {len(calls)}."
-        )
+        assert len(calls) >= 2, f"Expected at least 2 trafilatura.extract() calls, got {len(calls)}."
         for i, c in enumerate(calls):
             passed_url = c.kwargs.get("url") or c.kwargs.get("record_id")
             assert passed_url is not None, (
@@ -536,7 +507,8 @@ class TestFromAC_URLConfiguration:
         return fn
 
     def test_script_accepts_multiple_urls_argument(
-        self, trafilatura_stub: MagicMock  # noqa: ARG002
+        self,
+        trafilatura_stub: MagicMock,  # noqa: ARG002
     ) -> None:
         """Must accept --urls multi-value argument for configuring multiple targets."""
         spike = _load_spike()
@@ -563,7 +535,9 @@ class TestFromAC_URLConfiguration:
         )
 
     def test_default_urls_include_at_least_five_entries(
-        self, trafilatura_stub: MagicMock, monkeypatch: pytest.MonkeyPatch  # noqa: ARG002
+        self,
+        trafilatura_stub: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,  # noqa: ARG002
     ) -> None:
         """Default URL list must have at least 5 entries when no env/CLI override is given."""
         spike = _load_spike()
@@ -600,7 +574,8 @@ class TestFromAC_URLConfiguration:
         )
 
     def test_default_urls_include_three_sharepoint_entries(
-        self, trafilatura_stub: MagicMock  # noqa: ARG002
+        self,
+        trafilatura_stub: MagicMock,  # noqa: ARG002
     ) -> None:
         """Default URL list must include at least 3 SharePoint placeholder URLs."""
         spike = _load_spike()
@@ -629,7 +604,8 @@ class TestFromAC_URLConfiguration:
         )
 
     def test_default_urls_include_two_confluence_entries(
-        self, trafilatura_stub: MagicMock  # noqa: ARG002
+        self,
+        trafilatura_stub: MagicMock,  # noqa: ARG002
     ) -> None:
         """Default URL list must include at least 2 Confluence placeholder URLs."""
         spike = _load_spike()
@@ -650,9 +626,7 @@ class TestFromAC_URLConfiguration:
             if isinstance(default_urls, str)
             else list(default_urls)
         )
-        conf_count = sum(
-            1 for u in url_list if "confluence" in u.lower() or "atlassian" in u.lower()
-        )
+        conf_count = sum(1 for u in url_list if "confluence" in u.lower() or "atlassian" in u.lower())
         assert conf_count >= 2, (
             f"Default URL list must have at least 2 Confluence entries. "
             f"AC4 requirement (3 SharePoint, 2 Confluence). "
@@ -660,7 +634,8 @@ class TestFromAC_URLConfiguration:
         )
 
     def test_script_help_documents_multi_url_option(
-        self, trafilatura_stub: MagicMock  # noqa: ARG002
+        self,
+        trafilatura_stub: MagicMock,  # noqa: ARG002
     ) -> None:
         """--help output must document --urls or TARGET_URLS for multi-URL configuration."""
         import subprocess  # noqa: PLC0415

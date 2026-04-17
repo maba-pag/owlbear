@@ -361,9 +361,7 @@ class TestFromAC_InitFunction:
         )
         init(target, _OWLBEAR_DIR)
         data = json.loads((target / ".vscode" / "mcp.json").read_text(encoding="utf-8"))
-        assert "my-custom-server" in data["servers"], (
-            "User server 'my-custom-server' was lost during mcp.json merge"
-        )
+        assert "my-custom-server" in data["servers"], "User server 'my-custom-server' was lost during mcp.json merge"
         # Owlbear servers should also be present
         assert "owlbear-kanban" in data["servers"], (
             "Owlbear server 'owlbear-kanban' was not added during mcp.json merge"
@@ -750,16 +748,21 @@ class TestSeedDotfiles:
 
     @pytest.mark.parametrize(
         "filename",
-        [".editorconfig", ".gitattributes", ".gitignore", ".markdownlint.json",
-         ".markdownlint-cli2.jsonc", ".markdownlintignore"],
+        [
+            ".editorconfig",
+            ".gitattributes",
+            ".gitignore",
+            ".markdownlint.json",
+            ".markdownlint-cli2.jsonc",
+            ".markdownlintignore",
+        ],
     )
     def test_seed_dotfile_exists(self, filename: str) -> None:
         assert (_SEED_DIR / filename).exists(), f"seed/{filename} does not exist"
 
     @pytest.mark.parametrize(
         "filename",
-        [".editorconfig", ".gitattributes", ".markdownlint.json",
-         ".markdownlint-cli2.jsonc", ".markdownlintignore"],
+        [".editorconfig", ".gitattributes", ".markdownlint.json", ".markdownlint-cli2.jsonc", ".markdownlintignore"],
     )
     def test_skip_if_exists_dotfiles_not_overwritten(self, filename: str, tmp_path: Path) -> None:
         """Dotfiles in _SKIP_IF_EXISTS_REL must not be overwritten."""

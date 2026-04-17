@@ -118,9 +118,7 @@ class TestFromAC_StartWork:
         with pytest.raises(ValueError, match="blocked"):  # noqa: PT011
             engine.start_work(str(task.id))
 
-    def test_start_work_blocked_does_not_expose_task_as_claimed(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_start_work_blocked_does_not_expose_task_as_claimed(self, engine: KanbanEngine) -> None:
         """Rejected start_work on blocked task leaves claimed_by as None."""
         task = engine.create_task("Blocked unclaimed")
         engine.edit_task(str(task.id), blocked=True, block_reason="dependency missing")
@@ -159,9 +157,7 @@ class TestFromAC_EndWorkSuccess:
         record = engine.show_task(str(task.id))
         assert re.search(r"\[\[\d{4}-\d{2}-\d{2}\]\]", record.body)
 
-    def test_end_work_success_advances_status_from_research(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_end_work_success_advances_status_from_research(self, engine: KanbanEngine) -> None:
         """end_work(success) moves task from 'research' to 'backlog'."""
         task = engine.create_task("Advance task", status="research")
         engine.start_work(str(task.id))
@@ -177,9 +173,7 @@ class TestFromAC_EndWorkSuccess:
         record = engine.show_task(str(task.id))
         assert record.status == "review"
 
-    def test_end_work_success_penultimate_advances_to_last_status(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_end_work_success_penultimate_advances_to_last_status(self, engine: KanbanEngine) -> None:
         """end_work(success) when at 'docs' (penultimate) advances to 'done' (last)."""
         task = engine.create_task("Pre-last task", status="docs")
         engine.start_work(str(task.id))
@@ -213,9 +207,7 @@ class TestFromAC_EndWorkSuccess:
 class TestFromAC_EndWorkSuccessLastStatus:
     """Tests for AC3: end_work(success) on last status archives the task."""
 
-    def test_end_work_last_status_removes_from_tasks_dir(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_end_work_last_status_removes_from_tasks_dir(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """end_work(success) on 'done' (last status) removes file from tasks/."""
         task = engine.create_task("Archive me", status="done")
         engine.start_work(str(task.id))
@@ -224,9 +216,7 @@ class TestFromAC_EndWorkSuccessLastStatus:
         task_files = list(tasks_dir.glob(f"{task.id}-*.md"))
         assert task_files == []
 
-    def test_end_work_last_status_creates_file_in_archive_dir(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_end_work_last_status_creates_file_in_archive_dir(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """end_work(success) on 'done' creates the task file in archive/."""
         task = engine.create_task("Find in archive", status="done")
         engine.start_work(str(task.id))
@@ -235,9 +225,7 @@ class TestFromAC_EndWorkSuccessLastStatus:
         archive_files = list(archive_dir.glob(f"{task.id}-*.md"))
         assert len(archive_files) == 1
 
-    def test_end_work_last_status_note_present_in_archive(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_end_work_last_status_note_present_in_archive(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """The appended note is present in the archived task file."""
         task = engine.create_task("Note in archive", status="done")
         engine.start_work(str(task.id))
@@ -310,9 +298,7 @@ class TestFromAC_EndWorkBlock:
         """Note is appended to task body after end_work(block)."""
         task = engine.create_task("Block note task", status="in-progress")
         engine.start_work(str(task.id))
-        engine.end_work(
-            str(task.id), note="Waiting on data", outcome="block", block_reason="dep pending"
-        )
+        engine.end_work(str(task.id), note="Waiting on data", outcome="block", block_reason="dep pending")
         record = engine.show_task(str(task.id))
         assert "Waiting on data" in record.body
 
@@ -320,9 +306,7 @@ class TestFromAC_EndWorkBlock:
         """end_work(block) sets blocked=True on the task."""
         task = engine.create_task("Block flag task", status="todo")
         engine.start_work(str(task.id))
-        engine.end_work(
-            str(task.id), note="Blocked", outcome="block", block_reason="infra down"
-        )
+        engine.end_work(str(task.id), note="Blocked", outcome="block", block_reason="infra down")
         record = engine.show_task(str(task.id))
         assert record.blocked is True
 
@@ -330,9 +314,7 @@ class TestFromAC_EndWorkBlock:
         """end_work(block) sets block_reason to the provided value."""
         task = engine.create_task("Block reason task", status="todo")
         engine.start_work(str(task.id))
-        engine.end_work(
-            str(task.id), note="Blocking", outcome="block", block_reason="need more info"
-        )
+        engine.end_work(str(task.id), note="Blocking", outcome="block", block_reason="need more info")
         record = engine.show_task(str(task.id))
         assert record.block_reason == "need more info"
 
@@ -365,9 +347,7 @@ class TestFromAC_EndWorkReject:
         """Note is appended to task body after end_work(reject)."""
         task = engine.create_task("Reject note task", status="in-progress")
         engine.start_work(str(task.id))
-        engine.end_work(
-            str(task.id), note="Needs rework", outcome="reject", move_to="research"
-        )
+        engine.end_work(str(task.id), note="Needs rework", outcome="reject", move_to="research")
         record = engine.show_task(str(task.id))
         assert "Needs rework" in record.body
 
@@ -375,9 +355,7 @@ class TestFromAC_EndWorkReject:
         """end_work(reject) sets task status to the move_to parameter value."""
         task = engine.create_task("Moving task", status="in-progress")
         engine.start_work(str(task.id))
-        engine.end_work(
-            str(task.id), note="Back to backlog", outcome="reject", move_to="backlog"
-        )
+        engine.end_work(str(task.id), note="Back to backlog", outcome="reject", move_to="backlog")
         record = engine.show_task(str(task.id))
         assert record.status == "backlog"
 
@@ -393,9 +371,7 @@ class TestFromAC_EndWorkReject:
         """end_work(reject) clears claimed_by."""
         task = engine.create_task("Release on reject", status="todo")
         engine.start_work(str(task.id))
-        engine.end_work(
-            str(task.id), note="Rejecting", outcome="reject", move_to="research"
-        )
+        engine.end_work(str(task.id), note="Rejecting", outcome="reject", move_to="research")
         record = engine.show_task(str(task.id))
         assert record.claimed_by is None
 
@@ -403,9 +379,7 @@ class TestFromAC_EndWorkReject:
         """end_work(reject) clears claimed_at."""
         task = engine.create_task("Release at on reject", status="todo")
         engine.start_work(str(task.id))
-        engine.end_work(
-            str(task.id), note="Rejecting", outcome="reject", move_to="research"
-        )
+        engine.end_work(str(task.id), note="Rejecting", outcome="reject", move_to="research")
         record = engine.show_task(str(task.id))
         assert record.claimed_at is None
 
@@ -413,9 +387,7 @@ class TestFromAC_EndWorkReject:
         """end_work(reject) returns a Task with the rejected-to status."""
         task = engine.create_task("Return on reject", status="in-progress")
         engine.start_work(str(task.id))
-        result = engine.end_work(
-            str(task.id), note="Rejected", outcome="reject", move_to="research"
-        )
+        result = engine.end_work(str(task.id), note="Rejected", outcome="reject", move_to="research")
         assert result.id == task.id
         assert result.status == "research"
 
@@ -433,30 +405,20 @@ class TestFromAC_EndWorkBlockGuard:
         task = engine.create_task("Block guard test", status="in-progress")
         engine.start_work(str(task.id))
         with pytest.raises(ValueError, match="block_reason"):  # noqa: PT011
-            engine.end_work(
-                str(task.id), note="Blocking", outcome="block", block_reason=""
-            )
+            engine.end_work(str(task.id), note="Blocking", outcome="block", block_reason="")
 
-    def test_end_work_block_missing_reason_does_not_set_blocked(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_end_work_block_missing_reason_does_not_set_blocked(self, engine: KanbanEngine) -> None:
         """On missing block_reason, blocked flag remains False — no partial mutation."""
         task = engine.create_task("Guard no modify", status="in-progress")
         engine.start_work(str(task.id))
         with pytest.raises(ValueError):  # noqa: PT011
-            engine.end_work(
-                str(task.id), note="Block attempt", outcome="block", block_reason=""
-            )
+            engine.end_work(str(task.id), note="Block attempt", outcome="block", block_reason="")
         record = engine.show_task(str(task.id))
         assert record.blocked is False
 
-    def test_end_work_block_with_nonempty_reason_does_not_raise(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_end_work_block_with_nonempty_reason_does_not_raise(self, engine: KanbanEngine) -> None:
         """end_work(block) with a non-empty block_reason does not raise."""
         task = engine.create_task("Block with reason", status="in-progress")
         engine.start_work(str(task.id))
         # Must not raise when block_reason is provided
-        engine.end_work(
-            str(task.id), note="Blocking now", outcome="block", block_reason="real reason"
-        )
+        engine.end_work(str(task.id), note="Blocking now", outcome="block", block_reason="real reason")

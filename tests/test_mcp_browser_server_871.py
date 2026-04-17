@@ -132,8 +132,7 @@ class TestFromAC_PlaywrightLauncherImport:
         import owlbear_mcp_browser.server as server_module
 
         assert not hasattr(server_module, "CDPConnectionManager"), (
-            "CDPConnectionManager must not remain in server module namespace after pivot; "
-            "it is currently importable"
+            "CDPConnectionManager must not remain in server module namespace after pivot; it is currently importable"
         )
 
 
@@ -186,9 +185,7 @@ class TestFromAC_AppContextLauncherField:
         from owlbear_mcp_browser.server import AppContext
 
         fields = {f.name for f in dataclasses.fields(AppContext)}
-        assert "cdp" not in fields, (
-            f"'cdp' field must be removed from AppContext after pivot; found: {sorted(fields)}"
-        )
+        assert "cdp" not in fields, f"'cdp' field must be removed from AppContext after pivot; found: {sorted(fields)}"
 
     def test_appcontext_annotations_do_not_reference_cdp_connection_manager(self) -> None:
         """AppContext type annotations must not reference CDPConnectionManager after pivot.
@@ -199,8 +196,7 @@ class TestFromAC_AppContextLauncherField:
 
         annotations_str = str(AppContext.__annotations__)
         assert "CDPConnectionManager" not in annotations_str, (
-            f"AppContext annotations must not reference CDPConnectionManager after pivot; "
-            f"found in: {annotations_str}"
+            f"AppContext annotations must not reference CDPConnectionManager after pivot; found in: {annotations_str}"
         )
 
 
@@ -290,13 +286,9 @@ class TestFromAC_LifespanCreatesPlaywrightLauncher:
             async with app_lifespan(MagicMock()):
                 pass
 
-        launcher_closed = (
-            mock_launcher.__aexit__.call_count > 0
-            or mock_launcher.close.await_count > 0
-        )
+        launcher_closed = mock_launcher.__aexit__.call_count > 0 or mock_launcher.close.await_count > 0
         assert launcher_closed, (
-            "PlaywrightLauncher must be closed during lifespan cleanup; "
-            "neither __aexit__ nor close() was called"
+            "PlaywrightLauncher must be closed during lifespan cleanup; neither __aexit__ nor close() was called"
         )
 
     @pytest.mark.asyncio
@@ -318,13 +310,9 @@ class TestFromAC_LifespanCreatesPlaywrightLauncher:
             async with app_lifespan(MagicMock()):
                 raise RuntimeError(_body_err)
 
-        launcher_closed = (
-            mock_launcher.__aexit__.call_count > 0
-            or mock_launcher.close.await_count > 0
-        )
+        launcher_closed = mock_launcher.__aexit__.call_count > 0 or mock_launcher.close.await_count > 0
         assert launcher_closed, (
-            "PlaywrightLauncher must be closed even when lifespan body raises; "
-            "neither __aexit__ nor close() was called"
+            "PlaywrightLauncher must be closed even when lifespan body raises; neither __aexit__ nor close() was called"
         )
 
     @pytest.mark.asyncio
@@ -395,17 +383,14 @@ class TestFromAC_BrowserFetcherPlaywrightContext:
             async with app_lifespan(MagicMock()):
                 pass
 
-        assert mock_fetcher_cls.called, (
-            "BrowserContentFetcher must be instantiated in lifespan; not called"
-        )
+        assert mock_fetcher_cls.called, "BrowserContentFetcher must be instantiated in lifespan; not called"
         call_arg = (
             mock_fetcher_cls.call_args.args[0]
             if mock_fetcher_cls.call_args.args
             else next(iter(mock_fetcher_cls.call_args.kwargs.values()), None)
         )
         assert call_arg is mock_launcher.context, (
-            "BrowserContentFetcher must receive launcher.context specifically; "
-            f"got {call_arg!r}"
+            f"BrowserContentFetcher must receive launcher.context specifically; got {call_arg!r}"
         )
 
     @pytest.mark.asyncio

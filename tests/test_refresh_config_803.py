@@ -74,9 +74,7 @@ def engine(kanban_dir: Path) -> KanbanEngine:
 class TestFromAC_RefreshConfig:
     """Tests that refresh_config() reloads all config state from disk."""
 
-    def test_refresh_config_reloads_yaml_from_disk(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_refresh_config_reloads_yaml_from_disk(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Change next_id on disk → refresh → board_config().next_id reflects new value."""
         updated_yaml = _BASE_CONFIG_YAML.replace("next_id: 100", "next_id: 999")
         (kanban_dir / "config.yml").write_text(updated_yaml, encoding="utf-8")
@@ -85,9 +83,7 @@ class TestFromAC_RefreshConfig:
 
         assert engine.board_config().next_id == 999
 
-    def test_refresh_config_updates_tasks_dir(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_refresh_config_updates_tasks_dir(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Change tasks_dir on disk → refresh → create_task writes to new dir."""
         (kanban_dir / "newtasks").mkdir()
         updated_yaml = _BASE_CONFIG_YAML.replace("tasks_dir: tasks", "tasks_dir: newtasks")
@@ -100,9 +96,7 @@ class TestFromAC_RefreshConfig:
         written_files = list(new_tasks_dir.glob(f"{task.id}-*.md"))
         assert len(written_files) == 1, f"Expected task file in newtasks/, found: {written_files}"
 
-    def test_refresh_config_updates_statuses(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_refresh_config_updates_statuses(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Add status on disk → refresh → valid_transitions includes new status."""
         extra_status_yaml = _BASE_CONFIG_YAML.replace(
             "    - name: done\n",
@@ -114,9 +108,7 @@ class TestFromAC_RefreshConfig:
 
         assert "staging" in engine.valid_transitions("research")
 
-    def test_refresh_config_updates_priorities(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_refresh_config_updates_priorities(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Change priorities on disk → refresh → board_config().priorities reflects new list."""
         new_priorities_yaml = _BASE_CONFIG_YAML.replace(
             "priorities:\n    - someday\n    - nice-to-have\n    - important\n    - needed\n    - critical\n",
@@ -128,9 +120,7 @@ class TestFromAC_RefreshConfig:
 
         assert engine.board_config().priorities == ["low", "high"]
 
-    def test_refresh_config_then_move_task_accepts_new_status(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_refresh_config_then_move_task_accepts_new_status(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Add status on disk → refresh → move_task succeeds with new status."""
         task = engine.create_task("Movable task")
 
@@ -144,9 +134,7 @@ class TestFromAC_RefreshConfig:
         record = engine.move_task(str(task.id), "staging")
         assert record.status == "staging"
 
-    def test_refresh_config_then_move_task_rejects_removed_status(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_refresh_config_then_move_task_rejects_removed_status(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Remove status on disk → refresh → move_task raises ValueError for removed status."""
         task = engine.create_task("Task to move")
 

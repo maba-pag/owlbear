@@ -61,12 +61,12 @@ _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
 # NOT attempt to handle every edge case — just enough for settings.json files.
-_JSONC_LINE_COMMENT_RE = re.compile(r'(?<!:)//.*$', re.MULTILINE)
+_JSONC_LINE_COMMENT_RE = re.compile(r"(?<!:)//.*$", re.MULTILINE)
 
 
 def _strip_jsonc_comments(text: str) -> str:
     """Strip ``//``-style line comments so stdlib ``json.loads`` can parse JSONC."""
-    return _JSONC_LINE_COMMENT_RE.sub('', text)
+    return _JSONC_LINE_COMMENT_RE.sub("", text)
 
 
 def _merge_settings(owlbear: dict, existing: dict) -> dict:
@@ -142,8 +142,7 @@ def _write_settings(src: Path, dest: Path, owlbear_path: str) -> None:
             import warnings
 
             warnings.warn(
-                f"Could not parse existing {dest} as JSON(C); "
-                f"owlbear settings will be written without merging.",
+                f"Could not parse existing {dest} as JSON(C); owlbear settings will be written without merging.",
                 stacklevel=2,
             )
 

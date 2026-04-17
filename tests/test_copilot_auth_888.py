@@ -114,9 +114,7 @@ class TestFromAC_DeviceFlowOAuth:
     @pytest.mark.asyncio
     async def test_request_device_code_returns_dict_with_device_code_key(self) -> None:
         """request_device_code() returns a dict containing 'device_code'."""
-        resp = _MockResponse(
-            {"device_code": "dc-abc", "user_code": "ABCD-1234", "expires_in": 900, "interval": 5}
-        )
+        resp = _MockResponse({"device_code": "dc-abc", "user_code": "ABCD-1234", "expires_in": 900, "interval": 5})
         http_mock = _make_http_mock(post_responses=resp)
         with (
             patch("owlbear_knowledge.copilot_auth._http_client", return_value=http_mock),
@@ -423,9 +421,7 @@ class TestFromAC_GracefulFallback:
         """extract() returns empty ExtractionResult when the LLM API call raises (Copilot path)."""
         with patch("owlbear_knowledge.llm_extractor.AsyncOpenAI") as mock_aoi:
             client = MagicMock()
-            client.chat.completions.parse = AsyncMock(
-                side_effect=Exception("Copilot auth revoked")
-            )
+            client.chat.completions.parse = AsyncMock(side_effect=Exception("Copilot auth revoked"))
             mock_aoi.return_value = client
             extractor = LLMExtractor(
                 model="gpt-4o",
@@ -502,15 +498,11 @@ class TestFromAC_RateLimiting:
             mock_time.monotonic.return_value = frozen
             client = MagicMock()
             client.chat.completions.parse = AsyncMock(
-                return_value=MagicMock(
-                    choices=[MagicMock(message=MagicMock(parsed=ExtractionResult()))]
-                )
+                return_value=MagicMock(choices=[MagicMock(message=MagicMock(parsed=ExtractionResult()))])
             )
             mock_aoi.return_value = client
             # 1 request per minute: second call within same frozen window is rate-limited
-            extractor = LLMExtractor(
-                model="gpt-4o", api_key="sk-test", requests_per_minute=1
-            )
+            extractor = LLMExtractor(model="gpt-4o", api_key="sk-test", requests_per_minute=1)
             await extractor.extract("first call — uses the budget")
             result = await extractor.extract("second call — budget exhausted")
         assert result == ExtractionResult()
@@ -539,16 +531,10 @@ class TestFromAC_PyprojectTomlDeps:
         with _PYPROJECT_PATH.open("rb") as f:
             config = tomllib.load(f)
         optional_deps = config.get("project", {}).get("optional-dependencies", {})
-        copilot_groups = {
-            name: deps
-            for name, deps in optional_deps.items()
-            if any("truststore" in d for d in deps)
-        }
+        copilot_groups = {name: deps for name, deps in optional_deps.items() if any("truststore" in d for d in deps)}
         assert copilot_groups, "No optional-dep group with truststore found"
         for deps in copilot_groups.values():
-            assert any("httpx" in d for d in deps), (
-                f"Group with truststore must also include httpx. Got: {deps}"
-            )
+            assert any("httpx" in d for d in deps), f"Group with truststore must also include httpx. Got: {deps}"
 
 
 # ---------------------------------------------------------------------------
@@ -602,4 +588,3 @@ class TestBuilderDiscovered:
             result = _http_client()
         assert result is not None
         mock_httpx.AsyncClient.assert_called_once()
-

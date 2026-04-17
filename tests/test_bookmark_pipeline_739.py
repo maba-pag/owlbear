@@ -70,9 +70,7 @@ class TestFromAC_UpdateBookmarkTagsRegistration:  # noqa: N801
     def test_update_bookmark_tags_in_all(self) -> None:
         from owlbear_mcp_knowledge import server as server_mod  # noqa: PLC0415
 
-        assert "update_bookmark_tags" in server_mod.__all__, (
-            "update_bookmark_tags missing from server.py __all__"
-        )
+        assert "update_bookmark_tags" in server_mod.__all__, "update_bookmark_tags missing from server.py __all__"
 
     def test_update_bookmark_tags_is_callable(self) -> None:
         from owlbear_mcp_knowledge import server as server_mod  # noqa: PLC0415

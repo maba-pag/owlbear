@@ -54,18 +54,14 @@ class TestFromAC_McpJsonCleanup:
         assert mcp_json_path.exists(), ".vscode/mcp.json not found"
         # The key may be at top level or nested under "servers"
         raw = mcp_json_path.read_text(encoding="utf-8")
-        assert '"owlbear-project"' not in raw, (
-            ".vscode/mcp.json still contains owlbear-project server entry"
-        )
+        assert '"owlbear-project"' not in raw, ".vscode/mcp.json still contains owlbear-project server entry"
 
     def test_seed_vscode_mcp_json_no_owlbear_project_entry(self) -> None:
         """seed/.vscode/mcp.json must not contain an owlbear-project server entry."""
         mcp_json_path = ROOT / "seed" / ".vscode" / "mcp.json"
         assert mcp_json_path.exists(), "seed/.vscode/mcp.json not found"
         raw = mcp_json_path.read_text(encoding="utf-8")
-        assert '"owlbear-project"' not in raw, (
-            "seed/.vscode/mcp.json still contains owlbear-project server entry"
-        )
+        assert '"owlbear-project"' not in raw, "seed/.vscode/mcp.json still contains owlbear-project server entry"
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +140,7 @@ class TestFromAC_NoRemainingReferences:
         assert test_path.exists(), "test_tools_exclude_493.py not found"
         content = test_path.read_text(encoding="utf-8")
         assert "owlbear_mcp_project" not in content, (
-            "test_tools_exclude_493.py still imports owlbear_mcp_project — "
-            "remove mcp-project test classes and imports"
+            "test_tools_exclude_493.py still imports owlbear_mcp_project — remove mcp-project test classes and imports"
         )
 
     def test_mcp_server_conventions_test_no_owlbear_mcp_project_import(self) -> None:

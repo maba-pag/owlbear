@@ -127,8 +127,16 @@ class TestFromAC_CorpEntityContrastiveConcept:
         'unlike', 'distinct', 'distinguish', 'contrast', 'vs', 'whereas')."""
         stripped = _strip_entity_list(LLM_EXTRACTION_PROMPT)
         contrastive_keywords = [
-            "not ", "unlike", "distinct", "vs.", "vs ",
-            "distinguish", "contrast", "whereas", "rather than", "instead of",
+            "not ",
+            "unlike",
+            "distinct",
+            "vs.",
+            "vs ",
+            "distinguish",
+            "contrast",
+            "whereas",
+            "rather than",
+            "instead of",
         ]
         paragraphs = [p.lower() for p in stripped.split("\n\n")]
         for para in paragraphs:

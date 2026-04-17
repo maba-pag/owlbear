@@ -37,10 +37,7 @@ class TestFromAC_StripNoiseSharePointClasses:
         from owlbear_browser.cleaner import strip_noise
 
         # Use <div> not <nav> — <nav> is already in _NOISE_TAGS and would pass trivially
-        html = (
-            '<div class="ms-Breadcrumb"><a>Home</a> &gt; <a>Documents</a></div>'
-            "<p>Main text</p>"
-        )
+        html = '<div class="ms-Breadcrumb"><a>Home</a> &gt; <a>Documents</a></div><p>Main text</p>'
         result = strip_noise(html)
         assert "Home</a>" not in result
 
@@ -48,10 +45,7 @@ class TestFromAC_StripNoiseSharePointClasses:
         """strip_noise() removes element with class ms-Persona (user avatar container)."""
         from owlbear_browser.cleaner import strip_noise
 
-        html = (
-            '<div class="ms-Persona"><img src="avatar.jpg" /><span>John Doe</span></div>'
-            "<p>Document body</p>"
-        )
+        html = '<div class="ms-Persona"><img src="avatar.jpg" /><span>John Doe</span></div><p>Document body</p>'
         result = strip_noise(html)
         assert "John Doe" not in result
 
@@ -59,10 +53,7 @@ class TestFromAC_StripNoiseSharePointClasses:
         """strip_noise() removes element with class ms-LivePersona (live persona card)."""
         from owlbear_browser.cleaner import strip_noise
 
-        html = (
-            '<div class="ms-LivePersona"><span>Jane Smith</span></div>'
-            "<p>Report text</p>"
-        )
+        html = '<div class="ms-LivePersona"><span>Jane Smith</span></div><p>Report text</p>'
         result = strip_noise(html)
         assert "Jane Smith" not in result
 
@@ -70,10 +61,7 @@ class TestFromAC_StripNoiseSharePointClasses:
         """strip_noise() removes element with class ms-DateTimeField (dynamic timestamp)."""
         from owlbear_browser.cleaner import strip_noise
 
-        html = (
-            '<span class="ms-DateTimeField">Modified 2026-04-11T08:00:00Z</span>'
-            "<p>Policy text</p>"
-        )
+        html = '<span class="ms-DateTimeField">Modified 2026-04-11T08:00:00Z</span><p>Policy text</p>'
         result = strip_noise(html)
         assert "Modified 2026-04-11T08:00:00Z" not in result
 
@@ -82,10 +70,7 @@ class TestFromAC_StripNoiseSharePointClasses:
         from owlbear_browser.cleaner import clean
 
         # Use <div> not <nav> — <nav> is already in _NOISE_TAGS and would pass trivially
-        html = (
-            '<div class="ms-Breadcrumb"><a>Home</a> / <a>Team Site</a> / Policies</div>'
-            "<h1>HR Policy</h1>"
-        )
+        html = '<div class="ms-Breadcrumb"><a>Home</a> / <a>Team Site</a> / Policies</div><h1>HR Policy</h1>'
         result = clean(html)
         assert "Team Site" not in result
         assert "HR Policy" in result
@@ -143,10 +128,7 @@ class TestFromAC_StripNoiseSharePointIds:
         """strip_noise() removes element with id=SuiteNavPlaceHolder."""
         from owlbear_browser.cleaner import strip_noise
 
-        html = (
-            '<div id="SuiteNavPlaceHolder">Suite nav bar content</div>'
-            "<p>Page content</p>"
-        )
+        html = '<div id="SuiteNavPlaceHolder">Suite nav bar content</div><p>Page content</p>'
         result = strip_noise(html)
         assert "Suite nav bar content" not in result
         assert "Page content" in result
@@ -155,10 +137,7 @@ class TestFromAC_StripNoiseSharePointIds:
         """strip_noise() removes element with id=O365_NavHeader."""
         from owlbear_browser.cleaner import strip_noise
 
-        html = (
-            '<div id="O365_NavHeader">O365 navigation header</div>'
-            "<p>Document body</p>"
-        )
+        html = '<div id="O365_NavHeader">O365 navigation header</div><p>Document body</p>'
         result = strip_noise(html)
         assert "O365 navigation header" not in result
         assert "Document body" in result
@@ -167,10 +146,7 @@ class TestFromAC_StripNoiseSharePointIds:
         """strip_noise() removes element with id=s4-ribbonrow (SharePoint ribbon row)."""
         from owlbear_browser.cleaner import strip_noise
 
-        html = (
-            '<div id="s4-ribbonrow">Ribbon New Edit Delete Share</div>'
-            "<p>List items</p>"
-        )
+        html = '<div id="s4-ribbonrow">Ribbon New Edit Delete Share</div><p>List items</p>'
         result = strip_noise(html)
         assert "Ribbon New Edit Delete Share" not in result
         assert "List items" in result
@@ -346,10 +322,7 @@ class TestFromAC_IdempotentOutput:
         html = "<p>Data\u200bwith\ufeffartifacts in the content.</p>"
         first = clean(html)
         second = clean(html)
-        assert (
-            hashlib.sha256(first.encode()).hexdigest()
-            == hashlib.sha256(second.encode()).hexdigest()
-        )
+        assert hashlib.sha256(first.encode()).hexdigest() == hashlib.sha256(second.encode()).hexdigest()
         # Zero-width chars must be stripped — these assertions drive the RED failure
         assert "\u200b" not in first
         assert "\ufeff" not in first
@@ -379,10 +352,7 @@ class TestFromAC_IdempotentOutput:
         """Full pipeline clean() removes all four zero-width variants from mixed input."""
         from owlbear_browser.cleaner import clean
 
-        html = (
-            "<h1>Title\u200b</h1>"
-            "<p>Body\u200cwith\u200dencoded\ufeffchars.</p>"
-        )
+        html = "<h1>Title\u200b</h1><p>Body\u200cwith\u200dencoded\ufeffchars.</p>"
         result = clean(html)
         for char in ("\u200b", "\u200c", "\u200d", "\ufeff"):
             assert char not in result, f"Zero-width char {hex(ord(char))} found in output"

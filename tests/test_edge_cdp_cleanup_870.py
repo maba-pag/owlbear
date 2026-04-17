@@ -42,11 +42,13 @@ class TestFromAC_EdgeCDPCleanup:
     def test_edge_not_found_error_removed_from_errors_module(self) -> None:
         """EdgeNotFoundError is no longer raised — must be deleted from _errors.py."""
         import owlbear_browser._errors as errors
+
         assert not hasattr(errors, "EdgeNotFoundError")
 
     def test_cdp_connection_error_removed_from_errors_module(self) -> None:
         """CDPConnectionError is no longer raised — must be deleted from _errors.py."""
         import owlbear_browser._errors as errors
+
         assert not hasattr(errors, "CDPConnectionError")
 
     # ── AC3: __init__.py exports cleaned ─────────────────────────────────────
@@ -54,36 +56,43 @@ class TestFromAC_EdgeCDPCleanup:
     def test_init_no_edge_cdp_launcher_export(self) -> None:
         """EdgeCDPLauncher must not be exported from the owlbear_browser package root."""
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "EdgeCDPLauncher")
 
     def test_init_no_cdp_connection_manager_export(self) -> None:
         """CDPConnectionManager must not be exported from the owlbear_browser package root."""
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "CDPConnectionManager")
 
     def test_init_no_edge_not_found_error_export(self) -> None:
         """EdgeNotFoundError must not be exported from the owlbear_browser package root."""
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "EdgeNotFoundError")
 
     def test_init_no_cdp_connection_error_export(self) -> None:
         """CDPConnectionError must not be exported from the owlbear_browser package root."""
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "CDPConnectionError")
 
     def test_init_no_find_edge_binary_export(self) -> None:
         """find_edge_binary must not be exported from the owlbear_browser package root."""
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "find_edge_binary")
 
     def test_init_no_launch_edge_export(self) -> None:
         """launch_edge must not be exported from the owlbear_browser package root."""
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "launch_edge")
 
     def test_init_no_build_launch_args_export(self) -> None:
         """build_launch_args must not be exported from the owlbear_browser package root."""
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "build_launch_args")
 
     def test_init_no_resolve_edge_binary_export(self) -> None:
@@ -91,6 +100,7 @@ class TestFromAC_EdgeCDPCleanup:
         exported from the owlbear_browser package root.
         """
         import owlbear_browser
+
         assert not hasattr(owlbear_browser, "resolve_edge_binary")
 
     # ── AC4: Superseded test files deleted ───────────────────────────────────
@@ -121,7 +131,5 @@ class TestFromAC_EdgeCDPCleanup:
         The 4 non-CDP classes (BrowserMCPServer, AuthWebRefreshHandler,
         ContentSafetyInversion, ReplaceOnChangeRefresh) must be retained.
         """
-        content = (
-            _TESTS_DIR / "test_authenticated_content_pipeline_775.py"
-        ).read_text(encoding="utf-8")
+        content = (_TESTS_DIR / "test_authenticated_content_pipeline_775.py").read_text(encoding="utf-8")
         assert "class TestFromAC_BrowserPackage" not in content

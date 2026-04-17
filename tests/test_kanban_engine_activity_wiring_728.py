@@ -83,11 +83,7 @@ def _read_entries(log_path: Path) -> list[dict]:
     """Parse a JSONL file into a list of dicts. Returns [] if the file is missing."""
     if not log_path.exists():
         return []
-    return [
-        json.loads(line)
-        for line in log_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def _reset_log(kanban_dir: Path) -> None:
@@ -103,17 +99,11 @@ def _reset_log(kanban_dir: Path) -> None:
 class TestFromAC_ActivityLogPath:
     """Engine.__init__ stores _activity_log_path = kanban_dir / 'activity.jsonl'."""
 
-    def test_engine_has_activity_log_path_attribute(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_engine_has_activity_log_path_attribute(self, engine: KanbanEngine) -> None:
         """_activity_log_path attribute exists on the engine instance."""
-        assert hasattr(engine, "_activity_log_path"), (
-            "Engine should expose _activity_log_path after __init__"
-        )
+        assert hasattr(engine, "_activity_log_path"), "Engine should expose _activity_log_path after __init__"
 
-    def test_activity_log_path_points_to_jsonl_in_kanban_dir(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_activity_log_path_points_to_jsonl_in_kanban_dir(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """_activity_log_path resolves to kanban_dir / 'activity.jsonl'."""
         assert hasattr(engine, "_activity_log_path")
         assert engine._activity_log_path == kanban_dir / "activity.jsonl"
@@ -127,44 +117,34 @@ class TestFromAC_ActivityLogPath:
 class TestFromAC_CreateTaskLogging:
     """create_task → action='create', detail=title."""
 
-    def test_create_task_writes_log_entry(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_create_task_writes_log_entry(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """create_task produces exactly one entry in activity.jsonl."""
         engine.create_task("Brand New Task")
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert len(entries) == 1
 
-    def test_create_task_log_action_is_create(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_create_task_log_action_is_create(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """create_task log entry action field is 'create'."""
         engine.create_task("Some Task")
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert entries, "Expected a log entry after create_task"
         assert entries[0]["action"] == "create"
 
-    def test_create_task_log_detail_equals_title(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_create_task_log_detail_equals_title(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """create_task log detail equals the task title."""
         engine.create_task("Exact Title Here")
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert entries, "Expected a log entry after create_task"
         assert entries[0]["detail"] == "Exact Title Here"
 
-    def test_create_task_log_task_id_matches_record(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_create_task_log_task_id_matches_record(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """create_task log task_id matches the newly created task's id."""
         record = engine.create_task("Task Alpha")
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert entries, "Expected a log entry after create_task"
         assert entries[0]["task_id"] == record.id
 
-    def test_two_creates_append_two_entries(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_two_creates_append_two_entries(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """Two create_task calls append two log entries in order."""
         engine.create_task("First")
         engine.create_task("Second")
@@ -182,9 +162,7 @@ class TestFromAC_CreateTaskLogging:
 class TestFromAC_EditTaskLogging:
     """edit_task (no blocked transition) → action='edit', detail=changed fields."""
 
-    def test_edit_task_writes_log_entry(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_edit_task_writes_log_entry(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task produces an entry in activity.jsonl."""
         record = engine.create_task("Editable")
         _reset_log(kanban_dir)
@@ -192,9 +170,7 @@ class TestFromAC_EditTaskLogging:
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert len(entries) == 1
 
-    def test_edit_task_log_action_is_edit(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_edit_task_log_action_is_edit(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task logs action='edit'."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -203,9 +179,7 @@ class TestFromAC_EditTaskLogging:
         assert entries, "Expected a log entry after edit_task"
         assert entries[0]["action"] == "edit"
 
-    def test_edit_task_log_task_id_matches(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_edit_task_log_task_id_matches(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task log task_id matches the edited task's id."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -214,9 +188,7 @@ class TestFromAC_EditTaskLogging:
         assert entries, "Expected a log entry after edit_task"
         assert entries[0]["task_id"] == record.id
 
-    def test_edit_task_log_detail_is_non_empty_string(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_edit_task_log_detail_is_non_empty_string(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task detail is a non-empty string summarising changed fields."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -235,9 +207,7 @@ class TestFromAC_EditTaskLogging:
 class TestFromAC_MoveTaskLogging:
     """move_task logs action='move' with '{old} -> {new}' detail."""
 
-    def test_move_task_writes_log_entry(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_move_task_writes_log_entry(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """move_task produces an entry in activity.jsonl."""
         record = engine.create_task("Moveable")
         _reset_log(kanban_dir)
@@ -245,9 +215,7 @@ class TestFromAC_MoveTaskLogging:
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert len(entries) == 1
 
-    def test_move_task_log_action_is_move(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_move_task_log_action_is_move(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """move_task logs action='move'."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -256,9 +224,7 @@ class TestFromAC_MoveTaskLogging:
         assert entries, "Expected a log entry after move_task"
         assert entries[0]["action"] == "move"
 
-    def test_move_task_detail_shows_status_transition(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_move_task_detail_shows_status_transition(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """move_task detail is '{old_status} -> {new_status}'."""
         record = engine.create_task("Task")  # default status: research
         _reset_log(kanban_dir)
@@ -267,9 +233,7 @@ class TestFromAC_MoveTaskLogging:
         assert entries, "Expected a log entry after move_task"
         assert entries[0]["detail"] == "research -> todo"
 
-    def test_move_task_log_task_id_matches(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_move_task_log_task_id_matches(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """move_task log task_id matches the moved task's id."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -278,9 +242,7 @@ class TestFromAC_MoveTaskLogging:
         assert entries, "Expected a log entry after move_task"
         assert entries[0]["task_id"] == record.id
 
-    def test_archive_uses_move_verb_not_archive(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_archive_uses_move_verb_not_archive(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """Archiving logs action='move', NOT action='archive'."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -289,9 +251,7 @@ class TestFromAC_MoveTaskLogging:
         assert entries, "Expected a log entry after archiving"
         assert entries[0]["action"] == "move"
 
-    def test_archive_detail_shows_archived_destination(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_archive_detail_shows_archived_destination(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """Archiving detail is '{old_status} -> archived'."""
         record = engine.create_task("Task")  # default status: research
         _reset_log(kanban_dir)
@@ -309,9 +269,7 @@ class TestFromAC_MoveTaskLogging:
 class TestFromAC_ClaimTaskLogging:
     """claim_task → action='claim', detail=agent_name."""
 
-    def test_claim_task_writes_log_entry(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_claim_task_writes_log_entry(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """claim_task produces an entry in activity.jsonl."""
         record = engine.create_task("Claimable")
         _reset_log(kanban_dir)
@@ -319,9 +277,7 @@ class TestFromAC_ClaimTaskLogging:
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert len(entries) == 1
 
-    def test_claim_task_log_action_is_claim(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_claim_task_log_action_is_claim(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """claim_task logs action='claim'."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -330,9 +286,7 @@ class TestFromAC_ClaimTaskLogging:
         assert entries, "Expected a log entry after claim_task"
         assert entries[0]["action"] == "claim"
 
-    def test_claim_task_log_detail_is_agent_name(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_claim_task_log_detail_is_agent_name(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """claim_task detail is the engine's agent_name."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -341,9 +295,7 @@ class TestFromAC_ClaimTaskLogging:
         assert entries, "Expected a log entry after claim_task"
         assert entries[0]["detail"] == engine.agent_name
 
-    def test_claim_task_log_task_id_matches(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_claim_task_log_task_id_matches(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """claim_task log task_id matches the claimed task's id."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -361,9 +313,7 @@ class TestFromAC_ClaimTaskLogging:
 class TestFromAC_ReleaseTaskLogging:
     """release_task → action='release', detail=agent_name."""
 
-    def test_release_task_writes_log_entry(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_release_task_writes_log_entry(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """release_task produces an entry in activity.jsonl."""
         record = engine.create_task("Releasable")
         engine.claim_task(str(record.id))
@@ -372,9 +322,7 @@ class TestFromAC_ReleaseTaskLogging:
         entries = _read_entries(kanban_dir / "activity.jsonl")
         assert len(entries) == 1
 
-    def test_release_task_log_action_is_release(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_release_task_log_action_is_release(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """release_task logs action='release'."""
         record = engine.create_task("Task")
         engine.claim_task(str(record.id))
@@ -384,9 +332,7 @@ class TestFromAC_ReleaseTaskLogging:
         assert entries, "Expected a log entry after release_task"
         assert entries[0]["action"] == "release"
 
-    def test_release_task_log_detail_is_agent_name(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_release_task_log_detail_is_agent_name(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """release_task detail is the engine's agent_name."""
         record = engine.create_task("Task")
         engine.claim_task(str(record.id))
@@ -396,9 +342,7 @@ class TestFromAC_ReleaseTaskLogging:
         assert entries, "Expected a log entry after release_task"
         assert entries[0]["detail"] == engine.agent_name
 
-    def test_release_task_log_task_id_matches(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_release_task_log_task_id_matches(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """release_task log task_id matches the released task's id."""
         record = engine.create_task("Task")
         engine.claim_task(str(record.id))
@@ -417,9 +361,7 @@ class TestFromAC_ReleaseTaskLogging:
 class TestFromAC_BlockUnblockDetection:
     """Block/unblock transitions emit 'block'/'unblock' INSTEAD OF 'edit'."""
 
-    def test_false_to_true_transition_emits_block(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_false_to_true_transition_emits_block(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task(blocked=True) on unblocked task logs action='block'."""
         record = engine.create_task("Blockable")
         _reset_log(kanban_dir)
@@ -428,9 +370,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries, "Expected a log entry after blocking"
         assert entries[0]["action"] == "block"
 
-    def test_block_detail_equals_block_reason(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_block_detail_equals_block_reason(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task(blocked=True) detail is the block_reason string."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -439,9 +379,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries, "Expected a log entry after blocking"
         assert entries[0]["detail"] == "needs approval"
 
-    def test_block_without_reason_uses_empty_detail(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_block_without_reason_uses_empty_detail(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task(blocked=True) with no block_reason logs detail=''."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -451,9 +389,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries[0]["action"] == "block"
         assert entries[0]["detail"] == ""
 
-    def test_true_to_false_transition_emits_unblock(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_true_to_false_transition_emits_unblock(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task(blocked=False) on blocked task logs action='unblock'."""
         record = engine.create_task("Task")
         engine.edit_task(str(record.id), blocked=True, block_reason="reason")
@@ -463,9 +399,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries, "Expected a log entry after unblocking"
         assert entries[0]["action"] == "unblock"
 
-    def test_unblock_detail_is_empty_string(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_unblock_detail_is_empty_string(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task(blocked=False) on blocked task logs detail=''."""
         record = engine.create_task("Task")
         engine.edit_task(str(record.id), blocked=True, block_reason="reason")
@@ -475,9 +409,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries, "Expected a log entry after unblocking"
         assert entries[0]["detail"] == ""
 
-    def test_block_emits_block_not_edit(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_block_emits_block_not_edit(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """Block transition emits 'block' and NOT 'edit' — INSTEAD-OF contract."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -486,9 +418,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries, "Expected a log entry after blocking"
         assert entries[0]["action"] != "edit"
 
-    def test_unblock_emits_unblock_not_edit(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_unblock_emits_unblock_not_edit(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """Unblock transition emits 'unblock' and NOT 'edit' — INSTEAD-OF contract."""
         record = engine.create_task("Task")
         engine.edit_task(str(record.id), blocked=True)
@@ -509,9 +439,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries, "Expected a log entry"
         assert entries[0]["action"] == "block"
 
-    def test_no_blocked_transition_emits_edit(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_no_blocked_transition_emits_edit(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task with no blocked state change (False→False) emits 'edit', not 'unblock'."""
         record = engine.create_task("Task")  # blocked=False by default
         _reset_log(kanban_dir)
@@ -520,9 +448,7 @@ class TestFromAC_BlockUnblockDetection:
         assert entries, "Expected a log entry after edit_task"
         assert entries[0]["action"] == "edit"
 
-    def test_block_log_task_id_matches(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_block_log_task_id_matches(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """Block log entry task_id matches the blocked task's id."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)
@@ -540,18 +466,14 @@ class TestFromAC_BlockUnblockDetection:
 class TestFromAC_LogFileCreation:
     """Log file is created on first write if it does not exist beforehand."""
 
-    def test_log_file_created_by_first_create_task(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_log_file_created_by_first_create_task(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """activity.jsonl is created when create_task is called for the first time."""
         log_path = kanban_dir / "activity.jsonl"
         assert not log_path.exists(), "Precondition: file must not exist yet"
         engine.create_task("First Task")
         assert log_path.exists()
 
-    def test_log_file_created_by_first_move_task(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_log_file_created_by_first_move_task(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """Deleting the log then calling move_task recreates activity.jsonl."""
         record = engine.create_task("Task")
         _reset_log(kanban_dir)

@@ -240,9 +240,7 @@ class TestFromAC_PickTasksResponseFormat:
             result = await pick_tasks(mcp_ctx)
         dispatch = result["dispatch"]
         assert len(dispatch) == 1
-        assert isinstance(dispatch[0]["task_id"], int), (
-            f"task_id must be int, got {type(dispatch[0]['task_id'])}"
-        )
+        assert isinstance(dispatch[0]["task_id"], int), f"task_id must be int, got {type(dispatch[0]['task_id'])}"
 
     @pytest.mark.asyncio
     async def test_empty_board_returns_empty_dispatch(self) -> None:
@@ -267,11 +265,10 @@ class TestFromAC_PickTasksMCPContract:
     def test_pick_tasks_registered_in_mcp(self) -> None:
         """'pick_tasks' tool must be registered in the FastMCP server."""
         registered_names = [
-            getattr(t, "name", None) for t in mcp._tool_manager.list_tools()  # noqa: SLF001
+            getattr(t, "name", None)
+            for t in mcp._tool_manager.list_tools()  # noqa: SLF001
         ]
-        assert "pick_tasks" in registered_names, (
-            f"pick_tasks not found in registered tools: {registered_names}"
-        )
+        assert "pick_tasks" in registered_names, f"pick_tasks not found in registered tools: {registered_names}"
 
     def test_pick_tasks_has_read_only_hint(self) -> None:
         """pick_tasks MCP annotation must set readOnlyHint=True."""

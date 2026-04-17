@@ -64,8 +64,8 @@ next_id: 100
 
 # Sentinel datetimes for timeout boundary tests
 _CLAIM_ORIGIN = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
-_EXPIRED_NOW = _CLAIM_ORIGIN + timedelta(hours=2)    # 2h after origin; 1h timeout → expired
-_FRESH_NOW = _CLAIM_ORIGIN + timedelta(minutes=30)   # 30m after origin; 1h timeout → active
+_EXPIRED_NOW = _CLAIM_ORIGIN + timedelta(hours=2)  # 2h after origin; 1h timeout → expired
+_FRESH_NOW = _CLAIM_ORIGIN + timedelta(minutes=30)  # 30m after origin; 1h timeout → active
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -261,9 +261,7 @@ class TestFromAC_ReleaseTask:
         record = engine.show_task(str(task.id))
         assert record.claimed_at is None
 
-    def test_release_allows_reclaim_by_rival(
-        self, engine: KanbanEngine, rival_engine: KanbanEngine
-    ) -> None:
+    def test_release_allows_reclaim_by_rival(self, engine: KanbanEngine, rival_engine: KanbanEngine) -> None:
         """After release, a different agent can claim the task."""
         task = engine.create_task("Re-claimable task")
         engine.claim_task(str(task.id))
@@ -332,9 +330,7 @@ class TestFromAC_ClaimTimeout:
     checking, enabling deterministic tests without real sleeps.
     """
 
-    def test_expired_claim_can_be_overridden_by_rival(
-        self, engine: KanbanEngine, rival_engine: KanbanEngine
-    ) -> None:
+    def test_expired_claim_can_be_overridden_by_rival(self, engine: KanbanEngine, rival_engine: KanbanEngine) -> None:
         """Expired claim (claimed_at + timeout < now) allows a different agent to claim."""
         task = engine.create_task("Timeout task")
         engine.claim_task(str(task.id), now=_CLAIM_ORIGIN)
@@ -343,9 +339,7 @@ class TestFromAC_ClaimTimeout:
         record = rival_engine.show_task(str(task.id))
         assert record.claimed_by == rival_engine.agent_name
 
-    def test_unexpired_claim_is_rejected_by_rival(
-        self, engine: KanbanEngine, rival_engine: KanbanEngine
-    ) -> None:
+    def test_unexpired_claim_is_rejected_by_rival(self, engine: KanbanEngine, rival_engine: KanbanEngine) -> None:
         """Unexpired claim (claimed_at + timeout > now) blocks another agent."""
         task = engine.create_task("Fresh claim task")
         engine.claim_task(str(task.id), now=_CLAIM_ORIGIN)
@@ -353,9 +347,7 @@ class TestFromAC_ClaimTimeout:
         with pytest.raises(Exception):  # noqa: B017, PT011
             rival_engine.claim_task(str(task.id), now=_FRESH_NOW)
 
-    def test_expired_claim_overrider_becomes_new_owner(
-        self, engine: KanbanEngine, rival_engine: KanbanEngine
-    ) -> None:
+    def test_expired_claim_overrider_becomes_new_owner(self, engine: KanbanEngine, rival_engine: KanbanEngine) -> None:
         """After overriding an expired claim, claimed_by reflects only the new owner."""
         task = engine.create_task("Ownership transfer")
         engine.claim_task(str(task.id), now=_CLAIM_ORIGIN)
@@ -364,9 +356,7 @@ class TestFromAC_ClaimTimeout:
         assert record.claimed_by == rival_engine.agent_name
         assert record.claimed_by != engine.agent_name
 
-    def test_claim_at_exact_timeout_boundary_is_expired(
-        self, engine: KanbanEngine, rival_engine: KanbanEngine
-    ) -> None:
+    def test_claim_at_exact_timeout_boundary_is_expired(self, engine: KanbanEngine, rival_engine: KanbanEngine) -> None:
         """Claim at exactly claimed_at + claim_timeout is considered expired (boundary)."""
         task = engine.create_task("Boundary task")
         engine.claim_task(str(task.id), now=_CLAIM_ORIGIN)
@@ -399,9 +389,7 @@ class TestFromAC_ClaimTimeout:
         eng2.claim_task(str(task.id), now=rival_now)
         assert eng2.show_task(str(task.id)).claimed_by == eng2.agent_name
 
-    def test_claim_timeout_parsed_from_config_hours_still_blocks(
-        self, tmp_path: Path
-    ) -> None:
+    def test_claim_timeout_parsed_from_config_hours_still_blocks(self, tmp_path: Path) -> None:
         """claim_timeout='2h' in config; 90m later is still unexpired."""
         config = _BASE_CONFIG_YAML.replace("claim_timeout: 1h", "claim_timeout: 2h")
         (tmp_path / "config.yml").write_text(config, encoding="utf-8")

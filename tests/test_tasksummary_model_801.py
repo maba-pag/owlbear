@@ -45,27 +45,31 @@ _FULL_TASK_DATA: dict = {
     "file": "tasks/0010-sample-task.md",
 }
 
-_INCLUSION_FIELDS: frozenset[str] = frozenset({
-    "id",
-    "title",
-    "status",
-    "priority",
-    "tags",
-    "blocked",
-    "block_reason",
-    "claimed",
-    "parent",
-    "depends_on",
-})
+_INCLUSION_FIELDS: frozenset[str] = frozenset(
+    {
+        "id",
+        "title",
+        "status",
+        "priority",
+        "tags",
+        "blocked",
+        "block_reason",
+        "claimed",
+        "parent",
+        "depends_on",
+    }
+)
 
-_EXCLUSION_FIELDS: frozenset[str] = frozenset({
-    "body",
-    "created",
-    "updated",
-    "claimed_by",
-    "claimed_at",
-    "file",
-})
+_EXCLUSION_FIELDS: frozenset[str] = frozenset(
+    {
+        "body",
+        "created",
+        "updated",
+        "claimed_by",
+        "claimed_at",
+        "file",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -79,9 +83,7 @@ class TestFromAC_TaskSummarySchema:
     def test_inclusion_fields_all_present(self) -> None:
         """All 10 inclusion fields are declared in TaskSummary.model_fields."""
         missing = _INCLUSION_FIELDS - set(TaskSummary.model_fields)
-        assert missing == set(), (
-            f"TaskSummary.model_fields is missing required fields: {missing}"
-        )
+        assert missing == set(), f"TaskSummary.model_fields is missing required fields: {missing}"
 
     def test_claimed_is_bool_not_optional_string(self) -> None:
         """claimed field annotation must be bool, not str | None or claimed_by-style string."""
@@ -91,27 +93,19 @@ class TestFromAC_TaskSummarySchema:
         field_info = TaskSummary.model_fields["claimed"]
         annotation = field_info.annotation
         # Accept bare bool; reject any Optional[str], str, or NoneType.
-        assert annotation is bool, (
-            f"TaskSummary.claimed annotation must be bool, got {annotation!r}"
-        )
+        assert annotation is bool, f"TaskSummary.claimed annotation must be bool, got {annotation!r}"
 
     def test_block_reason_field_present(self) -> None:
         """block_reason must be a declared field in TaskSummary (currently absent)."""
-        assert "block_reason" in TaskSummary.model_fields, (
-            "TaskSummary.block_reason field is missing — AC requires it"
-        )
+        assert "block_reason" in TaskSummary.model_fields, "TaskSummary.block_reason field is missing — AC requires it"
 
     def test_parent_field_present(self) -> None:
         """parent must be a declared field in TaskSummary (currently absent)."""
-        assert "parent" in TaskSummary.model_fields, (
-            "TaskSummary.parent field is missing — AC requires it"
-        )
+        assert "parent" in TaskSummary.model_fields, "TaskSummary.parent field is missing — AC requires it"
 
     def test_depends_on_field_present(self) -> None:
         """depends_on must be a declared field in TaskSummary (currently absent)."""
-        assert "depends_on" in TaskSummary.model_fields, (
-            "TaskSummary.depends_on field is missing — AC requires it"
-        )
+        assert "depends_on" in TaskSummary.model_fields, "TaskSummary.depends_on field is missing — AC requires it"
 
 
 # ---------------------------------------------------------------------------
@@ -125,9 +119,7 @@ class TestFromAC_TaskSummaryExcludes:
     def test_excluded_fields_absent_from_schema(self) -> None:
         """All 6 exclusion fields are absent from TaskSummary.model_fields."""
         present = _EXCLUSION_FIELDS & set(TaskSummary.model_fields)
-        assert present == set(), (
-            f"TaskSummary.model_fields must not include: {present}"
-        )
+        assert present == set(), f"TaskSummary.model_fields must not include: {present}"
 
     def test_claimed_by_not_in_schema(self) -> None:
         """claimed_by (str) must NOT appear in TaskSummary — replaced by claimed (bool)."""
@@ -139,26 +131,20 @@ class TestFromAC_TaskSummaryExcludes:
         """Constructing TaskSummary from full task data must not include body in output."""
         summary = TaskSummary.model_validate(_FULL_TASK_DATA)
         dumped = summary.model_dump()
-        assert "body" not in dumped, (
-            f"body leaked into TaskSummary.model_dump(): {list(dumped.keys())}"
-        )
+        assert "body" not in dumped, f"body leaked into TaskSummary.model_dump(): {list(dumped.keys())}"
 
     def test_temporal_fields_not_in_construction_output(self) -> None:
         """Constructing TaskSummary from full task data must not include created or updated."""
         summary = TaskSummary.model_validate(_FULL_TASK_DATA)
         dumped = summary.model_dump()
         leaked = {"created", "updated"} & set(dumped)
-        assert leaked == set(), (
-            f"Temporal fields leaked into TaskSummary.model_dump(): {leaked}"
-        )
+        assert leaked == set(), f"Temporal fields leaked into TaskSummary.model_dump(): {leaked}"
 
     def test_claimed_by_not_in_construction_output(self) -> None:
         """Constructing TaskSummary from full task data must not expose claimed_by string."""
         summary = TaskSummary.model_validate(_FULL_TASK_DATA)
         dumped = summary.model_dump()
-        assert "claimed_by" not in dumped, (
-            f"claimed_by leaked into TaskSummary.model_dump(): {list(dumped.keys())}"
-        )
+        assert "claimed_by" not in dumped, f"claimed_by leaked into TaskSummary.model_dump(): {list(dumped.keys())}"
 
 
 # ---------------------------------------------------------------------------
@@ -194,17 +180,13 @@ class TestFromAC_TaskSummaryFromTask:
         """Task with claimed_by='some-agent' → TaskSummary.claimed is True."""
         task = self._make_task(claimed_by="some-agent", claimed_at="2026-04-10T10:30:00+00:00")
         summary = TaskSummary.model_validate(task.model_dump())
-        assert summary.claimed is True, (
-            f"Expected claimed=True when claimed_by is set, got {summary.claimed!r}"
-        )
+        assert summary.claimed is True, f"Expected claimed=True when claimed_by is set, got {summary.claimed!r}"
 
     def test_claimed_false_when_task_unclaimed(self) -> None:
         """Task with claimed_by=None → TaskSummary.claimed is False."""
         task = self._make_task(claimed_by=None)
         summary = TaskSummary.model_validate(task.model_dump())
-        assert summary.claimed is False, (
-            f"Expected claimed=False when claimed_by is None, got {summary.claimed!r}"
-        )
+        assert summary.claimed is False, f"Expected claimed=False when claimed_by is None, got {summary.claimed!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -228,12 +210,6 @@ class TestFromAC_ListTasksProjection:
         origin = getattr(ret, "__origin__", None)
         args = getattr(ret, "__args__", ())
 
-        assert origin is list, (
-            f"list_tasks return type origin must be list, got {origin!r} from {ret!r}"
-        )
-        assert len(args) == 1, (
-            f"list_tasks return type must have exactly one type arg, got {args!r}"
-        )
-        assert args[0] is TaskSummary, (
-            f"list_tasks must return list[TaskSummary], not {ret!r}"
-        )
+        assert origin is list, f"list_tasks return type origin must be list, got {origin!r} from {ret!r}"
+        assert len(args) == 1, f"list_tasks return type must have exactly one type arg, got {args!r}"
+        assert args[0] is TaskSummary, f"list_tasks must return list[TaskSummary], not {ret!r}"

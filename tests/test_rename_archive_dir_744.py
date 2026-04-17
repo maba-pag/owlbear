@@ -158,9 +158,7 @@ class TestFromAC_EngineDocstrings:
 class TestFromAC_ArchiveDirectoryBehavior:
     """Tests for AC3/AC4: archived tasks are written to and read from archive/."""
 
-    def test_end_work_last_status_writes_to_archive_dir(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_end_work_last_status_writes_to_archive_dir(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """end_work(success) on 'done' (last status) writes task file to archive/ directory."""
         task = engine.create_task("To be archived", status="done")
         engine.start_work(str(task.id))
@@ -170,9 +168,7 @@ class TestFromAC_ArchiveDirectoryBehavior:
         archive_files = list(archive_dir.glob(f"{task.id}-*.md"))
         assert len(archive_files) == 1
 
-    def test_end_work_last_status_no_file_in_v1_archive(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_end_work_last_status_no_file_in_v1_archive(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """end_work(success) on 'done' must NOT write to the legacy v1-archive/ directory."""
         task = engine.create_task("Should not go to v1-archive", status="done")
         engine.start_work(str(task.id))
@@ -183,9 +179,7 @@ class TestFromAC_ArchiveDirectoryBehavior:
             legacy_files = list(legacy_archive_dir.glob(f"{task.id}-*.md"))
             assert legacy_files == []
 
-    def test_move_task_archived_writes_to_archive_dir(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_move_task_archived_writes_to_archive_dir(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """move_task('archived') places the task file in archive/ directory."""
         task = engine.create_task("Move to archive")
         engine.move_task(str(task.id), "archived")
@@ -203,9 +197,7 @@ class TestFromAC_ArchiveDirectoryBehavior:
 class TestFromAC_ListTasksArchiveDir:
     """Tests for AC7: list_tasks(archived=True) reads from archive/ directory."""
 
-    def test_list_tasks_archived_reads_from_archive_dir(
-        self, kanban_dir_with_archive: Path
-    ) -> None:
+    def test_list_tasks_archived_reads_from_archive_dir(self, kanban_dir_with_archive: Path) -> None:
         """list_tasks(archived=True) returns tasks placed in archive/ directory."""
         archive_dir = kanban_dir_with_archive / "archive"
         _write_task_file(archive_dir, 201, "Archived task alpha")
@@ -218,9 +210,7 @@ class TestFromAC_ListTasksArchiveDir:
         ids = {t.id for t in result}
         assert ids == {201, 202}
 
-    def test_list_tasks_archived_does_not_read_from_v1_archive(
-        self, kanban_dir_with_archive: Path
-    ) -> None:
+    def test_list_tasks_archived_does_not_read_from_v1_archive(self, kanban_dir_with_archive: Path) -> None:
         """list_tasks(archived=True) reads from archive/, not v1-archive/."""
         # Place tasks only in the legacy v1-archive/; engine must NOT find them
         legacy_dir = kanban_dir_with_archive / "v1-archive"
@@ -233,9 +223,7 @@ class TestFromAC_ListTasksArchiveDir:
         ids = {t.id for t in result}
         assert 301 not in ids
 
-    def test_list_tasks_archived_nonexistent_archive_dir_returns_empty(
-        self, kanban_dir_with_archive: Path
-    ) -> None:
+    def test_list_tasks_archived_nonexistent_archive_dir_returns_empty(self, kanban_dir_with_archive: Path) -> None:
         """list_tasks(archived=True) returns [] when only v1-archive/ exists (not archive/)."""
         # Create v1-archive/ with tasks in it — the renamed engine must NOT read this.
         legacy_dir = kanban_dir_with_archive / "v1-archive"

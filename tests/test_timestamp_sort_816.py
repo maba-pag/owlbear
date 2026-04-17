@@ -124,10 +124,8 @@ class TestFromAC_TimestampSort:
         Correct UTC sort with fromisoformat(): [1, 2].
         """
         kdir = _make_kanban_dir(tmp_path)
-        _add_task(kdir, 1, "Go format earlier UTC",
-                  updated="2026-02-01T12:00:00.1234567+02:00")
-        _add_task(kdir, 2, "Python format later UTC",
-                  updated="2026-02-01T11:00:00.123456+00:00")
+        _add_task(kdir, 1, "Go format earlier UTC", updated="2026-02-01T12:00:00.1234567+02:00")
+        _add_task(kdir, 2, "Python format later UTC", updated="2026-02-01T11:00:00.123456+00:00")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(sort="updated")
@@ -150,8 +148,7 @@ class TestFromAC_TimestampSort:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Go created round trip", created=go_ts)
-        _add_task(kdir, 2, "Reference task",
-                  created="2026-01-15T11:00:00.000000+00:00")
+        _add_task(kdir, 2, "Reference task", created="2026-01-15T11:00:00.000000+00:00")
 
         engine = KanbanEngine(kdir)
         engine.list_tasks(sort="created")  # trigger sort; must not mutate files
@@ -170,8 +167,7 @@ class TestFromAC_TimestampSort:
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Go updated round trip", updated=go_ts)
-        _add_task(kdir, 2, "Reference task",
-                  updated="2026-04-09T02:00:00.000000+00:00")
+        _add_task(kdir, 2, "Reference task", updated="2026-04-09T02:00:00.000000+00:00")
 
         engine = KanbanEngine(kdir)
         engine.list_tasks(sort="updated")  # trigger sort; must not mutate files
@@ -212,12 +208,9 @@ class TestFromAC_TimestampSort:
         Correct UTC order: [1, 3, 2].
         """
         kdir = _make_kanban_dir(tmp_path)
-        _add_task(kdir, 1, "Extreme positive TZ",
-                  created="2026-01-01T00:00:00.000000+14:00")
-        _add_task(kdir, 2, "Extreme negative TZ",
-                  created="2026-01-01T00:00:00.000000-12:00")
-        _add_task(kdir, 3, "UTC reference",
-                  created="2026-01-01T10:00:00.000000+00:00")
+        _add_task(kdir, 1, "Extreme positive TZ", created="2026-01-01T00:00:00.000000+14:00")
+        _add_task(kdir, 2, "Extreme negative TZ", created="2026-01-01T00:00:00.000000-12:00")
+        _add_task(kdir, 3, "UTC reference", created="2026-01-01T10:00:00.000000+00:00")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(sort="created")
@@ -233,10 +226,8 @@ class TestFromAC_TimestampSort:
         Correct UTC sort: [2, 1].
         """
         kdir = _make_kanban_dir(tmp_path)
-        _add_task(kdir, 1, "Negative TZ later UTC",
-                  updated="2026-03-15T08:00:00.000000-05:00")
-        _add_task(kdir, 2, "UTC reference earlier",
-                  updated="2026-03-15T10:00:00.000000+00:00")
+        _add_task(kdir, 1, "Negative TZ later UTC", updated="2026-03-15T08:00:00.000000-05:00")
+        _add_task(kdir, 2, "UTC reference earlier", updated="2026-03-15T10:00:00.000000+00:00")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(sort="updated")
@@ -252,10 +243,8 @@ class TestFromAC_TimestampSort:
         Correct UTC sort: [2, 1].
         """
         kdir = _make_kanban_dir(tmp_path)
-        _add_task(kdir, 1, "Negative TZ Go format",
-                  created="2026-05-20T06:30:00.0000000-08:00")
-        _add_task(kdir, 2, "UTC noon reference",
-                  created="2026-05-20T12:00:00.0000000+00:00")
+        _add_task(kdir, 1, "Negative TZ Go format", created="2026-05-20T06:30:00.0000000-08:00")
+        _add_task(kdir, 2, "UTC noon reference", created="2026-05-20T12:00:00.0000000+00:00")
 
         engine = KanbanEngine(kdir)
         result = engine.list_tasks(sort="created")

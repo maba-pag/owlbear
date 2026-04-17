@@ -52,9 +52,7 @@ def _make_v8_db() -> sqlite3.Connection:
         "scope      TEXT DEFAULT 'global'"
         ")"
     )
-    conn.execute(
-        "CREATE TABLE schema_version (version INTEGER, applied_at TEXT)"
-    )
+    conn.execute("CREATE TABLE schema_version (version INTEGER, applied_at TEXT)")
     conn.execute(
         "INSERT INTO schema_version (version, applied_at) VALUES (8, ?)",
         (_now(),),
@@ -80,15 +78,12 @@ class TestFromAC_V8ToV9MigrationRuns:
         """Document rows inserted before migration are intact after migration."""
         conn = _make_v8_db()
         conn.execute(
-            "INSERT INTO documents (id, title, content, metadata, created_at, scope)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
             ("legacy-doc-1", "Legacy Doc", "body text", "{}", _now(), "global"),
         )
         conn.commit()
         init_db(conn)
-        row = conn.execute(
-            "SELECT id, title FROM documents WHERE id='legacy-doc-1'"
-        ).fetchone()
+        row = conn.execute("SELECT id, title FROM documents WHERE id='legacy-doc-1'").fetchone()
         assert row is not None
         assert row[0] == "legacy-doc-1"
         assert row[1] == "Legacy Doc"
@@ -113,9 +108,7 @@ class TestFromAC_SourcePagesAfterMigration:
         """source_pages table is present after v8→v9 migration."""
         conn = _make_v8_db()
         init_db(conn)
-        row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'"
-        ).fetchone()
+        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='source_pages'").fetchone()
         assert row is not None
 
     @pytest.mark.parametrize(
@@ -136,10 +129,7 @@ class TestFromAC_SourcePagesAfterMigration:
         """source_pages table has every required column after v8→v9 migration."""
         conn = _make_v8_db()
         init_db(conn)
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(source_pages)").fetchall()}
         assert column in cols
 
     def test_source_pages_source_id_index_exists_after_migration(self) -> None:
@@ -147,8 +137,7 @@ class TestFromAC_SourcePagesAfterMigration:
         conn = _make_v8_db()
         init_db(conn)
         row = conn.execute(
-            "SELECT name FROM sqlite_master"
-            " WHERE type='index' AND name='idx_source_pages_source_id'"
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_source_pages_source_id'"
         ).fetchone()
         assert row is not None
 
@@ -157,8 +146,7 @@ class TestFromAC_SourcePagesAfterMigration:
         conn = _make_v8_db()
         init_db(conn)
         row = conn.execute(
-            "SELECT name FROM sqlite_master"
-            " WHERE type='index' AND name='idx_source_pages_scope'"
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_source_pages_scope'"
         ).fetchone()
         assert row is not None
 
@@ -175,25 +163,19 @@ class TestFromAC_DocumentsSourceIdAfterMigration:
         """documents table has source_id column after v8→v9 migration."""
         conn = _make_v8_db()
         init_db(conn)
-        cols = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(documents)").fetchall()
-        }
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(documents)").fetchall()}
         assert "source_id" in cols
 
     def test_legacy_document_source_id_is_null_after_migration(self) -> None:
         """Document inserted before migration has source_id = NULL after migration."""
         conn = _make_v8_db()
         conn.execute(
-            "INSERT INTO documents (id, title, content, metadata, created_at, scope)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents (id, title, content, metadata, created_at, scope) VALUES (?, ?, ?, ?, ?, ?)",
             ("legacy-2", "Legacy Pre-V9", "text", "{}", _now(), "global"),
         )
         conn.commit()
         init_db(conn)
-        row = conn.execute(
-            "SELECT source_id FROM documents WHERE id='legacy-2'"
-        ).fetchone()
+        row = conn.execute("SELECT source_id FROM documents WHERE id='legacy-2'").fetchone()
         assert row is not None
         assert row[0] is None
 
@@ -202,11 +184,7 @@ class TestFromAC_DocumentsSourceIdAfterMigration:
         conn = _make_v8_db()
         init_db(conn)
         col_info = next(
-            (
-                row
-                for row in conn.execute("PRAGMA table_info(documents)").fetchall()
-                if row[1] == "source_id"
-            ),
+            (row for row in conn.execute("PRAGMA table_info(documents)").fetchall() if row[1] == "source_id"),
             None,
         )
         assert col_info is not None

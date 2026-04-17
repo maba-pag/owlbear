@@ -16,28 +16,28 @@ from pathlib import Path
 
 _SERVE_DIR = Path(__file__).parent.parent / "serve"
 _KANBAN_ENGINE_DIR = _SERVE_DIR / "kanban"
-_MCP_KANBAN_SERVER = (
-    _SERVE_DIR / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "server.py"
-)
+_MCP_KANBAN_SERVER = _SERVE_DIR / "mcp-kanban" / "src" / "owlbear_mcp_kanban" / "server.py"
 
 _TRANSPORT_BLOCKLIST: frozenset[str] = frozenset({"mcp", "fastmcp"})
 
-_ENGINE_PUBLIC_API: frozenset[str] = frozenset({
-    "list_tasks",
-    "show_task",
-    "create_task",
-    "edit_task",
-    "move_task",
-    "claim_task",
-    "release_task",
-    "start_work",
-    "end_work",
-    "agent_name",
-    "board_config",
-    "refresh_config",
-    "valid_transitions",
-    "revision",
-})
+_ENGINE_PUBLIC_API: frozenset[str] = frozenset(
+    {
+        "list_tasks",
+        "show_task",
+        "create_task",
+        "edit_task",
+        "move_task",
+        "claim_task",
+        "release_task",
+        "start_work",
+        "end_work",
+        "agent_name",
+        "board_config",
+        "refresh_config",
+        "valid_transitions",
+        "revision",
+    }
+)
 
 
 class TestFromAC_EngineImportable:
@@ -75,19 +75,12 @@ class TestFromAC_EngineBoundary:
                         root = alias.name.split(".")[0]
                         if root in _TRANSPORT_BLOCKLIST:
                             violations.append(f"{py_file.name}: imports {root!r}")
-                elif (
-                    isinstance(node, ast.ImportFrom)
-                    and node.module
-                    and node.level == 0
-                ):
+                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
                     root = node.module.split(".")[0]
                     if root in _TRANSPORT_BLOCKLIST:
                         violations.append(f"{py_file.name}: imports from {root!r}")
 
-        assert not violations, (
-            "Engine package must not import transport packages:\n"
-            + "\n".join(violations)
-        )
+        assert not violations, "Engine package must not import transport packages:\n" + "\n".join(violations)
 
 
 class TestFromAC_EnginePublicAPI:
@@ -118,9 +111,7 @@ class TestFromAC_AdapterImportsEngine:
 
     def test_adapter_imports_engine(self) -> None:
         """server.py imports from owlbear_kanban — adapter wraps extracted engine."""
-        assert _MCP_KANBAN_SERVER.exists(), (
-            f"server.py not found at {_MCP_KANBAN_SERVER}"
-        )
+        assert _MCP_KANBAN_SERVER.exists(), f"server.py not found at {_MCP_KANBAN_SERVER}"
         source = _MCP_KANBAN_SERVER.read_text(encoding="utf-8")
         tree = ast.parse(source, filename=str(_MCP_KANBAN_SERVER))
 
@@ -143,6 +134,5 @@ class TestFromAC_AdapterImportsEngine:
                 break
 
         assert found, (
-            "server.py does not import from owlbear_kanban — "
-            "MCP adapter must depend on engine package after extraction"
+            "server.py does not import from owlbear_kanban — MCP adapter must depend on engine package after extraction"
         )

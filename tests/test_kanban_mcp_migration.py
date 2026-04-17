@@ -376,8 +376,12 @@ class TestFromAC_CreateTask:
         app_ctx = _make_engine_app_ctx(create_task=_MINIMAL_TASK_RECORD)
         mcp_ctx = _make_mcp_ctx(app_ctx)
         await create_task(
-            mcp_ctx, title="Parameterised", priority="critical",
-            tags="phase-3,kanban", body="some body", status="todo",
+            mcp_ctx,
+            title="Parameterised",
+            priority="critical",
+            tags="phase-3,kanban",
+            body="some body",
+            status="todo",
         )
         call_kwargs = app_ctx.engine.create_task.call_args[1]  # type: ignore[attr-defined]
         assert call_kwargs.get("priority") == "critical"

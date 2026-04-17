@@ -133,9 +133,7 @@ class TestFromAC_CriticalSectionProtection:
 
         # PermissionError = same task file path collision on Windows = same ID = race.
         # Both outcome types prove the absence of locking.
-        file_collision_errors = [
-            e for e in errors if isinstance(e, (PermissionError, OSError))
-        ]
+        file_collision_errors = [e for e in errors if isinstance(e, (PermissionError, OSError))]
         other_errors = [e for e in errors if not isinstance(e, (PermissionError, OSError))]
         assert not other_errors, f"Threads raised unexpected exceptions: {other_errors}"
         assert not file_collision_errors, (
@@ -143,9 +141,7 @@ class TestFromAC_CriticalSectionProtection:
             f"{file_collision_errors}  — TOCTOU race detected"
         )
         assert len(ids_out) == 2, "Both threads must complete and produce a task"
-        assert len(set(ids_out)) == 2, (
-            f"Duplicate task IDs — TOCTOU race detected: {sorted(ids_out)}"
-        )
+        assert len(set(ids_out)) == 2, f"Duplicate task IDs — TOCTOU race detected: {sorted(ids_out)}"
 
     def test_lock_held_through_slow_save_config(self, kanban_dir: Path) -> None:
         """AC2+AC4 (boundary — lock scope): The lock must not be released between
@@ -183,14 +179,10 @@ class TestFromAC_CriticalSectionProtection:
                 t.join(timeout=10.0)
 
         # TypeError = concurrent save_config reads partial/empty YAML on Windows → race evidence
-        race_errors = [
-            e for e in errors if isinstance(e, (PermissionError, OSError, TypeError))
-        ]
+        race_errors = [e for e in errors if isinstance(e, (PermissionError, OSError, TypeError))]
         other_errors = [e for e in errors if not isinstance(e, (PermissionError, OSError, TypeError))]
         assert not other_errors, f"Threads raised unexpected exceptions: {other_errors}"
-        assert not race_errors, (
-            f"Race condition evidence (file collision or YAML corruption): {race_errors}"
-        )
+        assert not race_errors, f"Race condition evidence (file collision or YAML corruption): {race_errors}"
         assert len(ids_out) == 2
         assert len(set(ids_out)) == 2, (
             f"Lock does not cover the full critical section — IDs collided: {sorted(ids_out)}"
@@ -234,18 +226,14 @@ class TestFromAC_CriticalSectionProtection:
             for t in threads:
                 t.join(timeout=20.0)
 
-        file_collision_errors = [
-            e for e in errors if isinstance(e, (PermissionError, OSError, TypeError))
-        ]
+        file_collision_errors = [e for e in errors if isinstance(e, (PermissionError, OSError, TypeError))]
         other_errors = [e for e in errors if not isinstance(e, (PermissionError, OSError, TypeError))]
         assert not other_errors, f"Threads raised unexpected exceptions: {other_errors}"
         assert not file_collision_errors, (
             f"File collisions/data corruption (same ID allocated to {len(file_collision_errors)} threads): "
             f"{file_collision_errors}  — TOCTOU race detected"
         )
-        assert len(ids_out) == n_threads, (
-            f"Expected {n_threads} tasks, got {len(ids_out)}"
-        )
+        assert len(ids_out) == n_threads, f"Expected {n_threads} tasks, got {len(ids_out)}"
         assert len(set(ids_out)) == n_threads, (
             f"ID collisions under high concurrency — "
             f"unique={len(set(ids_out))} vs expected={n_threads}: {sorted(ids_out)}"
@@ -270,9 +258,7 @@ class TestFromAC_CrossPlatformLocking:
     """
 
     @pytest.mark.slow
-    def test_two_processes_create_tasks_no_duplicate_ids(
-        self, kanban_dir: Path, tmp_path: Path
-    ) -> None:
+    def test_two_processes_create_tasks_no_duplicate_ids(self, kanban_dir: Path, tmp_path: Path) -> None:
         """AC3+AC4 (cross-process): Two separate OS processes calling
         create_task on the same kanban_dir must receive different task IDs.
 
@@ -392,14 +378,7 @@ class TestFromAC_ExceptionSafety:
         """
         from pathlib import Path
 
-        engine_path = (
-            Path(__file__).parent.parent
-            / "serve"
-            / "kanban"
-            / "src"
-            / "owlbear_kanban"
-            / "engine.py"
-        )
+        engine_path = Path(__file__).parent.parent / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
         source = engine_path.read_text(encoding="utf-8")
         lock_keywords = ["fcntl", "msvcrt", "filelock", "LK_LOCK", "LOCK_EX", "flock"]
         found = [kw for kw in lock_keywords if kw in source]
@@ -409,4 +388,3 @@ class TestFromAC_ExceptionSafety:
             "AC5 (no deadlock on exception) cannot be satisfied without a lock. "
             f"Expected at least one of: {lock_keywords}"
         )
-

@@ -37,14 +37,8 @@ ROOT = Path(__file__).parent.parent
 _SPIKE_PATH = ROOT / ".owlbear" / "scratch" / "cdp-spike.py"
 _URL_A = "https://contoso.sharepoint.com/sites/team"
 _URL_B = "https://contoso.confluence.atlassian.net/wiki/spaces/PROJ"
-_SAMPLE_HTML_A = (
-    "<html><body><h1>Team Site</h1><p>Important content.</p>"
-    "<footer>Copyright 2026</footer></body></html>"
-)
-_SAMPLE_HTML_B = (
-    "<html><body><h1>Confluence Space</h1><p>Project docs.</p>"
-    "<footer>Atlassian</footer></body></html>"
-)
+_SAMPLE_HTML_A = "<html><body><h1>Team Site</h1><p>Important content.</p><footer>Copyright 2026</footer></body></html>"
+_SAMPLE_HTML_B = "<html><body><h1>Confluence Space</h1><p>Project docs.</p><footer>Atlassian</footer></body></html>"
 _CLEANED_TEXT_A = "# Team Site\n\nImportant content."
 _CLEANED_TEXT_B = "# Confluence Space\n\nProject docs."
 
@@ -79,8 +73,7 @@ def _load_spike() -> Any:  # noqa: ANN401
     """
     if not _SPIKE_PATH.exists():
         pytest.fail(
-            f"cdp-spike.py not found at {_SPIKE_PATH} — "
-            "builder must implement the script before tests can run."
+            f"cdp-spike.py not found at {_SPIKE_PATH} — builder must implement the script before tests can run."
         )
 
     pw_stub = MagicMock()
@@ -119,10 +112,7 @@ def _make_mock_page(html: str = _SAMPLE_HTML_A) -> MagicMock:
 
 def _get_stability_fn(spike: Any) -> Any:  # noqa: ANN401
     """Locate the hash stability helper in the spike module."""
-    return (
-        getattr(spike, "_run_hash_stability", None)
-        or getattr(spike, "run_hash_stability", None)
-    )
+    return getattr(spike, "_run_hash_stability", None) or getattr(spike, "run_hash_stability", None)
 
 
 # ---------------------------------------------------------------------------
@@ -140,8 +130,7 @@ class TestFromAC_HashStabilityProtocol:
         """argparse must accept --hash-stability flag without raising SystemExit."""
         spike = _load_spike()
         assert hasattr(spike, "_parse_args"), (
-            "Spike must expose _parse_args(). "
-            "AC1 requires --hash-stability flag added to the argparse configuration."
+            "Spike must expose _parse_args(). AC1 requires --hash-stability flag added to the argparse configuration."
         )
         try:
             args = spike._parse_args(["--hash-stability"])
@@ -365,10 +354,7 @@ class TestFromAC_HashComparison:
 
         captured = capsys.readouterr()
         output = captured.out + captured.err
-        assert any(
-            kw in output.lower()
-            for kw in ("diff", "differ", "mismatch", "unstable", "change")
-        ), (
+        assert any(kw in output.lower() for kw in ("diff", "differ", "mismatch", "unstable", "change")), (
             "When cleaned hashes differ, must log diff or mismatch information. "
             "Builder guidance §5: use difflib.unified_diff on cleaned text when hashes differ."
         )
@@ -429,12 +415,7 @@ class TestFromAC_GoNoGoVerdict:
 
         captured = capsys.readouterr()
         output = (captured.out + captured.err).upper()
-        assert (
-            "NO-GO" in output
-            or "NOGO" in output
-            or "UNSTABLE" in output
-            or "FAIL" in output
-        ), (
+        assert "NO-GO" in output or "NOGO" in output or "UNSTABLE" in output or "FAIL" in output, (
             f"Output does not contain NO-GO/FAIL/UNSTABLE when hashes are unstable: "
             f"{output[:300]!r}. "
             "AC4: when cleaned hashes are unstable the log must contain a NO-GO signal."
@@ -484,13 +465,7 @@ class TestFromAC_GoNoGoVerdict:
 
         captured = capsys.readouterr()
         output = (captured.out + captured.err).upper()
-        assert (
-            "FAIL" in output
-            or "NO-GO" in output
-            or "NONE" in output
-            or "WARN" in output
-            or "ERROR" in output
-        ), (
+        assert "FAIL" in output or "NO-GO" in output or "NONE" in output or "WARN" in output or "ERROR" in output, (
             f"Output does not indicate failure when trafilatura returned None: {output[:300]!r}. "
             "Builder guidance §4: 'log and mark as FAIL if extraction returns None'."
         )

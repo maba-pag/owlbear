@@ -133,18 +133,14 @@ class TestFromAC_ValidTransitions:
     # -------------------------------------------------------------------
 
     @pytest.mark.parametrize("status", _ALL_DEFAULT_STATUSES)
-    def test_returns_all_statuses_except_given(
-        self, engine: KanbanEngine, status: str
-    ) -> None:
+    def test_returns_all_statuses_except_given(self, engine: KanbanEngine, status: str) -> None:
         """Each of the 7 configured statuses returns the other 6 as a set."""
         result = engine.valid_transitions(status)
         expected = set(_ALL_DEFAULT_STATUSES) - {status}
         assert result == expected
 
     @pytest.mark.parametrize("status", _ALL_DEFAULT_STATUSES)
-    def test_given_status_excluded_from_result(
-        self, engine: KanbanEngine, status: str
-    ) -> None:
+    def test_given_status_excluded_from_result(self, engine: KanbanEngine, status: str) -> None:
         """The current status is never included in the returned transition set."""
         result = engine.valid_transitions(status)
         assert status not in result
@@ -154,9 +150,7 @@ class TestFromAC_ValidTransitions:
         result = engine.valid_transitions("research")
         assert isinstance(result, set)
 
-    def test_hyphenated_status_returns_correct_set(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_hyphenated_status_returns_correct_set(self, engine: KanbanEngine) -> None:
         """Hyphenated status 'in-progress' is handled the same as any other status."""
         result = engine.valid_transitions("in-progress")
         assert "in-progress" not in result
@@ -181,9 +175,7 @@ class TestFromAC_ValidTransitions:
         with pytest.raises(ValueError):
             engine.valid_transitions("RESEARCH")
 
-    def test_value_error_message_names_invalid_status(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_value_error_message_names_invalid_status(self, engine: KanbanEngine) -> None:
         """ValueError message identifies the offending status value."""
         with pytest.raises(ValueError, match="Invalid status"):
             engine.valid_transitions("bogus")
@@ -192,38 +184,28 @@ class TestFromAC_ValidTransitions:
     # AC3: transitions match config-defined statuses (config-driven)
     # -------------------------------------------------------------------
 
-    def test_custom_config_two_statuses_returns_one(
-        self, custom_engine: KanbanEngine
-    ) -> None:
+    def test_custom_config_two_statuses_returns_one(self, custom_engine: KanbanEngine) -> None:
         """With a 2-status config, each status yields exactly {the other one}."""
         result = custom_engine.valid_transitions("open")
         assert result == {"closed"}
 
-    def test_custom_config_result_is_subset_of_configured_names(
-        self, custom_engine: KanbanEngine
-    ) -> None:
+    def test_custom_config_result_is_subset_of_configured_names(self, custom_engine: KanbanEngine) -> None:
         """All returned transitions are names actually defined in config."""
         result = custom_engine.valid_transitions("open")
         configured = {"open", "closed"}
         assert result.issubset(configured)
 
-    def test_custom_config_excludes_default_status_names(
-        self, custom_engine: KanbanEngine
-    ) -> None:
+    def test_custom_config_excludes_default_status_names(self, custom_engine: KanbanEngine) -> None:
         """Default status names (e.g. 'research') never appear in a custom-config result."""
         result = custom_engine.valid_transitions("open")
         assert result.isdisjoint(set(_ALL_DEFAULT_STATUSES))
 
-    def test_result_count_is_total_statuses_minus_one_custom(
-        self, custom_engine: KanbanEngine
-    ) -> None:
+    def test_result_count_is_total_statuses_minus_one_custom(self, custom_engine: KanbanEngine) -> None:
         """Result size equals (number of configured statuses - 1) for custom config."""
         result = custom_engine.valid_transitions("closed")
         assert len(result) == 1
 
-    def test_result_count_is_total_statuses_minus_one_default(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_result_count_is_total_statuses_minus_one_default(self, engine: KanbanEngine) -> None:
         """Result size equals (number of configured statuses - 1) across all defaults."""
         for status in _ALL_DEFAULT_STATUSES:
             result = engine.valid_transitions(status)

@@ -32,10 +32,7 @@ class TestFromAC_LxmlExplicitDependency:
             data = tomllib.load(fh)
         deps: list[str] = data["project"]["dependencies"]
         lxml_entries = [d for d in deps if d.lower().startswith("lxml")]
-        assert lxml_entries, (
-            f"lxml is not listed in serve/browser/pyproject.toml dependencies; "
-            f"current deps: {deps}"
-        )
+        assert lxml_entries, f"lxml is not listed in serve/browser/pyproject.toml dependencies; current deps: {deps}"
 
     def test_lxml_version_constraint_includes_gte_4_9(self) -> None:
         """lxml dependency specifies a minimum version constraint of >=4.9.
@@ -49,9 +46,7 @@ class TestFromAC_LxmlExplicitDependency:
         lxml_entries = [d for d in deps if d.lower().startswith("lxml")]
         assert lxml_entries, "lxml not found in dependencies — cannot check version constraint"
         lxml_dep = lxml_entries[0]
-        assert ">=4.9" in lxml_dep, (
-            f"lxml constraint does not include '>=4.9'; found: {lxml_dep!r}"
-        )
+        assert ">=4.9" in lxml_dep, f"lxml constraint does not include '>=4.9'; found: {lxml_dep!r}"
 
     def test_lxml_dep_has_no_strict_upper_pin(self) -> None:
         """lxml dependency does not pin an exact version (==) that would block updates.
@@ -67,6 +62,4 @@ class TestFromAC_LxmlExplicitDependency:
         assert lxml_entries, "lxml not found in dependencies — cannot check pin policy"
         lxml_dep = lxml_entries[0]
         # A strict exact-version pin must not be the only constraint
-        assert "==" not in lxml_dep, (
-            f"lxml is pinned to an exact version; use >=4.9 instead: {lxml_dep!r}"
-        )
+        assert "==" not in lxml_dep, f"lxml is pinned to an exact version; use >=4.9 instead: {lxml_dep!r}"

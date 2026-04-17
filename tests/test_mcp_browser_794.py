@@ -62,8 +62,7 @@ class TestFromAC_ToolAnnotationsComplete:
         ann = _get_tool_annotations("navigate")
         assert ann is not None, "navigate has no ToolAnnotations"
         assert ann.readOnlyHint is False, (  # type: ignore[union-attr]
-            f"Expected readOnlyHint=False for navigate (page state changes on navigation), "
-            f"got: {ann.readOnlyHint!r}"  # type: ignore[union-attr]
+            f"Expected readOnlyHint=False for navigate (page state changes on navigation), got: {ann.readOnlyHint!r}"  # type: ignore[union-attr]
         )
 
     # -- click: idempotentHint ------------------------------------------------
@@ -91,8 +90,7 @@ class TestFromAC_ToolAnnotationsComplete:
         ann = _get_tool_annotations("type")
         assert ann is not None, "'type' tool has no ToolAnnotations"
         assert ann.idempotentHint is False, (  # type: ignore[union-attr]
-            f"Expected idempotentHint=False for 'type' (repeated calls append text), "
-            f"got: {ann.idempotentHint!r}"  # type: ignore[union-attr]
+            f"Expected idempotentHint=False for 'type' (repeated calls append text), got: {ann.idempotentHint!r}"  # type: ignore[union-attr]
         )
 
     # -- select: readOnlyHint -------------------------------------------------
@@ -105,8 +103,7 @@ class TestFromAC_ToolAnnotationsComplete:
         ann = _get_tool_annotations("select")
         assert ann is not None, "select has no ToolAnnotations"
         assert ann.readOnlyHint is False, (  # type: ignore[union-attr]
-            f"Expected readOnlyHint=False for select (form state changes on selection), "
-            f"got: {ann.readOnlyHint!r}"  # type: ignore[union-attr]
+            f"Expected readOnlyHint=False for select (form state changes on selection), got: {ann.readOnlyHint!r}"  # type: ignore[union-attr]
         )
 
     # -- read_text: destructiveHint -------------------------------------------

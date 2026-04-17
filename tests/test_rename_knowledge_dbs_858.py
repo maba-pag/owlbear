@@ -82,9 +82,7 @@ class TestFromAC_AutoDetectBehavior:
 
         assert "knowledge.db" not in str(_AUTO_DETECT_RELATIVE)
 
-    def test_import_scope_none_no_env_no_root_returns_explicit_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_import_scope_none_no_env_no_root_returns_explicit_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """import_scope(None) with no env var and no workspace_root returns explicit error."""
         from owlbear_knowledge.scope_transfer import import_scope  # noqa: PLC0415
 
@@ -122,9 +120,7 @@ class TestFromAC_ResolveGlobalDbPath:
 
         assert callable(resolve_global_db_path)
 
-    def test_resolve_happy_path_returns_path_object(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resolve_happy_path_returns_path_object(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """resolve_global_db_path returns a Path when owlbear-project.json is valid."""
         from owlbear_knowledge.scope_transfer import resolve_global_db_path  # noqa: PLC0415
 
@@ -138,9 +134,7 @@ class TestFromAC_ResolveGlobalDbPath:
         result = resolve_global_db_path(tmp_path)
         assert isinstance(result, Path)
 
-    def test_resolve_happy_path_points_to_global_db(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resolve_happy_path_points_to_global_db(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """resolve_global_db_path result path must end with store/knowledge/global.db."""
         from owlbear_knowledge.scope_transfer import resolve_global_db_path  # noqa: PLC0415
 
@@ -156,9 +150,7 @@ class TestFromAC_ResolveGlobalDbPath:
         path_str = str(result)
         assert path_str.endswith(("store/knowledge/global.db", "store\\knowledge\\global.db"))
 
-    def test_resolve_env_var_override_returns_env_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resolve_env_var_override_returns_env_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """OWLBEAR_GLOBAL_KB_PATH env var overrides JSON resolution."""
         from owlbear_knowledge.scope_transfer import resolve_global_db_path  # noqa: PLC0415
 
@@ -167,9 +159,7 @@ class TestFromAC_ResolveGlobalDbPath:
         result = resolve_global_db_path(tmp_path)
         assert str(result) == expected
 
-    def test_resolve_env_var_overrides_even_without_json(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resolve_env_var_overrides_even_without_json(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """OWLBEAR_GLOBAL_KB_PATH is honoured even when owlbear-project.json is absent."""
         from owlbear_knowledge.scope_transfer import resolve_global_db_path  # noqa: PLC0415
 
@@ -180,9 +170,7 @@ class TestFromAC_ResolveGlobalDbPath:
         assert str(result) == custom_path
         assert not str(result).startswith("error:")
 
-    def test_resolve_missing_json_returns_error_prefix(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resolve_missing_json_returns_error_prefix(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """resolve_global_db_path returns error: string when owlbear-project.json is missing."""
         from owlbear_knowledge.scope_transfer import resolve_global_db_path  # noqa: PLC0415
 
@@ -191,9 +179,7 @@ class TestFromAC_ResolveGlobalDbPath:
         assert isinstance(result, str)
         assert result.startswith("error:")
 
-    def test_resolve_malformed_json_returns_error_prefix(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resolve_malformed_json_returns_error_prefix(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """resolve_global_db_path returns error: string when owlbear-project.json is malformed."""
         from owlbear_knowledge.scope_transfer import resolve_global_db_path  # noqa: PLC0415
 
@@ -226,9 +212,7 @@ class TestFromAC_ResolveGlobalDbPath:
 
         monkeypatch.delenv("OWLBEAR_GLOBAL_KB_PATH", raising=False)
         (tmp_path / "owlbear-project.json").write_text(
-            json.dumps(
-                {"name": "myproject", "owlbear_path": str(tmp_path / "does_not_exist")}
-            ),
+            json.dumps({"name": "myproject", "owlbear_path": str(tmp_path / "does_not_exist")}),
             encoding="utf-8",
         )
         result = resolve_global_db_path(tmp_path)
@@ -245,9 +229,7 @@ class TestFromAC_EnvVarRenameServer:
     """server.py reads OWLBEAR_LOCAL_KB_PATH with fallback to OWLBEAR_KB_PATH."""
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_server_lifespan_reads_owlbear_local_kb_path(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_server_lifespan_reads_owlbear_local_kb_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """app_lifespan must open the DB at OWLBEAR_LOCAL_KB_PATH when set."""
         from owlbear_mcp_knowledge.server import app_lifespan  # noqa: PLC0415
 
@@ -271,9 +253,7 @@ class TestFromAC_EnvVarRenameServer:
         assert custom_path in args
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_server_lifespan_local_kb_takes_priority_over_kb_path(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_server_lifespan_local_kb_takes_priority_over_kb_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OWLBEAR_LOCAL_KB_PATH takes priority over OWLBEAR_KB_PATH when both are set."""
         from owlbear_mcp_knowledge.server import app_lifespan  # noqa: PLC0415
 
@@ -299,9 +279,7 @@ class TestFromAC_EnvVarRenameServer:
         assert old_path not in args
 
     @pytest.mark.asyncio(loop_scope="function")
-    async def test_server_lifespan_no_env_uses_local_db_default(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_server_lifespan_no_env_uses_local_db_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """app_lifespan without env vars uses '.owlbear/knowledge/local.db' as default."""
         from owlbear_mcp_knowledge.server import app_lifespan  # noqa: PLC0415
 

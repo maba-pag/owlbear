@@ -182,9 +182,7 @@ class TestFromAC_ContentNormalization:
 
         html = "<p>First paragraph</p><p>Second paragraph</p><p>Third paragraph</p>"
         result = clean(html)
-        assert "\n\n\n" not in result, (
-            f"Expected at most one consecutive blank line; got: {result!r}"
-        )
+        assert "\n\n\n" not in result, f"Expected at most one consecutive blank line; got: {result!r}"
 
     def test_clean_semantically_equivalent_html_produces_same_output(self) -> None:
         """Same semantic content with different HTML whitespace → identical clean() output."""
@@ -193,8 +191,7 @@ class TestFromAC_ContentNormalization:
         html_compact = "<p>Hello World</p>"
         html_spaced = "<p>Hello   World</p>"
         assert clean(html_compact) == clean(html_spaced), (
-            f"Expected identical output; got:\n  compact: {clean(html_compact)!r}\n"
-            f"  spaced:  {clean(html_spaced)!r}"
+            f"Expected identical output; got:\n  compact: {clean(html_compact)!r}\n  spaced:  {clean(html_spaced)!r}"
         )
 
     def test_clean_multiple_nbsp_in_single_element(self) -> None:
@@ -287,18 +284,11 @@ class TestFromAC_MarkdownConversion:
         """A document containing h1-h6 renders all six distinct # depths."""
         from owlbear_browser.cleaner import html_to_markdown
 
-        html = (
-            "<html><body>"
-            "<h1>H1</h1><h2>H2</h2><h3>H3</h3>"
-            "<h4>H4</h4><h5>H5</h5><h6>H6</h6>"
-            "</body></html>"
-        )
+        html = "<html><body><h1>H1</h1><h2>H2</h2><h3>H3</h3><h4>H4</h4><h5>H5</h5><h6>H6</h6></body></html>"
         result = html_to_markdown(html)
         for level in range(1, 7):
             marker = "#" * level
-            assert f"{marker} H{level}" in result, (
-                f"Expected '{marker} H{level}' in result; got:\n{result!r}"
-            )
+            assert f"{marker} H{level}" in result, f"Expected '{marker} H{level}' in result; got:\n{result!r}"
 
     # --- links --------------------------------------------------------------
 
@@ -342,12 +332,7 @@ class TestFromAC_MarkdownConversion:
         """<table> with a header row produces a GFM table with '---' separator after row 0."""
         from owlbear_browser.cleaner import html_to_markdown
 
-        html = (
-            "<table>"
-            "<tr><th>Name</th><th>Role</th></tr>"
-            "<tr><td>Alice</td><td>Engineer</td></tr>"
-            "</table>"
-        )
+        html = "<table><tr><th>Name</th><th>Role</th></tr><tr><td>Alice</td><td>Engineer</td></tr></table>"
         result = html_to_markdown(html)
         assert "| Name | Role |" in result
         assert "| --- | --- |" in result
@@ -432,10 +417,7 @@ class TestFromAC_MarkdownConversion:
         """Element with id='ms-site-actions' (SharePoint actions bar) is stripped."""
         from owlbear_browser.cleaner import clean
 
-        html = (
-            '<div id="ms-site-actions">Like Follow Subscribe Share</div>'
-            "<p>Document body content</p>"
-        )
+        html = '<div id="ms-site-actions">Like Follow Subscribe Share</div><p>Document body content</p>'
         result = clean(html)
         assert "Like Follow Subscribe Share" not in result
         assert "Document body content" in result

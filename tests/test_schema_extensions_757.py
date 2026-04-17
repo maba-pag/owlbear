@@ -323,10 +323,10 @@ class TestFromAC_SourcePageSchemaColumns:
         # A unified PageStatus design uses one column.  Separate approval_state /
         # extraction_status columns indicate an old design not matching this spec.
         assert "status" in cols
-        assert "approval_state" not in cols, (
-            "approval_state is a split-column remnant; only unified 'status' is valid"
+        assert "approval_state" not in cols, "approval_state is a split-column remnant; only unified 'status' is valid"
+        assert "extraction_status" not in cols, (
+            "extraction_status is a split-column remnant; only unified 'status' is valid"
         )
-        assert "extraction_status" not in cols, "extraction_status is a split-column remnant; only unified 'status' is valid"
 
     def test_schema_version_is_9_after_v9_migration(self) -> None:
         """After init_db on a fresh connection, schema_version is 9."""
@@ -363,9 +363,7 @@ class TestFromAC_InsertDocumentSourceId:
             ("src-999", "doc-src-001"),
         )  # Manually stamped — just verifying the column exists
 
-        row = conn.execute(
-            "SELECT source_id FROM documents WHERE id = ?", ("doc-src-001",)
-        ).fetchone()
+        row = conn.execute("SELECT source_id FROM documents WHERE id = ?", ("doc-src-001",)).fetchone()
         assert row is not None
         # Column must exist (no OperationalError) — actual propagation tested below
 
@@ -384,9 +382,7 @@ class TestFromAC_InsertDocumentSourceId:
         )
         store.insert_document("doc-src-002", intake, source_id="src-insert-01")
 
-        row = conn.execute(
-            "SELECT source_id FROM documents WHERE id = ?", ("doc-src-002",)
-        ).fetchone()
+        row = conn.execute("SELECT source_id FROM documents WHERE id = ?", ("doc-src-002",)).fetchone()
         assert row is not None
         assert row[0] == "src-insert-01"
 
@@ -401,9 +397,7 @@ class TestFromAC_InsertDocumentSourceId:
         intake = IntakeResult(content="content", source="https://example.com", metadata={})
         store.insert_document("doc-nosrc-001", intake)
 
-        row = conn.execute(
-            "SELECT source_id FROM documents WHERE id = ?", ("doc-nosrc-001",)
-        ).fetchone()
+        row = conn.execute("SELECT source_id FROM documents WHERE id = ?", ("doc-nosrc-001",)).fetchone()
         assert row is not None
         assert row[0] is None
 
@@ -416,9 +410,7 @@ class TestFromAC_InsertDocumentSourceId:
 class TestFromAC_DeleteSourceCascade:
     """delete_source_cascade removes source_pages, documents, and all 6 downstream tables."""
 
-    def _setup_full_chain(
-        self, conn: sqlite3.Connection, source_id: str
-    ) -> None:
+    def _setup_full_chain(self, conn: sqlite3.Connection, source_id: str) -> None:
         """Insert one source_page, one document, and all downstream rows for *source_id*."""
         from owlbear_knowledge.document_store import DocumentStore
         from owlbear_knowledge.graph_store import GraphStore
@@ -436,8 +428,7 @@ class TestFromAC_DeleteSourceCascade:
         # document row linked by source_id
         doc_id = f"doc-cascade-{source_id}"
         conn.execute(
-            "INSERT INTO documents (id, title, content, metadata, created_at, source_id)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents (id, title, content, metadata, created_at, source_id) VALUES (?, ?, ?, ?, ?, ?)",
             (doc_id, "Doc", "body", "{}", _now(), source_id),
         )
 
@@ -484,9 +475,7 @@ class TestFromAC_DeleteSourceCascade:
         store = DocumentStore(conn, GraphStore(conn), MagicMock(), MagicMock())
         store.delete_source_cascade("src-cascade-001")
 
-        rows = conn.execute(
-            "SELECT id FROM source_pages WHERE source_id = ?", ("src-cascade-001",)
-        ).fetchall()
+        rows = conn.execute("SELECT id FROM source_pages WHERE source_id = ?", ("src-cascade-001",)).fetchall()
         assert rows == []
 
     def test_delete_source_cascade_removes_documents(self) -> None:
@@ -499,9 +488,7 @@ class TestFromAC_DeleteSourceCascade:
         store = DocumentStore(conn, GraphStore(conn), MagicMock(), MagicMock())
         store.delete_source_cascade("src-cascade-002")
 
-        rows = conn.execute(
-            "SELECT id FROM documents WHERE source_id = ?", ("src-cascade-002",)
-        ).fetchall()
+        rows = conn.execute("SELECT id FROM documents WHERE source_id = ?", ("src-cascade-002",)).fetchall()
         assert rows == []
 
     def test_delete_source_cascade_removes_entities(self) -> None:
@@ -531,9 +518,7 @@ class TestFromAC_DeleteSourceCascade:
         store = DocumentStore(conn, GraphStore(conn), MagicMock(), MagicMock())
         store.delete_source_cascade("src-cascade-004")
 
-        row = conn.execute(
-            "SELECT id FROM edges WHERE id = ?", (edge_id,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM edges WHERE id = ?", (edge_id,)).fetchone()
         assert row is None
 
     def test_delete_source_cascade_removes_chunks(self) -> None:
@@ -563,9 +548,7 @@ class TestFromAC_DeleteSourceCascade:
         store = DocumentStore(conn, GraphStore(conn), MagicMock(), MagicMock())
         store.delete_source_cascade("src-cascade-006")
 
-        row = conn.execute(
-            "SELECT document_id FROM document_status WHERE document_id = ?", (doc_id,)
-        ).fetchone()
+        row = conn.execute("SELECT document_id FROM document_status WHERE document_id = ?", (doc_id,)).fetchone()
         assert row is None
 
     def test_delete_source_cascade_full_chain_all_six_tables_zero_rows(self) -> None:
@@ -580,21 +563,11 @@ class TestFromAC_DeleteSourceCascade:
         store = DocumentStore(conn, GraphStore(conn), MagicMock(), MagicMock())
         store.delete_source_cascade(src_id)
 
-        assert conn.execute(
-            "SELECT id FROM source_pages WHERE source_id = ?", (src_id,)
-        ).fetchall() == []
-        assert conn.execute(
-            "SELECT id FROM documents WHERE source_id = ?", (src_id,)
-        ).fetchall() == []
-        assert conn.execute(
-            "SELECT id FROM entities WHERE document_id = ?", (doc_id,)
-        ).fetchall() == []
-        assert conn.execute(
-            "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
-        ).fetchall() == []
-        assert conn.execute(
-            "SELECT document_id FROM document_status WHERE document_id = ?", (doc_id,)
-        ).fetchall() == []
+        assert conn.execute("SELECT id FROM source_pages WHERE source_id = ?", (src_id,)).fetchall() == []
+        assert conn.execute("SELECT id FROM documents WHERE source_id = ?", (src_id,)).fetchall() == []
+        assert conn.execute("SELECT id FROM entities WHERE document_id = ?", (doc_id,)).fetchall() == []
+        assert conn.execute("SELECT id FROM chunks WHERE document_id = ?", (doc_id,)).fetchall() == []
+        assert conn.execute("SELECT document_id FROM document_status WHERE document_id = ?", (doc_id,)).fetchall() == []
 
     def test_delete_source_cascade_on_empty_source_is_no_op(self) -> None:
         """delete_source_cascade on an unknown source_id does not raise."""
@@ -618,13 +591,9 @@ class TestFromAC_DeleteSourceCascade:
         store.delete_source_cascade("src-target")
 
         # source_pages for the kept source must still exist
-        pages = conn.execute(
-            "SELECT id FROM source_pages WHERE source_id = ?", ("src-keep",)
-        ).fetchall()
+        pages = conn.execute("SELECT id FROM source_pages WHERE source_id = ?", ("src-keep",)).fetchall()
         assert len(pages) == 1
 
         # documents for the kept source must still exist
-        docs = conn.execute(
-            "SELECT id FROM documents WHERE source_id = ?", ("src-keep",)
-        ).fetchall()
+        docs = conn.execute("SELECT id FROM documents WHERE source_id = ?", ("src-keep",)).fetchall()
         assert len(docs) == 1

@@ -19,11 +19,22 @@ _THIS_FILE = Path(__file__).resolve()
 _LEGACY_MODULE = "owlbear_mcp_kanban.engine_models"
 
 # Directories excluded from the import scan (virtual envs, caches, build artifacts)
-_SCAN_EXCLUDE_DIRS = frozenset({
-    ".venv", "venv", "__pycache__", ".git", ".tox", ".mypy_cache",
-    ".pytest_cache", ".ruff_cache", "node_modules", "dist", "build",
-    "site-packages",
-})
+_SCAN_EXCLUDE_DIRS = frozenset(
+    {
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".git",
+        ".tox",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "node_modules",
+        "dist",
+        "build",
+        "site-packages",
+    }
+)
 
 
 def _workspace_py_files() -> list[Path]:
@@ -84,7 +95,6 @@ class TestFromAC_RemoveLegacyEngineModels:
                             rel = py_file.relative_to(_REPO_ROOT)
                             offenders.append(f"{rel}:{node.lineno}")
 
-        assert not offenders, (
-            f"These files still import from '{_LEGACY_MODULE}' and must be updated:\n"
-            + "\n".join(f"  {o}" for o in offenders)
+        assert not offenders, f"These files still import from '{_LEGACY_MODULE}' and must be updated:\n" + "\n".join(
+            f"  {o}" for o in offenders
         )

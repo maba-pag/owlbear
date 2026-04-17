@@ -73,9 +73,7 @@ def _make_pipeline_with_fresh_entities(
     from owlbear_knowledge.models import Edge, Entity, EntityType, RelationType
 
     def _fresh(_text: str) -> ExtractionResult:
-        entities = [
-            Entity(name=f"E{i}", entity_type=EntityType.CONCEPT) for i in range(n_entities)
-        ]
+        entities = [Entity(name=f"E{i}", entity_type=EntityType.CONCEPT) for i in range(n_entities)]
         edges: list[Edge] = []
         if n_edges > 0 and len(entities) >= 2:
             edges = [
@@ -244,9 +242,7 @@ class TestFromAC_CascadeDeleteOnChange:
         sentinel_entity = Entity(name="UnrelatedDocEntity", entity_type=EntityType.CONCEPT)
 
         mock_extractor_doc2 = MagicMock()
-        mock_extractor_doc2.extract = AsyncMock(
-            return_value=ExtractionResult(entities=[sentinel_entity], edges=[])
-        )
+        mock_extractor_doc2.extract = AsyncMock(return_value=ExtractionResult(entities=[sentinel_entity], edges=[]))
         from owlbear_knowledge.chunker import TextChunker
         from owlbear_knowledge.ingest import IngestPipeline
 
@@ -272,9 +268,7 @@ class TestFromAC_CascadeDeleteOnChange:
         )
 
         # doc2's sentinel entity must still be in the DB
-        count = conn.execute(
-            "SELECT COUNT(*) FROM entities WHERE name = ?", ("UnrelatedDocEntity",)
-        ).fetchone()[0]
+        count = conn.execute("SELECT COUNT(*) FROM entities WHERE name = ?", ("UnrelatedDocEntity",)).fetchone()[0]
         assert count == 1
 
 
@@ -341,12 +335,14 @@ class TestFromAC_NoEntityAccumulationOnRefresh:
 
         # Fails: content_cleaner kwarg not accepted
         await pipeline.ingest(
-            _make_intake("content v1", source=source), content_cleaner=_strip_tags,
+            _make_intake("content v1", source=source),
+            content_cleaner=_strip_tags,
         )  # type: ignore[call-arg]
         count_after_first = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
 
         await pipeline.ingest(
-            _make_intake("content v2", source=source), content_cleaner=_strip_tags,
+            _make_intake("content v2", source=source),
+            content_cleaner=_strip_tags,
         )  # type: ignore[call-arg]
         count_after_second = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
 
@@ -364,13 +360,16 @@ class TestFromAC_NoEntityAccumulationOnRefresh:
 
         # Fails: content_cleaner kwarg not accepted
         await pipeline.ingest(
-            _make_intake("version one", source=source), content_cleaner=_strip_tags,
+            _make_intake("version one", source=source),
+            content_cleaner=_strip_tags,
         )  # type: ignore[call-arg]
         await pipeline.ingest(
-            _make_intake("version two", source=source), content_cleaner=_strip_tags,
+            _make_intake("version two", source=source),
+            content_cleaner=_strip_tags,
         )  # type: ignore[call-arg]
         await pipeline.ingest(
-            _make_intake("version three", source=source), content_cleaner=_strip_tags,
+            _make_intake("version three", source=source),
+            content_cleaner=_strip_tags,
         )  # type: ignore[call-arg]
 
         total_entities = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
@@ -388,12 +387,14 @@ class TestFromAC_NoEntityAccumulationOnRefresh:
 
         # Fails: content_cleaner kwarg not accepted
         await pipeline.ingest(
-            _make_intake("edge content v1", source=source), content_cleaner=_strip_tags,
+            _make_intake("edge content v1", source=source),
+            content_cleaner=_strip_tags,
         )  # type: ignore[call-arg]
         edge_count_first = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
 
         await pipeline.ingest(
-            _make_intake("edge content v2", source=source), content_cleaner=_strip_tags,
+            _make_intake("edge content v2", source=source),
+            content_cleaner=_strip_tags,
         )  # type: ignore[call-arg]
         edge_count_second = conn.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
 

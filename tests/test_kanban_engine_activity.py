@@ -30,11 +30,7 @@ from owlbear_kanban.activity_log import log_activity
 
 def _read_entries(log_path: Path) -> list[dict]:
     """Parse a JSONL file into a list of dicts."""
-    return [
-        json.loads(line)
-        for line in log_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 # ===========================================================================
@@ -245,8 +241,7 @@ class TestFromAC_AppendOnlySemantics:
     def test_ten_appends_produce_ten_entries(self, tmp_path: Path) -> None:
         """10 sequential calls produce exactly 10 JSONL entries."""
         log_path = tmp_path / "activity.jsonl"
-        verbs = ["create", "edit", "move", "claim", "release", "block", "unblock",
-                 "edit", "move", "edit"]
+        verbs = ["create", "edit", "move", "claim", "release", "block", "unblock", "edit", "move", "edit"]
         for i, verb in enumerate(verbs):
             log_activity(log_path, verb, i, f"entry {i}")
         entries = _read_entries(log_path)
@@ -286,9 +281,7 @@ class TestFromAC_LogFileMissing:
 
     def test_log_file_created_for_every_verb(self, tmp_path: Path) -> None:
         """Each verb is capable of creating a fresh log file."""
-        for i, verb in enumerate(
-            ["create", "edit", "move", "claim", "release", "block", "unblock"]
-        ):
+        for i, verb in enumerate(["create", "edit", "move", "claim", "release", "block", "unblock"]):
             log_path = tmp_path / f"activity_{verb}.jsonl"
             assert not log_path.exists()
             log_activity(log_path, verb, i, f"{verb} creates file")

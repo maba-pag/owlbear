@@ -137,9 +137,7 @@ class TestFromAC_HandleAuthenticatedWebDispatch:
             content_fetcher=mock_fetcher,
         )
 
-        with patch.object(
-            orchestrator, "_handle_url_list", wraps=orchestrator._handle_url_list
-        ) as spy_url_list:
+        with patch.object(orchestrator, "_handle_url_list", wraps=orchestrator._handle_url_list) as spy_url_list:
             await orchestrator.refresh(source)
 
         spy_url_list.assert_not_called()
@@ -349,9 +347,7 @@ class TestFromAC_ContentFetcherInjection:
             pipeline=MagicMock(),
             content_fetcher=None,
         )
-        result = asyncio.get_event_loop().run_until_complete(
-            orch._handle_authenticated_web(source)
-        )
+        result = asyncio.get_event_loop().run_until_complete(orch._handle_authenticated_web(source))
 
         assert isinstance(result, RefreshResult)
         assert result.refreshed == 0
@@ -399,9 +395,7 @@ class TestBuilderDiscovered_NullFetcherBehavior:
             pipeline=MagicMock(),
             content_fetcher=None,
         )
-        result = asyncio.get_event_loop().run_until_complete(
-            orch._handle_authenticated_web(source)
-        )
+        result = asyncio.get_event_loop().run_until_complete(orch._handle_authenticated_web(source))
 
         assert isinstance(result, RefreshResult)
         assert result.refreshed == 0

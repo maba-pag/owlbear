@@ -72,11 +72,7 @@ def _read_entries(log_path: Path) -> list[dict]:
     """Parse a JSONL file into a list of dicts. Returns [] if missing."""
     if not log_path.exists():
         return []
-    return [
-        json.loads(line)
-        for line in log_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    return [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def _activity_log(kanban_dir: Path) -> Path:
@@ -124,9 +120,7 @@ class TestFromAC_LogActivityActorParam:
         entry = _read_entries(log_path)[0]
         assert entry["actor"] == ""
 
-    def test_log_activity_actor_arbitrary_string_round_trips(
-        self, tmp_path: Path
-    ) -> None:
+    def test_log_activity_actor_arbitrary_string_round_trips(self, tmp_path: Path) -> None:
         """Multiple actor values round-trip through JSONL correctly."""
         log_path = tmp_path / "activity.jsonl"
         actors = ["user", "mcp", "test-agent", "orchestrator"]
@@ -186,9 +180,7 @@ class TestFromAC_EngineCallSitesPassActor:
     Indirectly verifies all 7 call sites in engine.py pass actor to log_activity().
     """
 
-    def test_create_task_entry_has_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_create_task_entry_has_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """create_task produces a JSONL entry with 'actor' field."""
         engine.create_task("Actor Test Task")
         entries = _read_entries(_activity_log(kanban_dir))
@@ -196,9 +188,7 @@ class TestFromAC_EngineCallSitesPassActor:
         assert len(create_entries) == 1
         assert create_entries[0]["actor"] == "test-agent"
 
-    def test_edit_task_entry_has_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_edit_task_entry_has_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """edit_task produces a JSONL entry with 'actor' field."""
         record = engine.create_task("Edit Me")
         _reset_log(kanban_dir)
@@ -208,9 +198,7 @@ class TestFromAC_EngineCallSitesPassActor:
         assert len(edit_entries) == 1
         assert edit_entries[0]["actor"] == "test-agent"
 
-    def test_move_task_entry_has_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_move_task_entry_has_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """move_task produces a JSONL entry with 'actor' field."""
         record = engine.create_task("Move Me")
         _reset_log(kanban_dir)
@@ -220,9 +208,7 @@ class TestFromAC_EngineCallSitesPassActor:
         assert len(move_entries) == 1
         assert move_entries[0]["actor"] == "test-agent"
 
-    def test_claim_task_entry_has_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_claim_task_entry_has_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """claim_task produces a JSONL entry with 'actor' field."""
         record = engine.create_task("Claim Me")
         engine.move_task(str(record.id), "todo")
@@ -233,9 +219,7 @@ class TestFromAC_EngineCallSitesPassActor:
         assert len(claim_entries) == 1
         assert claim_entries[0]["actor"] == "test-agent"
 
-    def test_release_task_entry_has_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_release_task_entry_has_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """release_task produces a JSONL entry with 'actor' field."""
         record = engine.create_task("Release Me")
         engine.move_task(str(record.id), "todo")
@@ -247,9 +231,7 @@ class TestFromAC_EngineCallSitesPassActor:
         assert len(release_entries) == 1
         assert release_entries[0]["actor"] == "test-agent"
 
-    def test_block_task_entry_has_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_block_task_entry_has_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """block transition via edit_task produces a JSONL entry with 'actor' field."""
         record = engine.create_task("Block Me")
         _reset_log(kanban_dir)
@@ -259,9 +241,7 @@ class TestFromAC_EngineCallSitesPassActor:
         assert len(block_entries) == 1
         assert block_entries[0]["actor"] == "test-agent"
 
-    def test_unblock_task_entry_has_actor(
-        self, engine: KanbanEngine, kanban_dir: Path
-    ) -> None:
+    def test_unblock_task_entry_has_actor(self, engine: KanbanEngine, kanban_dir: Path) -> None:
         """unblock transition via edit_task produces a JSONL entry with 'actor' field."""
         record = engine.create_task("Unblock Me")
         engine.edit_task(str(record.id), blocked=True, block_reason="dep")
@@ -281,17 +261,17 @@ class TestFromAC_EngineCallSitesPassActor:
 class TestFromAC_BackwardCompatibility:
     """Tests for AC4: JSONL files mixing old (4-key) and new (5-key) entries stay valid."""
 
-    def test_new_entry_appended_to_legacy_file_has_actor(
-        self, tmp_path: Path
-    ) -> None:
+    def test_new_entry_appended_to_legacy_file_has_actor(self, tmp_path: Path) -> None:
         """When log_activity() appends to a legacy file, the new entry has 'actor'."""
         log_path = tmp_path / "activity.jsonl"
-        old_entry = json.dumps({
-            "timestamp": "2026-01-01T00:00:00+00:00",
-            "action": "create",
-            "task_id": 1,
-            "detail": "legacy entry",
-        })
+        old_entry = json.dumps(
+            {
+                "timestamp": "2026-01-01T00:00:00+00:00",
+                "action": "create",
+                "task_id": 1,
+                "detail": "legacy entry",
+            }
+        )
         log_path.write_text(old_entry + "\n", encoding="utf-8")
         # Append a new entry without explicit actor (uses default)
         log_activity(log_path, "edit", 1, "new entry")
@@ -321,12 +301,14 @@ class TestFromAC_BackwardCompatibility:
         """Old entries plus a new entry with explicit actor= all parse correctly."""
         log_path = tmp_path / "activity.jsonl"
         old_lines = "\n".join(
-            json.dumps({
-                "timestamp": "2026-01-01T00:00:00+00:00",
-                "action": "create",
-                "task_id": i,
-                "detail": "old",
-            })
+            json.dumps(
+                {
+                    "timestamp": "2026-01-01T00:00:00+00:00",
+                    "action": "create",
+                    "task_id": i,
+                    "detail": "old",
+                }
+            )
             for i in range(3)
         )
         log_path.write_text(old_lines + "\n", encoding="utf-8")

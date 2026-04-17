@@ -44,26 +44,20 @@ class TestFromAC_KanbanPackageToml:
         """ruamel.yaml must be in serve/kanban/pyproject.toml dependencies (config_loader.py uses it)."""
         data = tomllib.loads(_KANBAN_PYPROJECT.read_text(encoding="utf-8"))
         deps = data.get("project", {}).get("dependencies", [])
-        assert any("ruamel.yaml" in d for d in deps), (
-            f"ruamel.yaml not found in serve/kanban deps: {deps}"
-        )
+        assert any("ruamel.yaml" in d for d in deps), f"ruamel.yaml not found in serve/kanban deps: {deps}"
 
     def test_pydantic_dep(self) -> None:
         """pydantic must be in serve/kanban/pyproject.toml dependencies (models.py requires it)."""
         data = tomllib.loads(_KANBAN_PYPROJECT.read_text(encoding="utf-8"))
         deps = data.get("project", {}).get("dependencies", [])
-        assert any("pydantic" in d for d in deps), (
-            f"pydantic not found in serve/kanban deps: {deps}"
-        )
+        assert any("pydantic" in d for d in deps), f"pydantic not found in serve/kanban deps: {deps}"
 
     def test_no_mcp_dep(self) -> None:
         """serve/kanban/pyproject.toml must NOT depend on mcp or fastmcp (engine is transport-free)."""
         data = tomllib.loads(_KANBAN_PYPROJECT.read_text(encoding="utf-8"))
         deps = data.get("project", {}).get("dependencies", [])
         mcp_deps = [d for d in deps if d.lower().startswith("mcp") or "fastmcp" in d.lower()]
-        assert not mcp_deps, (
-            f"Engine package must not depend on MCP transport packages: {mcp_deps}"
-        )
+        assert not mcp_deps, f"Engine package must not depend on MCP transport packages: {mcp_deps}"
 
 
 class TestFromAC_EngineFilesExtracted:
@@ -71,9 +65,7 @@ class TestFromAC_EngineFilesExtracted:
 
     def test_engine_src_dir_exists(self) -> None:
         """serve/kanban/src/owlbear_kanban/ directory must exist after extraction."""
-        assert _KANBAN_SRC.exists(), (
-            f"serve/kanban/src/owlbear_kanban/ not found at {_KANBAN_SRC}"
-        )
+        assert _KANBAN_SRC.exists(), f"serve/kanban/src/owlbear_kanban/ not found at {_KANBAN_SRC}"
 
     def test_engine_py_at_new_location(self) -> None:
         """engine.py must exist at serve/kanban/src/owlbear_kanban/engine.py."""
@@ -155,9 +147,7 @@ class TestFromAC_RootConfigUpdated:
         """Root pyproject.toml [tool.ruff] src must include 'serve/kanban/src'."""
         data = tomllib.loads(_ROOT_PYPROJECT.read_text(encoding="utf-8"))
         ruff_src = data.get("tool", {}).get("ruff", {}).get("src", [])
-        assert "serve/kanban/src" in ruff_src, (
-            f"'serve/kanban/src' not in [tool.ruff] src: {ruff_src}"
-        )
+        assert "serve/kanban/src" in ruff_src, f"'serve/kanban/src' not in [tool.ruff] src: {ruff_src}"
 
 
 class TestFromAC_McpKanbanWorkspaceDep:
@@ -167,17 +157,13 @@ class TestFromAC_McpKanbanWorkspaceDep:
         """serve/mcp-kanban/pyproject.toml must list owlbear-kanban as a dependency."""
         data = tomllib.loads(_MCP_KANBAN_PYPROJECT.read_text(encoding="utf-8"))
         deps = data.get("project", {}).get("dependencies", [])
-        assert any("owlbear-kanban" in d for d in deps), (
-            f"owlbear-kanban not found in mcp-kanban dependencies: {deps}"
-        )
+        assert any("owlbear-kanban" in d for d in deps), f"owlbear-kanban not found in mcp-kanban dependencies: {deps}"
 
     def test_owlbear_kanban_workspace_source(self) -> None:
         """serve/mcp-kanban/pyproject.toml must declare owlbear-kanban as workspace = true in [tool.uv.sources]."""
         data = tomllib.loads(_MCP_KANBAN_PYPROJECT.read_text(encoding="utf-8"))
         sources = data.get("tool", {}).get("uv", {}).get("sources", {})
-        assert "owlbear-kanban" in sources, (
-            f"owlbear-kanban not in mcp-kanban [tool.uv.sources]: {sources}"
-        )
+        assert "owlbear-kanban" in sources, f"owlbear-kanban not in mcp-kanban [tool.uv.sources]: {sources}"
         assert sources["owlbear-kanban"].get("workspace") is True, (
             f"owlbear-kanban source must be workspace=true, got: {sources.get('owlbear-kanban')}"
         )

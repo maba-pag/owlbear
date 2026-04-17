@@ -272,14 +272,10 @@ class DocumentStore:
         Args:
             source_id: The knowledge source ID to delete.
         """
-        doc_rows = self._conn.execute(
-            "SELECT id FROM documents WHERE source_id = ?", (source_id,)
-        ).fetchall()
+        doc_rows = self._conn.execute("SELECT id FROM documents WHERE source_id = ?", (source_id,)).fetchall()
         for (doc_id,) in doc_rows:
             self.delete_document_data(doc_id)
-        self._conn.execute(
-            "DELETE FROM source_pages WHERE source_id = ?", (source_id,)
-        )
+        self._conn.execute("DELETE FROM source_pages WHERE source_id = ?", (source_id,))
         self._conn.commit()
 
     # ── Status ────────────────────────────────────────────────────────────

@@ -105,8 +105,10 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com,intranet.corp"}), \
-             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
+        with (
+            patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com,intranet.corp"}),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()),
+        ):
             async with app_lifespan(mock_server) as ctx:
                 # The context must carry an allowlist that permits listed domains
                 from owlbear_mcp_browser.allowlist import DomainAllowlist
@@ -120,8 +122,10 @@ class TestFromAC_DomainAllowlistEnvVar:
 
         mock_server = _make_mock_server()
         env_without = {k: v for k, v in os.environ.items() if k != "BROWSER_ALLOWED_DOMAINS"}
-        with patch.dict(os.environ, env_without, clear=True), \
-             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
+        with (
+            patch.dict(os.environ, env_without, clear=True),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()),
+        ):
             async with app_lifespan(mock_server) as ctx:
                 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
@@ -136,8 +140,10 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": ""}), \
-             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
+        with (
+            patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": ""}),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()),
+        ):
             async with app_lifespan(mock_server) as ctx:
                 with pytest.raises(PermissionError):
                     ctx.allowlist.check("https://any.domain.com/page")
@@ -148,8 +154,10 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "host-a.corp,host-b.corp"}), \
-             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
+        with (
+            patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "host-a.corp,host-b.corp"}),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()),
+        ):
             async with app_lifespan(mock_server) as ctx:
                 # Both listed domains must be permitted
                 ctx.allowlist.check("https://host-a.corp/page")  # must not raise
@@ -161,8 +169,10 @@ class TestFromAC_DomainAllowlistEnvVar:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com"}), \
-             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
+        with (
+            patch.dict(os.environ, {"BROWSER_ALLOWED_DOMAINS": "sharepoint.example.com"}),
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()),
+        ):
             async with app_lifespan(mock_server) as ctx:
                 ctx.allowlist.check("https://sharepoint.example.com/sites/IT")  # must not raise
                 with pytest.raises(PermissionError):
@@ -354,8 +364,10 @@ class TestFromAC_ApplyToolExclusions:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply, \
-             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
+        with (
+            patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply,
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()),
+        ):
             async with app_lifespan(mock_server):
                 mock_apply.assert_called_once()
 
@@ -365,8 +377,10 @@ class TestFromAC_ApplyToolExclusions:
         from owlbear_mcp_browser.server import app_lifespan  # type: ignore[attr-defined]
 
         mock_server = _make_mock_server()
-        with patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply, \
-             patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()):
+        with (
+            patch("owlbear_mcp_browser.server._apply_tool_exclusions") as mock_apply,
+            patch("owlbear_mcp_browser.server.PlaywrightLauncher", return_value=_make_mock_launcher()),
+        ):
             async with app_lifespan(mock_server):
                 call_args = mock_apply.call_args
                 assert call_args is not None

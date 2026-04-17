@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
+
 def _move_file(src: Path, dest: Path) -> None:
     """Move *src* to *dest*, preferring ``git mv`` when inside a git repo.
 
@@ -121,14 +122,10 @@ class KanbanEngine:
         self._tasks_dir = kanban_dir / self._config.tasks_dir
         self._archive_dir = kanban_dir / self._config.archive_dir
         self._agent_name: str = (
-            agent_name
-            if agent_name is not None
-            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+            agent_name if agent_name is not None else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
         effective_activity_log = activity_log if activity_log is not None else self._config.activity_log
-        self._activity_log_path: Path | None = (
-            kanban_dir / "activity.jsonl" if effective_activity_log else None
-        )
+        self._activity_log_path: Path | None = kanban_dir / "activity.jsonl" if effective_activity_log else None
         self._revision: int = 0
 
     @property
@@ -246,10 +243,7 @@ class KanbanEngine:
             tasks = [t for t in tasks if t.claimed_by is None]
         if search:
             needle = search.lower()
-            tasks = [
-                t for t in tasks
-                if needle in t.title.lower() or needle in t.body.lower()
-            ]
+            tasks = [t for t in tasks if needle in t.title.lower() or needle in t.body.lower()]
 
         # --- Sort ---
         if sort:
@@ -480,16 +474,30 @@ class KanbanEngine:
                 else:
                     log_activity(self._activity_log_path, "unblock", record.id, "", actor=self._agent_name)
             else:
-                changed = [name for name, val in [
-                    ("title", title), ("body", body), ("priority", priority),
-                    ("status", status), ("parent", parent), ("add_tags", add_tags),
-                    ("remove_tags", remove_tags), ("add_deps", add_deps),
-                    ("remove_deps", remove_deps), ("blocked", blocked),
-                    ("block_reason", block_reason), ("append_body", append_body),
-                ] if val is not None]
+                changed = [
+                    name
+                    for name, val in [
+                        ("title", title),
+                        ("body", body),
+                        ("priority", priority),
+                        ("status", status),
+                        ("parent", parent),
+                        ("add_tags", add_tags),
+                        ("remove_tags", remove_tags),
+                        ("add_deps", add_deps),
+                        ("remove_deps", remove_deps),
+                        ("blocked", blocked),
+                        ("block_reason", block_reason),
+                        ("append_body", append_body),
+                    ]
+                    if val is not None
+                ]
                 log_activity(
-                    self._activity_log_path, "edit", record.id,
-                    ", ".join(changed) or "updated", actor=self._agent_name,
+                    self._activity_log_path,
+                    "edit",
+                    record.id,
+                    ", ".join(changed) or "updated",
+                    actor=self._agent_name,
                 )
 
         self._revision += 1
@@ -532,8 +540,11 @@ class KanbanEngine:
 
         if self._activity_log_path:
             log_activity(
-                self._activity_log_path, "move", record.id,
-                f"{old_status} -> {record.status}", actor=self._agent_name,
+                self._activity_log_path,
+                "move",
+                record.id,
+                f"{old_status} -> {record.status}",
+                actor=self._agent_name,
             )
         self._revision += 1
         return record
@@ -626,7 +637,11 @@ class KanbanEngine:
         return self.claim_task(task_id, now=now)
 
     def _apply_outcome(
-        self, record: Task, outcome: str, block_reason: str, move_to: str,
+        self,
+        record: Task,
+        outcome: str,
+        block_reason: str,
+        move_to: str,
     ) -> bool:
         """Apply outcome-specific mutations to *record* in-place.
 
@@ -734,8 +749,11 @@ class KanbanEngine:
                 "reject": f"{old_status} -> {move_to}",
             }
             log_activity(
-                self._activity_log_path, "end_work", record.id,
-                details[outcome], actor=self._agent_name,
+                self._activity_log_path,
+                "end_work",
+                record.id,
+                details[outcome],
+                actor=self._agent_name,
             )
 
         self._revision += 1
@@ -773,7 +791,9 @@ class KanbanEngine:
                 archived_moved += 1
                 if self._activity_log_path:
                     log_activity(
-                        self._activity_log_path, "sweep-archive", record.id,
+                        self._activity_log_path,
+                        "sweep-archive",
+                        record.id,
                         "orphaned archived task moved to archive dir",
                         actor=self._agent_name,
                     )
@@ -788,7 +808,9 @@ class KanbanEngine:
                     claims_released += 1
                     if self._activity_log_path:
                         log_activity(
-                            self._activity_log_path, "sweep-release", record.id,
+                            self._activity_log_path,
+                            "sweep-release",
+                            record.id,
                             f"expired claim by {record.claimed_by} released",
                             actor=self._agent_name,
                         )

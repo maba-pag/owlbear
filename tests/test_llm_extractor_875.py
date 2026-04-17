@@ -189,20 +189,14 @@ class TestFromAC_LLMExtractor:
         """The llm optional-dep group specifies openai>=1.50."""
         with _PYPROJECT_PATH.open("rb") as f:
             config = tomllib.load(f)
-        llm_deps: list[str] = (
-            config.get("project", {}).get("optional-dependencies", {}).get("llm", [])
+        llm_deps: list[str] = config.get("project", {}).get("optional-dependencies", {}).get("llm", [])
+        assert any("openai" in dep and "1.50" in dep for dep in llm_deps), (
+            f"llm group must include 'openai>=1.50', got: {llm_deps}"
         )
-        assert any(
-            "openai" in dep and "1.50" in dep for dep in llm_deps
-        ), f"llm group must include 'openai>=1.50', got: {llm_deps}"
 
     def test_pyproject_toml_full_group_includes_openai(self) -> None:
         """The full optional-dep group includes openai (bringing in the llm dependency)."""
         with _PYPROJECT_PATH.open("rb") as f:
             config = tomllib.load(f)
-        full_deps: list[str] = (
-            config.get("project", {}).get("optional-dependencies", {}).get("full", [])
-        )
-        assert any(
-            "openai" in dep for dep in full_deps
-        ), f"full extras group must include openai, got: {full_deps}"
+        full_deps: list[str] = config.get("project", {}).get("optional-dependencies", {}).get("full", [])
+        assert any("openai" in dep for dep in full_deps), f"full extras group must include openai, got: {full_deps}"

@@ -78,9 +78,7 @@ class TestFromAC_CopilotServerFallback:
     """AC4, AC5: app_lifespan falls back to Copilot auth when no LLM API key is set."""
 
     @pytest.mark.asyncio
-    async def test_lifespan_calls_get_copilot_token_when_no_api_key(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_lifespan_calls_get_copilot_token_when_no_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """get_copilot_token() is called during lifespan when neither API key env var is set."""
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -159,9 +157,7 @@ class TestFromAC_CopilotServerFallback:
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-        copilot_mod = _make_copilot_auth_mod(
-            get_token_side_effect=TimeoutError("browser auth timeout")
-        )
+        copilot_mod = _make_copilot_auth_mod(get_token_side_effect=TimeoutError("browser auth timeout"))
 
         with patch.dict(sys.modules, {"owlbear_knowledge.copilot_auth": copilot_mod}):
             async with app_lifespan(MagicMock()) as ctx:

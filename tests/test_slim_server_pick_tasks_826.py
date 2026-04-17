@@ -87,12 +87,8 @@ class TestFromAC_DelegationEngine:
             mock_pd.return_value = []
             await pick_tasks(mcp_ctx)
             args, _ = mock_pd.call_args
-            assert len(args) >= 1, (
-                "pick_dispatchable must receive engine as first positional argument"
-            )
-            assert args[0] is mock_engine, (
-                f"Expected engine from AppContext as first arg, got: {args[0]!r}"
-            )
+            assert len(args) >= 1, "pick_dispatchable must receive engine as first positional argument"
+            assert args[0] is mock_engine, f"Expected engine from AppContext as first arg, got: {args[0]!r}"
 
 
 # ===========================================================================
@@ -153,9 +149,7 @@ class TestFromAC_BoundaryConversion:
             result = await pick_tasks(mcp_ctx)
         entry = result["dispatch"][0]
         assert entry["task_id"] == 10, f"Expected task_id=10, got {entry['task_id']!r}"
-        assert isinstance(entry["task_id"], int), (
-            f"task_id must be int, got {type(entry['task_id'])}"
-        )
+        assert isinstance(entry["task_id"], int), f"task_id must be int, got {type(entry['task_id'])}"
 
     @pytest.mark.asyncio
     async def test_task_object_status_becomes_status_str_in_dispatch(self) -> None:
@@ -170,9 +164,7 @@ class TestFromAC_BoundaryConversion:
             result = await pick_tasks(mcp_ctx)
         entry = result["dispatch"][0]
         assert entry["status"] == "todo", f"Expected status='todo', got {entry['status']!r}"
-        assert isinstance(entry["status"], str), (
-            f"status must be str, got {type(entry['status'])}"
-        )
+        assert isinstance(entry["status"], str), f"status must be str, got {type(entry['status'])}"
 
     @pytest.mark.asyncio
     async def test_multiple_task_objects_all_appear_in_dispatch_order(self) -> None:

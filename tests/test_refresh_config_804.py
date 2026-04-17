@@ -102,8 +102,7 @@ class TestFromAC_RankMapsAfterRefresh:
         # After refresh: done=0, todo=1, research=2 → done task must be first
         result = engine.list_tasks(sort="status")
         assert result[0].id == t_done.id, (
-            f"Expected done task (id={t_done.id}) first after refresh, "
-            f"got id={result[0].id}"
+            f"Expected done task (id={t_done.id}) first after refresh, got id={result[0].id}"
         )
         assert result[1].id == t_todo.id
 
@@ -134,16 +133,13 @@ class TestFromAC_RankMapsAfterRefresh:
 
         result = engine.list_tasks(sort="priority")
         assert result[0].id == t_critical.id, (
-            f"Expected critical task (id={t_critical.id}) first after refresh, "
-            f"got id={result[0].id}"
+            f"Expected critical task (id={t_critical.id}) first after refresh, got id={result[0].id}"
         )
         assert result[1].id == t_someday.id
 
     # --- Edge cases --------------------------------------------------------
 
-    def test_unknown_priority_after_config_shrink_sorts_last(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_unknown_priority_after_config_shrink_sorts_last(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Task with a removed priority sorts after all known priorities.
 
         Create a critical task, then remove 'critical' from config and refresh.
@@ -166,13 +162,9 @@ class TestFromAC_RankMapsAfterRefresh:
         ids_in_order = [t.id for t in result]
         critical_pos = ids_in_order.index(t_critical.id)
         important_pos = ids_in_order.index(t_important.id)
-        assert important_pos < critical_pos, (
-            "Task with removed priority must sort after tasks with known priorities"
-        )
+        assert important_pos < critical_pos, "Task with removed priority must sort after tasks with known priorities"
 
-    def test_status_rank_consistent_across_repeated_refreshes(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_status_rank_consistent_across_repeated_refreshes(self, engine: KanbanEngine) -> None:
         """list_tasks sort order is stable across multiple refresh_config() calls.
 
         Two refreshes with no disk change in between must produce identical
@@ -191,9 +183,7 @@ class TestFromAC_RankMapsAfterRefresh:
 
     # --- Boundary conditions -----------------------------------------------
 
-    def test_rank_order_reverts_when_config_restored(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_rank_order_reverts_when_config_restored(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """Refreshing back to the original config restores the original sort order.
 
         Sequence: original config → create tasks → reverse statuses → refresh →
@@ -262,9 +252,7 @@ class TestFromAC_ArchiveDirAfterRefresh:
             f"Expected task file in archive/, found {len(archived_files)} files: {archived_files}"
         )
 
-    def test_archive_dir_path_is_kanban_dir_slash_archive(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_archive_dir_path_is_kanban_dir_slash_archive(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """archive_dir is always kanban_dir/archive regardless of config.
 
         refresh_config() must not change archive_dir's location even if

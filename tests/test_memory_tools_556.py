@@ -983,8 +983,7 @@ class TestFromAC_ToolAnnotations:
         ann = _get_tool_annotations("record_learning")
         assert ann is not None, "record_learning has no ToolAnnotations"
         assert ann.destructiveHint is False, (  # type: ignore[union-attr]
-            "Expected destructiveHint=False for record_learning,"
-            f" got {ann.destructiveHint!r}"  # type: ignore[union-attr]
+            f"Expected destructiveHint=False for record_learning, got {ann.destructiveHint!r}"  # type: ignore[union-attr]
         )
 
     # AC17: mark_for_deletion — destructiveHint=True (soft-deletes data)
@@ -993,8 +992,7 @@ class TestFromAC_ToolAnnotations:
         ann = _get_tool_annotations("mark_for_deletion")
         assert ann is not None, "mark_for_deletion has no ToolAnnotations"
         assert ann.destructiveHint is True, (  # type: ignore[union-attr]
-            "Expected destructiveHint=True for mark_for_deletion,"
-            f" got {ann.destructiveHint!r}"  # type: ignore[union-attr]
+            f"Expected destructiveHint=True for mark_for_deletion, got {ann.destructiveHint!r}"  # type: ignore[union-attr]
         )
 
     # AC17: mark_for_deletion — idempotentHint=True (safe to call twice)

@@ -482,11 +482,15 @@ class TestFromAC_SortByField:
         """
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "Earlier UTC",
+            kdir,
+            1,
+            "Earlier UTC",
             created="2026-01-01T12:00:00.0000000+02:00",
         )
         _add_task(
-            kdir, 2, "Later UTC",
+            kdir,
+            2,
+            "Later UTC",
             created="2026-01-01T11:00:00.0000000+00:00",
         )
 
@@ -509,11 +513,15 @@ class TestFromAC_SortByField:
         """
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "Earlier UTC updated",
+            kdir,
+            1,
+            "Earlier UTC updated",
             updated="2026-02-01T12:00:00.0000000+02:00",
         )
         _add_task(
-            kdir, 2, "Later UTC updated",
+            kdir,
+            2,
+            "Later UTC updated",
             updated="2026-02-01T11:00:00.0000000+00:00",
         )
 
@@ -536,11 +544,15 @@ class TestFromAC_SortByField:
         """
         kdir = _make_kanban_dir(tmp_path)
         _add_task(
-            kdir, 1, "Go fmt earlier UTC",
+            kdir,
+            1,
+            "Go fmt earlier UTC",
             created="2026-01-01T12:00:00.1234567+02:00",
         )
         _add_task(
-            kdir, 2, "Python fmt later UTC",
+            kdir,
+            2,
+            "Python fmt later UTC",
             created="2026-01-01T11:00:00.123456+00:00",
         )
 
@@ -566,7 +578,7 @@ class TestFromAC_SortByField:
         String sort: [2, 1] (wrong).  Correct UTC sort: [1, 2].
         """
         go_ts = "2026-01-15T12:00:00.1234567+02:00"  # Go 7-digit, 10:00 UTC
-        py_ts = "2026-01-15T11:00:00.000000+00:00"   # Python 6-digit, 11:00 UTC
+        py_ts = "2026-01-15T11:00:00.000000+00:00"  # Python 6-digit, 11:00 UTC
 
         kdir = _make_kanban_dir(tmp_path)
         _add_task(kdir, 1, "Go fmt round trip", created=go_ts)

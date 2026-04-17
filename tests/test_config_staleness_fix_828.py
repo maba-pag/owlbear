@@ -81,9 +81,7 @@ class TestFromAC_ConfigStalenessInCreateTask:
 
     # --- Happy path --------------------------------------------------------
 
-    def test_board_config_next_id_incremented_after_one_create(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_next_id_incremented_after_one_create(self, engine: KanbanEngine) -> None:
         """board_config().next_id is 101 immediately after one create_task call.
 
         Bug: create_task assigns load_config() to a local variable and never
@@ -92,9 +90,7 @@ class TestFromAC_ConfigStalenessInCreateTask:
         engine.create_task("First task")
         assert engine.board_config().next_id == 101
 
-    def test_board_config_next_id_incremented_after_two_creates(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_next_id_incremented_after_two_creates(self, engine: KanbanEngine) -> None:
         """board_config().next_id is 102 after two consecutive create_task calls."""
         engine.create_task("First task")
         engine.create_task("Second task")
@@ -102,9 +98,7 @@ class TestFromAC_ConfigStalenessInCreateTask:
 
     # --- Edge cases --------------------------------------------------------
 
-    def test_board_config_matches_disk_config_after_create(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_matches_disk_config_after_create(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """board_config().next_id matches a fresh load_config() from disk after create.
 
         Currently broken: board sees stale 100, disk has 101.
@@ -113,9 +107,7 @@ class TestFromAC_ConfigStalenessInCreateTask:
         disk_config = load_config(kanban_dir)
         assert engine.board_config().next_id == disk_config.next_id
 
-    def test_board_config_consistent_without_manual_refresh(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_consistent_without_manual_refresh(self, engine: KanbanEngine) -> None:
         """board_config() should agree with refresh_config() without a manual call.
 
         If self._config is updated by create_task (the fix), calling
@@ -130,18 +122,14 @@ class TestFromAC_ConfigStalenessInCreateTask:
 
     # --- Boundary conditions -----------------------------------------------
 
-    def test_board_config_next_id_tracks_n_creates(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_board_config_next_id_tracks_n_creates(self, engine: KanbanEngine) -> None:
         """board_config().next_id equals 100 + N after N sequential creates."""
         n = 5
         for i in range(n):
             engine.create_task(f"Task {i}")
         assert engine.board_config().next_id == 100 + n
 
-    def test_tasks_dir_updated_after_create_when_config_changes(
-        self, kanban_dir: Path, engine: KanbanEngine
-    ) -> None:
+    def test_tasks_dir_updated_after_create_when_config_changes(self, kanban_dir: Path, engine: KanbanEngine) -> None:
         """_tasks_dir reflects tasks_dir from the reloaded config after create_task.
 
         Setup: externally change tasks_dir in config.yml to 'tasks2' while the
@@ -156,9 +144,7 @@ class TestFromAC_ConfigStalenessInCreateTask:
         new_tasks_dir.mkdir()
 
         # Change tasks_dir in config while engine is live
-        new_config_yaml = _BASE_CONFIG_YAML.replace(
-            "tasks_dir: tasks", "tasks_dir: tasks2"
-        )
+        new_config_yaml = _BASE_CONFIG_YAML.replace("tasks_dir: tasks", "tasks_dir: tasks2")
         (kanban_dir / "config.yml").write_text(new_config_yaml, encoding="utf-8")
 
         # First create_task triggers config reload; fix must update _tasks_dir

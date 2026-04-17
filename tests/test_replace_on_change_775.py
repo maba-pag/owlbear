@@ -153,9 +153,7 @@ class TestFromAC_ReplaceOnChangeSemantics:
 
         assert doc_store.delete_document_data.call_count == 2  # noqa: PLR2004
         actual_calls = [c.args[0] for c in doc_store.delete_document_data.call_args_list]
-        assert actual_calls == list(prior_ids), (
-            f"expected deletes for {list(prior_ids)}, got {actual_calls}"
-        )
+        assert actual_calls == list(prior_ids), f"expected deletes for {list(prior_ids)}, got {actual_calls}"
 
     @pytest.mark.asyncio
     async def test_change_path_returns_ok_status(self) -> None:

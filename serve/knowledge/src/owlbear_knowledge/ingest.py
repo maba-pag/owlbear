@@ -233,9 +233,7 @@ class IngestPipeline:
 
             extract_coros = [
                 self._extractor.extract(
-                    wrap_untrusted_content(c.text, source_url=str(intake.source))
-                    if _should_wrap
-                    else c.text
+                    wrap_untrusted_content(c.text, source_url=str(intake.source)) if _should_wrap else c.text
                 )
                 for c in chunks
             ]

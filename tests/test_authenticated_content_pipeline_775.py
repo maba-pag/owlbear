@@ -417,9 +417,7 @@ class TestFromAC_ContentSafetyInversion:
         from owlbear_knowledge import content_safety  # noqa: PLC0415
 
         # After inversion an explicit `should_wrap` or `is_exempt` predicate must exist
-        assert hasattr(content_safety, "should_wrap") or hasattr(
-            content_safety, "is_trusted_source"
-        )
+        assert hasattr(content_safety, "should_wrap") or hasattr(content_safety, "is_trusted_source")
 
     @pytest.mark.asyncio
     async def test_url_list_wrapping_includes_source_url_attribute(self) -> None:

@@ -83,9 +83,7 @@ class TestFromAC_SSOExtensionDiscovery:  # noqa: N801
 
         assert result == version_dir
 
-    def test_raises_when_extension_dir_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_raises_when_extension_dir_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """SSOExtensionNotFoundError raised when the extension root directory does not exist."""
         # LOCALAPPDATA points to tmp_path but no extension dir is created
         monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
@@ -106,9 +104,7 @@ class TestFromAC_SSOExtensionDiscovery:  # noqa: N801
         with pytest.raises(SSOExtensionNotFoundError):
             find_sso_extension()
 
-    def test_env_var_override_returns_given_path(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_var_override_returns_given_path(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """SSO_EXTENSION_PATH env var is respected and returned without filesystem discovery."""
         override = tmp_path / "custom_sso_ext"
         override.mkdir()
@@ -118,9 +114,7 @@ class TestFromAC_SSOExtensionDiscovery:  # noqa: N801
 
         assert result == override
 
-    def test_env_var_override_raises_when_path_missing(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_var_override_raises_when_path_missing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """SSOExtensionNotFoundError raised when SSO_EXTENSION_PATH points to a non-existent path."""
         missing = tmp_path / "nonexistent_ext"
         # Do NOT create the directory
@@ -170,9 +164,7 @@ class TestFromAC_PlaywrightArgs:  # noqa: N801
         ext_path = Path(r"C:\ext\sso")
         args = build_playwright_args(ext_path)
         for arg in args:
-            assert "--remote-debugging-port" not in arg, (
-                f"CDP arg must not appear in Playwright args: {arg}"
-            )
+            assert "--remote-debugging-port" not in arg, f"CDP arg must not appear in Playwright args: {arg}"
 
     def test_never_includes_0_0_0_0(self) -> None:
         """No arg binds to 0.0.0.0 — security constraint (open network binding)."""

@@ -24,9 +24,7 @@ class TestFromAC_DeadCodeRemoval:
 
     def test_run_kanban_not_in_module(self) -> None:
         """_run_kanban() has been removed — not present in server module."""
-        assert not hasattr(_srv, "_run_kanban"), (
-            "_run_kanban should be removed from server.py but is still present"
-        )
+        assert not hasattr(_srv, "_run_kanban"), "_run_kanban should be removed from server.py but is still present"
 
     def test_forward_slash_path_not_in_module(self) -> None:
         """_ForwardSlashPath class has been removed — not present in server module."""
@@ -48,21 +46,15 @@ class TestFromAC_DeadCodeRemoval:
 
     def test_asyncio_not_imported_in_server(self) -> None:
         """asyncio import removed — becomes unused after _run_kanban() deletion."""
-        assert not hasattr(_srv, "asyncio"), (
-            "asyncio is still imported in server.py — remove it with _run_kanban()"
-        )
+        assert not hasattr(_srv, "asyncio"), "asyncio is still imported in server.py — remove it with _run_kanban()"
 
     def test_all_excludes_run_kanban(self) -> None:
         """__all__ no longer contains the stale _run_kanban entry."""
-        assert "_run_kanban" not in _srv.__all__, (
-            "_run_kanban should be removed from __all__ in server.py"
-        )
+        assert "_run_kanban" not in _srv.__all__, "_run_kanban should be removed from __all__ in server.py"
 
     def test_all_excludes_parse_task_json(self) -> None:
         """__all__ no longer contains the stale _parse_task_json entry."""
-        assert "_parse_task_json" not in _srv.__all__, (
-            "_parse_task_json should be removed from __all__ in server.py"
-        )
+        assert "_parse_task_json" not in _srv.__all__, "_parse_task_json should be removed from __all__ in server.py"
 
 
 class TestFromAC_ObsoleteTestFilesRemoved:
@@ -71,16 +63,12 @@ class TestFromAC_ObsoleteTestFilesRemoved:
     def test_test_server_py_deleted(self) -> None:
         """test_server.py no longer exists — it tests the obsolete subprocess API (#56/#89)."""
         stale = _MCP_KANBAN_ROOT / "tests" / "test_server.py"
-        assert not stale.exists(), (
-            f"Obsolete test file still present: {stale} — delete it"
-        )
+        assert not stale.exists(), f"Obsolete test file still present: {stale} — delete it"
 
     def test_test_integration_py_deleted(self) -> None:
         """test_integration.py no longer exists — it requires the eliminated binary."""
         stale = _MCP_KANBAN_ROOT / "tests" / "test_integration.py"
-        assert not stale.exists(), (
-            f"Obsolete test file still present: {stale} — delete it"
-        )
+        assert not stale.exists(), f"Obsolete test file still present: {stale} — delete it"
 
 
 class TestFromAC_NoStaleReferences:
@@ -92,21 +80,13 @@ class TestFromAC_NoStaleReferences:
     def test_no_kanban_bin_in_tree(self) -> None:
         """'kanban_bin' does not appear in any Python file under serve/mcp-kanban/."""
         offenders = [
-            str(f)
-            for f in self._py_files()
-            if "kanban_bin" in f.read_text(encoding="utf-8", errors="replace")
+            str(f) for f in self._py_files() if "kanban_bin" in f.read_text(encoding="utf-8", errors="replace")
         ]
-        assert offenders == [], (
-            f"'kanban_bin' still referenced in: {offenders}"
-        )
+        assert offenders == [], f"'kanban_bin' still referenced in: {offenders}"
 
     def test_no_run_kanban_in_tree(self) -> None:
         """'_run_kanban' does not appear in any Python file under serve/mcp-kanban/."""
         offenders = [
-            str(f)
-            for f in self._py_files()
-            if "_run_kanban" in f.read_text(encoding="utf-8", errors="replace")
+            str(f) for f in self._py_files() if "_run_kanban" in f.read_text(encoding="utf-8", errors="replace")
         ]
-        assert offenders == [], (
-            f"'_run_kanban' still referenced in: {offenders}"
-        )
+        assert offenders == [], f"'_run_kanban' still referenced in: {offenders}"

@@ -114,9 +114,7 @@ class TestFromAC_InterDocPromptIntegration:
         entity_a = _entity("Risk Policy", "doc1", EntityType.POLICY, "governs risk control")
         entity_b = _entity("Risk Policy", "doc2", EntityType.PROCEDURE, "risk assessment steps")
         extractor = _async_extractor()
-        builder = InterDocGraphBuilder(
-            extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store()
-        )
+        builder = InterDocGraphBuilder(extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store())
         await builder.build([entity_a, entity_b], scope="test")
 
         extractor.extract.assert_called_once()
@@ -130,9 +128,7 @@ class TestFromAC_InterDocPromptIntegration:
         entity_a = _entity("Data Standard", "doc1", EntityType.POLICY, "governs data retention")
         entity_b = _entity("Data Standard", "doc2", EntityType.STANDARD, "ISO 27001 baseline")
         extractor = _async_extractor()
-        builder = InterDocGraphBuilder(
-            extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store()
-        )
+        builder = InterDocGraphBuilder(extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store())
         await builder.build([entity_a, entity_b], scope="test")
 
         extractor.extract.assert_called_once()
@@ -146,9 +142,7 @@ class TestFromAC_InterDocPromptIntegration:
         entity_a = _entity("Compliance Control", "doc1", EntityType.REQUIREMENT, "req desc")
         entity_b = _entity("Compliance Control", "doc2", EntityType.CONCEPT, "concept desc")
         extractor = _async_extractor()
-        builder = InterDocGraphBuilder(
-            extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store()
-        )
+        builder = InterDocGraphBuilder(extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store())
         await builder.build([entity_a, entity_b], scope="test")
 
         prompt: str = extractor.extract.call_args.args[0]
@@ -161,9 +155,7 @@ class TestFromAC_InterDocPromptIntegration:
         entity_a = _entity("Asset Framework", "doc1", EntityType.STANDARD, description="")
         entity_b = _entity("Asset Framework", "doc2", EntityType.SOLUTION, description="")
         extractor = _async_extractor()
-        builder = InterDocGraphBuilder(
-            extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store()
-        )
+        builder = InterDocGraphBuilder(extractor=extractor, vector_store=_vector_store(), graph_store=_graph_store())
         await builder.build([entity_a, entity_b], scope="test")
 
         extractor.extract.assert_called_once()
@@ -180,8 +172,7 @@ class TestFromAC_InterDocPromptIntegration:
         by the {relation_types} placeholder injection alone.
         """
         assert "governs" in INTER_DOC_PROMPT.lower(), (
-            "INTER_DOC_PROMPT must contain governs guidance prose, "
-            "not just rely on {relation_types} placeholder"
+            "INTER_DOC_PROMPT must contain governs guidance prose, not just rely on {relation_types} placeholder"
         )
 
     def test_inter_doc_prompt_governs_guidance_references_policy_or_standard(self) -> None:
