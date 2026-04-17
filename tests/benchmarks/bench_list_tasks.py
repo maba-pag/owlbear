@@ -277,3 +277,51 @@ def test_list_tasks_latency(
     assert cold_ms >= 0, "cold_ms must be non-negative"
     assert p50_ms >= 0, "p50_ms must be non-negative"
     assert p99_ms >= p50_ms, "p99 must be >= p50"
+
+
+# ---------------------------------------------------------------------------
+# Warm-cache latency benchmark (AC #942)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.benchmark
+def test_warm_cache_p99_under_50ms_at_1500_tasks(
+    bench_boards: dict[int, Path],
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """Warm-read p99 must be <50ms at 1500 tasks after mtime cache is implemented.
+
+    AC #942 target: warm read p99 <50ms at 1500 tasks.
+    Baseline (no cache): p99 ~453ms.
+
+    This test FAILS in RED phase — cache not yet implemented so p99 ~450ms.
+    """
+    kanban_dir = bench_boards[1500]
+    engine = KanbanEngine(kanban_dir, agent_name="bench-warm-agent", activity_log=False)
+
+    # Warm the cache with one unmetered call
+    engine.list_tasks()
+
+    # Measure warm reads (no file changes between calls)
+    raw_ns: list[int] = []
+    for _ in range(N_ITERS):
+        t0 = time.perf_counter_ns()
+        engine.list_tasks()
+        raw_ns.append(time.perf_counter_ns() - t0)
+
+    sorted_ms = sorted(ns / 1_000_000.0 for ns in raw_ns)
+    p50_ms = _percentile(sorted_ms, 50)
+    p99_ms = _percentile(sorted_ms, 99)
+
+    with capsys.disabled():
+        print(  # noqa: T201
+            f"\n  [1500 tasks | warm_cache            ]"
+            f"  p50={p50_ms:>7.1f}ms"
+            f"  p99={p99_ms:>7.1f}ms"
+            f"  (target: p99 <50ms)"
+        )
+
+    assert p99_ms < 50, (
+        f"Warm-read p99 must be <50ms at 1500 tasks, got {p99_ms:.1f}ms. "
+        f"Cache not implemented or not effective."
+    )
