@@ -62,6 +62,11 @@ ignore = [
   "INP001", # .owlbear/hooks/ is not a package — direct-run scripts are expected here
   "T201",   # print() is the stdout I/O contract for VS Code hook scripts
 ]
+"seed/.owlbear/hooks/*.py" = [
+  "C901",   # hook scripts have inherently complex path-extraction logic
+  "INP001", # seed/.owlbear/hooks/ is not a package — direct-run scripts are expected here
+  "T201",   # print() is the stdout I/O contract for VS Code hook scripts
+]
 ".owlbear/scripts/*.py" = [
   "INP001", # .owlbear/scripts/ is not a package — direct-run files are expected here
   "T201",   # print() is intentional in CLI scripts
