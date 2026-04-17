@@ -35,6 +35,17 @@ user-invocable: false
 - `--import-mode=importlib` set via `addopts` in `pyproject.toml` — required for monorepo layout.
 - For test/lint **commands and flags**, see the `h-pytest-and-linting` skill.
 
+### Two-Tier Test Model
+
+| Tier | File naming | Lifespan | Authority |
+|------|------------|----------|-----------|
+| **Task-scoped** (transient) | `test_{module}_{task_id}.py` | Active pipeline only | Test-writer creates, builder implements, reviewer validates. Immutable during pipeline. Curator deletes post-archive. |
+| **Module-level** (durable) | `test_{module}.py` | Permanent | Curator promotes contract-level assertions from task-scoped files. Subject to future lifecycle. |
+
+- **Task-scoped tests** are scaffolding. They verify acceptance criteria for a single task and are removed by the curator after the task is archived.
+- **Module-level tests** are the durable test suite. They contain contract-level assertions (public API behavior, integration contracts) promoted from task-scoped tests by the curator.
+- Builders run both the task-scoped file and the module's durable file (if it exists) during GREEN phase.
+
 ## Known Gotchas
 
 - **Pydantic v2 + MagicMock:** `MagicMock(spec=PydanticModel)` cannot auto-generate Pydantic v2 fields. Explicitly set every accessed field on the mock.
