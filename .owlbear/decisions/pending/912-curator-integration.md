@@ -1,65 +1,67 @@
-# Curator Pipeline Integration Pattern
+---
+# >> Your action: set response to approved, needs-info, or rejected
+response: pending
+decision: "A: Archive-triggered dispatch"
+notes: ""
+# >> Agent metadata
+task_id: 912
+agent: orchestrator
+created: 2026-04-17
+urgency: blocking
+decision_type: approach-selection
+impact_tier: 2
+---
 
-**Task:** #912 — Test lifecycle management  
-**Decision needed by:** User  
-**Created:** 2026-04-17
+# Decision: How should the test-curator be invoked post-archive?
 
 ## Context
 
-The test-curator agent processes task-scoped test files post-archive — promoting contract-level assertions to durable module-level files and removing transient scaffolding. The curator must **never gate** the next task dispatch.
+The test-curator agent processes task-scoped test files post-archive — promoting contract-level assertions to durable module-level files and removing transient scaffolding. It must **never gate** the next task dispatch. The agent exists but has no dispatch trigger in `w-orchestration`.
 
-The question: **how does the curator get invoked?**
+The question: **what mechanism invokes the test-curator after a task is archived?**
 
 ## Options
 
-### (a) Parallel dispatch
+### A: Archive-triggered dispatch — (rec:) recommended
 
-The orchestrator dispatches the test-curator alongside non-test-touching agents immediately after archiving a task. The curator runs in parallel with the next task's researcher/architect phase.
+The orchestrator dispatches the test-curator immediately when `end_work` archives a task. Fire-and-forget — non-blocking.
 
-| Dimension | Assessment |
-|-----------|------------|
-| **Latency** | Low — curation starts immediately after archive |
-| **Complexity** | Medium — orchestrator needs dispatch logic for post-archive agents |
-| **Interference risk** | Low — curator touches only `tests/` files; next task's researcher/architect don't touch tests |
-| **Conflict window** | Moderate — if the next task reaches test-writer before curator finishes, both touch `tests/`. Curator writes `test_{module}.py`, test-writer writes `test_{module}_{task_id}.py` — different files, no conflict. |
+- Effort: ~0.5 day — add one dispatch call to the orchestrator's archive path in `w-orchestration`
+- Trade-off: simplest integration; immediate curation with minimal infrastructure
+- Risk: if the next task reaches test-writer before curator finishes, both touch `tests/` — but different files (`test_{module}.py` vs `test_{module}_{task_id}.py`), so no conflict
+- Confidence: .85
 
-### (b) Queue-based
+### B: Parallel dispatch with next wave
 
-The curator maintains its own work queue (e.g., a file listing archived task IDs). A separate process or manual trigger processes the queue periodically.
+The orchestrator dispatches the test-curator alongside non-test-touching agents (researcher/architect) in the first wave after archiving a task.
 
-| Dimension | Assessment |
-|-----------|------------|
-| **Latency** | Variable — depends on trigger frequency |
-| **Complexity** | High — requires queue infrastructure, separate trigger mechanism |
-| **Interference risk** | Lowest — fully decoupled from pipeline |
-| **Conflict window** | None — runs on its own schedule |
+- Effort: ~1 day — wave assembly logic needs a post-archive slot
+- Trade-off: uses existing wave machinery; curation runs in parallel with next task's early phases
+- Risk: same as A — different file targets, no conflict. Slightly more complex assembly logic
+- Confidence: .70
 
-### (c) Archive-triggered
+### C: Periodic sweep (every N archives) — (bp:) best practice
 
-The orchestrator auto-dispatches the curator immediately when `end_work` archives a task. Synchronous but non-blocking (fire and forget).
+A dedicated curator cycle runs after N archives accumulate (e.g., every 5 tasks). The orchestrator checks the archive count and dispatches the test-curator in its own orchestration pass, similar to the memory-curator's periodic dispatch.
 
-| Dimension | Assessment |
-|-----------|------------|
-| **Latency** | Lowest — immediate |
-| **Complexity** | Low — single dispatch call in orchestrator's archive handler |
-| **Interference risk** | Same as (a) |
-| **Conflict window** | Same as (a) |
+- Effort: ~1 day — counter + threshold check in `w-orchestration`
+- Trade-off: batches curation work, reducing dispatch overhead; follows memory-curator's established pattern
+- Risk: task-scoped test files linger up to N tasks before cleanup; module-level files lag behind
+- Confidence: .65
 
-### (d) Separate orchestrator cycle
+### D: Defer / do nothing
 
-A dedicated curator cycle runs after N archives accumulate (e.g., every 5 tasks). The orchestrator checks the archive count and dispatches the curator in its own orchestration pass.
+The test-curator agent definition exists but is never automatically invoked. Manual dispatch only via `/test-curator`.
 
-| Dimension | Assessment |
-|-----------|------------|
-| **Latency** | Medium — up to N tasks of delay |
-| **Complexity** | Low — counter + threshold check |
-| **Interference risk** | Low — runs during a natural pause |
-| **Conflict window** | Low — batched processing reduces overlap probability |
+- Effort: 0
+- Trade-off: no automatic test lifecycle management; task-scoped files accumulate indefinitely
+- Risk: test debt grows silently; the entire two-tier model exists on paper but doesn't execute
+- Confidence: .20
 
 ## Recommendation
 
-Option **(c) Archive-triggered** for simplicity: add a single `dispatch(test-curator, task_id)` call to the orchestrator's archive path. Non-blocking, immediate, minimal infrastructure. Fall back to **(d) Separate orchestrator cycle** if testing shows interference.
+.85 — **A: Archive-triggered dispatch.** Lowest complexity, immediate feedback. The memory-curator uses periodic dispatch because memory curation is batch-oriented. Test curation is task-specific — one archived task produces exactly one set of files to process. Archive-triggered matches the work unit naturally.
 
-## Decision
+## Impact of Deferral
 
-_Pending user input._
+Without a dispatch trigger, the test-curator is dead code. Task-scoped test files accumulate in `tests/`, the two-tier model doesn't function, and the nuclear reset + skill updates from #912 deliver no value. Auto-resolves in 5 days (T2).
