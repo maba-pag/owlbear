@@ -173,9 +173,10 @@ class KanbanEngine:
 
         After calling this method, ``_status_rank()`` and ``_priority_rank()``
         use the newly loaded config values. Also updates ``_tasks_dir`` and
-        ``_archive_dir`` to reflect any tasks_dir change in config. Both
-        ``_task_cache`` and ``_archive_cache`` are cleared so the next
-        ``list_tasks()`` call performs a full cold scan.
+        ``_archive_dir`` to reflect any tasks_dir change in config. All three
+        caches — ``_task_cache``, ``_archive_cache``, and ``_id_to_filename``
+        — are cleared so the next ``list_tasks()`` call performs a full cold
+        scan and rebuilds the id→filename index.
         """
         self._config = load_config(self._kanban_dir)
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
