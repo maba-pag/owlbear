@@ -272,9 +272,7 @@ def _do_import(
     # Read source data (snapshots before transaction begins)
     src_conn.row_factory = sqlite3.Row
     if source_scope is not None:
-        docs = src_conn.execute(
-            "SELECT * FROM documents WHERE scope = ?", (source_scope,)
-        ).fetchall()
+        docs = src_conn.execute("SELECT * FROM documents WHERE scope = ?", (source_scope,)).fetchall()
         doc_ids_placeholder = ",".join("?" * len(docs)) if docs else "NULL"
         doc_ids = [doc["id"] for doc in docs]
         doc_statuses: dict[str, sqlite3.Row] = {
@@ -304,9 +302,7 @@ def _do_import(
             edges = []
     else:
         docs = src_conn.execute("SELECT * FROM documents").fetchall()
-        doc_statuses = {
-            row["document_id"]: row for row in src_conn.execute("SELECT * FROM document_status").fetchall()
-        }
+        doc_statuses = {row["document_id"]: row for row in src_conn.execute("SELECT * FROM document_status").fetchall()}
         chunks = src_conn.execute("SELECT * FROM chunks").fetchall()
         entities = src_conn.execute("SELECT * FROM entities").fetchall()
         edges = src_conn.execute("SELECT * FROM edges").fetchall()

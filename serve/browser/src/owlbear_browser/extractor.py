@@ -71,4 +71,3 @@ def extract_content(html: str, url: str | None = None) -> str:
     if result:
         return result
     return html_to_markdown(noise_free)
-

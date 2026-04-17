@@ -210,9 +210,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
         inter_doc_builder = (
-            InterDocGraphBuilder(structured_extractor, vs, gs)
-            if structured_extractor is not None
-            else None
+            InterDocGraphBuilder(structured_extractor, vs, gs) if structured_extractor is not None else None
         )
         gar = GraphAugmentedRetriever(vs, gs, emb)
         qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
@@ -234,9 +232,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
             pipeline=pipeline,
             workspace_root=Path.cwd(),
         )
-        consolidation_service: ConsolidationService | None = ConsolidationService(
-            conn, make_text_completion_fn()
-        )
+        consolidation_service: ConsolidationService | None = ConsolidationService(conn, make_text_completion_fn())
         ctx = AppContext(
             conn=conn,
             query_service=qs,
@@ -540,7 +536,7 @@ async def sync_from_global(ctx: Context) -> str:
         # → AC format: "Imported N documents (skipped M duplicates) from global into local under scope 'global'"
         prefix = "Imported "
         if raw.startswith(prefix):
-            counts_part = raw[len(prefix):raw.index(" into scope")]
+            counts_part = raw[len(prefix) : raw.index(" into scope")]
             return f"Imported {counts_part} from global into local under scope 'global'"
         return raw
 
@@ -570,16 +566,14 @@ async def sync_to_global(ctx: Context) -> str:
         global_conn = sqlite3.connect(str(global_path))
         try:
             _schema_init_db(global_conn)
-            raw = _core_do_import(
-                local_conn, global_conn, target_scope="global", source_scope="global"
-            )
+            raw = _core_do_import(local_conn, global_conn, target_scope="global", source_scope="global")
         finally:
             global_conn.close()
         # Reformat raw "Imported N documents (skipped M duplicates) into scope global"
         # → AC format: "Exported N documents (skipped M duplicates) from local scope 'global' to global DB"
         prefix = "Imported "
         if raw.startswith(prefix):
-            counts_part = raw[len(prefix):raw.index(" into scope")]
+            counts_part = raw[len(prefix) : raw.index(" into scope")]
             return f"Exported {counts_part} from local scope 'global' to global DB"
         return raw
 

@@ -66,9 +66,7 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
     """app_lifespan conditionally creates LLMExtractor based on import availability and env vars."""
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_created_when_owlbear_api_key_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llm_extractor_created_when_owlbear_api_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLMExtractor is instantiated when OWLBEAR_LLM_API_KEY is set. (AC1)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-owlbear-test")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -79,9 +77,7 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         mock_llm_cls.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_created_when_openai_api_key_fallback(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llm_extractor_created_when_openai_api_key_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLMExtractor is created when OPENAI_API_KEY is set as fallback (AC2 — hybrid env)"""
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-fallback")
@@ -92,9 +88,7 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         mock_llm_cls.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_default_model_gpt4o_mini(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llm_extractor_receives_default_model_gpt4o_mini(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLMExtractor receives model='gpt-4o-mini' when OWLBEAR_LLM_MODEL is absent. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.delenv("OWLBEAR_LLM_MODEL", raising=False)
@@ -107,9 +101,7 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         assert kwargs.get("model") == "gpt-4o-mini", "Default model must be gpt-4o-mini"
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_custom_model_from_env(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llm_extractor_receives_custom_model_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """LLMExtractor receives the model name from OWLBEAR_LLM_MODEL. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.setenv("OWLBEAR_LLM_MODEL", "gpt-4-turbo")
@@ -122,9 +114,7 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         assert kwargs.get("model") == "gpt-4-turbo"
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_owlbear_base_url(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llm_extractor_receives_owlbear_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """OWLBEAR_LLM_BASE_URL is forwarded to LLMExtractor. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.setenv("OWLBEAR_LLM_BASE_URL", "https://custom.example.com/v1")
@@ -138,9 +128,7 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         assert kwargs.get("base_url") == "https://custom.example.com/v1"
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_openai_base_url_fallback(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_llm_extractor_receives_openai_base_url_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Falls back to OPENAI_BASE_URL when OWLBEAR_LLM_BASE_URL is absent. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.delenv("OWLBEAR_LLM_BASE_URL", raising=False)
@@ -249,9 +237,7 @@ class TestFromAC_GraphBuilderWiring:
                 assert ctx.intra_doc_builder is not None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_intra_doc_builder_receives_extractor_kwarg(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_intra_doc_builder_receives_extractor_kwarg(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """IntraDocGraphBuilder(extractor=<llm_instance>) when LLMExtractor available. (AC4)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         mock_llm_instance = MagicMock(name="LLMExtractorInstance")
@@ -281,9 +267,7 @@ class TestFromAC_GraphBuilderWiring:
                 assert ctx.inter_doc_builder is None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_inter_doc_builder_instantiated_with_extractor_vs_gs(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_inter_doc_builder_instantiated_with_extractor_vs_gs(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """InterDocGraphBuilder(extractor, vs, gs) when extractor available. (AC5)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         mock_llm_instance = MagicMock(name="LLMExtractorInstance")
@@ -317,9 +301,7 @@ class TestFromAC_AppContextFields:
     """AppContext exposes structured_extractor, intra_doc_builder, inter_doc_builder."""
 
     @pytest.mark.asyncio
-    async def test_app_context_has_structured_extractor_field(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_app_context_has_structured_extractor_field(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """AppContext.structured_extractor exists (is None when no openai key). (AC6)"""
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)

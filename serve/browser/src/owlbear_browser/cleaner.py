@@ -20,33 +20,37 @@ if TYPE_CHECKING:
     from lxml.html import HtmlElement
 
 _NOISE_TAGS: frozenset[str] = frozenset({"nav", "header", "footer", "aside", "script", "style"})
-_NOISE_CLASSES: frozenset[str] = frozenset({
-    # Cookie notices
-    "cookie-banner",
-    "cookie-notice",
-    "cookie-popup",
-    "cookie-bar",
-    # SharePoint boilerplate
-    "ms-header",
-    "ms-commandBar",
-    "ms-commandbar",
-    "ms-pageEditBar",
-    "ms-Breadcrumb",
-    "ms-Persona",
-    "ms-LivePersona",
-    "ms-DateTimeField",
-})
-_NOISE_IDS: frozenset[str] = frozenset({
-    # Cookie consent
-    "cookie-consent",
-    "cookie-banner",
-    # SharePoint boilerplate
-    "SuiteNavWrapper",
-    "ms-site-actions",
-    "SuiteNavPlaceHolder",
-    "O365_NavHeader",
-    "s4-ribbonrow",
-})
+_NOISE_CLASSES: frozenset[str] = frozenset(
+    {
+        # Cookie notices
+        "cookie-banner",
+        "cookie-notice",
+        "cookie-popup",
+        "cookie-bar",
+        # SharePoint boilerplate
+        "ms-header",
+        "ms-commandBar",
+        "ms-commandbar",
+        "ms-pageEditBar",
+        "ms-Breadcrumb",
+        "ms-Persona",
+        "ms-LivePersona",
+        "ms-DateTimeField",
+    }
+)
+_NOISE_IDS: frozenset[str] = frozenset(
+    {
+        # Cookie consent
+        "cookie-consent",
+        "cookie-banner",
+        # SharePoint boilerplate
+        "SuiteNavWrapper",
+        "ms-site-actions",
+        "SuiteNavPlaceHolder",
+        "O365_NavHeader",
+        "s4-ribbonrow",
+    }
+)
 _NOISE_ROLES: frozenset[str] = frozenset({"complementary"})
 _HEADING_TAGS: frozenset[str] = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
@@ -236,4 +240,3 @@ def clean(html_str: str) -> str:
     if not html_str or not html_str.strip():
         return ""
     return _normalize_content(html_to_markdown(strip_noise(html_str)))
-

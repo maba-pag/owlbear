@@ -318,7 +318,8 @@ class RefreshOrchestrator:
 
         asyncio.create_task(_run())  # noqa: RUF006
 
-    def _update_source_record(        self,
+    def _update_source_record(
+        self,
         source: KnowledgeSource,
         result: RefreshResult,
     ) -> None:

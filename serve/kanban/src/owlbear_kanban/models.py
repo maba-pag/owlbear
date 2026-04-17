@@ -95,7 +95,6 @@ class Task(BaseModel):
     claimed_at: str | None = None
 
 
-
 class TaskSummary(BaseModel):
     """Lightweight task summary for list operations.
 

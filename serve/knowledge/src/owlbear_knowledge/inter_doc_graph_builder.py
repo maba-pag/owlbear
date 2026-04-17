@@ -74,15 +74,17 @@ def _stamp_inter_edge(
     src_b = source_by_entity.get(edge.target_id)
     doc_pair = sorted(d for d in [doc_id_a, doc_id_b] if isinstance(d, str))
     source_pair = sorted(s for s in [src_a, src_b] if isinstance(s, str))
-    return edge.model_copy(update={
-        "weight": _INTER_WEIGHT,
-        "metadata": {
-            **edge.metadata,
-            "source": _INTER_SOURCE,
-            "doc_pair": doc_pair,
-            "source_pair": source_pair,
-        },
-    })
+    return edge.model_copy(
+        update={
+            "weight": _INTER_WEIGHT,
+            "metadata": {
+                **edge.metadata,
+                "source": _INTER_SOURCE,
+                "doc_pair": doc_pair,
+                "source_pair": source_pair,
+            },
+        }
+    )
 
 
 def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:
@@ -90,10 +92,7 @@ def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:
     for a, b in pairs:
         a_desc = f" — {a.description}" if a.description else ""
         b_desc = f" — {b.description}" if b.description else ""
-        pair_lines.append(
-            f"  ({a.name} [{a.entity_type.value}]{a_desc}, "
-            f"{b.name} [{b.entity_type.value}]{b_desc})"
-        )
+        pair_lines.append(f"  ({a.name} [{a.entity_type.value}]{a_desc}, {b.name} [{b.entity_type.value}]{b_desc})")
     pairs_str = "\n".join(pair_lines)
     return f"scope: {scope}\nEntity pairs:\n{pairs_str}"
 
@@ -162,9 +161,7 @@ class InterDocGraphBuilder:
             doc = self._graph_store.get_document(doc_id)
             doc_to_source[doc_id] = doc.source_id if doc is not None else None
         return {
-            entity.id: (
-                None if entity.document_id is None else doc_to_source.get(entity.document_id)
-            )
+            entity.id: (None if entity.document_id is None else doc_to_source.get(entity.document_id))
             for entity in entities
         }
 
@@ -186,7 +183,7 @@ class InterDocGraphBuilder:
             if len(group) < _MIN_ENTITIES:
                 continue
             for i, a in enumerate(group):
-                for b in group[i + 1:]:
+                for b in group[i + 1 :]:
                     if a.document_id == b.document_id:
                         continue
                     if (a.id, b.id) in existing_pairs or (b.id, a.id) in existing_pairs:

@@ -163,7 +163,8 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
         Sorted, capped list of Task instances.
     """
     tasks: list[Task] = [
-        read_task(path) for path in sorted(engine._tasks_dir.glob("*.md"))  # noqa: SLF001
+        read_task(path)
+        for path in sorted(engine._tasks_dir.glob("*.md"))  # noqa: SLF001
     ]
 
     active_ids: frozenset[int] = frozenset(t.id for t in tasks if t.id is not None)
@@ -187,9 +188,11 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
             continue
         passing.append(task)
 
-    passing.sort(key=lambda t: (
-        PRIORITY_RANK.get(t.priority or "", _MAX_PRIORITY_RANK + 1),
-        STATUS_RANK.get(t.status or "", _MAX_STATUS_RANK + 1),
-    ))
+    passing.sort(
+        key=lambda t: (
+            PRIORITY_RANK.get(t.priority or "", _MAX_PRIORITY_RANK + 1),
+            STATUS_RANK.get(t.status or "", _MAX_STATUS_RANK + 1),
+        )
+    )
 
     return passing[:limit]
