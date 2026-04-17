@@ -313,15 +313,15 @@ class TestFromAC_EnvVarConfig:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_kanban_bin_fallback_when_env_var_absent(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When KANBAN_BIN is unset, binary falls back to 'kanban/kanban-md.exe'."""
+        """When KANBAN_BIN is unset, binary falls back to 'kanban/kanban-md'."""
         monkeypatch.delenv("KANBAN_BIN", raising=False)
         monkeypatch.setenv("KANBAN_DIR", _BOARD_DIR)
         agent = _make_agent_with_conn()
         with patch(f"{_MODULE}.subprocess.run", return_value=_subprocess_ok()) as mock_run:
             await agent.prompt(prompt=_prompt_blocks("#42"), session_id=_SESSION_ID)
         first_call_args = mock_run.call_args_list[0].args[0]
-        assert first_call_args[0] == "kanban/kanban-md.exe", (
-            f"Default binary must be 'kanban/kanban-md.exe', got '{first_call_args[0]}'"
+        assert first_call_args[0] == "kanban/kanban-md", (
+            f"Default binary must be 'kanban/kanban-md', got '{first_call_args[0]}'"
         )
 
     @pytest.mark.asyncio(loop_scope="function")

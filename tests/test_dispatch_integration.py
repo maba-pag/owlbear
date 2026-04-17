@@ -71,7 +71,7 @@ def real_kanban_bin() -> Path:
 
     Resolution order:
     1. ``KANBAN_BIN`` environment variable
-    2. ``kanban/kanban-md.exe`` relative to the repository root
+    2. ``kanban/kanban-md`` relative to the repository root
     """
     env_bin = os.environ.get("KANBAN_BIN")
     if env_bin:
@@ -80,7 +80,7 @@ def real_kanban_bin() -> Path:
             return p
 
     repo_root = Path(__file__).resolve().parent.parent
-    convention = repo_root / ".owlbear" / "kanban" / "kanban-md.exe"
+    convention = repo_root / ".owlbear" / "kanban" / "kanban-md"
     if convention.exists():
         return convention
 

@@ -459,7 +459,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
         tmp_path: Path,
     ) -> None:
         """run_loop must pass a cycle_id (32-char uuid4 hex) to dispatch_wave."""
-        kanban_bin = tmp_path / "kanban-md.exe"
+        kanban_bin = tmp_path / "kanban-md"
         kanban_bin.touch()
 
         wave_entry = DispatchEntry(task_id=2, agent="builder", target_status="review")
@@ -506,7 +506,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
         tmp_path: Path,
     ) -> None:
         """All waves within a single cycle must receive the same cycle_id."""
-        kanban_bin = tmp_path / "kanban-md.exe"
+        kanban_bin = tmp_path / "kanban-md"
         kanban_bin.touch()
 
         wave1 = MagicMock(entries=[DispatchEntry(task_id=3, agent="builder", target_status="review")])
@@ -558,7 +558,7 @@ class TestFromAC_CycleIdRunLoop:  # noqa: N801
         tmp_path: Path,
     ) -> None:
         """Each cycle iteration must generate a distinct cycle_id (uuid4 is random)."""
-        kanban_bin = tmp_path / "kanban-md.exe"
+        kanban_bin = tmp_path / "kanban-md"
         kanban_bin.touch()
 
         wave_entry1 = DispatchEntry(task_id=20, agent="builder", target_status="review")

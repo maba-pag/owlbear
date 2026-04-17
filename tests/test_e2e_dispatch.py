@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.e2e
 
 _PROJECT_ROOT = Path(__file__).parent.parent
-_KANBAN_BIN = _PROJECT_ROOT / ".owlbear" / "kanban" / "kanban-md.exe"
+_KANBAN_BIN = _PROJECT_ROOT / ".owlbear" / "kanban" / "kanban-md"
 _AUDIT_DIR = _PROJECT_ROOT / "store" / "audit"
 
 

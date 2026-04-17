@@ -7,7 +7,7 @@ Entry point: ``run_agent(KanbanMockAgent())`` — spawnable via spawn_agent_proc
 
 Environment variables:
     KANBAN_DIR: Path to the kanban board directory (required).
-    KANBAN_BIN: Path to the kanban-md binary (default: kanban/kanban-md.exe).
+    KANBAN_BIN: Path to the kanban-md binary (default: kanban/kanban-md).
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from typing import Any
 from acp import run_agent
 from acp.schema import InitializeResponse, NewSessionResponse, PromptResponse
 
-_DEFAULT_KANBAN_BIN = "kanban/kanban-md.exe"
+_DEFAULT_KANBAN_BIN = "kanban/kanban-md"
 _TASK_ID_RE = re.compile(r"#(\d+)")
 
 

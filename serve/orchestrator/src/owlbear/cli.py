@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 app = typer.Typer()
 
-_KANBAN_BIN = Path("kanban/kanban-md.exe")
+_KANBAN_BIN = Path("kanban/kanban-md")
 _KANBAN_DIR = Path("kanban")
 _COPILOT_CMD = "gh"
 

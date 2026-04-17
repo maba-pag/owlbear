@@ -609,7 +609,7 @@ class TestFromAC_RunLoop:  # noqa: N801
             ),
         ):
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
             )
@@ -633,7 +633,7 @@ class TestFromAC_RunLoop:  # noqa: N801
             patch("owlbear.orchestrator.loop.select_tasks", side_effect=_select),
         ):
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
             )
@@ -662,7 +662,7 @@ class TestFromAC_RunLoop:  # noqa: N801
             patch("owlbear.orchestrator.loop.select_tasks", side_effect=_select),
         ):
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
             )
@@ -702,7 +702,7 @@ class TestFromAC_RunLoop:  # noqa: N801
             patch("owlbear.orchestrator.loop.select_tasks", side_effect=_select),
         ):
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
             )
@@ -730,7 +730,7 @@ class TestFromAC_RunLoop:  # noqa: N801
             patch("owlbear.orchestrator.loop.select_tasks", side_effect=_select),
         ):
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
             )
@@ -784,7 +784,7 @@ class TestFromAC_RunLoopCallSignature:  # noqa: N801
         with patch("owlbear.orchestrator.loop.read_board", new=AsyncMock(return_value=[])):
             # Real select_tasks — exposes TypeError if run_loop passes extra kwargs
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
             )
@@ -796,7 +796,7 @@ class TestFromAC_RunLoopCallSignature:  # noqa: N801
         client = _make_client()
         with patch("owlbear.orchestrator.loop.read_board", new=AsyncMock(return_value=[])):
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
                 scope="phase-1",
@@ -809,7 +809,7 @@ class TestFromAC_RunLoopCallSignature:  # noqa: N801
         read_board_mock = AsyncMock(return_value=[])
         with patch("owlbear.orchestrator.loop.read_board", new=read_board_mock):
             await run_loop(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
                 scope="phase-3",
@@ -878,7 +878,7 @@ class TestFromAC_OrchestrateFunction:  # noqa: N801
         client = _make_client()
         with patch("owlbear.orchestrator.loop.read_board", new=AsyncMock(return_value=[])):
             await orchestrate_fn(
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 client=client,
             )
@@ -949,7 +949,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
             patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
         ):
             await pkg.orchestrate(  # type: ignore[attr-defined]
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 copilot_cmd=copilot_cmd,
             )
@@ -970,7 +970,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
             patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
         ):
             await pkg.orchestrate(  # type: ignore[attr-defined]
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 copilot_cmd=["copilot", "--acp", "--stdio"],
             )
@@ -991,7 +991,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
             patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
         ):
             await pkg.orchestrate(  # type: ignore[attr-defined]
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 copilot_cmd=["copilot", "--acp", "--stdio"],
             )
@@ -1015,7 +1015,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
             patch("owlbear.orchestrator.loop.run_loop", new=run_loop_mock),
         ):
             await pkg.orchestrate(  # type: ignore[attr-defined]
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 copilot_cmd=["copilot", "--acp", "--stdio"],
                 scope="phase-2",
@@ -1039,7 +1039,7 @@ class TestFromAC_OrchestrateWiring:  # noqa: N801
             patch("owlbear.orchestrator.loop.run_loop", new=AsyncMock()),
         ):
             await pkg.orchestrate(  # type: ignore[attr-defined]
-                kanban_bin=Path("kanban/kanban-md.exe"),
+                kanban_bin=Path("kanban/kanban-md"),
                 kanban_dir=Path("kanban"),
                 copilot_cmd=["copilot", "--acp", "--stdio"],
             )
