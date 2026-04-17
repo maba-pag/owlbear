@@ -4031,3 +4031,4 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse stdin/stdout JSON contract, permissionDecision output format, exit codes, editFiles tool_input schema | .owlbear/research/891-pretooluse-hooks-test-approach.md | 2026-04-17 |
+| VS Code Hooks docs — PostToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PostToolUse stdin/stdout JSON contract, additionalContext output, decision: block, exit codes, tool_input formats | .owlbear/research/892-lint-changed-hook-test-approach.md | 2026-04-17 |
