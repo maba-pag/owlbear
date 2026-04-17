@@ -27,6 +27,10 @@ def pytest_configure(config: pytest.Config) -> None:
         "slow: tests that are long-running (subprocess-heavy tests)",
     )
     config.addinivalue_line(
+        "markers",
+        "benchmark: latency benchmarks — run with -v -s to see results",
+    )
+    config.addinivalue_line(
         "filterwarnings",
         "ignore::pluggy.PluggyTeardownRaisedWarning",
     )
