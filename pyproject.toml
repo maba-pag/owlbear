@@ -120,6 +120,7 @@ ignore = [
   "E501",    # long assertion messages in test strings are acceptable
   "EM102",   # f-string in exception message — acceptable in test helpers
   "I001",    # isort — pre-existing test-writer files may have non-standard order
+  "INP001",  # serve/*/tests/ dirs without __init__.py — importlib mode handles discovery
   "N801",    # TestFromAC_* class naming convention required by test-writer workflow
   "PERF401", # list comprehension recommendation — readability preference in tests
   "PLW1510", # subprocess.run without check — intentional in test assertions
@@ -128,6 +129,7 @@ ignore = [
   "RUF100",  # unused noqa — pre-existing marker suppression in test files
   "S101",    # assert is fine in tests
   "S105",    # token/password false positives in test assertions
+  "S506",    # yaml.load with custom SafeLoader subclass — YAML12SafeLoader IS safe
   "S106",    # hardcoded password in function args — test fixtures
   "S603",    # subprocess security — test-controlled inputs
   "S607",    # partial executable path — test-controlled commands
