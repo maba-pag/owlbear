@@ -212,7 +212,9 @@ async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
         record = await asyncio.to_thread(
-            app_ctx.engine.move_task, task_id, status,
+            app_ctx.engine.move_task,
+            task_id,
+            status,
         )
     except (FileNotFoundError, ValueError) as exc:
         msg = str(exc)

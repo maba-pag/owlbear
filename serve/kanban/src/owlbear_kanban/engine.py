@@ -121,9 +121,13 @@ class KanbanEngine:
         self._config: BoardConfig = load_config(kanban_dir)
         self._tasks_dir = kanban_dir / self._config.tasks_dir
         self._archive_dir = kanban_dir / self._config.archive_dir
+        # fmt: off
         self._agent_name: str = (
-            agent_name if agent_name is not None else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+            agent_name
+            if agent_name is not None
+            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
+        # fmt: on
         effective_activity_log = activity_log if activity_log is not None else self._config.activity_log
         self._activity_log_path: Path | None = kanban_dir / "activity.jsonl" if effective_activity_log else None
         self._revision: int = 0
