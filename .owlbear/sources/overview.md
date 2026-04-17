@@ -25,6 +25,12 @@ External repos and resources studied during OwlBear development.
 | Copilot SDK Issue #857 | <https://github.com/github/copilot-sdk/issues/857> | "Force structured output" — open feature request, no milestone | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
 | PyPI github-copilot-sdk v0.2.2 | <https://pypi.org/project/github-copilot-sdk/> | SDK API surface: session-based, no `response_format`, BYOK `wire_api` field (custom providers only) | `.owlbear/research/887-copilot-sdk-vs-openai-compat-endpoint.md` (monitoring update) | 2026-04-15 |
 
+## Session-Context Python Port (Task #896)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Hooks docs — SessionStart I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | SessionStart hook stdin/stdout JSON contract, fail-open spec | `.owlbear/research/896-session-context-py-port.md` | 2026-04-17 |
+
 ## Copilot Auth Port Feasibility (Task #888)
 
 | Source | URL | What | Where Used | Date |

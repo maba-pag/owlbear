@@ -31,7 +31,7 @@ How should we implement an E2E test validating the full OwlBear pipeline (bootst
 | Sequential re-routing (2 agents) | Yes | `test_intent_routing.py::TestMidConversationReroute` | None |
 | Full multi-step pipeline (4+ agents) | **No** | — | **Key gap** |
 | Real agent registry in bootstrap | Yes | `test_bootstrap_integration.py::test_agent_registry_set` | None |
-| Tool resolution per agent | Partial | `test_agent_definitions.py::test_get_kanban_planner_returns_agent_with_resolved_tools` | Only 1 agent tested |
+| Tool resolution per agent | Partial | `test_agent_definitions.py::test_get_planner_returns_agent_with_resolved_tools` | Only 1 agent tested |
 | Hook pipeline with tool calls | Yes | `test_integration_e2e.py::TestHookPipeline` | None |
 | Role policy filtering | Partial | `test_agent_registry.py::test_get_applies_role_policy_for_non_builder` | Synthetic, not real defs |
 | Skills loaded via registry | **No** | — | **Gap** |

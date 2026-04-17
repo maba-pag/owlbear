@@ -1,21 +1,112 @@
-﻿[
+[
+  {
+    "cycle": "2026-04-17T-periodic-28",
+    "note": "Periodic curation cycle 28. Channel A: MCP memory_entries table confirmed empty (0 rows, all states). Channel B: /memories/repo/ inbox empty. Repo root clean. Task body scan: archived tasks #890–#896, #902–#903, #907 no longer accessible via show_task (files removed post-archive); active tasks #897–#905 all pre-execution (todo/research), no agent notes yet. 0 entries processed. SECURITY-URGENT (22nd carry): _web_read SSRF CWE-918 unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 0,
+    "promotions": [],
+    "kept_medium": [],
+    "pruned": [],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-22ND-CARRY",
+        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 22 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
+    "cycle": "2026-04-17T-periodic-27",
+    "note": "Periodic curation cycle 27. Channel A/B empty. Task body scan: #896 (docs, completed \u2014 no new lessons). 1 MEDIUM carry pruned: cross-task-testfromac-contract-conflict (6th carry, no recurrence in macOS epic phase-1 tasks #893-#896, NOISE threshold exceeded). SECURITY-URGENT (21st carry): _web_read SSRF CWE-918 unaddressed \u2014 21 cycles without a kanban task. USER ACTION REQUIRED.",
+    "entries_processed": 2,
+    "promotions": [],
+    "kept_medium": null,
+    "pruned": "carry:cycle26:852-builder+test-writer:cross-task-testfromac-contract-conflict \u2014 6th carry, no recurrence in #893-#896, NOISE threshold (3+ carries, last recurrence was partial in #836)",
+    "flags": "SECURITY-URGENT-21ST-CARRY: _web_read SSRF CWE-918 in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183. 21 curation cycles without action. Direct calls to private IPs (127.0.0.1, 10.x, 192.168.x, 169.254.169.254) not blocked. USER ACTION REQUIRED: Create kanban task \"Security: add private IP blocklist to _web_read (SSRF CWE-918)\"."
+  },
+  {
+    "cycle": "2026-04-17T-periodic-26",
+    "note": "Periodic curation cycle 26. Channel A: MCP DB empty (0 rows). Channel B: inbox empty. Repo root clean. Task body scan: #893 (done, session-context.py hook \u2014 test-writer + builder + 2 review cycles). No new MCP entries, no inline learning notes. 1 MEDIUM carry pruned: static-analysis-test-fixture-misread (3rd carry, no recurrence \u2014 reviewer for #893 correctly traced _make_fake_git helper in both passes, NOISE). 1 MEDIUM carry continued: cross-task-testfromac-contract-conflict (6th carry, no recurrence in #893 pure test-write pass, phase-1 builder tasks #894\u2013#896 still pending). 0 promotions. SECURITY-URGENT (20th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 3,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "carry:cycle25:852-builder+test-writer:cross-task-testfromac-contract-conflict",
+        "content_preview": "New task AC contradicted existing TestFromAC_* test in prior task. Pattern: TestFromAC design conflicts with implementation requirements require arch review escalation.",
+        "recommendation": "keep",
+        "reason": "MEDIUM \u2014 6th carry. #893 was a pure test-writer task adapting existing _590 pattern \u2014 no AC conflict arose. Phase-1 builder tasks #894\u2013#896 still pending; relevant until those complete."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "carry:cycle25:836-reviewer:static-analysis-test-fixture-misread",
+        "content_preview": "Static-only reviewers without test execution systematically misidentify fixture helpers when multiple helpers have similar names. Caused 4 consecutive false FAIL verdicts.",
+        "recommendation": "reject",
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry (cycles 24-26), no recurrence. #893 reviewer correctly traced _make_fake_git helper in both review passes. No fixture-helper misread since #836. Pruning."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-20TH-CARRY",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 20 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
+  {
+    "cycle": "2026-04-17T-periodic-25",
+    "note": "Periodic curation cycle 25. Channel A: MCP DB empty (0 rows). Channel B: inbox empty. Repo root clean. Task body scan: #890 (done, planning/orchestration), #902 (review, builder complete), #903 (review, pass-through). No new MCP entries. 1 new potential observation from #902 arch review (scope-undercounting) rated LOW/NOISE \u2014 AC4 grep check is the designed safety net, system worked correctly, not a process failure \u2014 rejected. 2 MEDIUM carries continue (5th and 2nd carry respectively) \u2014 macOS epic (#891\u2013#905) still early in pipeline, no recurrence data yet. SECURITY-URGENT (19th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "entries_processed": 3,
+    "promotions": [],
+    "kept_medium": [
+      {
+        "entry_id": "carry:cycle24:852-builder+test-writer:cross-task-testfromac-contract-conflict",
+        "content_preview": "New task AC contradicted existing TestFromAC_* test in prior task. Pattern: TestFromAC design conflicts with implementation requirements require arch review escalation.",
+        "recommendation": "keep",
+        "reason": "MEDIUM \u2014 5th carry. MacOS epic (#891\u2013#905) still early in pipeline (phase-1 builder tasks #894\u2013#896 in research status); no new recurrence data available. Promote if recurs in phase-1/2 builder passes."
+      },
+      {
+        "entry_id": "carry:cycle24:836-reviewer:static-analysis-test-fixture-misread",
+        "content_preview": "Static-only reviewers without test execution systematically misidentify fixture helpers when multiple helpers have similar names. Caused 4 consecutive false FAIL verdicts.",
+        "recommendation": "keep",
+        "reason": "MEDIUM \u2014 2nd carry. No new reviewer passes yet on the macOS epic; phase-1 tasks have not reached review stage. Keep one more cycle; promote if fixture-helper misread recurs in #891\u2013#896 or later phase-2 tasks."
+      }
+    ],
+    "pruned": [
+      {
+        "entry_id": "inline:#902-arch:research-scope-undercounting",
+        "content_preview": "Researcher scope summary listed 6 affected files; architect's independent grep found 8. Two test files (test_dispatch_cycle_trace_id.py, test_e2e_dispatch.py) missed by research.",
+        "recommendation": "reject",
+        "reason": "LOW \u2014 single occurrence. AC4 (grep returns no results) is the designed safety net for exactly this scenario, and it worked correctly. Not a process failure \u2014 the system caught it at the right gate. Not actionable as a separate lesson."
+      }
+    ],
+    "flags": [
+      {
+        "type": "SECURITY-URGENT-19TH-CARRY",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (~2026-03)",
+        "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 19 curation cycles. Curator lacks create_task MCP tool.",
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+      }
+    ]
+  },
   {
     "cycle": "2026-04-15T-periodic-24",
-    "note": "Periodic curation cycle 24. Channel A: MCP DB empty (0 rows, no entries in any state). Channel B: inbox empty. Repo memory root clean. Task body scan: #765 (done), #836 (done), #886 (review), #887 (done). No Channel A entries to process. 2 MEDIUM carries pruned (3rd carry, no recurrence): wip-preservation-selective-staging, msal-sync-blocks-async-event-loop (MSAL code deleted in #886 — doubly confirmed dead). 1 MEDIUM carry continued (3rd carry, borderline recurrence in #836 AC3 test-spec conflict): cross-task-testfromac-contract-conflict. 1 new MEDIUM added from #836 (static-analysis reviewer misread test fixture helper for 4 cycles). 0 promotions (no HIGH-threshold findings). SECURITY-URGENT (18th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "note": "Periodic curation cycle 24. Channel A: MCP DB empty (0 rows, no entries in any state). Channel B: inbox empty. Repo memory root clean. Task body scan: #765 (done), #836 (done), #886 (review), #887 (done). No Channel A entries to process. 2 MEDIUM carries pruned (3rd carry, no recurrence): wip-preservation-selective-staging, msal-sync-blocks-async-event-loop (MSAL code deleted in #886 \u2014 doubly confirmed dead). 1 MEDIUM carry continued (3rd carry, borderline recurrence in #836 AC3 test-spec conflict): cross-task-testfromac-contract-conflict. 1 new MEDIUM added from #836 (static-analysis reviewer misread test fixture helper for 4 cycles). 0 promotions (no HIGH-threshold findings). SECURITY-URGENT (18th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
     "entries_processed": 8,
     "promotions": [],
     "kept_medium": [
       {
         "entry_id": "carry:cycle23:852-builder+test-writer:cross-task-testfromac-contract-conflict",
-        "content_preview": "New #852 AC (fetcher=None → ToolError) contradicted existing #775 TestFromAC_* test. #836 AC3: click/type/select test-spec expected str return but impl raised ToolError; needed arch re-eval via task #877.",
+        "content_preview": "New #852 AC (fetcher=None \u2192 ToolError) contradicted existing #775 TestFromAC_* test. #836 AC3: click/type/select test-spec expected str return but impl raised ToolError; needed arch re-eval via task #877.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 3rd carry. Partial recurrence in #836: AC3 tests (click/type/select) used _make_mcp_ctx_with_mock_page(), not _make_mcp_ctx(), creating test-spec vs implementation tension resolved via architecture review escalation (task #877). Pattern: TestFromAC design conflicts with implementation requirements require arch review, not builder override. Promote at 4th carry if recurs again."
+        "reason": "MEDIUM \u2014 3rd carry. Partial recurrence in #836: AC3 tests (click/type/select) used _make_mcp_ctx_with_mock_page(), not _make_mcp_ctx(), creating test-spec vs implementation tension resolved via architecture review escalation (task #877). Pattern: TestFromAC design conflicts with implementation requirements require arch review, not builder override. Promote at 4th carry if recurs again."
       },
       {
         "entry_id": "inline:#836-reviewer:static-analysis-test-fixture-misread",
         "content_preview": "4 consecutive reviewer passes incorrectly identified click/type/select AC3 tests as using _make_mcp_ctx() (page=None) when actual file used _make_mcp_ctx_with_mock_page(). Caused false FAIL verdicts; resolved only by live test execution.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Static-only reviewers without test execution systematically misidentify fixture helpers when there are multiple helpers with similar names. The error persisted through 4 review cycles (passes 1-4) until architecture review ran tests live. Non-obvious (static path trace looks identical). Keep one cycle; promote if recurs in another task."
+        "reason": "MEDIUM \u2014 1st carry. Static-only reviewers without test execution systematically misidentify fixture helpers when there are multiple helpers with similar names. The error persisted through 4 review cycles (passes 1-4) until architecture review ran tests live. Non-obvious (static path trace looks identical). Keep one cycle; promote if recurs in another task."
       }
     ],
     "pruned": [
@@ -23,46 +114,46 @@
         "entry_id": "carry:cycle23:882-builder:wip-preservation-selective-staging",
         "content_preview": "Builder had uncommitted WIP (#865) while needing to commit a one-line change (#882). Used backup/restore + selective staging.",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry (cycles 22-24), no recurrence in #765/#836/#886/#887. Single task-specific workaround. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry (cycles 22-24), no recurrence in #765/#836/#886/#887. Single task-specific workaround. Pruning."
       },
       {
         "entry_id": "carry:cycle23:883-reviewer:msal-sync-blocks-async-event-loop",
         "content_preview": "_acquire_token() is synchronous inside async def fetch(); MSAL network calls block the event loop. Tests pass because MSAL is mocked.",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry (cycles 22-24), no recurrence. MSAL code deleted entirely in #886 (graph_fetcher.py removed, msal dep removed from pyproject.toml). Doubly confirmed dead. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry (cycles 22-24), no recurrence. MSAL code deleted entirely in #886 (graph_fetcher.py removed, msal dep removed from pyproject.toml). Doubly confirmed dead. Pruning."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-18TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (~2026-03)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 18 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-15T-periodic-23",
-    "note": "Periodic curation cycle 23 (user label: cycle 15). Channel A: MCP DB 0 pending entries. Channel B: inbox empty. Task body scan: #884–#885 (SHAREPOINT_API dispatch, both done). 3 MEDIUM carries from cycle 22 hit 2nd occurrence — promoted: (1) TestFromAC lint errors propagate (promoted to h-pytest-and-linting Known Gotchas); (2) parent TestFromAC freezes child API kwarg names (promoted to r-pipeline-protocol § TestFromAC API-Name Freeze); (3) pre-existing GREEN impl contaminates RED baseline (promoted to r-pipeline-protocol § Child GREEN Builders). 2 MEDIUM carries hit 3rd carry with no recurrence — pruned: 829-auditor-ac-copy-paste, 846-arch-redundant-without-test-run. 3 MEDIUM entries continue to 2nd carry: wip-preservation-selective-staging, msal-sync-blocks-async-event-loop, cross-task-testfromac-contract-conflict. SECURITY-URGENT (17th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "note": "Periodic curation cycle 23 (user label: cycle 15). Channel A: MCP DB 0 pending entries. Channel B: inbox empty. Task body scan: #884\u2013#885 (SHAREPOINT_API dispatch, both done). 3 MEDIUM carries from cycle 22 hit 2nd occurrence \u2014 promoted: (1) TestFromAC lint errors propagate (promoted to h-pytest-and-linting Known Gotchas); (2) parent TestFromAC freezes child API kwarg names (promoted to r-pipeline-protocol \u00a7 TestFromAC API-Name Freeze); (3) pre-existing GREEN impl contaminates RED baseline (promoted to r-pipeline-protocol \u00a7 Child GREEN Builders). 2 MEDIUM carries hit 3rd carry with no recurrence \u2014 pruned: 829-auditor-ac-copy-paste, 846-arch-redundant-without-test-run. 3 MEDIUM entries continue to 2nd carry: wip-preservation-selective-staging, msal-sync-blocks-async-event-loop, cross-task-testfromac-contract-conflict. SECURITY-URGENT (17th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
     "entries_processed": 8,
     "promotions": [
       {
         "entry_id": "carry:cycle22:884-test-writer:testfromac-lint-errors-propagate",
         "content_preview": "Test-writer introduced ruff errors (RUF002 EN dash, UP024 IOError) inside TestFromAC_* class body; builders cannot modify",
         "recommendation": "approve",
-        "reason": "HIGH — 2nd occurrence (cycle 22 first; cycle 23 confirmed in #884 reviewer report: 2 pre-existing ruff violations in TestFromAC_* persisting through full pipeline). Promoted to h-pytest-and-linting Known Gotchas."
+        "reason": "HIGH \u2014 2nd occurrence (cycle 22 first; cycle 23 confirmed in #884 reviewer report: 2 pre-existing ruff violations in TestFromAC_* persisting through full pipeline). Promoted to h-pytest-and-linting Known Gotchas."
       },
       {
         "entry_id": "carry:cycle22:884-arch:parent-testfromac-locks-child-api-naming",
         "content_preview": "Parent TestFromAC_* test used graph_fetcher kwarg; child task canonicalized to graph_content_fetcher; builder needed backward-compat alias",
         "recommendation": "approve",
-        "reason": "HIGH — 2nd occurrence (cycle 22 first; #884-#885 pipeline confirmed kwarg-name lock in full detail). Promoted to r-pipeline-protocol § TestFromAC API-Name Freeze."
+        "reason": "HIGH \u2014 2nd occurrence (cycle 22 first; #884-#885 pipeline confirmed kwarg-name lock in full detail). Promoted to r-pipeline-protocol \u00a7 TestFromAC API-Name Freeze."
       },
       {
         "entry_id": "carry:cycle22:879+883+885-builder:pre-existing-impl-child-green-tasks",
         "content_preview": "Parent #879 builder implemented full feature before decomposition; child GREEN tasks (#882, #883, #885) found code already in place; RED re-verification was skipped",
         "recommendation": "approve",
-        "reason": "HIGH — 2nd occurrence (cycle 22 first; #884 reviewer found AC5 violated: 1/19 tests passing in RED state due to pre-existing constructor param from prior pass). Promoted to r-pipeline-protocol § Child GREEN Builders."
+        "reason": "HIGH \u2014 2nd occurrence (cycle 22 first; #884 reviewer found AC5 violated: 1/19 tests passing in RED state due to pre-existing constructor param from prior pass). Promoted to r-pipeline-protocol \u00a7 Child GREEN Builders."
       }
     ],
     "kept_medium": [
@@ -70,19 +161,19 @@
         "entry_id": "carry:cycle22:882-builder:wip-preservation-selective-staging",
         "content_preview": "Builder had uncommitted WIP (#865 changes) while needing to commit a one-line change (#882). Used backup/restore + selective staging.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
+        "reason": "MEDIUM \u2014 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
       },
       {
         "entry_id": "carry:cycle22:883-reviewer:msal-sync-blocks-async-event-loop",
         "content_preview": "_acquire_token() is synchronous inside async def fetch(); MSAL network calls block the event loop in production. Tests pass because MSAL is mocked.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
+        "reason": "MEDIUM \u2014 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
       },
       {
         "entry_id": "carry:cycle22:852-builder+test-writer:cross-task-testfromac-contract-conflict",
-        "content_preview": "New #852 AC (fetcher=None → ToolError) contradicted existing #775 TestFromAC_* test (fetcher=None → success). Builder REJECTed correctly.",
+        "content_preview": "New #852 AC (fetcher=None \u2192 ToolError) contradicted existing #775 TestFromAC_* test (fetcher=None \u2192 success). Builder REJECTed correctly.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
+        "reason": "MEDIUM \u2014 2nd carry. No recurrence in #884-#885 scope. Keep one more cycle; prune at 3rd carry if still no recurrence."
       }
     ],
     "pruned": [
@@ -90,34 +181,34 @@
         "entry_id": "carry:cycle21:829-auditor-ac-copy-paste-without-research-verification",
         "content_preview": "AC writer may copy body bullet points into AC without verifying function attribution or completeness against research findings",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry (cycles 21-23), no recurrence in #879–#885. Single task-specific pattern. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry (cycles 21-23), no recurrence in #879\u2013#885. Single task-specific pattern. Pruning."
       },
       {
         "entry_id": "carry:cycle21:846-arch-declared-redundant-without-test-run",
         "content_preview": "Arch review + research declared 'all AC items already implemented' but builder found failing tests due to Pydantic subtlety",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry (cycles 21-23), no recurrence in #879–#885. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry (cycles 21-23), no recurrence in #879\u2013#885. Pruning."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-17TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (~2026-03)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 17 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-15T-periodic-22",
-    "note": "Periodic curation cycle 22 (user label: cycle 10). Channel A: MCP DB empty (0 rows total). Channel B: inbox empty. Task body scan: #879–#885 (GraphContentFetcher pipeline, all in docs/review) and #852 (browser fetcher wiring, in review). 1 HIGH promoted: edit_task-unavailable-stale-depends_on — 3rd independent occurrence (#758, #787, #879 each in different pipeline context, all reporting agents could not apply identified depends_on correction). Promoted to r-pipeline-protocol §2 Follow-up Task Quality as `depends_on` Correction Pattern. 6 new MEDIUM entries added (1st carry each). 2 MEDIUM carries continued (2nd carry). 1 MEDIUM carry pruned (3rd carry, no recurrence: tdd-test-task-scope-overlap-sibling-parents). SECURITY-URGENT (16th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "note": "Periodic curation cycle 22 (user label: cycle 10). Channel A: MCP DB empty (0 rows total). Channel B: inbox empty. Task body scan: #879\u2013#885 (GraphContentFetcher pipeline, all in docs/review) and #852 (browser fetcher wiring, in review). 1 HIGH promoted: edit_task-unavailable-stale-depends_on \u2014 3rd independent occurrence (#758, #787, #879 each in different pipeline context, all reporting agents could not apply identified depends_on correction). Promoted to r-pipeline-protocol \u00a72 Follow-up Task Quality as `depends_on` Correction Pattern. 6 new MEDIUM entries added (1st carry each). 2 MEDIUM carries continued (2nd carry). 1 MEDIUM carry pruned (3rd carry, no recurrence: tdd-test-task-scope-overlap-sibling-parents). SECURITY-URGENT (16th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
     "entries_processed": 9,
     "promotions": [
       {
         "entry_id": "inline:#758+#787+#879:edit_task-unavailable-stale-depends_on",
-        "content_preview": "Architects and researchers identify incorrect depends_on metadata but cannot apply corrections — edit_task/update_task not always available; stale dependency metadata propagates",
+        "content_preview": "Architects and researchers identify incorrect depends_on metadata but cannot apply corrections \u2014 edit_task/update_task not always available; stale dependency metadata propagates",
         "recommendation": "approve",
-        "reason": "HIGH — 3 independent occurrences across different pipeline contexts (#758 architect, #787 architect, #879 researcher). Recurring, actionable, non-obvious. Promoted to r-pipeline-protocol §2 as `depends_on` Correction Pattern with DEPENDS_ON-CORRECTION tag guidance."
+        "reason": "HIGH \u2014 3 independent occurrences across different pipeline contexts (#758 architect, #787 architect, #879 researcher). Recurring, actionable, non-obvious. Promoted to r-pipeline-protocol \u00a72 as `depends_on` Correction Pattern with DEPENDS_ON-CORRECTION tag guidance."
       }
     ],
     "kept_medium": [
@@ -125,78 +216,78 @@
         "entry_id": "inline:#882-builder:wip-preservation-selective-staging",
         "content_preview": "Builder had uncommitted WIP (#865 changes) in working tree while needing to commit a one-line change (#882). Used backup/restore + selective staging.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable workaround pattern for staging around WIP. Keep one cycle; promote if recurs."
+        "reason": "MEDIUM \u2014 1st carry. Single occurrence. Actionable workaround pattern for staging around WIP. Keep one cycle; promote if recurs."
       },
       {
         "entry_id": "inline:#883-reviewer:msal-sync-blocks-async-event-loop",
         "content_preview": "_acquire_token() is synchronous inside async def fetch(); MSAL network calls block the event loop in production. Tests pass because MSAL is mocked.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (reviewer/builder should flag sync calls in async methods). Non-obvious (tests pass cleanly). Keep one cycle; promote if recurs."
+        "reason": "MEDIUM \u2014 1st carry. Single occurrence. Actionable (reviewer/builder should flag sync calls in async methods). Non-obvious (tests pass cleanly). Keep one cycle; promote if recurs."
       },
       {
         "entry_id": "inline:#884-arch:parent-testfromac-locks-child-api-naming",
         "content_preview": "Parent task test-writer used graph_fetcher kwarg in TestFromAC_*; child tasks canonicalized to graph_content_fetcher; builder had to implement backward-compat alias because TestFromAC_* cannot be modified.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (planners/architects should note that parent TestFromAC_* tests freeze parameter names for child tasks). Keep one cycle."
+        "reason": "MEDIUM \u2014 1st carry. Single occurrence. Actionable (planners/architects should note that parent TestFromAC_* tests freeze parameter names for child tasks). Keep one cycle."
       },
       {
         "entry_id": "inline:#884-test-writer:testfromac-lint-errors-propagate",
         "content_preview": "Test-writer introduced ruff errors (RUF002 EN dash, UP024 IOError) inside TestFromAC_* class body; builders cannot modify TestFromAC_* so these erros persist indefinitely.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (test-writers must run ruff check before committing test files). Keep one cycle."
+        "reason": "MEDIUM \u2014 1st carry. Single occurrence. Actionable (test-writers must run ruff check before committing test files). Keep one cycle."
       },
       {
         "entry_id": "inline:#879+#883+#885-builder:pre-existing-impl-child-green-tasks",
         "content_preview": "Parent #879 builder implemented full feature before decomposition. Child GREEN tasks (#882, #883, #885) found code already in place. RED re-verification was skipped in #883.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Single occurrence. Actionable (child GREEN builders should still independently verify RED precondition even when code appears pre-existing). Keep one cycle."
+        "reason": "MEDIUM \u2014 1st carry. Single occurrence. Actionable (child GREEN builders should still independently verify RED precondition even when code appears pre-existing). Keep one cycle."
       },
       {
         "entry_id": "inline:#852-builder+test-writer:cross-task-testfromac-contract-conflict",
-        "content_preview": "New #852 AC (fetcher=None → ToolError) contradicted existing #775 TestFromAC_* test (fetcher=None → success). Builder REJECTed correctly; test-writer updated #775 test with mock fetcher.",
+        "content_preview": "New #852 AC (fetcher=None \u2192 ToolError) contradicted existing #775 TestFromAC_* test (fetcher=None \u2192 success). Builder REJECTed correctly; test-writer updated #775 test with mock fetcher.",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Single occurrence. Correct pipeline behavior demonstrated (REJECT → test-writer fix → retry). Actionable if recurs: builder should REJECT with exact fix instructions when TestFromAC_* conflict is irresolvable. Keep one cycle."
+        "reason": "MEDIUM \u2014 1st carry. Single occurrence. Correct pipeline behavior demonstrated (REJECT \u2192 test-writer fix \u2192 retry). Actionable if recurs: builder should REJECT with exact fix instructions when TestFromAC_* conflict is irresolvable. Keep one cycle."
       },
       {
         "entry_id": "carry:cycle21:829-auditor-ac-copy-paste-without-research-verification",
         "content_preview": "AC writer may copy body bullet points into AC without verifying function attribution or completeness against research findings",
         "recommendation": "keep",
-        "reason": "MEDIUM — 2nd carry. No direct recurrence in #879–#885/#852. Keep one more cycle; prune at 3rd carry if still no recurrence."
+        "reason": "MEDIUM \u2014 2nd carry. No direct recurrence in #879\u2013#885/#852. Keep one more cycle; prune at 3rd carry if still no recurrence."
       },
       {
         "entry_id": "carry:cycle21:846-arch-declared-redundant-without-test-run",
         "content_preview": "Arch review + research declared 'all AC items already implemented' but builder found failing tests due to Pydantic subtlety",
         "recommendation": "keep",
-        "reason": "MEDIUM — 2nd carry. No recurrence in #879–#885. Keep one more cycle; prune at 3rd carry if still no recurrence."
+        "reason": "MEDIUM \u2014 2nd carry. No recurrence in #879\u2013#885. Keep one more cycle; prune at 3rd carry if still no recurrence."
       }
     ],
     "pruned": [
       {
         "entry_id": "carry:cycle21:tdd-test-task-scope-overlap-sibling-parents",
-        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module — caught by architect pass 1",
+        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module \u2014 caught by architect pass 1",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry, no new occurrence in #876–#885. Single task-specific pattern. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry, no new occurrence in #876\u2013#885. Single task-specific pattern. Pruning."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-16TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (~2026-03)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 16 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-14T-periodic-21",
-    "note": "Periodic curation cycle 21. Channel A: owlbearMemory MCP tools unavailable (consistent cycles 3-21). Channel B: 1 new inbox entry (829-auditor.md — AC copy-paste from body without research verification). Task body scan: #798–#875 (all done tasks since cycle 20). 1 HIGH promoted: stale pytest cache in retry cycles — 2 independent observations (#857 reviewer pass 2, #871 builder cycles 2-3), both reported false '0 failed' while a test was actually failing; promoted to h-pytest-and-linting Known Gotchas. 3 cycle-19 MEDIUM carries pruned: sys-modules-pre-stub (3rd carry, no 2nd sighting), self-referential-scan-glob (3rd carry, no 2nd sighting), too-broad-import-scan-pattern (3rd carry, no 2nd sighting). 4 MEDIUM entries kept: 829-auditor AC quality (1st carry), 846-arch-redundant-without-test-run (1st carry), edit_task-unavailable (2nd carry), tdd-test-scope-overlap (2nd carry). SECURITY-URGENT (15th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
+    "note": "Periodic curation cycle 21. Channel A: owlbearMemory MCP tools unavailable (consistent cycles 3-21). Channel B: 1 new inbox entry (829-auditor.md \u2014 AC copy-paste from body without research verification). Task body scan: #798\u2013#875 (all done tasks since cycle 20). 1 HIGH promoted: stale pytest cache in retry cycles \u2014 2 independent observations (#857 reviewer pass 2, #871 builder cycles 2-3), both reported false '0 failed' while a test was actually failing; promoted to h-pytest-and-linting Known Gotchas. 3 cycle-19 MEDIUM carries pruned: sys-modules-pre-stub (3rd carry, no 2nd sighting), self-referential-scan-glob (3rd carry, no 2nd sighting), too-broad-import-scan-pattern (3rd carry, no 2nd sighting). 4 MEDIUM entries kept: 829-auditor AC quality (1st carry), 846-arch-redundant-without-test-run (1st carry), edit_task-unavailable (2nd carry), tdd-test-scope-overlap (2nd carry). SECURITY-URGENT (15th carry): _web_read SSRF (CWE-918) still unaddressed. USER ACTION REQUIRED.",
     "entries_processed": 8,
     "promotions": [
       {
         "entry_id": "inline:#857-reviewer-pass2+#871-builder-cycle2:stale-pytest-cache-retry-cycles",
-        "content_preview": "Stale .pytest_cache causes agents to report false '0 failed' in retry cycles — seen in #857 (reviewer) and #871 (builder)",
+        "content_preview": "Stale .pytest_cache causes agents to report false '0 failed' in retry cycles \u2014 seen in #857 (reviewer) and #871 (builder)",
         "recommendation": "approve",
-        "reason": "HIGH — 2 independent occurrences in same sprint (#857 reviewer pass 2 + #871 builder cycles 2-3). Actionable. Non-obvious. Promoted to h-pytest-and-linting SKILL.md Known Gotchas."
+        "reason": "HIGH \u2014 2 independent occurrences in same sprint (#857 reviewer pass 2 + #871 builder cycles 2-3). Actionable. Non-obvious. Promoted to h-pytest-and-linting SKILL.md Known Gotchas."
       }
     ],
     "kept_medium": [
@@ -204,91 +295,91 @@
         "entry_id": "inbox:829-auditor-ac-copy-paste-without-research-verification",
         "content_preview": "AC writer may copy body bullet points into AC without verifying function attribution or completeness against research findings",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry (from 829-auditor.md inbox). Single observation. Actionable (planner should cross-check research doc for function attribution before writing AC). Keep one more cycle; promote if recurs."
+        "reason": "MEDIUM \u2014 1st carry (from 829-auditor.md inbox). Single observation. Actionable (planner should cross-check research doc for function attribution before writing AC). Keep one more cycle; promote if recurs."
       },
       {
         "entry_id": "inline:#846-arch-declared-redundant-without-test-run",
         "content_preview": "Arch review (2 passes) + research confirmed 'all AC items already implemented' but builder found 3 genuinely failing tests due to Pydantic field declaration subtlety",
         "recommendation": "keep",
-        "reason": "MEDIUM — 1st carry. Single occurrence. Arch review is not expected to run tests, but the 'fully redundant' fast-track guidance should prompt a test-run check. Keep one cycle."
+        "reason": "MEDIUM \u2014 1st carry. Single occurrence. Arch review is not expected to run tests, but the 'fully redundant' fast-track guidance should prompt a test-run check. Keep one cycle."
       },
       {
         "entry_id": "carry:cycle20:edit_task-unavailable-stale-depends_on",
-        "content_preview": "Architect flagged depends_on corrections (#758, #787) but edit_task not available — stale metadata proceeds uncorrected",
+        "content_preview": "Architect flagged depends_on corrections (#758, #787) but edit_task not available \u2014 stale metadata proceeds uncorrected",
         "recommendation": "keep",
-        "reason": "MEDIUM — 2nd carry (1st in cycle 20). No new occurrence in #798–#875. Keep one more cycle; promote if seen again in a separate pipeline context."
+        "reason": "MEDIUM \u2014 2nd carry (1st in cycle 20). No new occurrence in #798\u2013#875. Keep one more cycle; promote if seen again in a separate pipeline context."
       },
       {
         "entry_id": "carry:cycle20:tdd-test-task-scope-overlap-sibling-parents",
-        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module — caught by architect pass 1",
+        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module \u2014 caught by architect pass 1",
         "recommendation": "keep",
-        "reason": "MEDIUM — 2nd carry (1st in cycle 20). No new occurrence in #798–#875. Keep one more cycle."
+        "reason": "MEDIUM \u2014 2nd carry (1st in cycle 20). No new occurrence in #798\u2013#875. Keep one more cycle."
       }
     ],
     "pruned": [
       {
         "entry_id": "carry:cycle19:sys-modules-pre-stub-uninstalled-deps",
-        "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py — enables per-function errors instead of collection-time ModuleNotFoundError",
+        "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py \u2014 enables per-function errors instead of collection-time ModuleNotFoundError",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry, no second occurrence across 3 cycles. Single task-specific fix. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry, no second occurrence across 3 cycles. Single task-specific fix. Pruning."
       },
       {
         "entry_id": "carry:cycle19:self-referential-scan-glob",
-        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself — could never pass",
+        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself \u2014 could never pass",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry, no second occurrence. Task-specific error. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry, no second occurrence. Task-specific error. Pruning."
       },
       {
         "entry_id": "carry:cycle19:too-broad-import-scan-pattern",
-        "content_preview": "re.compile(r'owlbear[._]voice') too broad — matched function names, docstrings, not just import statements; fixed with anchored pattern",
+        "content_preview": "re.compile(r'owlbear[._]voice') too broad \u2014 matched function names, docstrings, not just import statements; fixed with anchored pattern",
         "recommendation": "reject",
-        "reason": "MEDIUM → NOISE — 3rd carry, no second occurrence. Task-specific regex mistake. Pruning."
+        "reason": "MEDIUM \u2192 NOISE \u2014 3rd carry, no second occurrence. Task-specific regex mistake. Pruning."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-15TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (~2026-03)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (~2026-03)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 15 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-10T-periodic-20",
-    "note": "Periodic curation cycle 20. Channel A: MCP DB queried via sqlite — 0 pending entries (table empty; 0 total). Channel B: inbox empty. Task body scan: #758 (P1-04: Edge launcher + CDP connection manager, arch + test-writer notes) and #787 (owlbear_browser package scaffold, arch pass 1+2 + test-writer notes) are new since cycle 19. No tasks in range #777–#797 have builder/reviewer notes. Two new MEDIUM findings: (1) edit_task-unavailable pattern — architect agents flagged depends_on corrections in #758 and #787 but could not call edit_task; stale metadata proceeds uncorrected (co-related occurrence, keep one more cycle); (2) TDD test task scope overlap between sibling parent pipelines — #782 (parent #775) duplicated scope of #755 (parent #751), caught by architect on pass 1 (single occurrence, keep). One MEDIUM carry pruned: UnicodeDecodeError-as-ValueError silently suppressed (#731, cycle 18 carry) — 3 cycles, no second occurrence, prune. Four MEDIUM carries retained from cycle 19: sys.modules pre-stubbing, self-referential test glob, too-broad import scan, edit_task-unavailability (new). SECURITY-URGENT (14th carry): _web_read SSRF (CWE-918) still unaddressed — 14 curation cycles, no kanban task. USER ACTION REQUIRED.",
+    "note": "Periodic curation cycle 20. Channel A: MCP DB queried via sqlite \u2014 0 pending entries (table empty; 0 total). Channel B: inbox empty. Task body scan: #758 (P1-04: Edge launcher + CDP connection manager, arch + test-writer notes) and #787 (owlbear_browser package scaffold, arch pass 1+2 + test-writer notes) are new since cycle 19. No tasks in range #777\u2013#797 have builder/reviewer notes. Two new MEDIUM findings: (1) edit_task-unavailable pattern \u2014 architect agents flagged depends_on corrections in #758 and #787 but could not call edit_task; stale metadata proceeds uncorrected (co-related occurrence, keep one more cycle); (2) TDD test task scope overlap between sibling parent pipelines \u2014 #782 (parent #775) duplicated scope of #755 (parent #751), caught by architect on pass 1 (single occurrence, keep). One MEDIUM carry pruned: UnicodeDecodeError-as-ValueError silently suppressed (#731, cycle 18 carry) \u2014 3 cycles, no second occurrence, prune. Four MEDIUM carries retained from cycle 19: sys.modules pre-stubbing, self-referential test glob, too-broad import scan, edit_task-unavailability (new). SECURITY-URGENT (14th carry): _web_read SSRF (CWE-918) still unaddressed \u2014 14 curation cycles, no kanban task. USER ACTION REQUIRED.",
     "entries_processed": 4,
     "promotions": [],
     "kept_medium": [
       {
         "entry_id": "carry:cycle19:sys-modules-pre-stub-uninstalled-deps",
-        "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py — enables per-function errors instead of collection-time ModuleNotFoundError",
+        "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py \u2014 enables per-function errors instead of collection-time ModuleNotFoundError",
         "recommendation": "keep",
-        "reason": "MEDIUM — carry from cycle 19. No second occurrence in #777–#797. Keep one more cycle; promote if recurs."
+        "reason": "MEDIUM \u2014 carry from cycle 19. No second occurrence in #777\u2013#797. Keep one more cycle; promote if recurs."
       },
       {
         "entry_id": "carry:cycle19:self-referential-scan-glob",
-        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself — could never pass",
+        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself \u2014 could never pass",
         "recommendation": "keep",
-        "reason": "MEDIUM — carry from cycle 19. No second occurrence in #777–#797. Keep one more cycle."
+        "reason": "MEDIUM \u2014 carry from cycle 19. No second occurrence in #777\u2013#797. Keep one more cycle."
       },
       {
         "entry_id": "carry:cycle19:too-broad-import-scan-pattern",
-        "content_preview": "re.compile(r'owlbear[._]voice') too broad — matched function names, docstrings, not just import statements; fixed with anchored pattern",
+        "content_preview": "re.compile(r'owlbear[._]voice') too broad \u2014 matched function names, docstrings, not just import statements; fixed with anchored pattern",
         "recommendation": "keep",
-        "reason": "MEDIUM — carry from cycle 19. No second occurrence in #777–#797. Keep one more cycle."
+        "reason": "MEDIUM \u2014 carry from cycle 19. No second occurrence in #777\u2013#797. Keep one more cycle."
       },
       {
         "entry_id": "inline:#758+#787-architect:edit_task-unavailable-stale-depends_on",
-        "content_preview": "Architect flagged depends_on corrections (#758: [] → [755]; #787: [782] → [755]) but edit_task not available — stale metadata proceeds uncorrected",
+        "content_preview": "Architect flagged depends_on corrections (#758: [] \u2192 [755]; #787: [782] \u2192 [755]) but edit_task not available \u2014 stale metadata proceeds uncorrected",
         "recommendation": "keep",
-        "reason": "MEDIUM — two co-related occurrences (same pipeline cluster, same day). Actionable if recurs independently across different pipelines. Keep one cycle; promote if seen again in a separate pipeline context."
+        "reason": "MEDIUM \u2014 two co-related occurrences (same pipeline cluster, same day). Actionable if recurs independently across different pipelines. Keep one cycle; promote if seen again in a separate pipeline context."
       },
       {
         "entry_id": "inline:#787-architect:tdd-test-task-scope-overlap-sibling-parents",
-        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module — caught by architect pass 1",
+        "content_preview": "#782 (parent #775) proposed tests duplicating #755 (parent #751) scope for same owlbear_browser module \u2014 caught by architect pass 1",
         "recommendation": "keep",
-        "reason": "MEDIUM — actionable (orchestrator or planner should check for existing test files targeting the same module before creating a new TDD test task), non-obvious (parent lineage diverges long before the overlap is visible), single occurrence. Keep one cycle."
+        "reason": "MEDIUM \u2014 actionable (orchestrator or planner should check for existing test files targeting the same module before creating a new TDD test task), non-obvious (parent lineage diverges long before the overlap is visible), single occurrence. Keep one cycle."
       }
     ],
     "pruned": [
@@ -296,21 +387,21 @@
         "entry_id": "carry:cycle18:UnicodeDecodeError-is-ValueError-subclass",
         "content_preview": "contextlib.suppress(ValueError, KeyError) in list_tasks() silently swallowed UnicodeDecodeError from cp1252 files",
         "recommendation": "reject",
-        "reason": "MEDIUM carry from cycle 18 — now 3 cycles with no second occurrence. Demoting to noise. Single occurrence of a bug fix is insufficient for a promoted rule."
+        "reason": "MEDIUM carry from cycle 18 \u2014 now 3 cycles with no second occurrence. Demoting to noise. Single occurrence of a bug fix is insufficient for a promoted rule."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-14TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (2026-03-xx)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (2026-03-xx)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 14 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-10T-periodic-19",
-    "note": "Periodic curation cycle 19. Channel A: MCP DB queried directly — 0 pending entries (table empty). Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: tasks #733–#776 (first dispatch since cycle 18 covered only #731–#732). Seven inline findings extracted across tasks #750, #751, #775, #776, #758. Three MEDIUM (kept for next cycle): self-referential cleanup test glob, too-broad import scan regex, sys.modules pre-stubbing for uninstalled deps. Three LOW pruned (module-filename drift, schema complexity extraction, ghost-document bug — all task-specific or covered by existing rules). One DEDUP pruned (repeated dep-fix-not-acted-upon pattern — already in 'Stale AC: fix it, don't just flag it'). Carry from cycle 18: UnicodeDecodeError MEDIUM — no second occurrence, keep another cycle. No promotions this cycle. SECURITY-URGENT (13th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py L165–183 still unaddressed — 13 curation cycles, no kanban task created. USER ACTION REQUIRED: create security task (see flags).",
+    "note": "Periodic curation cycle 19. Channel A: MCP DB queried directly \u2014 0 pending entries (table empty). Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: tasks #733\u2013#776 (first dispatch since cycle 18 covered only #731\u2013#732). Seven inline findings extracted across tasks #750, #751, #775, #776, #758. Three MEDIUM (kept for next cycle): self-referential cleanup test glob, too-broad import scan regex, sys.modules pre-stubbing for uninstalled deps. Three LOW pruned (module-filename drift, schema complexity extraction, ghost-document bug \u2014 all task-specific or covered by existing rules). One DEDUP pruned (repeated dep-fix-not-acted-upon pattern \u2014 already in 'Stale AC: fix it, don't just flag it'). Carry from cycle 18: UnicodeDecodeError MEDIUM \u2014 no second occurrence, keep another cycle. No promotions this cycle. SECURITY-URGENT (13th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py L165\u2013183 still unaddressed \u2014 13 curation cycles, no kanban task created. USER ACTION REQUIRED: create security task (see flags).",
     "entries_processed": 7,
     "promotions": [],
     "kept_medium": [
@@ -318,25 +409,25 @@
         "entry_id": "carry:cycle18:UnicodeDecodeError-is-ValueError-subclass",
         "content_preview": "contextlib.suppress(ValueError, KeyError) in list_tasks() silently swallowed UnicodeDecodeError from cp1252 files",
         "recommendation": "keep",
-        "reason": "MEDIUM — carry from cycle 18. No second occurrence in tasks #733–#776. Keep one more cycle."
+        "reason": "MEDIUM \u2014 carry from cycle 18. No second occurrence in tasks #733\u2013#776. Keep one more cycle."
       },
       {
         "entry_id": "inline:#750-test-writer:self-referential-scan-glob",
-        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself (test_voice_removal_clean_build_750.py) — could never pass",
+        "content_preview": "Cleanup verification test glob test_voice_*.py matched the test file itself (test_voice_removal_clean_build_750.py) \u2014 could never pass",
         "recommendation": "keep",
-        "reason": "MEDIUM — actionable (rename test file so it does not match its own scan pattern), non-obvious (easy to overlook when naming a verification file), single occurrence. Keep for next cycle; promote if recurs."
+        "reason": "MEDIUM \u2014 actionable (rename test file so it does not match its own scan pattern), non-obvious (easy to overlook when naming a verification file), single occurrence. Keep for next cycle; promote if recurs."
       },
       {
         "entry_id": "inline:#750-test-writer:too-broad-import-scan-pattern",
-        "content_preview": "re.compile(r'owlbear[._]voice') too broad — matched function names, docstrings, string literals in tests, not just import statements; fixed with anchored ^\\s*(?:from pkg|import pkg) pattern",
+        "content_preview": "re.compile(r'owlbear[._]voice') too broad \u2014 matched function names, docstrings, string literals in tests, not just import statements; fixed with anchored ^\\s*(?:from pkg|import pkg) pattern",
         "recommendation": "keep",
-        "reason": "MEDIUM — actionable (use line-anchored import regex; exclude the scanning file itself via _THIS_FILE), non-obvious (the broad regex looks correct at a glance), single occurrence. Keep for next cycle."
+        "reason": "MEDIUM \u2014 actionable (use line-anchored import regex; exclude the scanning file itself via _THIS_FILE), non-obvious (the broad regex looks correct at a glance), single occurrence. Keep for next cycle."
       },
       {
         "entry_id": "inline:#776-test-writer:sys-modules-pre-stub-uninstalled-deps",
         "content_preview": "Pre-stub playwright in sys.modules before importlib-loading cdp-spike.py, enabling per-function AttributeError failures instead of collection-time ModuleNotFoundError",
         "recommendation": "keep",
-        "reason": "MEDIUM — actionable (concrete technique for RED-phase tests against scripts with uninstalled dependencies), non-obvious (sys.modules pre-stubbing before importlib is not widely documented), single occurrence. Keep for next cycle."
+        "reason": "MEDIUM \u2014 actionable (concrete technique for RED-phase tests against scripts with uninstalled dependencies), non-obvious (sys.modules pre-stubbing before importlib is not widely documented), single occurrence. Keep for next cycle."
       }
     ],
     "pruned": [
@@ -344,39 +435,39 @@
         "entry_id": "inline:#758-architect:module-filename-drift-body-vs-research",
         "content_preview": "Task body said cdp_manager.py but research spec and RED tests used cdp.py; architect caught inconsistency and issued correction",
         "recommendation": "reject",
-        "reason": "LOW — covered by existing 'Stale AC: fix it, don't just flag it' rule and general AC-accuracy discipline. Single occurrence, no independent transferable rule."
+        "reason": "LOW \u2014 covered by existing 'Stale AC: fix it, don't just flag it' rule and general AC-accuracy discipline. Single occurrence, no independent transferable rule."
       },
       {
         "entry_id": "inline:#751-builder:extract-migrations-helper-c901",
         "content_preview": "_apply_migrations() helper extracted to keep init_db() within C901 cognitive complexity limit",
         "recommendation": "reject",
-        "reason": "LOW — the obvious solution when a C901 error appears is to extract a helper. Single observation, not a new transferable principle."
+        "reason": "LOW \u2014 the obvious solution when a C901 error appears is to extract a helper. Single observation, not a new transferable principle."
       },
       {
         "entry_id": "inline:#775-researcher:ghost-document-ingest-bug",
-        "content_preview": "ingest.py inserts new doc on content change but never deletes the old one — existing_id unused in changed branch; delete_document_data() already exists for cascade",
+        "content_preview": "ingest.py inserts new doc on content change but never deletes the old one \u2014 existing_id unused in changed branch; delete_document_data() already exists for cascade",
         "recommendation": "reject",
-        "reason": "LOW — task-specific bug fix (scope item SC10). Not a transferable rule across agents."
+        "reason": "LOW \u2014 task-specific bug fix (scope item SC10). Not a transferable rule across agents."
       },
       {
         "entry_id": "inline:#751-#775-dep-fix-flagged-not-fixed",
         "content_preview": "#775 depends_on [752] should be [774]; flagged in #751 research, #751 arch review, and #775 research body without anyone fixing it",
         "recommendation": "reject",
-        "reason": "DEDUP — exact pattern covered by existing process-patterns.md rule 'Stale AC: fix it, don't just flag it'. Three agents flagging without fixing is an instance of that rule."
+        "reason": "DEDUP \u2014 exact pattern covered by existing process-patterns.md rule 'Stale AC: fix it, don't just flag it'. Three agents flagging without fixing is an instance of that rule."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-13TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (2026-03-xx)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (2026-03-xx)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L165-183: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 13 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-10T-periodic-18",
-    "note": "Periodic curation cycle 18. Channel A: MCP DB tools not available in this session — treated as 0 pending entries. Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #731 (done) and #732 (docs) are the new tasks since cycle 17. Four inline findings extracted. One MEDIUM (UnicodeDecodeError-as-ValueError silently suppressed by contextlib.suppress — actionable, non-obvious, single occurrence → kept for next cycle). Three LOW findings pruned: test-via-low-level-API, orphaned-section-header, stale-module-docstring (all common-sense or project-specific). No promotions. SECURITY-URGENT (12th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed — 12 curation cycles, no kanban task. USER ACTION REQUIRED: create security task (see flags).",
+    "note": "Periodic curation cycle 18. Channel A: MCP DB tools not available in this session \u2014 treated as 0 pending entries. Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #731 (done) and #732 (docs) are the new tasks since cycle 17. Four inline findings extracted. One MEDIUM (UnicodeDecodeError-as-ValueError silently suppressed by contextlib.suppress \u2014 actionable, non-obvious, single occurrence \u2192 kept for next cycle). Three LOW findings pruned: test-via-low-level-API, orphaned-section-header, stale-module-docstring (all common-sense or project-specific). No promotions. SECURITY-URGENT (12th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed \u2014 12 curation cycles, no kanban task. USER ACTION REQUIRED: create security task (see flags).",
     "entries_processed": 4,
     "promotions": [],
     "kept_medium": [
@@ -384,7 +475,7 @@
         "entry_id": "inline:#731-builder:UnicodeDecodeError-is-ValueError-subclass",
         "content_preview": "contextlib.suppress(ValueError, KeyError) in list_tasks() silently swallowed UnicodeDecodeError from cp1252 files",
         "recommendation": "keep",
-        "reason": "MEDIUM — actionable (file I/O loops using broad ValueError suppression can silently drop files with encoding issues), non-obvious (UnicodeDecodeError→UnicodeError→ValueError inheritance chain), single occurrence. Keep for next cycle; promote if recurs."
+        "reason": "MEDIUM \u2014 actionable (file I/O loops using broad ValueError suppression can silently drop files with encoding issues), non-obvious (UnicodeDecodeError\u2192UnicodeError\u2192ValueError inheritance chain), single occurrence. Keep for next cycle; promote if recurs."
       }
     ],
     "pruned": [
@@ -392,33 +483,33 @@
         "entry_id": "inline:#731-builder:test-read_task-not-list_tasks-for-parse-all",
         "content_preview": "list_tasks() suppresses parse errors via contextlib.suppress; test read_task() directly to assert all files parse",
         "recommendation": "reject",
-        "reason": "LOW — project-specific implementation detail; follows directly from the UnicodeDecodeError finding. Not a transferable rule beyond this engine's known suppression design."
+        "reason": "LOW \u2014 project-specific implementation detail; follows directly from the UnicodeDecodeError finding. Not a transferable rule beyond this engine's known suppression design."
       },
       {
         "entry_id": "inline:#732-reviewer:orphaned-section-header-after-content-removal",
         "content_preview": "## Known Gotchas header left behind after removing Binary discovery content in h-mcp-kanban/SKILL.md",
         "recommendation": "reject",
-        "reason": "LOW — obvious cleanup oversight. Reviewer noted -.02. Common-sense editing hygiene, not a transferable rule."
+        "reason": "LOW \u2014 obvious cleanup oversight. Reviewer noted -.02. Common-sense editing hygiene, not a transferable rule."
       },
       {
         "entry_id": "inline:#732-reviewer:stale-module-docstring-after-class-removal",
         "content_preview": "test_setup_init.py L9 docstring still listed removed TestFromAC_SeedSetupPs1 class AC4 entry",
         "recommendation": "reject",
-        "reason": "LOW — 'update docs when removing code' is common sense. Reviewer noted -.01. Single observation, not a transferable rule."
+        "reason": "LOW \u2014 'update docs when removing code' is common sense. Reviewer noted -.01. Single observation, not a transferable rule."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-12TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (2026-03-xx)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (2026-03-xx)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L139-152: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 12 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-10T-periodic-17",
-    "note": "Periodic curation cycle 17. Channel A: MCP DB tools not available in this session (tool set limitation) — treated as 0 pending entries. Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #730 is the only task completed since cycle 16. One inline observation from #730 builder: tree-wide stale reference scan (test_no_kanban_bin_in_tree, test_no_run_kanban_in_tree) caught test_start_work_470.py not listed in AC — builder correctly verified replacement coverage in test_kanban_mcp_migration.py and deleted the obsolete file. Signal: LOW — single occurrence, naturally handled by existing process, fully covered by the existing 'Cross-sibling pre-satisfaction' and 'Check git log' patterns. No new transferable rule warranted. No promotions. SECURITY-URGENT (11th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed — 11 curation cycles, no kanban task created. USER ACTION REQUIRED: create security task (see flags).",
+    "note": "Periodic curation cycle 17. Channel A: MCP DB tools not available in this session (tool set limitation) \u2014 treated as 0 pending entries. Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #730 is the only task completed since cycle 16. One inline observation from #730 builder: tree-wide stale reference scan (test_no_kanban_bin_in_tree, test_no_run_kanban_in_tree) caught test_start_work_470.py not listed in AC \u2014 builder correctly verified replacement coverage in test_kanban_mcp_migration.py and deleted the obsolete file. Signal: LOW \u2014 single occurrence, naturally handled by existing process, fully covered by the existing 'Cross-sibling pre-satisfaction' and 'Check git log' patterns. No new transferable rule warranted. No promotions. SECURITY-URGENT (11th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed \u2014 11 curation cycles, no kanban task created. USER ACTION REQUIRED: create security task (see flags).",
     "entries_processed": 1,
     "promotions": [],
     "kept_medium": [],
@@ -427,97 +518,97 @@
         "entry_id": "inline:#730-builder:tree-wide-stale-ref-scan-caught-unlisted-file",
         "content_preview": "test_start_work_470.py not in AC but had kanban_bin/_run_kanban refs; caught by tree-scan tests, deleted after verifying coverage",
         "recommendation": "reject",
-        "reason": "LOW — single occurrence; builder handled correctly per existing 'cross-sibling pre-satisfaction' pattern. Tree-wide scan catching unlisted files is a natural, desirable consequence of that test design, not a new rule."
+        "reason": "LOW \u2014 single occurrence; builder handled correctly per existing 'cross-sibling pre-satisfaction' pattern. Tree-wide scan catching unlisted files is a natural, desirable consequence of that test design, not a new rule."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-11TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (2026-03-xx)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (2026-03-xx)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L139-152: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 11 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-10T-periodic-16",
-    "note": "Periodic curation cycle 16. Channel A: MCP DB queried directly — 0 pending entries (DB empty). Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #729 (archived 2026-04-10, only new task since cycle 15). Four LOW inline observations from #729 builder/reviewer: (1) _record_to_task conversion pattern via KanbanTask.model_validate(record.model_dump()), (2) pick_tasks post-filter design, (3) lifespan test call_args-not-None assertion laxness, (4) end_work delegation assert_called_once without kwargs — all project-specific KanbanEngine migration details, single-sighting, not transferable as rules. No new promotions. CRLF dedup confirmed resolved (cycle 15 pruning verified: entry absent from process-patterns.md). SECURITY-URGENT (10th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed — 10 curation cycles, no kanban task. USER ACTION REQUIRED: create security task (see flags).",
+    "note": "Periodic curation cycle 16. Channel A: MCP DB queried directly \u2014 0 pending entries (DB empty). Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #729 (archived 2026-04-10, only new task since cycle 15). Four LOW inline observations from #729 builder/reviewer: (1) _record_to_task conversion pattern via KanbanTask.model_validate(record.model_dump()), (2) pick_tasks post-filter design, (3) lifespan test call_args-not-None assertion laxness, (4) end_work delegation assert_called_once without kwargs \u2014 all project-specific KanbanEngine migration details, single-sighting, not transferable as rules. No new promotions. CRLF dedup confirmed resolved (cycle 15 pruning verified: entry absent from process-patterns.md). SECURITY-URGENT (10th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed \u2014 10 curation cycles, no kanban task. USER ACTION REQUIRED: create security task (see flags).",
     "entries_processed": 4,
     "promotions": [],
     "kept_medium": [],
     "pruned": [
       {
         "entry_id": "inline:#729-builder:record-to-task-conversion-pattern",
-        "content_preview": "_record_to_task uses KanbanTask.model_validate(record.model_dump()) for claimed_by→claimed via _coerce_claimed",
+        "content_preview": "_record_to_task uses KanbanTask.model_validate(record.model_dump()) for claimed_by\u2192claimed via _coerce_claimed",
         "recommendation": "reject",
-        "reason": "LOW — project-specific migration pattern for kanban domain. Single observation. Not a transferable rule for other agents or contexts."
+        "reason": "LOW \u2014 project-specific migration pattern for kanban domain. Single observation. Not a transferable rule for other agents or contexts."
       },
       {
         "entry_id": "inline:#729-builder:pick-tasks-post-filter-design",
         "content_preview": "pick_tasks: engine.list_tasks(blocked=False, unclaimed=True) + _check_pick_gates post-filter",
         "recommendation": "reject",
-        "reason": "LOW — implementation choice specific to pick_tasks migration. Single observation. Not a reusable rule."
+        "reason": "LOW \u2014 implementation choice specific to pick_tasks migration. Single observation. Not a reusable rule."
       },
       {
         "entry_id": "inline:#729-reviewer:lifespan-test-call-args-lax",
         "content_preview": "test_lifespan_instantiates_engine verifies call_args is not None but not the exact _DEFAULT_KANBAN_DIR value",
         "recommendation": "reject",
-        "reason": "LOW — informational reviewer note about test assertion laxness. AC says 'instantiates KanbanEngine(kanban_dir)', not specific path. Single observation, project-specific."
+        "reason": "LOW \u2014 informational reviewer note about test assertion laxness. AC says 'instantiates KanbanEngine(kanban_dir)', not specific path. Single observation, project-specific."
       },
       {
         "entry_id": "inline:#729-reviewer:end-work-assert-called-once-no-kwargs",
         "content_preview": "test_end_work_delegates_to_engine uses assert_called_once() without kwarg check; compensated by other tests",
         "recommendation": "reject",
-        "reason": "LOW — informational note; reviewer confirmed compensation by separate outcome-specific tests. Single observation, project-specific."
+        "reason": "LOW \u2014 informational note; reviewer confirmed compensation by separate outcome-specific tests. Single observation, project-specific."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-10TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7 (2026-03-xx)",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7 (2026-03-xx)",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L139-152: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 10 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-09T-periodic-15",
-    "note": "Periodic curation cycle 15. Channel A: MCP DB queried directly — 0 pending entries. Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #726 (newly archived since cycle 14). Two LOW observations from #726 reviewer — unknown outcome boundary (no test for outcome not in {success,fail,block,reject}) and status=-1 fallback untested — both informational, outside AC scope, single-sighting, no actionable rule. No new promotions. DEDUP RESOLVED (was 8-cycle carry): Pruned process-patterns.md lines 348-353 (§ 'kanban task files: CRLF line endings break kanban-md parsing') — fully duplicated by superior entry in kanban-md-limits.md lines 232-244 (§ 'VS Code edit tools introduce CRLF; kanban-md requires LF'; includes byte-level diagnostic and WriteAllBytes fix; evidence #510). No unique signal in pruned entry. SECURITY-URGENT (9th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed — 9 curation cycles, no kanban task created. USER ACTION REQUIRED: create security task (see flags).",
+    "note": "Periodic curation cycle 15. Channel A: MCP DB queried directly \u2014 0 pending entries. Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #726 (newly archived since cycle 14). Two LOW observations from #726 reviewer \u2014 unknown outcome boundary (no test for outcome not in {success,fail,block,reject}) and status=-1 fallback untested \u2014 both informational, outside AC scope, single-sighting, no actionable rule. No new promotions. DEDUP RESOLVED (was 8-cycle carry): Pruned process-patterns.md lines 348-353 (\u00a7 'kanban task files: CRLF line endings break kanban-md parsing') \u2014 fully duplicated by superior entry in kanban-md-limits.md lines 232-244 (\u00a7 'VS Code edit tools introduce CRLF; kanban-md requires LF'; includes byte-level diagnostic and WriteAllBytes fix; evidence #510). No unique signal in pruned entry. SECURITY-URGENT (9th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py still unaddressed \u2014 9 curation cycles, no kanban task created. USER ACTION REQUIRED: create security task (see flags).",
     "entries_processed": 3,
     "promotions": [],
     "kept_medium": [],
     "pruned": [
       {
         "entry_id": "file:process-patterns.md:lines-348-353:kanban-task-files-CRLF",
-        "content_preview": "## kanban task files: CRLF line endings break kanban-md parsing — kanban-md.exe requires LF-only...",
+        "content_preview": "## kanban task files: CRLF line endings break kanban-md parsing \u2014 kanban-md.exe requires LF-only...",
         "recommendation": "reject",
-        "reason": "DEDUP — fully duplicated by kanban-md-limits.md lines 232-244 (superior entry: byte diagnostic, WriteAllBytes fix, evidence #510). process-patterns.md version adds no unique signal."
+        "reason": "DEDUP \u2014 fully duplicated by kanban-md-limits.md lines 232-244 (superior entry: byte diagnostic, WriteAllBytes fix, evidence #510). process-patterns.md version adds no unique signal."
       },
       {
         "entry_id": "inline:#726-reviewer:unknown-outcome-boundary",
         "content_preview": "No test for end_work with outcome not in {success,fail,block,reject}; defensive code exists but untested",
         "recommendation": "reject",
-        "reason": "LOW — informational boundary observation, outside AC scope. Single sighting. Not a transferable rule for other agents."
+        "reason": "LOW \u2014 informational boundary observation, outside AC scope. Single sighting. Not a transferable rule for other agents."
       },
       {
         "entry_id": "inline:#726-reviewer:status-minus1-fallback-untested",
         "content_preview": "Status not in config statuses: current_idx fallback untested",
         "recommendation": "reject",
-        "reason": "LOW — informational edge case, outside AC scope. Single sighting. No actionable pattern."
+        "reason": "LOW \u2014 informational edge case, outside AC scope. Single sighting. No actionable pattern."
       }
     ],
     "flags": [
       {
         "type": "SECURITY-URGENT-9TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L139-152: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 9 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-09T-periodic-14",
-    "note": "Periodic curation cycle 14. Channel A: MCP DB unavailable (consistent pattern, cycles 3-14). Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #725 only (newly archived since cycle 13). Two LOW observations from #725 reviewer — test tightness gap (block guard: no assertion that note was NOT appended) and sequential non-atomic end_work design note — both single-sighting, project-specific, already enforced by tests. No new promotions. Dedup flag (8th carry): process-patterns.md § 'kanban task files: CRLF' still duplicates kanban-md-limits.md § 'VS Code edit tools introduce CRLF' — pending user confirmation to prune. SECURITY-URGENT (8th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py unaddressed — 8 curation cycles, no kanban task. Curator lacks create_task tool. USER ACTION REQUIRED: create security task manually (see flags).",
+    "note": "Periodic curation cycle 14. Channel A: MCP DB unavailable (consistent pattern, cycles 3-14). Channel B: inbox empty, no misplaced entries in /memories/repo/. Task body scan: #725 only (newly archived since cycle 13). Two LOW observations from #725 reviewer \u2014 test tightness gap (block guard: no assertion that note was NOT appended) and sequential non-atomic end_work design note \u2014 both single-sighting, project-specific, already enforced by tests. No new promotions. Dedup flag (8th carry): process-patterns.md \u00a7 'kanban task files: CRLF' still duplicates kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF' \u2014 pending user confirmation to prune. SECURITY-URGENT (8th carry): _web_read SSRF (CWE-918) in serve/mcp-knowledge/server.py unaddressed \u2014 8 curation cycles, no kanban task. Curator lacks create_task tool. USER ACTION REQUIRED: create security task manually (see flags).",
     "entries_processed": 2,
     "promotions": [],
     "kept_medium": [],
@@ -526,13 +617,13 @@
         "entry_id": "inline:#725-reviewer:block-guard-note-not-appended-missing-assertion",
         "content_preview": "test_end_work_block_missing_reason_does_not_set_blocked does not assert note was NOT appended when guard fires",
         "recommendation": "reject",
-        "reason": "LOW — single observation, test-tightness improvement only. Not a transferable rule; guard fires before edit_task call, so no appended note is already the correct behavior enforced by the guard placement itself."
+        "reason": "LOW \u2014 single observation, test-tightness improvement only. Not a transferable rule; guard fires before edit_task call, so no appended note is already the correct behavior enforced by the guard placement itself."
       },
       {
         "entry_id": "inline:#725-reviewer:end-work-sequential-not-atomic",
-        "content_preview": "end_work performs sequential file operations (append note → release → move_task); not atomic",
+        "content_preview": "end_work performs sequential file operations (append note \u2192 release \u2192 move_task); not atomic",
         "recommendation": "reject",
-        "reason": "LOW — pre-existing engine design pattern noted by reviewer but explicitly filed as 'not a new concern introduced here'. Single sighting, project-specific, no actionable rule."
+        "reason": "LOW \u2014 pre-existing engine design pattern noted by reviewer but explicitly filed as 'not a new concern introduced here'. Single sighting, project-specific, no actionable rule."
       }
     ],
     "flags": [
@@ -540,35 +631,35 @@
         "type": "dedup-needs-user-confirmation",
         "carry": 8,
         "source": "process-patterns.md lines 348-353",
-        "finding": "§ 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md § 'VS Code edit tools introduce CRLF; kanban-md requires LF'. kanban-md-limits version is canonical (includes diagnostic bytes, evidence #510). process-patterns.md entry adds no additional signal.",
+        "finding": "\u00a7 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF; kanban-md requires LF'. kanban-md-limits version is canonical (includes diagnostic bytes, evidence #510). process-patterns.md entry adds no additional signal.",
         "action": "USER CONFIRMATION REQUIRED: Prune process-patterns.md lines 348-353 (the CRLF entry)?"
       },
       {
         "type": "SECURITY-URGENT-8TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 7",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 7",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L139-152: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 8 curation cycles. Curator lacks create_task MCP tool.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security."
       }
     ]
   },
   {
     "cycle": "2026-04-09T-periodic-13",
-    "note": "Periodic curation cycle 13. Channel A: MCP DB queried directly (0 pending entries). Channel B: inbox empty. Task body scan (#724, #728): 2 new findings assessed — LOW (project-specific KanbanEngine implementation details; enforced by tests; not broadly reusable). No new promotions. Dedup flag (6th carry): process-patterns.md § 'kanban task files: CRLF' still duplicates kanban-md-limits.md — user confirmation required before pruning reviewed entry. SECURITY-URGENT (6th carry): _web_read SSRF (CWE-918) still unaddressed — serve/mcp-knowledge only checks scheme, no private IP blocklist. 6 curation cycles without a kanban task. curator cannot create task without mcp-kanban create-task tool. USER ACTION REQUIRED: create security task manually.",
+    "note": "Periodic curation cycle 13. Channel A: MCP DB queried directly (0 pending entries). Channel B: inbox empty. Task body scan (#724, #728): 2 new findings assessed \u2014 LOW (project-specific KanbanEngine implementation details; enforced by tests; not broadly reusable). No new promotions. Dedup flag (6th carry): process-patterns.md \u00a7 'kanban task files: CRLF' still duplicates kanban-md-limits.md \u2014 user confirmation required before pruning reviewed entry. SECURITY-URGENT (6th carry): _web_read SSRF (CWE-918) still unaddressed \u2014 serve/mcp-knowledge only checks scheme, no private IP blocklist. 6 curation cycles without a kanban task. curator cannot create task without mcp-kanban create-task tool. USER ACTION REQUIRED: create security task manually.",
     "entries_processed": 2,
     "promotions": [],
     "kept_medium": [],
     "pruned": [
       {
         "entry_id": "inline:#728:archive-verb-is-move-not-archive",
-        "content_preview": "Activity log archive ops use action='move', not 'archive' — Go binary behavioral contract",
+        "content_preview": "Activity log archive ops use action='move', not 'archive' \u2014 Go binary behavioral contract",
         "recommendation": "reject",
-        "reason": "LOW — project-specific KanbanEngine implementation detail. Behavior now enforced by a dedicated TestFromAC assertion (test_archive_uses_move_verb_not_archive). Not a reusable principle across agents."
+        "reason": "LOW \u2014 project-specific KanbanEngine implementation detail. Behavior now enforced by a dedicated TestFromAC assertion (test_archive_uses_move_verb_not_archive). Not a reusable principle across agents."
       },
       {
         "entry_id": "inline:#728:block-unblock-detection-old-blocked-capture",
-        "content_preview": "Read old_blocked before mutation to detect F→T (block), T→F (unblock), or no-transition (edit) for activity log verb",
+        "content_preview": "Read old_blocked before mutation to detect F\u2192T (block), T\u2192F (unblock), or no-transition (edit) for activity log verb",
         "recommendation": "reject",
-        "reason": "LOW — specific implementation pattern for KanbanEngine.edit_task() wiring. Not a reusable rule; serves a single internal method and is tested explicitly."
+        "reason": "LOW \u2014 specific implementation pattern for KanbanEngine.edit_task() wiring. Not a reusable rule; serves a single internal method and is tested explicitly."
       }
     ],
     "flags": [
@@ -576,27 +667,27 @@
         "type": "dedup-needs-user-confirmation",
         "carry": 6,
         "source": "process-patterns.md lines 348-353",
-        "finding": "§ 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md § 'VS Code edit tools introduce CRLF; kanban-md requires LF'. kanban-md-limits version is canonical (includes diagnostic bytes, evidence #510). process-patterns.md entry adds no additional signal.",
+        "finding": "\u00a7 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF; kanban-md requires LF'. kanban-md-limits version is canonical (includes diagnostic bytes, evidence #510). process-patterns.md entry adds no additional signal.",
         "action": "USER CONFIRMATION REQUIRED: Prune process-patterns.md lines 348-353 (the CRLF entry)?"
       },
       {
         "type": "SECURITY-URGENT-6TH-CARRY",
-        "source": "#690-reviewer — unaddressed since curation cycle 8",
+        "source": "#690-reviewer \u2014 unaddressed since curation cycle 8",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py L139-152: user-controlled URL, scheme-only check (http/https), no private IP range blocklist. follow_redirects=False mitigates redirect-chain SSRF but NOT direct calls to 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata endpoint). CWE-918 confirmed across 6 curation cycles.",
-        "action": "USER ACTION REQUIRED: Create kanban task — Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security. Curator cannot create task (mcp-kanban create_task tool not available in curator session)."
+        "action": "USER ACTION REQUIRED: Create kanban task \u2014 Title: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. Tags: scope:mcp-knowledge, type:security. Curator cannot create task (mcp-kanban create_task tool not available in curator session)."
       }
     ]
   },
   {
     "cycle": "2026-04-09T-periodic-12",
-    "note": "Periodic curation cycle 12. Channel A: owlbearMemory MCP tools unavailable (consistent cycles 3-12). Channel B: inbox empty. Inline task body scan (last 10 tasks): 1 HIGH finding promoted — builder pre-handoff commit hygiene, 3 independent observations in one sprint (#720, #723, #727: builders leaving deliverable files untracked, auditors cleaning up). MEDIUM entry 'weak-membership-check-mock-assertion' dropped (3rd carry expired, no 2nd sighting). Dedup flag #5 carry: process-patterns.md CRLF entry duplicates kanban-md-limits.md — needs user confirmation to prune. SECURITY FLAG NOW URGENT (5th carry): _web_read SSRF (CWE-918) confirmed in serve/mcp-knowledge — no IP blocklist, no kanban task exists after 4 curation cycles.",
+    "note": "Periodic curation cycle 12. Channel A: owlbearMemory MCP tools unavailable (consistent cycles 3-12). Channel B: inbox empty. Inline task body scan (last 10 tasks): 1 HIGH finding promoted \u2014 builder pre-handoff commit hygiene, 3 independent observations in one sprint (#720, #723, #727: builders leaving deliverable files untracked, auditors cleaning up). MEDIUM entry 'weak-membership-check-mock-assertion' dropped (3rd carry expired, no 2nd sighting). Dedup flag #5 carry: process-patterns.md CRLF entry duplicates kanban-md-limits.md \u2014 needs user confirmation to prune. SECURITY FLAG NOW URGENT (5th carry): _web_read SSRF (CWE-918) confirmed in serve/mcp-knowledge \u2014 no IP blocklist, no kanban task exists after 4 curation cycles.",
     "entries_processed": 11,
     "promotions": [
       {
         "entry_id": "inline:#720-auditor,#723-auditor,#727-auditor",
         "content_preview": "Builder did not commit deliverable files; auditor committed them. 3 independent observations one sprint.",
         "recommendation": "approve",
-        "reason": "HIGH — recurring (3× one sprint), actionable, non-obvious. Promoted to process-patterns.md."
+        "reason": "HIGH \u2014 recurring (3\u00d7 one sprint), actionable, non-obvious. Promoted to process-patterns.md."
       }
     ],
     "kept_medium": [],
@@ -605,7 +696,7 @@
         "entry_id": "inline:weak-membership-check-mock-assertion",
         "content_preview": "`in positional` assertions on mock call_args pass even with transposed args; use assert_called_once_with for positional order",
         "recommendation": "reject",
-        "reason": "MEDIUM 3rd carry expired — no second independent sighting. Drop policy: carried entries without 2nd sighting after 3 cycles are pruned."
+        "reason": "MEDIUM 3rd carry expired \u2014 no second independent sighting. Drop policy: carried entries without 2nd sighting after 3 cycles are pruned."
       }
     ],
     "flags": [
@@ -613,12 +704,12 @@
         "type": "dedup-needs-user-confirmation",
         "carry": 5,
         "source": "process-patterns.md lines 349-353",
-        "finding": "§ 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md § 'VS Code edit tools introduce CRLF'. kanban-md-limits version is canonical and more detailed (includes diagnostic bytes, #510 evidence). Recommend removing the process-patterns.md entry.",
-        "action": "Pending user confirmation — cannot prune reviewed entry unilaterally."
+        "finding": "\u00a7 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF'. kanban-md-limits version is canonical and more detailed (includes diagnostic bytes, #510 evidence). Recommend removing the process-patterns.md entry.",
+        "action": "Pending user confirmation \u2014 cannot prune reviewed entry unilaterally."
       },
       {
         "type": "SECURITY-URGENT-5TH-CARRY",
-        "source": "#690-reviewer — carried from cycles 9, 10, 11, 12",
+        "source": "#690-reviewer \u2014 carried from cycles 9, 10, 11, 12",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py line 139: user-controlled URL with only http/https scheme check, no private IP range blocklist. Agent prompt injection could access 127.0.0.1, 10.x, 192.168.x, 169.254.169.254 (AWS metadata). SSRF risk (CWE-918). Confirmed code reading cycle 12.",
         "action": "CRITICAL: create kanban task manually: 'Security: add private IP blocklist to _web_read (SSRF CWE-918)'. Priority: needed. No task has been created after 4 curation cycles."
       }
@@ -626,7 +717,7 @@
   },
   {
     "cycle": "2026-04-09T-periodic-11",
-    "note": "Periodic curation cycle 11. Channel A: owlbearMemory MCP tools unavailable (consistent cycles 3-11). Channel B: inbox empty. New entries from task body #722 (3 LOW/NOISE): _find_task_path path-containment gap, archive-status frontmatter anomaly, weak move_to_archived assertions — all single sightings, single task, informational/intentional-by-design; dropped. Carried MEDIUM (3rd carry): weak-membership-check-mock-assertion — no 2nd sighting yet, final carry before drop next cycle. Dedup flag (2nd carry): process-patterns.md § 'kanban task files: CRLF' duplicates kanban-md-limits.md § 'VS Code edit tools introduce CRLF' — still pending user confirmation to prune. Security flag (3rd carry): _web_read SSRF in mcp-knowledge/server.py — 3 cycles unaddressed, no kanban task exists.",
+    "note": "Periodic curation cycle 11. Channel A: owlbearMemory MCP tools unavailable (consistent cycles 3-11). Channel B: inbox empty. New entries from task body #722 (3 LOW/NOISE): _find_task_path path-containment gap, archive-status frontmatter anomaly, weak move_to_archived assertions \u2014 all single sightings, single task, informational/intentional-by-design; dropped. Carried MEDIUM (3rd carry): weak-membership-check-mock-assertion \u2014 no 2nd sighting yet, final carry before drop next cycle. Dedup flag (2nd carry): process-patterns.md \u00a7 'kanban task files: CRLF' duplicates kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF' \u2014 still pending user confirmation to prune. Security flag (3rd carry): _web_read SSRF in mcp-knowledge/server.py \u2014 3 cycles unaddressed, no kanban task exists.",
     "entries_processed": 6,
     "promotions": [],
     "kept_medium": [
@@ -634,47 +725,47 @@
         "entry_id": "inline:#690-reviewer:weak-membership-check-mock-assertion",
         "content_preview": "`in positional` assertions on mock call_args pass even with transposed positional args; use assert_called_once_with(a, b, c) for positional order",
         "recommendation": "keep",
-        "reason": "MEDIUM (3rd carry, single sighting) — still specific and actionable. Final carry — drop next cycle if no 2nd independent sighting."
+        "reason": "MEDIUM (3rd carry, single sighting) \u2014 still specific and actionable. Final carry \u2014 drop next cycle if no 2nd independent sighting."
       }
     ],
     "pruned": [
       {
         "entry_id": "inline:#722-reviewer:_find_task_path-path-containment-gap",
-        "content_preview": "_find_task_path uses glob without validate_path_containment — inconsistent with create_task pattern",
+        "content_preview": "_find_task_path uses glob without validate_path_containment \u2014 inconsistent with create_task pattern",
         "recommendation": "reject",
-        "reason": "LOW — single sighting, low practical risk (local tool, MCP layer enforces numeric IDs). Informational reviewer note, not a recurring pattern."
+        "reason": "LOW \u2014 single sighting, low practical risk (local tool, MCP layer enforces numeric IDs). Informational reviewer note, not a recurring pattern."
       },
       {
         "entry_id": "inline:#722-reviewer:archive-status-frontmatter-anomaly",
         "content_preview": "move_task('archived') moves file but does not update frontmatter status field in the file",
         "recommendation": "reject",
-        "reason": "LOW — intentional design (architect explicitly permissive on archive behavior). Not a rule violation, not actionable as a warning."
+        "reason": "LOW \u2014 intentional design (architect explicitly permissive on archive behavior). Not a rule violation, not actionable as a warning."
       },
       {
         "entry_id": "inline:#722-reviewer:weak-move-archived-assertions",
-        "content_preview": "test_move_task_to_archived: asserts only result is not None and isinstance — compensated by sibling test",
+        "content_preview": "test_move_task_to_archived: asserts only result is not None and isinstance \u2014 compensated by sibling test",
         "recommendation": "reject",
-        "reason": "NOISE — reviewer assessed 'ADEQUATE' when considered with sibling test. No actionable pattern not already covered by existing test-quality rules."
+        "reason": "NOISE \u2014 reviewer assessed 'ADEQUATE' when considered with sibling test. No actionable pattern not already covered by existing test-quality rules."
       }
     ],
     "flags": [
       {
         "type": "dedup-needs-user-confirmation",
         "source": "process-patterns.md lines 348-353",
-        "finding": "§ 'kanban task files: CRLF line endings break kanban-md parsing' is a duplicate of kanban-md-limits.md § 'VS Code edit tools introduce CRLF; kanban-md requires LF'. kanban-md-limits version is canonical (includes diagnostic bytes, evidence #510). process-patterns version adds no additional signal. 2nd cycle flagged.",
+        "finding": "\u00a7 'kanban task files: CRLF line endings break kanban-md parsing' is a duplicate of kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF; kanban-md requires LF'. kanban-md-limits version is canonical (includes diagnostic bytes, evidence #510). process-patterns version adds no additional signal. 2nd cycle flagged.",
         "action": "Pending user confirmation to prune process-patterns.md entry. Cannot delete reviewed entry unilaterally."
       },
       {
         "type": "security-debt-3rd-carry",
-        "source": "#690-reviewer — carried from cycles 9, 10, 11",
+        "source": "#690-reviewer \u2014 carried from cycles 9, 10, 11",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py: user-controlled URL with only http/https scheme check, no private IP range blocklist. SSRF risk (CWE-918). Reviewer flagged twice in #690.",
-        "action": "NO kanban task exists after 3 curation cycles. Strongly recommend creating a security task now: 'Security: add private IP range blocklist to _web_read (SSRF — CWE-918)'. Priority: important."
+        "action": "NO kanban task exists after 3 curation cycles. Strongly recommend creating a security task now: 'Security: add private IP range blocklist to _web_read (SSRF \u2014 CWE-918)'. Priority: important."
       }
     ]
   },
   {
     "cycle": "2026-04-09T-periodic-10",
-    "note": "Periodic curation. Channel A: owlbearMemory MCP tools unavailable in session (consistent with cycles 3-9). Channel B: inbox empty. Repo memory quality scan: 13 catalog files reviewed. 1 catalog correction: end_work \\n UNCERTAIN note (sitting unresolved since cycle 3) — resolved in-place with CLARIFIED note (condition: only manifests with literal \\n escape sequences, not real newlines; confirmed by #670, #716). 1 dedup flag: process-patterns.md § 'kanban task files: CRLF' duplicates kanban-md-limits.md § 'VS Code edit tools introduce CRLF' (same finding, kanban-md-limits version is canonical/more detailed — needs user confirmation to prune). 1 carried MEDIUM (2nd carry): weak-membership-check-mock-assertion. Security flag from cycle 9 (_web_read SSRF) still unresolved.",
+    "note": "Periodic curation. Channel A: owlbearMemory MCP tools unavailable in session (consistent with cycles 3-9). Channel B: inbox empty. Repo memory quality scan: 13 catalog files reviewed. 1 catalog correction: end_work \\n UNCERTAIN note (sitting unresolved since cycle 3) \u2014 resolved in-place with CLARIFIED note (condition: only manifests with literal \\n escape sequences, not real newlines; confirmed by #670, #716). 1 dedup flag: process-patterns.md \u00a7 'kanban task files: CRLF' duplicates kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF' (same finding, kanban-md-limits version is canonical/more detailed \u2014 needs user confirmation to prune). 1 carried MEDIUM (2nd carry): weak-membership-check-mock-assertion. Security flag from cycle 9 (_web_read SSRF) still unresolved.",
     "entries_processed": 3,
     "promotions": [],
     "kept_medium": [
@@ -682,28 +773,28 @@
         "entry_id": "inline:#690-reviewer:weak-membership-check-mock-assertion",
         "content_preview": "`in positional` assertions on mock call_args pass even with transposed positional args; use assert_called_once_with(a, b, c) for positional order",
         "recommendation": "keep",
-        "reason": "MEDIUM (2nd carry, single sighting) — specific, non-obvious, actionable. No second independent sighting yet. Keep one more cycle."
+        "reason": "MEDIUM (2nd carry, single sighting) \u2014 specific, non-obvious, actionable. No second independent sighting yet. Keep one more cycle."
       }
     ],
     "pruned": [],
     "catalog_corrections": [
       {
-        "entry_id": "kanban-md-limits.md § MCP end_work note field writes literal \\n",
-        "content_preview": "end_work note parameter does not interpret \\n — writes literal characters",
+        "entry_id": "kanban-md-limits.md \u00a7 MCP end_work note field writes literal \\n",
+        "content_preview": "end_work note parameter does not interpret \\n \u2014 writes literal characters",
         "action": "clarified",
-        "reason": "RESOLVED — replaced ⚠ CURATOR NOTE (sitting open since cycle 3) with CLARIFIED note: issue only manifests when caller embeds literal two-character \\n escape sequences, not real newlines. Confirmed working with real newlines by #670, #716."
+        "reason": "RESOLVED \u2014 replaced \u26a0 CURATOR NOTE (sitting open since cycle 3) with CLARIFIED note: issue only manifests when caller embeds literal two-character \\n escape sequences, not real newlines. Confirmed working with real newlines by #670, #716."
       }
     ],
     "flags": [
       {
         "type": "dedup-needs-user-confirmation",
         "source": "process-patterns.md lines 349-353",
-        "finding": "§ 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md § 'VS Code edit tools introduce CRLF; kanban-md requires LF'. Same finding, different evidence sources (#263 vs #510). kanban-md-limits version is more complete (diagnostic bytes, more tool names).",
+        "finding": "\u00a7 'kanban task files: CRLF line endings break kanban-md parsing' duplicates kanban-md-limits.md \u00a7 'VS Code edit tools introduce CRLF; kanban-md requires LF'. Same finding, different evidence sources (#263 vs #510). kanban-md-limits version is more complete (diagnostic bytes, more tool names).",
         "action": "Cannot prune reviewed entry without user confirmation. Recommendation: remove the process-patterns.md entry (less detailed) after user approves."
       },
       {
         "type": "security-debt-carried",
-        "source": "#690-reviewer (2 passes) — carried from cycle 9",
+        "source": "#690-reviewer (2 passes) \u2014 carried from cycle 9",
         "finding": "_web_read in serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py: user-controlled URL with only http/https scheme check, no private IP range blocklist. SSRF risk.",
         "action": "No kanban task exists. Carried from cycle 9. Recommend creating a security task."
       }
@@ -711,7 +802,7 @@
   },
   {
     "cycle": "2026-04-09T-periodic-9",
-    "note": "Periodic curation cycle 9. Channel A: MCP owlbearMemory DB empty (0 entries). Channel B: inbox empty. 5 entries processed (3 carried from cycle 8 + 2 new from task bodies #690/#721/#719). 0 promotions. 3 dropped: pre-shipped-red-green-cross-task (4th carry, no sighting, covered by process-patterns.md), test-writer-uncommitted-file (4th carry, no sighting), ruff-crlf-normalization (already in ruff-and-lint-discipline.md — RESOLVED). 1 new MEDIUM kept: weak-membership-check-mock-assertion from #690 reviewer (1st sighting). 1 security flag: _web_read SSRF cited twice by reviewer in #690 — no kanban task exists; needs new task.",
+    "note": "Periodic curation cycle 9. Channel A: MCP owlbearMemory DB empty (0 entries). Channel B: inbox empty. 5 entries processed (3 carried from cycle 8 + 2 new from task bodies #690/#721/#719). 0 promotions. 3 dropped: pre-shipped-red-green-cross-task (4th carry, no sighting, covered by process-patterns.md), test-writer-uncommitted-file (4th carry, no sighting), ruff-crlf-normalization (already in ruff-and-lint-discipline.md \u2014 RESOLVED). 1 new MEDIUM kept: weak-membership-check-mock-assertion from #690 reviewer (1st sighting). 1 security flag: _web_read SSRF cited twice by reviewer in #690 \u2014 no kanban task exists; needs new task.",
     "entries_processed": 5,
     "promotions": [],
     "kept_medium": [
@@ -719,27 +810,27 @@
         "entry_id": "inline:#690-reviewer:weak-membership-check-mock-assertion",
         "content_preview": "`in positional` assertions on mock call_args pass even with transposed positional args; use assert_called_once_with(a, b, c) for positional order",
         "recommendation": "keep",
-        "reason": "MEDIUM (1st sighting) — specific, non-obvious, actionable. Single reviewer observation from #690. Keep for second sighting."
+        "reason": "MEDIUM (1st sighting) \u2014 specific, non-obvious, actionable. Single reviewer observation from #690. Keep for second sighting."
       }
     ],
     "pruned": [
       {
         "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
-        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched \u2014 builder had no work to do",
         "recommendation": "reject",
-        "reason": "LOW — 4th carry, no second sighting. The general pre-existing state pattern is already in process-patterns.md lines 48-56. This specific cross-task variant is a one-off."
+        "reason": "LOW \u2014 4th carry, no second sighting. The general pre-existing state pattern is already in process-patterns.md lines 48-56. This specific cross-task variant is a one-off."
       },
       {
         "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
-        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer \u2014 found untracked, committed as leftover in 2da2a83",
         "recommendation": "reject",
-        "reason": "LOW — 4th carry, no second sighting in #719/#721 (both test-writers committed properly). Single occurrence too specific for catalog."
+        "reason": "LOW \u2014 4th carry, no second sighting in #719/#721 (both test-writers committed properly). Single occurrence too specific for catalog."
       },
       {
         "entry_id": "ruff-and-lint-discipline.md:200-207:ruff-crlf-normalization",
-        "content_preview": "ruff check --fix normalizes CRLF→LF on Windows; makes git diff show full-file changes; --ignore-cr-at-eol separates CRLF noise from real changes",
+        "content_preview": "ruff check --fix normalizes CRLF\u2192LF on Windows; makes git diff show full-file changes; --ignore-cr-at-eol separates CRLF noise from real changes",
         "recommendation": "reject",
-        "reason": "RESOLVED — already written to ruff-and-lint-discipline.md lines 200-206. Knowledge captured. Carry tracking unnecessary."
+        "reason": "RESOLVED \u2014 already written to ruff-and-lint-discipline.md lines 200-206. Knowledge captured. Carry tracking unnecessary."
       }
     ],
     "flags": [
@@ -753,93 +844,93 @@
   },
   {
     "cycle": "2026-04-09T-periodic-8",
-    "note": "Periodic curation cycle 8. Channel A: MCP owlbearMemory not accessible this session. Channel B: inbox empty. 4 entries processed (3 from cycle-7 carries, 1 new). 1 promotion: ruamel-yaml-timestamp-resolver (MEDIUM→HIGH via #716 corroboration → added to process-patterns.md). 2 kept MEDIUM (final 3rd carry): pre-shipped-red-green-cross-task, test-writer-uncommitted-file. 1 new MEDIUM (ruff CRLF→LF normalization, already in ruff-and-lint-discipline.md) — keep for corroboration. 0 pruned this cycle. 0 conflicts.",
+    "note": "Periodic curation cycle 8. Channel A: MCP owlbearMemory not accessible this session. Channel B: inbox empty. 4 entries processed (3 from cycle-7 carries, 1 new). 1 promotion: ruamel-yaml-timestamp-resolver (MEDIUM\u2192HIGH via #716 corroboration \u2192 added to process-patterns.md). 2 kept MEDIUM (final 3rd carry): pre-shipped-red-green-cross-task, test-writer-uncommitted-file. 1 new MEDIUM (ruff CRLF\u2192LF normalization, already in ruff-and-lint-discipline.md) \u2014 keep for corroboration. 0 pruned this cycle. 0 conflicts.",
     "entries_processed": 4,
     "promotions": [
       {
         "entry_id": "inline:#715-builder+#716-builder:ruamel-yaml-timestamp-resolver",
-        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level — avoids global side effects)",
+        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level \u2014 avoids global side effects)",
         "recommendation": "approve",
-        "reason": "HIGH — 2 independent corroborations (#715 design + #716 confirmed working). Specific, non-obvious, actionable. Added to process-patterns.md."
+        "reason": "HIGH \u2014 2 independent corroborations (#715 design + #716 confirmed working). Specific, non-obvious, actionable. Added to process-patterns.md."
       }
     ],
     "kept_medium": [
       {
         "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
-        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched \u2014 builder had no work to do",
         "recommendation": "keep",
-        "reason": "MEDIUM (3rd carry, final) — variant of existing process-patterns.md 'pre-existing test/implementation state' entry (lines 48-56), but cross-task; still single observation"
+        "reason": "MEDIUM (3rd carry, final) \u2014 variant of existing process-patterns.md 'pre-existing test/implementation state' entry (lines 48-56), but cross-task; still single observation"
       },
       {
         "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
-        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer \u2014 found untracked, committed as leftover in 2da2a83",
         "recommendation": "keep",
-        "reason": "MEDIUM (3rd carry, final) — existing pipeline-handoff rule covers researchers but not test-writers; single occurrence"
+        "reason": "MEDIUM (3rd carry, final) \u2014 existing pipeline-handoff rule covers researchers but not test-writers; single occurrence"
       },
       {
         "entry_id": "ruff-and-lint-discipline.md:200-207:ruff-crlf-normalization",
-        "content_preview": "ruff check --fix normalizes CRLF→LF on Windows; makes git diff show full-file changes; --ignore-cr-at-eol separates CRLF noise from real changes",
+        "content_preview": "ruff check --fix normalizes CRLF\u2192LF on Windows; makes git diff show full-file changes; --ignore-cr-at-eol separates CRLF noise from real changes",
         "recommendation": "keep",
-        "reason": "MEDIUM (1st carry) — specific, non-obvious, actionable. Single megalinter session source. Keep for second sighting."
+        "reason": "MEDIUM (1st carry) \u2014 specific, non-obvious, actionable. Single megalinter session source. Keep for second sighting."
       }
     ],
     "pruned": []
   },
   {
     "cycle": "2026-04-09T-periodic-7",
-    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. New findings: findings-2026-04-09-d8e6149.md (MegaLinter on commit d8e6149). 7 entries reviewed (3 new + 4 carried). 0 promotions. 3 kept MEDIUM (all from cycle 6 carries — 2nd carry). 5 pruned: 4 new findings (editorconfig-v1archive NOISE, json-bom-vscode LOW, ruff-72-residual LOW, yamllint-conventions NOISE) + 1 dropped after 4th carry (#703-docstring-overclaim, no second sighting). Security note: gitleaks now CLEAN on d8e6149 (was 6 secrets on d5ed020 from cycle 6) — prior security alert RESOLVED, no user action needed.",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. New findings: findings-2026-04-09-d8e6149.md (MegaLinter on commit d8e6149). 7 entries reviewed (3 new + 4 carried). 0 promotions. 3 kept MEDIUM (all from cycle 6 carries \u2014 2nd carry). 5 pruned: 4 new findings (editorconfig-v1archive NOISE, json-bom-vscode LOW, ruff-72-residual LOW, yamllint-conventions NOISE) + 1 dropped after 4th carry (#703-docstring-overclaim, no second sighting). Security note: gitleaks now CLEAN on d8e6149 (was 6 secrets on d5ed020 from cycle 6) \u2014 prior security alert RESOLVED, no user action needed.",
     "entries_processed": 7,
     "promotions": [],
     "kept_medium": [
       {
         "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
-        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched \u2014 builder had no work to do",
         "recommendation": "keep",
-        "reason": "MEDIUM (2nd carry) — variant of existing process-patterns.md 'pre-existing test/implementation state' entry (lines 48-56), but cross-task; still single observation; keep one more cycle"
+        "reason": "MEDIUM (2nd carry) \u2014 variant of existing process-patterns.md 'pre-existing test/implementation state' entry (lines 48-56), but cross-task; still single observation; keep one more cycle"
       },
       {
         "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
-        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer \u2014 found untracked, committed as leftover in 2da2a83",
         "recommendation": "keep",
-        "reason": "MEDIUM (2nd carry) — existing pipeline-handoff rule covers researchers but not test-writers; single occurrence; keep one more cycle"
+        "reason": "MEDIUM (2nd carry) \u2014 existing pipeline-handoff rule covers researchers but not test-writers; single occurrence; keep one more cycle"
       },
       {
         "entry_id": "inline:#715-builder:ruamel-yaml-timestamp-resolver",
-        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level — avoids global side effects)",
+        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level \u2014 avoids global side effects)",
         "recommendation": "keep",
-        "reason": "MEDIUM (2nd carry) — specific, non-obvious, actionable YAML technique; single use of ruamel.yaml in codebase (#715); keep one more cycle to check for second usage"
+        "reason": "MEDIUM (2nd carry) \u2014 specific, non-obvious, actionable YAML technique; single use of ruamel.yaml in codebase (#715); keep one more cycle to check for second usage"
       }
     ],
     "pruned": [
       {
         "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
-        "content_preview": "test-writer docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer flagged MISSING",
+        "content_preview": "test-writer docstring claimed AC6 covered \u2014 no TestFromAC_ class backed the claim; reviewer flagged MISSING",
         "recommendation": "reject",
-        "reason": "DROP — 4th carry with no second independent sighting. Lean-catalog principle: stop carrying MEDIUM entries with no recurrence after 4 cycles. Idiosyncratic single instance."
+        "reason": "DROP \u2014 4th carry with no second independent sighting. Lean-catalog principle: stop carrying MEDIUM entries with no recurrence after 4 cycles. Idiosyncratic single instance."
       },
       {
         "entry_id": "findings-2026-04-09-d8e6149:editorconfig-v1archive-lines",
         "content_preview": "editorconfig-checker: hundreds of line-too-long errors in .owlbear/kanban/v1-archive/activity.jsonl",
         "recommendation": "reject",
-        "reason": "NOISE — archive JSONL file with long lines by nature; fix is to exclude .owlbear/kanban/v1-archive/ from editorconfig-checker; not an agent process pattern"
+        "reason": "NOISE \u2014 archive JSONL file with long lines by nature; fix is to exclude .owlbear/kanban/v1-archive/ from editorconfig-checker; not an agent process pattern"
       },
       {
         "entry_id": "findings-2026-04-09-d8e6149:json-bom-vscode-mcp",
-        "content_preview": ".vscode/mcp.json has UTF-8 BOM — jsonlint parse error on token BOM",
+        "content_preview": ".vscode/mcp.json has UTF-8 BOM \u2014 jsonlint parse error on token BOM",
         "recommendation": "reject",
-        "reason": "LOW — instance of documented pattern (Set-Content adds BOM on PS 5.1, terminal-output-isolation.md:45-49); not a new finding"
+        "reason": "LOW \u2014 instance of documented pattern (Set-Content adds BOM on PS 5.1, terminal-output-isolation.md:45-49); not a new finding"
       },
       {
         "entry_id": "findings-2026-04-09-d8e6149:ruff-72-residual-errors",
-        "content_preview": "ruff: 72 errors after MegaLinter ruff config fix (5289→72); includes ExceptionGroup undefined name and unused imports",
+        "content_preview": "ruff: 72 errors after MegaLinter ruff config fix (5289\u219272); includes ExceptionGroup undefined name and unused imports",
         "recommendation": "reject",
-        "reason": "LOW — operational CI residual post-fix; unused imports in v1/stubs + E402 ordering; ExceptionGroup is a config issue (target-version); not an agent behavior pattern"
+        "reason": "LOW \u2014 operational CI residual post-fix; unused imports in v1/stubs + E402 ordering; ExceptionGroup is a config issue (target-version); not an agent behavior pattern"
       },
       {
         "entry_id": "findings-2026-04-09-d8e6149:yamllint-warnings",
-        "content_preview": "yamllint: 6 warnings across 4 files — missing '---' doc-start, truthy value conventions in GitHub Actions workflows",
+        "content_preview": "yamllint: 6 warnings across 4 files \u2014 missing '---' doc-start, truthy value conventions in GitHub Actions workflows",
         "recommendation": "reject",
-        "reason": "NOISE — style conventions; not recurring agent behavior; dev would fix these on first encounter via yamllint output"
+        "reason": "NOISE \u2014 style conventions; not recurring agent behavior; dev would fix these on first encounter via yamllint output"
       }
     ],
     "security_resolved": [
@@ -847,39 +938,39 @@
         "entry_id": "findings-2026-04-09-d5ed020:gitleaks-6-secrets",
         "content_preview": "gitleaks: 1 error, 6 secrets detected in CI run on commit d5ed020",
         "status": "RESOLVED",
-        "reason": "gitleaks passes cleanly on commit d8e6149 — secrets were false positives or addressed. No user action needed. Prior 'user_attention_required' flag from cycle 6 superseded."
+        "reason": "gitleaks passes cleanly on commit d8e6149 \u2014 secrets were false positives or addressed. No user action needed. Prior 'user_attention_required' flag from cycle 6 superseded."
       }
     ]
   },
   {
     "cycle": "2026-04-09T-periodic-6",
-    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. Task scan: #689 (LLMExtractor done), #715 (config_loader archived). New artifacts: findings-2026-04-09-d5ed020.md (MegaLinter CI). 9 entries reviewed (7 new + 2 carried). 0 promotions. 3 kept MEDIUM (B,C,D new). 3 pruned (A,F,G). Stale UNCERTAIN dropped (end_work-\\n — 4 cycles no new evidence; catalog note at kanban-md-limits.md:268 already expresses uncertainty). 1 HIGH security flag: gitleaks detected 6 secrets in commit d5ed020 — requires user-created cleanup task. Carried: docstring-overclaim-coverage (MEDIUM, cycle 3) + 3 new MEDIUMs.",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. Task scan: #689 (LLMExtractor done), #715 (config_loader archived). New artifacts: findings-2026-04-09-d5ed020.md (MegaLinter CI). 9 entries reviewed (7 new + 2 carried). 0 promotions. 3 kept MEDIUM (B,C,D new). 3 pruned (A,F,G). Stale UNCERTAIN dropped (end_work-\\n \u2014 4 cycles no new evidence; catalog note at kanban-md-limits.md:268 already expresses uncertainty). 1 HIGH security flag: gitleaks detected 6 secrets in commit d5ed020 \u2014 requires user-created cleanup task. Carried: docstring-overclaim-coverage (MEDIUM, cycle 3) + 3 new MEDIUMs.",
     "entries_processed": 9,
     "promotions": [],
     "kept_medium": [
       {
         "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
-        "content_preview": "test-writer docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer flagged MISSING",
+        "content_preview": "test-writer docstring claimed AC6 covered \u2014 no TestFromAC_ class backed the claim; reviewer flagged MISSING",
         "recommendation": "keep",
-        "reason": "MEDIUM — now 3 cycles, still single observation; promote if second independent sighting occurs"
+        "reason": "MEDIUM \u2014 now 3 cycles, still single observation; promote if second independent sighting occurs"
       },
       {
         "entry_id": "inline:#689+#698:pre-shipped-red-green-cross-task",
-        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched — builder had no work to do",
+        "content_preview": "#698 committed RED tests + GREEN impl in single commit before #689 (GREEN task) was dispatched \u2014 builder had no work to do",
         "recommendation": "keep",
-        "reason": "MEDIUM — variant of existing process-patterns.md 'pre-existing test/implementation state' (lines 48-56), but from a cross-task commit; needs second independent observation before adding a variant to catalog"
+        "reason": "MEDIUM \u2014 variant of existing process-patterns.md 'pre-existing test/implementation state' (lines 48-56), but from a cross-task commit; needs second independent observation before adding a variant to catalog"
       },
       {
         "entry_id": "inline:#715-auditor:test-writer-uncommitted-file",
-        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer — found untracked, committed as leftover in 2da2a83",
+        "content_preview": "tests/test_kanban_engine_config.py was never committed by test-writer \u2014 found untracked, committed as leftover in 2da2a83",
         "recommendation": "keep",
-        "reason": "MEDIUM — single occurrence; existing pipeline-handoff rule covers researchers but not test-writers; watch for second occurrence before promoting"
+        "reason": "MEDIUM \u2014 single occurrence; existing pipeline-handoff rule covers researchers but not test-writers; watch for second occurrence before promoting"
       },
       {
         "entry_id": "inline:#715-builder:ruamel-yaml-timestamp-resolver",
-        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level — avoids global side effects)",
+        "content_preview": "ruamel.yaml: disable timestamp auto-conversion by shadowing instance-level yaml_implicit_resolvers (not class-level \u2014 avoids global side effects)",
         "recommendation": "keep",
-        "reason": "MEDIUM — specific, non-obvious, actionable YAML technique; single occurrence; watch for second use of ruamel.yaml before promoting to catalog"
+        "reason": "MEDIUM \u2014 specific, non-obvious, actionable YAML technique; single occurrence; watch for second use of ruamel.yaml before promoting to catalog"
       }
     ],
     "pruned": [
@@ -887,27 +978,27 @@
         "entry_id": "inline:#689-reviewer:pydanticai-result-type-rename",
         "content_preview": "PydanticAI v1 used result_type=ExtractionResult but current API uses output_type=ExtractionResult",
         "recommendation": "reject",
-        "reason": "LOW — specific API version detail, not a process pattern; single occurrence; developer would discover via docs or type error immediately"
+        "reason": "LOW \u2014 specific API version detail, not a process pattern; single occurrence; developer would discover via docs or type error immediately"
       },
       {
         "entry_id": "findings-2026-04-09-d5ed020:editorconfig-widespread-crlf",
         "content_preview": "editorconfig-checker: widespread CRLF line endings and UTF-8-SIG encoding across serve/, tests/, share/",
         "recommendation": "reject",
-        "reason": "LOW — pre-existing quality debt, not a new process pattern; CRLF/kanban-file issue already in process-patterns.md; UTF-8-SIG note known Windows editor issue; individual file cleanup is operational work not catalog-worthy"
+        "reason": "LOW \u2014 pre-existing quality debt, not a new process pattern; CRLF/kanban-file issue already in process-patterns.md; UTF-8-SIG note known Windows editor issue; individual file cleanup is operational work not catalog-worthy"
       },
       {
         "entry_id": "findings-2026-04-09-d5ed020:ruff-5289-errors",
         "content_preview": "ruff: 5,289 errors across 301 files; no auto-fix applied",
         "recommendation": "reject",
-        "reason": "NOISE — pre-existing formatting debt; task-scoped lint discipline already in ruff-and-lint-discipline.md; repo-wide ruff noise is the documented pattern"
+        "reason": "NOISE \u2014 pre-existing formatting debt; task-scoped lint discipline already in ruff-and-lint-discipline.md; repo-wide ruff noise is the documented pattern"
       }
     ],
     "dropped_stale": [
       {
         "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
-        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines \u2014 use one-line note + file edit",
         "action": "dropped",
-        "reason": "UNCERTAIN for 4 consecutive cycles with no new evidence either way. Catalog entry at kanban-md-limits.md:268 already contains a ⚠ CURATOR NOTE expressing the uncertainty. Continuing to carry this entry adds no value — the uncertainty is already documented in the catalog for users to assess on first use."
+        "reason": "UNCERTAIN for 4 consecutive cycles with no new evidence either way. Catalog entry at kanban-md-limits.md:268 already contains a \u26a0 CURATOR NOTE expressing the uncertainty. Continuing to carry this entry adds no value \u2014 the uncertainty is already documented in the catalog for users to assess on first use."
       }
     ],
     "user_attention_required": [
@@ -915,28 +1006,28 @@
         "entry_id": "findings-2026-04-09-d5ed020:gitleaks-6-secrets",
         "content_preview": "gitleaks: 1 error, 6 secrets detected in CI run on commit d5ed020",
         "recommendation": "approve",
-        "reason": "HIGH — security concern; 6 potential secrets found in CI scan; requires a kanban cleanup task to audit and rotate/remove. This curator cannot create tasks — user action required."
+        "reason": "HIGH \u2014 security concern; 6 potential secrets found in CI scan; requires a kanban cleanup task to audit and rotate/remove. This curator cannot create tasks \u2014 user action required."
       }
     ],
     "catalog_corrections": []
   },
   {
     "cycle": "2026-04-09T-periodic-5",
-    "note": "Periodic curation. Channel A: 0 pending MCP entries (memory tools unavailable in session; consistent with cycle-4 DB-empty report). Channel B: 0 inbox files. Inline scan: 2 recently-done task bodies (#701 PydanticAI wiring, #714 RED/GREEN pass-through). 0 promotions: both inline findings rated LOW (covered by existing catalog entries). 2 MEDIUM/UNCERTAIN entries carried from cycle 4: (1) end_work \\n literal (UNCERTAIN, 3rd cycle — no new evidence); (2) reviewer docstring-overclaim coverage (MEDIUM, single observation from #703 — watch for recurrence). Catalog in good shape.",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (memory tools unavailable in session; consistent with cycle-4 DB-empty report). Channel B: 0 inbox files. Inline scan: 2 recently-done task bodies (#701 PydanticAI wiring, #714 RED/GREEN pass-through). 0 promotions: both inline findings rated LOW (covered by existing catalog entries). 2 MEDIUM/UNCERTAIN entries carried from cycle 4: (1) end_work \\n literal (UNCERTAIN, 3rd cycle \u2014 no new evidence); (2) reviewer docstring-overclaim coverage (MEDIUM, single observation from #703 \u2014 watch for recurrence). Catalog in good shape.",
     "entries_processed": 2,
     "promotions": [],
     "kept_medium": [
       {
         "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
-        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines \u2014 use one-line note + file edit",
         "recommendation": "keep",
-        "reason": "UNCERTAIN (cycle 3→4→5) — catalog warning note already at kanban-md-limits.md:268; no new evidence disambiguating behavior; user verification still needed"
+        "reason": "UNCERTAIN (cycle 3\u21924\u21925) \u2014 catalog warning note already at kanban-md-limits.md:268; no new evidence disambiguating behavior; user verification still needed"
       },
       {
         "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
-        "content_preview": "test-writer docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer flagged MISSING",
+        "content_preview": "test-writer docstring claimed AC6 covered \u2014 no TestFromAC_ class backed the claim; reviewer flagged MISSING",
         "recommendation": "keep",
-        "reason": "MEDIUM — still single occurrence; needs second independent observation before promotion to process-patterns.md"
+        "reason": "MEDIUM \u2014 still single occurrence; needs second independent observation before promotion to process-patterns.md"
       }
     ],
     "pruned": [],
@@ -944,21 +1035,21 @@
   },
   {
     "cycle": "2026-04-09T-periodic-4",
-    "note": "Periodic curation. Channel A: 0 pending MCP entries (memory_entries table empty, 0 rows). Channel B: 0 inbox files (inbox dir empty). No memory commits since 2026-04-07. Legacy inline scan: 2 recently-done task bodies reviewed (#713, #703). 1 MEDIUM finding from #703 (test-writer docstring overclaiming AC coverage without TestFromAC_ class — single occurrence, not yet recurring). 1 UNCERTAIN entry carried forward from prior cycle (end_work \\n literal — unresolved). No promotions, no prunings, no conflicts.",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (memory_entries table empty, 0 rows). Channel B: 0 inbox files (inbox dir empty). No memory commits since 2026-04-07. Legacy inline scan: 2 recently-done task bodies reviewed (#713, #703). 1 MEDIUM finding from #703 (test-writer docstring overclaiming AC coverage without TestFromAC_ class \u2014 single occurrence, not yet recurring). 1 UNCERTAIN entry carried forward from prior cycle (end_work \\n literal \u2014 unresolved). No promotions, no prunings, no conflicts.",
     "entries_processed": 0,
     "promotions": [],
     "kept_medium": [
       {
         "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
-        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines \u2014 use one-line note + file edit",
         "recommendation": "keep",
-        "reason": "UNCERTAIN (carried from cycle 3) — evidence from #546 (old) conflicts with recent task #670 showing proper multi-line output; no new disambiguating evidence in cycle 4; flagged for user verification"
+        "reason": "UNCERTAIN (carried from cycle 3) \u2014 evidence from #546 (old) conflicts with recent task #670 showing proper multi-line output; no new disambiguating evidence in cycle 4; flagged for user verification"
       },
       {
         "entry_id": "inline:#703-reviewer:docstring-overclaim-coverage",
-        "content_preview": "test_remove_crawl_stubs_703.py docstring claimed AC6 covered — no TestFromAC_ class backed the claim; reviewer correctly flagged MISSING",
+        "content_preview": "test_remove_crawl_stubs_703.py docstring claimed AC6 covered \u2014 no TestFromAC_ class backed the claim; reviewer correctly flagged MISSING",
         "recommendation": "keep",
-        "reason": "MEDIUM — single occurrence; actionable pattern for reviewers (cross-check each AC claim in docstring against presence of TestFromAC_ class) but not yet recurring; watch for second observation before promoting to process-patterns.md"
+        "reason": "MEDIUM \u2014 single occurrence; actionable pattern for reviewers (cross-check each AC claim in docstring against presence of TestFromAC_ class) but not yet recurring; watch for second observation before promoting to process-patterns.md"
       }
     ],
     "pruned": [],
@@ -966,24 +1057,24 @@
   },
   {
     "cycle": "2026-04-07T-periodic-3",
-    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. Repo memory quality scan: 10 catalog files reviewed. 1 stale entry corrected (dual skill locations — migration complete). 1 uncertain entry flagged (end_work \\n literal). No promotions, no conflicts.",
+    "note": "Periodic curation. Channel A: 0 pending MCP entries (DB empty). Channel B: 0 inbox files. Repo memory quality scan: 10 catalog files reviewed. 1 stale entry corrected (dual skill locations \u2014 migration complete). 1 uncertain entry flagged (end_work \\n literal). No promotions, no conflicts.",
     "entries_processed": 2,
     "promotions": [],
     "kept_medium": [
       {
         "entry_id": "catalog:kanban-md-limits.md#end_work-newlines",
-        "content_preview": "MCP end_work note field writes literal \\n instead of newlines — use one-line note + file edit",
+        "content_preview": "MCP end_work note field writes literal \\n instead of newlines \u2014 use one-line note + file edit",
         "recommendation": "keep",
-        "reason": "UNCERTAIN — evidence from #546 (old) conflicts with recent task #670 showing proper multi-line output; may only apply when caller passes literal escape sequences vs actual newlines; flagged for user verification"
+        "reason": "UNCERTAIN \u2014 evidence from #546 (old) conflicts with recent task #670 showing proper multi-line output; may only apply when caller passes literal escape sequences vs actual newlines; flagged for user verification"
       }
     ],
     "pruned": [],
     "catalog_corrections": [
       {
         "entry_id": "catalog:v2-architecture-decisions.md#dual-skill-locations",
-        "content_preview": "Dual skill locations during migration — .github/skills/ and .github/agents/ coexist with skills/",
+        "content_preview": "Dual skill locations during migration \u2014 .github/skills/ and .github/agents/ coexist with skills/",
         "action": "updated",
-        "reason": "STALE — .github/skills/ and .github/agents/ confirmed absent 2026-04-07; entry updated to MIGRATION COMPLETE with corrected canonical paths (share/skills/, share/agents/, share/instructions/)"
+        "reason": "STALE \u2014 .github/skills/ and .github/agents/ confirmed absent 2026-04-07; entry updated to MIGRATION COMPLETE with corrected canonical paths (share/skills/, share/agents/, share/instructions/)"
       }
     ]
   }

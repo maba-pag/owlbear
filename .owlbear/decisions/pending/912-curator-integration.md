@@ -45,9 +45,9 @@ The orchestrator auto-dispatches the curator immediately when `end_work` archive
 | **Interference risk** | Same as (a) |
 | **Conflict window** | Same as (a) |
 
-### (d) Batch sweep
+### (d) Separate orchestrator cycle
 
-A dedicated curator sweep runs after N archives accumulate (e.g., every 5 tasks). The orchestrator checks the archive count and dispatches if threshold is met.
+A dedicated curator cycle runs after N archives accumulate (e.g., every 5 tasks). The orchestrator checks the archive count and dispatches the curator in its own orchestration pass.
 
 | Dimension | Assessment |
 |-----------|------------|
@@ -58,7 +58,7 @@ A dedicated curator sweep runs after N archives accumulate (e.g., every 5 tasks)
 
 ## Recommendation
 
-Option **(c) Archive-triggered** for simplicity: add a single `dispatch(test-curator, task_id)` call to the orchestrator's archive path. Non-blocking, immediate, minimal infrastructure. Fall back to **(d) Batch sweep** if testing shows interference.
+Option **(c) Archive-triggered** for simplicity: add a single `dispatch(test-curator, task_id)` call to the orchestrator's archive path. Non-blocking, immediate, minimal infrastructure. Fall back to **(d) Separate orchestrator cycle** if testing shows interference.
 
 ## Decision
 
