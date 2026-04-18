@@ -246,3 +246,61 @@ class TestFromAC_WebReadSSRF:
             "expected the URL to be rewritten to the resolved IP (93.184.216.34) "
             "to prevent DNS rebinding"
         )
+
+    # ------------------------------------------------------------------
+    # Retry additions (reviewer FAIL — missing AC coverage)
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_blocks_localhost_hostname(self) -> None:
+        """http://localhost/ resolves to 127.0.0.1 (loopback) — must return None.
+
+        AC6 explicitly names 'localhost' as a required test case.  A literal-IP
+        check would miss this; the implementation must resolve the hostname first.
+        """
+        mock_client = _make_mock_client()
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("127.0.0.1")),
+            patch("httpx.AsyncClient", return_value=mock_client) as mock_cls,
+        ):
+            result = await _web_read("http://localhost/")
+        assert result is None
+        mock_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_blocks_broadcast_255_255_255_255(self) -> None:
+        """255.255.255.255 (broadcast / reserved) — must return None, httpx never called.
+
+        AC2 names 'broadcast' as a blocked range.  Python's ipaddress marks
+        255.255.255.255 as is_reserved; the test validates that property is checked.
+        """
+        mock_client = _make_mock_client()
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("255.255.255.255")),
+            patch("httpx.AsyncClient", return_value=mock_client) as mock_cls,
+        ):
+            result = await _web_read("http://255.255.255.255/")
+        assert result is None
+        mock_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_httpx_exception_returns_none(self) -> None:
+        """An httpx exception during a safe fetch returns None — must not propagate.
+
+        The except-Exception handler at the bottom of _web_read must catch
+        network errors and return None so callers are never exposed to exceptions.
+        """
+        import httpx
+
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")),
+            patch("httpx.AsyncClient", return_value=mock_client),
+        ):
+            try:
+                result = await _web_read("http://example.com/page")
+            except Exception as exc:  # noqa: BLE001
+                pytest.fail(f"_web_read raised {exc!r} on httpx error instead of returning None")
+        assert result is None
