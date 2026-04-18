@@ -152,7 +152,7 @@ export const Column = memo(function Column({ status, tasks, priorities, onContex
   )
 
   return (
-    <div data-column={status}>
+    <div data-column={status} style={{ overflowY: 'auto', maxHeight: '100vh' }}>
       <header>
         <span>{status}</span>
         <span data-testid="column-count">{tasks.length}</span>
@@ -247,7 +247,7 @@ export default function KanbanBoard() {
   }
 
   return (
-    <div style={{ display: 'flex', gap: '16px', overflowX: 'auto' }}>
+    <div data-testid="kanban-board" style={{ display: 'flex', gap: '16px', overflowX: 'auto' }}>
       {board.statuses.map(({ name }) => {
         const colTasks = tasksByStatus[name] ?? []
         return (
