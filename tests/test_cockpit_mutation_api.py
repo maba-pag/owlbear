@@ -415,6 +415,46 @@ class TestFromAC_AuditLogging:
         cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
         assert len(cockpit_entries) >= 1, "At least one activity entry must have actor='cockpit'"
 
+    def test_edit_noop_only_updated_writes_activity_log_actor_cockpit(
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
+    ) -> None:
+        """AC6: edit with only 'updated' (no other fields) must still write activity log.
+
+        The empty-kwargs path currently bypasses engine.edit_task entirely, which
+        silently skips the audit log. AC6 states all mutations must log actor='cockpit'.
+        Either the endpoint must reject no-op edits (422) or must call engine.edit_task
+        to ensure the audit trail is written.
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated},  # no editable fields — empty kwargs
+        )
+        # A valid 200 response without an audit log entry violates AC6.
+        # The endpoint must either: (a) call engine.edit_task producing an audit entry,
+        # or (b) reject the no-op with 422 (no mutation = no log needed).
+        # If 200 is returned, an activity log entry with actor='cockpit' MUST exist.
+        if response.status_code == 200:
+            activity_file = board_dir / "activity.jsonl"
+            assert activity_file.exists(), (
+                "activity.jsonl must exist after a 200 edit response (AC6)"
+            )
+            entries = [
+                json.loads(line)
+                for line in activity_file.read_text().splitlines()
+                if line.strip()
+            ]
+            cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+            assert len(cockpit_entries) >= 1, (
+                "POST /edit with only 'updated' returned 200 but wrote no activity log "
+                "entry — AC6 requires actor='cockpit' for all mutations (empty-kwargs path)"
+            )
+        else:
+            # 422 is also acceptable — a no-op edit is not a mutation, so no log needed.
+            assert response.status_code == 422, (
+                f"Expected 200 (with audit log) or 422 (no-op rejected), got {response.status_code}"
+            )
+
     def test_release_writes_activity_log_actor_cockpit(
         self, client: TestClient, board_dir: Path
     ) -> None:
