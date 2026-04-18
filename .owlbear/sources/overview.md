@@ -42,6 +42,13 @@ External repos and resources studied during OwlBear development.
 | PDS License | <https://github.com/porsche-design-system/porsche-design-system/blob/main/LICENSE.md> | Dual license: Apache 2.0 source code + custom restrictive design assets license | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
 | PDS Theme styles | <https://designsystem.porsche.com/v3/styles/theme> | Design token exports: JS, SCSS, vanilla-extract, Tailwind CSS theme | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
 
+## Context Menu Dismiss + A11y RED Tests (Task #962)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| WAI-ARIA APG Menu Pattern | <https://www.w3.org/WAI/ARIA/apg/patterns/menu/> | `role="menu"` + `role="menuitem"` requirements, Escape closes menu, keyboard interaction spec | `.owlbear/research/962-context-menu-dismiss-a11y.md` | 2026-04-18 |
+| RTL fireEvent API | <https://testing-library.com/docs/dom-testing-library/api-events> | `fireEvent.keyDown(node, {key:'Escape'})`, `fireEvent.mouseDown(node)` patterns for dismiss testing | `.owlbear/research/962-context-menu-dismiss-a11y.md` | 2026-04-18 |
+
 ## Frontend Perf Benchmark + Virtualization (Task #959)
 
 | Source | URL | What | Where Used | Date |
