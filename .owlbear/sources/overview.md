@@ -54,6 +54,15 @@ External repos and resources studied during OwlBear development.
 | useMemo API reference | <https://react.dev/reference/react/useMemo> | Caching calculations, dependency semantics, memo+useMemo synergy pattern | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 | useCallback API reference | <https://react.dev/reference/react/useCallback> | Function caching, equivalent to useMemo returning function, hook ordering rules | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 
+## React Compiler Evaluation (Task #969)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability statement, 1.0.0 stable, supported React versions | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config (3 LOC), babel plugin setup, devDep | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+| babel-plugin-react-compiler (npm) | <https://www.npmjs.com/package/babel-plugin-react-compiler> | v1.0.0, 7.6M weekly downloads, integration LOC | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+| react-compiler-runtime (npm) | <https://www.npmjs.com/package/react-compiler-runtime> | v1.0.0, 0 dependencies, runtime companion | `.owlbear/research/969-react-compiler-evaluation.md` | 2026-04-18 |
+
 ## React Compiler + PDS Interop (Task #970)
 
 | Source | URL | What | Where Used | Date |
