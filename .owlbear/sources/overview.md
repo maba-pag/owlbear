@@ -25,6 +25,12 @@ External repos and resources studied during OwlBear development.
 | React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 | React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 
+## Shell Traffic-Light State Wiring (Task #966)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React docs: Passing Data Deeply with Context | <https://react.dev/learn/passing-data-deeply-with-context> | createContext/useContext pattern, when to use context vs props | `.owlbear/research/966-shell-traffic-light-wiring.md` | 2026-04-18 |
+
 ## E2E Kanban Board Tests: DnD, Density, Scroll (Task #957)
 
 | Source | URL | What | Where Used | Date |
