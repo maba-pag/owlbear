@@ -475,3 +475,26 @@ class TestBuilderDiscovered:
         assert 90 in returned_ids, "valid entry before bad-timestamp entry must be processed"
         assert 91 not in returned_ids, "entry with unparseable timestamp must be skipped"
         assert 92 in returned_ids, "valid entry after bad-timestamp entry must be processed"
+
+    def test_young_superseded_claim_is_running_not_stuck(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """A claim superseded by a re-claim before the timeout is 'running', not 'stuck'.
+
+        Discovered: _collect_task_sessions() marks the previous session as 'stuck'
+        unconditionally when a second claim arrives without a close event. The AC for
+        stuck detection requires age >= claim_timeout. A young superseded claim (age <
+        timeout) must not be classified as 'stuck'.
+        """
+        _write_log(log_path, [
+            _entry(action="claim", task_id=95, detail="agent-1", ts=_ts(timedelta(minutes=-10))),
+            _entry(action="claim", task_id=95, detail="agent-2", ts=_ts(timedelta(minutes=-5))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        task_sessions = [s for s in sessions if s.task_id == 95]
+        assert len(task_sessions) == 2, "two consecutive claims must produce two distinct sessions"
+        states = [s.state for s in task_sessions]
+        assert "stuck" not in states, (
+            "young superseded claim (10 min < 1h timeout) must not be classified as 'stuck'"
+        )
+        assert "running" in states, "young superseded claim must be 'running' (age < timeout)"

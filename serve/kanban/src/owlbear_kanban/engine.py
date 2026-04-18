@@ -65,6 +65,14 @@ def _classify_end_work(detail: str) -> str:
 _CLOSE_ACTIONS: frozenset[str] = frozenset({"end_work", "release", "sweep-release"})
 
 
+def _state_from_age(ref_ts: str, timeout: timedelta, now: datetime) -> str:
+    """Return 'running' or 'stuck' based on whether *ref_ts* is within *timeout* of *now*."""
+    ref_dt = datetime.fromisoformat(ref_ts)
+    if ref_dt.tzinfo is None:
+        ref_dt = ref_dt.replace(tzinfo=UTC)
+    return "running" if (now - ref_dt) < timeout else "stuck"
+
+
 def _collect_task_sessions(
     task_id: int,
     events: list[dict],
@@ -83,7 +91,11 @@ def _collect_task_sessions(
 
         if action == "claim":
             if open_claim_ts is not None:
-                sessions.append(WorkSession(task_id=task_id, state="stuck"))
+                # A new claim arrived without a close event (crash/restart scenario).
+                # Apply the same age-based logic as the unclosed-session path: only
+                # classify as "stuck" when last activity exceeds claim_timeout.
+                ref_ts = last_activity_ts or open_claim_ts
+                sessions.append(WorkSession(task_id=task_id, state=_state_from_age(ref_ts, timeout, now)))
             open_claim_ts = ts
             last_activity_ts = ts
         elif action in _CLOSE_ACTIONS:
@@ -102,11 +114,7 @@ def _collect_task_sessions(
 
     if open_claim_ts is not None:
         ref_ts = last_activity_ts or open_claim_ts
-        ref_dt = datetime.fromisoformat(ref_ts)
-        if ref_dt.tzinfo is None:
-            ref_dt = ref_dt.replace(tzinfo=UTC)
-        state = "running" if (now - ref_dt) < timeout else "stuck"
-        sessions.append(WorkSession(task_id=task_id, state=state))
+        sessions.append(WorkSession(task_id=task_id, state=_state_from_age(ref_ts, timeout, now)))
 
 
 _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
