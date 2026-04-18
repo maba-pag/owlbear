@@ -76,6 +76,13 @@ External repos and resources studied during OwlBear development.
 | Rules of React | <https://react.dev/reference/rules> | Purity, side effects, immutability — compiler contract | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
 | Vitest coverage drop — reactwg/react-compiler#78 | <https://github.com/reactwg/react-compiler/discussions/78> | Compiler-generated branches inflate coverage branch count | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
 
+## useBoard Polling GREEN Implementation (Task #967)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React docs: useEffect | <https://react.dev/reference/react/useEffect> | Cleanup, setInterval pattern, fetch-in-effect, StrictMode double-mount | `.owlbear/research/967-useboard-polling-green.md` | 2026-04-18 |
+| MDN: AbortController | <https://developer.mozilla.org/en-US/docs/Web/API/AbortController> | Signal/abort API, fetch cancellation, browser compat | `.owlbear/research/967-useboard-polling-green.md` | 2026-04-18 |
+
 ## TanStack Query vs Plain Polling Research (Task #960)
 
 | Source | URL | What | Where Used | Date |
