@@ -1,10 +1,10 @@
 ---
 id: 931
 title: 'P2-04: RED — Kanban board surface tests'
-status: in-progress
+status: archived
 priority: important
 created: 2026-04-17T19:58:06.421846+00:00
-updated: 2026-04-18T14:08:53.600672+00:00
+updated: 2026-04-18T14:29:12.152883+00:00
 tags:
 - cockpit
 - frontend
@@ -16,8 +16,8 @@ depends_on:
 - 930
 blocked: false
 block_reason:
-claimed_by: odd-mist
-claimed_at: 2026-04-18T14:08:53.600672+00:00
+claimed_by:
+claimed_at:
 ---
 Brief: see parent #920
 
@@ -194,3 +194,127 @@ If #933 proceeds with its planned structure, the test import path is wrong and t
 **FAIL → in-progress**
 
 **Fix:** Remove `serve/cockpit/web/src/KanbanBoard.tsx`. Restore RED state: tests should fail on import (`../KanbanBoard does not exist`). Do NOT re-implement — #933 is the designated GREEN task and specifies the correct file path (`src/surfaces/kanban/KanbanBoard.tsx`). Note: #933 will need to either (a) update the test import from `'../KanbanBoard'` to the new path, or (b) accept the flat `src/KanbanBoard.tsx` location and align with the test-writer's import — this path question should be resolved at #933's arch review.
+[[2026-04-18]]
+## Builder Notes
+
+**Fix applied:** Deleted `serve/cockpit/web/src/KanbanBoard.tsx` (the premature GREEN implementation created in the previous build attempt).
+
+**RED state restored:** `npm test src/__tests__/KanbanBoard.test.tsx` → 1 suite failed, 0 tests collected — import error on `../KanbanBoard` (module does not exist).
+
+**Commit:** `d15048b8`
+
+**Scope:** 1 file deleted. No other files touched.
+
+**Note for #933 (GREEN):** Test import is `'../KanbanBoard'` (resolves to `src/KanbanBoard.tsx`). If #933 uses `src/surfaces/kanban/KanbanBoard.tsx`, the import path in the test file must be updated — architect should resolve this at #933's arch review.
+[[2026-04-18]]
+## Review Evidence
+
+### Test Execution (quality-runner — independent)
+- vitest: **0 passed, 1 suite failed** (exit 1)
+- Failure: `Failed to resolve import "../KanbanBoard"` — module does not exist
+- RED phase confirmed independently. ✓
+- `serve/cockpit/web/src/KanbanBoard.tsx`: does NOT exist ✓
+
+### Lint
+- ESLint could not run (import target missing) — expected for RED phase; test file syntax verified valid by quality-runner inspection. Not a defect.
+
+### TestFromAC Integrity
+All 25 `TestFromAC_KanbanBoard` test methods read and verified unmodified. PRESERVED.
+
+| Category | Count | AC items |
+|----------|-------|----------|
+| columns (happy + edge) | 5 | AC #2, #8, #9 |
+| cards (happy + edge + boundary) | 11 | AC #3, #4, #5, #6 |
+| context menu | 4 | AC #7 |
+| loading state | 2 | AC #10 |
+| error state | 3 | AC #11 |
+| **Total** | **25** | **11/11 in-scope** |
+
+### Test Quality
+- Assertion specificity: STRONG — exact counts (`toBe(7)`), exact order (`toEqual([…])`), exact attribute values (`toBe('critical')`)
+- Negative/error paths: STRONG — absent card, unblocked/unclaimed absence, error state column check, invalid transition absence
+- Mutation resistance: STRONG — sort order verified by `data-priority` values, column order by full `toEqual`, context menu count by `toBe(2)`
+- Test independence: STRONG — `beforeEach` stubs fresh, `afterEach` calls `vi.unstubAllGlobals()`; error/loading tests override default stub per-test
+- Descriptive names: STRONG
+
+### Security
+No security concerns. Frontend test file, no secrets or injection vectors.
+
+### AC Compliance Table
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test file exists (Vitest + RTL) | `src/__tests__/KanbanBoard.test.tsx`, 25 tests | PASS |
+| Columns in board-config order | `renders all 7 status columns`, `renders columns in board-config order` | PASS |
+| Cards in correct columns, sorted priority | `renders cards within correct column`, `sorts by priority descending` | PASS |
+| Card title / truncation / data-priority | `card renders task title text`, `title attr for truncation`, `data-priority attribute` | PASS |
+| Block badge + reason tooltip | `blocked card shows block badge`, `block badge exposes block_reason` | PASS |
+| Running indicator (`claimed`) | `claimed card shows running indicator`, `unclaimed has no indicator` | PASS |
+| Context menu valid transitions | 4 tests: open, contains valid, no invalid, exact count | PASS |
+| Per-column task counts | `shows correct task count in column header` | PASS |
+| Empty column designed state | `renders designed empty state`, `empty-state non-blank text` | PASS |
+| Loading state | `loading indicator while fetching`, `indicator gone after load` | PASS |
+| Error state recovery message | `error message element`, `non-empty text`, `no columns in error state` | PASS |
+| All tests fail (RED phase) | vitest: 0 passed, 1 suite failed — import error ✓ | PASS |
+
+### Prior Cycle Finding Resolution
+- Finding 1 (AC "all tests fail" violated) → RESOLVED: KanbanBoard.tsx deleted, import fails ✓
+- Finding 2 (import path coupling `'../KanbanBoard'` vs #933 planned `src/surfaces/kanban/KanbanBoard.tsx`) → DOCUMENTED: Builder noted for #933 arch review. Not a defect in this RED task.
+
+### Deductions
+None.
+
+### Verdict
+**Confidence: .95 → PASS → docs**
+[[2026-04-18]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | RED task — net deliverable is `src/__tests__/KanbanBoard.test.tsx` only; `KanbanBoard.tsx` created and deleted; no API or behavior change |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | Yes | Verified | `.owlbear/sources/overview.md` already has `## Kanban Board RED Tests (Task #931)` section with 2 RTL sources (RTL Example+MSW, RTL user-event setup) — added by researcher |
+| 4 | CLI changes | No | N/A | No CLI commands changed |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/931-kanban-board-tests.md` exists; linked in task body; follow-up tasks #954 and #955 created |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- `.owlbear/scratch/931-architect.md` — deleted
+[[2026-04-18]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test file exists (Vitest + RTL) | `src/__tests__/KanbanBoard.test.tsx` — 25 tests, 409 lines, read in full | PASS |
+| Columns in board-config order | `renders all 7 status columns`, `renders columns in board-config order` (lines ~130-180) | PASS |
+| Cards in correct columns, sorted priority | `renders cards within correct column`, `sorts by priority descending` (lines ~200-220) | PASS |
+| Card title / truncation / data-priority | `card renders task title text`, `title attr for truncation`, `data-priority attribute` (lines ~225-250) | PASS |
+| Block badge + reason tooltip | `blocked card shows block badge`, `block badge exposes block_reason` (lines ~255-280) | PASS |
+| Running indicator (claimed) | `claimed card shows running indicator`, `unclaimed has no indicator` (lines ~290-305) | PASS |
+| Context menu valid transitions | 4 tests: open, contains valid, no invalid, exact count (lines ~310-350) | PASS |
+| Per-column task counts | `shows correct task count in column header` (line ~165) | PASS |
+| Empty column designed state | `renders designed empty state`, `empty-state non-blank text` (lines ~175-195) | PASS |
+| Loading state | `loading indicator while fetching`, `indicator gone after load` (lines ~355-380) | PASS |
+| Error state recovery message | `error message element`, `non-empty text`, `no columns in error state` (lines ~385-410) | PASS |
+| All tests fail (RED phase) | `KanbanBoard.tsx` not found (file_search confirmed); import fails | PASS |
+
+### Test Results
+- pytest (full Python suite): 589 passed, 6 failed (all in mcp-knowledge — pre-existing, not task scope)
+- ruff: clean (exit 0)
+- Frontend (vitest): RED state confirmed — 0 tests collected, 1 suite failed (import error). Expected for RED task.
+
+### Architect Quality: 4/5
+Specific AC with 14 items, 11 correctly scoped to jsdom, 3 deferred to E2E (#955). `claim_status` corrected to `claimed: bool` — good refinement. Import path question (flat vs nested) left for GREEN task arch review — reasonable deferral. Minor gap: required researcher to surface missing API fields (#954 dependency).
+
+### Deduction Breakdown
+- 12/12 AC lines with specific evidence: no deduction
+- Ruff clean: no deduction
+- AC quality 4/5 (above 3): no deduction
+- Reviewer evidence present, detailed, two review cycles: no deduction
+- Full-suite failures not in task scope: no deduction
+
+### Confidence: .98
+### Action: archive

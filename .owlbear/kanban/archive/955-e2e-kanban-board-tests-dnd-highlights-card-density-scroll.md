@@ -1,10 +1,10 @@
 ---
 id: 955
 title: 'E2E kanban board tests: DnD highlights, card density, scroll'
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-04-18T13:41:19.344390+00:00
-updated: 2026-04-18T14:00:12.475022+00:00
+updated: 2026-04-18T14:50:02.970472+00:00
 tags:
 - cockpit
 - frontend
@@ -109,3 +109,127 @@ Discovered during #931 research: jsdom lacks layout engine and functional DnD AP
 2. **#957** (todo → in-progress, after #956): Write failing Playwright tests for DnD highlights, card density, scroll
 
 Note: #957's `depends_on` should be updated to include #956 (currently only lists #955).
+[[2026-04-18]]
+## Builder Notes
+
+**Pass-through — no implementation required.**
+
+### Files Changed
+- `.owlbear/kanban/tasks/957-red-playwright-e2e-tests-for-kanban-board-dnd-density-scroll.md` — fixed `depends_on` to include `956` (architect-documented gap, C2)
+
+### Test Results
+- N/A — framework decision task; no code, no tests
+
+### Lint
+- N/A — no Python/TS files modified
+
+### Evidence Summary
+- AC #1 (Playwright chosen, confidence 0.85): satisfied by research in `.owlbear/research/955-e2e-kanban-board-tests.md`, validated by challenger
+- AC #2 (DnD, density, scroll tests): delegated to #957
+- AC #3 (runs against dev server): delegated to #956
+- Dependency gap fixed: `#957 depends_on` updated from `[955]` → `[955, 956]`
+
+### Remaining Dependency Notes (for reviewer)
+- Informal GREEN dependency (#956, #957 both require kanban board component to exist) should be formalized when the GREEN impl task is created
+- #956 AC should clarify `vite dev` vs `vite preview` for `webServer` config (research note B1)
+[[2026-04-18]]
+## Review Evidence
+
+### Test Results
+- N/A — pass-through task, no code or tests produced
+
+### Lint
+- N/A — only changed file is `.owlbear/kanban/tasks/957-*.md` (YAML/Markdown metadata)
+
+### Coverage
+- N/A
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+No `TestFromAC_*` classes exist — conditional skipped.
+
+#### Security Review
+- Only changed file: `.owlbear/kanban/tasks/957-red-playwright-e2e-tests-for-kanban-board-dnd-density-scroll.md` — YAML frontmatter metadata only. No secrets, no injection surfaces, no code. No issues.
+
+#### Test Integrity
+No `TestFromAC_*` modifications — conditional skipped.
+
+#### Test Quality
+Pass-through task — no tests written. Test-writer correctly identified no testable interfaces exist for AC #1. AC #2-3 delegated to #957/#956. N/A.
+
+#### Data Safety
+N/A — no runtime code, no state mutations, no external boundaries.
+
+#### Implementation-Aware Test Gap Analysis
+N/A — no implementation.
+
+#### Necessity Check
+N/A — no new dependencies, integrations, or tooling added by #955 itself.
+
+#### Builder Process Quality
+One `## Builder Notes` section, single atomic change, no retries. **CLEAN.**
+
+### Pass 2 — INFORMATIONAL
+No informational findings.
+
+### AC Compliance
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| E2E test framework chosen (Playwright recommended) | Research doc `.owlbear/research/955-e2e-kanban-board-tests.md` — 8 sources, 5 ≥0.90 relevance, Playwright chosen at 0.85 confidence; challenger validated (originally blocked Vitest Browser Mode at 0.35 confidence; researcher accepted revision) | PASS |
+| Tests cover DnD highlights, card density, scroll | Delegated to #957 — architect APPROVE verdict documents this explicitly. #957 task file exists at correct path with matching AC lines for DnD, density, scroll. | PASS (delegated) |
+| Tests run against dev server or build | Delegated to #956 — architect APPROVE verdict documents this explicitly. | PASS (delegated) |
+
+### Builder Change Verification
+- Claimed: `#957 depends_on` updated from `[955]` → `[955, 956]`
+- Verified: `.owlbear/kanban/tasks/957-red-playwright-e2e-tests-for-kanban-board-dnd-density-scroll.md` frontmatter shows `depends_on: [955, 956]` — matches claim exactly.
+
+### Deductions
+None.
+
+### Verdict
+Confidence: 0.96 → **PASS**
+
+Action: advance to docs.
+[[2026-04-18]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Framework decision + delegation task; only change was YAML frontmatter in #957 task file. No copilot-instructions.md update needed. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | Yes | Verified | `.owlbear/sources/overview.md` §"E2E Kanban Board Tests (Task #955)" already contains 4 rows: Playwright intro, DnD+scrolling, Locator API (boundingBox), Vitest Browser Mode, Vitest Component Testing — all dated 2026-04-18. |
+| 4 | CLI changes | No | N/A | No CLI additions or modifications. |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/955-e2e-kanban-board-tests.md` exists, linked in task body. Follow-up tasks #956 and #957 confirmed created. |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/955-*` files found)
+[[2026-04-18]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| E2E test framework chosen (Playwright recommended) | `.owlbear/research/955-e2e-kanban-board-tests.md` L67-69: "Use Playwright Test (standalone)"; challenger validated at 0.85 confidence | PASS |
+| Tests cover DnD highlights, card density, scroll | Delegated to #957; task file confirmed with matching AC, `depends_on: [955, 956]` verified in frontmatter | PASS (delegated) |
+| Tests run against dev server or build | Delegated to #956; architect APPROVE documents delegation | PASS (delegated) |
+
+### Test Results
+- pytest: 593 passed, 6 failed (all in serve/mcp-knowledge/ -- pre-existing, out of scope), 0 skipped
+- ruff: clean
+
+### Architect Quality: 4/5
+Clear framework-choice AC with recommended tool. Minor dependency gap (C2: #957 missing #956 in depends_on) caught by challenger and fixed by builder. Good delegation documentation. Deducted 1 point for the gap requiring downstream fix.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 3 verified) -- no deduction
+- Lint violations: none -- no deduction
+- AC quality score 4 (> 3): no deduction
+- Reviewer evidence: present, detailed, PASS verdict -- no deduction
+- Full-suite failures in task scope: 0 (6 failures all in mcp-knowledge, unrelated) -- no deduction
+
+### Confidence: 1.00
+### Action: archive

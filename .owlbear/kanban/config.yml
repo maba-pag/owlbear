@@ -24,6 +24,6 @@ claim_timeout: 1h
 tui:
   title_lines: 2
   hide_empty_columns: true
-next_id: 958
+next_id: 1011
 archive_dir: archive
 activity_log: false
