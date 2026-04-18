@@ -1,9 +1,13 @@
-import { PorscheDesignSystemProvider, PHeading } from '@porsche-design-system/components-react'
+import { BrowserRouter } from 'react-router'
+import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
+import Shell from './Shell'
 
 function App() {
   return (
     <PorscheDesignSystemProvider>
-      <PHeading>OwlBear Cockpit</PHeading>
+      <BrowserRouter>
+        <Shell />
+      </BrowserRouter>
     </PorscheDesignSystemProvider>
   )
 }

@@ -1,0 +1,47 @@
+.shell {
+  display: grid;
+  grid-template-areas:
+    'status-bar status-bar status-bar'
+    'nav-rail workspace sidecar'
+    'nav-rail workspace sidecar';
+  grid-template-columns: 56px 1fr 360px;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  background: var(--pds-theme-light-background-base);
+  color: var(--pds-theme-light-primary);
+}
+
+.shell__status-bar {
+  grid-area: status-bar;
+  display: flex;
+  align-items: center;
+  gap: var(--pds-grid-gap, 8px);
+  padding: 0 var(--pds-grid-margin, 16px);
+  background: var(--pds-theme-light-background-surface);
+  border-bottom: 1px solid var(--pds-theme-light-contrast-low);
+}
+
+.shell__nav-rail {
+  grid-area: nav-rail;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: var(--pds-grid-gap, 8px);
+  background: var(--pds-theme-light-background-surface);
+  border-right: 1px solid var(--pds-theme-light-contrast-low);
+}
+
+.shell__workspace {
+  grid-area: workspace;
+  overflow: auto;
+}
+
+.shell__sidecar {
+  grid-area: sidecar;
+  overflow: auto;
+  border-left: 1px solid var(--pds-theme-light-contrast-low);
+}
+
+.shell__contextual {
+  display: none;
+}

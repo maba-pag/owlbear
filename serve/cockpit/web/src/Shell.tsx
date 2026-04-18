@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { Routes, Route } from 'react-router'
+import './Shell.css'
 
 function Shell() {
   const tabsRef = useRef<HTMLElement>(null)
@@ -19,23 +20,23 @@ function Shell() {
   }, [])
 
   return (
-    <div>
-      <header data-region="status-bar">
+    <div className="shell">
+      <header className="shell__status-bar" data-region="status-bar">
         <span data-testid="traffic-light" />
         <span data-testid="task-count" />
       </header>
-      <nav data-region="nav-rail">
+      <nav className="shell__nav-rail" data-region="nav-rail">
         <button data-surface="kanban" aria-current="page">
           Kanban
         </button>
       </nav>
-      <main data-region="workspace">
+      <main className="shell__workspace" data-region="workspace">
         <Routes>
           <Route path="/" element={<div>kanban</div>} />
           <Route path="/hello" element={<div>hello</div>} />
         </Routes>
       </main>
-      <aside data-region="sidecar">
+      <aside className="shell__sidecar" data-region="sidecar">
         <p-tabs ref={tabsRef}>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
             <div ref={detailRef} data-tab-content="detail" aria-hidden="false" />
@@ -45,7 +46,7 @@ function Shell() {
           </p-tabs-item>
         </p-tabs>
       </aside>
-      <div data-region="contextual" />
+      <div className="shell__contextual" data-region="contextual" />
     </div>
   )
 }
