@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## Kanban Board RED Tests (Task #931)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| RTL Example + MSW recommendation | <https://testing-library.com/docs/react-testing-library/example-intro> | MSW for API mocking, fetch-level mock pattern, async test patterns | `.owlbear/research/931-kanban-board-tests.md` | 2026-04-18 |
+| RTL user-event setup | <https://testing-library.com/docs/user-event/setup> | userEvent.setup() session pattern, DnD limitations in jsdom | `.owlbear/research/931-kanban-board-tests.md` | 2026-04-18 |
+
 ## App Shell RED Phase — Test Strategy (Task #927)
 
 | Source | URL | What | Where Used | Date |
@@ -44,6 +51,16 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse hook I/O contract: stdin JSON schema, stdout allow/deny format, exit code semantics, fail-open spec | `.owlbear/research/891-pretooluse-hooks-test-approach.md` | 2026-04-17 |
+
+## E2E Kanban Board Tests (Task #955)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright intro + installation | <https://playwright.dev/docs/intro> | Setup, webServer config, headless/headed modes, CI story | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Playwright DnD + scrolling | <https://playwright.dev/docs/input#drag-and-drop> | `locator.dragTo()`, manual drag via `mouse.down()/move()/up()`, `mouse.wheel()`, `scrollIntoViewIfNeeded()` | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Playwright Locator API — boundingBox | <https://playwright.dev/docs/api/class-locator#locator-bounding-box> | `boundingBox()` returns `{x,y,width,height}` for layout measurement | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Vitest Browser Mode | <https://vitest.dev/guide/browser/> | Browser mode setup, Playwright provider, projects config, limitations | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
+| Vitest Component Testing | <https://vitest.dev/guide/browser/component-testing> | Component testing patterns, `vitest-browser-react`, Testing Library integration | `.owlbear/research/955-e2e-kanban-board-tests.md` | 2026-04-18 |
 
 ## SSRF Surface in BrowserContentFetcher (Task #949)
 

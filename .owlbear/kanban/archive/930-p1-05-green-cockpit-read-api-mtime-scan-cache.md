@@ -1,10 +1,10 @@
 ---
 id: 930
 title: 'P1-05: GREEN — Cockpit read API + mtime-scan cache'
-status: done
+status: archived
 priority: important
 created: 2026-04-17T19:58:06.396709+00:00
-updated: 2026-04-18T13:24:34.557767+00:00
+updated: 2026-04-18T13:32:07.948804+00:00
 tags:
 - cockpit
 - backend
@@ -375,3 +375,35 @@ No new security concerns introduced in Pass 2 code. All 5 adapter functions are 
 **Scratch files:** No `.owlbear/scratch/930-*` files found — nothing to clean.
 
 **Review Evidence:** Present (`## Review Evidence (Pass 2)`) — PASS verdict, confidence .94, all AC items PASS.
+[[2026-04-18]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Routes in routes/read.py | `routes/read.py` exists, `APIRouter` with 4 routes, registered in `main.py` | PASS |
+| Engine adapter wraps 5 methods | `adapter.py:11-35` — 5 typed wrappers; `read.py` imports `adapter.*` throughout | PASS |
+| Mtime-scan cache; conditional reload | `cache.py:43-52` `has_changed()` tracks `_last_mtime`; `read.py:59-60` engine called only on miss | PASS |
+| GET /api/tasks includes mtime | `read.py:78` `mtime=cache.last_mtime` | PASS |
+| GET /api/tasks/{id} includes updated | `read.py:88` `updated=task.updated` | PASS |
+| GET /api/board returns config + transitions | `read.py:28-40` iterates statuses, builds sorted dict | PASS |
+| GET /api/sessions proxies list_sessions | `read.py:106-114` passes filter to `adapter.list_sessions` | PASS |
+| Pydantic response models | `models.py` — 6 BaseModel subclasses | PASS |
+| All #928 RED tests pass | 34/34 pass (quality-runner) | PASS |
+| Boundary test #924 passes | 19/19 pass (quality-runner) | PASS |
+
+### Test Results
+- pytest: 557 passed, 6 failed (all in mcp-knowledge/knowledge — pre-existing, outside cockpit scope; 0 failures in task scope)
+- ruff: clean (0 violations)
+
+### Architect Quality: 4/5
+Specific AC with clear file list. 34 RED tests from #928 defined exact contract. Minor ambiguity on adapter necessity led to initial builder skip, but overall strong direction. Architecture review notes for builder were particularly useful (empty board edge case, WorkSession conversion, valid_transitions iteration).
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 10 covered)
+- Lint violations: 0
+- AC quality score 4 (> 3): no deduction
+- Reviewer evidence section: present and thorough (two-pass cycle)
+- Full-suite failures in task scope: 0
+
+### Confidence: .98
+### Action: archive

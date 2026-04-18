@@ -1,0 +1,407 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, fireEvent, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
+import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
+import KanbanBoard from '../KanbanBoard'
+
+// ─── Mock fixtures ────────────────────────────────────────────────────────────
+
+const BOARD = {
+  statuses: [
+    { name: 'research' },
+    { name: 'backlog' },
+    { name: 'todo' },
+    { name: 'in-progress' },
+    { name: 'review' },
+    { name: 'docs' },
+    { name: 'done' },
+  ],
+  priorities: ['someday', 'nice-to-have', 'important', 'needed', 'critical'],
+  valid_transitions: {
+    research: ['backlog'],
+    backlog: ['research', 'todo'],
+    todo: ['backlog', 'in-progress'],
+    'in-progress': ['todo', 'review'],
+    review: ['in-progress', 'docs'],
+    docs: ['review', 'done'],
+    done: [],
+  } as Record<string, string[]>,
+}
+
+const TASKS = {
+  tasks: [
+    {
+      id: 1,
+      title: 'Task one',
+      status: 'backlog',
+      priority: 'critical',
+      tags: [],
+      blocked: false,
+      block_reason: null,
+      claimed: false,
+    },
+    {
+      id: 2,
+      title: 'Blocked task',
+      status: 'todo',
+      priority: 'needed',
+      tags: ['bug'],
+      blocked: true,
+      block_reason: 'Waiting for API',
+      claimed: false,
+    },
+    {
+      id: 3,
+      title: 'Active task',
+      status: 'in-progress',
+      priority: 'important',
+      tags: [],
+      blocked: false,
+      block_reason: null,
+      claimed: true,
+    },
+    {
+      id: 4,
+      title: 'Low priority task',
+      status: 'backlog',
+      priority: 'someday',
+      tags: [],
+      blocked: false,
+      block_reason: null,
+      claimed: false,
+    },
+  ],
+  mtime: 1713456000,
+}
+
+// ─── Fetch stub helpers ───────────────────────────────────────────────────────
+
+function stubFetchSuccess() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url.includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
+      }
+      if (url.includes('/api/tasks')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASKS) })
+      }
+      return Promise.reject(new Error(`Unexpected URL: ${url}`))
+    }),
+  )
+}
+
+function stubFetchError() {
+  vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('Network error'))))
+}
+
+function stubFetchPending() {
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+}
+
+// ─── Render helper ────────────────────────────────────────────────────────────
+
+function renderBoard() {
+  return render(
+    <PorscheDesignSystemProvider>
+      <MemoryRouter>
+        <KanbanBoard />
+      </MemoryRouter>
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('TestFromAC_KanbanBoard', () => {
+  beforeEach(() => {
+    stubFetchSuccess()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // ─── AC #2, #8, #9 — columns ─────────────────────────────────────────────
+
+  describe('columns', () => {
+    it('renders all 7 status columns from board config', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const columns = container.querySelectorAll('[data-column]')
+        expect(columns.length).toBe(7)
+      })
+    })
+
+    it('renders columns in board-config order', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const columns = Array.from(container.querySelectorAll('[data-column]'))
+        const names = columns.map(col => col.getAttribute('data-column'))
+        expect(names).toEqual([
+          'research',
+          'backlog',
+          'todo',
+          'in-progress',
+          'review',
+          'docs',
+          'done',
+        ])
+      })
+    })
+
+    it('shows correct task count in column header', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const backlogCol = container.querySelector('[data-column="backlog"]')
+        const count = backlogCol?.querySelector('[data-testid="column-count"]')
+        expect(count).not.toBeNull()
+        expect(count?.textContent).toBe('2')
+      })
+    })
+
+    it('empty column renders designed empty state (not blank)', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        // 'research' has no tasks in the mock data
+        const researchCol = container.querySelector('[data-column="research"]')
+        expect(researchCol?.querySelector('[data-testid="empty-column"]')).not.toBeNull()
+      })
+    })
+
+    it('empty column empty-state content is non-blank text', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const researchCol = container.querySelector('[data-column="research"]')
+        const emptyState = researchCol?.querySelector('[data-testid="empty-column"]')
+        expect(emptyState?.textContent?.trim().length).toBeGreaterThan(0)
+      })
+    })
+  })
+
+  // ─── AC #3, #4, #5, #6 — cards ───────────────────────────────────────────
+
+  describe('cards', () => {
+    it('renders cards within their correct status column', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const backlogCol = container.querySelector('[data-column="backlog"]')
+        const cards = backlogCol?.querySelectorAll('[data-testid="task-card"]')
+        expect(cards?.length).toBe(2)
+      })
+    })
+
+    it('card is absent from a column it does not belong to', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        // 'research' column has no tasks in the mock data
+        const researchCol = container.querySelector('[data-column="research"]')
+        const cards = researchCol?.querySelectorAll('[data-testid="task-card"]')
+        expect(cards?.length ?? 0).toBe(0)
+      })
+    })
+
+    it('sorts cards within a column by priority descending (critical first)', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const backlogCol = container.querySelector('[data-column="backlog"]')
+        const cards = Array.from(backlogCol?.querySelectorAll('[data-testid="task-card"]') ?? [])
+        expect(cards.length).toBe(2)
+        // id=1 is critical, id=4 is someday — critical must come first
+        expect(cards[0].getAttribute('data-priority')).toBe('critical')
+        expect(cards[1].getAttribute('data-priority')).toBe('someday')
+      })
+    })
+
+    it('card renders task title text', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="1"]')
+        expect(card?.textContent).toContain('Task one')
+      })
+    })
+
+    it('card title element has full title in title attribute for truncation tooltip', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="1"]')
+        const titleEl = card?.querySelector('[data-testid="card-title"]')
+        expect(titleEl?.getAttribute('title')).toBe('Task one')
+      })
+    })
+
+    it('card has data-priority attribute matching task priority', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="1"]')
+        expect(card?.getAttribute('data-priority')).toBe('critical')
+      })
+    })
+
+    it('blocked card shows block badge', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="2"]')
+        expect(card?.querySelector('[data-testid="block-badge"]')).not.toBeNull()
+      })
+    })
+
+    it('block badge exposes block_reason text via title or aria-label', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="2"]')
+        const badge = card?.querySelector('[data-testid="block-badge"]')
+        const reason =
+          badge?.getAttribute('title') ??
+          badge?.getAttribute('aria-label') ??
+          badge?.textContent ??
+          ''
+        expect(reason).toContain('Waiting for API')
+      })
+    })
+
+    it('unblocked card has no block badge', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="1"]')
+        expect(card?.querySelector('[data-testid="block-badge"]')).toBeNull()
+      })
+    })
+
+    it('claimed card shows running indicator', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="3"]')
+        expect(card?.querySelector('[data-testid="running-indicator"]')).not.toBeNull()
+      })
+    })
+
+    it('unclaimed card has no running indicator', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const card = container.querySelector('[data-testid="task-card"][data-id="1"]')
+        expect(card?.querySelector('[data-testid="running-indicator"]')).toBeNull()
+      })
+    })
+  })
+
+  // ─── AC #7 — context menu ────────────────────────────────────────────────
+
+  describe('context menu', () => {
+    it('right-clicking a card opens a context menu', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
+      })
+    })
+
+    it('context menu contains all valid transition items for card status', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      // Card id=1 is in 'backlog'; valid_transitions['backlog'] = ['research', 'todo']
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        const menu = container.querySelector('[data-testid="context-menu"]')
+        const items = Array.from(menu?.querySelectorAll('[data-testid="transition-item"]') ?? [])
+        const statuses = items.map(i => i.getAttribute('data-status'))
+        expect(statuses).toContain('todo')
+        expect(statuses).toContain('research')
+      })
+    })
+
+    it('context menu does not contain invalid transition targets', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      // 'done' and 'in-progress' are not reachable from 'backlog'
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        const menu = container.querySelector('[data-testid="context-menu"]')
+        const items = Array.from(menu?.querySelectorAll('[data-testid="transition-item"]') ?? [])
+        const statuses = items.map(i => i.getAttribute('data-status'))
+        expect(statuses).not.toContain('done')
+        expect(statuses).not.toContain('in-progress')
+      })
+    })
+
+    it('context menu contains exactly as many items as valid transitions', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      // Card id=1 in 'backlog'; valid_transitions['backlog'] = ['research', 'todo'] => 2 items
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        const menu = container.querySelector('[data-testid="context-menu"]')
+        const items = menu?.querySelectorAll('[data-testid="transition-item"]')
+        expect(items?.length).toBe(2)
+      })
+    })
+  })
+
+  // ─── AC #10 — loading state ───────────────────────────────────────────────
+
+  describe('loading state', () => {
+    it('renders loading indicator while data is being fetched', () => {
+      stubFetchPending() // override beforeEach stub — never resolves
+      const { container } = renderBoard()
+      expect(
+        container.querySelector('[data-testid="loading-indicator"]') ??
+          container.querySelector('[data-testid="skeleton"]'),
+      ).not.toBeNull()
+    })
+
+    it('loading indicator is not shown after data has loaded', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        // Columns visible means data has loaded
+        expect(container.querySelector('[data-column]')).not.toBeNull()
+      })
+      expect(
+        container.querySelector('[data-testid="loading-indicator"]') ??
+          container.querySelector('[data-testid="skeleton"]'),
+      ).toBeNull()
+    })
+  })
+
+  // ─── AC #11 — error state ─────────────────────────────────────────────────
+
+  describe('error state', () => {
+    it('renders error message element when API call fails', async () => {
+      stubFetchError() // override beforeEach stub
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="error-message"]')).not.toBeNull()
+      })
+    })
+
+    it('error message contains non-empty recovery text', async () => {
+      stubFetchError()
+      const { container } = renderBoard()
+      await waitFor(() => {
+        const errorEl = container.querySelector('[data-testid="error-message"]')
+        expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
+      })
+    })
+
+    it('board columns are not rendered in error state', async () => {
+      stubFetchError()
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="error-message"]')).not.toBeNull()
+      })
+      expect(container.querySelector('[data-column]')).toBeNull()
+    })
+  })
+})

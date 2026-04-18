@@ -1,14 +1,8 @@
 [
   {
-    "entry_id": "2026-04-18-pds-cdn-import-path.md",
-    "content_preview": "`skipPorscheDesignSystemCDNRequestsDuringTests()` exported from main PDS package, NOT /testing subpath",
-    "recommendation": "approve",
-    "reason": "HIGH: corrects incorrect research doc, non-obvious, confirmed by codebase — promoted to h-frontend-conventions Testing section"
-  },
-  {
     "entry_id": "2026-04-18-jsonl-state-machine-all-paths.md",
-    "content_preview": "State machine tests must cover all transition paths incl. double-event-without-close (crash recovery)",
+    "content_preview": "State machine tests should cover ALL transition paths incl double-claim-without-close (crash/re-claim)",
     "recommendation": "keep",
-    "reason": "MEDIUM (4th cycle) — actionable, non-obvious; still single occurrence. Escalate via scribe if no corroboration by next cycle."
+    "reason": "Actionable, non-obvious, but single occurrence — hold for next cycle to check for recurrence"
   }
 ]
