@@ -108,16 +108,30 @@ const PRIORITY_COLORS: Record<string, string> = {
 interface CardProps {
   task: Task
   onContextMenu: (e: React.MouseEvent, task: Task) => void
+  onDragStart: () => void
+  onDragEnd: () => void
 }
 
-export const Card = memo(function Card({ task, onContextMenu }: CardProps) {
+export const Card = memo(function Card({ task, onContextMenu, onDragStart, onDragEnd }: CardProps) {
   return (
     <div
       data-testid="task-card"
       data-id={task.id}
       data-priority={task.priority}
-      style={{ borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? '#888888'}` }}
+      draggable={true}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onContextMenu={(e) => onContextMenu(e, task)}
+      style={{
+        borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? '#888888'}`,
+        minHeight: '48px',
+        maxHeight: '56px',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 8px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+      }}
     >
       <span data-testid="card-title" title={task.title}>
         {task.title}
@@ -143,16 +157,48 @@ interface ColumnProps {
   tasks: Task[]
   priorities: string[]
   onContextMenu: (e: React.MouseEvent, task: Task) => void
+  onDragStart: (status: string) => void
+  onDragEnd: () => void
+  isValidDragTarget: boolean
 }
 
-export const Column = memo(function Column({ status, tasks, priorities, onContextMenu }: ColumnProps) {
+export const Column = memo(function Column({
+  status,
+  tasks,
+  priorities,
+  onContextMenu,
+  onDragStart,
+  onDragEnd,
+  isValidDragTarget,
+}: ColumnProps) {
+  const [isDragOver, setIsDragOver] = useState(false)
+
   const sorted = useMemo(
     () => [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority)),
     [tasks, priorities],
   )
 
+  const handleCardDragStart = useCallback(() => {
+    onDragStart(status)
+  }, [onDragStart, status])
+
   return (
-    <div data-column={status} style={{ overflowY: 'auto', maxHeight: '100vh' }}>
+    <div
+      data-column={status}
+      data-drag-over={isDragOver && isValidDragTarget ? 'true' : undefined}
+      onDragOver={(e) => {
+        if (isValidDragTarget) {
+          e.preventDefault()
+          setIsDragOver(true)
+        }
+      }}
+      onDragLeave={() => setIsDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setIsDragOver(false)
+      }}
+      style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 56px)' }}
+    >
       <header>
         <span>{status}</span>
         <span data-testid="column-count">{tasks.length}</span>
@@ -160,7 +206,15 @@ export const Column = memo(function Column({ status, tasks, priorities, onContex
       {sorted.length === 0 ? (
         <div data-testid="empty-column">No tasks</div>
       ) : (
-        sorted.map((task) => <Card key={task.id} task={task} onContextMenu={onContextMenu} />)
+        sorted.map((task) => (
+          <Card
+            key={task.id}
+            task={task}
+            onContextMenu={onContextMenu}
+            onDragStart={handleCardDragStart}
+            onDragEnd={onDragEnd}
+          />
+        ))
       )}
     </div>
   )
@@ -179,6 +233,7 @@ export default function KanbanBoard() {
   const { board, tasks, loading, error, refetchTasks } = useBoard()
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
+  const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -208,6 +263,14 @@ export default function KanbanBoard() {
     setMoveError(null)
     setContextMenu({ taskId: task.id, taskStatus: task.status, x: e.clientX, y: e.clientY })
   }, [board])
+
+  const handleDragStart = useCallback((status: string) => {
+    setDragSourceStatus(status)
+  }, [])
+
+  const handleDragEnd = useCallback(() => {
+    setDragSourceStatus(null)
+  }, [])
 
   const tasksByStatus = useMemo(() => {
     return tasks.reduce<Record<string, Task[]>>((acc, task) => {
@@ -257,6 +320,12 @@ export default function KanbanBoard() {
             tasks={colTasks}
             priorities={board.priorities}
             onContextMenu={handleContextMenu}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            isValidDragTarget={
+              dragSourceStatus !== null &&
+              (board.valid_transitions[dragSourceStatus] ?? []).includes(name)
+            }
           />
         )
       })}
