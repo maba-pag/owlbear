@@ -531,3 +531,90 @@ class TestBuilderDiscovered:
         cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
         assert cockpit_entries[0]["action"] == "release"
         assert cockpit_entries[0]["task_id"] == 2
+
+
+# ---------------------------------------------------------------------------
+# AC #975: block:user tag lifecycle in edit_task route
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BlockUserTag:
+    """Tests for automatic block:user tag lifecycle in POST /api/tasks/{id}/edit.
+
+    AC #975 — all tests must FAIL until GREEN implementation injects tag logic:
+      1. edit_task adds 'block:user' tag when transitioning task to blocked
+      2. edit_task removes 'block:user' tag when unblocking
+      3. Tag addition is idempotent (no duplicates if called repeatedly)
+      4. Unblock on a task without the tag doesn't error (robustness guard)
+
+    Notes: AC4 trivially passes in RED (route returns 200 without tag handling).
+    AC1-3 fail because the route does not inject/remove 'block:user' yet.
+    """
+
+    def test_block_adds_block_user_tag(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC1: Blocking via cockpit edit_task injects 'block:user' into the task's tags."""
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "block_reason": "waiting on infra"},
+        )
+        assert response.status_code == 200
+        assert "block:user" in response.json()["tags"]
+
+    def test_unblock_removes_block_user_tag(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC2: Unblocking via cockpit edit_task removes 'block:user' from task tags."""
+        # Setup: block with block:user tag present (simulates a prior cockpit block)
+        engine.edit_task("1", blocked=True, block_reason="dependency", add_tags=["block:user"])
+        task = engine.show_task("1")
+        assert "block:user" in (task.tags or [])  # confirm setup
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "block_reason": None},
+        )
+        assert response.status_code == 200
+        assert "block:user" not in response.json()["tags"]
+
+    def test_block_user_tag_is_idempotent(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC3: Blocking a second time doesn't create duplicate 'block:user' tags."""
+        # First block
+        task = engine.show_task("1")
+        r1 = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "block_reason": "first block"},
+        )
+        assert r1.status_code == 200
+
+        # Second block (task is already blocked — update reason)
+        task2 = engine.show_task("1")
+        r2 = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task2.updated, "block_reason": "second block"},
+        )
+        assert r2.status_code == 200
+        tags = r2.json()["tags"]
+        assert tags.count("block:user") == 1, (
+            f"Expected exactly 1 'block:user' tag, got {tags.count('block:user')}: {tags}"
+        )
+
+    def test_unblock_without_tag_present_returns_200(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """AC4: Unblocking a task that has no 'block:user' tag doesn't error (returns 200)."""
+        # Setup: block via engine directly WITHOUT adding block:user tag
+        engine.edit_task("1", blocked=True, block_reason="set by engine, no tag added")
+        task = engine.show_task("1")
+        assert "block:user" not in (task.tags or [])  # confirm tag absent
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "block_reason": None},
+        )
+        assert response.status_code == 200
+        assert response.json()["blocked"] is False
