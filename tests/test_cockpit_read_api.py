@@ -79,20 +79,23 @@ def _make_board(base_dir: Path) -> Path:
 
 @pytest.fixture
 def board_dir(tmp_path: Path) -> Path:
-    """Minimal kanban board with 3 tasks covering filter dimensions.
+    """Minimal kanban board with 4 tasks covering filter dimensions.
 
-    Task 1: status=todo,       priority=important, tags=[alpha], blocked=False
-    Task 2: status=review,     priority=critical,  tags=[beta],  blocked=False
-    Task 3: status=in-progress,priority=needed,    tags=[gamma], blocked=True
+    Task 1: status=todo,       priority=important, tags=[alpha], blocked=False, claimed=False
+    Task 2: status=review,     priority=critical,  tags=[beta],  blocked=False, claimed=False
+    Task 3: status=in-progress,priority=needed,    tags=[gamma], blocked=True,  claimed=False
+    Task 4: status=in-progress,priority=important, tags=[delta], blocked=False, claimed=True
     """
     kanban_dir = _make_board(tmp_path)
     seed_engine = KanbanEngine(kanban_dir, agent_name="seed")
     seed_engine.create_task("Alpha task", status="todo", priority="important", tags=["alpha"])
     seed_engine.create_task("Beta task", status="review", priority="critical", tags=["beta"])
     seed_engine.create_task("Gamma blocked", status="in-progress", priority="needed", tags=["gamma"])
-    # Mark task 3 as blocked — list_tasks first to populate id→filename cache
+    seed_engine.create_task("Delta claimed", status="in-progress", priority="important", tags=["delta"])
+    # Populate id→filename cache before edits
     seed_engine.list_tasks()
     seed_engine.edit_task("3", blocked=True, block_reason="waiting on dependency")
+    seed_engine.claim_task("4")
     return kanban_dir
 
 
@@ -429,3 +432,84 @@ class TestFromAC_MtimeCache:
             "mtime must change when a task file is modified, "
             f"but before={mtime_before} and after={mtime_after} are equal"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC: block_reason and claimed fields on TaskSummaryOut (#954)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_TaskSummaryFields:
+    """Tests that GET /api/tasks exposes block_reason and claimed per task.
+
+    Covers:
+    - TaskSummaryOut includes block_reason: str | None = None  (AC#1)
+    - TaskSummaryOut includes claimed: bool = False            (AC#1)
+    - Adapter maps block_reason and claimed from engine TaskSummary (AC#2)
+    - GET /api/tasks response includes both fields per task     (AC#4)
+    - Correct values: block_reason for blocked task, claimed for claimed task (AC arch-review)
+    - Default nulls/false for unblocked/unclaimed tasks         (AC arch-review)
+    """
+
+    def test_task_summary_has_block_reason_field(self, client: TestClient) -> None:
+        """Each task summary in GET /api/tasks includes a 'block_reason' key."""
+        response = client.get("/api/tasks")
+        assert response.status_code == 200
+        tasks = response.json()["tasks"]
+        assert len(tasks) > 0
+        for task in tasks:
+            assert "block_reason" in task, f"Task summary missing 'block_reason': {task}"
+
+    def test_task_summary_has_claimed_field(self, client: TestClient) -> None:
+        """Each task summary in GET /api/tasks includes a 'claimed' key."""
+        response = client.get("/api/tasks")
+        assert response.status_code == 200
+        tasks = response.json()["tasks"]
+        assert len(tasks) > 0
+        for task in tasks:
+            assert "claimed" in task, f"Task summary missing 'claimed': {task}"
+
+    def test_blocked_task_block_reason_is_correct_value(self, client: TestClient) -> None:
+        """The blocked task (task 3) has block_reason == 'waiting on dependency'."""
+        response = client.get("/api/tasks", params={"blocked": "true"})
+        assert response.status_code == 200
+        tasks = response.json()["tasks"]
+        assert len(tasks) == 1, f"Expected 1 blocked task, got {len(tasks)}"
+        assert tasks[0]["block_reason"] == "waiting on dependency"
+
+    def test_claimed_task_claimed_is_true(self, client: TestClient) -> None:
+        """The claimed task (task 4, tag=delta) has claimed == true."""
+        response = client.get("/api/tasks", params={"tag": "delta"})
+        assert response.status_code == 200
+        tasks = response.json()["tasks"]
+        assert len(tasks) == 1, f"Expected 1 delta task, got {len(tasks)}"
+        assert tasks[0]["claimed"] is True
+
+    def test_unblocked_task_block_reason_is_null(self, client: TestClient) -> None:
+        """An unblocked task (task 1) has block_reason == null."""
+        response = client.get("/api/tasks", params={"tag": "alpha"})
+        assert response.status_code == 200
+        tasks = response.json()["tasks"]
+        assert len(tasks) == 1, f"Expected 1 alpha task, got {len(tasks)}"
+        assert tasks[0]["block_reason"] is None
+
+    def test_unclaimed_task_claimed_is_false(self, client: TestClient) -> None:
+        """An unclaimed task (task 1) has claimed == false."""
+        response = client.get("/api/tasks", params={"tag": "alpha"})
+        assert response.status_code == 200
+        tasks = response.json()["tasks"]
+        assert len(tasks) == 1, f"Expected 1 alpha task, got {len(tasks)}"
+        assert tasks[0]["claimed"] is False
+
+    def test_all_tasks_have_block_reason_and_claimed_with_correct_types(self, client: TestClient) -> None:
+        """block_reason is str-or-null and claimed is bool for every task summary."""
+        response = client.get("/api/tasks")
+        assert response.status_code == 200
+        tasks = response.json()["tasks"]
+        for task in tasks:
+            assert task["block_reason"] is None or isinstance(task["block_reason"], str), (
+                f"block_reason must be str or null, got {task['block_reason']!r} for task {task['id']}"
+            )
+            assert isinstance(task["claimed"], bool), (
+                f"claimed must be bool, got {task['claimed']!r} for task {task['id']}"
+            )
