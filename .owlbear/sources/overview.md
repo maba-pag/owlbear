@@ -59,6 +59,16 @@ External repos and resources studied during OwlBear development.
 | Bundlephobia: react-window | <https://bundlephobia.com/package/react-window@2.2.7> | Bundle composition: 100% self, tree-shakeable | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 | Vitest bench API | <https://vitest.dev/api/#bench> | Experimental Tinybench-based benchmarking, `bench()` function, statistical output | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 
+## TanStack Query vs Plain Polling (Task #960)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| TanStack Query v5 — overview | <https://tanstack.com/query/latest/docs/framework/react/overview> | Core concepts: server state caching, dedup, structural sharing, stale-while-revalidate | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — polling guide | <https://tanstack.com/query/latest/docs/framework/react/guides/polling> | `refetchInterval` API, conditional polling via function, background polling, dedup semantics | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — testing guide | <https://tanstack.com/query/latest/docs/framework/react/guides/testing> | QueryClientProvider wrapper, retry:false, gcTime:Infinity for test isolation | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — important defaults | <https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults> | staleTime, structuralSharing, refetchOnWindowFocus, retry defaults | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| @tanstack/react-query (npm) | <https://www.npmjs.com/package/@tanstack/react-query> | v5.99.0, 1 dep, 47M/wk, MIT, ~15-20KB gzipped total | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+
 ## Mtime Cache for list_tasks() (Task #941)
 
 | Source | URL | What | Where Used | Date |
