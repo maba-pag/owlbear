@@ -463,3 +463,26 @@ describe('TestFromAC_DetailTab', () => {
     })
   })
 })
+
+// ─── Builder-discovered tests (AC9: unclaim) ──────────────────────────────────
+
+describe('TestBuilderDiscovered', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  describe('unclaim confirm dialog (AC9)', () => {
+    it('unclaim action button is present', () => {
+      const { container } = renderDetail()
+      expect(container.querySelector('[data-testid="unclaim-action"]')).not.toBeNull()
+    })
+
+    it('unclaim action requires a confirmation dialog', () => {
+      const { container } = renderDetail()
+      const btn = container.querySelector('[data-testid="unclaim-action"]') as HTMLElement | null
+      expect(btn).not.toBeNull()
+      fireEvent.click(btn!)
+      expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull()
+    })
+  })
+})

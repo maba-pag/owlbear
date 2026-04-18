@@ -13,12 +13,14 @@ interface Session {
   outcome: string | null
 }
 
-type FilterType = 'all' | 'failed' | 'released'
+type FilterType = 'all' | 'active' | 'failed' | 'released'
 
 function applyFilter(sessions: Session[], filter: FilterType): Session[] {
   switch (filter) {
     case 'all':
       return sessions
+    case 'active':
+      return sessions.filter((s) => s.state === 'in-progress' || s.state === 'stuck')
     case 'failed':
       return sessions.filter((s) => s.outcome === 'fail' || s.outcome === 'rejected')
     case 'released':
@@ -28,7 +30,7 @@ function applyFilter(sessions: Session[], filter: FilterType): Session[] {
 
 export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
   const [sessions, setSessions] = useState<Session[]>([])
-  const [filter, setFilter] = useState<FilterType>('all')
+  const [filter, setFilter] = useState<FilterType>('active')
 
   useEffect(() => {
     void (async () => {
@@ -49,6 +51,9 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
   return (
     <div>
       <div>
+        <button data-testid="filter-active" onClick={() => setFilter('active')}>
+          Active
+        </button>
         <button data-testid="filter-all" onClick={() => setFilter('all')}>
           All
         </button>

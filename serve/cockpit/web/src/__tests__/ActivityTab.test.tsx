@@ -103,7 +103,7 @@ describe('TestFromAC_ActivityTab', () => {
     })
 
     it('default render shows session rows for active (running + stuck) sessions', async () => {
-      stubFetchSessions(ACTIVE_SESSIONS)
+      stubFetchSessions(ALL_SESSIONS)
       const { container } = renderActivity()
       await waitFor(
         () => {
@@ -217,7 +217,7 @@ describe('TestFromAC_ActivityTab', () => {
         () => {
           const row = container.querySelector('[data-testid="session-row"]')
           expect(row).not.toBeNull()
-          expect((row as HTMLElement).querySelector('[data-testid="session-task"]')).not.toBeNull()
+          expect((row as HTMLElement).querySelector('[data-testid="session-task"]')?.textContent).toBe('1')
         },
         { timeout: 500 },
       )
@@ -230,20 +230,20 @@ describe('TestFromAC_ActivityTab', () => {
         () => {
           const row = container.querySelector('[data-testid="session-row"]')
           expect(row).not.toBeNull()
-          expect((row as HTMLElement).querySelector('[data-testid="session-state"]')).not.toBeNull()
+          expect((row as HTMLElement).querySelector('[data-testid="session-state"]')?.textContent).toBe('in-progress')
         },
         { timeout: 500 },
       )
     })
 
     it('session row shows duration', async () => {
-      stubFetchSessions({ sessions: [SESSION_RELEASED_OK] })
+      stubFetchSessions(ACTIVE_SESSIONS)
       const { container } = renderActivity()
       await waitFor(
         () => {
           const row = container.querySelector('[data-testid="session-row"]')
           expect(row).not.toBeNull()
-          expect((row as HTMLElement).querySelector('[data-testid="session-duration"]')).not.toBeNull()
+          expect((row as HTMLElement).querySelector('[data-testid="session-duration"]')?.textContent).toBe('\u2014')
         },
         { timeout: 500 },
       )

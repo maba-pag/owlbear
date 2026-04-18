@@ -192,3 +192,39 @@ describe('TestFromAC_usePolling', () => {
     })
   })
 })
+
+// ─── Builder-discovered tests (AC14: mtime change detection) ──────────────────
+
+describe('TestBuilderDiscovered', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  describe('mtime change detection (AC14)', () => {
+    it('exposes lastMtime from response and updates when mtime changes between polls', async () => {
+      let callCount = 0
+      const fetchMock = vi.fn(() => {
+        callCount++
+        const response = callCount === 1 ? TASKS_RESPONSE : TASKS_RESPONSE_UPDATED
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(response) })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      const { result } = renderHook(() => usePolling('/api/tasks'))
+      // Process the mount fetch
+      await act(async () => {})
+      // After mount: mtime from TASKS_RESPONSE (1000) should be tracked
+      expect(result.current.lastMtime).toBe(1000)
+      // Advance one interval so a second fetch fires (returning TASKS_RESPONSE_UPDATED)
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
+      })
+      // lastMtime should update to 2000 when mtime changes
+      expect(result.current.lastMtime).toBe(2000)
+    })
+  })
+})

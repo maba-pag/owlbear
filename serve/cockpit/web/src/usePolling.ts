@@ -5,6 +5,7 @@ export type HealthState = 'green' | 'yellow' | 'red'
 export interface UsePollingResult {
   health: HealthState
   skipNextPoll: () => void
+  lastMtime: number | null
 }
 
 function computeHealth(elapsed: number): HealthState {
@@ -15,7 +16,9 @@ function computeHealth(elapsed: number): HealthState {
 
 export function usePolling(url: string): UsePollingResult {
   const [health, setHealth] = useState<HealthState>('green')
+  const [lastMtime, setLastMtime] = useState<number | null>(null)
   const lastHealthyAt = useRef<number>(Date.now())
+  const lastMtimeRef = useRef<number | null>(null)
   const skipRef = useRef<boolean>(false)
 
   const poll = useCallback(async () => {
@@ -23,6 +26,11 @@ export function usePolling(url: string): UsePollingResult {
       const res = await fetch(url, { method: 'GET' })
       if (res.ok) {
         lastHealthyAt.current = Date.now()
+        const data = (await res.json()) as { mtime?: number }
+        if (data.mtime !== undefined && data.mtime !== lastMtimeRef.current) {
+          lastMtimeRef.current = data.mtime
+          setLastMtime(data.mtime)
+        }
       }
     } catch {
       // network error — health degrades by elapsed time
@@ -48,5 +56,6 @@ export function usePolling(url: string): UsePollingResult {
     skipNextPoll: () => {
       skipRef.current = true
     },
+    lastMtime,
   }
 }

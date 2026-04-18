@@ -22,7 +22,7 @@ import { usePolling } from '../usePolling'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function stubHealth(health: HealthState) {
-  vi.mocked(usePolling).mockReturnValue({ health, skipNextPoll: vi.fn() })
+  vi.mocked(usePolling).mockReturnValue({ health, skipNextPoll: vi.fn(), lastMtime: null })
 }
 
 function renderShell(route = '/') {

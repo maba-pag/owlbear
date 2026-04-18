@@ -33,11 +33,12 @@ interface Session {
 export default function DetailTab({ task }: DetailTabProps) {
   const [editBody, setEditBody] = useState(false)
   const [showConflict, setShowConflict] = useState(false)
-  const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock'>(null)
+  const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock' | 'unclaim'>(null)
   const [showHistory, setShowHistory] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [title, setTitle] = useState(task?.title ?? '')
   const [priority, setPriority] = useState(task?.priority ?? '')
+  const [body, setBody] = useState(task?.body ?? '')
 
   if (!task) return null
 
@@ -47,11 +48,20 @@ export default function DetailTab({ task }: DetailTabProps) {
     const res = await fetch(`/api/tasks/${t.id}/edit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updated: t.updated, title, priority }),
+      body: JSON.stringify({ updated: t.updated, title, priority, body }),
     })
     if (res.status === 409) {
       setShowConflict(true)
     }
+  }
+
+  async function handleForceSave() {
+    setShowConflict(false)
+    await fetch(`/api/tasks/${t.id}/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updated: t.updated, title, priority, body }),
+    })
   }
 
   async function handleHistoryClick() {
@@ -110,7 +120,7 @@ export default function DetailTab({ task }: DetailTabProps) {
 
       {/* Body — markdown view or edit textarea */}
       {editBody ? (
-        <textarea data-field="body" defaultValue={t.body} />
+        <textarea data-field="body" value={body} onChange={(e) => setBody(e.target.value)} />
       ) : (
         <ReactMarkdown>{t.body}</ReactMarkdown>
       )}
@@ -124,6 +134,9 @@ export default function DetailTab({ task }: DetailTabProps) {
       </button>
       <button data-testid="move-backward" onClick={() => setConfirmType('move-backward')}>
         Move Backward
+      </button>
+      <button data-testid="unclaim-action" onClick={() => setConfirmType('unclaim')}>
+        Unclaim
       </button>
       {t.blocked && (
         <button data-testid="unblock-action" onClick={() => setConfirmType('unblock')}>
@@ -153,7 +166,7 @@ export default function DetailTab({ task }: DetailTabProps) {
           >
             Discard changes
           </button>
-          <button data-testid="conflict-overwrite">Force save</button>
+          <button data-testid="conflict-overwrite" onClick={() => void handleForceSave()}>Force save</button>
         </div>
       )}
 
