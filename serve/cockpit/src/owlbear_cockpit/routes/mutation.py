@@ -130,13 +130,27 @@ def _build_edit_kwargs(req: EditRequest, task: Any) -> dict[str, Any]:  # noqa: 
     )
 
     if "block_reason" in fields:
-        if req.block_reason is not None:
-            kwargs["blocked"] = True
-            kwargs["block_reason"] = req.block_reason
-        else:
-            kwargs["blocked"] = False
+        _apply_block_kwargs(kwargs, req, task)
 
     return kwargs
+
+
+def _apply_block_kwargs(kwargs: dict[str, Any], req: EditRequest, task: Any) -> None:  # noqa: ANN401
+    """Apply block_reason and block:user tag changes to kwargs."""
+    current_tags = set(task.tags or [])
+    if req.block_reason is not None:
+        kwargs["blocked"] = True
+        kwargs["block_reason"] = req.block_reason
+        if "block:user" not in current_tags:
+            add_tags: list[str] = kwargs.get("add_tags") or []
+            if "block:user" not in add_tags:
+                kwargs["add_tags"] = [*add_tags, "block:user"]
+    else:
+        kwargs["blocked"] = False
+        if "block:user" in current_tags:
+            remove_tags: list[str] = kwargs.get("remove_tags") or []
+            if "block:user" not in remove_tags:
+                kwargs["remove_tags"] = [*remove_tags, "block:user"]
 
 
 def _apply_list_diff(
