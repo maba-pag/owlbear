@@ -1,32 +1,14 @@
 [
   {
-    "entry_id": "task-body:#925-pds-cdn-import",
-    "content_preview": "skipPorscheDesignSystemCDNRequestsDuringTests() is in main PDS package, NOT /testing",
-    "recommendation": "keep",
-    "reason": "MEDIUM — actionable PDS import correction, single occurrence. Written to inbox for next MCP-enabled cycle."
-  },
-  {
-    "entry_id": "task-body:#925-pds-attachinternals",
-    "content_preview": "attachInternals lives on HTMLElement, not Element — TypeScript mock fix",
-    "recommendation": "keep",
-    "reason": "MEDIUM — actionable TypeScript specificity. Bundled with PDS CDN finding in inbox entry."
-  },
-  {
-    "entry_id": "task-body:#926-verify-research-against-code",
-    "content_preview": "Research finding F2 (end_work prefix mismatch) was inaccurate — prefixes already aligned",
-    "recommendation": "reject",
-    "reason": "LOW — obvious best practice. Inaccurate finding corrected inline in reviewer pass 2."
-  },
-  {
-    "entry_id": "task-body:#926-jsonl-state-machine-paths",
-    "content_preview": "Double-claim-without-close path marked stuck unconditionally, no age check, no test",
-    "recommendation": "keep",
-    "reason": "MEDIUM — actionable for state-machine implementations, single occurrence. Written to inbox for next cycle."
-  },
-  {
-    "entry_id": "task-body:#952-ac-unchanged-regression-guard",
-    "content_preview": "AC 'X unchanged' requires direct regression guard test, transitive coverage insufficient",
+    "entry_id": "2026-04-18-pds-cdn-import-path.md",
+    "content_preview": "`skipPorscheDesignSystemCDNRequestsDuringTests()` exported from main PDS package, NOT /testing subpath",
     "recommendation": "approve",
-    "reason": "HIGH — non-obvious, actionable, directly caught by reviewer. Promoted to w-tdd-red SKILL.md Step 4."
+    "reason": "HIGH: corrects incorrect research doc, non-obvious, confirmed by codebase — promoted to h-frontend-conventions Testing section"
+  },
+  {
+    "entry_id": "2026-04-18-jsonl-state-machine-all-paths.md",
+    "content_preview": "State machine tests must cover all transition paths incl. double-event-without-close (crash recovery)",
+    "recommendation": "keep",
+    "reason": "MEDIUM (4th cycle) — actionable, non-obvious; still single occurrence. Escalate via scribe if no corroboration by next cycle."
   }
 ]

@@ -52,3 +52,13 @@ Minimum: **WCAG 2.1 Level AA**.
 - Test user behavior, not implementation details — interact via roles, labels, text
 - a11y tests: use `axe-core` or equivalent automated checker
 - Visual regression tests recommended for design-system-critical components
+
+### PDS Test Environment Setup (Vitest + jsdom)
+
+- `skipPorscheDesignSystemCDNRequestsDuringTests()` is exported from the **main package** (`@porsche-design-system/components-react`), NOT from the `/testing` subpath. The research doc placed it in `/testing` — this is incorrect.
+- jsdom does not implement `attachInternals`. It lives on `HTMLElement`, not `Element` — mock it on `HTMLElement.prototype`, not `Element.prototype`:
+  ```ts
+  if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.attachInternals) {
+    (HTMLElement.prototype as unknown as Record<string, unknown>)['attachInternals'] = vi.fn()
+  }
+  ```
