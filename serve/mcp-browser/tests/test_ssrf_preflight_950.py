@@ -225,6 +225,34 @@ class TestFromAC_NavigateIPBlocklist:
         ):
             await navigate(ctx, "http://127.0.0.1/")
 
+    @pytest.mark.asyncio
+    async def test_blocks_reserved_ip(self) -> None:
+        """240.0.0.1 (class E / is_reserved=True) must raise ToolError.
+
+        AC1 explicitly requires blocking reserved addresses.  Removing
+        ``check.is_reserved`` from ``_is_blocked_ip`` would let this IP through.
+        """
+        ctx = _make_ctx()
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("240.0.0.1")),
+            pytest.raises(ToolError),
+        ):
+            await navigate(ctx, f"https://{_ALLOWED_HOST}/")
+
+    @pytest.mark.asyncio
+    async def test_blocks_unspecified_ip(self) -> None:
+        """0.0.0.0 (is_unspecified=True) must raise ToolError.
+
+        AC1 explicitly requires blocking unspecified addresses.  Removing
+        ``check.is_unspecified`` from ``_is_blocked_ip`` would let this IP through.
+        """
+        ctx = _make_ctx()
+        with (
+            patch("socket.getaddrinfo", return_value=_addr4("0.0.0.0")),  # noqa: S104
+            pytest.raises(ToolError),
+        ):
+            await navigate(ctx, f"https://{_ALLOWED_HOST}/")
+
 
 # ---------------------------------------------------------------------------
 # DNS failure — binding guidance §2
