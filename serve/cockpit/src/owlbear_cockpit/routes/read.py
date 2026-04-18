@@ -77,6 +77,8 @@ def list_tasks(  # noqa: PLR0913
             priority=s.priority,
             tags=s.tags,
             blocked=s.blocked,
+            block_reason=s.block_reason,
+            claimed=s.claimed,
         )
         for s in summaries
     ]
