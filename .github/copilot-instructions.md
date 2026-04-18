@@ -29,13 +29,13 @@ All other `serve/` packages are Python — use `uv run` for those.
 
 ## 4. Cockpit Backend
 
-`serve/cockpit/src/owlbear_cockpit/` is the Python FastAPI backend — read-only API consumed by the Cockpit frontend.
+`serve/cockpit/src/owlbear_cockpit/` is the Python FastAPI backend — read/write API consumed by the Cockpit frontend.
 
 | Attribute | Value |
 |-----------|-------|
 | Stack | FastAPI + Pydantic v2 |
-| Endpoints | `GET /api/board`, `GET /api/tasks`, `GET /api/tasks/{id}`, `GET /api/sessions`, `GET /health` |
+| Endpoints | `GET /api/board`, `GET /api/tasks`, `GET /api/tasks/{id}`, `GET /api/sessions`, `GET /health`, `POST /api/tasks/{id}/move`, `POST /api/tasks/{id}/edit`, `POST /api/tasks/{id}/release` |
 | DI pattern | `get_engine` from `owlbear_cockpit.main` — override via `app.dependency_overrides` in tests |
 | Cache | `MtimeScanCache` in `cache.py` — skips engine reload when task-dir mtime is unchanged |
-| Test scope | `tests/test_cockpit_read_api*.py`, `tests/test_cockpit_boundary.py` |
+| Test scope | `tests/test_cockpit_read_api*.py`, `tests/test_cockpit_boundary.py`, `tests/test_cockpit_mutation_api.py` |
 | Package manager | `uv` (standard for all `serve/` Python packages) |
