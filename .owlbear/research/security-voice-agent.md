@@ -33,7 +33,7 @@ Task #650 creates the `ideation-security.agent.md` domain opinion subagent. It m
 | Frontmatter fields | 8 fields (name, description, argument-hint, user-invocable, disable-model-invocation, model, tools, agents) | Same 8 fields | Yes |
 | Tool set | 8 tools (edit/create*, read/*, search, vscode/memory, agent) | Same 8 tools | Yes |
 | Agents list | [ideation-critic] | [ideation-critic] | Yes |
-| Model | Claude Opus 4.6 (copilot) | Claude Opus 4.6 (copilot) | Yes |
+| Model | Claude Opus 4.7 (copilot) | Claude Opus 4.7 (copilot) | Yes |
 | Tier | T4 (Tools) | T4 (Tools) | Yes |
 | Sections | persona, critical_rules, Voice Reasoning Cycle, Input/Output Contract | Same sections | Yes |
 | Persona domain | System design, structure, patterns | Access control, data safety, trust boundaries, compliance | No |
@@ -68,7 +68,7 @@ This logic lives in the ideator (Mediator), not in ideation-security. The voice 
 Build `share/agents/ideation-security.agent.md` as a ~65-75 line agent file using the ideation-architect template with security-domain adaptations:
 
 - **T4 tier**, `user-invocable: false`, `disable-model-invocation: true`
-- **Model:** Claude Opus 4.6 (copilot) — per spec §12
+- **Model:** Claude Opus 4.7 (copilot) — per spec §12
 - **Tools:** 8 tools — `[edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, read/viewImage, search, vscode/memory, agent]`
 - **Agents:** `[ideation-critic]`
 - **Persona:** OWASP-aware security perspective — access control, data safety, trust boundaries, blast radius, defense-in-depth, least privilege. Opinionated, not neutral.

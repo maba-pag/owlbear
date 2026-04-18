@@ -1,7 +1,7 @@
 # React Compiler + PDS Web Component Interop Analysis
 
 > **Owning task:** #970 — Enable React Compiler with PDS interop validation spike
-> **Date:** 2026-04-18 **Status:** Complete
+> **Date:** 2026-04-18 (validated 2026-04-18) **Status:** Complete — superseded by #971
 
 ## 1. Context and Question
 
@@ -77,5 +77,39 @@ Challenge: FALLBACK — subagent unavailable.
 
 ## 5. Follow-up Tasks
 
-1. Re-evaluate trigger when #963 (manual memos) lands or when component count grows in phase-2
+1. ~~Re-evaluate trigger when #963 (manual memos) lands~~ → Done (see §6)
 2. Validate Vitest coverage impact when spike eventually runs — may need coverage threshold adjustment
+3. **#971 trigger refinement:** Replace unbounded "component count grows" with concrete threshold (e.g., ≥8 components or ≥5 memoized components)
+
+## 6. Validation Pass (2026-04-18)
+
+### Changed state
+
+| Fact | Original (§4) | Current |
+|------|---------------|---------|
+| Manual memos | 0 | 5 (2× React.memo, 2× useMemo, 1× useCallback) |
+| #963 status | Not landed | Review (commit `b41c912d`) |
+| Memoized components | 0/5 | 3/5 (Card, Column, KanbanBoard) |
+| Memoization candidates | 4/5 (§1 table) | 4/5 — unchanged |
+
+### Trigger re-assessment
+
+The trigger "≥5 components with memoization needs" is **ambiguous** (challenger C1). Under strict reading (memo-wrapped components), 3/5 — unmet. Under broad reading (components that benefit from memoization per §1 table), 4/5 — still unmet but approaching. The remaining non-candidate (App.tsx) is a trivial provider wrapper unlikely to ever need memoization.
+
+**#971 OR arm:** #963 was created from research #959 which identified re-render cascade as a performance risk. This means memos were added to address observed performance concerns — #971's OR trigger ("performance profiling shows re-render overhead") is **partially met** (challenger B3).
+
+### Revised recommendation
+
+**Keep deferred.** PDS interop findings validated — risk remains LOW. The 5 manual memos are manageable and already working. However, #971's trigger conditions need refinement: the AND arm's "component count grows" is unbounded (challenger C2). Recommend adding concrete threshold to #971.
+
+**Confidence: 0.80** (revised from 0.85 — trigger ambiguity and OR arm nuance reduce certainty).
+
+**#970 disposition:** Superseded by #971. Advance to backlog for archival. #971 is the canonical tracker for React Compiler adoption.
+
+### Challenge results
+
+- Challenger: **reconsider** (confidence in original: 0.60)
+- Accepted: C1 (trigger ambiguity), C2 (unbounded threshold), B3 (OR trigger unevaluated)
+- Rejected: C3 (#971 has no block_reason — challenger used stale data), A2 (#970 vs #971 AC scope — tighter AC is not better when #971 includes coverage impact which is a known gotcha per §3.2)
+- Partially accepted: A1 (60% memo rate is significant, but still below trigger threshold under any reading)
+- Researcher response: revised confidence 0.85→0.80, added trigger refinement follow-up, updated disposition rationale

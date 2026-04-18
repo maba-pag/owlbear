@@ -55,7 +55,7 @@ Task #646 requires creating the Pragmatist voice — a synthesis subagent that r
 |----------|-------|-----------|
 | `user-invocable` | `false` | AC states this; subagent only |
 | `disable-model-invocation` | `true` | Follows ideation-critic pattern (voice subagent, only ideator should invoke) |
-| `model` | `Claude Opus 4.6 (copilot)` | Spec §7: all voices except Critic use Claude Opus 4.6 |
+| `model` | `Claude Opus 4.7 (copilot)` | Spec §7: all voices except Critic use Claude Opus 4.6 |
 | `agents` | `[]` | No subagent delegation |
 | `argument-hint` | `"Synthesize: {working directory path}"` | Mediator passes Working Dir path |
 

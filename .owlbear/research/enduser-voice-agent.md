@@ -73,7 +73,7 @@ Persona should embody a UX practitioner mindset — someone who thinks in terms 
 | description | Domain opinion: human experience, usability, clarity, discoverability | Spec §7 |
 | user-invocable | false | AC line |
 | disable-model-invocation | true | Standard for subagent-only T4 agents |
-| model | Claude Opus 4.6 (copilot) | AC + spec §12 multi-model assignment |
+| model | Claude Opus 4.7 (copilot) | AC + spec §12 multi-model assignment |
 | tools | 8-tool set (§3.1) | Derived from spec §12 read/write table, matches ideation-architect |
 | agents | [ideation-critic] | AC + spec §12 Voice Reasoning Cycle |
 | argument-hint | "End-User: {problem and outcome context for usability and user-experience analysis}" | h-agent-structure standard |
@@ -95,7 +95,7 @@ Persona should embody a UX practitioner mindset — someone who thinks in terms 
 Build `share/agents/ideation-enduser.agent.md` as a ~65-75 line agent file following the domain opinion pattern established by ideation-architect research:
 
 - **T4 tier**, `user-invocable: false`, `disable-model-invocation: true`
-- **Model:** Claude Opus 4.6 (copilot) — per spec §12
+- **Model:** Claude Opus 4.7 (copilot) — per spec §12
 - **Tools:** 8 tools — file read/write for Working Dir, search for codebase, agent for Critic loop
 - **Agents:** `[ideation-critic]`
 - **Persona:** Opinionated UX practitioner — usability, clarity, discoverability, approachability. Thinks in user flows, cognitive load, error states from the human's perspective, feedback quality.

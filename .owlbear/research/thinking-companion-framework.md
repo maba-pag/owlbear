@@ -227,7 +227,7 @@ All domain opinions are **always implemented as subagents** — never internally
 
 The Critic uses a **different LLM model** from all other voices. This creates genuine cognitive diversity — a different model doesn't just find holes the first model left, it sees the problem from a fundamentally different angle. This is what makes adversarial critique effective rather than performative.
 
-All voices: **Claude Opus 4.6 (copilot)**. Critic: **GPT-5.4 (copilot)**. Configured via the `model:` key in each agent's YAML frontmatter.
+All voices: **Claude Opus 4.7 (copilot)**. Critic: **GPT-5.4 (copilot)**. Configured via the `model:` key in each agent's YAML frontmatter.
 
 ### Voice Attribution in Conversation
 
@@ -441,7 +441,7 @@ Domain Opinion invoked by Mediator:
 
 ### Multi-Model Assignment
 
-All voices use **Claude Opus 4.6 (copilot)**. The Critic uses **GPT-5.4 (copilot)** for genuine model diversity — a different model producing different reasoning patterns is what makes adversarial critique effective.
+All voices use **Claude Opus 4.7 (copilot)**. The Critic uses **GPT-5.4 (copilot)** for genuine model diversity — a different model producing different reasoning patterns is what makes adversarial critique effective.
 
 Model assignment is specified per voice agent file via the `model:` key in YAML frontmatter.
 
@@ -585,7 +585,7 @@ Questions raised during design, now resolved:
 
 1. **Re-entry:** Context-aware. Mediator loads Working Directory + board state, enters at relevant Moment. See Brief Lifecycle section.
 2. **Panel extensibility:** Fixed panel (4 domain opinions + Critic + Pragmatist). If new voices are needed, they are added through development, not user configuration.
-3. **Voice agent model configuration:** Specified via `model:` key in agent YAML frontmatter. Example: `model: [Claude Opus 4.6 (copilot), GPT-5.4 (copilot)]`
+3. **Voice agent model configuration:** Specified via `model:` key in agent YAML frontmatter. Example: `model: [Claude Opus 4.7 (copilot), GPT-5.4 (copilot)]`
 4. **Duplicate-voice pattern:** Removed. Voices run on Opus, Critic on GPT. This provides sufficient model diversity without the cost of dual-model runs.
 5. **Brief versioning:** Brief content is transferred into a parent kanban task at handoff. Downstream agents work from kanban tasks, not Brief files. The Brief file is preserved in the Working Directory as audit trail. On re-entry, the Mediator reads the current board state + Working Directory to understand what's changed.
 6. **Working Directory cleanup:** Draft artifacts preserved after handoff for audit trail. Cleaned up when parent task is completed/archived.

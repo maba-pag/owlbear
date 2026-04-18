@@ -28,7 +28,7 @@ Task #648 creates the second domain opinion subagent (`ideation-data.agent.md`) 
 | Dimension | ideation-architect | ideation-data | Change needed? |
 |-----------|----------------|------------|---------------|
 | Frontmatter structure | T4, 8 tools, agents:[ideation-critic] | Identical | No |
-| Model | Claude Opus 4.6 (copilot) | Identical | No |
+| Model | Claude Opus 4.7 (copilot) | Identical | No |
 | Voice Reasoning Cycle | Read → opinion → Critic loop → publish | Identical | No |
 | Input files | context.md, decisions.md, research-notes.md | Identical | No |
 | Output files | opinions/architect.md, opinions/architect-debate.md | opinions/data-person.md, opinions/data-person-debate.md | File paths only |
@@ -52,7 +52,7 @@ Rationale unchanged from ideation-architect analysis: file read/write for Workin
 | argument-hint | "Data: {problem and outcome context for data quality analysis}" | h-agent-structure standard |
 | user-invocable | false | AC |
 | disable-model-invocation | true | ideation-critic + ideation-architect pattern |
-| model | Claude Opus 4.6 (copilot) | AC + spec §12 |
+| model | Claude Opus 4.7 (copilot) | AC + spec §12 |
 | tools | 8-tool set (§3.2) | ideation-architect research §3.1 |
 | agents | [ideation-critic] | AC |
 

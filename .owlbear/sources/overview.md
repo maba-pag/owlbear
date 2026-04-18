@@ -25,6 +25,13 @@ External repos and resources studied during OwlBear development.
 | React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 | React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 
+## Planner askQuestions Approval (Task #998)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| VS Code Custom Agents docs | <https://code.visualstudio.com/docs/copilot/customization/custom-agents> | Handoffs, tool lists, user-invocable/disable-model-invocation flags, agent file structure | `.owlbear/research/998-planner-askquestions-approval.md` | 2026-04-18 |
+| VS Code Subagents docs | <https://code.visualstudio.com/docs/copilot/agents/subagents> | Subagent isolation model, coordinator patterns, custom agent as subagent, tool inheritance | `.owlbear/research/998-planner-askquestions-approval.md` | 2026-04-18 |
+
 ## Shell Traffic-Light State Wiring (Task #966)
 
 | Source | URL | What | Where Used | Date |

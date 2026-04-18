@@ -100,7 +100,7 @@ VS Code `agents` field. Key validation points:
 
 ## 6. Model Selection and Thinking Configuration
 
-V1 agents already use correct model syntax: `Claude Opus 4.6 (copilot)`, `Claude Sonnet 4.6 (copilot)`, etc. Array syntax for fallback priority is used (e.g., builder: `[GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]`). This is fully compatible.
+V1 agents already use correct model syntax: `Claude Opus 4.7 (copilot)`, `Claude Sonnet 4.6 (copilot)`, etc. Array syntax for fallback priority is used (e.g., builder: `[GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]`). This is fully compatible.
 
 Thinking effort is **not** configurable via `.agent.md` frontmatter fields in current VS Code custom-agent docs. Current supported guidance is:
 

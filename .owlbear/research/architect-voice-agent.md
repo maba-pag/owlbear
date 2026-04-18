@@ -76,7 +76,7 @@ No conflict: different files, different names, different tiers, different dispat
 | name | ideation-architect | AC, distinct from pipeline `architect` |
 | user-invocable | false | AC spec |
 | disable-model-invocation | true | Standard for subagent-only T4 agents (ideation-critic pattern) |
-| model | Claude Opus 4.6 (copilot) | AC + spec §12 |
+| model | Claude Opus 4.7 (copilot) | AC + spec §12 |
 | tools | 8-tool set (§3.1 above) | Derived from spec §12 read/write table |
 | agents | [ideation-critic] | AC + spec §12 Voice Reasoning Cycle |
 | argument-hint | "Architect: {problem and outcome context for architectural analysis}" | h-agent-structure standard |
@@ -86,7 +86,7 @@ No conflict: different files, different names, different tiers, different dispat
 Build `share/agents/ideation-architect.agent.md` as a ~65-75 line agent file following Option A (mirror ideation-critic pattern with domain-specific adaptations):
 
 - **T4 tier**, `user-invocable: false`, `disable-model-invocation: true`
-- **Model:** Claude Opus 4.6 (copilot) — per spec §12 multi-model assignment
+- **Model:** Claude Opus 4.7 (copilot) — per spec §12 multi-model assignment
 - **Tools:** 8 tools — file read/write for Working Dir, search for codebase, agent for Critic loop
 - **Agents:** `[ideation-critic]` — sole subagent
 - **Persona:** Strong architectural opinions — system design, structure, patterns, component integration. Not neutral; opinionated from experience.
