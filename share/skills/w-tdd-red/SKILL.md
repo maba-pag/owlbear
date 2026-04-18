@@ -77,6 +77,7 @@ Map each AC line to test categories:
 Create `tests/test_{module}_{task_id}.py` with class `TestFromAC_{Feature}`:
 
 - Each AC line gets at least one test.
+- **AC lines stating "X unchanged" / "no modification to Y" / "existing Z unmodified":** Write a direct regression guard test that calls the production code path and asserts the expected result. Do NOT rely on transitive coverage — if another test exercises X as a side-effect, that is not a substitute. A direct `TestFromAC_*` test is required.
 - Test the **contract** described in AC, not a specific implementation.
 - Use `unittest.mock.patch` / `MagicMock` for external dependencies.
 - `from __future__ import annotations` at top of new files.
