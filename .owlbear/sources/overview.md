@@ -48,6 +48,37 @@ External repos and resources studied during OwlBear development.
 | useMemo API reference | <https://react.dev/reference/react/useMemo> | Caching calculations, dependency semantics, memo+useMemo synergy pattern | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 | useCallback API reference | <https://react.dev/reference/react/useCallback> | Function caching, equivalent to useMemo returning function, hook ordering rules | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 
+## React Compiler + PDS Interop (Task #970)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability, scope, what the compiler does | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config, babel plugin setup | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, "use no memo" directive | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | "use memo"/"use no memo" opt-in/out | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | Annotation mode, overrides for gradual rollout | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | compilationMode, panicThreshold settings | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| Rules of React | <https://react.dev/reference/rules> | Purity, side effects, immutability — compiler contract | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| Vitest coverage drop — reactwg/react-compiler#78 | <https://github.com/reactwg/react-compiler/discussions/78> | Compiler-generated branches inflate coverage branch count | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+
+## TanStack Query vs Plain Polling Research (Task #960)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| TanStack Query v5 docs — overview | <https://tanstack.com/query/latest/docs/framework/react/overview> | Architecture, QueryClient, structural sharing, stale-while-revalidate semantics | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — polling guide | <https://tanstack.com/query/latest/docs/framework/react/guides/polling> | `refetchInterval`, `refetchIntervalInBackground`, polling lifecycle | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — testing guide | <https://tanstack.com/query/latest/docs/framework/react/guides/testing> | QueryClientProvider wrapper pattern, test isolation with createQueryClient | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| TanStack Query — important defaults | <https://tanstack.com/query/latest/docs/framework/react/guides/important-defaults> | 3-retry default, staleTime=0, gcTime semantics | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+| @tanstack/react-query (npm) | <https://www.npmjs.com/package/@tanstack/react-query> | v5.x bundle size (~15-20 KB gzip), peer deps, changelog | `.owlbear/research/960-tanstack-query-vs-plain-polling.md` | 2026-04-18 |
+
+## Sidecar + Polling RED Tests (Task #935)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| react-markdown npm docs | <https://www.npmjs.com/package/react-markdown> | v10.1.0, safe by default (no dangerouslySetInnerHTML), skipHtml option, rehype-sanitize for strict mode | `.owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
+| Vitest mocking guide | <https://vitest.dev/guide/mocking.html> | vi.useFakeTimers, vi.stubGlobal, vi.mock factory patterns for polling and module mocking | `.owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
+| RTL introduction | <https://testing-library.com/docs/react-testing-library/intro> | renderHook API in v16, data-testid pattern, user-behavior-first testing philosophy | `.owlbear/research/935-sidecar-detail-activity-polling-tests.md` | 2026-04-18 |
+
 ## Frontend Scaffold Feasibility (Task #925)
 
 | Source | URL | What | Where Used | Date |
