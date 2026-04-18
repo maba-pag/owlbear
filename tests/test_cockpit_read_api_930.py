@@ -383,3 +383,90 @@ class TestFromAC_EngineReloadOnMtimeChange:
             f"mtime must increase after a new task file is created "
             f"(before={mtime_before}, after={mtime_after})"
         )
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered: adapter wrappers (AC#2) + cache-hit skip (AC#3)
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests for reviewer-identified AC gaps.
+
+    AC#2: owlbear_cockpit.adapter exposes thin wrappers for all 5 engine methods.
+    AC#3: engine.list_tasks() is NOT called on a second request when mtime unchanged.
+    """
+
+    # -- AC#2: adapter functions callable via engine --------------------------
+
+    def test_adapter_list_tasks_is_callable_via_engine(self, engine: KanbanEngine) -> None:
+        """adapter.list_tasks(engine) delegates to engine.list_tasks and returns a list."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.list_tasks(engine)
+        assert isinstance(result, list)
+
+    def test_adapter_show_task_is_callable_via_engine(self, engine: KanbanEngine) -> None:
+        """adapter.show_task(engine, task_id) returns the matching task object."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        tasks = engine.list_tasks()
+        task_id = str(tasks[0].id)
+        result = adapter.show_task(engine, task_id)
+        assert result is not None
+        assert str(result.id) == task_id
+
+    def test_adapter_board_config_is_callable_via_engine(self, engine: KanbanEngine) -> None:
+        """adapter.board_config(engine) returns a config object with statuses."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.board_config(engine)
+        assert result is not None
+        assert hasattr(result, "statuses")
+
+    def test_adapter_valid_transitions_is_callable_via_engine(self, engine: KanbanEngine) -> None:
+        """adapter.valid_transitions(engine, status) returns a collection of strings."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.valid_transitions(engine, "todo")
+        assert isinstance(result, (set, frozenset, list))
+
+    def test_adapter_list_sessions_is_callable_via_engine(self, engine: KanbanEngine) -> None:
+        """adapter.list_sessions(engine) returns a list."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.list_sessions(engine)
+        assert isinstance(result, list)
+
+    # -- AC#3: mtime-conditional engine reload --------------------------------
+
+    def test_engine_list_tasks_not_called_on_cache_hit(
+        self, client: TestClient, engine: KanbanEngine, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """engine.list_tasks() is NOT called on a second request when no files changed.
+
+        After the first GET /api/tasks populates the mtime cache, subsequent requests
+        with unchanged task files must NOT call engine.list_tasks() — the cached task
+        list must be returned instead.
+        """
+        # First request — populates the mtime cache and task cache
+        r1 = client.get("/api/tasks")
+        assert r1.status_code == 200
+
+        # Intercept engine.list_tasks calls AFTER first request
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting_list_tasks(**kwargs):  # noqa: ANN202
+            nonlocal call_count
+            call_count += 1
+            return original(**kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting_list_tasks)
+
+        # Second request — same files, engine.list_tasks must NOT be called
+        r2 = client.get("/api/tasks")
+        assert r2.status_code == 200
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on cache hit, expected 0"
+        )

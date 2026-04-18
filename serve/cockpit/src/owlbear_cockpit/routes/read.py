@@ -6,8 +6,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from owlbear_cockpit import adapter
 from owlbear_cockpit.cache import MtimeScanCache
-from owlbear_cockpit.deps import get_engine
+from owlbear_cockpit.deps import get_cache, get_engine
 from owlbear_cockpit.models import (
     BoardOut,
     SessionListOut,
@@ -21,16 +22,17 @@ from owlbear_kanban import KanbanEngine
 router = APIRouter()
 
 _Engine = Annotated[KanbanEngine, Depends(get_engine)]
+_Cache = Annotated[MtimeScanCache, Depends(get_cache)]
 
 
 @router.get("/board", response_model=BoardOut)
 def get_board(engine: _Engine) -> BoardOut:
     """Return board config: statuses, priorities, and valid_transitions map."""
-    config = engine.board_config()
+    config = adapter.board_config(engine)
     statuses = config.statuses
     status_names = [s["name"] for s in statuses]
     valid_transitions = {
-        name: sorted(engine.valid_transitions(name)) for name in status_names
+        name: sorted(adapter.valid_transitions(engine, name)) for name in status_names
     }
     return BoardOut(
         statuses=statuses,
@@ -40,22 +42,35 @@ def get_board(engine: _Engine) -> BoardOut:
 
 
 @router.get("/tasks", response_model=TaskListOut)
-def list_tasks(
+def list_tasks(  # noqa: PLR0913
     engine: _Engine,
+    cache: _Cache,
     status: str = "",
     priority: str = "",
     tag: str = "",
     blocked: bool | None = None,  # noqa: FBT001
 ) -> TaskListOut:
-    """Return task summaries list and max mtime_ns of the tasks directory."""
-    cache = MtimeScanCache(engine._tasks_dir)  # noqa: SLF001
-    mtime = cache.scan()
-    summaries = engine.list_tasks(
-        status=status,
-        priority=priority,
-        tag=tag,
-        blocked=blocked,
-    )
+    """Return task summaries list and max mtime_ns of the tasks directory.
+
+    Uses a per-engine mtime cache: engine.list_tasks() is only called when the
+    tasks directory has changed since the last request (cache miss).  On a cache
+    hit the previously fetched task list is returned without touching the engine.
+    Filtering is applied in Python after the cache look-up so that different
+    filter combinations still benefit from the same cached full task list.
+    """
+    if cache.has_changed():
+        cache.tasks = adapter.list_tasks(engine)
+
+    summaries = cache.tasks
+    if status:
+        summaries = [s for s in summaries if s.status == status]
+    if priority:
+        summaries = [s for s in summaries if s.priority == priority]
+    if tag:
+        summaries = [s for s in summaries if tag in (s.tags or [])]
+    if blocked is not None:
+        summaries = [s for s in summaries if s.blocked == blocked]
+
     tasks = [
         TaskSummaryOut(
             id=s.id,
@@ -67,14 +82,14 @@ def list_tasks(
         )
         for s in summaries
     ]
-    return TaskListOut(tasks=tasks, mtime=mtime)
+    return TaskListOut(tasks=tasks, mtime=cache.last_mtime)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskDetailOut)
 def get_task(task_id: str, engine: _Engine) -> TaskDetailOut:
     """Return full task detail for the given task ID, or 404 if not found."""
     try:
-        task = engine.show_task(task_id)
+        task = adapter.show_task(engine, task_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Task {task_id!r} not found") from None
     return TaskDetailOut(
@@ -96,7 +111,7 @@ def get_task(task_id: str, engine: _Engine) -> TaskDetailOut:
 @router.get("/sessions", response_model=SessionListOut)
 def list_sessions(engine: _Engine, filter: str = "active") -> SessionListOut:  # noqa: A002
     """Return work sessions, filtered by state."""
-    sessions = engine.list_sessions(filter=filter)
+    sessions = adapter.list_sessions(engine, filter=filter)
     return SessionListOut(
         sessions=[
             SessionOut(
