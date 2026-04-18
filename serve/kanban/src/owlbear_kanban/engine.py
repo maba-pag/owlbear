@@ -23,10 +23,13 @@ Architecture:
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import random
 import subprocess
 import sys
+from collections import defaultdict
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -39,6 +42,88 @@ from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
+
+
+@dataclass
+class WorkSession:
+    """One claim cycle derived from the activity log."""
+
+    task_id: int
+    state: str
+
+
+def _classify_end_work(detail: str) -> str:
+    """Map an end_work detail string to a session state."""
+    if detail.startswith("success:"):
+        return "completed-pass"
+    if detail.startswith("reject:"):
+        return "completed-rejected"
+    # outcome=fail, blocked: ..., or any other end_work outcome → completed-fail
+    return "completed-fail"
+
+
+_CLOSE_ACTIONS: frozenset[str] = frozenset({"end_work", "release", "sweep-release"})
+
+
+def _collect_task_sessions(
+    task_id: int,
+    events: list[dict],
+    timeout: timedelta,
+    now: datetime,
+    sessions: list[WorkSession],
+) -> None:
+    """Append WorkSession entries for one task's event list into *sessions*."""
+    open_claim_ts: str | None = None
+    last_activity_ts: str | None = None
+
+    for event in events:
+        action: str = event["action"]
+        detail: str = event["detail"]
+        ts: str = event["timestamp"]
+
+        if action == "claim":
+            if open_claim_ts is not None:
+                sessions.append(WorkSession(task_id=task_id, state="stuck"))
+            open_claim_ts = ts
+            last_activity_ts = ts
+        elif action in _CLOSE_ACTIONS:
+            if open_claim_ts is None:
+                continue
+            if action == "sweep-release":
+                open_claim_ts = None
+                last_activity_ts = None
+                continue
+            state = "released" if action == "release" else _classify_end_work(detail)
+            sessions.append(WorkSession(task_id=task_id, state=state))
+            open_claim_ts = None
+            last_activity_ts = None
+        elif open_claim_ts is not None:
+            last_activity_ts = ts
+
+    if open_claim_ts is not None:
+        ref_ts = last_activity_ts or open_claim_ts
+        ref_dt = datetime.fromisoformat(ref_ts)
+        if ref_dt.tzinfo is None:
+            ref_dt = ref_dt.replace(tzinfo=UTC)
+        state = "running" if (now - ref_dt) < timeout else "stuck"
+        sessions.append(WorkSession(task_id=task_id, state=state))
+
+
+_SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
+    "active": frozenset({"running", "stuck"}),
+    "failed-or-rejected": frozenset({"completed-fail", "completed-rejected"}),
+    "released": frozenset({"released"}),
+}
+
+
+def _apply_session_filter(sessions: list[WorkSession], filter: str) -> list[WorkSession]:  # noqa: A002
+    """Return *sessions* filtered by *filter* name."""
+    if filter == "all":
+        return sessions
+    allowed = _SESSION_FILTER_STATES.get(filter)
+    if allowed is None:
+        return sessions
+    return [s for s in sessions if s.state in allowed]
 
 
 def _move_file(src: Path, dest: Path) -> None:
@@ -885,6 +970,69 @@ class KanbanEngine:
                         )
 
         return {"archived_moved": archived_moved, "claims_released": claims_released}
+
+    # ------------------------------------------------------------------
+    # Session helpers
+    # ------------------------------------------------------------------
+
+    def list_sessions(self, *, filter: str = "active") -> list[WorkSession]:  # noqa: A002
+        """Derive logical Work Sessions from the activity log.
+
+        Each claim→close cycle for a task becomes one :class:`WorkSession`.
+        Open claims (no close event yet) are classified as *running* or *stuck*
+        based on the age of the most recent activity within that session
+        relative to the configured ``claim_timeout``.
+
+        Args:
+            filter: One of ``"active"`` (default), ``"all"``,
+                    ``"failed-or-rejected"``, or ``"released"``.
+                    ``"active"`` returns sessions with state ``running`` or
+                    ``stuck`` only.
+
+        Returns:
+            List of :class:`WorkSession` objects matching the filter.
+        """
+        if self._activity_log_path is None or not self._activity_log_path.exists():
+            return []
+        sessions = self._derive_sessions()
+        return _apply_session_filter(sessions, filter)
+
+    def _read_log_entries(self) -> list[dict]:
+        """Parse activity.jsonl; skip malformed and incomplete lines."""
+        assert self._activity_log_path is not None  # caller must check
+        try:
+            text = self._activity_log_path.read_text(encoding="utf-8")
+        except OSError:
+            return []
+        entries: list[dict] = []
+        for line in text.splitlines():
+            line = line.strip()  # noqa: PLW2901
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if all(k in entry for k in ("action", "task_id", "detail", "timestamp")):
+                entries.append(entry)
+        return entries
+
+    def _derive_sessions(self) -> list[WorkSession]:
+        """Build WorkSession list from parsed log entries."""
+        by_task: dict[int, list[dict]] = defaultdict(list)
+        for entry in self._read_log_entries():
+            try:
+                task_id = int(entry["task_id"])
+            except (ValueError, TypeError):
+                continue
+            by_task[task_id].append(entry)
+
+        timeout = self._parse_claim_timeout()
+        now = datetime.now(tz=UTC)
+        sessions: list[WorkSession] = []
+        for task_id, events in by_task.items():
+            _collect_task_sessions(task_id, events, timeout, now, sessions)
+        return sessions
 
     # ------------------------------------------------------------------
     # Private helpers
