@@ -174,7 +174,10 @@ def edit_task(task_id: int, req: EditRequest, engine: _Engine) -> TaskDetailOut:
         )
 
     kwargs = _build_edit_kwargs(req, task)
-    updated_task = engine.edit_task(str(task_id), **kwargs) if kwargs else task
+    try:
+        updated_task = engine.edit_task(str(task_id), **kwargs) if kwargs else task
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _task_to_detail(updated_task)
 
 

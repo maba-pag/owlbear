@@ -425,3 +425,69 @@ class TestFromAC_AuditLogging:
         entries = [json.loads(line) for line in activity_file.read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
         assert len(cockpit_entries) >= 1, "At least one activity entry must have actor='cockpit'"
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered: edge cases not covered by TestFromAC_*
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests: invalid priority → 422, and audit log content assertions."""
+
+    def test_edit_invalid_priority_returns_422(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """Invalid priority string causes engine.edit_task to raise ValueError → must be 422."""
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "priority": "ultra-critical"},
+        )
+        assert response.status_code == 422
+
+    def test_move_audit_log_has_correct_action_and_task_id(
+        self, client: TestClient, board_dir: Path
+    ) -> None:
+        """Move audit log entry has action='move' and task_id matching the mutated task."""
+        client.post("/api/tasks/1/move", json={"status": "in-progress"})
+        entries = [
+            json.loads(line)
+            for line in (board_dir / "activity.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        assert cockpit_entries[0]["action"] == "move"
+        assert cockpit_entries[0]["task_id"] == 1
+
+    def test_edit_audit_log_has_correct_action_and_task_id(
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
+    ) -> None:
+        """Edit audit log entry has action='edit' and task_id matching the mutated task."""
+        task = engine.show_task("1")
+        client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "title": "Audit action test"},
+        )
+        entries = [
+            json.loads(line)
+            for line in (board_dir / "activity.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        assert cockpit_entries[0]["action"] == "edit"
+        assert cockpit_entries[0]["task_id"] == 1
+
+    def test_release_audit_log_has_correct_action_and_task_id(
+        self, client: TestClient, board_dir: Path
+    ) -> None:
+        """Release audit log entry has action='release' and task_id matching the mutated task."""
+        client.post("/api/tasks/2/release")  # task 2 is pre-claimed
+        entries = [
+            json.loads(line)
+            for line in (board_dir / "activity.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        assert cockpit_entries[0]["action"] == "release"
+        assert cockpit_entries[0]["task_id"] == 2
