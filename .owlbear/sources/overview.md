@@ -25,12 +25,28 @@ External repos and resources studied during OwlBear development.
 | React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 | React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 
+## E2E Kanban Board Tests: DnD, Density, Scroll (Task #957)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright Mouse API | <https://playwright.dev/docs/api/class-mouse> | `mouse.down()`, `mouse.move()`, `mouse.up()`, `mouse.wheel()` for DnD and scroll testing | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
+| Playwright Locator.boundingBox() | <https://playwright.dev/docs/api/class-locator#locator-bounding-box> | Returns `{x, y, width, height}` for card density measurement | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
+| Playwright DnD + Scrolling guide | <https://playwright.dev/docs/input#drag-and-drop> | Manual drag pattern, double mouse-move requirement for dragover, `mouse.wheel()` scroll pattern | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
+
 ## Cockpit Read API GREEN Phase (Task #930)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | FastAPI Dependency Injection | <https://fastapi.tiangolo.com/tutorial/dependencies/> | `Depends()` pattern for `get_engine` DI callable, `dependency_overrides` in tests | `.owlbear/research/930-cockpit-read-api-green.md` | 2026-04-18 |
 | PDS v3.34 Tabs examples + API | <https://designsystem.porsche.com/v3> | PTabs/PTabsItem custom element tags, `activeTabIndex` prop, `label` prop, jsdom tab-switch event behaviour | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+
+## KanbanBoard Memoization (Task #963)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React.memo API reference | <https://react.dev/reference/react/memo> | Shallow prop comparison, React Compiler note, custom comparator API | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
+| useMemo API reference | <https://react.dev/reference/react/useMemo> | Caching calculations, dependency semantics, memo+useMemo synergy pattern | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
+| useCallback API reference | <https://react.dev/reference/react/useCallback> | Function caching, equivalent to useMemo returning function, hook ordering rules | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 
 ## Frontend Scaffold Feasibility (Task #925)
 
@@ -58,6 +74,19 @@ External repos and resources studied during OwlBear development.
 | Bundlephobia: react-virtuoso | <https://bundlephobia.com/package/react-virtuoso@4.18.5> | Bundle composition: 100% self, tree-shakeable, side-effect free | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 | Bundlephobia: react-window | <https://bundlephobia.com/package/react-window@2.2.7> | Bundle composition: 100% self, tree-shakeable | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
 | Vitest bench API | <https://vitest.dev/api/#bench> | Experimental Tinybench-based benchmarking, `bench()` function, statistical output | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+
+## React Compiler + PDS Interop (Task #970)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability statement, scope, useMemo/useCallback guidance | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite Babel plugin config, DevTools verification, "use no memo" | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, runtime vs build errors, "use no memo" workflow | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | "use memo"/"use no memo", compilationMode interaction, best practices | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | Babel overrides, annotation mode, runtime gating | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | compilationMode, panicThreshold, logger, gating options | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| Vitest coverage drop with React Compiler | <https://github.com/reactwg/react-compiler/discussions/78> | Known issue: compiler-generated branches inflate branch count, no source-map fix | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| Rules of React | <https://react.dev/reference/rules> | Purity, side effects outside render, immutability rules compiler relies on | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
 
 ## TanStack Query vs Plain Polling (Task #960)
 
@@ -4173,3 +4202,12 @@ External repos and resources studied during OwlBear development.
 | Playwright webServer docs | <https://playwright.dev/docs/test-webserver> | webServer config: command, url, reuseExistingServer, timeout, auto-start dev server | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
 | Playwright config reference | <https://playwright.dev/docs/test-configuration> | testDir, projects, reporters, fullyParallel, forbidOnly, workers | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
 | Vite preview options | <https://vite.dev/config/preview-options.html> | Default port 4173, strictPort, host options for vite preview | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
+
+## React Compiler Evaluation (Task #969)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability status, what it does, useMemo/useCallback/React.memo guidance | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite integration guide, ESLint plugin, verification steps | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
+| babel-plugin-react-compiler npm | <https://www.npmjs.com/package/babel-plugin-react-compiler> | v1.0.0 stable, 7.6M weekly downloads, MIT license | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
+| react-compiler-runtime npm | <https://www.npmjs.com/package/react-compiler-runtime> | v1.0.0, 0 dependencies, React 19 compat shim | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
