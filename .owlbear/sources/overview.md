@@ -42,6 +42,16 @@ External repos and resources studied during OwlBear development.
 | PDS License | <https://github.com/porsche-design-system/porsche-design-system/blob/main/LICENSE.md> | Dual license: Apache 2.0 source code + custom restrictive design assets license | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
 | PDS Theme styles | <https://designsystem.porsche.com/v3/styles/theme> | Design token exports: JS, SCSS, vanilla-extract, Tailwind CSS theme | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
 
+## Frontend Perf Benchmark + Virtualization (Task #959)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| react-virtuoso (npm) | <https://www.npmjs.com/package/react-virtuoso> | v4.18.5, 57KB min / 18.4KB gzip, 0 deps, 2.5M/wk, built-in DnD scroll support | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| react-window (npm) | <https://www.npmjs.com/package/react-window> | v2.2.7, 12.5KB min / 6.5KB gzip, 0 deps, 5.4M/wk, fixed-height List/Grid | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| Bundlephobia: react-virtuoso | <https://bundlephobia.com/package/react-virtuoso@4.18.5> | Bundle composition: 100% self, tree-shakeable, side-effect free | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| Bundlephobia: react-window | <https://bundlephobia.com/package/react-window@2.2.7> | Bundle composition: 100% self, tree-shakeable | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+| Vitest bench API | <https://vitest.dev/api/#bench> | Experimental Tinybench-based benchmarking, `bench()` function, statistical output | `.owlbear/research/959-frontend-perf-virtualization.md` | 2026-04-18 |
+
 ## Mtime Cache for list_tasks() (Task #941)
 
 | Source | URL | What | Where Used | Date |
@@ -4138,3 +4148,11 @@ External repos and resources studied during OwlBear development.
 | React Router v7 API reference | <https://api.reactrouter.com/v7/modules/react-router.html> | MemoryRouter, Routes, Route, Outlet — unified `react-router` package in v7 | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
 | React Router v7 library install + routing docs | <https://reactrouter.com/start/library/installation> | Declarative routing: BrowserRouter, nested Routes, layout routes, Outlet pattern | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
 | PDS v3.34 Tabs examples | <https://designsystem.porsche.com/v3/components/tabs/examples/> | PTabs + PTabsItem API: `label` prop, `activeTabIndex`, tab content pattern | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
+
+## Playwright E2E Infrastructure (Task #956)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright webServer docs | <https://playwright.dev/docs/test-webserver> | webServer config: command, url, reuseExistingServer, timeout, auto-start dev server | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
+| Playwright config reference | <https://playwright.dev/docs/test-configuration> | testDir, projects, reporters, fullyParallel, forbidOnly, workers | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
+| Vite preview options | <https://vite.dev/config/preview-options.html> | Default port 4173, strictPort, host options for vite preview | .owlbear/research/956-playwright-e2e-infrastructure.md | 2026-04-18 |
