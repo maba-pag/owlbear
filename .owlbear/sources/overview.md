@@ -54,6 +54,13 @@ External repos and resources studied during OwlBear development.
 | useMemo API reference | <https://react.dev/reference/react/useMemo> | Caching calculations, dependency semantics, memo+useMemo synergy pattern | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 | useCallback API reference | <https://react.dev/reference/react/useCallback> | Function caching, equivalent to useMemo returning function, hook ordering rules | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 
+## Sidecar GREEN Gaps (Task #936)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| react-markdown npm (v10.1.0) | <https://www.npmjs.com/package/react-markdown> | Safe by default, no dSIH, HTML escaped; rehypeSanitize is no-op without rehypeRaw | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
+| rehype-sanitize npm (v6.0.0) | <https://www.npmjs.com/package/rehype-sanitize> | Sanitizes HTML in hast tree; defaultSchema follows GitHub-style sanitation | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
+
 ## React Compiler Evaluation (Task #969)
 
 | Source | URL | What | Where Used | Date |
