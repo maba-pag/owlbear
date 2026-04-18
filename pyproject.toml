@@ -13,7 +13,7 @@ dev = [
   "pytest-cov>=7.1.0",
   "pytest-xdist>=3.5",
   "pyyaml>=6.0.3",
-  "ruff>=0.15",
+  "ruff>=0.15.11",
   "strictyaml>=1.7",
 ]
 validation = [
