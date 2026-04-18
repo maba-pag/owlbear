@@ -1,4 +1,4 @@
-import { useState, useEffect, memo, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -179,6 +179,27 @@ export default function KanbanBoard() {
   const { board, tasks, loading, error, refetchTasks } = useBoard()
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!contextMenu) return
+
+    function handleMouseDown(e: MouseEvent) {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) return
+      setContextMenu(null)
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [contextMenu])
 
   const handleContextMenu = useCallback((e: React.MouseEvent, task: Task) => {
     e.preventDefault()
@@ -244,7 +265,9 @@ export default function KanbanBoard() {
 
       {contextMenu && (
         <div
+          ref={menuRef}
           data-testid="context-menu"
+          role="menu"
           style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x }}
         >
           {(board.valid_transitions[contextMenu.taskStatus] ?? []).map((target) => (
@@ -252,6 +275,7 @@ export default function KanbanBoard() {
               key={target}
               data-testid="transition-item"
               data-status={target}
+              role="menuitem"
               onClick={() => void handleTransitionClick(contextMenu.taskId, target)}
             >
               → {target}

@@ -670,3 +670,50 @@ describe('TestFromAC_ContextMenuMove', () => {
     })
   })
 })
+
+// ─── Builder-discovered: re-right-click replaces menu ────────────────────────
+
+describe('TestBuilderDiscovered', () => {
+  beforeEach(() => {
+    stubFetchSuccess()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('right-clicking a second card replaces the context menu with transitions for the new card', async () => {
+    const { container } = renderBoard()
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+    })
+
+    // Open menu for card id=1 (backlog → transitions: research, todo)
+    const card1 = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+    fireEvent.contextMenu(card1)
+    await waitFor(() => {
+      const menu = container.querySelector('[data-testid="context-menu"]')
+      expect(menu).not.toBeNull()
+      const statuses = Array.from(menu!.querySelectorAll('[data-testid="transition-item"]')).map(
+        (el) => el.getAttribute('data-status'),
+      )
+      expect(statuses).toContain('research')
+      expect(statuses).toContain('todo')
+    })
+
+    // Right-click card id=3 (in-progress → transitions: todo, review)
+    const card3 = container.querySelector('[data-testid="task-card"][data-id="3"]')!
+    fireEvent.contextMenu(card3)
+    await waitFor(() => {
+      const menu = container.querySelector('[data-testid="context-menu"]')
+      expect(menu).not.toBeNull()
+      const statuses = Array.from(menu!.querySelectorAll('[data-testid="transition-item"]')).map(
+        (el) => el.getAttribute('data-status'),
+      )
+      expect(statuses).toContain('todo')
+      expect(statuses).toContain('review')
+      // Old backlog transitions must be gone
+      expect(statuses).not.toContain('research')
+    })
+  })
+})
