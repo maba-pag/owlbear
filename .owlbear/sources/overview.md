@@ -2,11 +2,39 @@
 
 External repos and resources studied during OwlBear development.
 
+## Mtime Cache for list_tasks() (Task #941)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Python os.scandir/DirEntry docs | <https://docs.python.org/3/library/os.html#os.scandir> | DirEntry.stat() behavior on Unix (requires syscall), st_mtime_ns type (int, nanoseconds) | `.owlbear/research/mtime-cache-941.md` | 2026-04-17 |
+
+## Cockpit Layout Validation (Task #922)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Porsche DS Grid styles | <https://designsystem.porsche.com/v3/styles/grid> | Grid primitives, spacing tokens, fluid column system | `.owlbear/research/922-cockpit-layout-mockup.md` | 2026-04-17 |
+| Pragmatic Drag-and-Drop | <https://github.com/atlassian/pragmatic-drag-and-drop> | Atlassian kanban board drag patterns (Trello/Jira reference) | `.owlbear/research/922-cockpit-layout-mockup.md` | 2026-04-17 |
+
 ## PreToolUse Guard Hooks Test Approach (Task #891)
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse hook I/O contract: stdin JSON schema, stdout allow/deny format, exit code semantics, fail-open spec | `.owlbear/research/891-pretooluse-hooks-test-approach.md` | 2026-04-17 |
+
+## SSRF Surface in BrowserContentFetcher (Task #949)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright page.goto() docs | <https://playwright.dev/python/docs/api/class-page#page-goto> | No IP+Host header support; follows redirects by default; URL string only | `.owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
+| Playwright browser_context.route() docs | <https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route> | Route interception pattern for blocking requests by URL/predicate | `.owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
+| Playwright Network docs | <https://playwright.dev/python/docs/network> | Request interception, modification, and abort patterns | `.owlbear/research/949-ssrf-browser-fetcher.md` | 2026-04-18 |
+
+## SSRF Pre-Flight Check for navigate() (Task #950)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Playwright page.goto() docs | <https://playwright.dev/python/docs/api/class-page#page-goto> | No IP+Host header support; Playwright constraint on TOCTOU mitigation | `.owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
+| OwlBear #946 `_is_blocked_ip` implementation | Internal: `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` L156-175 | Proven SSRF IP blocklist pattern for duplication | `.owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
 
 ## Copilot SDK vs OpenAI-Compat Endpoint Research (Task #887)
 
