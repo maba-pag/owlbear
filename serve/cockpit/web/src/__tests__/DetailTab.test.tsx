@@ -485,4 +485,83 @@ describe('TestBuilderDiscovered', () => {
       expect(container.querySelector('[data-testid="confirm-dialog"]')).not.toBeNull()
     })
   })
+
+  // ─── AC6: body field included in save payload ─────────────────────────────
+
+  describe('save payload includes body (AC6)', () => {
+    it('save request body includes the edited body textarea content', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail()
+
+      // Toggle into edit mode so the body textarea is rendered
+      const toggle = container.querySelector('[data-testid="body-edit-toggle"]') as HTMLElement | null
+      expect(toggle).not.toBeNull()
+      fireEvent.click(toggle!)
+
+      const textarea = container.querySelector('textarea[data-field="body"]') as HTMLTextAreaElement | null
+      expect(textarea).not.toBeNull()
+      fireEvent.change(textarea!, { target: { value: 'edited body content' } })
+
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+
+      await waitFor(
+        () => {
+          const [, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const parsed = JSON.parse(options.body as string) as Record<string, unknown>
+          expect(parsed).toHaveProperty('body', 'edited body content')
+        },
+        { timeout: 500 },
+      )
+    })
+  })
+
+  // ─── AC7: force-save button fires second API call ─────────────────────────
+
+  describe('force-save fires API call (AC7)', () => {
+    it('clicking conflict-overwrite sends a second POST to /api/tasks/{id}/edit', async () => {
+      let callCount = 0
+      const fetchMock = vi.fn(() => {
+        callCount++
+        if (callCount === 1) {
+          return Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })
+        }
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASK) })
+      })
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderDetail()
+
+      // Trigger 409
+      const saveBtn = container.querySelector('[data-testid="save-button"]') as HTMLElement | null
+      expect(saveBtn).not.toBeNull()
+      fireEvent.click(saveBtn!)
+
+      // Wait for conflict modal to appear
+      await waitFor(
+        () => {
+          expect(container.querySelector('[data-testid="conflict-modal"]')).not.toBeNull()
+        },
+        { timeout: 500 },
+      )
+
+      // Click force-save
+      const overwriteBtn = container.querySelector('[data-testid="conflict-overwrite"]') as HTMLElement | null
+      expect(overwriteBtn).not.toBeNull()
+      fireEvent.click(overwriteBtn!)
+
+      await waitFor(
+        () => {
+          expect(fetchMock).toHaveBeenCalledTimes(2)
+          const [url, options] = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
+          expect(url).toContain('/api/tasks/42/edit')
+          expect(options.method).toBe('POST')
+        },
+        { timeout: 500 },
+      )
+    })
+  })
 })
