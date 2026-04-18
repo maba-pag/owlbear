@@ -70,6 +70,16 @@ const TASKS = {
       block_reason: null,
       claimed: false,
     },
+    {
+      id: 5,
+      title: 'Completed task',
+      status: 'done',
+      priority: 'nice-to-have',
+      tags: [],
+      blocked: false,
+      block_reason: null,
+      claimed: false,
+    },
   ],
   mtime: 1713456000,
 }
@@ -347,6 +357,71 @@ describe('TestFromAC_KanbanBoard', () => {
         const items = menu?.querySelectorAll('[data-testid="transition-item"]')
         expect(items?.length).toBe(2)
       })
+    })
+  })
+
+  // ─── AC #962 — dismiss and accessibility ──────────────────────────────────
+
+  describe('dismiss and accessibility', () => {
+    it('clicking outside context menu dismisses it', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
+      })
+      fireEvent.mouseDown(document.body)
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="context-menu"]')).toBeNull()
+      })
+    })
+
+    it('pressing Escape key dismisses context menu', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
+      })
+      fireEvent.keyDown(document, { key: 'Escape' })
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="context-menu"]')).toBeNull()
+      })
+    })
+
+    it('context menu has role="menu" and transition items have role="menuitem"', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+      })
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')!
+      fireEvent.contextMenu(card)
+      await waitFor(() => {
+        const menu = container.querySelector('[data-testid="context-menu"]')
+        expect(menu?.getAttribute('role')).toBe('menu')
+        const items = Array.from(menu?.querySelectorAll('[data-testid="transition-item"]') ?? [])
+        expect(items.length).toBeGreaterThan(0)
+        items.forEach(item => {
+          expect(item.getAttribute('role')).toBe('menuitem')
+        })
+      })
+    })
+
+    it('right-clicking a done-status card shows no context menu', async () => {
+      const { container } = renderBoard()
+      await waitFor(() => {
+        expect(container.querySelector('[data-testid="task-card"][data-id="5"]')).not.toBeNull()
+      })
+      const doneCard = container.querySelector('[data-testid="task-card"][data-id="5"]')!
+      fireEvent.contextMenu(doneCard)
+      await new Promise(resolve => setTimeout(resolve, 50))
+      expect(container.querySelector('[data-testid="context-menu"]')).toBeNull()
     })
   })
 
