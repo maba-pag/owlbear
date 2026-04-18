@@ -94,6 +94,47 @@ function stubBoardHttpError() {
   )
 }
 
+/** Both APIs succeed with two tasks of different priorities (for TestBuilderDiscovered) */
+function stubFetchSuccessMulti() {
+  const tasksMulti = {
+    tasks: [
+      {
+        id: 1,
+        title: 'Critical task',
+        status: 'backlog',
+        priority: 'critical',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+      },
+      {
+        id: 2,
+        title: 'Someday task',
+        status: 'backlog',
+        priority: 'someday',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+      },
+    ],
+    mtime: 1713456000,
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url.includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
+      }
+      if (url.includes('/api/tasks')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(tasksMulti) })
+      }
+      return Promise.reject(new Error(`Unexpected URL: ${url}`))
+    }),
+  )
+}
+
 /** /api/tasks returns HTTP 500 (ok: false); /api/board succeeds */
 function stubTasksHttpError() {
   vi.stubGlobal(
@@ -198,6 +239,51 @@ describe('TestFromAC_KanbanBoardBothOrNothing', () => {
         expect(container.querySelector('[data-testid="error-message"]')).not.toBeNull()
       })
       expect(container.querySelector('[data-column]')).toBeNull()
+    })
+  })
+})
+
+// ─── Tests: AC#2, AC#4 — layout and priority border ──────────────────────────
+
+describe('TestBuilderDiscovered', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('columns container has flex or grid display', async () => {
+    stubFetchSuccessMulti()
+    const { container } = renderBoard()
+    await waitFor(() => {
+      const firstCol = container.querySelector('[data-column]')
+      expect(firstCol).not.toBeNull()
+      const columnsContainer = firstCol?.parentElement
+      expect(['flex', 'grid']).toContain(columnsContainer?.style.display)
+    })
+  })
+
+  it('card has a non-empty borderLeft style (priority-coded left border)', async () => {
+    stubFetchSuccessMulti()
+    const { container } = renderBoard()
+    await waitFor(() => {
+      const card = container.querySelector('[data-testid="task-card"][data-id="1"]')
+      expect(card).not.toBeNull()
+      expect((card as HTMLElement | null)?.style.borderLeft).toBeTruthy()
+    })
+  })
+
+  it('different priorities yield different left border colors', async () => {
+    stubFetchSuccessMulti()
+    const { container } = renderBoard()
+    await waitFor(() => {
+      const criticalCard = container.querySelector('[data-testid="task-card"][data-id="1"]')
+      const somedayCard = container.querySelector('[data-testid="task-card"][data-id="2"]')
+      expect(criticalCard).not.toBeNull()
+      expect(somedayCard).not.toBeNull()
+      const criticalBorder = (criticalCard as HTMLElement | null)?.style.borderLeft
+      const somedayBorder = (somedayCard as HTMLElement | null)?.style.borderLeft
+      expect(criticalBorder).toBeTruthy()
+      expect(somedayBorder).toBeTruthy()
+      expect(criticalBorder).not.toBe(somedayBorder)
     })
   })
 })

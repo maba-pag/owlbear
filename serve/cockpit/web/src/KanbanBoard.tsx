@@ -78,6 +78,16 @@ export function useBoard(): UseBoardResult {
   return { board, tasks, loading, error }
 }
 
+// ─── Priority colours ───────────────────────────────────────────────────────
+
+const PRIORITY_COLORS: Record<string, string> = {
+  critical: '#e00000',
+  needed: '#ff8000',
+  important: '#ffcc00',
+  'nice-to-have': '#0066cc',
+  someday: '#888888',
+}
+
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
 interface CardProps {
@@ -91,6 +101,7 @@ function Card({ task, onContextMenu }: CardProps) {
       data-testid="task-card"
       data-id={task.id}
       data-priority={task.priority}
+      style={{ borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? '#888888'}` }}
       onContextMenu={(e) => onContextMenu(e, task)}
     >
       <span data-testid="card-title" title={task.title}>
@@ -167,7 +178,7 @@ export default function KanbanBoard() {
   }
 
   return (
-    <div>
+    <div style={{ display: 'flex', gap: '16px', overflowX: 'auto' }}>
       {board.statuses.map(({ name }) => {
         const colTasks = tasks.filter((t) => t.status === name)
         return (
