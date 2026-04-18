@@ -498,3 +498,304 @@ class TestBuilderDiscovered:
             "young superseded claim (10 min < 1h timeout) must not be classified as 'stuck'"
         )
         assert "running" in states, "young superseded claim must be 'running' (age < timeout)"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_WorkSessionFields  (#953)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_WorkSessionFields:
+    """AC #953: WorkSession extended with agent, started_at, duration, outcome fields.
+
+    AC coverage:
+      AC1 - WorkSession has fields: task_id, agent, state, started_at, duration, outcome
+      AC3 - agent derived from claim event detail (not actor)
+      AC4 - started_at derived from claim event timestamp
+      AC5 - duration = close_ts - claim_ts in seconds; None for open/superseded
+      AC6 - outcome = raw end_work detail; "released" for release; None for open/superseded
+      AC9 - WorkSession exported from owlbear_kanban.__init__
+      New - superseded claim carries agent and started_at from original claim
+    """
+
+    # ------------------------------------------------------------------ AC9: export
+
+    def test_worksession_exported_from_package(self) -> None:
+        """WorkSession must be accessible as owlbear_kanban.WorkSession."""
+        import importlib
+
+        mod = importlib.import_module("owlbear_kanban")
+        assert hasattr(mod, "WorkSession"), "WorkSession must be exported from owlbear_kanban package"
+
+    def test_worksession_in_package_all(self) -> None:
+        """WorkSession must appear in owlbear_kanban.__all__."""
+        import owlbear_kanban
+
+        assert "WorkSession" in owlbear_kanban.__all__
+
+    # ------------------------------------------------------------------ AC1: field presence
+
+    def test_session_has_agent_field(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Completed session must expose an `agent` attribute."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=200, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=200, detail="success: todo -> in-progress"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 200)
+        _ = s.agent  # AttributeError if field absent
+
+    def test_session_has_started_at_field(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Completed session must expose a `started_at` attribute."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=201, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=201, detail="success: todo -> in-progress"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 201)
+        _ = s.started_at  # AttributeError if field absent
+
+    def test_session_has_duration_field(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session must expose a `duration` attribute."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=202, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=202, detail="success: todo -> in-progress"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 202)
+        _ = s.duration  # AttributeError if field absent
+
+    def test_session_has_outcome_field(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session must expose an `outcome` attribute."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=203, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=203, detail="success: todo -> in-progress"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 203)
+        _ = s.outcome  # AttributeError if field absent
+
+    # ------------------------------------------------------------------ AC3: agent from claim detail
+
+    def test_agent_equals_claim_event_detail(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.agent must equal the `detail` field of the claim event."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=210, detail="builder-agent", actor="different-actor",
+                   ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=210, detail="success: todo -> in-progress"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 210)
+        assert s.agent == "builder-agent"
+
+    def test_agent_is_detail_not_actor(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.agent must be the claim `detail` field, not `actor`, when they differ."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=211, detail="the-detail-agent", actor="the-actor-agent",
+                   ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=211, detail="success: todo -> in-progress"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 211)
+        assert s.agent == "the-detail-agent"
+        assert s.agent != "the-actor-agent"
+
+    # ------------------------------------------------------------------ AC4: started_at from claim timestamp
+
+    def test_started_at_equals_claim_timestamp(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.started_at must equal the claim event's timestamp string."""
+        claim_ts = "2026-01-15T10:00:00+00:00"
+        _write_log(log_path, [
+            _entry(action="claim", task_id=220, detail="my-agent", ts=claim_ts),
+            _entry(action="end_work", task_id=220, detail="success: todo -> in-progress",
+                   ts="2026-01-15T10:30:00+00:00"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 220)
+        assert s.started_at == claim_ts
+
+    def test_started_at_is_iso8601_string(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.started_at must be a string parseable as ISO-8601 datetime."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=221, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=221, detail="success: todo -> in-progress"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 221)
+        assert isinstance(s.started_at, str)
+        datetime.fromisoformat(s.started_at)  # must not raise
+
+    # ------------------------------------------------------------------ AC5: duration
+
+    def test_duration_is_close_minus_claim_seconds(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.duration must equal (close_ts - claim_ts).total_seconds() for closed sessions."""
+        claim_ts = "2026-01-15T10:00:00+00:00"
+        close_ts = "2026-01-15T10:30:00+00:00"  # 1800 s
+        _write_log(log_path, [
+            _entry(action="claim", task_id=230, detail="my-agent", ts=claim_ts),
+            _entry(action="end_work", task_id=230, detail="success: todo -> in-progress", ts=close_ts),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 230)
+        assert s.duration == pytest.approx(1800.0)
+
+    def test_duration_is_none_for_running_session(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.duration is None for an open (running) session."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=231, detail="my-agent", ts=_ts(timedelta(minutes=-5))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 231)
+        assert s.duration is None
+
+    def test_duration_is_none_for_stuck_session(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.duration is None for an open (stuck) session."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=232, detail="my-agent", ts=_ts(timedelta(hours=-3))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 232)
+        assert s.duration is None
+
+    def test_duration_is_none_for_superseded_claim(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.duration is None for a superseded (orphaned) claim."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=233, detail="agent-1", ts=_ts(timedelta(hours=-2))),
+            _entry(action="claim", task_id=233, detail="agent-2", ts=_ts(timedelta(minutes=-10))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        task_sessions = [s for s in sessions if s.task_id == 233]
+        # First claim was 2h ago without close → classified as "stuck" when superseded
+        superseded = next(s for s in task_sessions if s.state == "stuck")
+        assert superseded.duration is None
+
+    def test_duration_with_tz_naive_claim_timestamp(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Duration computed correctly when claim timestamp is tz-naive (no UTC offset)."""
+        # tz-naive claim vs tz-aware close — engine must normalize both to UTC
+        claim_ts = "2026-01-15T10:00:00"  # no tz info
+        close_ts = "2026-01-15T10:30:00+00:00"
+        _write_log(log_path, [
+            _entry(action="claim", task_id=234, detail="my-agent", ts=claim_ts),
+            _entry(action="end_work", task_id=234, detail="success: todo -> in-progress", ts=close_ts),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 234)
+        assert s.duration == pytest.approx(1800.0)
+
+    def test_duration_is_set_for_released_session(self, engine: KanbanEngine, log_path: Path) -> None:
+        """Session.duration is a non-None float for a released session."""
+        claim_ts = "2026-01-15T10:00:00+00:00"
+        close_ts = "2026-01-15T11:00:00+00:00"  # 3600 s
+        _write_log(log_path, [
+            _entry(action="claim", task_id=235, detail="my-agent", ts=claim_ts),
+            _entry(action="release", task_id=235, detail="my-agent", ts=close_ts),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 235)
+        assert s.duration == pytest.approx(3600.0)
+
+    # ------------------------------------------------------------------ AC6: outcome
+
+    def test_outcome_is_raw_end_work_detail_for_success(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Session.outcome is the raw end_work detail string (not a classified label)."""
+        detail = "success: todo -> in-progress"
+        _write_log(log_path, [
+            _entry(action="claim", task_id=240, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=240, detail=detail),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 240)
+        assert s.outcome == detail
+
+    def test_outcome_is_raw_end_work_detail_for_fail(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Session.outcome is the raw end_work detail string for a completed-fail session."""
+        detail = "outcome=fail"
+        _write_log(log_path, [
+            _entry(action="claim", task_id=241, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="end_work", task_id=241, detail=detail),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 241)
+        assert s.outcome == detail
+
+    def test_outcome_is_released_string_for_release_event(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Session.outcome is the literal string 'released' when closed by a release event."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=242, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+            _entry(action="release", task_id=242, detail="my-agent"),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 242)
+        assert s.outcome == "released"
+
+    def test_outcome_is_none_for_running_session(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Session.outcome is None for an open (running) session."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=243, detail="my-agent", ts=_ts(timedelta(minutes=-5))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 243)
+        assert s.outcome is None
+
+    def test_outcome_is_none_for_stuck_session(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Session.outcome is None for an open (stuck) session."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=244, detail="my-agent", ts=_ts(timedelta(hours=-3))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        s = next(s for s in sessions if s.task_id == 244)
+        assert s.outcome is None
+
+    def test_outcome_is_none_for_superseded_claim(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Session.outcome is None for a superseded (orphaned) claim."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=245, detail="agent-1", ts=_ts(timedelta(hours=-2))),
+            _entry(action="claim", task_id=245, detail="agent-2", ts=_ts(timedelta(minutes=-10))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        task_sessions = [s for s in sessions if s.task_id == 245]
+        superseded = next(s for s in task_sessions if s.state == "stuck")
+        assert superseded.outcome is None
+
+    # ------------------------------------------------------------------ New AC: superseded claim fields
+
+    def test_superseded_claim_agent_from_original_claim_detail(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Superseded session.agent is from the original (first) claim detail field."""
+        _write_log(log_path, [
+            _entry(action="claim", task_id=250, detail="original-agent", ts=_ts(timedelta(hours=-2))),
+            _entry(action="claim", task_id=250, detail="new-agent", ts=_ts(timedelta(minutes=-10))),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        task_sessions = [s for s in sessions if s.task_id == 250]
+        # original claim was 2h ago without close → classified as "stuck" when superseded
+        superseded = next(s for s in task_sessions if s.state == "stuck")
+        assert superseded.agent == "original-agent"
+
+    def test_superseded_claim_started_at_from_original_claim_timestamp(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Superseded session.started_at equals the original claim event's timestamp."""
+        original_ts = _ts(timedelta(hours=-2))
+        new_ts = _ts(timedelta(minutes=-10))
+        _write_log(log_path, [
+            _entry(action="claim", task_id=251, detail="original-agent", ts=original_ts),
+            _entry(action="claim", task_id=251, detail="new-agent", ts=new_ts),
+        ])
+        sessions = engine.list_sessions(filter="all")
+        task_sessions = [s for s in sessions if s.task_id == 251]
+        superseded = next(s for s in task_sessions if s.state == "stuck")
+        assert superseded.started_at == original_ts
