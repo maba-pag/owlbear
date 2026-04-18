@@ -2,6 +2,15 @@
 
 External repos and resources studied during OwlBear development.
 
+## Kanban Board GREEN Phase (Task #933)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| @dnd-kit/react (npm) | <https://www.npmjs.com/package/@dnd-kit/react> | v0.4.0 pre-release, React 19 native, useDraggable/useDroppable/useSortable hooks | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+| @dnd-kit/core (npm) | <https://www.npmjs.com/package/@dnd-kit/core> | v6.3.1 stable, 13M/week, React 19 issues reported (#1654, #1747) | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+| @atlaskit/pragmatic-drag-and-drop (npm) | <https://www.npmjs.com/package/@atlaskit/pragmatic-drag-and-drop> | v1.8.0, framework-agnostic, Apache-2.0, 970K/week | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+| dnd-kit React 19 issues | <https://github.com/clauderic/dnd-kit/issues?q=react+19> | Open issues: #1654 use-client, #1747 removeChild, #1940 sortable lists | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
+
 ## Kanban Board RED Tests (Task #931)
 
 | Source | URL | What | Where Used | Date |
