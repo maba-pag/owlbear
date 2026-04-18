@@ -8,6 +8,12 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 | React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+
+## Cockpit Read API GREEN Phase (Task #930)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastAPI Dependency Injection | <https://fastapi.tiangolo.com/tutorial/dependencies/> | `Depends()` pattern for `get_engine` DI callable, `dependency_overrides` in tests | `.owlbear/research/930-cockpit-read-api-green.md` | 2026-04-18 |
 | PDS v3.34 Tabs examples + API | <https://designsystem.porsche.com/v3> | PTabs/PTabsItem custom element tags, `activeTabIndex` prop, `label` prop, jsdom tab-switch event behaviour | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 
 ## Frontend Scaffold Feasibility (Task #925)
@@ -53,6 +59,13 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | Playwright page.goto() docs | <https://playwright.dev/python/docs/api/class-page#page-goto> | No IP+Host header support; Playwright constraint on TOCTOU mitigation | `.owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
 | OwlBear #946 `_is_blocked_ip` implementation | Internal: `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py` L156-175 | Proven SSRF IP blocklist pattern for duplication | `.owlbear/research/950-ssrf-browser-navigate.md` | 2026-04-18 |
+
+## App Shell GREEN Phase (Task #929)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Router v7 library routing docs | <https://reactrouter.com/start/library/routing> | BrowserRouter, layout routes, Outlet pattern, nested route config | `.owlbear/research/929-app-shell-green.md` | 2026-04-18 |
+| React Router v7 installation guide | <https://reactrouter.com/start/library/installation> | BrowserRouter wrapper pattern for Vite/React apps | `.owlbear/research/929-app-shell-green.md` | 2026-04-18 |
 
 ## Copilot SDK vs OpenAI-Compat Endpoint Research (Task #887)
 
@@ -4084,7 +4097,7 @@ External repos and resources studied during OwlBear development.
 | Entra ID app registration quickstart | <https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app> | App registration steps, supported account types, admin consent process | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
 | OAuth 2.0 device authorization grant | <https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-device-code> | Device-code flow protocol: `/devicecode` endpoint, polling, token response format, Conditional Access considerations | .owlbear/research/878-azure-ad-app-registration-request.md | 2026-04-14 |
 
-## PreToolUse Guard Hooks Test Approach (Task #891)
+## PreToolUse Guard Hooks Test Approach (Task #891) — Supplement
 
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|

@@ -148,9 +148,7 @@ class TestFromAC_MtimeCache:
             assert isinstance(value, tuple), "value must be tuple"
             assert len(value) == 2, "value must be 2-tuple"
             mtime_ns, task = value
-            assert isinstance(mtime_ns, int), (
-                f"mtime_ns must be int (st_mtime_ns), got {type(mtime_ns).__name__}"
-            )
+            assert isinstance(mtime_ns, int), f"mtime_ns must be int (st_mtime_ns), got {type(mtime_ns).__name__}"
             assert isinstance(task, Task), f"second element must be Task, got {type(task)}"
 
     # ------------------------------------------------------------------ AC 2 + 3
@@ -159,9 +157,7 @@ class TestFromAC_MtimeCache:
     def test_cold_call_populates_task_cache(self, engine: KanbanEngine) -> None:
         """Cold list_tasks() populates _task_cache with one entry per .md file."""
         results = engine.list_tasks()
-        assert len(engine._task_cache) == len(results), (
-            "_task_cache must contain one entry per returned task"
-        )
+        assert len(engine._task_cache) == len(results), "_task_cache must contain one entry per returned task"
 
     def test_unchanged_file_not_reparsed_on_warm_call(self, engine: KanbanEngine) -> None:
         """Second list_tasks() must not call read_task() when no files changed."""
@@ -374,9 +370,7 @@ class TestFromAC_MtimeCache:
         # Simulate a race: first call to read_task raises FileNotFoundError
         # (file deleted between scandir and read)
         call_count: dict[str, int] = {"n": 0}
-        original_read_task = __import__(
-            "owlbear_kanban.task_io", fromlist=["read_task"]
-        ).read_task
+        original_read_task = __import__("owlbear_kanban.task_io", fromlist=["read_task"]).read_task
 
         def patched_read(path: Path) -> Task:  # type: ignore[return]
             call_count["n"] += 1
@@ -407,9 +401,7 @@ class TestFromAC_MtimeCache:
         time.sleep(0.01)
         target.write_bytes(target.read_bytes())
 
-        original_read_task = __import__(
-            "owlbear_kanban.task_io", fromlist=["read_task"]
-        ).read_task
+        original_read_task = __import__("owlbear_kanban.task_io", fromlist=["read_task"]).read_task
 
         def patched_read(path: Path) -> Task:  # type: ignore[return]
             if path.name == target_name:
@@ -419,6 +411,4 @@ class TestFromAC_MtimeCache:
         with patch("owlbear_kanban.engine.read_task", side_effect=patched_read):
             eng.list_tasks()
 
-        assert target_name not in eng._task_cache, (
-            "cache entry must be evicted when read_task raises FileNotFoundError"
-        )
+        assert target_name not in eng._task_cache, "cache entry must be evicted when read_task raises FileNotFoundError"

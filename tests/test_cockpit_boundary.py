@@ -20,13 +20,9 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
-_FORBIDDEN_NAMES: frozenset[str] = frozenset(
-    {"claim_task", "start_work", "end_work", "pick_dispatchable"}
-)
+_FORBIDDEN_NAMES: frozenset[str] = frozenset({"claim_task", "start_work", "end_work", "pick_dispatchable"})
 # Both top-level and submodule import paths are checked per research finding.
-_FORBIDDEN_MODULES: frozenset[str] = frozenset(
-    {"owlbear_kanban", "owlbear_kanban.engine", "owlbear_kanban.dispatch"}
-)
+_FORBIDDEN_MODULES: frozenset[str] = frozenset({"owlbear_kanban", "owlbear_kanban.engine", "owlbear_kanban.dispatch"})
 
 
 def _collect_forbidden_imports(src_root: Path) -> list[tuple[str, str, int]]:
@@ -46,9 +42,7 @@ def _collect_forbidden_imports(src_root: Path) -> list[tuple[str, str, int]]:
                 if module in _FORBIDDEN_MODULES:
                     for alias in node.names:
                         if alias.name in _FORBIDDEN_NAMES:
-                            violations.append(
-                                (str(py_file.relative_to(src_root)), alias.name, node.lineno)
-                            )
+                            violations.append((str(py_file.relative_to(src_root)), alias.name, node.lineno))
     return violations
 
 
@@ -197,37 +191,23 @@ class TestFromAC_BoundaryEnforcement:
 
     def test_no_forbidden_import_claim_task(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'claim_task' from owlbear_kanban*."""
-        violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "claim_task"
-        ]
+        violations = [(f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "claim_task"]
         assert violations == [], f"D12 violation — 'claim_task' imported at: {violations}"
 
     def test_no_forbidden_import_start_work(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'start_work' from owlbear_kanban*."""
-        violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "start_work"
-        ]
+        violations = [(f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "start_work"]
         assert violations == [], f"D12 violation — 'start_work' imported at: {violations}"
 
     def test_no_forbidden_import_end_work(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'end_work' from owlbear_kanban*."""
-        violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "end_work"
-        ]
+        violations = [(f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "end_work"]
         assert violations == [], f"D12 violation — 'end_work' imported at: {violations}"
 
     def test_no_forbidden_import_pick_dispatchable(self, cockpit_src_root: Path) -> None:
         """AC#5: cockpit src must not import 'pick_dispatchable' from owlbear_kanban*."""
         violations = [
-            (f, n, ln)
-            for f, n, ln in _collect_forbidden_imports(cockpit_src_root)
-            if n == "pick_dispatchable"
+            (f, n, ln) for f, n, ln in _collect_forbidden_imports(cockpit_src_root) if n == "pick_dispatchable"
         ]
         assert violations == [], f"D12 violation — 'pick_dispatchable' imported at: {violations}"
 

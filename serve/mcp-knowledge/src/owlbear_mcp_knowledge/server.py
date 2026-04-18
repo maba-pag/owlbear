@@ -168,13 +168,7 @@ def _is_blocked_ip(ip_str: str) -> bool:
         check = addr.ipv4_mapped
     else:
         check = addr
-    return (
-        check.is_loopback
-        or check.is_private
-        or check.is_link_local
-        or check.is_reserved
-        or check.is_unspecified
-    )
+    return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
 
 
 async def _web_read(url: str) -> str | None:
@@ -198,9 +192,7 @@ async def _web_read(url: str) -> str | None:
     port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
 
     try:
-        addrs = await asyncio.to_thread(
-            socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC
-        )
+        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC)
     except OSError:
         return None
 

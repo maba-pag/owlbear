@@ -73,9 +73,7 @@ class TestFromAC_YAML12SafeLoader:
         from owlbear_kanban.task_io import YAML12SafeLoader  # noqa: F401 — triggers class definition
 
         all_tags_in_safeloader = {
-            tag
-            for resolvers in yaml.SafeLoader.yaml_implicit_resolvers.values()
-            for tag, _ in resolvers
+            tag for resolvers in yaml.SafeLoader.yaml_implicit_resolvers.values() for tag, _ in resolvers
         }
         assert "tag:yaml.org,2002:timestamp" in all_tags_in_safeloader, (
             "yaml.SafeLoader.yaml_implicit_resolvers must not be mutated globally; "
@@ -228,9 +226,7 @@ class TestFromAC_ReadTaskPyYAML:
         """task_io must expose a 'yaml' attribute — pyyaml imported at module level."""
         import owlbear_kanban.task_io as _task_io
 
-        assert hasattr(_task_io, "yaml"), (
-            "task_io must import yaml (pyyaml) at module level so read_task() can use it"
-        )
+        assert hasattr(_task_io, "yaml"), "task_io must import yaml (pyyaml) at module level so read_task() can use it"
 
     # -- AC 8b: read_task calls yaml.load with YAML12SafeLoader ---------------
 
@@ -272,9 +268,7 @@ class TestFromAC_ReadTaskPyYAML:
 
         assert mock_yaml.load.called, "yaml.load must be called in read_task()"
         call_args = mock_yaml.load.call_args
-        loader_arg = call_args.kwargs.get("Loader") or (
-            call_args.args[1] if len(call_args.args) > 1 else None
-        )
+        loader_arg = call_args.kwargs.get("Loader") or (call_args.args[1] if len(call_args.args) > 1 else None)
         assert loader_arg is YAML12SafeLoader, (
             f"yaml.load must be called with Loader=YAML12SafeLoader, got Loader={loader_arg!r}"
         )
@@ -311,12 +305,8 @@ class TestFromAC_ReadTaskPyYAML:
 
         task = read_task(task_file)
 
-        assert task.created == ts_7, (
-            f"7-digit timestamp must be preserved verbatim; got {task.created!r}"
-        )
-        assert task.updated == ts_6, (
-            f"6-digit timestamp must be preserved verbatim; got {task.updated!r}"
-        )
+        assert task.created == ts_7, f"7-digit timestamp must be preserved verbatim; got {task.created!r}"
+        assert task.updated == ts_6, f"6-digit timestamp must be preserved verbatim; got {task.updated!r}"
 
     # -- AC 13: YAML 1.1 coercion regression via read_task() -----------------
 
@@ -346,12 +336,8 @@ class TestFromAC_ReadTaskPyYAML:
         assert task.block_reason == "no", (
             f"block_reason 'no' must not be coerced to bool False; got {task.block_reason!r}"
         )
-        assert task.claimed_by == "yes", (
-            f"claimed_by 'yes' must not be coerced to bool True; got {task.claimed_by!r}"
-        )
-        assert task.tags == ["on", "off"], (
-            f"tags with on/off values must survive as strings; got {task.tags!r}"
-        )
+        assert task.claimed_by == "yes", f"claimed_by 'yes' must not be coerced to bool True; got {task.claimed_by!r}"
+        assert task.tags == ["on", "off"], f"tags with on/off values must survive as strings; got {task.tags!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -370,8 +356,7 @@ class TestFromAC_Dependencies:
 
         deps: list[str] = data["project"]["dependencies"]
         assert any("pyyaml" in dep.lower() for dep in deps), (
-            f"pyyaml>=6.0.3 must be declared in serve/kanban/pyproject.toml "
-            f"[project.dependencies]; found: {deps}"
+            f"pyyaml>=6.0.3 must be declared in serve/kanban/pyproject.toml [project.dependencies]; found: {deps}"
         )
 
 
@@ -405,15 +390,9 @@ class TestFromAC_WriteReadRoundTrip:
 
         loaded = read_task(task_file)
 
-        assert loaded.block_reason == "no", (
-            f"block_reason 'no' must survive as string; got {loaded.block_reason!r}"
-        )
-        assert loaded.claimed_by == "yes", (
-            f"claimed_by 'yes' must survive as string; got {loaded.claimed_by!r}"
-        )
-        assert loaded.tags == ["on", "off"], (
-            f"tags ['on', 'off'] must survive as strings; got {loaded.tags!r}"
-        )
+        assert loaded.block_reason == "no", f"block_reason 'no' must survive as string; got {loaded.block_reason!r}"
+        assert loaded.claimed_by == "yes", f"claimed_by 'yes' must survive as string; got {loaded.claimed_by!r}"
+        assert loaded.tags == ["on", "off"], f"tags ['on', 'off'] must survive as strings; got {loaded.tags!r}"
 
     def test_roundtrip_bool_fields_preserved(self, tmp_path: Path) -> None:
         """bool fields (blocked=True) must survive write→read as Python True, not strings."""
@@ -471,9 +450,7 @@ class TestFromAC_WriteReadRoundTrip:
         assert validated.created == ts_7, (
             f"7-digit timestamp must survive write→read→validate; got {validated.created!r}"
         )
-        assert validated.updated == ts_6, (
-            f"6-digit timestamp must survive; got {validated.updated!r}"
-        )
+        assert validated.updated == ts_6, f"6-digit timestamp must survive; got {validated.updated!r}"
         assert validated.blocked is False
         assert validated.tags == ["cockpit", "engine", "phase-0"]
         assert validated.parent == 10

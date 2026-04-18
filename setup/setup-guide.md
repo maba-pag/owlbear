@@ -18,8 +18,10 @@ Before running setup, ensure the following are installed on your machine:
 > `init.py` uses relative paths, and `os.path.relpath` raises `ValueError` when
 > resolving paths across different Windows drive letters (e.g., `C:\` vs `D:\`).
 
-> **macOS and Linux:** No additional prerequisites — Python, uv, VS Code, and Git work
-> natively on all platforms.
+<!-- separate blockquotes -->
+
+> **macOS and Linux:** No additional prerequisites — Python, uv, VS Code, and Git
+> work natively on all platforms.
 
 ---
 

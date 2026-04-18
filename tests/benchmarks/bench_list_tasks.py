@@ -322,6 +322,5 @@ def test_warm_cache_p99_under_50ms_at_1500_tasks(
         )
 
     assert p99_ms < 50, (
-        f"Warm-read p99 must be <50ms at 1500 tasks, got {p99_ms:.1f}ms. "
-        f"Cache not implemented or not effective."
+        f"Warm-read p99 must be <50ms at 1500 tasks, got {p99_ms:.1f}ms. Cache not implemented or not effective."
     )

@@ -176,18 +176,14 @@ class TestFromAC_BoardConfig:
         assert "valid_transitions" in body
         assert isinstance(body["valid_transitions"], dict)
 
-    def test_board_valid_transitions_maps_every_configured_status(
-        self, client: TestClient
-    ) -> None:
+    def test_board_valid_transitions_maps_every_configured_status(self, client: TestClient) -> None:
         """valid_transitions dict has an entry for every configured status (R1)."""
         response = client.get("/api/board")
         assert response.status_code == 200
         vt = response.json()["valid_transitions"]
         assert set(vt.keys()) == set(_STATUSES)
 
-    def test_board_valid_transitions_values_are_lists_of_strings(
-        self, client: TestClient
-    ) -> None:
+    def test_board_valid_transitions_values_are_lists_of_strings(self, client: TestClient) -> None:
         """Each valid_transitions value is a non-empty list of strings (R1)."""
         response = client.get("/api/board")
         assert response.status_code == 200
@@ -198,17 +194,13 @@ class TestFromAC_BoardConfig:
             for t in targets:
                 assert isinstance(t, str), f"target {t!r} for {status!r} is not a string"
 
-    def test_board_valid_transitions_excludes_current_status(
-        self, client: TestClient
-    ) -> None:
+    def test_board_valid_transitions_excludes_current_status(self, client: TestClient) -> None:
         """Each status is excluded from its own valid_transitions list (R1)."""
         response = client.get("/api/board")
         assert response.status_code == 200
         vt = response.json()["valid_transitions"]
         for status, targets in vt.items():
-            assert status not in targets, (
-                f"valid_transitions[{status!r}] contains itself: {targets}"
-            )
+            assert status not in targets, f"valid_transitions[{status!r}] contains itself: {targets}"
 
 
 # ---------------------------------------------------------------------------
@@ -258,9 +250,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"status": "review"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_status_returns_only_matching(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_status_returns_only_matching(self, client: TestClient) -> None:
         """All tasks in a status-filtered response have the requested status."""
         response = client.get("/api/tasks", params={"status": "review"})
         assert response.status_code == 200
@@ -273,9 +263,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"priority": "critical"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_priority_returns_only_matching(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_priority_returns_only_matching(self, client: TestClient) -> None:
         """All tasks in a priority-filtered response have the requested priority."""
         response = client.get("/api/tasks", params={"priority": "critical"})
         assert response.status_code == 200
@@ -288,9 +276,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"tag": "alpha"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_tag_returns_only_matching(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_tag_returns_only_matching(self, client: TestClient) -> None:
         """All tasks in a tag-filtered response include the requested tag."""
         response = client.get("/api/tasks", params={"tag": "alpha"})
         assert response.status_code == 200
@@ -303,9 +289,7 @@ class TestFromAC_TaskList:
         response = client.get("/api/tasks", params={"blocked": "true"})
         assert response.status_code == 200
 
-    def test_tasks_filter_by_blocked_returns_only_blocked_tasks(
-        self, client: TestClient
-    ) -> None:
+    def test_tasks_filter_by_blocked_returns_only_blocked_tasks(self, client: TestClient) -> None:
         """All tasks in a blocked=true response have blocked=True."""
         response = client.get("/api/tasks", params={"blocked": "true"})
         assert response.status_code == 200
@@ -344,16 +328,12 @@ class TestFromAC_TaskDetail:
         for field in ("id", "title", "status", "priority", "body", "updated", "created"):
             assert field in body, f"Task detail missing field {field!r}"
 
-    def test_task_detail_nonexistent_id_returns_404_with_id_in_detail(
-        self, client: TestClient
-    ) -> None:
+    def test_task_detail_nonexistent_id_returns_404_with_id_in_detail(self, client: TestClient) -> None:
         """GET /api/tasks/9999 returns 404 with the ID referenced in the error detail."""
         response = client.get("/api/tasks/9999")
         assert response.status_code == 404
         detail = response.json().get("detail", "")
-        assert "9999" in str(detail), (
-            f"404 detail should reference the requested ID '9999', got: {detail!r}"
-        )
+        assert "9999" in str(detail), f"404 detail should reference the requested ID '9999', got: {detail!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -382,9 +362,7 @@ class TestFromAC_Sessions:
         assert "sessions" in body
         assert isinstance(body["sessions"], list)
 
-    def test_sessions_each_entry_has_task_id_and_state(
-        self, client: TestClient
-    ) -> None:
+    def test_sessions_each_entry_has_task_id_and_state(self, client: TestClient) -> None:
         """Each session entry has task_id (int) and state (str) fields."""
         response = client.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
@@ -422,9 +400,7 @@ class TestFromAC_MtimeCache:
         assert isinstance(mtime, int)
         assert mtime > 0
 
-    def test_mtime_stable_on_repeated_calls_without_file_changes(
-        self, client: TestClient
-    ) -> None:
+    def test_mtime_stable_on_repeated_calls_without_file_changes(self, client: TestClient) -> None:
         """Two sequential GETs with no file changes return the same mtime (cache hit)."""
         r1 = client.get("/api/tasks")
         assert r1.status_code == 200
@@ -432,9 +408,7 @@ class TestFromAC_MtimeCache:
         assert r2.status_code == 200
         assert r1.json()["mtime"] == r2.json()["mtime"]
 
-    def test_mtime_changes_after_task_file_modified(
-        self, client: TestClient, board_dir: Path
-    ) -> None:
+    def test_mtime_changes_after_task_file_modified(self, client: TestClient, board_dir: Path) -> None:
         """After modifying a task file the mtime in the response changes."""
         r1 = client.get("/api/tasks")
         assert r1.status_code == 200

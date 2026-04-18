@@ -181,7 +181,11 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         with (
             patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}),
             patch("owlbear_mcp_knowledge.server.EntityExtractor", mock_entity_cls),
-            patch("owlbear_knowledge.copilot_auth.get_copilot_token", new_callable=AsyncMock, side_effect=RuntimeError("no copilot")),
+            patch(
+                "owlbear_knowledge.copilot_auth.get_copilot_token",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("no copilot"),
+            ),
         ):
             async with app_lifespan(MagicMock()):
                 pass

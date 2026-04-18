@@ -146,10 +146,13 @@ class TestFromAC_ListSessions:
 
     def test_claim_to_end_work_is_one_session(self, engine: KanbanEngine, log_path: Path) -> None:
         """Claim followed by end_work produces exactly one session for that task."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=1, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=1, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=1, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=1, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert len(task_sessions) == 1
@@ -158,10 +161,13 @@ class TestFromAC_ListSessions:
 
     def test_end_work_success_state_is_completed_pass(self, engine: KanbanEngine, log_path: Path) -> None:
         """end_work with success detail prefix produces state=completed-pass."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=1, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=1, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=1, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=1, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 1]
         assert states == ["completed-pass"]
@@ -170,10 +176,13 @@ class TestFromAC_ListSessions:
 
     def test_end_work_fail_state_is_completed_fail(self, engine: KanbanEngine, log_path: Path) -> None:
         """end_work with 'outcome=fail' detail produces state=completed-fail."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=2, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=2, detail="outcome=fail"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=2, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=2, detail="outcome=fail"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 2]
         assert states == ["completed-fail"]
@@ -182,10 +191,13 @@ class TestFromAC_ListSessions:
 
     def test_end_work_block_maps_to_completed_fail(self, engine: KanbanEngine, log_path: Path) -> None:
         """end_work with 'blocked:' detail maps to completed-fail (no 7th state for block)."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=3, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=3, detail="blocked: needs DB migration"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=3, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=3, detail="blocked: needs DB migration"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 3]
         assert states == ["completed-fail"]
@@ -194,10 +206,13 @@ class TestFromAC_ListSessions:
 
     def test_end_work_reject_state_is_completed_rejected(self, engine: KanbanEngine, log_path: Path) -> None:
         """end_work with 'reject:' detail prefix produces state=completed-rejected."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=4, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=4, detail="reject: in-progress -> todo"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=4, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=4, detail="reject: in-progress -> todo"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 4]
         assert states == ["completed-rejected"]
@@ -206,10 +221,13 @@ class TestFromAC_ListSessions:
 
     def test_release_event_state_is_released(self, engine: KanbanEngine, log_path: Path) -> None:
         """A release event closes the session with state=released."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=5, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="release", task_id=5, detail="test-agent"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=5, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="release", task_id=5, detail="test-agent"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 5]
         assert states == ["released"]
@@ -218,9 +236,12 @@ class TestFromAC_ListSessions:
 
     def test_open_recent_claim_state_is_running(self, engine: KanbanEngine, log_path: Path) -> None:
         """Unclosed claim younger than claim_timeout (1h) produces state=running."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=6, detail="test-agent", ts=_ts(timedelta(minutes=-10))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=6, detail="test-agent", ts=_ts(timedelta(minutes=-10))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 6]
         assert states == ["running"]
@@ -229,38 +250,43 @@ class TestFromAC_ListSessions:
 
     def test_old_claim_no_activity_state_is_stuck(self, engine: KanbanEngine, log_path: Path) -> None:
         """Unclosed claim older than claim_timeout (1h) with no subsequent activity is stuck."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=7, detail="test-agent", ts=_ts(timedelta(hours=-2))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=7, detail="test-agent", ts=_ts(timedelta(hours=-2))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 7]
         assert states == ["stuck"]
 
     # ------------------------------------------------------------------ AC 9: stuck anti-test
 
-    def test_old_claim_with_recent_activity_is_running_not_stuck(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_old_claim_with_recent_activity_is_running_not_stuck(self, engine: KanbanEngine, log_path: Path) -> None:
         """Claim older than timeout but with recent mid-session activity remains running, not stuck."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=8, detail="test-agent", ts=_ts(timedelta(hours=-2))),
-            _entry(action="edit", task_id=8, detail="updated body", ts=_ts(timedelta(minutes=-5))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=8, detail="test-agent", ts=_ts(timedelta(hours=-2))),
+                _entry(action="edit", task_id=8, detail="updated body", ts=_ts(timedelta(minutes=-5))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 8]
         assert states == ["running"]
 
     # ------------------------------------------------------------------ AC 10: sweep-release dual events
 
-    def test_sweep_release_pair_produces_one_released_session(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_sweep_release_pair_produces_one_released_session(self, engine: KanbanEngine, log_path: Path) -> None:
         """Engine sweep emits release then sweep-release — exactly one released session, no phantom second."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=9, detail="test-agent", ts=_ts(timedelta(hours=-2))),
-            _entry(action="release", task_id=9, detail="test-agent"),
-            _entry(action="sweep-release", task_id=9, detail="expired claim by test-agent released"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=9, detail="test-agent", ts=_ts(timedelta(hours=-2))),
+                _entry(action="release", task_id=9, detail="test-agent"),
+                _entry(action="sweep-release", task_id=9, detail="expired claim by test-agent released"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 9]
         assert len(task_sessions) == 1
@@ -268,19 +294,20 @@ class TestFromAC_ListSessions:
 
     # ------------------------------------------------------------------ AC 11: filter active-only (default)
 
-    def test_default_filter_returns_running_and_stuck_only(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_default_filter_returns_running_and_stuck_only(self, engine: KanbanEngine, log_path: Path) -> None:
         """list_sessions() with no filter arg returns only running and stuck sessions."""
-        _write_log(log_path, [
-            # running
-            _entry(action="claim", task_id=10, detail="test-agent", ts=_ts(timedelta(minutes=-5))),
-            # stuck
-            _entry(action="claim", task_id=11, detail="test-agent", ts=_ts(timedelta(hours=-3))),
-            # completed-pass (must be excluded)
-            _entry(action="claim", task_id=12, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=12, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                # running
+                _entry(action="claim", task_id=10, detail="test-agent", ts=_ts(timedelta(minutes=-5))),
+                # stuck
+                _entry(action="claim", task_id=11, detail="test-agent", ts=_ts(timedelta(hours=-3))),
+                # completed-pass (must be excluded)
+                _entry(action="claim", task_id=12, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=12, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions()  # default = active-only
         returned_ids = {s.task_id for s in sessions}
         assert 10 in returned_ids, "running session must be in active-only results"
@@ -289,10 +316,13 @@ class TestFromAC_ListSessions:
 
     def test_active_only_excludes_released(self, engine: KanbanEngine, log_path: Path) -> None:
         """list_sessions() default filter excludes released sessions."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=13, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="release", task_id=13, detail="test-agent"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=13, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="release", task_id=13, detail="test-agent"),
+            ],
+        )
         sessions = engine.list_sessions()
         returned_ids = {s.task_id for s in sessions}
         assert 13 not in returned_ids, "released session must not appear in active-only"
@@ -301,44 +331,49 @@ class TestFromAC_ListSessions:
 
     def test_filter_all_returns_every_session(self, engine: KanbanEngine, log_path: Path) -> None:
         """filter='all' returns every session regardless of state."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=20, detail="test-agent", ts=_ts(timedelta(minutes=-5))),
-            _entry(action="claim", task_id=21, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=21, detail="success: todo -> in-progress"),
-            _entry(action="claim", task_id=22, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="release", task_id=22, detail="test-agent"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=20, detail="test-agent", ts=_ts(timedelta(minutes=-5))),
+                _entry(action="claim", task_id=21, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=21, detail="success: todo -> in-progress"),
+                _entry(action="claim", task_id=22, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="release", task_id=22, detail="test-agent"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         returned_ids = {s.task_id for s in sessions}
         assert {20, 21, 22}.issubset(returned_ids)
 
     # ------------------------------------------------------------------ AC 13: filter failed-or-rejected
 
-    def test_filter_failed_or_rejected_includes_fail_and_reject(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_filter_failed_or_rejected_includes_fail_and_reject(self, engine: KanbanEngine, log_path: Path) -> None:
         """filter='failed-or-rejected' includes completed-fail and completed-rejected sessions."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=30, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=30, detail="outcome=fail"),
-            _entry(action="claim", task_id=31, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=31, detail="reject: in-progress -> todo"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=30, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=30, detail="outcome=fail"),
+                _entry(action="claim", task_id=31, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=31, detail="reject: in-progress -> todo"),
+            ],
+        )
         sessions = engine.list_sessions(filter="failed-or-rejected")
         returned_ids = {s.task_id for s in sessions}
         assert 30 in returned_ids, "completed-fail must be in failed-or-rejected"
         assert 31 in returned_ids, "completed-rejected must be in failed-or-rejected"
 
-    def test_filter_failed_or_rejected_excludes_pass_and_released(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_filter_failed_or_rejected_excludes_pass_and_released(self, engine: KanbanEngine, log_path: Path) -> None:
         """filter='failed-or-rejected' excludes completed-pass and released sessions."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=32, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=32, detail="success: todo -> in-progress"),
-            _entry(action="claim", task_id=33, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="release", task_id=33, detail="test-agent"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=32, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=32, detail="success: todo -> in-progress"),
+                _entry(action="claim", task_id=33, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="release", task_id=33, detail="test-agent"),
+            ],
+        )
         sessions = engine.list_sessions(filter="failed-or-rejected")
         returned_ids = {s.task_id for s in sessions}
         assert 32 not in returned_ids, "completed-pass must be excluded from failed-or-rejected"
@@ -346,16 +381,17 @@ class TestFromAC_ListSessions:
 
     # ------------------------------------------------------------------ AC 14: filter released
 
-    def test_filter_released_returns_released_sessions_only(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_filter_released_returns_released_sessions_only(self, engine: KanbanEngine, log_path: Path) -> None:
         """filter='released' returns only released-state sessions."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=40, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="release", task_id=40, detail="test-agent"),
-            _entry(action="claim", task_id=41, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=41, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=40, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="release", task_id=40, detail="test-agent"),
+                _entry(action="claim", task_id=41, detail="test-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=41, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="released")
         returned_ids = {s.task_id for s in sessions}
         states = {s.state for s in sessions}
@@ -394,9 +430,7 @@ class TestFromAC_ListSessions:
 
     # ------------------------------------------------------------------ AC 18: incomplete entries
 
-    def test_incomplete_entry_missing_fields_skipped_gracefully(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_incomplete_entry_missing_fields_skipped_gracefully(self, engine: KanbanEngine, log_path: Path) -> None:
         """An entry missing required fields (action) is skipped; subsequent entries still processed."""
         incomplete = {"timestamp": _ts(), "task_id": 60}  # missing action, detail, actor
         valid = _entry(action="claim", task_id=61, detail="test-agent", ts=_ts(timedelta(minutes=-5)))
@@ -407,15 +441,16 @@ class TestFromAC_ListSessions:
 
     # ------------------------------------------------------------------ AC 19: re-claim cycles
 
-    def test_reclaim_after_release_produces_two_distinct_sessions(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_reclaim_after_release_produces_two_distinct_sessions(self, engine: KanbanEngine, log_path: Path) -> None:
         """Same task claimed → released → re-claimed produces two distinct session rows."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=70, detail="agent-1", ts=_ts(timedelta(hours=-2))),
-            _entry(action="release", task_id=70, detail="agent-1", ts=_ts(timedelta(hours=-1, minutes=-30))),
-            _entry(action="claim", task_id=70, detail="agent-2", ts=_ts(timedelta(minutes=-20))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=70, detail="agent-1", ts=_ts(timedelta(hours=-2))),
+                _entry(action="release", task_id=70, detail="agent-1", ts=_ts(timedelta(hours=-1, minutes=-30))),
+                _entry(action="claim", task_id=70, detail="agent-2", ts=_ts(timedelta(minutes=-20))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 70]
         assert len(task_sessions) == 2, f"expected 2 distinct sessions for task 70, got {len(task_sessions)}"
@@ -425,16 +460,19 @@ class TestFromAC_ListSessions:
 
     # ------------------------------------------------------------------ AC 20: multi-task interleaved
 
-    def test_interleaved_events_attributed_to_correct_task(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_interleaved_events_attributed_to_correct_task(self, engine: KanbanEngine, log_path: Path) -> None:
         """Events for multiple tasks interleaved in the log are assigned to the correct task."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=80, detail="agent-a", ts=_ts(timedelta(minutes=-40))),
-            _entry(action="claim", task_id=81, detail="agent-b", ts=_ts(timedelta(minutes=-35))),
-            _entry(action="end_work", task_id=80, detail="success: todo -> in-progress", ts=_ts(timedelta(minutes=-20))),
-            _entry(action="end_work", task_id=81, detail="outcome=fail", ts=_ts(timedelta(minutes=-10))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=80, detail="agent-a", ts=_ts(timedelta(minutes=-40))),
+                _entry(action="claim", task_id=81, detail="agent-b", ts=_ts(timedelta(minutes=-35))),
+                _entry(
+                    action="end_work", task_id=80, detail="success: todo -> in-progress", ts=_ts(timedelta(minutes=-20))
+                ),
+                _entry(action="end_work", task_id=81, detail="outcome=fail", ts=_ts(timedelta(minutes=-10))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         by_task = {s.task_id: s for s in sessions}
         assert by_task[80].state == "completed-pass"
@@ -449,9 +487,7 @@ class TestFromAC_ListSessions:
 class TestBuilderDiscovered:
     """Builder-discovered edge cases not covered by TestFromAC_ListSessions."""
 
-    def test_invalid_timestamp_value_skipped_gracefully(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_invalid_timestamp_value_skipped_gracefully(self, engine: KanbanEngine, log_path: Path) -> None:
         """Entry with all required keys but an unparseable timestamp is skipped gracefully.
 
         Discovered: _read_log_entries only validates key presence; a syntactically valid
@@ -476,9 +512,7 @@ class TestBuilderDiscovered:
         assert 91 not in returned_ids, "entry with unparseable timestamp must be skipped"
         assert 92 in returned_ids, "valid entry after bad-timestamp entry must be processed"
 
-    def test_young_superseded_claim_is_running_not_stuck(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_young_superseded_claim_is_running_not_stuck(self, engine: KanbanEngine, log_path: Path) -> None:
         """A claim superseded by a re-claim before the timeout is 'running', not 'stuck'.
 
         Discovered: _collect_task_sessions() marks the previous session as 'stuck'
@@ -486,17 +520,18 @@ class TestBuilderDiscovered:
         stuck detection requires age >= claim_timeout. A young superseded claim (age <
         timeout) must not be classified as 'stuck'.
         """
-        _write_log(log_path, [
-            _entry(action="claim", task_id=95, detail="agent-1", ts=_ts(timedelta(minutes=-10))),
-            _entry(action="claim", task_id=95, detail="agent-2", ts=_ts(timedelta(minutes=-5))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=95, detail="agent-1", ts=_ts(timedelta(minutes=-10))),
+                _entry(action="claim", task_id=95, detail="agent-2", ts=_ts(timedelta(minutes=-5))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 95]
         assert len(task_sessions) == 2, "two consecutive claims must produce two distinct sessions"
         states = [s.state for s in task_sessions]
-        assert "stuck" not in states, (
-            "young superseded claim (10 min < 1h timeout) must not be classified as 'stuck'"
-        )
+        assert "stuck" not in states, "young superseded claim (10 min < 1h timeout) must not be classified as 'stuck'"
         assert "running" in states, "young superseded claim must be 'running' (age < timeout)"
 
 
@@ -537,40 +572,52 @@ class TestFromAC_WorkSessionFields:
 
     def test_session_has_agent_field(self, engine: KanbanEngine, log_path: Path) -> None:
         """Completed session must expose an `agent` attribute."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=200, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=200, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=200, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=200, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 200)
         _ = s.agent  # AttributeError if field absent
 
     def test_session_has_started_at_field(self, engine: KanbanEngine, log_path: Path) -> None:
         """Completed session must expose a `started_at` attribute."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=201, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=201, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=201, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=201, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 201)
         _ = s.started_at  # AttributeError if field absent
 
     def test_session_has_duration_field(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session must expose a `duration` attribute."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=202, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=202, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=202, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=202, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 202)
         _ = s.duration  # AttributeError if field absent
 
     def test_session_has_outcome_field(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session must expose an `outcome` attribute."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=203, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=203, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=203, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=203, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 203)
         _ = s.outcome  # AttributeError if field absent
@@ -579,22 +626,38 @@ class TestFromAC_WorkSessionFields:
 
     def test_agent_equals_claim_event_detail(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.agent must equal the `detail` field of the claim event."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=210, detail="builder-agent", actor="different-actor",
-                   ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=210, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(
+                    action="claim",
+                    task_id=210,
+                    detail="builder-agent",
+                    actor="different-actor",
+                    ts=_ts(timedelta(minutes=-30)),
+                ),
+                _entry(action="end_work", task_id=210, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 210)
         assert s.agent == "builder-agent"
 
     def test_agent_is_detail_not_actor(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.agent must be the claim `detail` field, not `actor`, when they differ."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=211, detail="the-detail-agent", actor="the-actor-agent",
-                   ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=211, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(
+                    action="claim",
+                    task_id=211,
+                    detail="the-detail-agent",
+                    actor="the-actor-agent",
+                    ts=_ts(timedelta(minutes=-30)),
+                ),
+                _entry(action="end_work", task_id=211, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 211)
         assert s.agent == "the-detail-agent"
@@ -605,21 +668,31 @@ class TestFromAC_WorkSessionFields:
     def test_started_at_equals_claim_timestamp(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.started_at must equal the claim event's timestamp string."""
         claim_ts = "2026-01-15T10:00:00+00:00"
-        _write_log(log_path, [
-            _entry(action="claim", task_id=220, detail="my-agent", ts=claim_ts),
-            _entry(action="end_work", task_id=220, detail="success: todo -> in-progress",
-                   ts="2026-01-15T10:30:00+00:00"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=220, detail="my-agent", ts=claim_ts),
+                _entry(
+                    action="end_work",
+                    task_id=220,
+                    detail="success: todo -> in-progress",
+                    ts="2026-01-15T10:30:00+00:00",
+                ),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 220)
         assert s.started_at == claim_ts
 
     def test_started_at_is_iso8601_string(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.started_at must be a string parseable as ISO-8601 datetime."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=221, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=221, detail="success: todo -> in-progress"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=221, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=221, detail="success: todo -> in-progress"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 221)
         assert isinstance(s.started_at, str)
@@ -631,38 +704,50 @@ class TestFromAC_WorkSessionFields:
         """Session.duration must equal (close_ts - claim_ts).total_seconds() for closed sessions."""
         claim_ts = "2026-01-15T10:00:00+00:00"
         close_ts = "2026-01-15T10:30:00+00:00"  # 1800 s
-        _write_log(log_path, [
-            _entry(action="claim", task_id=230, detail="my-agent", ts=claim_ts),
-            _entry(action="end_work", task_id=230, detail="success: todo -> in-progress", ts=close_ts),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=230, detail="my-agent", ts=claim_ts),
+                _entry(action="end_work", task_id=230, detail="success: todo -> in-progress", ts=close_ts),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 230)
         assert s.duration == pytest.approx(1800.0)
 
     def test_duration_is_none_for_running_session(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.duration is None for an open (running) session."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=231, detail="my-agent", ts=_ts(timedelta(minutes=-5))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=231, detail="my-agent", ts=_ts(timedelta(minutes=-5))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 231)
         assert s.duration is None
 
     def test_duration_is_none_for_stuck_session(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.duration is None for an open (stuck) session."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=232, detail="my-agent", ts=_ts(timedelta(hours=-3))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=232, detail="my-agent", ts=_ts(timedelta(hours=-3))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 232)
         assert s.duration is None
 
     def test_duration_is_none_for_superseded_claim(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.duration is None for a superseded (orphaned) claim."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=233, detail="agent-1", ts=_ts(timedelta(hours=-2))),
-            _entry(action="claim", task_id=233, detail="agent-2", ts=_ts(timedelta(minutes=-10))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=233, detail="agent-1", ts=_ts(timedelta(hours=-2))),
+                _entry(action="claim", task_id=233, detail="agent-2", ts=_ts(timedelta(minutes=-10))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 233]
         # First claim was 2h ago without close → classified as "stuck" when superseded
@@ -674,10 +759,13 @@ class TestFromAC_WorkSessionFields:
         # tz-naive claim vs tz-aware close — engine must normalize both to UTC
         claim_ts = "2026-01-15T10:00:00"  # no tz info
         close_ts = "2026-01-15T10:30:00+00:00"
-        _write_log(log_path, [
-            _entry(action="claim", task_id=234, detail="my-agent", ts=claim_ts),
-            _entry(action="end_work", task_id=234, detail="success: todo -> in-progress", ts=close_ts),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=234, detail="my-agent", ts=claim_ts),
+                _entry(action="end_work", task_id=234, detail="success: todo -> in-progress", ts=close_ts),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 234)
         assert s.duration == pytest.approx(1800.0)
@@ -686,84 +774,93 @@ class TestFromAC_WorkSessionFields:
         """Session.duration is a non-None float for a released session."""
         claim_ts = "2026-01-15T10:00:00+00:00"
         close_ts = "2026-01-15T11:00:00+00:00"  # 3600 s
-        _write_log(log_path, [
-            _entry(action="claim", task_id=235, detail="my-agent", ts=claim_ts),
-            _entry(action="release", task_id=235, detail="my-agent", ts=close_ts),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=235, detail="my-agent", ts=claim_ts),
+                _entry(action="release", task_id=235, detail="my-agent", ts=close_ts),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 235)
         assert s.duration == pytest.approx(3600.0)
 
     # ------------------------------------------------------------------ AC6: outcome
 
-    def test_outcome_is_raw_end_work_detail_for_success(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_outcome_is_raw_end_work_detail_for_success(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.outcome is the raw end_work detail string (not a classified label)."""
         detail = "success: todo -> in-progress"
-        _write_log(log_path, [
-            _entry(action="claim", task_id=240, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=240, detail=detail),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=240, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=240, detail=detail),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 240)
         assert s.outcome == detail
 
-    def test_outcome_is_raw_end_work_detail_for_fail(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_outcome_is_raw_end_work_detail_for_fail(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.outcome is the raw end_work detail string for a completed-fail session."""
         detail = "outcome=fail"
-        _write_log(log_path, [
-            _entry(action="claim", task_id=241, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="end_work", task_id=241, detail=detail),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=241, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="end_work", task_id=241, detail=detail),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 241)
         assert s.outcome == detail
 
-    def test_outcome_is_released_string_for_release_event(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_outcome_is_released_string_for_release_event(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.outcome is the literal string 'released' when closed by a release event."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=242, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
-            _entry(action="release", task_id=242, detail="my-agent"),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=242, detail="my-agent", ts=_ts(timedelta(minutes=-30))),
+                _entry(action="release", task_id=242, detail="my-agent"),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 242)
         assert s.outcome == "released"
 
-    def test_outcome_is_none_for_running_session(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_outcome_is_none_for_running_session(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.outcome is None for an open (running) session."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=243, detail="my-agent", ts=_ts(timedelta(minutes=-5))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=243, detail="my-agent", ts=_ts(timedelta(minutes=-5))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 243)
         assert s.outcome is None
 
-    def test_outcome_is_none_for_stuck_session(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_outcome_is_none_for_stuck_session(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.outcome is None for an open (stuck) session."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=244, detail="my-agent", ts=_ts(timedelta(hours=-3))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=244, detail="my-agent", ts=_ts(timedelta(hours=-3))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 244)
         assert s.outcome is None
 
-    def test_outcome_is_none_for_superseded_claim(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_outcome_is_none_for_superseded_claim(self, engine: KanbanEngine, log_path: Path) -> None:
         """Session.outcome is None for a superseded (orphaned) claim."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=245, detail="agent-1", ts=_ts(timedelta(hours=-2))),
-            _entry(action="claim", task_id=245, detail="agent-2", ts=_ts(timedelta(minutes=-10))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=245, detail="agent-1", ts=_ts(timedelta(hours=-2))),
+                _entry(action="claim", task_id=245, detail="agent-2", ts=_ts(timedelta(minutes=-10))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 245]
         superseded = next(s for s in task_sessions if s.state == "stuck")
@@ -771,14 +868,15 @@ class TestFromAC_WorkSessionFields:
 
     # ------------------------------------------------------------------ New AC: superseded claim fields
 
-    def test_superseded_claim_agent_from_original_claim_detail(
-        self, engine: KanbanEngine, log_path: Path
-    ) -> None:
+    def test_superseded_claim_agent_from_original_claim_detail(self, engine: KanbanEngine, log_path: Path) -> None:
         """Superseded session.agent is from the original (first) claim detail field."""
-        _write_log(log_path, [
-            _entry(action="claim", task_id=250, detail="original-agent", ts=_ts(timedelta(hours=-2))),
-            _entry(action="claim", task_id=250, detail="new-agent", ts=_ts(timedelta(minutes=-10))),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=250, detail="original-agent", ts=_ts(timedelta(hours=-2))),
+                _entry(action="claim", task_id=250, detail="new-agent", ts=_ts(timedelta(minutes=-10))),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 250]
         # original claim was 2h ago without close → classified as "stuck" when superseded
@@ -791,10 +889,13 @@ class TestFromAC_WorkSessionFields:
         """Superseded session.started_at equals the original claim event's timestamp."""
         original_ts = _ts(timedelta(hours=-2))
         new_ts = _ts(timedelta(minutes=-10))
-        _write_log(log_path, [
-            _entry(action="claim", task_id=251, detail="original-agent", ts=original_ts),
-            _entry(action="claim", task_id=251, detail="new-agent", ts=new_ts),
-        ])
+        _write_log(
+            log_path,
+            [
+                _entry(action="claim", task_id=251, detail="original-agent", ts=original_ts),
+                _entry(action="claim", task_id=251, detail="new-agent", ts=new_ts),
+            ],
+        )
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 251]
         superseded = next(s for s in task_sessions if s.state == "stuck")

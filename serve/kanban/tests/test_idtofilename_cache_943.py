@@ -162,9 +162,7 @@ class TestFromAC_IdToFilenameCache:
         """Values in _id_to_filename must be filename strings (e.g. '1-task-1.md')."""
         engine.list_tasks()
         for filename in engine._id_to_filename.values():
-            assert isinstance(filename, str), (
-                f"filename {filename!r} must be str, got {type(filename).__name__}"
-            )
+            assert isinstance(filename, str), f"filename {filename!r} must be str, got {type(filename).__name__}"
             assert filename.endswith(".md"), f"filename {filename!r} must end with .md"
 
     def test_id_to_filename_covers_all_tasks(self, engine: KanbanEngine, board: Path) -> None:
@@ -174,18 +172,14 @@ class TestFromAC_IdToFilenameCache:
         engine.list_tasks()
         assert len(engine._id_to_filename) == md_count
 
-    def test_archived_list_tasks_does_not_rebuild_id_to_filename(
-        self, board: Path
-    ) -> None:
+    def test_archived_list_tasks_does_not_rebuild_id_to_filename(self, board: Path) -> None:
         """list_tasks(archived=True) must NOT rebuild _id_to_filename — it uses _archive_cache."""
         archive_dir = board / "archive"
         _write_task_file(archive_dir, 99)
         eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
         eng.list_tasks(archived=True)
         # _id_to_filename must remain empty; archived tasks are not indexed there
-        assert eng._id_to_filename == {}, (
-            "_id_to_filename must remain empty after list_tasks(archived=True)"
-        )
+        assert eng._id_to_filename == {}, "_id_to_filename must remain empty after list_tasks(archived=True)"
 
     # ------------------------------------------------------------------ AC 5
     # refresh_config() clears _id_to_filename
@@ -194,13 +188,9 @@ class TestFromAC_IdToFilenameCache:
         """refresh_config() must reset _id_to_filename to empty dict."""
         assert warm_engine._id_to_filename, "pre-condition: _id_to_filename must be populated"
         warm_engine.refresh_config()
-        assert warm_engine._id_to_filename == {}, (
-            "_id_to_filename must be empty dict after refresh_config()"
-        )
+        assert warm_engine._id_to_filename == {}, "_id_to_filename must be empty dict after refresh_config()"
 
-    def test_refresh_config_id_to_filename_reachable_after_re_warm(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_refresh_config_id_to_filename_reachable_after_re_warm(self, warm_engine: KanbanEngine) -> None:
         """After refresh_config() + list_tasks(), _id_to_filename is rebuilt correctly."""
         warm_engine.refresh_config()
         warm_engine.list_tasks()
@@ -209,27 +199,21 @@ class TestFromAC_IdToFilenameCache:
     # ------------------------------------------------------------------ AC 1
     # show_task() cache hit — no glob, no read_task()
 
-    def test_show_task_warm_cache_does_not_call_glob(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_show_task_warm_cache_does_not_call_glob(self, warm_engine: KanbanEngine) -> None:
         """show_task() with warm _id_to_filename must NOT call Path.glob()."""
         task_id = next(iter(warm_engine._id_to_filename))  # first cached id
         with patch.object(type(warm_engine._tasks_dir), "glob") as mock_glob:
             warm_engine.show_task(str(task_id))
             mock_glob.assert_not_called()
 
-    def test_show_task_warm_cache_does_not_call_read_task(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_show_task_warm_cache_does_not_call_read_task(self, warm_engine: KanbanEngine) -> None:
         """show_task() with warm cache and unchanged file must NOT call read_task()."""
         task_id = next(iter(warm_engine._id_to_filename))
         with patch("owlbear_kanban.engine.read_task") as mock_read:
             warm_engine.show_task(str(task_id))
             mock_read.assert_not_called()
 
-    def test_show_task_warm_cache_returns_correct_task(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_show_task_warm_cache_returns_correct_task(self, warm_engine: KanbanEngine) -> None:
         """show_task() with warm cache must return a Task with the requested ID."""
         task_id = next(iter(warm_engine._id_to_filename))
         task = warm_engine.show_task(str(task_id))
@@ -251,9 +235,7 @@ class TestFromAC_IdToFilenameCache:
         _write_task_file(tasks_dir, task_id, status="in-progress")
 
         task = eng.show_task(str(task_id))
-        assert task.status == "in-progress", (
-            "show_task() must return updated content after mtime change"
-        )
+        assert task.status == "in-progress", "show_task() must return updated content after mtime change"
 
     def test_show_task_stale_mtime_updates_cache_entry(self, board: Path) -> None:
         """After a stale-mtime re-read, _task_cache must contain the new mtime and task."""
@@ -290,9 +272,7 @@ class TestFromAC_IdToFilenameCache:
         with pytest.raises(FileNotFoundError):
             eng.show_task(str(task_id))
 
-        assert filename not in eng._task_cache, (
-            "deleted file must be evicted from _task_cache"
-        )
+        assert filename not in eng._task_cache, "deleted file must be evicted from _task_cache"
 
     def test_show_task_missing_file_evicts_id_to_filename(self, board: Path) -> None:
         """When the file is gone, the entry must be evicted from _id_to_filename."""
@@ -307,9 +287,7 @@ class TestFromAC_IdToFilenameCache:
         with pytest.raises(FileNotFoundError):
             eng.show_task(str(task_id))
 
-        assert task_id not in eng._id_to_filename, (
-            "deleted file must be evicted from _id_to_filename"
-        )
+        assert task_id not in eng._id_to_filename, "deleted file must be evicted from _id_to_filename"
 
     def test_show_task_cold_cache_falls_back_to_glob(self, engine: KanbanEngine) -> None:
         """show_task() with cold cache (_id_to_filename empty) must fall back to glob."""
@@ -321,53 +299,41 @@ class TestFromAC_IdToFilenameCache:
     # ------------------------------------------------------------------ AC 6
     # int(task_id) conversion; non-integer falls through to glob (no ValueError)
 
-    def test_show_task_non_integer_id_does_not_raise_value_error(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_show_task_non_integer_id_does_not_raise_value_error(self, warm_engine: KanbanEngine) -> None:
         """show_task() with non-numeric task_id must not propagate ValueError.
 
         Pre-condition: cache is warm (_id_to_filename populated). The new code calls
         int(task_id) which raises ValueError; that must be caught and fall through to glob.
         """
         # Verify cache is warm — this assertion fails in RED phase
-        assert warm_engine._id_to_filename, (
-            "pre-condition: _id_to_filename must be populated for this test"
-        )
+        assert warm_engine._id_to_filename, "pre-condition: _id_to_filename must be populated for this test"
         # A non-numeric id cannot match any integer key — must fall through to glob fallback.
         # Glob will also fail to find it, so FileNotFoundError is expected, NOT ValueError.
         with pytest.raises(FileNotFoundError):
             warm_engine.show_task("not-a-number")
 
-    def test_find_task_path_non_integer_id_does_not_raise_value_error(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_find_task_path_non_integer_id_does_not_raise_value_error(self, warm_engine: KanbanEngine) -> None:
         """_find_task_path() with non-numeric task_id must not propagate ValueError.
 
         Pre-condition: cache is warm (_id_to_filename populated). The new code calls
         int(task_id) which raises ValueError; that must be caught and fall through to glob.
         """
         # Verify cache is warm — this assertion fails in RED phase
-        assert warm_engine._id_to_filename, (
-            "pre-condition: _id_to_filename must be populated for this test"
-        )
+        assert warm_engine._id_to_filename, "pre-condition: _id_to_filename must be populated for this test"
         with pytest.raises(FileNotFoundError):
             warm_engine._find_task_path("not-a-number", warm_engine._tasks_dir)
 
     # ------------------------------------------------------------------ AC 3
     # _find_task_path() O(1) cache hit
 
-    def test_find_task_path_warm_cache_does_not_call_glob(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_find_task_path_warm_cache_does_not_call_glob(self, warm_engine: KanbanEngine) -> None:
         """_find_task_path() with warm _id_to_filename must NOT call glob()."""
         task_id = str(next(iter(warm_engine._id_to_filename)))
         with patch.object(type(warm_engine._tasks_dir), "glob") as mock_glob:
             warm_engine._find_task_path(task_id, warm_engine._tasks_dir)
             mock_glob.assert_not_called()
 
-    def test_find_task_path_warm_cache_returns_correct_path(
-        self, warm_engine: KanbanEngine, board: Path
-    ) -> None:
+    def test_find_task_path_warm_cache_returns_correct_path(self, warm_engine: KanbanEngine, board: Path) -> None:
         """_find_task_path() with warm cache must return the correct Path."""
         task_id = next(iter(warm_engine._id_to_filename))
         filename = warm_engine._id_to_filename[task_id]
@@ -375,17 +341,13 @@ class TestFromAC_IdToFilenameCache:
         result = warm_engine._find_task_path(str(task_id), warm_engine._tasks_dir)
         assert result == expected_path
 
-    def test_find_task_path_cold_cache_falls_back_to_glob(
-        self, engine: KanbanEngine
-    ) -> None:
+    def test_find_task_path_cold_cache_falls_back_to_glob(self, engine: KanbanEngine) -> None:
         """_find_task_path() with cold cache must fall back to glob and find the file."""
         assert engine._id_to_filename == {}, "pre-condition: cache must be cold"
         result = engine._find_task_path("1", engine._tasks_dir)
         assert result.name.startswith("1-")
 
-    def test_find_task_path_search_dir_not_tasks_dir_uses_glob(
-        self, warm_engine: KanbanEngine, board: Path
-    ) -> None:
+    def test_find_task_path_search_dir_not_tasks_dir_uses_glob(self, warm_engine: KanbanEngine, board: Path) -> None:
         """_find_task_path() must use glob when search_dir != _tasks_dir."""
         other_dir = board / "archive"
         _write_task_file(other_dir, 1)  # write a matching file to the other dir
@@ -395,30 +357,26 @@ class TestFromAC_IdToFilenameCache:
             warm_engine._find_task_path(task_id, other_dir)
             mock_glob.assert_called_once()
 
-    def test_find_task_path_post_create_warm_miss_falls_back_to_glob(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_find_task_path_post_create_warm_miss_falls_back_to_glob(self, warm_engine: KanbanEngine) -> None:
         """_find_task_path() must fall back to glob for a task created after last list_tasks()."""
         new_task = warm_engine.create_task("Brand new task")
         # _id_to_filename is NOT updated by create_task (AC 7 — lazy invalidation)
         assert new_task.id not in warm_engine._id_to_filename, (
             "pre-condition: newly created task must NOT be in _id_to_filename"
         )
-        # But _find_task_path must still succeed via glob fallback
+        # But _find_task_path must still succeed via glob fallback and return the correct task
         result = warm_engine._find_task_path(str(new_task.id), warm_engine._tasks_dir)
-        assert result.exists()
+        assert result.name.startswith(str(new_task.id) + "-"), (
+            f"expected path for task {new_task.id}, got: {result.name}"
+        )
 
     # ------------------------------------------------------------------ AC 7
     # Write ops do NOT update caches (lazy invalidation)
 
-    def test_create_task_does_not_update_id_to_filename(
-        self, warm_engine: KanbanEngine
-    ) -> None:
+    def test_create_task_does_not_update_id_to_filename(self, warm_engine: KanbanEngine) -> None:
         """create_task() must NOT add the new task's ID to _id_to_filename."""
         before_ids = set(warm_engine._id_to_filename.keys())
         new_task = warm_engine.create_task("Lazy invalidation test")
         after_ids = set(warm_engine._id_to_filename.keys())
-        assert new_task.id not in after_ids, (
-            "create_task() must not proactively update _id_to_filename"
-        )
+        assert new_task.id not in after_ids, "create_task() must not proactively update _id_to_filename"
         assert after_ids == before_ids, "_id_to_filename must be unchanged after create_task()"

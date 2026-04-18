@@ -43,13 +43,7 @@ def _is_blocked_ip(ip_str: str) -> bool:
         check = addr.ipv4_mapped
     else:
         check = addr
-    return (
-        check.is_loopback
-        or check.is_private
-        or check.is_link_local
-        or check.is_reserved
-        or check.is_unspecified
-    )
+    return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
 
 
 async def _check_ssrf(url: str) -> None:

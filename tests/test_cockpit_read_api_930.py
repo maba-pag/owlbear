@@ -175,9 +175,7 @@ class TestFromAC_NewModulesImportable:
         from fastapi import APIRouter  # noqa: PLC0415
         from owlbear_cockpit.routes.read import router  # noqa: PLC0415
 
-        assert isinstance(router, APIRouter), (
-            f"routes.read.router must be an APIRouter, got {type(router).__name__}"
-        )
+        assert isinstance(router, APIRouter), f"routes.read.router must be an APIRouter, got {type(router).__name__}"
 
 
 # ---------------------------------------------------------------------------
@@ -196,36 +194,28 @@ class TestFromAC_PydanticResponseModels:
         from pydantic import BaseModel  # noqa: PLC0415
         from owlbear_cockpit.models import TaskSummaryOut  # noqa: PLC0415
 
-        assert issubclass(TaskSummaryOut, BaseModel), (
-            "TaskSummaryOut must be a pydantic BaseModel"
-        )
+        assert issubclass(TaskSummaryOut, BaseModel), "TaskSummaryOut must be a pydantic BaseModel"
 
     def test_task_detail_out_is_pydantic_model(self) -> None:
         """TaskDetailOut is a pydantic BaseModel subclass."""
         from pydantic import BaseModel  # noqa: PLC0415
         from owlbear_cockpit.models import TaskDetailOut  # noqa: PLC0415
 
-        assert issubclass(TaskDetailOut, BaseModel), (
-            "TaskDetailOut must be a pydantic BaseModel"
-        )
+        assert issubclass(TaskDetailOut, BaseModel), "TaskDetailOut must be a pydantic BaseModel"
 
     def test_board_out_is_pydantic_model(self) -> None:
         """BoardOut is a pydantic BaseModel subclass."""
         from pydantic import BaseModel  # noqa: PLC0415
         from owlbear_cockpit.models import BoardOut  # noqa: PLC0415
 
-        assert issubclass(BoardOut, BaseModel), (
-            "BoardOut must be a pydantic BaseModel"
-        )
+        assert issubclass(BoardOut, BaseModel), "BoardOut must be a pydantic BaseModel"
 
     def test_session_out_is_pydantic_model(self) -> None:
         """SessionOut is a pydantic BaseModel subclass."""
         from pydantic import BaseModel  # noqa: PLC0415
         from owlbear_cockpit.models import SessionOut  # noqa: PLC0415
 
-        assert issubclass(SessionOut, BaseModel), (
-            "SessionOut must be a pydantic BaseModel"
-        )
+        assert issubclass(SessionOut, BaseModel), "SessionOut must be a pydantic BaseModel"
 
 
 # ---------------------------------------------------------------------------
@@ -252,9 +242,7 @@ class TestFromAC_EmptyBoardEdgeCase:
         assert response.status_code == 200
         body = response.json()
         assert "tasks" in body
-        assert body["tasks"] == [], (
-            f"Expected empty tasks list for empty board, got {body['tasks']!r}"
-        )
+        assert body["tasks"] == [], f"Expected empty tasks list for empty board, got {body['tasks']!r}"
 
     def test_empty_board_tasks_mtime_is_zero(self, empty_client: TestClient) -> None:
         """GET /api/tasks on empty board returns mtime=0 (no task files → default 0)."""
@@ -262,9 +250,7 @@ class TestFromAC_EmptyBoardEdgeCase:
         assert response.status_code == 200
         body = response.json()
         assert "mtime" in body
-        assert body["mtime"] == 0, (
-            f"Expected mtime=0 for empty board, got {body['mtime']!r}"
-        )
+        assert body["mtime"] == 0, f"Expected mtime=0 for empty board, got {body['mtime']!r}"
 
 
 # ---------------------------------------------------------------------------
@@ -290,9 +276,7 @@ class TestFromAC_MtimeScanCacheUnit:
         from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
 
         cache = MtimeScanCache(tmp_path)
-        assert cache.scan() == 0, (
-            "Empty tasks dir must return mtime=0 (max with default=0)"
-        )
+        assert cache.scan() == 0, "Empty tasks dir must return mtime=0 (max with default=0)"
 
     def test_non_empty_dir_scan_returns_positive_int(self, tmp_path: Path) -> None:
         """MtimeScanCache.scan() returns a positive integer when files are present."""
@@ -320,9 +304,7 @@ class TestFromAC_MtimeScanCacheUnit:
             f2.stat().st_mtime_ns,
         )
         cache = MtimeScanCache(tmp_path)
-        assert cache.scan() == expected_max, (
-            "scan() must return the maximum mtime_ns, not the first or minimum"
-        )
+        assert cache.scan() == expected_max, "scan() must return the maximum mtime_ns, not the first or minimum"
 
     def test_scan_is_repeatable_with_no_changes(self, tmp_path: Path) -> None:
         """Two consecutive scan() calls with no file changes return the same value."""
@@ -330,9 +312,7 @@ class TestFromAC_MtimeScanCacheUnit:
 
         (tmp_path / "1-task.md").write_text("# task", encoding="utf-8")
         cache = MtimeScanCache(tmp_path)
-        assert cache.scan() == cache.scan(), (
-            "scan() must return a stable value when files are unchanged"
-        )
+        assert cache.scan() == cache.scan(), "scan() must return a stable value when files are unchanged"
 
 
 # ---------------------------------------------------------------------------
@@ -348,9 +328,7 @@ class TestFromAC_EngineReloadOnMtimeChange:
     appears in the response after a file-modifying operation.
     """
 
-    def test_new_task_appears_in_list_after_creation(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_new_task_appears_in_list_after_creation(self, client: TestClient, engine: KanbanEngine) -> None:
         """A task created after the first request appears in a subsequent request."""
         r1 = client.get("/api/tasks")
         assert r1.status_code == 200
@@ -362,13 +340,10 @@ class TestFromAC_EngineReloadOnMtimeChange:
         assert r2.status_code == 200
         count_after = len(r2.json()["tasks"])
         assert count_after > count_before, (
-            f"New task must appear in subsequent GET /api/tasks response "
-            f"(before={count_before}, after={count_after})"
+            f"New task must appear in subsequent GET /api/tasks response (before={count_before}, after={count_after})"
         )
 
-    def test_mtime_increases_after_new_task_created(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_mtime_increases_after_new_task_created(self, client: TestClient, engine: KanbanEngine) -> None:
         """Creating a new task file increases the mtime returned by GET /api/tasks."""
         r1 = client.get("/api/tasks")
         assert r1.status_code == 200
@@ -380,8 +355,7 @@ class TestFromAC_EngineReloadOnMtimeChange:
         assert r2.status_code == 200
         mtime_after = r2.json()["mtime"]
         assert mtime_after > mtime_before, (
-            f"mtime must increase after a new task file is created "
-            f"(before={mtime_before}, after={mtime_after})"
+            f"mtime must increase after a new task file is created (before={mtime_before}, after={mtime_after})"
         )
 
 
@@ -467,6 +441,4 @@ class TestBuilderDiscovered:
         # Second request — same files, engine.list_tasks must NOT be called
         r2 = client.get("/api/tasks")
         assert r2.status_code == 200
-        assert call_count == 0, (
-            f"engine.list_tasks() called {call_count} times on cache hit, expected 0"
-        )
+        assert call_count == 0, f"engine.list_tasks() called {call_count} times on cache hit, expected 0"

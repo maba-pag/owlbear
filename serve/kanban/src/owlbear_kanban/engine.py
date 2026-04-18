@@ -111,14 +111,16 @@ def _collect_task_sessions(
                 # Apply the same age-based logic as the unclosed-session path: only
                 # classify as "stuck" when last activity exceeds claim_timeout.
                 ref_ts = last_activity_ts or open_claim_ts
-                sessions.append(WorkSession(
-                    task_id=task_id,
-                    state=_state_from_age(ref_ts, timeout, now),
-                    agent=open_claim_agent or "",
-                    started_at=open_claim_ts,
-                    duration=None,
-                    outcome=None,
-                ))
+                sessions.append(
+                    WorkSession(
+                        task_id=task_id,
+                        state=_state_from_age(ref_ts, timeout, now),
+                        agent=open_claim_agent or "",
+                        started_at=open_claim_ts,
+                        duration=None,
+                        outcome=None,
+                    )
+                )
             open_claim_ts = ts
             open_claim_agent = detail
             last_activity_ts = ts
@@ -132,14 +134,16 @@ def _collect_task_sessions(
                 continue
             state = "released" if action == "release" else _classify_end_work(detail)
             outcome = "released" if action == "release" else detail
-            sessions.append(WorkSession(
-                task_id=task_id,
-                state=state,
-                agent=open_claim_agent or "",
-                started_at=open_claim_ts,
-                duration=_compute_duration(open_claim_ts, ts),
-                outcome=outcome,
-            ))
+            sessions.append(
+                WorkSession(
+                    task_id=task_id,
+                    state=state,
+                    agent=open_claim_agent or "",
+                    started_at=open_claim_ts,
+                    duration=_compute_duration(open_claim_ts, ts),
+                    outcome=outcome,
+                )
+            )
             open_claim_ts = None
             open_claim_agent = None
             last_activity_ts = None
@@ -148,14 +152,16 @@ def _collect_task_sessions(
 
     if open_claim_ts is not None:
         ref_ts = last_activity_ts or open_claim_ts
-        sessions.append(WorkSession(
-            task_id=task_id,
-            state=_state_from_age(ref_ts, timeout, now),
-            agent=open_claim_agent or "",
-            started_at=open_claim_ts,
-            duration=None,
-            outcome=None,
-        ))
+        sessions.append(
+            WorkSession(
+                task_id=task_id,
+                state=_state_from_age(ref_ts, timeout, now),
+                agent=open_claim_agent or "",
+                started_at=open_claim_ts,
+                duration=None,
+                outcome=None,
+            )
+        )
 
 
 _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
@@ -406,10 +412,7 @@ class KanbanEngine:
 
         if not archived:
             self._id_to_filename = dict(
-                sorted(
-                    (cached_task.id, filename)
-                    for filename, (_, cached_task) in self._task_cache.items()
-                )
+                sorted((cached_task.id, filename) for filename, (_, cached_task) in self._task_cache.items())
             )
 
         # --- Filters ---

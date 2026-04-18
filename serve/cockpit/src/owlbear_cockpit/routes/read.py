@@ -31,9 +31,7 @@ def get_board(engine: _Engine) -> BoardOut:
     config = adapter.board_config(engine)
     statuses = config.statuses
     status_names = [s["name"] for s in statuses]
-    valid_transitions = {
-        name: sorted(adapter.valid_transitions(engine, name)) for name in status_names
-    }
+    valid_transitions = {name: sorted(adapter.valid_transitions(engine, name)) for name in status_names}
     return BoardOut(
         statuses=statuses,
         priorities=config.priorities,

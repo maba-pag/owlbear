@@ -26,13 +26,7 @@ def _is_blocked_ip(ip_str: str) -> bool:
         check = addr.ipv4_mapped
     else:
         check = addr
-    return (
-        check.is_loopback
-        or check.is_private
-        or check.is_link_local
-        or check.is_reserved
-        or check.is_unspecified
-    )
+    return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
 
 
 async def safe_async_fetch(url: str) -> str:
@@ -59,9 +53,7 @@ async def safe_async_fetch(url: str) -> str:
     port = parsed.port or (443 if scheme == "https" else 80)
 
     try:
-        addrs = await asyncio.to_thread(
-            socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC
-        )
+        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC)
     except OSError as exc:
         msg = f"DNS resolution failed for {hostname!r}: {exc}"
         raise ValueError(msg) from exc
