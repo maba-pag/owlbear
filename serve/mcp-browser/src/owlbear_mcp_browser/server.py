@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import ipaddress
 import os
+import socket
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -22,6 +26,71 @@ from owlbear_browser.playwright_launcher import PlaywrightLauncher
 from owlbear_mcp_browser.allowlist import DomainAllowlist
 
 __all__ = ["AppContext", "app_lifespan", "mcp_app"]
+
+
+def _is_blocked_ip(ip_str: str) -> bool:
+    """Return True if *ip_str* is private/loopback/link-local/reserved/unspecified (CWE-918).
+
+    Duplicated from ``owlbear_knowledge._ssrf`` — cross-package dep for 20 LOC violates KISS.
+    Unwraps IPv4-mapped IPv6 addresses (e.g. ``::ffff:127.0.0.1``) before checking properties.
+    """
+    try:
+        addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        return True  # unparseable → block
+    check: ipaddress.IPv4Address | ipaddress.IPv6Address
+    if isinstance(addr, ipaddress.IPv6Address) and addr.ipv4_mapped is not None:
+        check = addr.ipv4_mapped
+    else:
+        check = addr
+    return (
+        check.is_loopback
+        or check.is_private
+        or check.is_link_local
+        or check.is_reserved
+        or check.is_unspecified
+    )
+
+
+async def _check_ssrf(url: str) -> None:
+    """Pre-flight SSRF check for *url* (CWE-918).
+
+    Raises :class:`~mcp.server.fastmcp.exceptions.ToolError` if:
+
+    - The scheme is not ``http`` or ``https``.
+    - DNS resolution raises ``OSError`` (unresolvable hostname).
+    - Any resolved IP is loopback / private / link-local / reserved / unspecified.
+
+    Accepted limitations:
+
+    - **TOCTOU / DNS rebinding**: Playwright cannot connect to a pre-resolved IP, so
+      the URL cannot be rewritten after DNS lookup. An attacker controlling DNS can change
+      the resolution between the check and ``page.goto()``. Mitigated by the
+      closed-by-default ``DomainAllowlist`` and agent-only access.
+    - **Redirect SSRF**: ``page.goto()`` follows HTTP redirects by default. An allowlisted
+      server returning a 3xx to an internal IP bypasses this pre-flight check. Mitigated by
+      the closed-by-default allowlist and agent-only access. Full coverage would require
+      ``context.route()`` interception — disproportionate for nice-to-have priority.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        msg = f"URL scheme '{parsed.scheme}' is not allowed — only http and https are permitted."
+        raise ToolError(msg)
+
+    hostname = parsed.hostname or ""
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    try:
+        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port)
+    except OSError as exc:
+        msg = f"DNS resolution failed for '{hostname}': {exc}"
+        raise ToolError(msg) from exc
+
+    for _family, _type, _proto, _canonname, sockaddr in addrs:
+        ip_str = sockaddr[0]
+        if _is_blocked_ip(ip_str):
+            msg = f"URL '{url}' resolved to a blocked IP address ({ip_str!r})."
+            raise ToolError(msg)
 
 
 @dataclass
@@ -99,6 +168,7 @@ _mcp = FastMCP("owlbear-mcp-browser", lifespan=app_lifespan)
 async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
     app_ctx = ctx.request_context.lifespan_context
+    await _check_ssrf(url)
     try:
         app_ctx.allowlist.check(url)
     except PermissionError as exc:
