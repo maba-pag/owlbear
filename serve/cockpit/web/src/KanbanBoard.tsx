@@ -33,6 +33,8 @@ interface UseBoardResult {
   tasks: Task[]
   loading: boolean
   error: string | null
+  isFetching: boolean
+  isStale: boolean
   refetchTasks: () => void
 }
 
@@ -43,13 +45,20 @@ export function useBoard(): UseBoardResult {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isFetching, setIsFetching] = useState(false)
+  const [isStale, setIsStale] = useState(false)
+  const mtimeRef = useRef<number | null>(null)
 
   useEffect(() => {
+    const controller = new AbortController()
     let cancelled = false
 
     async function load() {
       try {
-        const [boardRes, tasksRes] = await Promise.all([fetch('/api/board'), fetch('/api/tasks')])
+        const [boardRes, tasksRes] = await Promise.all([
+          fetch('/api/board', { signal: controller.signal }),
+          fetch('/api/tasks', { signal: controller.signal }),
+        ])
 
         if (!boardRes.ok) throw new Error(`Board API error: ${boardRes.status}`)
         if (!tasksRes.ok) throw new Error(`Tasks API error: ${tasksRes.status}`)
@@ -58,21 +67,50 @@ export function useBoard(): UseBoardResult {
         const tasksData = (await tasksRes.json()) as TasksResponse
 
         if (!cancelled) {
+          mtimeRef.current = tasksData.mtime
           setBoard(boardData)
           setTasks(tasksData.tasks)
           setLoading(false)
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
           setError(err instanceof Error ? err.message : 'Failed to load board')
           setLoading(false)
         }
       }
     }
 
+    async function pollTasks() {
+      setIsFetching(true)
+      try {
+        const res = await fetch('/api/tasks', { signal: controller.signal })
+        if (!res.ok) throw new Error(`Poll error: ${res.status}`)
+        const data = (await res.json()) as TasksResponse
+        if (!cancelled) {
+          if (data.mtime !== mtimeRef.current) {
+            mtimeRef.current = data.mtime
+            setTasks(data.tasks)
+          }
+          setError(null)
+          setIsStale(false)
+        }
+      } catch (err) {
+        if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
+          setError(err instanceof Error ? err.message : 'Poll failed')
+          setIsStale(true)
+        }
+      } finally {
+        if (!cancelled) setIsFetching(false)
+      }
+    }
+
     void load()
+    const intervalId = setInterval(() => void pollTasks(), 3000)
+
     return () => {
       cancelled = true
+      controller.abort()
+      clearInterval(intervalId)
     }
   }, [])
 
@@ -82,7 +120,10 @@ export function useBoard(): UseBoardResult {
         const res = await fetch('/api/tasks')
         if (res.ok) {
           const data = (await res.json()) as TasksResponse
-          setTasks(data.tasks)
+          if (data.mtime !== mtimeRef.current) {
+            mtimeRef.current = data.mtime
+            setTasks(data.tasks)
+          }
         }
       } catch {
         // silent — board data stays stale
@@ -90,7 +131,7 @@ export function useBoard(): UseBoardResult {
     })()
   }
 
-  return { board, tasks, loading, error, refetchTasks }
+  return { board, tasks, loading, error, isFetching, isStale, refetchTasks }
 }
 
 // ─── Priority colours ───────────────────────────────────────────────────────
