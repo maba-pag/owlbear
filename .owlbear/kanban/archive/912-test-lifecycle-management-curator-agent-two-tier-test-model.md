@@ -1,10 +1,10 @@
 ---
 id: 912
 title: Test lifecycle management — curator agent + two-tier test model
-status: done
+status: archived
 priority: critical
 created: 2026-04-17T10:56:46.604506+00:00
-updated: 2026-04-17T13:44:13.797225+00:00
+updated: 2026-04-17T20:04:15.466585+00:00
 tags:
 - test-quality
 - pipeline
@@ -13,8 +13,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: odd-mist
+claimed_at: 2026-04-17T20:02:40.719227+00:00
 ---
 ## Brief
 

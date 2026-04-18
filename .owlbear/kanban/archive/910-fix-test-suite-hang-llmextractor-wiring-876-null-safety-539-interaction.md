@@ -1,10 +1,10 @@
 ---
 id: 910
 title: 'Fix test suite hang: llmextractor_wiring_876 → null_safety_539 interaction'
-status: done
+status: archived
 priority: important
 created: 2026-04-17T10:47:30.444794+00:00
-updated: 2026-04-17T11:16:37.146607+00:00
+updated: 2026-04-17T20:04:08.476128+00:00
 tags:
 - scope:test
 - type:test

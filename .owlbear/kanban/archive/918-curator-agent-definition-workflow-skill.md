@@ -1,10 +1,10 @@
 ---
 id: 918
 title: Curator agent definition + workflow skill
-status: done
+status: archived
 priority: critical
 created: 2026-04-17T11:52:23.667240+00:00
-updated: 2026-04-17T13:43:32.080547+00:00
+updated: 2026-04-17T20:04:12.089237+00:00
 tags:
 - test-quality
 - type:agent

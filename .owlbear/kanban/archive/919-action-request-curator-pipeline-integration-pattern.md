@@ -1,10 +1,10 @@
 ---
 id: 919
 title: Action request — curator pipeline integration pattern
-status: done
+status: archived
 priority: needed
 created: 2026-04-17T11:52:32.640374+00:00
-updated: 2026-04-17T13:44:09.774913+00:00
+updated: 2026-04-17T20:04:12.105606+00:00
 tags:
 - test-quality
 - type:user-action

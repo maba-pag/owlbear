@@ -1,10 +1,10 @@
 ---
 id: 913
 title: Nuclear reset — delete all existing test files
-status: done
+status: archived
 priority: needed
 created: 2026-04-17T11:51:47.965070+00:00
-updated: 2026-04-17T13:37:49.766566+00:00
+updated: 2026-04-17T20:04:08.489869+00:00
 tags:
 - test-quality
 - type:user-action
