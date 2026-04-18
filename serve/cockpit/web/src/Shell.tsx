@@ -1,6 +1,23 @@
+import { useRef, useEffect } from 'react'
 import { Routes, Route } from 'react-router'
 
 function Shell() {
+  const tabsRef = useRef<HTMLElement>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
+  const activityRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const tabs = tabsRef.current
+    if (!tabs) return
+    const onTabChange = (e: Event) => {
+      const index = (e as CustomEvent<{ activeTabIndex: number }>).detail.activeTabIndex
+      detailRef.current?.setAttribute('aria-hidden', String(index !== 0))
+      activityRef.current?.setAttribute('aria-hidden', String(index !== 1))
+    }
+    tabs.addEventListener('tabChange', onTabChange)
+    return () => tabs.removeEventListener('tabChange', onTabChange)
+  }, [])
+
   return (
     <div>
       <header data-region="status-bar">
@@ -19,12 +36,12 @@ function Shell() {
         </Routes>
       </main>
       <aside data-region="sidecar">
-        <p-tabs>
+        <p-tabs ref={tabsRef}>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
-            <div data-tab-content="detail" />
+            <div ref={detailRef} data-tab-content="detail" aria-hidden="false" />
           </p-tabs-item>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Activity')}>
-            <div data-tab-content="activity" />
+            <div ref={activityRef} data-tab-content="activity" aria-hidden="true" />
           </p-tabs-item>
         </p-tabs>
       </aside>

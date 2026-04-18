@@ -122,7 +122,8 @@ describe('TestFromAC_AppShell', () => {
       const sidecar = container.querySelector('[data-region="sidecar"]') as HTMLElement
       const tabs = sidecar.querySelector('p-tabs') as HTMLElement
       fireEvent(tabs, new CustomEvent('tabChange', { detail: { activeTabIndex: 1 }, bubbles: true }))
-      expect(sidecar.querySelector('[data-tab-content="activity"]')).not.toBeNull()
+      expect(sidecar.querySelector('[data-tab-content="detail"]')?.getAttribute('aria-hidden')).toBe('true')
+      expect(sidecar.querySelector('[data-tab-content="activity"]')?.getAttribute('aria-hidden')).toBe('false')
     })
 
     it('Detail tab content area is present on initial render', () => {
