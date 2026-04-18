@@ -1,0 +1,1 @@
+"""Cockpit routes package."""
