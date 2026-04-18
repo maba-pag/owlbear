@@ -4,7 +4,7 @@ description: "Feature decomposition — break plans into atomic TDD-paired kanba
 argument-hint: "Plan: {feature_or-plan_description}"
 user-invocable: true
 disable-model-invocation: true
-model: Claude Opus 4.6 (copilot)
+model: Claude Opus 4.7 (copilot)
 tools:
   [vscode/memory, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: []

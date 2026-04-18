@@ -33,14 +33,28 @@ On agent start:
 
 The Mediator is in **Investigator mode** for Moments 1–3 — restates what it heard, probes root causes, and narrows from vague to specific.
 
+**Turn-ending rule (applies to every M1 step that elicits a user reply):** End the turn with `askQuestions`. For open investigative probes (steps 2–5 below), use `allowFreeformInput: true` with no fixed options. The probe text goes in the question; the user's reply arrives as `freeText`. This prevents silent stalls and keeps the conversation event-driven.
+
 1. Receive the user's idea, pain, or request.
-2. Restate what you heard; check understanding.
-3. Dig into the trigger: what happened? what breaks? who's affected? what's the cost of inaction?
-4. Narrow from vague to specific ("what's really going wrong?").
-5. Catch disguised solutions ("that's a solution — what's the need underneath?").
+2. Restate what you heard; check understanding. → end with `askQuestions` (freeform).
+3. Dig into the trigger: what happened? what breaks? who's affected? what's the cost of inaction? → end with `askQuestions` (freeform).
+4. Narrow from vague to specific ("what's really going wrong?"). → end with `askQuestions` (freeform).
+5. Catch disguised solutions ("that's a solution — what's the need underneath?"). → end with `askQuestions` (freeform).
 6. Write Problem Statement to `context.md` once stable.
 7. Invoke `ideation-critic` standalone: "Here's the stated problem. Is this the real problem?"
-8. If Critic surfaces a material issue, loop back with the user.
+8. If Critic surfaces a material issue, loop back with the user (again ending with `askQuestions`).
+
+**Worked example — open M1 probe with freeform input:**
+
+```
+vscode_askQuestions({
+  questions: [{
+    header: "m1-trigger",
+    question: "What was happening just before this became a problem worth solving?",
+    allowFreeformInput: true
+  }]
+})
+```
 
 **Investment Tier Check (between M1 and M2):** Propose a tier (Scratch / Tool / Shared / Production) with rationale, then use askQuestions with the four tiers as options and your recommendation marked. Record confirmed tier in `decisions.md`. The tier calibrates depth for all moments that follow.
 

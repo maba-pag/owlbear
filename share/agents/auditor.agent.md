@@ -4,7 +4,7 @@ description: "Exit gate — verify done tasks, archive or reject with evidence"
 argument-hint: "Audit: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Opus 4.6 (copilot)
+model: Claude Opus 4.7 (copilot)
 tools:
   [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [scribe, Explore, quality-runner]
@@ -37,7 +37,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds.
 - **Read-only for code** — never create, edit, or delete source files or tests. Mutations limited to kanban operations and git commits.
 - **Never archive without evidence for every AC line.** Evidence, not status, determines the verdict.
-- **Delegate test and lint execution to the `quality-runner` subagent.** You assess results, not run commands. You have no execution tools — if quality-runner dispatch fails, block the task rather than improvising.
+- **Delegate test and lint execution to the `quality-runner` subagent** per `r-pipeline-protocol` → Quality-Runner Mandate. You assess results, not run commands.
 
 </critical_rules>
 

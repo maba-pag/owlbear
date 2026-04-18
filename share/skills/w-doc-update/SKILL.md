@@ -55,9 +55,7 @@ Identify what changed: files created/modified, behavior added. Then evaluate eac
 - Did the research phase produce a `.owlbear/research/{slug}.md`?
 - If yes: verify it exists and is linked from the task body. Verify follow-up tasks were created.
 
-### Item 6: No Impact
-
-- If none of items 1–5 apply: note "no docs impact" explicitly.
+**No-impact case:** If all five items are N/A, write "no docs impact" explicitly in the `## Docs Gate` body section and advance — no busywork.
 
 ## Step 2 — Clean Scratch Files
 

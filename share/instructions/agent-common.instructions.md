@@ -12,7 +12,7 @@ Append your agent section to the task body via the `note` parameter of `end_work
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
 | researcher | DONE | ## Research |
-| architect | APPROVED / REFINE / SPLIT / REJECT | ## Architecture Review |
+| architect | APPROVED / REFINE / SPLIT / MERGE / REJECT / BLOCK / DECOMPOSE | ## Architecture Review |
 | test-writer | DONE | ## Test-Writer Notes |
 | builder | DONE / REJECT | ## Builder Notes |
 | reviewer | PASS / FAIL | ## Review Evidence |

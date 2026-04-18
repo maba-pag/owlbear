@@ -63,6 +63,14 @@ Researcher, architect, and planner must reject invalid task inputs immediately:
 - Never trust self-reports. Verify deliverables yourself — run tests, read files, check the board.
 - Cite specifics: file paths, line numbers, test names, command output. "It looks fine" is never acceptable.
 
+### Quality-Runner Mandate
+
+All pipeline agents (test-writer, builder, reviewer, auditor) **must** delegate test, lint, and coverage execution to the `quality-runner` subagent. Direct `pytest` / `ruff` invocation in agent terminals is prohibited — it bypasses the canonical evidence pipeline and produces non-comparable reports across agents.
+
+If `quality-runner` is unavailable (not in the calling agent's `agents:` array, or subagent dispatch fails), the agent **blocks the task** via `end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run {tests|lint|coverage} independently")`. Never improvise with direct shell commands.
+
+Exception: the `quality-runner` agent itself runs the underlying tools — that's its job.
+
 ### Defense-in-Depth
 
 The pipeline uses three lines of defense. Trust upstream lines' detailed work; focus on your own scope.
@@ -82,6 +90,9 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 | Reviewer | < .90, 3rd+ FAIL | FAIL — always backlog (loop-breaker) |
 | Auditor | ≥ .95 | Archive |
 | Auditor | < .95 | Reject to backlog |
+| Challenger | ≥ 0.80 | `proceed` — caller continues with original verdict |
+| Challenger | < 0.80 OR `reconsider` | Caller revises or justifies override with rebuttal |
+| Challenger | `block` | Caller revisits scope; rebuttal required to proceed |
 
 ### Process Habits
 

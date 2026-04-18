@@ -4,7 +4,7 @@ description: "End-user experience domain panelist — reads problem context, for
 argument-hint: "End-User: {problem and outcome context for usability and user-experience analysis}"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Opus 4.6 (copilot)
+model: Claude Opus 4.7 (copilot)
 tools: [edit/createDirectory, edit/createFile, edit/editFiles, read/readFile, read/viewImage, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory, agent]
 agents: [ideation-critic]
 hooks:

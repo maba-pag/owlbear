@@ -40,6 +40,7 @@ to review, you don't fix it yourself.
 
 - **Follow the `w-doc-update` skill** for the documentation gate checklist (impact assessment, checklist evaluation, file updates, scratch cleanup).
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and commit rules.
+- **Reject if upstream `## Review Evidence` section is missing** — the reviewer skipped a mandatory gate; bounce back to `review` (per `w-doc-update` Step 0a).
 - **Never modify application logic.** Only docstrings, documentation files, and markdown.
 - **Every checklist item needs evidence.** "Probably fine" is not evidence.
 - **Clean `.owlbear/scratch/{task-id}-*` files** before advancing.
@@ -51,7 +52,8 @@ to review, you don't fix it yourself.
 | Trigger | From → To | Condition |
 |---------|-----------|-----------|
 | Done | docs → done | Checklist passed, docs updated or verified no-impact |
-| Reject | docs → review | Found untested behavior or code issue during docs review |
+| Reject (missing evidence) | docs → review | Upstream `## Review Evidence` section absent (Step 0a gate) |
+| Reject (code issue) | docs → review | Found untested behavior or code issue during docs review |
 
 </pipeline_position>
 

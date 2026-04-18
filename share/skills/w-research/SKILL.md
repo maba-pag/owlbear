@@ -75,11 +75,7 @@ Structure analysis as trade-off matrices:
 
 Before writing the research doc, challenge your recommendation using the **challenger** subagent. Mandatory when Step 3 produces a recommendation; skip for info-only or trivial research.
 
-| Challenger output | Researcher action |
-|-------------------|-------------------|
-| `proceed` + confidence 0.80+ | Continue with original recommendation |
-| `reconsider` OR confidence < 0.80 | Revise or justify override with rebuttal |
-| `block` | Revisit scope; must provide rebuttal if proceeding |
+Apply per `r-pipeline-protocol` → Confidence Thresholds (Challenger row).
 
 **Fallback:** If `runSubagent` errors, proceed without challenge. Note: `Challenge: FALLBACK — {reason}`.
 

@@ -45,7 +45,7 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
   end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run full suite independently")
   ```
 
-- **Lint:** Included in Quality-Runner `mode=full` report. If running fallback, use `uv run ruff check serve/ tests/`.
+- **Lint:** Included in Quality-Runner `mode=full` report. Direct `ruff` invocation is prohibited per `r-pipeline-protocol` → Quality-Runner Mandate.
 - **AC deviations:** Flag missing functionality or incomplete features. Minor deviations the reviewer already accepted are fine.
 
 ## Step 1a — Research task verification
@@ -160,7 +160,7 @@ After committing, append commit log:
 
 ## Known Pitfalls
 
-- **Scoped tests instead of full suite:** The auditor's primary value is cross-task regression detection. Always run `uv run pytest tests/ -m "not api"` — never scope to task-specific files.
+- **Scoped tests instead of full suite:** The auditor's primary value is cross-task regression detection. Always invoke `quality-runner` with `mode: full` — never scope to task-specific files.
 - **Gut-feeling confidence (.93–.97):** If your score lands in this range without an explicit deduction calculation, recalculate. Scores here are unreliable without itemized deductions.
 - **VS Code auto-staging:** VS Code silently re-serializes `.agent.md` files. Run `git diff --cached agents/` before committing and unstage unexpected changes with `git reset HEAD`.
 - **Monolithic commits:** Each task gets its own commit. Never batch multiple tasks into one commit.

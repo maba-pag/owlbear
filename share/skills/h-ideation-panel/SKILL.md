@@ -141,7 +141,7 @@ The Critic loop exits when either:
 | Do not manufacture objections | Critic must exit cleanly if it cannot find genuine material flaws |
 | Evidence-backed challenges only | Every challenge must cite specific claims from the panelist's position |
 | No alternatives, no proposals | Critic challenges only — never proposes fixes or suggests a different stance |
-| Different model always | `ideation-critic` uses GPT-5.4 (copilot); all domain panelists use Claude Opus 4.6 (copilot) |
+| Different model always | `ideation-critic` uses GPT-5.4 (copilot); all domain panelists use Claude Opus 4.7 (copilot) |
 | Adversarial, not performative | Separate model invocation ensures genuine cognitive diversity |
 
 **Why a different model for the Critic:** A model that just proposed "Option A is best" cannot genuinely dismantle Option A in the same context. Separate invocation with a focused adversarial prompt produces real challenges. GPT-5.4 sees the problem from a fundamentally different angle than Claude Opus 4.6.
