@@ -439,3 +439,39 @@ class TestFromAC_ListSessions:
         by_task = {s.task_id: s for s in sessions}
         assert by_task[80].state == "completed-pass"
         assert by_task[81].state == "completed-fail"
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered edge cases not covered by TestFromAC_ListSessions."""
+
+    def test_invalid_timestamp_value_skipped_gracefully(
+        self, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """Entry with all required keys but an unparseable timestamp is skipped gracefully.
+
+        Discovered: _read_log_entries only validates key presence; a syntactically valid
+        JSON entry with timestamp='not-a-date' passes the key check and crashes
+        datetime.fromisoformat() in _collect_task_sessions with an unhandled ValueError.
+        The AC guarantees malformed/incomplete entries are skipped gracefully — this
+        path was not tested.
+        """
+        valid_before = _entry(action="claim", task_id=90, detail="test-agent", ts=_ts(timedelta(minutes=-30)))
+        bad_ts_entry = {
+            "timestamp": "not-a-date",
+            "action": "claim",
+            "task_id": 91,
+            "detail": "test-agent",
+            "actor": "test-agent",
+        }
+        valid_after = _entry(action="claim", task_id=92, detail="test-agent", ts=_ts(timedelta(minutes=-5)))
+        _write_log(log_path, [valid_before, bad_ts_entry, valid_after])
+        sessions = engine.list_sessions(filter="all")
+        returned_ids = {s.task_id for s in sessions}
+        assert 90 in returned_ids, "valid entry before bad-timestamp entry must be processed"
+        assert 91 not in returned_ids, "entry with unparseable timestamp must be skipped"
+        assert 92 in returned_ids, "valid entry after bad-timestamp entry must be processed"

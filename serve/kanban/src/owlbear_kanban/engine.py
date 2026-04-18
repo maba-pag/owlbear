@@ -1014,6 +1014,10 @@ class KanbanEngine:
             except json.JSONDecodeError:
                 continue
             if all(k in entry for k in ("action", "task_id", "detail", "timestamp")):
+                try:
+                    datetime.fromisoformat(str(entry["timestamp"]))
+                except ValueError:
+                    continue
                 entries.append(entry)
         return entries
 
