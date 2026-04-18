@@ -1,9 +1,11 @@
 import { useRef, useEffect } from 'react'
 import { Routes, Route } from 'react-router'
 import KanbanBoard from './KanbanBoard'
+import { usePolling } from './usePolling'
 import './Shell.css'
 
 function Shell() {
+  const { health } = usePolling('/health')
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
@@ -23,7 +25,7 @@ function Shell() {
   return (
     <div className="shell">
       <header className="shell__status-bar" data-region="status-bar">
-        <span data-testid="traffic-light" />
+        <span data-testid="traffic-light" data-health={health} />
         <span data-testid="task-count" />
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
