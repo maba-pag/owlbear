@@ -897,10 +897,10 @@ class KanbanEngine:
         # --- Activity logging ---
         if self._activity_log_path:
             details = {
-                "success": f"{old_status} -> {record.status}",
+                "success": f"success: {old_status} -> {record.status}",
                 "fail": "outcome=fail",
                 "block": f"blocked: {block_reason}",
-                "reject": f"{old_status} -> {move_to}",
+                "reject": f"reject: {old_status} -> {move_to}",
             }
             log_activity(
                 self._activity_log_path,
