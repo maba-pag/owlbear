@@ -1,0 +1,35 @@
+/* PDS Design Tokens — Light Theme CSS Custom Properties
+ * Mapped from @porsche-design-system/components-react theme exports (themeLight*)
+ * Placeholder hex values aligned with PDS v3 light theme; update if PDS ships
+ * a static token extract in a future release.
+ */
+:root {
+  /* Primary */
+  --pds-theme-light-primary: #010205;
+
+  /* Background */
+  --pds-theme-light-background-base: #ffffff;
+  --pds-theme-light-background-surface: #f2f2f2;
+  --pds-theme-light-background-shading: rgba(1, 2, 5, 0.7);
+
+  /* Contrast */
+  --pds-theme-light-contrast-low: #e8e8e8;
+  --pds-theme-light-contrast-medium: #9b9b9b;
+  --pds-theme-light-contrast-high: #323232;
+
+  /* Notification */
+  --pds-theme-light-notification-success: #018a16;
+  --pds-theme-light-notification-success-soft: #ebf9ec;
+  --pds-theme-light-notification-warning: #ff9b00;
+  --pds-theme-light-notification-warning-soft: #fff5e5;
+  --pds-theme-light-notification-error: #e00000;
+  --pds-theme-light-notification-error-soft: #fde8e8;
+  --pds-theme-light-notification-info: #0061bd;
+  --pds-theme-light-notification-info-soft: #e5f0fa;
+
+  /* State */
+  --pds-theme-light-state-hover: rgba(1, 2, 5, 0.06);
+  --pds-theme-light-state-active: rgba(1, 2, 5, 0.16);
+  --pds-theme-light-state-focus: #010205;
+  --pds-theme-light-state-disabled: rgba(1, 2, 5, 0.3);
+}
