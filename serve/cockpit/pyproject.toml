@@ -1,0 +1,16 @@
+[project]
+name = "owlbear-cockpit"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "OwlBear Cockpit — FastAPI backend for the kanban UI"
+dependencies = ["owlbear-kanban", "fastapi", "uvicorn", "pydantic"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/owlbear_cockpit"]
+
+[tool.uv.sources]
+owlbear-kanban = { workspace = true }

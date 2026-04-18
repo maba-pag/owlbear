@@ -43,6 +43,7 @@ src = [
   "serve/mcp-knowledge/src",
   "serve/mcp-memory/src",
   "serve/browser/src",
+  "serve/cockpit/src",
 ]
 
 [tool.ruff.lint]
