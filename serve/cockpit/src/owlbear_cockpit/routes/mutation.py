@@ -141,14 +141,20 @@ def _apply_block_kwargs(kwargs: dict[str, Any], req: EditRequest, task: Any) -> 
     if req.block_reason is not None:
         kwargs["blocked"] = True
         kwargs["block_reason"] = req.block_reason
+        # Strip block:user from remove_tags (conflict: tag-diff may have put it there)
+        remove_tags: list[str] = kwargs.get("remove_tags") or []
+        kwargs["remove_tags"] = [t for t in remove_tags if t != "block:user"]
         if "block:user" not in current_tags:
             add_tags: list[str] = kwargs.get("add_tags") or []
             if "block:user" not in add_tags:
                 kwargs["add_tags"] = [*add_tags, "block:user"]
     else:
         kwargs["blocked"] = False
+        # Strip block:user from add_tags (conflict: tag-diff may have put it there)
+        add_tags = kwargs.get("add_tags") or []
+        kwargs["add_tags"] = [t for t in add_tags if t != "block:user"]
         if "block:user" in current_tags:
-            remove_tags: list[str] = kwargs.get("remove_tags") or []
+            remove_tags = kwargs.get("remove_tags") or []
             if "block:user" not in remove_tags:
                 kwargs["remove_tags"] = [*remove_tags, "block:user"]
 

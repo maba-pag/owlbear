@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from pydantic import BeforeValidator
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.dispatch import pick_dispatchable
 from owlbear_kanban.models import TaskSummary
+from owlbear_mcp_kanban.guidance import collect_guidance
 from owlbear_mcp_kanban.models import KanbanTask
 
 if TYPE_CHECKING:
@@ -210,6 +212,7 @@ async def create_task(  # noqa: PLR0913
 async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    pre_task = await _show_validated(app_ctx, task_id)
     try:
         record = await asyncio.to_thread(
             app_ctx.engine.move_task,
@@ -219,7 +222,11 @@ async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
     except (FileNotFoundError, ValueError) as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
-    return _record_to_task(record)
+    result = _record_to_task(record)
+    with contextlib.suppress(Exception):
+        status_names = [s["name"] for s in app_ctx.engine.board_config().statuses]
+        result.guidance = collect_guidance("move", before=pre_task, after=result, status_names=status_names)
+    return result
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=False))
@@ -279,12 +286,21 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["timestamp"] = True
     if parent > 0:
         kwargs["parent"] = parent
+    # Remove block:user tag on any MCP block/unblock (agent takes ownership)
+    if block or unblock:
+        remove_tags: list[str] = list(kwargs.get("remove_tags", []))  # type: ignore[arg-type]
+        if "block:user" not in remove_tags:
+            remove_tags.append("block:user")
+        kwargs["remove_tags"] = remove_tags
     try:
         record = app_ctx.engine.edit_task(task_id, **kwargs)
     except (FileNotFoundError, ValueError) as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
-    return _record_to_task(record)
+    task = _record_to_task(record)
+    with contextlib.suppress(Exception):
+        task.guidance = collect_guidance("edit_task", None, task)
+    return task
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -326,7 +342,14 @@ async def end_work(  # noqa: PLR0913
         )
     except (ValueError, FileNotFoundError) as exc:
         raise ToolError(str(exc)) from exc
-    return _record_to_task(record)
+    # Remove block:user tag on MCP block outcome (agent takes ownership)
+    if outcome == "block":
+        with contextlib.suppress(Exception):
+            record = app_ctx.engine.edit_task(task_id, remove_tags=["block:user"])
+    task = _record_to_task(record)
+    with contextlib.suppress(Exception):
+        task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
+    return task
 
 
 # ---------------------------------------------------------------------------

@@ -201,6 +201,12 @@ The kanban `block` action is reserved for:
 
 Blocking and unblocking outside the standard lifecycle (e.g., orchestrator triage) uses `edit_task(block="reason")` / `edit_task(unblock=True)` (see `h-mcp-kanban`).
 
+#### DR Required on Agent Block
+
+**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via the scribe agent (see `w-decision-routing`).
+
+**Exemption — user-driven blocks:** Tasks blocked via the Cockpit carry the `block:user` tag. If `block:user` is present on the task after blocking, the guidance field will be empty — no DR is required. Agents **must not** create DRs for Cockpit-initiated blocks.
+
 ### Decision Tiers
 
 | Tier | When | Action |

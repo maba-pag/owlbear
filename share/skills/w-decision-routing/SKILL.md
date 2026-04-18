@@ -75,6 +75,8 @@ Search pending and resolved DRs for the task without creating. Return findings.
 
 ## When to Create a Decision Request
 
+> **Block-time guidance:** If the MCP tool response from `edit_task(block=...)` or `end_work(outcome="block")` contains a non-empty `guidance` field with "ACTION REQUIRED: Create a Decision Request", this skill is where you land. Follow the instructions below to create the DR, then call `end_work(outcome="block", block_reason="DR pending: {filename}")` if not already blocked.
+
 Create when:
 
 - Research finding recommends a direction the user hasn't approved.

@@ -25,6 +25,27 @@ For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
 Parameter names, types, defaults, descriptions, and allowed values are exposed via the MCP tool schema. Use `list_tools` or inspect the schema directly — do not rely on this document for parameter details.
 
+## Response: Guidance Field
+
+Every `KanbanTask` returned by `edit_task`, `end_work`, and `move_task` includes a `guidance: list[str]` field. It is the **first** key in the JSON payload (Pydantic v2 declaration-order serialization).
+
+`guidance` is advisory — the tool call always succeeds regardless of its value. An empty list means no guidance applies.
+
+| Operation | When populated |
+|-----------|---------------|
+| `edit_task(block=...)` | After blocking (DR-required message) |
+| `end_work(outcome="block")` | After blocking (DR-required message) |
+| `end_work(outcome="success")` | Always (commit-pushed reminder) |
+| `move_task` to a status > 1 slot ahead | Forward-skip warning |
+
+**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the scribe agent).
+
+### `block:user` Tag Exemption
+
+Blocks initiated by a human via the Cockpit carry the `block:user` tag. When `block:user` is present on the after-state task, the block guidance rule fires with an **empty list** — the agent does not need to create a DR for user-driven blocks.
+
+When an MCP agent calls `edit_task(block=...)` or `end_work(outcome="block")`, the server automatically removes any stale `block:user` tag — the agent takes ownership of the block.
+
 ## Compound Tools
 
 ### start_work

@@ -179,9 +179,7 @@ class TestFromAC_EditTask:
     'updated' snapshot, block/unblock mutations, and 404 for unknown tasks.
     """
 
-    def test_edit_title_returns_200_with_new_title(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_title_returns_200_with_new_title(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'title' returns 200 with updated title."""
         task = engine.show_task("1")
         response = client.post(
@@ -191,9 +189,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["title"] == "Renamed task"
 
-    def test_edit_tags_replaces_full_tag_list(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_tags_replaces_full_tag_list(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit 'tags' replaces the full tag list (full-replacement semantics)."""
         task = engine.show_task("1")
         response = client.post(
@@ -203,9 +199,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert set(response.json()["tags"]) == {"new-tag", "another"}
 
-    def test_edit_priority_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_priority_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'priority' returns 200 with updated priority."""
         task = engine.show_task("1")
         response = client.post(
@@ -215,9 +209,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["priority"] == "critical"
 
-    def test_edit_depends_on_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_depends_on_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'depends_on' (full replacement list) returns 200."""
         task = engine.show_task("1")
         response = client.post(
@@ -227,9 +219,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert set(response.json()["depends_on"]) == {2, 3}
 
-    def test_edit_parent_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_parent_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'parent' returns 200 with updated parent."""
         task = engine.show_task("1")
         response = client.post(
@@ -239,9 +229,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["parent"] == 3
 
-    def test_edit_body_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_body_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit allowlisted field 'body' returns 200 with updated body."""
         task = engine.show_task("1")
         new_body = "## New body\n\nSome markdown content."
@@ -252,9 +240,7 @@ class TestFromAC_EditTask:
         assert response.status_code == 200
         assert response.json()["body"] == new_body
 
-    def test_edit_status_field_rejected_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_status_field_rejected_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Non-allowlisted field 'status' (highest-value bypass target) → 422."""
         task = engine.show_task("1")
         response = client.post(
@@ -263,9 +249,7 @@ class TestFromAC_EditTask:
         )
         assert response.status_code == 422
 
-    def test_edit_blocked_field_directly_rejected_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_blocked_field_directly_rejected_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Non-allowlisted field 'blocked' directly → 422; use block_reason instead."""
         task = engine.show_task("1")
         response = client.post(
@@ -279,9 +263,7 @@ class TestFromAC_EditTask:
         response = client.post("/api/tasks/1/edit", json={"title": "No timestamp"})
         assert response.status_code == 422
 
-    def test_edit_stale_updated_returns_409(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_stale_updated_returns_409(self, client: TestClient, engine: KanbanEngine) -> None:
         """D9: stale 'updated' snapshot (task mutated since load) → 409 Conflict."""
         task = engine.show_task("1")
         stale_timestamp = task.updated
@@ -294,9 +276,7 @@ class TestFromAC_EditTask:
         )
         assert response.status_code == 409
 
-    def test_edit_block_reason_sets_blocked_state(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_block_reason_sets_blocked_state(self, client: TestClient, engine: KanbanEngine) -> None:
         """Edit with block_reason sets blocked=True implicitly."""
         task = engine.show_task("1")
         response = client.post(
@@ -308,9 +288,7 @@ class TestFromAC_EditTask:
         assert body["blocked"] is True
         assert body["block_reason"] == "waiting on dependency"
 
-    def test_edit_null_block_reason_clears_blocked_state(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_null_block_reason_clears_blocked_state(self, client: TestClient, engine: KanbanEngine) -> None:
         """Unblock: edit with block_reason=null clears blocked=False and block_reason=None."""
         # Setup: block task 1 via engine directly
         engine.edit_task("1", blocked=True, block_reason="originally blocked")
@@ -389,9 +367,7 @@ class TestFromAC_AuditLogging:
     activity_log=True so entries are written at all.
     """
 
-    def test_move_writes_activity_log_actor_cockpit(
-        self, client: TestClient, board_dir: Path
-    ) -> None:
+    def test_move_writes_activity_log_actor_cockpit(self, client: TestClient, board_dir: Path) -> None:
         """Move mutation writes activity.jsonl entry with actor='cockpit'."""
         client.post("/api/tasks/1/move", json={"status": "in-progress"})
         activity_file = board_dir / "activity.jsonl"
@@ -436,14 +412,8 @@ class TestFromAC_AuditLogging:
         # If 200 is returned, an activity log entry with actor='cockpit' MUST exist.
         if response.status_code == 200:
             activity_file = board_dir / "activity.jsonl"
-            assert activity_file.exists(), (
-                "activity.jsonl must exist after a 200 edit response (AC6)"
-            )
-            entries = [
-                json.loads(line)
-                for line in activity_file.read_text().splitlines()
-                if line.strip()
-            ]
+            assert activity_file.exists(), "activity.jsonl must exist after a 200 edit response (AC6)"
+            entries = [json.loads(line) for line in activity_file.read_text().splitlines() if line.strip()]
             cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
             assert len(cockpit_entries) >= 1, (
                 "POST /edit with only 'updated' returned 200 but wrote no activity log "
@@ -455,9 +425,7 @@ class TestFromAC_AuditLogging:
                 f"Expected 200 (with audit log) or 422 (no-op rejected), got {response.status_code}"
             )
 
-    def test_release_writes_activity_log_actor_cockpit(
-        self, client: TestClient, board_dir: Path
-    ) -> None:
+    def test_release_writes_activity_log_actor_cockpit(self, client: TestClient, board_dir: Path) -> None:
         """Release mutation writes activity.jsonl entry with actor='cockpit'."""
         client.post("/api/tasks/2/release")  # task 2 is pre-claimed
         activity_file = board_dir / "activity.jsonl"
@@ -475,9 +443,7 @@ class TestFromAC_AuditLogging:
 class TestBuilderDiscovered:
     """Builder-discovered tests: invalid priority → 422, and audit log content assertions."""
 
-    def test_edit_invalid_priority_returns_422(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_edit_invalid_priority_returns_422(self, client: TestClient, engine: KanbanEngine) -> None:
         """Invalid priority string causes engine.edit_task to raise ValueError → must be 422."""
         task = engine.show_task("1")
         response = client.post(
@@ -486,16 +452,10 @@ class TestBuilderDiscovered:
         )
         assert response.status_code == 422
 
-    def test_move_audit_log_has_correct_action_and_task_id(
-        self, client: TestClient, board_dir: Path
-    ) -> None:
+    def test_move_audit_log_has_correct_action_and_task_id(self, client: TestClient, board_dir: Path) -> None:
         """Move audit log entry has action='move' and task_id matching the mutated task."""
         client.post("/api/tasks/1/move", json={"status": "in-progress"})
-        entries = [
-            json.loads(line)
-            for line in (board_dir / "activity.jsonl").read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in (board_dir / "activity.jsonl").read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
         assert cockpit_entries[0]["action"] == "move"
         assert cockpit_entries[0]["task_id"] == 1
@@ -509,25 +469,15 @@ class TestBuilderDiscovered:
             "/api/tasks/1/edit",
             json={"updated": task.updated, "title": "Audit action test"},
         )
-        entries = [
-            json.loads(line)
-            for line in (board_dir / "activity.jsonl").read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in (board_dir / "activity.jsonl").read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
         assert cockpit_entries[0]["action"] == "edit"
         assert cockpit_entries[0]["task_id"] == 1
 
-    def test_release_audit_log_has_correct_action_and_task_id(
-        self, client: TestClient, board_dir: Path
-    ) -> None:
+    def test_release_audit_log_has_correct_action_and_task_id(self, client: TestClient, board_dir: Path) -> None:
         """Release audit log entry has action='release' and task_id matching the mutated task."""
         client.post("/api/tasks/2/release")  # task 2 is pre-claimed
-        entries = [
-            json.loads(line)
-            for line in (board_dir / "activity.jsonl").read_text().splitlines()
-            if line.strip()
-        ]
+        entries = [json.loads(line) for line in (board_dir / "activity.jsonl").read_text().splitlines() if line.strip()]
         cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
         assert cockpit_entries[0]["action"] == "release"
         assert cockpit_entries[0]["task_id"] == 2
@@ -551,9 +501,7 @@ class TestFromAC_BlockUserTag:
     AC1-3 fail because the route does not inject/remove 'block:user' yet.
     """
 
-    def test_block_adds_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_block_adds_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC1: Blocking via cockpit edit_task injects 'block:user' into the task's tags."""
         task = engine.show_task("1")
         response = client.post(
@@ -563,9 +511,7 @@ class TestFromAC_BlockUserTag:
         assert response.status_code == 200
         assert "block:user" in response.json()["tags"]
 
-    def test_unblock_removes_block_user_tag(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_unblock_removes_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC2: Unblocking via cockpit edit_task removes 'block:user' from task tags."""
         # Setup: block with block:user tag present (simulates a prior cockpit block)
         engine.edit_task("1", blocked=True, block_reason="dependency", add_tags=["block:user"])
@@ -579,9 +525,7 @@ class TestFromAC_BlockUserTag:
         assert response.status_code == 200
         assert "block:user" not in response.json()["tags"]
 
-    def test_block_user_tag_is_idempotent(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_block_user_tag_is_idempotent(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC3: Blocking a second time doesn't create duplicate 'block:user' tags."""
         # First block
         task = engine.show_task("1")
@@ -603,9 +547,7 @@ class TestFromAC_BlockUserTag:
             f"Expected exactly 1 'block:user' tag, got {tags.count('block:user')}: {tags}"
         )
 
-    def test_unblock_without_tag_present_returns_200(
-        self, client: TestClient, engine: KanbanEngine
-    ) -> None:
+    def test_unblock_without_tag_present_returns_200(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC4: Unblocking a task that has no 'block:user' tag doesn't error (returns 200)."""
         # Setup: block via engine directly WITHOUT adding block:user tag
         engine.edit_task("1", blocked=True, block_reason="set by engine, no tag added")
@@ -618,3 +560,90 @@ class TestFromAC_BlockUserTag:
         )
         assert response.status_code == 200
         assert response.json()["blocked"] is False
+
+
+# ---------------------------------------------------------------------------
+# AC #990: block:user tag-diff conflict resolution
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BlockUserTagConflict:
+    """Tests for tag-diff conflict resolution in POST /api/tasks/{id}/edit.
+
+    AC #990 — conflict resolution when _apply_list_diff and _apply_block_kwargs
+    produce contradictory add_tags/remove_tags entries for 'block:user'.
+
+    RED phase — all tests fail until _apply_block_kwargs strips conflicting entries.
+    """
+
+    def test_block_conflict_preserves_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
+        """AC1 conflict: Blocking while tag-diff would remove block:user → block:user preserved.
+
+        Setup: task already has 'block:user'. User sends tags=[] (omitting block:user)
+        + block_reason set. Without conflict resolution, _apply_list_diff would add
+        block:user to remove_tags, then _apply_block_kwargs skips (already in tags).
+        Result without fix: block:user removed despite active blocking.
+        """
+        # Setup: task has block:user tag + scope:test tag
+        engine.edit_task("1", add_tags=["block:user", "scope:test"])
+        task = engine.show_task("1")
+        assert "block:user" in (task.tags or [])  # confirm setup
+
+        # User sends only ["scope:test"] in tags (omitting block:user) + sets block_reason
+        # This causes tag-diff to put block:user in remove_tags
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={
+                "updated": task.updated,
+                "tags": ["scope:test"],
+                "block_reason": "dependency still blocked",
+            },
+        )
+        assert response.status_code == 200
+        assert "block:user" in response.json()["tags"], (
+            f"Expected block:user preserved during block+tag-diff, got {response.json()['tags']!r}"
+        )
+
+    def test_unblock_conflict_removes_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
+        """AC2 conflict: Unblocking while tag-diff would add block:user → block:user removed.
+
+        Setup: task lacks 'block:user'. User sends tags=["block:user"] + block_reason=null.
+        Without conflict resolution, _apply_list_diff would add block:user to add_tags,
+        then _apply_block_kwargs skips (not in current_tags). Result: block:user added.
+        """
+        # Setup: block via engine without block:user tag
+        engine.edit_task("1", blocked=True, block_reason="dependency")
+        task = engine.show_task("1")
+        assert "block:user" not in (task.tags or [])  # confirm setup
+
+        # User sends tags=["block:user"] + block_reason=null (unblocking)
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={
+                "updated": task.updated,
+                "tags": ["block:user"],
+                "block_reason": None,
+            },
+        )
+        assert response.status_code == 200
+        assert "block:user" not in response.json()["tags"], (
+            f"Expected block:user not added during unblock+tag-diff, got {response.json()['tags']!r}"
+        )
+
+    def test_block_with_new_tags_adds_both(self, client: TestClient, engine: KanbanEngine) -> None:
+        """AC3 happy path: Blocking with new tags adds both block:user and the new tag."""
+        task = engine.show_task("1")
+        assert "block:user" not in (task.tags or [])  # confirm no prior block:user
+
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={
+                "updated": task.updated,
+                "tags": ["scope:test"],
+                "block_reason": "waiting on dependency",
+            },
+        )
+        assert response.status_code == 200
+        result_tags = response.json()["tags"]
+        assert "block:user" in result_tags, f"Expected block:user in tags after block, got {result_tags!r}"
+        assert "scope:test" in result_tags, f"Expected scope:test in tags after block, got {result_tags!r}"
