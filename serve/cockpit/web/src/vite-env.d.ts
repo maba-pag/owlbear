@@ -7,6 +7,9 @@ declare namespace React {
       'p-tabs-item': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
         label?: string
       }
+      'p-icon': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+        name?: string
+      }
     }
   }
 }

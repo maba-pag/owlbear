@@ -133,3 +133,12 @@ describe('TestFromAC_AppShell', () => {
     })
   })
 })
+
+describe('TestBuilderDiscovered', () => {
+  it('kanban nav-rail button contains an icon element (p-icon or svg)', () => {
+    const { container } = renderShell()
+    const kanbanBtn = container.querySelector('[data-region="nav-rail"] [data-surface="kanban"]')
+    const icon = kanbanBtn?.querySelector('p-icon, svg')
+    expect(icon).not.toBeNull()
+  })
+})

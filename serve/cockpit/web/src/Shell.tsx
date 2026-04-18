@@ -27,6 +27,7 @@ function Shell() {
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
         <button data-surface="kanban" aria-current="page">
+          <p-icon name="list" aria-hidden="true" />
           Kanban
         </button>
       </nav>
