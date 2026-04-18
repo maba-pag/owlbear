@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo, useMemo, useCallback } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,7 +110,7 @@ interface CardProps {
   onContextMenu: (e: React.MouseEvent, task: Task) => void
 }
 
-function Card({ task, onContextMenu }: CardProps) {
+export const Card = memo(function Card({ task, onContextMenu }: CardProps) {
   return (
     <div
       data-testid="task-card"
@@ -134,7 +134,7 @@ function Card({ task, onContextMenu }: CardProps) {
       {task.claimed && <span data-testid="running-indicator">▶</span>}
     </div>
   )
-}
+})
 
 // ─── Column ───────────────────────────────────────────────────────────────────
 
@@ -145,9 +145,10 @@ interface ColumnProps {
   onContextMenu: (e: React.MouseEvent, task: Task) => void
 }
 
-function Column({ status, tasks, priorities, onContextMenu }: ColumnProps) {
-  const sorted = [...tasks].sort(
-    (a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority),
+export const Column = memo(function Column({ status, tasks, priorities, onContextMenu }: ColumnProps) {
+  const sorted = useMemo(
+    () => [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority)),
+    [tasks, priorities],
   )
 
   return (
@@ -163,7 +164,7 @@ function Column({ status, tasks, priorities, onContextMenu }: ColumnProps) {
       )}
     </div>
   )
-}
+})
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -179,6 +180,20 @@ export default function KanbanBoard() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
 
+  const handleContextMenu = useCallback((e: React.MouseEvent, task: Task) => {
+    e.preventDefault()
+    setMoveError(null)
+    setContextMenu({ taskId: task.id, taskStatus: task.status, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const tasksByStatus = useMemo(() => {
+    return tasks.reduce<Record<string, Task[]>>((acc, task) => {
+      if (!acc[task.status]) acc[task.status] = []
+      acc[task.status].push(task)
+      return acc
+    }, {})
+  }, [tasks])
+
   if (loading) {
     return <div data-testid="loading-indicator">Loading…</div>
   }
@@ -187,12 +202,6 @@ export default function KanbanBoard() {
     return (
       <div data-testid="error-message">Failed to load board. Please try again.</div>
     )
-  }
-
-  function handleContextMenu(e: React.MouseEvent, task: Task) {
-    e.preventDefault()
-    setMoveError(null)
-    setContextMenu({ taskId: task.id, taskStatus: task.status, x: e.clientX, y: e.clientY })
   }
 
   async function handleTransitionClick(taskId: number, targetStatus: string) {
@@ -216,7 +225,7 @@ export default function KanbanBoard() {
   return (
     <div style={{ display: 'flex', gap: '16px', overflowX: 'auto' }}>
       {board.statuses.map(({ name }) => {
-        const colTasks = tasks.filter((t) => t.status === name)
+        const colTasks = tasksByStatus[name] ?? []
         return (
           <Column
             key={name}
