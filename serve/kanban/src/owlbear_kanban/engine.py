@@ -50,6 +50,10 @@ class WorkSession:
 
     task_id: int
     state: str
+    agent: str
+    started_at: str
+    duration: float | None
+    outcome: str | None
 
 
 def _classify_end_work(detail: str) -> str:
@@ -63,6 +67,17 @@ def _classify_end_work(detail: str) -> str:
 
 
 _CLOSE_ACTIONS: frozenset[str] = frozenset({"end_work", "release", "sweep-release"})
+
+
+def _compute_duration(claim_ts: str, close_ts: str) -> float:
+    """Return (close_dt - claim_dt).total_seconds(), normalising tz-naive timestamps to UTC."""
+    claim_dt = datetime.fromisoformat(claim_ts)
+    close_dt = datetime.fromisoformat(close_ts)
+    if claim_dt.tzinfo is None:
+        claim_dt = claim_dt.replace(tzinfo=UTC)
+    if close_dt.tzinfo is None:
+        close_dt = close_dt.replace(tzinfo=UTC)
+    return (close_dt - claim_dt).total_seconds()
 
 
 def _state_from_age(ref_ts: str, timeout: timedelta, now: datetime) -> str:
@@ -82,6 +97,7 @@ def _collect_task_sessions(
 ) -> None:
     """Append WorkSession entries for one task's event list into *sessions*."""
     open_claim_ts: str | None = None
+    open_claim_agent: str | None = None
     last_activity_ts: str | None = None
 
     for event in events:
@@ -95,26 +111,51 @@ def _collect_task_sessions(
                 # Apply the same age-based logic as the unclosed-session path: only
                 # classify as "stuck" when last activity exceeds claim_timeout.
                 ref_ts = last_activity_ts or open_claim_ts
-                sessions.append(WorkSession(task_id=task_id, state=_state_from_age(ref_ts, timeout, now)))
+                sessions.append(WorkSession(
+                    task_id=task_id,
+                    state=_state_from_age(ref_ts, timeout, now),
+                    agent=open_claim_agent or "",
+                    started_at=open_claim_ts,
+                    duration=None,
+                    outcome=None,
+                ))
             open_claim_ts = ts
+            open_claim_agent = detail
             last_activity_ts = ts
         elif action in _CLOSE_ACTIONS:
             if open_claim_ts is None:
                 continue
             if action == "sweep-release":
                 open_claim_ts = None
+                open_claim_agent = None
                 last_activity_ts = None
                 continue
             state = "released" if action == "release" else _classify_end_work(detail)
-            sessions.append(WorkSession(task_id=task_id, state=state))
+            outcome = "released" if action == "release" else detail
+            sessions.append(WorkSession(
+                task_id=task_id,
+                state=state,
+                agent=open_claim_agent or "",
+                started_at=open_claim_ts,
+                duration=_compute_duration(open_claim_ts, ts),
+                outcome=outcome,
+            ))
             open_claim_ts = None
+            open_claim_agent = None
             last_activity_ts = None
         elif open_claim_ts is not None:
             last_activity_ts = ts
 
     if open_claim_ts is not None:
         ref_ts = last_activity_ts or open_claim_ts
-        sessions.append(WorkSession(task_id=task_id, state=_state_from_age(ref_ts, timeout, now)))
+        sessions.append(WorkSession(
+            task_id=task_id,
+            state=_state_from_age(ref_ts, timeout, now),
+            agent=open_claim_agent or "",
+            started_at=open_claim_ts,
+            duration=None,
+            outcome=None,
+        ))
 
 
 _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
