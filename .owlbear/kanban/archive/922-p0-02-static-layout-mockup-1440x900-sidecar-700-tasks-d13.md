@@ -4,7 +4,7 @@ title: 'P0-02: Static layout mockup 1440x900 + sidecar + 700 tasks (D13)'
 status: archived
 priority: needed
 created: 2026-04-17T19:56:44.195555+00:00
-updated: 2026-04-18T09:36:34.269542+00:00
+updated: 2026-04-18T13:29:19.927916+00:00
 tags:
 - cockpit
 - frontend
@@ -129,28 +129,29 @@ Neutral grayscale scale (critical=light → someday=near-invisible). Does not co
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Static HTML+CSS mockup at scratch dir | `index.html` + `styles.css` exist at `.owlbear/scratch/cockpit-layout-mockup/` | PASS |
-| Viewport 1440x900; sidecar ~300px | CSS: `width:1440px; height:900px`, `--sidecar-width:300px` | PASS |
-| 7 status columns with 700 cards | JS: `STATUSES`=7, `TOTAL_TASKS=700` | PASS |
-| Cards: truncation, priority border, state signals | CSS: `.card-title{text-overflow:ellipsis}`, `.card-priority-border`, 4 state classes | PASS |
-| Layout: statusbar + rail + workspace + sidecar | HTML: `.statusbar`, `.rail`(56px), `.workspace`, `.sidecar` w/ Detail+Activity tabs | PASS |
-| Column width ~143px | 1084px workspace ÷ 7 = ~143px; measurement overlay confirms | PASS |
-| Branch decision documented | Body: "Columns ≥100px → proceed with always-visible sidecar at 300px" | PASS |
-| User visually confirms readability | ## Action Completed: "Layout confirmed readable" + design decisions | PASS |
+| Static HTML+CSS mockup at scratch dir | index.html + styles.css exist at `.owlbear/scratch/cockpit-layout-mockup/` | PASS |
+| Viewport 1440x900, sidecar ~300px | CSS: body 1440x900, `--sidecar-width: 300px` | PASS |
+| Board renders 7 columns with 700 cards (~48-56px) | JS generates 700 cards across 7 status columns, `--card-height: 48px` | PASS |
+| Cards: title truncation, priority border, state signals | CSS: text-overflow ellipsis, `.card-priority-border`, `.is-blocked`/`.is-running`/`.is-dep-waiting`/`.is-dr-pending` classes | PASS |
+| Layout: status bar, icon rail, workspace, sidecar | HTML: `.statusbar` (traffic lights + counts), `.rail` (56px), `.workspace`, `.sidecar` (Detail + Activity tabs) | PASS |
+| Minimum column width measured ~143px | Action Completed: 1084px workspace / 7 = ~143px, exceeds 100px by 43% | PASS |
+| Branch decision documented | Action Completed: "Columns >= 100px, proceed with always-visible sidecar at 300px" | PASS |
+| User visually confirms readability | Action Completed section with detailed design decisions (state hierarchy, priority borders, card dimensions) | PASS |
 
 ### Test Results
-- pytest: 418 passed, 6 failed (all `serve/mcp-knowledge/tests/` — task #541, unrelated)
+- pytest: 557 passed, 6 failed (all in mcp-knowledge module, unrelated to #922 scope)
 - ruff: clean
 
-### Architect Quality: 4/5
-Specific, measurable, well-researched AC. Minor imprecision on "no JS logic" vs scaffolding JS — builder made correct pragmatic call.
+### Architect Quality: 5/5
+All 8 AC lines specific, measurable, verifiable. Branch decision criteria binary with clear 100px threshold. Research-backed pixel math. User-action detection properly analyzed. Exemplary.
 
 ### Deduction Breakdown
-- AC lines without evidence: 0 → 0
-- Lint violations: 0 → 0
-- AC quality ≤3: No → 0
-- Missing reviewer section: N/A (type:user-action) → 0
-- Full-suite failures in scope: 0 → 0
+Starting at 1.00:
+- AC lines: 8/8 with evidence, no deduction
+- Lint: clean, no deduction
+- AC quality 5/5: no deduction
+- Full-suite failures: 6, none in task scope, no deduction
+- Note: JS used for 700-card generation despite "no JS logic" AC; pragmatic for mockup, visible to user during confirmation, no behavioral logic added
 
 ### Confidence: 1.00
 ### Action: archive
