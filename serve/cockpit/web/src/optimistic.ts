@@ -1,5 +1,4 @@
-// RED-phase stub — minimal shell so tests compile.
-// Builder replaces this with the real implementation.
+import { useState, useRef } from 'react'
 
 export interface UseOptimisticResult<T> {
   state: T
@@ -8,9 +7,16 @@ export interface UseOptimisticResult<T> {
 }
 
 export function useOptimistic<T>(initial: T): UseOptimisticResult<T> {
-  return {
-    state: initial,
-    mutate: (_updater: (s: T) => T) => {},
-    rollback: () => {},
+  const [state, setState] = useState<T>(initial)
+  const snapshot = useRef<T>(initial)
+
+  function mutate(updater: (s: T) => T): void {
+    setState((prev) => updater(prev))
   }
+
+  function rollback(): void {
+    setState(snapshot.current)
+  }
+
+  return { state, mutate, rollback }
 }

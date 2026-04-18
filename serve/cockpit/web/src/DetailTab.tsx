@@ -1,5 +1,5 @@
-// RED-phase stub — minimal shell so tests compile.
-// Builder replaces this with the real implementation.
+import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 export interface TaskDetail {
   id: number
@@ -21,6 +21,152 @@ export interface DetailTabProps {
   onTaskUpdated?: (task: TaskDetail) => void
 }
 
-export default function DetailTab(_props: DetailTabProps): null {
-  return null
+interface Session {
+  task_id: number
+  state: string
+  agent: string
+  started_at: string
+  duration: number | null
+  outcome: string | null
+}
+
+export default function DetailTab({ task }: DetailTabProps) {
+  const [editBody, setEditBody] = useState(false)
+  const [showConflict, setShowConflict] = useState(false)
+  const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock'>(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [title, setTitle] = useState(task?.title ?? '')
+  const [priority, setPriority] = useState(task?.priority ?? '')
+
+  if (!task) return null
+
+  const t = task
+
+  async function handleSave() {
+    const res = await fetch(`/api/tasks/${t.id}/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updated: t.updated, title, priority }),
+    })
+    if (res.status === 409) {
+      setShowConflict(true)
+    }
+  }
+
+  async function handleHistoryClick() {
+    setShowHistory(true)
+    const res = await fetch('/api/sessions?filter=all', { method: 'GET' })
+    if (res.ok) {
+      const data = (await res.json()) as { sessions: Session[] }
+      setSessions(data.sessions)
+    }
+  }
+
+  const taskSessions = sessions.filter((s) => s.task_id === t.id)
+
+  return (
+    <div>
+      {/* History tab button — always visible */}
+      <button data-testid="history-tab" onClick={() => void handleHistoryClick()}>
+        History
+      </button>
+
+      {/* Read-only fields */}
+      <span data-testid="field-id">{t.id}</span>
+      <span data-testid="field-status">{t.status}</span>
+      <span data-testid="field-created">{t.created}</span>
+
+      {/* Editable fields */}
+      <input
+        data-field="title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <select
+        data-field="priority"
+        value={priority}
+        onChange={(e) => setPriority(e.target.value)}
+      >
+        <option value="someday">someday</option>
+        <option value="nice-to-have">nice-to-have</option>
+        <option value="important">important</option>
+        <option value="needed">needed</option>
+        <option value="critical">critical</option>
+      </select>
+      {t.tags.map((tag) => (
+        <span key={tag} data-testid="tag-chip">
+          {tag}
+        </span>
+      ))}
+      <input data-field="depends_on" defaultValue={t.depends_on.join(', ')} />
+      <input
+        data-field="parent"
+        defaultValue={t.parent !== null ? String(t.parent) : ''}
+      />
+      {t.blocked && (
+        <input data-field="block_reason" defaultValue={t.block_reason ?? ''} />
+      )}
+
+      {/* Body — markdown view or edit textarea */}
+      {editBody ? (
+        <textarea data-field="body" defaultValue={t.body} />
+      ) : (
+        <ReactMarkdown>{t.body}</ReactMarkdown>
+      )}
+      <button data-testid="body-edit-toggle" onClick={() => setEditBody((v) => !v)}>
+        Edit
+      </button>
+
+      {/* Actions */}
+      <button data-testid="save-button" onClick={() => void handleSave()}>
+        Save
+      </button>
+      <button data-testid="move-backward" onClick={() => setConfirmType('move-backward')}>
+        Move Backward
+      </button>
+      {t.blocked && (
+        <button data-testid="unblock-action" onClick={() => setConfirmType('unblock')}>
+          Unblock
+        </button>
+      )}
+
+      {/* History session rows */}
+      {showHistory && (
+        <div data-testid="history-view">
+          {taskSessions.map((s, i) => (
+            <div key={i} data-testid="history-session-row">
+              <span data-testid="session-agent">{s.agent}</span>
+              <span data-testid="session-duration">{s.duration ?? '\u2014'}</span>
+              <span data-testid="session-outcome">{s.outcome}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Conflict modal */}
+      {showConflict && (
+        <div data-testid="conflict-modal">
+          <button
+            data-testid="conflict-refresh"
+            onClick={() => setShowConflict(false)}
+          >
+            Discard changes
+          </button>
+          <button data-testid="conflict-overwrite">Force save</button>
+        </div>
+      )}
+
+      {/* Confirm dialog */}
+      {confirmType !== null && (
+        <div data-testid="confirm-dialog">
+          {confirmType === 'unblock' && t.block_reason && (
+            <span>{t.block_reason}</span>
+          )}
+          <button onClick={() => setConfirmType(null)}>Cancel</button>
+          <button onClick={() => setConfirmType(null)}>Confirm</button>
+        </div>
+      )}
+    </div>
+  )
 }
