@@ -87,6 +87,39 @@ Challenge: Skipped — user-directed change with no competing alternatives. No r
 - Keep existing Walkthrough Metrics (Fidelity, Readiness, Risk) — they still apply per-chunk
 - Keep the Post-Walkthrough Summary table — update to show chunk names instead of section names
 
-## 5. Follow-up Tasks
+## 5. Extension: Walkthrough Offer as Top-Level Rule
 
-1. **Implementation task** — Edit w-ideation SKILL.md: replace section-by-section walkthrough with topic-chunk walkthrough + Mediator commentary template + worked example.
+### Problem
+
+The walkthrough offer lives at w-ideation Step 5 sub-step 5 — buried deep. During the #984 ideation session the Mediator dumped the full Brief and asked "approve?" without offering a walkthrough. The user had to call it out.
+
+### Analysis: Where to Place the Rule
+
+| Location | Visibility | Risk of being missed |
+|----------|-----------|---------------------|
+| `ideator.agent.md` critical_rules | Loaded on every invocation — first thing the agent reads | Low |
+| w-ideation Step 5 sub-step 1 (moved from sub-step 5) | Read when executing M5 | Medium — agent may skim sub-steps |
+| Both locations | Redundant but reinforced | Lowest |
+
+**Recommendation: Both locations.** The critical_rule catches the behavior at the agent's top-of-mind level; the Step 5 sub-step ordering makes it procedurally first. Cost of redundancy is ~2 lines. Confidence: **0.92**.
+
+### Proposed critical_rule text
+
+> **Never present a Brief without first offering a walkthrough.** Before showing any Brief content (even partial), use askQuestions to offer "Walk me through it" / "I'll read it myself". Presenting Brief content before this offer is a protocol violation.
+
+### Proposed askQuestions call shape (worked example)
+
+```
+askQuestions:
+  question: "The Brief is ready. How would you like to review it?"
+  options:
+    - label: "Walk me through it"
+      description: "I'll present each topic chunk with my commentary, trade-offs, and honest assessment"
+    - label: "I'll read it myself"
+      description: "I'll share the Brief and you review at your own pace"
+  allowFreeformInput: false
+```
+
+## 6. Follow-up Tasks
+
+1. **Implementation task** — Edit w-ideation SKILL.md: replace section-by-section walkthrough with topic-chunk walkthrough + Mediator commentary template + worked example. Add walkthrough offer as Step 5 sub-step 1. Add critical_rule to ideator.agent.md.
