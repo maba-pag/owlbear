@@ -182,9 +182,11 @@ export default function KanbanBoard() {
 
   const handleContextMenu = useCallback((e: React.MouseEvent, task: Task) => {
     e.preventDefault()
+    const transitions = board?.valid_transitions[task.status] ?? []
+    if (transitions.length === 0) return
     setMoveError(null)
     setContextMenu({ taskId: task.id, taskStatus: task.status, x: e.clientX, y: e.clientY })
-  }, [])
+  }, [board])
 
   const tasksByStatus = useMemo(() => {
     return tasks.reduce<Record<string, Task[]>>((acc, task) => {
@@ -210,6 +212,7 @@ export default function KanbanBoard() {
     try {
       const res = await fetch(`/api/tasks/${taskId}/move`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: targetStatus }),
       })
       if (!res.ok) {
