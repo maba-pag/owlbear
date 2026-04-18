@@ -1,8 +1,20 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import Shell from '../Shell'
+
+// ─── Fetch stub (file-level) ──────────────────────────────────────────────────
+// Route "/" mounts KanbanBoard which fires fetch on mount.
+// Never-resolving promise keeps KanbanBoard in loading state, preventing state
+// updates after assertions and eliminating React act() warnings.
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function renderShell(route = '/') {
   return render(
@@ -72,10 +84,10 @@ describe('TestFromAC_AppShell', () => {
   })
 
   describe('Routing', () => {
-    it('route "/" renders kanban surface placeholder in workspace region', () => {
+    it('route "/" renders KanbanBoard (loading indicator visible) in workspace region', () => {
       const { container } = renderShell('/')
       const workspace = container.querySelector('[data-region="workspace"]')
-      expect(workspace?.textContent?.toLowerCase()).toContain('kanban')
+      expect(workspace?.querySelector('[data-testid="loading-indicator"]')).not.toBeNull()
     })
 
     it('route "/hello" renders hello content in workspace region', () => {

@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react'
 import { Routes, Route } from 'react-router'
+import KanbanBoard from './KanbanBoard'
 import './Shell.css'
 
 function Shell() {
@@ -33,7 +34,7 @@ function Shell() {
       </nav>
       <main className="shell__workspace" data-region="workspace">
         <Routes>
-          <Route path="/" element={<div>kanban</div>} />
+          <Route path="/" element={<KanbanBoard />} />
           <Route path="/hello" element={<div>hello</div>} />
         </Routes>
       </main>
