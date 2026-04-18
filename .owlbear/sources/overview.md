@@ -2,6 +2,16 @@
 
 External repos and resources studied during OwlBear development.
 
+## Frontend Scaffold Feasibility (Task #925)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| PDS React wrapper (npm) | <https://www.npmjs.com/package/@porsche-design-system/components-react> | Peer deps (React >=19), exports map, single JS dependency | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS React getting-started | <https://designsystem.porsche.com/v3/developing/react/getting-started> | Vite integration steps, PorscheDesignSystemProvider, partials plugin, Tailwind theme | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS React testing | <https://designsystem.porsche.com/v3/developing/react/testing> | jsdom polyfill, componentsReady, shadow DOM query utilities, CDN request suppression | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS License | <https://github.com/porsche-design-system/porsche-design-system/blob/main/LICENSE.md> | Dual license: Apache 2.0 source code + custom restrictive design assets license | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+| PDS Theme styles | <https://designsystem.porsche.com/v3/styles/theme> | Design token exports: JS, SCSS, vanilla-extract, Tailwind CSS theme | `.owlbear/research/925-frontend-scaffold.md` | 2026-04-18 |
+
 ## Mtime Cache for list_tasks() (Task #941)
 
 | Source | URL | What | Where Used | Date |
@@ -4073,3 +4083,11 @@ External repos and resources studied during OwlBear development.
 | VS Code Hooks docs — PreToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PreToolUse stdin/stdout JSON contract, permissionDecision output format, exit codes, editFiles tool_input schema | .owlbear/research/891-pretooluse-hooks-test-approach.md | 2026-04-17 |
 | VS Code Hooks docs — PostToolUse I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | PostToolUse stdin/stdout JSON contract, additionalContext output, decision: block, exit codes, tool_input formats | .owlbear/research/892-lint-changed-hook-test-approach.md | 2026-04-17 |
 | VS Code Hooks docs — SessionStart I/O | <https://code.visualstudio.com/docs/copilot/customization/hooks> | SessionStart I/O contract: stdin `{source: "new"}`, stdout `{hookSpecificOutput: {hookEventName, additionalContext}}`, fail-open exit 0 semantics | .owlbear/research/session-context-py-test-strategy.md | 2026-04-17 |
+
+## App Shell Test Strategy (Task #927)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Router v7 API reference | <https://api.reactrouter.com/v7/modules/react-router.html> | MemoryRouter, Routes, Route, Outlet — unified `react-router` package in v7 | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
+| React Router v7 library install + routing docs | <https://reactrouter.com/start/library/installation> | Declarative routing: BrowserRouter, nested Routes, layout routes, Outlet pattern | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
+| PDS v3.34 Tabs examples | <https://designsystem.porsche.com/v3/components/tabs/examples/> | PTabs + PTabsItem API: `label` prop, `activeTabIndex`, tab content pattern | .owlbear/research/927-app-shell-tests.md | 2026-04-18 |
