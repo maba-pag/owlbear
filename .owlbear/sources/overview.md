@@ -2,6 +2,14 @@
 
 External repos and resources studied during OwlBear development.
 
+## App Shell RED Phase — Test Strategy (Task #927)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+| React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+| PDS v3.34 Tabs examples + API | <https://designsystem.porsche.com/v3> | PTabs/PTabsItem custom element tags, `activeTabIndex` prop, `label` prop, jsdom tab-switch event behaviour | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+
 ## Frontend Scaffold Feasibility (Task #925)
 
 | Source | URL | What | Where Used | Date |
