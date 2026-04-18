@@ -3,15 +3,16 @@
 AC coverage:
   1. end_work(outcome="success") writes detail f"success: {old} -> {new}"
   2. end_work(outcome="reject") writes detail f"reject: {old} -> {target}"
-  3. end_work(outcome="fail") / end_work(outcome="block") details unchanged [existing behaviour — omitted, passes today]
-  4. Existing _classify_end_work() works without modification [omitted, passes today]
+  3. end_work(outcome="fail") / end_work(outcome="block") details unchanged
+  4. Existing _classify_end_work() works without modification
   5. Integration: end_work(success) → list_sessions(filter="all") returns completed-pass
   6. Integration: end_work(reject) → list_sessions(filter="all") returns completed-rejected
 
-Tests AC3 and AC4 are omitted: both describe already-correct behaviour and would pass
-in RED phase.  The builder must not regress them; covered as a side-effect of AC5/AC6.
-
-All tests FAIL in RED phase — end_work() still writes unprefixed detail strings.
+AC1/AC2/AC5/AC6 tests FAIL in RED phase — end_work() writes unprefixed detail strings.
+AC3 tests exercise already-correct behaviour (fail/block were never changed) and PASS
+in both RED and GREEN phases; they are regression guards ensuring the builder cannot
+accidentally alter the fail/block format strings.
+AC4 is exercised transitively by the AC5/AC6 integration tests.
 """
 
 from __future__ import annotations
@@ -270,7 +271,7 @@ class TestFromAC_EndWorkDetailPrefix:
         self, board: Path, engine: KanbanEngine
     ) -> None:
         """Regression: end_work(reject) must NOT produce completed-fail."""
-        _write_task(board, 10, status="todo")  # noqa: E501 — within config next_id=10 boundary
+        _write_task(board, 10, status="todo")
         engine.start_work("10")
         engine.end_work("10", note="rejected", outcome="reject", move_to="research")
 
@@ -279,4 +280,37 @@ class TestFromAC_EndWorkDetailPrefix:
         assert task_sessions, "No session found for task 10"
         assert task_sessions[-1].state != "completed-fail", (
             "end_work(reject) was misclassified as completed-fail — prefix missing"
+        )
+
+    # ------------------------------------------------------------------ AC3: fail/block details unchanged
+
+    def test_end_work_fail_detail_is_outcome_equals_fail(
+        self, board: Path, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """end_work(fail) writes detail 'outcome=fail' — unchanged from pre-fix format."""
+        _write_task(board, 1, status="in-progress")
+        engine.start_work("1")
+        engine.end_work("1", note="failed", outcome="fail")
+
+        detail = _last_end_work_detail(log_path)
+        assert detail == "outcome=fail", (
+            f"Expected 'outcome=fail' but got: {detail!r}"
+        )
+
+    def test_end_work_block_detail_is_blocked_with_reason(
+        self, board: Path, engine: KanbanEngine, log_path: Path
+    ) -> None:
+        """end_work(block) writes detail 'blocked: {reason}' — unchanged from pre-fix format."""
+        _write_task(board, 1, status="in-progress")
+        engine.start_work("1")
+        engine.end_work(
+            "1",
+            note="blocked",
+            outcome="block",
+            block_reason="external dependency",
+        )
+
+        detail = _last_end_work_detail(log_path)
+        assert detail == "blocked: external dependency", (
+            f"Expected 'blocked: external dependency' but got: {detail!r}"
         )
