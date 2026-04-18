@@ -405,3 +405,193 @@ describe('TestFromAC_KanbanBoard', () => {
     })
   })
 })
+
+// ─── Fixture: task 1 moved from backlog → todo ────────────────────────────────
+
+const TASKS_AFTER_MOVE = {
+  tasks: [
+    {
+      id: 1,
+      title: 'Task one',
+      status: 'todo',
+      priority: 'critical',
+      tags: [],
+      blocked: false,
+      block_reason: null,
+      claimed: false,
+    },
+    {
+      id: 2,
+      title: 'Blocked task',
+      status: 'todo',
+      priority: 'needed',
+      tags: ['bug'],
+      blocked: true,
+      block_reason: 'Waiting for API',
+      claimed: false,
+    },
+    {
+      id: 3,
+      title: 'Active task',
+      status: 'in-progress',
+      priority: 'important',
+      tags: [],
+      blocked: false,
+      block_reason: null,
+      claimed: true,
+    },
+    {
+      id: 4,
+      title: 'Low priority task',
+      status: 'backlog',
+      priority: 'someday',
+      tags: [],
+      blocked: false,
+      block_reason: null,
+      claimed: false,
+    },
+  ],
+  mtime: 1713456001,
+}
+
+// ─── Fetch stubs for move tests ───────────────────────────────────────────────
+
+function stubFetchWithMoveSuccess(tasksAfterMove: typeof TASKS = TASKS) {
+  let tasksCallCount = 0
+  const mockFetch = vi.fn((url: string) => {
+    if (url.includes('/api/board')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
+    }
+    if (/\/api\/tasks\/\d+\/move/.test(url)) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    if (url.includes('/api/tasks')) {
+      tasksCallCount += 1
+      const data = tasksCallCount === 1 ? TASKS : tasksAfterMove
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(data) })
+    }
+    return Promise.reject(new Error(`Unexpected URL: ${url}`))
+  })
+  vi.stubGlobal('fetch', mockFetch)
+  return mockFetch
+}
+
+function stubFetchWithMoveError(errorMode: '422' | 'network') {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url.includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
+      }
+      if (/\/api\/tasks\/\d+\/move/.test(url)) {
+        if (errorMode === '422') {
+          return Promise.resolve({
+            ok: false,
+            status: 422,
+            json: () => Promise.resolve({ detail: 'Invalid transition' }),
+          })
+        }
+        return Promise.reject(new Error('Network error'))
+      }
+      if (url.includes('/api/tasks')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(TASKS) })
+      }
+      return Promise.reject(new Error(`Unexpected URL: ${url}`))
+    }),
+  )
+}
+
+// ─── Tests: context menu → move action wiring ────────────────────────────────
+
+describe('TestFromAC_ContextMenuMove', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  async function openContextMenuForCard1(container: HTMLElement) {
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+    })
+    fireEvent.contextMenu(container.querySelector('[data-testid="task-card"][data-id="1"]')!)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
+    })
+  }
+
+  // ─── AC1: POST /move called with task ID from data-id and target status ───
+
+  it('clicking transition item sends POST /api/tasks/{id}/move with correct status', async () => {
+    const mockFetch = stubFetchWithMoveSuccess()
+    const { container } = renderBoard()
+    await openContextMenuForCard1(container)
+    fireEvent.click(
+      container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
+    )
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/tasks/1/move',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ status: 'todo' }),
+        }),
+      )
+    })
+  })
+
+  // ─── AC2: board refreshes — task appears in new column ───────────────────
+
+  it('board refreshes and task appears in new column after successful move', async () => {
+    stubFetchWithMoveSuccess(TASKS_AFTER_MOVE)
+    const { container } = renderBoard()
+    await openContextMenuForCard1(container)
+    fireEvent.click(
+      container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
+    )
+    await waitFor(() => {
+      const todoCol = container.querySelector('[data-column="todo"]')
+      expect(todoCol?.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+    })
+  })
+
+  // ─── AC3: error shown on HTTP 422 ────────────────────────────────────────
+
+  it('shows move-error element when POST /move returns HTTP 422', async () => {
+    stubFetchWithMoveError('422')
+    const { container } = renderBoard()
+    await openContextMenuForCard1(container)
+    fireEvent.click(
+      container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
+    )
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+    })
+  })
+
+  // ─── AC4: error shown on network failure ─────────────────────────────────
+
+  it('shows move-error element when POST /move fails with network error', async () => {
+    stubFetchWithMoveError('network')
+    const { container } = renderBoard()
+    await openContextMenuForCard1(container)
+    fireEvent.click(
+      container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
+    )
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+    })
+  })
+
+  // ─── AC5: context menu dismisses after transition click ──────────────────
+
+  it('context menu is no longer visible after clicking a transition item', async () => {
+    stubFetchWithMoveSuccess()
+    const { container } = renderBoard()
+    await openContextMenuForCard1(container)
+    fireEvent.click(
+      container.querySelector('[data-testid="transition-item"][data-status="todo"]')!,
+    )
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="context-menu"]')).toBeNull()
+    })
+  })
+})
