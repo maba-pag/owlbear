@@ -33,6 +33,7 @@ interface UseBoardResult {
   tasks: Task[]
   loading: boolean
   error: string | null
+  refetchTasks: () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -75,7 +76,21 @@ export function useBoard(): UseBoardResult {
     }
   }, [])
 
-  return { board, tasks, loading, error }
+  function refetchTasks() {
+    void (async () => {
+      try {
+        const res = await fetch('/api/tasks')
+        if (res.ok) {
+          const data = (await res.json()) as TasksResponse
+          setTasks(data.tasks)
+        }
+      } catch {
+        // silent — board data stays stale
+      }
+    })()
+  }
+
+  return { board, tasks, loading, error, refetchTasks }
 }
 
 // ─── Priority colours ───────────────────────────────────────────────────────
@@ -153,14 +168,16 @@ function Column({ status, tasks, priorities, onContextMenu }: ColumnProps) {
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
 interface ContextMenuState {
+  taskId: number
   taskStatus: string
   x: number
   y: number
 }
 
 export default function KanbanBoard() {
-  const { board, tasks, loading, error } = useBoard()
+  const { board, tasks, loading, error, refetchTasks } = useBoard()
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [moveError, setMoveError] = useState<string | null>(null)
 
   if (loading) {
     return <div data-testid="loading-indicator">Loading…</div>
@@ -174,7 +191,26 @@ export default function KanbanBoard() {
 
   function handleContextMenu(e: React.MouseEvent, task: Task) {
     e.preventDefault()
-    setContextMenu({ taskStatus: task.status, x: e.clientX, y: e.clientY })
+    setMoveError(null)
+    setContextMenu({ taskId: task.id, taskStatus: task.status, x: e.clientX, y: e.clientY })
+  }
+
+  async function handleTransitionClick(taskId: number, targetStatus: string) {
+    setContextMenu(null)
+    setMoveError(null)
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ status: targetStatus }),
+      })
+      if (!res.ok) {
+        setMoveError(`Move failed: ${res.status}`)
+        return
+      }
+      refetchTasks()
+    } catch {
+      setMoveError('Move failed: network error')
+    }
   }
 
   return (
@@ -192,13 +228,20 @@ export default function KanbanBoard() {
         )
       })}
 
+      {moveError && <div data-testid="move-error">{moveError}</div>}
+
       {contextMenu && (
         <div
           data-testid="context-menu"
           style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x }}
         >
           {(board.valid_transitions[contextMenu.taskStatus] ?? []).map((target) => (
-            <div key={target} data-testid="transition-item" data-status={target}>
+            <div
+              key={target}
+              data-testid="transition-item"
+              data-status={target}
+              onClick={() => void handleTransitionClick(contextMenu.taskId, target)}
+            >
               → {target}
             </div>
           ))}
