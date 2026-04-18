@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TaskSummaryOut(BaseModel):
@@ -33,6 +33,17 @@ class TaskDetailOut(BaseModel):
     block_reason: str | None = None
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
+    claimed: bool = False
+    claimed_by: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_claimed(cls, data: object) -> object:
+        """Derive claimed bool from claimed_by field."""
+        if isinstance(data, dict) and "claimed_by" in data:
+            data = dict(data)
+            data["claimed"] = data["claimed_by"] is not None
+        return data
 
 
 class BoardOut(BaseModel):

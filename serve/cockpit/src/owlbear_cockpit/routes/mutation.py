@@ -70,6 +70,7 @@ def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
         block_reason=task.block_reason,
         parent=task.parent,
         depends_on=task.depends_on or [],
+        claimed_by=task.claimed_by,
     )
 
 
