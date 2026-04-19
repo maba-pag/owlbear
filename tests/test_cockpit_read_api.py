@@ -513,3 +513,120 @@ class TestFromAC_TaskSummaryFields:
             assert isinstance(task["claimed"], bool), (
                 f"claimed must be bool, got {task['claimed']!r} for task {task['id']}"
             )
+
+
+# ---------------------------------------------------------------------------
+# AC: claimed and claimed_by fields on TaskDetailOut (#972)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_TaskDetailClaimedFields:
+    """Tests for claimed/claimed_by fields on the GET /api/tasks/{id} response.
+
+    Covers:
+    - TaskDetailOut includes claimed: bool = False            (AC#1)
+    - TaskDetailOut includes claimed_by: str | None = None   (AC#1)
+    - TaskDetailOut._coerce_claimed derives claimed from claimed_by (AC#2)
+    - get_task route passes claimed_by when constructing TaskDetailOut (AC#3)
+    - _task_to_detail in mutation.py passes claimed_by (AC#4)
+    - Unclaimed task (task 1): claimed=False, claimed_by=None (AC#5)
+    - Claimed task (task 4): claimed=True, claimed_by is non-null str (AC#5)
+    """
+
+    def test_task_detail_response_has_claimed_field(self, client: TestClient) -> None:
+        """GET /api/tasks/1 response includes a 'claimed' key."""
+        response = client.get("/api/tasks/1")
+        assert response.status_code == 200
+        body = response.json()
+        assert "claimed" in body, f"Task detail response missing 'claimed' field: {list(body.keys())}"
+
+    def test_task_detail_response_has_claimed_by_field(self, client: TestClient) -> None:
+        """GET /api/tasks/1 response includes a 'claimed_by' key."""
+        response = client.get("/api/tasks/1")
+        assert response.status_code == 200
+        body = response.json()
+        assert "claimed_by" in body, f"Task detail response missing 'claimed_by' field: {list(body.keys())}"
+
+    def test_unclaimed_task_detail_claimed_is_false(self, client: TestClient) -> None:
+        """Unclaimed task (task 1, tag=alpha): detail response has claimed=false."""
+        response = client.get("/api/tasks/1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["claimed"] is False, f"Expected claimed=false for task 1, got {body['claimed']!r}"
+
+    def test_unclaimed_task_detail_claimed_by_is_null(self, client: TestClient) -> None:
+        """Unclaimed task (task 1): detail response has claimed_by=null."""
+        response = client.get("/api/tasks/1")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["claimed_by"] is None, f"Expected claimed_by=null for task 1, got {body['claimed_by']!r}"
+
+    def test_claimed_task_detail_claimed_is_true(self, client: TestClient) -> None:
+        """Claimed task (task 4, tag=delta): detail response has claimed=true."""
+        response = client.get("/api/tasks/4")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["claimed"] is True, f"Expected claimed=true for task 4, got {body['claimed']!r}"
+
+    def test_claimed_task_detail_claimed_by_is_non_null_string(self, client: TestClient) -> None:
+        """Claimed task (task 4): detail response has claimed_by as a non-empty string."""
+        response = client.get("/api/tasks/4")
+        assert response.status_code == 200
+        body = response.json()
+        claimed_by = body["claimed_by"]
+        assert isinstance(claimed_by, str), f"Expected claimed_by to be a string, got {claimed_by!r}"
+        assert len(claimed_by) > 0, "claimed_by must be non-empty for a claimed task"
+
+    def test_claimed_field_is_bool_type(self, client: TestClient) -> None:
+        """The 'claimed' field in task detail is a bool, not a string or other type."""
+        response = client.get("/api/tasks/1")
+        assert response.status_code == 200
+        body = response.json()
+        assert isinstance(body["claimed"], bool), (
+            f"claimed must be bool, got {type(body['claimed']).__name__!r}: {body['claimed']!r}"
+        )
+
+    def test_claimed_by_field_is_str_or_null(self, client: TestClient) -> None:
+        """The 'claimed_by' field in task detail is str or null, not another type."""
+        for task_id in ("1", "4"):
+            response = client.get(f"/api/tasks/{task_id}")
+            assert response.status_code == 200
+            body = response.json()
+            claimed_by = body["claimed_by"]
+            assert claimed_by is None or isinstance(claimed_by, str), (
+                f"claimed_by must be str or null for task {task_id}, got {claimed_by!r}"
+            )
+
+    def test_task_detail_out_model_has_claimed_field(self) -> None:
+        """TaskDetailOut can be constructed with claimed_by; claimed is coerced to bool."""
+        from owlbear_cockpit.models import TaskDetailOut  # noqa: PLC0415
+
+        detail = TaskDetailOut(
+            id=1,
+            title="Test",
+            status="todo",
+            priority="important",
+            body="",
+            updated="2026-01-01T00:00:00",
+            created="2026-01-01T00:00:00",
+            claimed_by="some-agent",
+        )
+        assert detail.claimed is True
+        assert detail.claimed_by == "some-agent"
+
+    def test_task_detail_out_model_null_claimed_by_yields_claimed_false(self) -> None:
+        """TaskDetailOut with claimed_by=None coerces claimed=False."""
+        from owlbear_cockpit.models import TaskDetailOut  # noqa: PLC0415
+
+        detail = TaskDetailOut(
+            id=1,
+            title="Test",
+            status="todo",
+            priority="important",
+            body="",
+            updated="2026-01-01T00:00:00",
+            created="2026-01-01T00:00:00",
+            claimed_by=None,
+        )
+        assert detail.claimed is False
+        assert detail.claimed_by is None
