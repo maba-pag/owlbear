@@ -1,8 +1,8 @@
 [
   {
     "entry_id": "2026-04-18-jsonl-state-machine-all-paths.md",
-    "content_preview": "State machine tests should cover ALL transition paths incl double-claim-without-close (crash/re-claim)",
-    "recommendation": "keep",
-    "reason": "Actionable, non-obvious, but single occurrence — hold for next cycle to check for recurrence"
+    "content_preview": "When implementing state machines from JSONL event logs, test ALL reachable transition paths — including double-event-without-close scenarios",
+    "recommendation": "approve",
+    "reason": "Actionable, non-obvious, scope=test-writer. Single occurrence but 3 cycles without contradiction. Promoted to MCP (id: 59b8aa0f-79b6-4119-83a4-63756039dbc7, approved, scope_agent=test-writer)."
   }
 ]
