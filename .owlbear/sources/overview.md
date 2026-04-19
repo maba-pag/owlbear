@@ -66,6 +66,7 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | react-markdown npm (v10.1.0) | <https://www.npmjs.com/package/react-markdown> | Safe by default, no dSIH, HTML escaped; rehypeSanitize is no-op without rehypeRaw | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
+| remark-gfm npm (v4.0.1) | <https://www.npmjs.com/package/remark-gfm> | GFM plugin for remark — tables, strikethrough, task lists; required for task body rendering | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
 | rehype-sanitize npm (v6.0.0) | <https://www.npmjs.com/package/rehype-sanitize> | Sanitizes HTML in hast tree; defaultSchema follows GitHub-style sanitation | `.owlbear/research/936-sidecar-green-gaps.md` | 2026-04-18 |
 
 ## React Compiler Evaluation (Task #969)
