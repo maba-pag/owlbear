@@ -82,6 +82,23 @@ uv run owlbear status
 
 All commands require the Copilot CLI (`gh extension install github/gh-copilot`).
 
+## Cockpit
+
+The Steering Cockpit is a browser-based UI for managing the kanban board. Build the frontend first, then launch the server:
+
+```bash
+cd serve/cockpit/web && npm run build && cd -
+uv run cockpit
+```
+
+Starts the server on `http://127.0.0.1:8420` and opens it in the default browser. The kanban directory defaults to `.owlbear/kanban/` relative to CWD.
+
+| Variable | Default | Purpose |
+|----------|---------|--------|
+| `COCKPIT_PORT` | `8420` | Override listen port (1–65535) |
+| `COCKPIT_NO_OPEN` | — | Set to `1` to suppress browser auto-open |
+| `KANBAN_DIR` | `.owlbear/kanban/` | Override kanban directory path |
+
 ## Knowledge Base
 
 Populate the knowledge base from a sources manifest:
