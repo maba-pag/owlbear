@@ -16,7 +16,10 @@ Read `r-pipeline-protocol` skill if not already loaded.
 
 **Claiming:** When **orchestrator-dispatched** (parent task ID provided), claim the parent task via `start_work` — it returns the task body, making a separate `show_task` call redundant. When **user-invoked**, read the task via `show_task` without claiming.
 
-**Execution mode:** When **orchestrator-dispatched** (parent task ID provided), execute `create_task` calls directly and report created IDs. When **user-invoked**, output planned tasks for review — do NOT execute them.
+**Execution mode:** Determined by the caller's prompt prefix (mirrors `planner.agent.md` three-tier convention):
+- **`Plan and create: #{id} — ...`** → dispatch mode: execute `create_task` calls directly and report created IDs.
+- **`Plan: ...`** → user mode: present planned breakdown → `askQuestions` approval → create on approve. See Step 5b.
+- **No prefix detected** → fallback: if pipeline markers are present, abort with an error asking the caller to use `Plan and create:` prefix; otherwise default to user mode.
 
 ## Step 1 — Read the Plan
 
@@ -72,6 +75,22 @@ Before creating any task, validate every planned task:
 - **Reject empty bodies** — no AC or scoped content means the task is invalid.
 
 If a planned task fails: refine the title and body or stop. Never create a placeholder task.
+
+## Step 5b — Approval (user mode only)
+
+Skip this step if invoked in dispatch mode (`Plan and create:` prefix) — proceed directly to Step 6.
+
+Present the planned breakdown inline in the chat:
+- Task list table (title, priority, dependencies, tags)
+- Dependency graph (Mermaid)
+- Summary: total count, dependency layers, phase
+
+Call `askQuestions` with two options:
+- "Approve — create all {N} tasks"
+- "Reject — cancel without creating tasks"
+
+**On approve:** proceed to Step 6.  
+**On reject:** stop, report cancellation to the user. Do NOT call `create_task`.
 
 ## Step 6 — Create Tasks
 
