@@ -11,6 +11,12 @@ External repos and resources studied during OwlBear development.
 | @atlaskit/pragmatic-drag-and-drop (npm) | <https://www.npmjs.com/package/@atlaskit/pragmatic-drag-and-drop> | v1.8.0, framework-agnostic, Apache-2.0, 970K/week | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
 | dnd-kit React 19 issues | <https://github.com/clauderic/dnd-kit/issues?q=react+19> | Open issues: #1654 use-client, #1747 removeChild, #1940 sortable lists | `.owlbear/research/933-kanban-board-green.md` | 2026-04-18 |
 
+## CI Sync SPA Bundle (Task #938)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| actions/setup-node docs | <https://github.com/actions/setup-node> | node-version-file, cache options, v4 API | `.owlbear/research/938-ci-sync-spa-bundle.md` | 2026-04-19 |
+
 ## Kanban Board RED Tests (Task #931)
 
 | Source | URL | What | Where Used | Date |
@@ -24,6 +30,15 @@ External repos and resources studied during OwlBear development.
 |--------|-----|------|------------|------|
 | React Router v7 API docs | <https://api.reactrouter.com/v7> | MemoryRouter test wrapper pattern, initialEntries, unified `react-router` package structure in v7 | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
 | React Router v7 install + routing guide | <https://reactrouter.com> | `npm install react-router` install step, Routes/Route/Outlet layout pattern | `.owlbear/research/927-app-shell-tests.md` | 2026-04-18 |
+
+## Cockpit Launch Command (Task #937)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| FastAPI StaticFiles docs | <https://fastapi.tiangolo.com/tutorial/static-files/> | StaticFiles mount pattern, constructor args | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
+| Starlette StaticFiles source | <https://github.com/encode/starlette/blob/master/starlette/staticfiles.py> | html=True behavior — does NOT fallback to root index.html for deep routes | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
+| Starlette StaticFiles docs | <https://starlette.dev/staticfiles/> | html parameter, check_dir parameter | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
+| FastAPI Lifespan Events | <https://fastapi.tiangolo.com/advanced/events/> | asynccontextmanager lifespan pattern | `.owlbear/research/937-cockpit-launch-command.md` | 2026-04-19 |
 
 ## Planner askQuestions Approval (Task #998)
 
@@ -60,6 +75,16 @@ External repos and resources studied during OwlBear development.
 | React.memo API reference | <https://react.dev/reference/react/memo> | Shallow prop comparison, React Compiler note, custom comparator API | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 | useMemo API reference | <https://react.dev/reference/react/useMemo> | Caching calculations, dependency semantics, memo+useMemo synergy pattern | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
 | useCallback API reference | <https://react.dev/reference/react/useCallback> | Function caching, equivalent to useMemo returning function, hook ordering rules | `.owlbear/research/963-memoize-kanbanboard.md` | 2026-04-18 |
+
+## React Compiler Trigger Reassessment (Task #971)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Compiler installation docs | <https://react.dev/learn/react-compiler/installation> | Install steps (`babel-plugin-react-compiler`), vite.config.ts plugin wiring, `"use no memo"` opt-out directive | `.owlbear/research/971-react-compiler-trigger-reassessment.md` | 2026-04-19 |
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Compiler installation docs | <https://react.dev/learn/react-compiler/installation> | babel-plugin-react-compiler, Vite config, React 19 support, ESLint integration | `.owlbear/research/971-react-compiler-trigger-reassessment.md` | 2026-04-19 |
 
 ## Sidecar GREEN Gaps (Task #936)
 
