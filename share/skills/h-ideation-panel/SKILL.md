@@ -94,6 +94,9 @@ The Critic is also invoked standalone by the Mediator (not via panelist loops) a
 | After M2 | "Here are the proposed outcomes. What's wrong with them?" |
 | After M4 | "Here's the chosen approach. What will fail?" |
 | After M5 | "Here's the Brief. What are we sweeping under the rug?" |
+| Ad-hoc (any moment) | Varies by context — see w-ideation → Ad-hoc Critic Invocations |
+
+**Ad-hoc invocations are additive to the four fixed-boundary checks above.** For trigger conditions, tier gating, rate limits, and recording treatment, see `w-ideation` → `## Ad-hoc Critic Invocations`.
 
 ## Critic Loop Protocol
 
