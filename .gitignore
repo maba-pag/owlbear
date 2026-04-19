@@ -40,6 +40,8 @@ htmlcov/
 .hypothesis/
 .benchmarks/
 megalinter-reports/
+test-results/
+playwright-report/
 
 # IDE and editor
 .vscode/*
