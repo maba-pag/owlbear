@@ -11,14 +11,9 @@ updates:
       - "dependencies"
       - "github-actions"
     groups:
-      # Group minor and patch updates together
       github-actions:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
-      # Security updates get their own PRs for visibility
       github-actions-security:
         applies-to: "security-updates"
         patterns:
@@ -34,15 +29,28 @@ updates:
       - "dependencies"
       - "python"
     groups:
-      # Group minor and patch updates together
       python-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
-      # Security updates get their own PRs for visibility
       python-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/serve/cockpit/web"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "javascript"
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
+      npm-security:
         applies-to: "security-updates"
         patterns:
           - "*"

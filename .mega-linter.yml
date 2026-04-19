@@ -1,15 +1,17 @@
 ---
 # MegaLinter configuration for OwlBear
 # https://megalinter.io/configuration/
-# Version: v9.4.0 (python flavor)
+# Version: v9.4.0 (cupcake flavor — general-purpose, includes Python + JS/TS + CSS + HTML)
 
 # Explicit linter list — only what applies to this project
 ENABLE_LINTERS:
   # Python (bandit rules covered via ruff select=["ALL"] S-prefix)
   - PYTHON_RUFF
   - PYTHON_RUFF_FORMAT
-  # PowerShell
-  - POWERSHELL_POWERSHELL
+  # Frontend (Cockpit web — serve/cockpit/web/)
+  - TYPESCRIPT_ES
+  - CSS_STYLELINT
+  - HTML_HTMLHINT
   # Formats
   - JSON_JSONLINT
   - MARKDOWN_MARKDOWNLINT
@@ -37,6 +39,9 @@ ADDITIONAL_EXCLUDED_DIRECTORIES:
   - .venv
   - __pycache__
   - node_modules
+  - coverage             # Vitest/Playwright HTML coverage reports
+  - dist                 # Vite build output
+  - playwright-report    # Playwright HTML reports
 
 # ──────────────────────────────────────────────
 # Linter-specific configuration
