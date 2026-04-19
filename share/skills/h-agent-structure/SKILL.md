@@ -17,6 +17,7 @@ Content reaches agents through four mechanisms, ordered by reliability:
 | `copilot-instructions.md` | Every interaction | Guaranteed | Universal foundation (80%+ of agents need it) |
 | Agent file body | Agent invocation | Guaranteed | Identity, constraints, communication format |
 | Skills (SKILL.md) | Explicit `read_file` or auto-load by relevance | High | Procedures, protocol, domain knowledge |
+| Authority instructions (.instructions.md) | `<critical_rules>` attachment | Guaranteed | Full protocol definitions (cross-agent conventions) |
 | Instruction stubs (.instructions.md) | `applyTo` glob matches a touched file | Medium | Safety nets — pointers to skills |
 
 Pipeline agents load `r-pipeline-protocol` and `r-project-standards` from their `<critical_rules>` reference. This is deterministic because the agent body always loads.
@@ -30,6 +31,16 @@ Pipeline agents load `r-pipeline-protocol` and `r-project-standards` from their 
 | `.agent.md` | Long-lived role with persistent behavior: tool restrictions, model preferences, handoff boundaries, hooks. |
 
 Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or co-located resources are needed.
+
+### Boundary Fitness
+
+| Condition | Tier |
+|-----------|------|
+| ≥ 80% of agents need this content | `copilot-instructions.md` |
+| Content is loaded from `<critical_rules>` | Skill-tier minimum (SKILL.md or authority `.instructions.md`) |
+| Content applies to a single agent only | Agent file body |
+| Content is a step-by-step procedure invoked on-demand | Workflow skill (SKILL.md) |
+| Content is a file-type safety net pointing to a skill | Instruction stub (`.instructions.md`) |
 
 ## Agent Tiers
 
@@ -54,22 +65,6 @@ If a rule applies to 2+ agents identically, it belongs in `r-pipeline-protocol`,
 ### 80% Rule
 
 Content in `copilot-instructions.md` must benefit ≥ 80% of agents. Below that threshold, it goes to a more specific skill or `r-pipeline-protocol`.
-
-### Boundary Fitness
-
-Boundary fitness answers: "Is this content in the correct loading-model unit?" Use this checklist when auditing an existing file or deciding where new content belongs:
-
-| Question | If yes → | If no → |
-|----------|----------|---------|
-| Does ≥ 80% of agents need this? | `copilot-instructions.md` (see 80% Rule) | Narrower unit (skill or agent file) |
-| Does a single execution path touch ≥ 30% of this file? | File boundary is healthy | File likely bundles unrelated concerns — split |
-| Does the file type match the content's purpose? | Correct unit — see File Type Selection table | Wrong unit — move |
-| Is the content a step-by-step procedure? | `w-` workflow skill | Not a workflow skill |
-| Is the content a safety net that points elsewhere? | Instruction stub | Not a stub — see Instruction File Taxonomy |
-
-**Path-coverage heuristic:** If a realistic single-agent invocation exercises fewer than 30% of a file's sections, the file bundles unrelated concerns. Refactor by splitting or by extracting the low-frequency content into a more specific unit.
-
-Reference: [80% Rule](#80-rule) above · [File Type Selection](#file-type-selection) table above.
 
 ### Implicit Encoding
 
@@ -256,7 +251,7 @@ Rules skills define shared conventions referenced by multiple agents. Organized 
 
 Handbook skills carry domain-specific knowledge. Organized by domain topics with recipes and patterns.
 
-## Instruction File Taxonomy (.instructions.md)
+## Instruction File Types
 
 Instruction files (`.instructions.md`) serve two distinct roles. Knowing which role a file plays determines its permitted content.
 
@@ -288,11 +283,11 @@ Current stubs:
 
 ### Authority Files — Embedded Rules
 
-Authority instruction files legitimately contain rules **inline** rather than pointing to a skill. Use an authority file when:
-
-- The rules are universal or near-universal (no single skill boundary fits them)
-- The content is always needed for the target scope — loading a separate skill on every interaction would be wasteful
-- The `applyTo` scope is broad enough that no single skill owns the content
+| Use authority `.instructions.md` when | Rationale |
+|---------------------------------------|-----------|
+| Rules are universal or near-universal | No single skill boundary fits |
+| Content is always needed for the target scope | Loading a skill on every interaction would be wasteful |
+| `applyTo` scope is broad enough that no single skill owns the content | Authority files cross skill boundaries |
 
 Current authority files:
 
@@ -301,11 +296,11 @@ Current authority files:
 | `agent-common.instructions.md` | `share/agents/**` | Channel B protocol and per-agent section-header mapping (domain-scoped) |
 | `owlbear-system.instructions.md` | `**` | Decision heuristics, system awareness, memory governance (universal) |
 
-**Naming:** Hyphenated lowercase. Authority files use generic names reflecting their cross-cutting scope — not domain-specific names like `python.instructions.md`.
-
-**`applyTo` scope:** Domain-scoped authority files target a specific directory tree (`share/agents/**`). Universal authority files use `**`. Stubs target file-extension patterns (`**/*.py`). The `applyTo` value is the first signal of which type a file is.
-
-**`copilot-instructions.md` is NOT an instruction file.** It is a separate loading mechanism (see Loading Model table) that fires on every interaction regardless of `applyTo`. Do not treat it as an authority instruction file — it has its own placement and threshold rules (see 80% Rule).
+| Rule | Value |
+|------|-------|
+| Naming | Hyphenated lowercase; generic cross-cutting names (not domain-specific like `python.instructions.md`) |
+| `applyTo` scope | Domain-scoped: specific directory tree. Universal: `**`. Stub: file-extension pattern (`**/*.py`). |
+| `copilot-instructions.md` | Not an instruction file — separate loading mechanism, not governed by `applyTo`. See Loading Model. |
 
 ## Formatting Rules
 
