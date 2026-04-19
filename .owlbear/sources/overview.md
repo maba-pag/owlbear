@@ -58,6 +58,17 @@ External repos and resources studied during OwlBear development.
 | Source | URL | What | Where Used | Date |
 |--------|-----|------|------------|------|
 | Playwright Mouse API | <https://playwright.dev/docs/api/class-mouse> | `mouse.down()`, `mouse.move()`, `mouse.up()`, `mouse.wheel()` for DnD and scroll testing | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
+
+## React Compiler Enablement (Tasks #970, #971, #1015)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| React Compiler introduction | <https://react.dev/learn/react-compiler/introduction> | Stability, scope, and opt-out strategy | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite config: `react({ babel: { plugins: ['babel-plugin-react-compiler'] } })` | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler debugging | <https://react.dev/learn/react-compiler/debugging> | Breaking patterns, `"use no memo"` escape hatch | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler directives | <https://react.dev/reference/react-compiler/directives> | `"use memo"`/`"use no memo"` per-component opt-out | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler incremental adoption | <https://react.dev/learn/react-compiler/incremental-adoption> | `compilationMode`, per-file overrides | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
+| React Compiler configuration | <https://react.dev/reference/react-compiler/configuration> | `panicThreshold: 'none'`, silent skip behavior | `.owlbear/research/970-react-compiler-pds-interop.md` | 2026-04-18 |
 | Playwright Locator.boundingBox() | <https://playwright.dev/docs/api/class-locator#locator-bounding-box> | Returns `{x, y, width, height}` for card density measurement | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
 | Playwright DnD + Scrolling guide | <https://playwright.dev/docs/input#drag-and-drop> | Manual drag pattern, double mouse-move requirement for dragover, `mouse.wheel()` scroll pattern | `.owlbear/research/957-e2e-kanban-dnd-density-scroll.md` | 2026-04-18 |
 
