@@ -4,7 +4,6 @@ description: "Thinking companion — Mediator guide for transforming problems, i
 argument-hint: "Ideate: {idea, problem, or feature -- drop reference files in .owlbear/briefs/draft-new/input/}"
 user-invocable: true
 disable-model-invocation: true
-model: Claude Opus 4.7 (copilot)
 tools:
   [vscode/memory, vscode/askQuestions, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/list_tasks, owlbear-kanban/show_task, 'ddgs/search_text']
 agents:

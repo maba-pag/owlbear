@@ -4,7 +4,6 @@ description: "Pragmatist synthesis subagent — reads all panelist stances and p
 argument-hint: "Synthesize: {working directory path}"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Opus 4.7 (copilot)
 tools: [read/readFile, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
 agents: []
 ---

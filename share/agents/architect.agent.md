@@ -4,7 +4,6 @@ description: "Backlog gate — refine acceptance criteria, ensure architectural 
 argument-hint: "Architect Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Opus 4.7 (copilot)
 tools:
   [vscode/memory, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: [challenger, scribe, planner]
