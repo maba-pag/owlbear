@@ -87,6 +87,25 @@ jobs:
             README-consumer.md
           git mv README-consumer.md README.md
 
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
+        with:
+          node-version-file: serve/cockpit/web/.nvmrc
+
+      - name: Build cockpit SPA
+        working-directory: serve/cockpit/web
+        run: npm ci && npm run build
+
+      - name: Assert SPA bundle exists
+        run: |
+          if [ ! -f serve/cockpit/dist/index.html ]; then
+            echo "ERROR: serve/cockpit/dist/index.html not found — build may have failed or outDir is misconfigured."
+            exit 1
+          fi
+
+      - name: Stage built SPA bundle
+        run: git add -f serve/cockpit/dist/
+
       - name: Detect changes
         run: |
           if [ "$MAIN_EXISTS" = "true" ] && git diff --staged --quiet HEAD 2>/dev/null; then
