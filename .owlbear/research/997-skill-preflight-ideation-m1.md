@@ -67,7 +67,7 @@ Insert a "Skill Pre-Flight" sub-step in M1 between steps 5 and 6 with this struc
 4. If existing conventions contradict or inform assumptions → surface as M1 probes before tier confirmation.
 5. If nothing relevant → continue normally.
 
-Include keyword → skill mapping examples in the step definition. Mark explicitly as "not a substitute for M3 Explore."
+Include keyword → skill mapping examples in the step definition. Examples: blocking / Decision Request → `r-pipeline-protocol`; kanban / board → `h-mcp-kanban`; agents / pipeline → `agent-common.instructions.md`. Mark explicitly as "not a substitute for M3 Explore."
 
 Challenge: skipped — trivial skill-file modification, no architectural/security impact.
 
