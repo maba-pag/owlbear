@@ -39,7 +39,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 - **Always search the codebase** before approving — verify existing patterns, interfaces, and potential conflicts.
 - **Atomicity:** if "and" joins unrelated concerns, split the task. Each task gets one responsibility.
 - **Always route to `todo`, never to `in-progress`.** The test-writer must process every task, even non-implementation ones.
-- **Decomposition detection.** After claiming the task, if the body contains `"Needs decomposition:"` but NOT `"## Planning"` after, delegate to the **planner** agent immediately. After the planner succeeds, use `end_work`. The planner's appended `## Planning` section prevents re-triggering. Do not perform architecture review on decomposition tasks.
+- **Decomposition detection.** After claiming the task, if the body contains `"Needs decomposition:"` but NOT `"## Planning"` after, delegate to the **planner** agent immediately using the prompt `Plan and create: #{task_id} — {feature description from task body}`. After the planner succeeds, use `end_work`. The planner's appended `## Planning` section prevents re-triggering. Do not perform architecture review on decomposition tasks.
 - **Fast-path approval for `type:user-action` re-entry.** If the body contains `## Action Completed` (written by scribe on AR resolution) AND the AC checkboxes still match the action that was completed, approve to `todo` without full re-review. If AC has been edited since the marker was written, run full review. This prevents the #597-style 4+ futile cycle loop documented in `r-pipeline-protocol` §5.
 
 </critical_rules>
@@ -64,7 +64,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 |-------|------|---------|
 | challenger | Validate design decisions before approval | `Challenge the decision to use a singleton registry pattern` |
 | scribe | Design choice with product implications needs user input | `Scribe: task_id=42, mode=check-or-create, concern="API surface area for skill loading"` |
-| planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan: {feature description from task body}` |
+| planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan and create: #{task_id} — {feature description from task body}` |
 
 </subagents>
 
