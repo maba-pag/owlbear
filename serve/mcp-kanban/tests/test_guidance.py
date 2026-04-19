@@ -76,6 +76,23 @@ class TestFromAC_KanbanTaskGuidanceField:
         keys = list(task.model_dump().keys())
         assert keys[0] == "guidance", f"Expected 'guidance' as first serialization key, got {keys[0]!r}"
 
+    def test_model_validate_from_engine_dict_without_guidance_gives_empty_list(
+        self,
+    ) -> None:
+        """AC6 (#986): model_validate from engine Task dict (no guidance key) → guidance=[]."""
+        engine_dict = {
+            "id": 42,
+            "title": "Engine task",
+            "status": "todo",
+            "priority": "important",
+            "created": "2026-01-01",
+            "updated": "2026-01-01",
+        }
+        task = KanbanTask.model_validate(engine_dict)
+        assert task.guidance == [], (
+            f"Expected guidance=[] when validating dict with no 'guidance' key, got {task.guidance!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_CollectGuidance
@@ -176,31 +193,3 @@ class TestFromAC_CollectGuidance:
         result = collect_guidance("unknown_op", before, after)  # type: ignore[misc]
         assert result == [], f"Expected [] for unknown operation, got {result!r}"
 
-
-# ---------------------------------------------------------------------------
-# TestBuilderDiscovered
-# ---------------------------------------------------------------------------
-
-
-class TestBuilderDiscovered:
-    """Builder-discovered tests for KanbanTask.guidance field.
-
-    AC6 (#986): model_validate from engine Task dict (no guidance key) → guidance=[].
-    """
-
-    def test_model_validate_from_dict_without_guidance_key_gives_empty_list(
-        self,
-    ) -> None:
-        """AC6: KanbanTask.model_validate with no 'guidance' key in dict → guidance=[]."""
-        engine_dict = {
-            "id": 42,
-            "title": "Engine task",
-            "status": "todo",
-            "priority": "important",
-            "created": "2026-01-01",
-            "updated": "2026-01-01",
-        }
-        task = KanbanTask.model_validate(engine_dict)
-        assert task.guidance == [], (
-            f"Expected guidance=[] when validating dict with no 'guidance' key, got {task.guidance!r}"
-        )
