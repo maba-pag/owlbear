@@ -16,6 +16,8 @@ This skill does NOT claim a task — the scribe operates on behalf of the callin
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
 
+> **Block-time guidance:** When the kanban MCP server returns a `guidance` field containing the DR-required message on a block operation, it is directing the calling agent to this workflow. Follow Mode 1 (check-or-create) with the task ID from the blocked operation.
+
 ## Modes
 
 ### Mode 1: check-or-create
