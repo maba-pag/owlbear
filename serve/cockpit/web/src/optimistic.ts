@@ -11,7 +11,10 @@ export function useOptimistic<T>(initial: T): UseOptimisticResult<T> {
   const snapshot = useRef<T>(initial)
 
   function mutate(updater: (s: T) => T): void {
-    setState((prev) => updater(prev))
+    setState((prev) => {
+      snapshot.current = prev
+      return updater(prev)
+    })
   }
 
   function rollback(): void {

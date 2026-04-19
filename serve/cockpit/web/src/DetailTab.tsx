@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 
 export interface TaskDetail {
   id: number
@@ -122,7 +124,7 @@ export default function DetailTab({ task }: DetailTabProps) {
       {editBody ? (
         <textarea data-field="body" value={body} onChange={(e) => setBody(e.target.value)} />
       ) : (
-        <ReactMarkdown>{t.body}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{t.body}</ReactMarkdown>
       )}
       <button data-testid="body-edit-toggle" onClick={() => setEditBody((v) => !v)}>
         Edit
