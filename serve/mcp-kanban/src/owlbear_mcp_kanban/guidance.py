@@ -60,10 +60,13 @@ def _is_block_operation(
     after: KanbanTask,
     kwargs: dict[str, object],
 ) -> bool:
+    # Legacy operation aliases (pre-AC)
     if operation in _BLOCK_OP_ALIASES:
         return True
-    if operation == "edit_task" and after.blocked:
+    # AC: Block DR rule fires for ANY operation when after.blocked is True
+    if after.blocked:
         return True
+    # Legacy trigger: caller signals blocking via outcome kwarg before setting after.blocked
     return operation == "end_work" and kwargs.get("outcome") == "block"
 
 
