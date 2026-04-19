@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import ActivityTab from '../ActivityTab'
+import ActivityTab from '../components/ActivityTab'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 

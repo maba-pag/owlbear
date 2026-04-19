@@ -9,16 +9,16 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import type { HealthState } from '../usePolling'
+import type { HealthState } from '../hooks/usePolling'
 
 // ─── Module mock ──────────────────────────────────────────────────────────────
 // usePolling is mocked so tests control which health state Shell receives.
 // The factory produces a vi.fn() with no default impl; beforeEach sets it.
-vi.mock('../usePolling', () => ({
+vi.mock('../hooks/usePolling', () => ({
   usePolling: vi.fn(),
 }))
 
-import { usePolling } from '../usePolling'
+import { usePolling } from '../hooks/usePolling'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function stubHealth(health: HealthState) {

@@ -5,6 +5,23 @@ import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
 
+function cspPlugin() {
+  const policy = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+  ].join('; ')
+  return {
+    name: 'csp-meta',
+    apply: 'build' as const,
+    transformIndexHtml(html: string): string {
+      return html.replace('</head>', `  <meta http-equiv="Content-Security-Policy" content="${policy}">\n  </head>`)
+    },
+  }
+}
+
 function pdsPartialsPlugin() {
   return {
     name: 'pds-partials',
@@ -26,7 +43,7 @@ function pdsPartialsPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), pdsPartialsPlugin()],
+  plugins: [react(), pdsPartialsPlugin(), cspPlugin()],
   build: {
     outDir: '../dist',
     emptyOutDir: true,

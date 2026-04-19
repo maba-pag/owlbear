@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react'
 import { Routes, Route } from 'react-router'
 import KanbanBoard from './KanbanBoard'
-import { usePolling } from './usePolling'
+import { usePolling } from './hooks/usePolling'
 import './Shell.css'
 
 function Shell() {

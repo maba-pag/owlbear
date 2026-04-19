@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import DetailTab, { type TaskDetail } from '../DetailTab'
+import DetailTab, { type TaskDetail } from '../components/DetailTab'
 
 // ─── Mock react-markdown to capture plugin props ──────────────────────────────
 // vi.hoisted ensures the spy is available before module evaluation.

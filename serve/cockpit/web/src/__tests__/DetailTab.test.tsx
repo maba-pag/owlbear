@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import DetailTab, { type TaskDetail } from '../DetailTab'
+import DetailTab, { type TaskDetail } from '../components/DetailTab'
 
 // ─── Mock react-markdown ──────────────────────────────────────────────────────
 // Factory-based mock works even before the real package is installed.
