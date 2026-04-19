@@ -510,6 +510,7 @@ class TestFromAC_BlockUserTag:
         )
         assert response.status_code == 200
         assert "block:user" in response.json()["tags"]
+        assert response.json()["blocked"] is True
 
     def test_unblock_removes_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC2: Unblocking via cockpit edit_task removes 'block:user' from task tags."""
@@ -524,6 +525,7 @@ class TestFromAC_BlockUserTag:
         )
         assert response.status_code == 200
         assert "block:user" not in response.json()["tags"]
+        assert response.json()["blocked"] is False
 
     def test_block_user_tag_is_idempotent(self, client: TestClient, engine: KanbanEngine) -> None:
         """AC3: Blocking a second time doesn't create duplicate 'block:user' tags."""
@@ -602,6 +604,9 @@ class TestFromAC_BlockUserTagConflict:
         assert response.status_code == 200
         assert "block:user" in response.json()["tags"], (
             f"Expected block:user preserved during block+tag-diff, got {response.json()['tags']!r}"
+        )
+        assert "scope:test" in response.json()["tags"], (
+            f"Expected scope:test sibling tag preserved, got {response.json()['tags']!r}"
         )
 
     def test_unblock_conflict_removes_block_user_tag(self, client: TestClient, engine: KanbanEngine) -> None:
