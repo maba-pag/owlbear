@@ -1,138 +1,7 @@
-import { useState, useEffect, useRef, memo, useMemo, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useBoard, type Board, type Task } from './hooks/useBoard'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface BoardStatus {
-  name: string
-}
-
-interface Board {
-  statuses: BoardStatus[]
-  priorities: string[]
-  valid_transitions: Record<string, string[]>
-}
-
-interface Task {
-  id: number
-  title: string
-  status: string
-  priority: string
-  tags: string[]
-  blocked: boolean
-  block_reason: string | null
-  claimed: boolean
-}
-
-interface TasksResponse {
-  tasks: Task[]
-  mtime: number
-}
-
-interface UseBoardResult {
-  board: Board | null
-  tasks: Task[]
-  loading: boolean
-  error: string | null
-  isFetching: boolean
-  isStale: boolean
-  refetchTasks: () => void
-}
-
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
-export function useBoard(): UseBoardResult {
-  const [board, setBoard] = useState<Board | null>(null)
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isFetching, setIsFetching] = useState(false)
-  const [isStale, setIsStale] = useState(false)
-  const mtimeRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    let cancelled = false
-
-    async function load() {
-      try {
-        const [boardRes, tasksRes] = await Promise.all([
-          fetch('/api/board', { signal: controller.signal }),
-          fetch('/api/tasks', { signal: controller.signal }),
-        ])
-
-        if (!boardRes.ok) throw new Error(`Board API error: ${boardRes.status}`)
-        if (!tasksRes.ok) throw new Error(`Tasks API error: ${tasksRes.status}`)
-
-        const boardData = (await boardRes.json()) as Board
-        const tasksData = (await tasksRes.json()) as TasksResponse
-
-        if (!cancelled) {
-          mtimeRef.current = tasksData.mtime
-          setBoard(boardData)
-          setTasks(tasksData.tasks)
-          setLoading(false)
-        }
-      } catch (err) {
-        if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
-          setError(err instanceof Error ? err.message : 'Failed to load board')
-          setLoading(false)
-        }
-      }
-    }
-
-    async function pollTasks() {
-      setIsFetching(true)
-      try {
-        const res = await fetch('/api/tasks', { signal: controller.signal })
-        if (!res.ok) throw new Error(`Poll error: ${res.status}`)
-        const data = (await res.json()) as TasksResponse
-        if (!cancelled) {
-          if (data.mtime !== mtimeRef.current) {
-            mtimeRef.current = data.mtime
-            setTasks(data.tasks)
-          }
-          setError(null)
-          setIsStale(false)
-        }
-      } catch (err) {
-        if (!cancelled && !(err instanceof DOMException && err.name === 'AbortError')) {
-          setError(err instanceof Error ? err.message : 'Poll failed')
-          setIsStale(true)
-        }
-      } finally {
-        if (!cancelled) setIsFetching(false)
-      }
-    }
-
-    void load()
-    const intervalId = setInterval(() => void pollTasks(), 3000)
-
-    return () => {
-      cancelled = true
-      controller.abort()
-      clearInterval(intervalId)
-    }
-  }, [])
-
-  function refetchTasks() {
-    void (async () => {
-      try {
-        const res = await fetch('/api/tasks')
-        if (res.ok) {
-          const data = (await res.json()) as TasksResponse
-          if (data.mtime !== mtimeRef.current) {
-            mtimeRef.current = data.mtime
-            setTasks(data.tasks)
-          }
-        }
-      } catch {
-        // silent — board data stays stale
-      }
-    })()
-  }
-
-  return { board, tasks, loading, error, isFetching, isStale, refetchTasks }
-}
+export { useBoard }
 
 // ─── Priority colours ───────────────────────────────────────────────────────
 
@@ -153,7 +22,7 @@ interface CardProps {
   onDragEnd: () => void
 }
 
-export const Card = memo(function Card({ task, onContextMenu, onDragStart, onDragEnd }: CardProps) {
+export function Card({ task, onContextMenu, onDragStart, onDragEnd }: CardProps) {
   return (
     <div
       data-testid="task-card"
@@ -189,7 +58,7 @@ export const Card = memo(function Card({ task, onContextMenu, onDragStart, onDra
       {task.claimed && <span data-testid="running-indicator">▶</span>}
     </div>
   )
-})
+}
 
 // ─── Column ───────────────────────────────────────────────────────────────────
 
@@ -203,7 +72,7 @@ interface ColumnProps {
   isValidDragTarget: boolean
 }
 
-export const Column = memo(function Column({
+export function Column({
   status,
   tasks,
   priorities,
@@ -214,14 +83,11 @@ export const Column = memo(function Column({
 }: ColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false)
 
-  const sorted = useMemo(
-    () => [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority)),
-    [tasks, priorities],
-  )
+  const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
 
-  const handleCardDragStart = useCallback(() => {
+  const handleCardDragStart = () => {
     onDragStart(status)
-  }, [onDragStart, status])
+  }
 
   return (
     <div
@@ -259,7 +125,7 @@ export const Column = memo(function Column({
       )}
     </div>
   )
-})
+}
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -297,29 +163,27 @@ export default function KanbanBoard() {
     }
   }, [contextMenu])
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, task: Task) => {
+  const handleContextMenu = (e: React.MouseEvent, task: Task) => {
     e.preventDefault()
     const transitions = board?.valid_transitions[task.status] ?? []
     if (transitions.length === 0) return
     setMoveError(null)
     setContextMenu({ taskId: task.id, taskStatus: task.status, x: e.clientX, y: e.clientY })
-  }, [board])
+  }
 
-  const handleDragStart = useCallback((status: string) => {
+  const handleDragStart = (status: string) => {
     setDragSourceStatus(status)
-  }, [])
+  }
 
-  const handleDragEnd = useCallback(() => {
+  const handleDragEnd = () => {
     setDragSourceStatus(null)
-  }, [])
+  }
 
-  const tasksByStatus = useMemo(() => {
-    return tasks.reduce<Record<string, Task[]>>((acc, task) => {
-      if (!acc[task.status]) acc[task.status] = []
-      acc[task.status].push(task)
-      return acc
-    }, {})
-  }, [tasks])
+  const tasksByStatus = tasks.reduce<Record<string, Task[]>>((acc, task) => {
+    if (!acc[task.status]) acc[task.status] = []
+    acc[task.status].push(task)
+    return acc
+  }, {})
 
   if (loading) {
     return <div data-testid="loading-indicator">Loading…</div>

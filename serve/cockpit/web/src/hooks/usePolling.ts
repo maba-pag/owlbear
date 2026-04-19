@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useConnectionHealth, type HealthState } from './useConnectionHealth'
 
 export type { HealthState }
@@ -14,12 +14,16 @@ export function usePolling(url: string): UsePollingResult {
   const lastMtimeRef = useRef<number | null>(null)
   const skipRef = useRef<boolean>(false)
   const { health, markHealthy, updateHealth } = useConnectionHealth()
+  const markHealthyRef = useRef(markHealthy)
+  const updateHealthRef = useRef(updateHealth)
+  markHealthyRef.current = markHealthy
+  updateHealthRef.current = updateHealth
 
-  const poll = useCallback(async () => {
+  const poll = async () => {
     try {
       const res = await fetch(url, { method: 'GET' })
       if (res.ok) {
-        markHealthy()
+        markHealthyRef.current()
         const data = (await res.json()) as { mtime?: number }
         if (data.mtime !== undefined && data.mtime !== lastMtimeRef.current) {
           lastMtimeRef.current = data.mtime
@@ -29,8 +33,8 @@ export function usePolling(url: string): UsePollingResult {
     } catch {
       // network error — health degrades by elapsed time
     }
-    updateHealth()
-  }, [url, markHealthy, updateHealth])
+    updateHealthRef.current()
+  }
 
   useEffect(() => {
     void poll()
@@ -42,7 +46,7 @@ export function usePolling(url: string): UsePollingResult {
       void poll()
     }, 3000)
     return () => clearInterval(id)
-  }, [poll])
+  }, [url]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     health,

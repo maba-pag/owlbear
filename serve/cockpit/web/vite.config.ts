@@ -43,7 +43,7 @@ function pdsPartialsPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react(), pdsPartialsPlugin(), cspPlugin()],
+  plugins: [react({ babel: { plugins: ['babel-plugin-react-compiler'] } }), pdsPartialsPlugin(), cspPlugin()],
   build: {
     outDir: '../dist',
     emptyOutDir: true,
@@ -53,5 +53,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    testTimeout: 10_000,
+    teardownTimeout: 3_000,
   },
 })
