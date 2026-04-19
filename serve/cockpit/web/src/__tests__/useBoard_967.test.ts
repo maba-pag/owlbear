@@ -354,7 +354,11 @@ describe('TestFromAC_useBoardHook967', () => {
     it('calls AbortController.abort when the hook unmounts', async () => {
       const abortSpy = vi.spyOn(AbortController.prototype, 'abort')
       // Fetch never resolves — keeps a request in-flight at unmount time
-      const fetchMock = vi.fn(() => new Promise<never>(() => {}))
+      const fetchMock = vi.fn((_url: string, init?: RequestInit) =>
+        new Promise<never>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        }),
+      )
       vi.stubGlobal('fetch', fetchMock)
       const { unmount } = renderHook(() => useBoard())
       await act(async () => {})

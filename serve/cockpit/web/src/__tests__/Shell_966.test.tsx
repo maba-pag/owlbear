@@ -42,7 +42,11 @@ describe('TestFromAC_TrafficLight', () => {
   beforeEach(() => {
     // KanbanBoard fires fetch on mount; never-resolving keeps it in loading
     // state, preventing act() warnings.
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
+      new Promise<never>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      }),
+    ))
     stubHealth('green')
   })
 

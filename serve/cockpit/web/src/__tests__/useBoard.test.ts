@@ -360,11 +360,13 @@ describe('TestFromAC_useBoardPolling', () => {
   describe('unmount cleanup', () => {
     it('calls AbortController.abort on unmount', async () => {
       const abortSpy = vi.spyOn(AbortController.prototype, 'abort')
-      const fetchMock = vi.fn((url: string) => {
+      const fetchMock = vi.fn((url: string, init?: RequestInit) => {
         if ((url as string).includes('/api/board')) {
           return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
         }
-        return new Promise<never>(() => {}) // never resolves — keeps request in-flight
+        return new Promise<never>((_resolve, reject) => { // never resolves — keeps request in-flight
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        })
       })
       vi.stubGlobal('fetch', fetchMock)
       const { unmount } = renderHook(() => useBoard())

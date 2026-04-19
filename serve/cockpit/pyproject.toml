@@ -12,5 +12,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/owlbear_cockpit"]
 
+[project.scripts]
+cockpit = "owlbear_cockpit.main:run"
+
 [tool.uv.sources]
 owlbear-kanban = { workspace = true }

@@ -106,7 +106,11 @@ function stubFetchError() {
 }
 
 function stubFetchPending() {
-  vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+  vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
+    new Promise<never>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+    }),
+  ))
 }
 
 // ─── Render helper ────────────────────────────────────────────────────────────
