@@ -51,6 +51,26 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 | T3 — Support | scribe, planner, memory-curator | If applicable — from critical_rules |
 | T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, test-curator, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-pragmatist, ideation-security | Not needed |
 
+## Agent Extraction Markers
+
+### Extract when (≥ 2 apply)
+
+- Concern requires a distinct `tools:` allowlist.
+- Concern has an independent failure domain (its failure should not abort the parent).
+- Same delegation pattern appears in 2+ agents.
+- Concern requires a distinct model (cost, capability, or context-length profile).
+- Concern's procedure would exceed one screen inline in the parent's `<critical_rules>`.
+
+### Defer extraction when (< 2 extract conditions apply)
+
+- No distinct `tools:` or model requirements — parent's allowlist covers the concern.
+- Concern never fails independently — any failure aborts the parent.
+- Concern fits in a single `<critical_rules>` bullet.
+
+### Precedent
+
+`quality-runner` extracted from `builder`: independent failure domain (quality failures reported, not propagated) + distinct tool needs (test runner, linter) + reused by reviewer.
+
 ## Principles
 
 ### Rule of Two
