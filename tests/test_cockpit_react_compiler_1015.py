@@ -3,6 +3,9 @@
 Covers:
 - AC#1: babel-plugin-react-compiler installed as devDependency in package.json
 - AC#2: vite.config.ts updated with babel plugin configuration
+- AC#3: npm run build succeeds clean (no TypeScript type errors)
+- AC#4: Vitest suite passes with no unhandled errors
+- AC#5: Playwright E2E passes (requires npx playwright install chromium)
 - AC#6: Remove redundant React.memo/useMemo/useCallback (11 callsites across 5 modules)
   - KanbanBoard.tsx: Card (memo), Column (memo), Column.sorted (useMemo),
     Column.handleCardDragStart (useCallback), KanbanBoard.handleContextMenu (useCallback),
@@ -16,6 +19,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -269,4 +273,91 @@ class TestFromAC_KanbanBoard963TestCleanup:
         assert "$$typeof" not in content, (
             "KanbanBoard_963.test.tsx still checks $$typeof (React.memo marker) — "
             "delete the file or rewrite without structural assertions"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC#3, AC#4, AC#5 — Subprocess: build, Vitest, Playwright E2E
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.slow
+class TestFromAC_BuildTestE2EVerification:
+    """AC#3/4/5: subprocess verification of npm build, Vitest suite, and Playwright E2E.
+
+    These tests run actual npm commands and are marked slow.
+    They verify the runtime integration contract that static file-analysis cannot cover.
+
+    Prerequisites:
+      - AC#5 (Playwright): run `npx playwright install chromium` in serve/cockpit/web/ once.
+    """
+
+    def test_npm_build_succeeds_clean(self) -> None:
+        """AC#3: npm run build exits 0 and emits no TypeScript type errors.
+
+        A clean build must produce zero `error TS` lines in tsc output.
+        Pre-existing type errors in test files must be resolved or those files
+        excluded from the production tsconfig.
+        """
+        result = subprocess.run(
+            ["npm", "run", "build"],
+            cwd=_WEB,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, (
+            f"npm run build failed (exit {result.returncode}):\n{combined[-2000:]}"
+        )
+        assert "error TS" not in combined, (
+            "TypeScript type errors found in build output — fix or exclude test "
+            "files from the production tsconfig so the compiler-enabled build is clean:\n"
+            + combined[-2000:]
+        )
+
+    def test_vitest_suite_no_unhandled_errors(self) -> None:
+        """AC#4: npm test exits 0 and reports no unhandled errors.
+
+        `vitest run` may exit 0 while still reporting unhandled async errors.
+        This test checks both the exit code and the absence of the
+        "Unhandled Errors" section in Vitest output.
+        """
+        result = subprocess.run(
+            ["npm", "test"],
+            cwd=_WEB,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, (
+            f"npm test failed (exit {result.returncode}):\n{combined[-2000:]}"
+        )
+        assert "Unhandled Errors" not in combined, (
+            "Vitest reported unhandled errors — inspect and fix the cleanup "
+            "race condition (suspected: KanbanBoard.test.tsx ownerDocument error):\n"
+            + combined[-2000:]
+        )
+
+    def test_playwright_e2e_passes(self) -> None:
+        """AC#5: npm run test:e2e exits 0.
+
+        Requires Playwright chromium browser to be installed:
+            npx playwright install chromium   (run once after npm install)
+
+        The webServer config starts `npm run build && npm run preview` automatically.
+        """
+        result = subprocess.run(
+            ["npm", "run", "test:e2e"],
+            cwd=_WEB,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, (
+            f"npm run test:e2e failed (exit {result.returncode}) — "
+            "ensure `npx playwright install chromium` has been run:\n"
+            + combined[-2000:]
         )
