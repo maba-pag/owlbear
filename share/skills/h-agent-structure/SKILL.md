@@ -55,6 +55,22 @@ If a rule applies to 2+ agents identically, it belongs in `r-pipeline-protocol`,
 
 Content in `copilot-instructions.md` must benefit ≥ 80% of agents. Below that threshold, it goes to a more specific skill or `r-pipeline-protocol`.
 
+### Boundary Fitness
+
+Boundary fitness answers: "Is this content in the correct loading-model unit?" Use this checklist when auditing an existing file or deciding where new content belongs:
+
+| Question | If yes → | If no → |
+|----------|----------|---------|
+| Does ≥ 80% of agents need this? | `copilot-instructions.md` (see 80% Rule) | Narrower unit (skill or agent file) |
+| Does a single execution path touch ≥ 30% of this file? | File boundary is healthy | File likely bundles unrelated concerns — split |
+| Does the file type match the content's purpose? | Correct unit — see File Type Selection table | Wrong unit — move |
+| Is the content a step-by-step procedure? | `w-` workflow skill | Not a workflow skill |
+| Is the content a safety net that points elsewhere? | Instruction stub | Not a stub — see Instruction File Taxonomy |
+
+**Path-coverage heuristic:** If a realistic single-agent invocation exercises fewer than 30% of a file's sections, the file bundles unrelated concerns. Refactor by splitting or by extracting the low-frequency content into a more specific unit.
+
+Reference: [80% Rule](#80-rule) above · [File Type Selection](#file-type-selection) table above.
+
 ### Implicit Encoding
 
 Every section in an agent file can carry more than its primary function:
@@ -240,7 +256,11 @@ Rules skills define shared conventions referenced by multiple agents. Organized 
 
 Handbook skills carry domain-specific knowledge. Organized by domain topics with recipes and patterns.
 
-## Instruction Stub Format (.instructions.md)
+## Instruction File Taxonomy (.instructions.md)
+
+Instruction files (`.instructions.md`) serve two distinct roles. Knowing which role a file plays determines its permitted content.
+
+### Stubs — Safety Nets
 
 Instruction stubs are **safety nets** — minimal files that catch agents working in a domain without having loaded the relevant skill.
 
@@ -260,11 +280,32 @@ A stub is justified when there is a realistic scenario where an agent edits file
 Current stubs:
 
 | File | applyTo | Points to |
-|------|---------|-----------|
+|------|---------|----------|
 | `python.instructions.md` | `"**/*.py"` | `h-python-conventions` |
 | `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
 | `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
 | `agents-and-skills.instructions.md` | `"share/agents/**,share/skills/**"` | `h-agent-structure` |
+
+### Authority Files — Embedded Rules
+
+Authority instruction files legitimately contain rules **inline** rather than pointing to a skill. Use an authority file when:
+
+- The rules are universal or near-universal (no single skill boundary fits them)
+- The content is always needed for the target scope — loading a separate skill on every interaction would be wasteful
+- The `applyTo` scope is broad enough that no single skill owns the content
+
+Current authority files:
+
+| File | applyTo | Role |
+|------|---------|------|
+| `agent-common.instructions.md` | `share/agents/**` | Channel B protocol and per-agent section-header mapping (domain-scoped) |
+| `owlbear-system.instructions.md` | `**` | Decision heuristics, system awareness, memory governance (universal) |
+
+**Naming:** Hyphenated lowercase. Authority files use generic names reflecting their cross-cutting scope — not domain-specific names like `python.instructions.md`.
+
+**`applyTo` scope:** Domain-scoped authority files target a specific directory tree (`share/agents/**`). Universal authority files use `**`. Stubs target file-extension patterns (`**/*.py`). The `applyTo` value is the first signal of which type a file is.
+
+**`copilot-instructions.md` is NOT an instruction file.** It is a separate loading mechanism (see Loading Model table) that fires on every interaction regardless of `applyTo`. Do not treat it as an authority instruction file — it has its own placement and threshold rules (see 80% Rule).
 
 ## Formatting Rules
 
