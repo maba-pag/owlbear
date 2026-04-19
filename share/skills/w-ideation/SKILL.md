@@ -39,16 +39,22 @@ On agent start:
 
 The Mediator is in **Investigator mode** for Moments 1–3 — restates what it heard, probes root causes, and narrows from vague to specific.
 
-**Turn-ending rule (applies to every M1 step that elicits a user reply):** End the turn with `askQuestions`. For open investigative probes (steps 2–5 below), use `allowFreeformInput: true` with no fixed options. The probe text goes in the question; the user's reply arrives as `freeText`. This prevents silent stalls and keeps the conversation event-driven.
+**Turn-ending rule (applies to every M1 step that elicits a user reply):** End the turn with `askQuestions`. For open investigative probes (steps 2–6 below), use `allowFreeformInput: true` with no fixed options. The probe text goes in the question; the user's reply arrives as `freeText`. This prevents silent stalls and keeps the conversation event-driven.
 
 1. Receive the user's idea, pain, or request.
 2. Restate what you heard; check understanding. → end with `askQuestions` (freeform).
 3. Dig into the trigger: what happened? what breaks? who's affected? what's the cost of inaction? → end with `askQuestions` (freeform).
 4. Narrow from vague to specific ("what's really going wrong?"). → end with `askQuestions` (freeform).
 5. Catch disguised solutions ("that's a solution — what's the need underneath?"). → end with `askQuestions` (freeform).
-6. Write Problem Statement to `context.md` once stable.
-7. Invoke `ideation-critic` standalone: "Here's the stated problem. Is this the real problem?"
-8. If Critic surfaces a material issue, loop back with the user (again ending with `askQuestions`).
+6. **Skill Pre-Flight** *(1–2 minutes, 2–3 search calls + skim headlines — not a substitute for M3 Explore)*:
+   a. Extract 2–3 domain keywords from the narrowed problem. Examples: "blocking" → `r-pipeline-protocol`; "kanban" → `h-mcp-kanban`; "agents" → `agent-common.instructions.md`.
+   b. Use `textSearch` / `fileSearch` to grep `share/skills/` and `share/instructions/` for those keywords.
+   c. Skim matched section headers only — do not read full files.
+   d. If a matched section contradicts an assumption made in steps 2–5, surface it as an M1 probe → end with `askQuestions` (`allowFreeformInput: true`).
+   e. If no relevant matches → continue normally.
+7. Write Problem Statement to `context.md` once stable.
+8. Invoke `ideation-critic` standalone: "Here's the stated problem. Is this the real problem?"
+9. If Critic surfaces a material issue, loop back with the user (again ending with `askQuestions`).
 
 **Worked example — open M1 probe with freeform input:**
 
@@ -141,13 +147,14 @@ The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting sy
 
 **Mediator mode:** Facilitative (synthesis → Brief). **Active subagents:** `ideation-critic` standalone (final check).
 
-1. Synthesise `context.md` + `decisions.md` + `synthesis.md` into the Brief structure (see [Brief Artifact](#brief-artifact) below).
-2. Optionally open with a success narrative: "A month from now, you run one command and…"
-3. Invoke `ideation-critic` standalone: "Here's the Brief. What are we sweeping under the rug?"
-4. Address any Critic findings with the user.
-5. Use askQuestions to offer the user a choice: read the Brief on their own, or be walked through it chunk by chunk. See [Brief Walkthrough Protocol](#brief-walkthrough-protocol) below.
-6. After walkthrough or self-review: use askQuestions for Brief approval (approve / adjust / rework options). The Brief is the **contract** between thinking and building.
-7. Write approved Brief to `brief.md`.
+1. **Offer walkthrough first (first user-facing action).** Before showing any Brief content in the conversation, use askQuestions to offer the walkthrough choice. See [Brief Walkthrough Protocol → Walkthrough Offer](#brief-walkthrough-protocol). Brief content (even partial) must never appear in chat before this offer — doing so is a protocol violation.
+2. Synthesise `context.md` + `decisions.md` + `synthesis.md` into the Brief structure (see [Brief Artifact](#brief-artifact) below). Do not display content in chat yet.
+3. Optionally open with a success narrative: "A month from now, you run one command and…"
+4. Invoke `ideation-critic` standalone: "Here's the Brief. What are we sweeping under the rug?"
+5. Address any Critic findings with the user.
+6. Execute per the user's choice from step 1: show the Brief directly, or proceed through the topic-chunk walkthrough.
+7. After walkthrough or self-review: use askQuestions for Brief approval (approve / adjust / rework options). The Brief is the **contract** between thinking and building.
+8. Write approved Brief to `brief.md`.
 
 **Entry criteria:** `decisions.md` has chosen approach + rationale.
 **Exit criteria:** `brief.md` written; user has approved.
@@ -299,11 +306,24 @@ At M6, the planner decomposes `brief.md` into kanban tasks. Brief content (probl
 
 ## Brief Walkthrough Protocol
 
-When the user opts for a guided walkthrough (M5 step 5), the Mediator presents each Brief chunk one at a time with inline metrics. This replaces the "read and approve" flow with an interactive review.
+Before showing any Brief content in the conversation, the Mediator must offer the walkthrough choice via askQuestions. Brief content (even partial) must never appear in chat before this offer. Presenting Brief content before the walkthrough offer is a protocol violation.
 
-### Walkthrough Choice
+When the user opts for a guided walkthrough (M5 step 1), the Mediator presents each Brief chunk one at a time with inline metrics. This replaces the "read and approve" flow with an interactive review.
 
-Use askQuestions with two options:
+### Walkthrough Offer
+
+Use this askQuestions call shape at M5 step 1:
+
+```yaml
+askQuestions:
+  question: "The Brief is ready. How would you like to review it?"
+  options:
+    - label: "Walk me through it"
+      description: "I'll present each topic chunk with my commentary, trade-offs, and honest assessment"
+    - label: "I'll read it myself"
+      description: "I'll share the Brief and you review at your own pace"
+  allowFreeformInput: false
+```
 
 - **"I'll read it myself"** — user reviews `brief.md` directly. Proceed to approval question.
 - **"Walk me through it"** — Mediator presents each chunk with metrics. Proceed to walkthrough loop.
@@ -459,7 +479,7 @@ When the user returns to an existing Working Directory (mid-execution modificati
 ## Verification Checklist
 
 - [ ] Step 0 completed: Working Directory initialised, `input/*` read, project type determined
-- [ ] M1 complete: Problem Statement in `context.md`; Investment Tier set; standalone Critic check done
+- [ ] M1 complete: Problem Statement in `context.md`; Investment Tier set; standalone Critic check done; Skill Pre-Flight run (keywords extracted, `share/skills/` + `share/instructions/` scanned, conflicts surfaced or empty-result path confirmed)
 - [ ] M2 complete: 2–5 outcomes in `context.md`; standalone Critic check done
 - [ ] M3 complete: landscape in `context.md`; `research-notes.md` written; panelist deliberation complete; `synthesis.md` present
 - [ ] M4 complete: Decision written to `decisions.md`; standalone Critic check done; user has decided
