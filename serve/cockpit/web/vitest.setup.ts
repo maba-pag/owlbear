@@ -4,6 +4,25 @@ import { vi } from 'vitest'
 
 skipPorscheDesignSystemCDNRequestsDuringTests()
 
+// PDS global keydown handler (hideAllPopoversUntil) throws TypeError when
+// accessing ownerDocument on a null element in jsdom. This is a known PDS/jsdom
+// incompatibility: document.ownerDocument is null (document IS the document).
+// Suppress this specific error so it does not surface as an Unhandled Error.
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'error',
+    (event: ErrorEvent) => {
+      if (
+        event.error instanceof TypeError &&
+        event.error.message === "Cannot read properties of null (reading 'ownerDocument')"
+      ) {
+        event.preventDefault()
+      }
+    },
+    { capture: true },
+  )
+}
+
 // jsdom does not implement showModal/close on HTMLDialogElement
 if (typeof HTMLDialogElement !== 'undefined') {
   if (!HTMLDialogElement.prototype.showModal) {
