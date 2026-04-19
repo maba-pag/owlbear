@@ -1,10 +1,10 @@
 ---
 id: 974
 title: 'RED: KanbanTask.guidance field + collect_guidance unit tests'
-status: in-progress
+status: archived
 priority: needed
 created: 2026-04-18T21:17:49.860532+00:00
-updated: 2026-04-18T21:58:27.081176+00:00
+updated: 2026-04-19T01:18:32.064542+00:00
 tags:
 - scope:mcp
 - scope:kanban
@@ -115,3 +115,124 @@ Original AC used operation strings `"block"`, `"edit"`, `"move"`, `"success"` th
 - `collect_guidance` tests: `AssertionError` — `owlbear_mcp_kanban.guidance` module does not exist (ImportError wrapped via `_require_guidance()`)
 
 Commit: `dde538ad`
+[[2026-04-18]]
+## Builder Notes
+
+### Files changed
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/models.py` — added `guidance: list[str] = Field(default_factory=list)` as the first field (before `id`) to satisfy Pydantic v2 declaration-order serialization requirement
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/guidance.py` — new module with `collect_guidance(operation, before, after, **kwargs)` and two private helpers `_block_guidance` / `_move_guidance` (split to satisfy PLR0911 ≤6 returns per function)
+
+### Test results
+- 11 TestFromAC tests: all PASS (confirmed RED before implementation)
+- 30 mcp-kanban total: all PASS (no regressions)
+
+### Lint status
+ruff: CLEAN (fixed TC001 by moving KanbanTask import into TYPE_CHECKING block; fixed PLR0911 by extracting helper functions)
+
+### Evidence
+- RED verified: 11 FAILED before implementation (AttributeError on guidance field, ImportError on guidance module)
+- GREEN confirmed: 11 PASSED after implementation
+- Commit: `4438375c`
+[[2026-04-19]]
+## Review Evidence
+
+### Test Results
+pytest: 60 passed, 0 failed, 0 skipped (full mcp-kanban suite)
+
+### Lint
+ruff: CLEAN — 0 violations
+
+### Coverage
+- `owlbear_mcp_kanban.guidance`: 98%
+- `owlbear_mcp_kanban.models`: 100%
+
+### AC Compliance (Refined AC from Architecture Review)
+
+| AC Line | Mapped Test | Would Fail If Violated? | Verdict |
+|---------|------------|------------------------|---------|
+| `KanbanTask.guidance` defaults to `[]` | `test_guidance_defaults_to_empty_list` | Yes | COVERED |
+| `guidance` first key in `model_dump()` | `test_guidance_is_first_key_in_model_dump` | Yes | COVERED |
+| `edit_block` w/o `block:user` → "Decision Request" | `test_edit_block_without_block_user_tag_returns_dr_message` | Yes | COVERED |
+| `end_work_block` w/o `block:user` → "Decision Request" | `test_end_work_block_without_block_user_tag_returns_dr_message` | Yes | COVERED |
+| `edit_block` + `block:user` → `[]` | `test_edit_block_with_block_user_tag_returns_empty` | Yes | COVERED |
+| `end_work_block` + `block:user` → `[]` | `test_end_work_block_with_block_user_tag_returns_empty` | Yes | COVERED |
+| `move` forward >1 slot → guidance | `test_move_forward_skip_more_than_one_slot_returns_guidance` | Yes | COVERED |
+| `move` 1-slot adjacent → `[]` | `test_move_forward_one_slot_returns_empty` | Yes | COVERED |
+| `move` backward → `[]` | `test_move_backward_returns_empty` | Yes | COVERED |
+| `end_work_success` → first item contains "commit" | `test_end_work_success_returns_commit_message` | Yes | COVERED |
+| `unknown_op` → `[]` | `test_unknown_operation_returns_empty_list` | Yes | COVERED |
+
+### TestFromAC Integrity
+All 11 `TestFromAC_*` tests preserved unmodified. `TestBuilderDiscovered` class adds one strengthening test (AC6: `model_validate` from dict without `guidance` key) — STRENGTHENED, not weakened.
+
+### Security Review
+No hardcoded secrets, injection, path traversal, or unsafe deserialization. `extra="ignore"` on `ConfigDict` correctly rejects unknown fields.
+
+### Test Quality
+STRONG on all five dimensions: assertion specificity (exact equality + required substrings), negative/error-path coverage (5 empty-list tests), mutation resistance (flip `> 1` → `>= 1` caught by `test_move_forward_one_slot_returns_empty`), test independence (fresh `_task()` per test), descriptive names throughout.
+
+### Data Safety
+Pure business logic — string comparisons, list operations. No persistence, no mutable shared state.
+
+### Implementation Notes
+Builder correctly placed `guidance` as the first field in `KanbanTask` for Pydantic v2 declaration-order serialization. `_BLOCK_OP_ALIASES` frozenset and private helpers `_block_guidance`/`_move_guidance` are minimal and appropriate. TC001 and PLR0911 lint fixes are correct.
+
+### Deductions: 0
+### Confidence: .97 → PASS
+[[2026-04-19]]
+## Docs Gate
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | copilot-instructions.md | No | N/A | File has no mcp-kanban section; `guidance` field and `collect_guidance` module are internal impl details, not documented at system-instruction level |
+| 2 | Module docstrings | Yes | PASS | `guidance.py` module docstring ✅; `collect_guidance()` full docstring with Args/Returns ✅; `KanbanTask` class docstring ✅; private helpers are underscore-prefixed — no docstrings required |
+| 3 | External attribution | No | N/A | No external repos or patterns referenced |
+| 4 | CLI changes | No | N/A | No CLI commands added or modified |
+| 5 | Research doc | No | N/A | No .owlbear/research/ doc produced |
+
+**Files updated:** None required.
+**Scratch files:** None found (`.owlbear/scratch/974-*`).
+**Commit:** None — no documentation changes needed.
+[[2026-04-19]]
+## Audit
+### AC Verification (spot-check, reviewer trusted for full mapping)
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `KanbanTask.guidance` defaults to `[]` | models.py:L15 `guidance: list[str] = Field(default_factory=list)` + test_guidance_defaults_to_empty_list | PASS |
+| `guidance` first key in `model_dump()` | models.py: guidance declared before `id` (Pydantic v2 declaration-order) + test_guidance_is_first_key_in_model_dump | PASS |
+| `edit_block` w/o `block:user` -> DR message | guidance.py:_block_guidance + test_edit_block_without_block_user_tag_returns_dr_message | PASS |
+| `end_work_block` w/o `block:user` -> DR message | guidance.py:_block_guidance + test_end_work_block_without_block_user_tag_returns_dr_message | PASS |
+| `edit_block` + `block:user` -> `[]` | guidance.py:L80 `if "block:user" in after.tags: return []` + test_edit_block_with_block_user_tag_returns_empty | PASS |
+| `end_work_block` + `block:user` -> `[]` | Same logic + test_end_work_block_with_block_user_tag_returns_empty | PASS |
+| `move` forward >1 slot -> guidance | guidance.py:_move_guidance `delta > 1` + test_move_forward_skip_more_than_one_slot_returns_guidance | PASS |
+| `move` 1-slot adjacent -> `[]` | guidance.py: `delta > 1` returns [] for delta=1 + test_move_forward_one_slot_returns_empty | PASS |
+| `move` backward -> `[]` | guidance.py: negative delta, `delta > 1` false + test_move_backward_returns_empty | PASS |
+| `end_work_success` -> commit message | guidance.py:_is_success_operation + _COMMIT_REMINDER_MSG + test_end_work_success_returns_commit_message | PASS |
+| unknown operation -> `[]` | No branch matches, returns [] + test_unknown_operation_returns_empty_list | PASS |
+
+### Test Results
+- pytest: 658 passed, 6 failed (all mcp-knowledge, pre-existing, unrelated), 0 skipped
+- ruff: CLEAN (0 violations)
+
+### Scope Check
+Changed files: models.py, guidance.py (new), test_guidance.py (new) — all within serve/mcp-kanban, aligned with AC scope.
+
+### Reviewer Evidence
+Detailed section present. 60 mcp-kanban tests passed, 0 failed. 98% coverage on guidance, 100% on models. All 11 AC lines mapped COVERED. Confidence .97 PASS. Trusted for code-level findings.
+
+### Upstream Commits
+- Test-writer: dde538ad (RED tests)
+- Builder: 4438375c (GREEN implementation)
+
+### Architect Quality: 5/5
+AC lines extremely specific (operation strings, expected substrings, explicit kwargs). Challenger engagement effective — caught operation string mismatch with GREEN #976, resolved via refinement. Edge cases covered (backward move, unknown op, block:user tag). Status ordering via statuses kwarg made explicit per D6.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0
+- Lint violations: 0
+- AC quality score 5 (no deduction)
+- Missing reviewer evidence: 0
+- Full-suite failures in task scope: 0
+
+### Confidence: 1.00
+### Action: archive

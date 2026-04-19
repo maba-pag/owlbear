@@ -1,10 +1,10 @@
 ---
 id: 964
 title: 'Benchmark tests: kanban board 700-task mount, scroll, and re-render'
-status: review
+status: archived
 priority: needed
 created: 2026-04-18T15:51:06.555742+00:00
-updated: 2026-04-18T21:39:15.385886+00:00
+updated: 2026-04-19T00:49:09.434004+00:00
 tags:
 - cockpit
 - frontend
@@ -123,3 +123,100 @@ Challenger confidence was low (0.45) primarily due to the tag issue (C1), which 
 
 **Evidence summary:**
 All 6 ACs from task body are covered by existing tests written during #959 TDD cycle. Verified tests fail prior to implementation was not applicable here — this is a pure audit/pass-through task where tests already existed and passed. GREEN state confirmed by running both test suites directly.
+[[2026-04-18]]
+## Review Evidence
+
+### Test Results
+- Vitest (jsdom): 10 passed, 0 failed — `KanbanBoard_959.test.tsx`
+- Playwright: 5 passed, 0 failed — `bench_959.spec.ts`
+- **Total: 15/15 passed** (quality-runner, independent run)
+
+### Lint: clean
+- ESLint: no violations on either test file
+- TypeScript: pre-existing config warnings (jsx/module resolution) unrelated to this task — do not affect execution
+
+### Coverage: N/A
+- Pass-through task — no production code changed; no modules to instrument
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| jsdom: 700 tasks, DOM <5,000 nodes | `total DOM node count within board stays below 5000` ×2 | Yes — `expect(nodeCount).toBeLessThan(5000)` | COVERED |
+| Playwright: mount <500ms | `mount time <500ms — uniform/skewed` | Yes — `expect(elapsed).toBeLessThan(500)` | COVERED |
+| Playwright: scroll <5% frame drops | `100+ card column overflow-y` + `scroll 400-card: scrollTop + <5% long tasks` | Yes — `longTasks <= 1` (5% of 30 frames) + scrollTop > 0 | COVERED |
+| Playwright: re-render <100ms | `re-render after task move <100ms` | Yes — `expect(renderMs).toBeLessThan(100)` via MutationObserver + performance.now() | COVERED |
+| Uniform + skewed distributions | Both distributions tested in all applicable tests | Yes — separate test cases per distribution | COVERED |
+| SEED=42 deterministic fixture | Both files use `lcg(seed=42)` | Yes — hardcoded seed | COVERED |
+
+#### Security Review
+- No new production code or dependencies added. Test-only files, no system boundaries. No issues.
+
+#### Test Integrity
+- Files changed: none (pass-through task). No TestFromAC_* methods were modified. N/A.
+
+#### Test Quality
+- **Assertion specificity:** STRONG — all assertions use exact numeric thresholds (5000 nodes, 500ms, 1 long task, 100ms, 400/150/30 card counts)
+- **Negative/error-path coverage:** STRONG — scroll test checks `longTasks !== -1` (element-not-found guard), re-render test checks `renderMs !== null`, overflow test inspects computed style
+- **Manual mutation reasoning:** STRONG — flipping `<5000` to `>=5000`, `<500` to `>=500`, etc. would immediately fail; threshold mutations caught
+- **Test independence:** STRONG — `afterEach(() => vi.unstubAllGlobals())` cleans global fetch stub; Playwright tests each set up their own route handlers
+- **Descriptive names:** STRONG — all tests have precise human-readable names including distribution, threshold, and seed
+
+#### Data Safety
+- Test files only. No data safety concerns.
+
+#### Builder Process Quality
+- Single `## Builder Notes` section, no retries. CLEAN.
+
+### Deductions
+- None
+
+### Verdict
+Confidence: 0.97 → PASS
+[[2026-04-19]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Behavior/API change | No | N/A | Pass-through test task — zero production code changes; `copilot-instructions.md` tables unchanged |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified; frontend-only test files (`KanbanBoard_959.test.tsx`, `bench_959.spec.ts`) |
+| 3 | External attribution | No | N/A | All 5 sources codebase-internal (S1–S5 in research doc § 2); no external patterns used |
+| 4 | CLI changes | No | N/A | No CLI changes |
+| 5 | Research doc | Yes | Verified | `.owlbear/research/964-benchmark-tests-700-task-board.md` exists, linked in task body; follow-up tasks = none (all 6 ACs covered by existing tests, confidence 0.95) |
+
+### Files Updated
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/964-*` files found)
+[[2026-04-19]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| jsdom: 700 tasks, DOM <5,000 nodes | `KanbanBoard_959.test.tsx` — `expect(nodeCount).toBeLessThan(5000)` x2 (uniform + skewed) | PASS |
+| Playwright: mount <500ms | `bench_959.spec.ts` — `expect(elapsed).toBeLessThan(500)` x2 | PASS |
+| Playwright: scroll <5% frame drops | `bench_959.spec.ts` — `longTasks <= 1` (5% of 30 frames) + scrollTop | PASS |
+| Playwright: re-render <100ms | `bench_959.spec.ts` — `expect(renderMs).toBeLessThan(100)` via MutationObserver | PASS |
+| Uniform + skewed distributions | Both files test both distributions as separate cases | PASS |
+| SEED=42 deterministic fixture | Both files use `lcg(seed=42)` | PASS |
+
+### Test Results
+- pytest (full suite): 652 passed, 12 failed — all failures outside task scope (mcp-knowledge #541, mcp-kanban #987)
+- Vitest (jsdom): 10/10 passed (reviewer-verified independent run)
+- Playwright: 5/5 passed (reviewer-verified independent run)
+- ruff: clean, no violations
+
+### Architect Quality: 4/5
+All 6 AC lines have specific numeric thresholds (<5000, <500ms, <5%, <100ms, SEED=42). Minor gap: task was effectively pass-through since tests already existed from #959, but AC clarity was excellent.
+
+### Deduction Breakdown
+- 6/6 AC lines with specific evidence: no deduction
+- Lint clean: no deduction
+- AC quality 4/5 (>3): no deduction
+- Reviewer evidence present, detailed, PASS 0.97: no deduction
+- Full-suite failures all outside scope: no deduction
+
+### Confidence: 0.98
+### Action: archive

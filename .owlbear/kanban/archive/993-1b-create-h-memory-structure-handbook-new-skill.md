@@ -1,10 +1,10 @@
 ---
 id: 993
 title: '1b: Create h-memory-structure handbook (new skill)'
-status: research
-priority: needed
+status: archived
+priority: important
 created: 2026-04-18T21:23:32.409493+00:00
-updated: 2026-04-18T21:39:29.081629+00:00
+updated: 2026-04-18T23:42:37.813907+00:00
 tags:
 - type:docs
 - scope:skills
@@ -53,3 +53,38 @@ Create `share/skills/h-memory-structure/SKILL.md` — a new handbook defining wh
 #1001 has stricter AC (specific section names, ≤5 required fields, ≤150 line limit, ≤5 anti-patterns ≤2 lines each) vs. #993's vaguer "covers all content scope items" criteria.
 
 **Action:** Reject as duplicate. #1001 is the authoritative task — no further work needed on #993. This task should be archived or deleted.
+[[2026-04-18]]
+## Research
+
+Confirmed duplicate of #1001 — no research doc needed.
+
+- **Evidence:** Both tasks share parent #984, create identical file (`share/skills/h-memory-structure/SKILL.md`), cover identical scope. Parent #984's SPLIT table lists #1001 (not #993) as canonical child.
+- **#1001 status:** `todo` (architect-approved with refined AC — specific section names, ≤5 fields, ≤150 lines, ≤5 anti-patterns).
+- **#993 origin:** Planner artifact (21:23), superseded by architect's formal decomposition (#1001, 21:34).
+- **Disposition:** Reject to done for archival. No follow-up tasks, no decision requests.
+[[2026-04-18]]
+## Audit
+### Duplicate Verification
+Confirmed duplicate of #1001. Evidence:
+- Both tasks share parent #984, target identical file (`share/skills/h-memory-structure/SKILL.md`), identical scope
+- Parent #984 SPLIT table lists #1001 (not #993) as canonical child
+- #1001 has refined AC (specific section names, field counts, line limits) vs #993's vague "covers all content scope items"
+- #993 origin: planner artifact (21:23), superseded by architect SPLIT (#1001, 21:34)
+- Deliverable file does not exist — no orphaned work
+
+### AC Verification
+N/A — task correctly identified as duplicate before implementation. AC will be fulfilled by #1001.
+
+### Test Results
+N/A — no code changes (duplicate disposition, no deliverables)
+
+### Architect Quality: 3/5
+Planner-authored AC was reasonable but vaguer than #1001's refined version. Architect correctly caught the duplicate and created #1001 with stricter, mechanically-verifiable AC. System worked as designed.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC quality 3/5: -.03
+- Missing reviewer section: no deduction (expected for duplicate-disposition flow)
+
+### Confidence: .97
+### Action: archive
