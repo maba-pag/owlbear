@@ -15,7 +15,6 @@ vi.mock('vite', () => ({ defineConfig: (c: unknown) => c }))
 vi.mock('@vitejs/plugin-react', () => ({ default: () => [{ name: 'react-plugin' }] }))
 
 import config from '../../vite.config'
-import config from '../../vite.config'
 
 // Flatten nested plugin arrays (e.g. react() returns Plugin[])
 function findCspPlugin(plugins: unknown[]): Record<string, unknown> | undefined {
