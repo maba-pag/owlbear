@@ -307,8 +307,8 @@ class TestFromAC_CockpitLaunch:
             with TestClient(app, raise_server_exceptions=True) as client:
                 resp = client.get("/some/spa/route")
             assert resp.status_code == 200
-            # index.html has substantive content
-            assert len(resp.text) > 0
+            assert resp.headers.get("content-type", "").startswith("text/html")
+            assert "<html" in resp.text.lower()
         finally:
             app.dependency_overrides.clear()
 
