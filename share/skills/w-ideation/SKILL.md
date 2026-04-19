@@ -135,8 +135,9 @@ The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting sy
 
 **Mediator mode:** Facilitative (pipeline handoff). **Active subagents:** planner.
 
-1. Invoke the **planner** subagent with `brief.md` reference: decompose into kanban tasks with dependencies.
-2. Report to user: "Project X is live — N tasks created. First tasks are queued for research now."
+1. Invoke `owlbear-kanban/create_task` to create a **parent kanban task** with the Brief content in the task body. Capture the returned task ID.
+2. Invoke the **planner** subagent with the structured prefix: `Plan and create: #{parent_id} — {brief summary}`. This puts planner in dispatch mode (auto-create subtasks, no askQuestions).
+3. Report to user: "Project X is live — N tasks created. First tasks are queued for research now."
 3. Confirm on the kanban board (tasks visible).
 4. Working Directory preserved as audit trail.
 
@@ -349,6 +350,40 @@ The system proposes a tier based on conversational signals between M1 and M2. Us
 
 ---
 
+## Ad-hoc Critic Invocations
+
+Ad-hoc Critic invocations are **additive** to the four fixed-boundary checks (after M1, M2, M4, M5). They fire at any moment, triggered by the user or the Mediator.
+
+### User-Request Path
+
+When the user asks "what does the Critic think?" or equivalent, the Mediator invokes `ideation-critic` standalone with the current proposal as context. Present findings with attribution and confidence.
+
+### Mediator Self-Trigger
+
+When a proposal changes the problem boundary, outcome set, or approach **after the corresponding fixed-boundary Critic has already run**, the Mediator MAY invoke the Critic on the changed element.
+
+- **MAY, not MUST.** The Mediator exercises judgment — consistent with Adaptive Depth compression.
+- **Rate limit:** At most one ad-hoc invocation per user turn. Batch multiple changed elements into one focused prompt.
+- **Silent resolution:** If the Critic finds nothing material, the Mediator continues without surfacing the check.
+
+### Tier Gating
+
+| Tier | Self-trigger disposition |
+|------|------------------------|
+| Scratch | Skip — compressed flow, minimal Critic |
+| Tool | Mediator judgment — invoke if the change is material |
+| Shared / Production | Lean toward invoking |
+
+### Recording
+
+Ad-hoc findings follow the same treatment as fixed-boundary findings. The Mediator presents findings to the user with attribution: "[Critic] challenged this proposal — confidence {X}." If the finding influences a decision, record the *decision* in `decisions.md` with rationale citing the Critic finding.
+
+### Worked Example
+
+During M5 walkthrough, user proposes adding a new artifact type (`.owlbear/audit-log.md`) not discussed in M3–M4 panel deliberation. The M5 fixed-boundary Critic has already run on the Brief. The Mediator recognises this changes the outcome set after the relevant boundary. Mediator invokes `ideation-critic`: "User proposes adding an audit-log artifact to the Brief. This wasn't part of panel deliberation. What risks does this introduce?" Critic returns findings (confidence 0.45 against — artifact duplicates existing kanban activity log). Mediator presents: "[Critic] flagged overlap with the existing activity log — confidence 0.45 against adding this. Your call." User decides to drop it.
+
+---
+
 ## Re-Entry Protocol
 
 When the user returns to an existing Working Directory (mid-execution modification or continuation):
@@ -374,7 +409,8 @@ When the user returns to an existing Working Directory (mid-execution modificati
 - [ ] M5 complete: `brief.md` written; user has approved
 - [ ] M5 walkthrough: if user chose walkthrough, all sections presented inline with Fidelity/Readiness/Risk metrics; summary table shown before approval
 - [ ] All askQuestions uses: content being discussed is visible in the chat message (blockquote or inline), never only in a file edit or tool output
-- [ ] M6 complete: planner invoked; kanban tasks created; user confirmed
+- [ ] M6 complete: parent kanban task created via `create_task`; planner invoked with `Plan and create: #{id}` prefix; kanban subtasks created; user confirmed
 - [ ] User informed of depth calibration at each tier decision
 - [ ] Mediator never reads raw `research-notes.md` or debate logs directly
 - [ ] All panelist perspectives attributed to the user with panelist name
+- [ ] Ad-hoc Critic invocations (if any) presented to user when material; silent resolution applied when non-material
