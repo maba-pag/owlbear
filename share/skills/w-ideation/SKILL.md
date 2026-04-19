@@ -10,6 +10,12 @@ Six-moment process for transforming fuzzy ideas into approved Briefs. The Mediat
 
 See `h-ideation-panel` for panelist characterizations, Critic-loop rules, and invocation prompts.
 
+> **Turn-ending rule:** Every turn that elicits a user reply ends with `askQuestions`. Use `allowFreeformInput: true` for open investigative probes; use structured `options` for decisions. This rule applies to all six moments — M1–M3 investigative probes and M4–M6 facilitated decisions alike.
+>
+> Worked example — M1 probe: `askQuestions(title="Tell me more", questions=[{id: "q1", question: "What happened recently that made this feel urgent?", allowFreeformInput: true}])`. Use this same pattern for any investigative question at any moment.
+>
+> **Confidence/recommended rule:** When any `askQuestions` call presents >2 options with genuine trade-offs (not procedural navigation like "next / back"), include per-option `confidence` (0.0–1.0) and mark one option `recommended: true`. Skills are the canonical authority for this rule — it applies at every moment where the user chooses between meaningful alternatives.
+
 ## Step 0 — Setup and Entry
 
 On agent start:
@@ -109,6 +115,21 @@ The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting sy
    - Panelist perspectives attributed: `[ideation-architect] favors A because…`
    - Points of convergence and disagreement highlighted
 3. **User decides.** Present approaches as askQuestions options with your confidence and recommendation per option. Capture the chosen approach with rationale in `decisions.md`.
+
+   **Worked example — M4 approach decision:**
+   ```
+   vscode_askQuestions(title="Which approach should we take?", questions=[{
+     id: "approach",
+     question: "[ideation-architect] favors A for simplicity; [ideation-pragmatist] warns C adds 2–3 weeks. Which path?",
+     options: [
+       { label: "Option A — extend existing module (low effort)", value: "a", confidence: 0.75, recommended: true },
+       { label: "Option B — standalone service (medium effort)", value: "b", confidence: 0.55 },
+       { label: "Option C — full rewrite (high effort)", value: "c", confidence: 0.30 }
+     ],
+     allowFreeformInput: true
+   }])
+   ```
+
 4. Invoke `ideation-critic` standalone: "Here's the chosen approach. What will fail?"
 5. If Critic surfaces significant concerns, be transparent with the user. They decide whether to re-invoke panelists with updated context.
    On loop-back: panelists are stateless — they read updated `context.md` + `decisions.md` and form fresh positions.
@@ -124,7 +145,7 @@ The Mediator shifts to **facilitative mode** for Moments 4–6 — presenting sy
 2. Optionally open with a success narrative: "A month from now, you run one command and…"
 3. Invoke `ideation-critic` standalone: "Here's the Brief. What are we sweeping under the rug?"
 4. Address any Critic findings with the user.
-5. Use askQuestions to offer the user a choice: read the Brief on their own, or be walked through it section by section. See [Brief Walkthrough Protocol](#brief-walkthrough-protocol) below.
+5. Use askQuestions to offer the user a choice: read the Brief on their own, or be walked through it chunk by chunk. See [Brief Walkthrough Protocol](#brief-walkthrough-protocol) below.
 6. After walkthrough or self-review: use askQuestions for Brief approval (approve / adjust / rework options). The Brief is the **contract** between thinking and building.
 7. Write approved Brief to `brief.md`.
 
@@ -278,48 +299,84 @@ At M6, the planner decomposes `brief.md` into kanban tasks. Brief content (probl
 
 ## Brief Walkthrough Protocol
 
-When the user opts for a guided walkthrough (M5 step 5), the Mediator presents each Brief section one at a time with inline metrics. This replaces the "read and approve" flow with an interactive review.
+When the user opts for a guided walkthrough (M5 step 5), the Mediator presents each Brief chunk one at a time with inline metrics. This replaces the "read and approve" flow with an interactive review.
 
 ### Walkthrough Choice
 
 Use askQuestions with two options:
 
 - **"I'll read it myself"** — user reviews `brief.md` directly. Proceed to approval question.
-- **"Walk me through it"** — Mediator presents each section with metrics. Proceed to walkthrough loop.
+- **"Walk me through it"** — Mediator presents each chunk with metrics. Proceed to walkthrough loop.
 
 ### Walkthrough Loop
 
-For each Brief section (Problem, Approach, Outcomes, Scope, Decisions, Implementation Sequence, Follow-ups):
+Five topic chunks cover the entire Brief:
 
-1. **Present the section text** in the conversation — blockquote or inline. Never rely on the user reading a file edit or tool output. The content being discussed must always be visible in the chat message itself.
-2. **Management summary** — 1–2 sentences: what this section says and why it matters.
-3. **Mediator opinion** — brief assessment: is this section strong, weak, or notable in any way? What came from the user vs. what came from research/panel?
-4. **Metrics** — score three dimensions (see [Walkthrough Metrics](#walkthrough-metrics) below).
-5. **askQuestions** — present metrics in the question text, with options: "Good, next section" / "Needs adjustment". Always allow freeform input.
-6. If the user says "needs adjustment" or provides freeform feedback: address the concern, update the Brief section, re-present the updated text, re-score, and ask again.
+| Chunk | Name | Sections Covered |
+|-------|------|------------------|
+| 1 | **The Why** | Problem + Outcomes |
+| 2 | **The How** | Approach + Alternatives Considered + Context |
+| 3 | **The Boundary** | Scope (In/Out) + Key Decisions |
+| 4 | **The Honesty** | Risks & Mitigations |
+| 5 | **The Next Step** | Decomposition preview (summary of planned tasks and sequencing) |
 
-**Critical rule:** Always present the section content inline in the conversation message before using askQuestions. The user must see what they're being asked about without opening a separate file. This applies to all askQuestions uses, not just Brief walkthroughs.
+For each chunk:
+
+1. **Present the chunk content** in the conversation — blockquote or inline. Never rely on the user reading a file edit or tool output. The content being discussed must always be visible in the chat message itself.
+2. **Mediator commentary** — structured across six slots (1–2 sentences each):
+   - **Summary:** Restate what the chunk says in your own words.
+   - **Opinion:** What's strong here? What's weak or uncertain?
+   - **Decision trail:** Which user choices or panelist findings shaped this?
+   - **Trade-offs:** What was accepted? What was given up or dropped?
+   - **Why this shape:** Why is this the optimal form — what alternatives were rejected?
+   - **Honest negatives:** What risks, gaps, or concerns remain?
+3. **Metrics** — score three dimensions (see [Walkthrough Metrics](#walkthrough-metrics) below).
+4. **askQuestions** — present metrics in the question text, with options: "Good, next chunk" / "Needs adjustment". Always allow freeform input.
+5. If the user says "needs adjustment" or provides freeform feedback: address the concern, update the Brief, re-present the updated chunk content, re-score, and ask again.
+
+**Critical rule:** Always present the chunk content inline in the conversation message before using askQuestions. The user must see what they're being asked about without opening a separate file. This applies to all askQuestions uses, not just Brief walkthroughs.
+
+**Confidence/recommended rule:** When presenting options with genuine trade-offs — including the final approval options (approve / adjust / rework) — include per-option `confidence` (0.0–1.0) and mark one option `recommended: true`. Procedural navigation options ("next chunk" / "back") do not require confidence scores.
 
 ### Walkthrough Metrics
 
-Three metrics scored per section:
+Three metrics scored per chunk:
 
 | Metric | Scale | Definition |
 |--------|-------|------------|
-| **Fidelity** | 0.0–1.0 | Does this section accurately reflect what was discussed? High = directly from user's words or confirmed research. Low = paraphrased, inferred, or invented. |
-| **Readiness** | 0.0–1.0 | Can a builder implement from this section without coming back to ask questions? Combines completeness (is anything missing?) and actionability (is it specific enough?). |
-| **Risk** | low / medium / high | How much could go wrong if this section is slightly off? High = security, architecture, scope boundaries. Low = documentation, follow-ups. |
+| **Fidelity** | 0.0–1.0 | Does this chunk accurately reflect what was discussed? High = directly from user's words or confirmed research. Low = paraphrased, inferred, or invented. |
+| **Readiness** | 0.0–1.0 | Can a builder implement from this chunk without coming back to ask questions? Combines completeness (is anything missing?) and actionability (is it specific enough?). |
+| **Risk** | low / medium / high | How much could go wrong if this chunk is slightly off? High = security, architecture, scope boundaries. Low = documentation, follow-ups. |
 
 Present metrics in a compact single line: `Fidelity: 0.92 | Readiness: 0.85 | Risk: medium`
 
+### Walkthrough Worked Example
+
+**Chunk 1 — "The Why"** (Problem + Outcomes):
+
+> **Problem:** The ideation loop currently presents users with 7–8 separate Brief sections one at a time. Each requires a separate review cycle, creating interaction fatigue and losing thematic coherence.
+>
+> **Outcomes:** After this change, walkthroughs use 5 thematic chunks. Users see related sections together, reducing context-switching. Review sessions feel like a conversation rather than a form.
+
+**Mediator commentary:**
+
+- **Summary:** The problem is interaction overhead from over-granular chunking; the outcome is a more coherent, less fatiguing review flow.
+- **Opinion:** Strong — problem is clearly user-observable and the outcome is directly traceable. Slightly abstract on "thematic coherence" but the intent is clear.
+- **Decision trail:** User reported the 8-section walkthrough felt mechanical. Pragmatist panelist confirmed fewer, richer chunks reduces decision fatigue.
+- **Trade-offs:** Accepted: sections merged into theme-pairs lose fine-grained scoring granularity. Dropped: per-section restart option (now per-chunk restart).
+- **Why this shape:** Five chunks matches natural Brief narrative arc (Why / How / Boundary / Honesty / Next). Fewer chunks under-group; more chunks replicates the problem.
+- **Honest negatives:** "The Next Step" chunk has no source content in the current Brief structure — the Mediator must synthesise a decomposition preview rather than present existing text.
+
+`Fidelity: 0.90 | Readiness: 0.85 | Risk: low`
+
 ### Post-Walkthrough Summary
 
-After all sections are reviewed, present a summary table of metrics across all sections. Highlight the weakest Readiness score and highest Risk section — these are the areas most likely to cause implementation questions.
+After all chunks are reviewed, present a summary table of metrics across all chunks. Highlight the weakest Readiness score and highest Risk chunk — these are the areas most likely to cause implementation questions.
 
-| Section | Fidelity | Readiness | Risk |
-|---------|----------|-----------|------|
-| Problem | 0.90 | 0.85 | low |
-| ... | ... | ... | ... |
+| Chunk | Name | Fidelity | Readiness | Risk |
+|-------|------|----------|-----------|------|
+| 1 | The Why | 0.90 | 0.85 | low |
+| ... | ... | ... | ... | ... |
 
 Then proceed to the approval askQuestions (approve / adjust / rework).
 
@@ -407,7 +464,7 @@ When the user returns to an existing Working Directory (mid-execution modificati
 - [ ] M3 complete: landscape in `context.md`; `research-notes.md` written; panelist deliberation complete; `synthesis.md` present
 - [ ] M4 complete: Decision written to `decisions.md`; standalone Critic check done; user has decided
 - [ ] M5 complete: `brief.md` written; user has approved
-- [ ] M5 walkthrough: if user chose walkthrough, all sections presented inline with Fidelity/Readiness/Risk metrics; summary table shown before approval
+- [ ] M5 walkthrough: if user chose walkthrough, all chunks presented inline with Fidelity/Readiness/Risk metrics; summary table shown before approval
 - [ ] All askQuestions uses: content being discussed is visible in the chat message (blockquote or inline), never only in a file edit or tool output
 - [ ] M6 complete: parent kanban task created via `create_task`; planner invoked with `Plan and create: #{id}` prefix; kanban subtasks created; user confirmed
 - [ ] User informed of depth calibration at each tier decision
