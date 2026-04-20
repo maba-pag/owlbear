@@ -218,5 +218,8 @@ def main() -> None:
     args = parser.parse_args()
     root = Path(args.root).resolve()
     index_path = (root / args.output).resolve()
+    if not index_path.is_relative_to(root):
+        msg = f"error: output path must be inside workspace root: {index_path}"
+        raise SystemExit(msg)
     if should_regenerate(index_path, root):
         generate_index(root, index_path)

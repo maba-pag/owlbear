@@ -161,4 +161,5 @@ source_pkgs = [
   "owlbear_mcp_knowledge",
   "owlbear_mcp_memory",
   "owlbear_browser",
+  "owlbear_tools",
 ]

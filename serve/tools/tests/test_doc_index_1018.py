@@ -583,3 +583,51 @@ class TestBuilderDiscovered:
         main()
         assert index_path.exists()
         assert "## README.md" in index_path.read_text()
+
+    def test_main_skips_regen_when_index_is_current(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """main() does not overwrite the index when it is already up-to-date."""
+        doc = _make_md(tmp_path, "README.md", "# Root\n")
+        index_path = tmp_path / ".owlbear" / "doc-index.md"
+        index_path.parent.mkdir(parents=True)
+        index_path.write_text("existing content")
+        past = time.time() - 100
+        future = time.time() + 100
+        os.utime(doc, (past, past))
+        os.utime(index_path, (future, future))
+        monkeypatch.setattr(sys, "argv", ["doc-index", str(tmp_path)])
+        main()
+        assert index_path.read_text() == "existing content"
+
+    def test_main_rejects_absolute_output_path(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """main() raises SystemExit when --output resolves to a path outside the workspace root."""
+        _make_md(tmp_path, "README.md", "# Root\n")
+        monkeypatch.setattr(
+            sys, "argv", ["doc-index", str(tmp_path), "--output", "/tmp/steal.md"]  # noqa: S108
+        )
+        with pytest.raises(SystemExit):
+            main()
+
+    def test_should_regenerate_empty_workspace_with_existing_index(
+        self, tmp_path: Path
+    ) -> None:
+        """should_regenerate returns False when no docs exist but an index exists — no stale trigger."""
+        index_path = tmp_path / "doc-index.md"
+        index_path.write_text("# existing\n")
+        assert should_regenerate(index_path, tmp_path) is False
+
+    def test_excalidraw_empty_describes_list_no_describes_line(
+        self, tmp_path: Path
+    ) -> None:
+        """Excalidraw with describes=[] silently emits no describes line in the index entry."""
+        _make_excalidraw(tmp_path, "empty.excalidraw", '{"describes": []}')
+        index_path = tmp_path / "doc-index.md"
+        generate_index(tmp_path, index_path)
+        text = index_path.read_text()
+        entry_start = text.index("## empty.excalidraw")
+        next_entry = text.find("\n## ", entry_start + 1)
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
+        assert "describes" not in entry_text
