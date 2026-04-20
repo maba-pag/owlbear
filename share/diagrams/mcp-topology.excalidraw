@@ -43,7 +43,7 @@
       "id": "s0_subtitle",
       "type": "text",
       "x": 100,
-      "y": 84,
+      "y": 80,
       "width": 800,
       "height": 20,
       "angle": 0,
@@ -61,8 +61,8 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "Descriptive, not authoritative  ·  All registered servers use stdio transport (uv or uvx)",
-      "originalText": "Descriptive, not authoritative  ·  All registered servers use stdio transport (uv or uvx)",
+      "text": "Descriptive, not authoritative  \u00b7  All registered servers use stdio transport (uv or uvx)",
+      "originalText": "Descriptive, not authoritative  \u00b7  All registered servers use stdio transport (uv or uvx)",
       "textAlign": "left",
       "verticalAlign": "top",
       "lineHeight": 1.25,
@@ -73,7 +73,7 @@
       "id": "s1_section_label",
       "type": "text",
       "x": 100,
-      "y": 132,
+      "y": 140,
       "width": 120,
       "height": 18,
       "angle": 0,
@@ -89,7 +89,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 20,
       "fontFamily": 1,
       "text": "CLIENTS",
       "originalText": "CLIENTS",
@@ -103,7 +103,7 @@
       "id": "s1_orchestrator_rect",
       "type": "rectangle",
       "x": 160,
-      "y": 152,
+      "y": 160,
       "width": 220,
       "height": 80,
       "angle": 0,
@@ -118,17 +118,25 @@
       "versionNonce": 20004,
       "groupIds": [],
       "boundElements": [
-        { "id": "s1_orchestrator_text", "type": "text" },
-        { "id": "s1_acp_arrow", "type": "arrow" }
+        {
+          "id": "s1_orchestrator_text",
+          "type": "text"
+        },
+        {
+          "id": "s1_acp_arrow",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s1_orchestrator_text",
       "type": "text",
       "x": 160,
-      "y": 152,
+      "y": 160,
       "width": 220,
       "height": 80,
       "angle": 0,
@@ -146,8 +154,8 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "Orchestrator\n(ACP client → VS Code)",
-      "originalText": "Orchestrator\n(ACP client → VS Code)",
+      "text": "Orchestrator\n(ACP client \u2192 VS Code)",
+      "originalText": "Orchestrator\n(ACP client \u2192 VS Code)",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -158,7 +166,7 @@
       "id": "s1_vscode_rect",
       "type": "rectangle",
       "x": 500,
-      "y": 152,
+      "y": 160,
       "width": 300,
       "height": 80,
       "angle": 0,
@@ -173,23 +181,49 @@
       "versionNonce": 20006,
       "groupIds": [],
       "boundElements": [
-        { "id": "s1_vscode_text", "type": "text" },
-        { "id": "s1_acp_arrow", "type": "arrow" },
-        { "id": "s2_arrow_kanban", "type": "arrow" },
-        { "id": "s2_arrow_knowledge", "type": "arrow" },
-        { "id": "s2_arrow_memory", "type": "arrow" },
-        { "id": "s2_arrow_ddgs", "type": "arrow" },
-        { "id": "s2_arrow_markitdown", "type": "arrow" },
-        { "id": "s2_arrow_github", "type": "arrow" }
+        {
+          "id": "s1_vscode_text",
+          "type": "text"
+        },
+        {
+          "id": "s1_acp_arrow",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arrow_kanban",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arrow_knowledge",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arrow_memory",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arrow_ddgs",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arrow_markitdown",
+          "type": "arrow"
+        },
+        {
+          "id": "s2_arrow_github",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s1_vscode_text",
       "type": "text",
       "x": 500,
-      "y": 152,
+      "y": 160,
       "width": 300,
       "height": 80,
       "angle": 0,
@@ -219,7 +253,7 @@
       "id": "s1_acp_arrow",
       "type": "arrow",
       "x": 380,
-      "y": 192,
+      "y": 200,
       "width": 120,
       "height": 0,
       "angle": 0,
@@ -234,19 +268,39 @@
       "versionNonce": 20008,
       "groupIds": [],
       "boundElements": [
-        { "id": "s1_acp_label", "type": "text" }
+        {
+          "id": "s1_acp_label",
+          "type": "text"
+        }
       ],
       "isDeleted": false,
-      "points": [ [0, 0], [120, 0] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          120,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s1_orchestrator_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s1_vscode_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s1_orchestrator_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s1_vscode_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s1_acp_label",
       "type": "text",
       "x": 422,
-      "y": 182,
+      "y": 180,
       "width": 36,
       "height": 18,
       "angle": 0,
@@ -262,7 +316,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "ACP",
       "originalText": "ACP",
@@ -292,7 +346,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 20,
       "fontFamily": 1,
       "text": "MCP SERVERS",
       "originalText": "MCP SERVERS",
@@ -321,12 +375,23 @@
       "versionNonce": 20011,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_kanban_text", "type": "text" },
-        { "id": "s2_arrow_kanban", "type": "arrow" },
-        { "id": "s3_arrow_kanban", "type": "arrow" }
+        {
+          "id": "s2_kanban_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arrow_kanban",
+          "type": "arrow"
+        },
+        {
+          "id": "s3_arrow_kanban",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s2_kanban_text",
@@ -348,10 +413,10 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
-      "text": "owlbear-kanban\nstdio · uv",
-      "originalText": "owlbear-kanban\nstdio · uv",
+      "text": "owlbear-kanban\nstdio \u00b7 uv",
+      "originalText": "owlbear-kanban\nstdio \u00b7 uv",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -377,12 +442,23 @@
       "versionNonce": 20013,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_knowledge_text", "type": "text" },
-        { "id": "s2_arrow_knowledge", "type": "arrow" },
-        { "id": "s3_arrow_knowledge", "type": "arrow" }
+        {
+          "id": "s2_knowledge_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arrow_knowledge",
+          "type": "arrow"
+        },
+        {
+          "id": "s3_arrow_knowledge",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s2_knowledge_text",
@@ -404,10 +480,10 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
-      "text": "owlbear-knowledge\nstdio · uv",
-      "originalText": "owlbear-knowledge\nstdio · uv",
+      "text": "owlbear-knowledge\nstdio \u00b7 uv",
+      "originalText": "owlbear-knowledge\nstdio \u00b7 uv",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -433,12 +509,23 @@
       "versionNonce": 20015,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_memory_text", "type": "text" },
-        { "id": "s2_arrow_memory", "type": "arrow" },
-        { "id": "s3_arrow_memory", "type": "arrow" }
+        {
+          "id": "s2_memory_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arrow_memory",
+          "type": "arrow"
+        },
+        {
+          "id": "s3_arrow_memory",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s2_memory_text",
@@ -460,10 +547,10 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
-      "text": "owlbear-memory\nstdio · uv",
-      "originalText": "owlbear-memory\nstdio · uv",
+      "text": "owlbear-memory\nstdio \u00b7 uv",
+      "originalText": "owlbear-memory\nstdio \u00b7 uv",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -489,11 +576,19 @@
       "versionNonce": 20017,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_ddgs_text", "type": "text" },
-        { "id": "s2_arrow_ddgs", "type": "arrow" }
+        {
+          "id": "s2_ddgs_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arrow_ddgs",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s2_ddgs_text",
@@ -515,10 +610,10 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
-      "text": "ddgs\nstdio · uv",
-      "originalText": "ddgs\nstdio · uv",
+      "text": "ddgs\nstdio \u00b7 uv",
+      "originalText": "ddgs\nstdio \u00b7 uv",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -544,11 +639,19 @@
       "versionNonce": 20019,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_markitdown_text", "type": "text" },
-        { "id": "s2_arrow_markitdown", "type": "arrow" }
+        {
+          "id": "s2_markitdown_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arrow_markitdown",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s2_markitdown_text",
@@ -570,10 +673,10 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
-      "text": "microsoft/markitdown\nstdio · uvx",
-      "originalText": "microsoft/markitdown\nstdio · uvx",
+      "text": "microsoft/markitdown\nstdio \u00b7 uvx",
+      "originalText": "microsoft/markitdown\nstdio \u00b7 uvx",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -599,11 +702,19 @@
       "versionNonce": 20021,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_github_text", "type": "text" },
-        { "id": "s2_arrow_github", "type": "arrow" }
+        {
+          "id": "s2_github_text",
+          "type": "text"
+        },
+        {
+          "id": "s2_arrow_github",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s2_github_text",
@@ -625,7 +736,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "GitHub MCP\n(VS Code built-in)",
       "originalText": "GitHub MCP\n(VS Code built-in)",
@@ -654,10 +765,15 @@
       "versionNonce": 20023,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_browser_text", "type": "text" }
+        {
+          "id": "s2_browser_text",
+          "type": "text"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s2_browser_text",
@@ -679,7 +795,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "mcp-browser\n(unregistered)",
       "originalText": "mcp-browser\n(unregistered)",
@@ -693,9 +809,9 @@
       "id": "s2_arrow_kanban",
       "type": "arrow",
       "x": 650,
-      "y": 232,
+      "y": 240,
       "width": 450,
-      "height": 88,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#495057",
       "backgroundColor": "transparent",
@@ -709,18 +825,35 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [-450, 88] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -450,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s1_vscode_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_kanban_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s1_vscode_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_kanban_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s2_arrow_knowledge",
       "type": "arrow",
       "x": 650,
-      "y": 232,
+      "y": 240,
       "width": 270,
-      "height": 88,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#495057",
       "backgroundColor": "transparent",
@@ -734,18 +867,35 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [-270, 88] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -270,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s1_vscode_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_knowledge_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s1_vscode_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_knowledge_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s2_arrow_memory",
       "type": "arrow",
       "x": 650,
-      "y": 232,
+      "y": 240,
       "width": 90,
-      "height": 88,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#495057",
       "backgroundColor": "transparent",
@@ -759,18 +909,35 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [-90, 88] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -90,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s1_vscode_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_memory_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s1_vscode_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_memory_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s2_arrow_ddgs",
       "type": "arrow",
       "x": 650,
-      "y": 232,
+      "y": 240,
       "width": 90,
-      "height": 88,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#495057",
       "backgroundColor": "transparent",
@@ -784,18 +951,35 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [90, 88] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          90,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s1_vscode_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_ddgs_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s1_vscode_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_ddgs_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s2_arrow_markitdown",
       "type": "arrow",
       "x": 650,
-      "y": 232,
+      "y": 240,
       "width": 280,
-      "height": 88,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#495057",
       "backgroundColor": "transparent",
@@ -809,18 +993,35 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [280, 88] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          280,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s1_vscode_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_markitdown_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s1_vscode_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_markitdown_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s2_arrow_github",
       "type": "arrow",
       "x": 650,
-      "y": 232,
+      "y": 240,
       "width": 490,
-      "height": 88,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#6741d9",
       "backgroundColor": "transparent",
@@ -833,19 +1034,39 @@
       "versionNonce": 20030,
       "groupIds": [],
       "boundElements": [
-        { "id": "s2_github_arrow_label", "type": "text" }
+        {
+          "id": "s2_github_arrow_label",
+          "type": "text"
+        }
       ],
       "isDeleted": false,
-      "points": [ [0, 0], [490, 88] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          490,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s1_vscode_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s2_github_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s1_vscode_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s2_github_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s2_github_arrow_label",
       "type": "text",
       "x": 875,
-      "y": 272,
+      "y": 280,
       "width": 60,
       "height": 18,
       "angle": 0,
@@ -861,7 +1082,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 13,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "built-in",
       "originalText": "built-in",
@@ -875,7 +1096,7 @@
       "id": "s3_section_label",
       "type": "text",
       "x": 100,
-      "y": 472,
+      "y": 460,
       "width": 200,
       "height": 18,
       "angle": 0,
@@ -891,7 +1112,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 20,
       "fontFamily": 1,
       "text": "CORE LIBRARIES",
       "originalText": "CORE LIBRARIES",
@@ -905,7 +1126,7 @@
       "id": "s3_kanban_lib_rect",
       "type": "rectangle",
       "x": 120,
-      "y": 492,
+      "y": 480,
       "width": 160,
       "height": 60,
       "angle": 0,
@@ -920,17 +1141,25 @@
       "versionNonce": 20033,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_kanban_lib_text", "type": "text" },
-        { "id": "s3_arrow_kanban", "type": "arrow" }
+        {
+          "id": "s3_kanban_lib_text",
+          "type": "text"
+        },
+        {
+          "id": "s3_arrow_kanban",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s3_kanban_lib_text",
       "type": "text",
       "x": 120,
-      "y": 492,
+      "y": 480,
       "width": 160,
       "height": 60,
       "angle": 0,
@@ -946,7 +1175,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "serve/kanban/",
       "originalText": "serve/kanban/",
@@ -960,7 +1189,7 @@
       "id": "s3_knowledge_lib_rect",
       "type": "rectangle",
       "x": 300,
-      "y": 492,
+      "y": 480,
       "width": 160,
       "height": 60,
       "angle": 0,
@@ -975,17 +1204,25 @@
       "versionNonce": 20035,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_knowledge_lib_text", "type": "text" },
-        { "id": "s3_arrow_knowledge", "type": "arrow" }
+        {
+          "id": "s3_knowledge_lib_text",
+          "type": "text"
+        },
+        {
+          "id": "s3_arrow_knowledge",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s3_knowledge_lib_text",
       "type": "text",
       "x": 300,
-      "y": 492,
+      "y": 480,
       "width": 160,
       "height": 60,
       "angle": 0,
@@ -1001,7 +1238,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "serve/knowledge/",
       "originalText": "serve/knowledge/",
@@ -1015,7 +1252,7 @@
       "id": "s3_memory_lib_rect",
       "type": "rectangle",
       "x": 480,
-      "y": 492,
+      "y": 480,
       "width": 160,
       "height": 60,
       "angle": 0,
@@ -1030,17 +1267,25 @@
       "versionNonce": 20037,
       "groupIds": [],
       "boundElements": [
-        { "id": "s3_memory_lib_text", "type": "text" },
-        { "id": "s3_arrow_memory", "type": "arrow" }
+        {
+          "id": "s3_memory_lib_text",
+          "type": "text"
+        },
+        {
+          "id": "s3_arrow_memory",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false,
-      "roundness": { "type": 3 }
+      "roundness": {
+        "type": 3
+      }
     },
     {
       "id": "s3_memory_lib_text",
       "type": "text",
       "x": 480,
-      "y": 492,
+      "y": 480,
       "width": 160,
       "height": 60,
       "angle": 0,
@@ -1056,7 +1301,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "store/memory/",
       "originalText": "store/memory/",
@@ -1072,7 +1317,7 @@
       "x": 200,
       "y": 400,
       "width": 0,
-      "height": 92,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#2f9e44",
       "backgroundColor": "transparent",
@@ -1086,10 +1331,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [0, 92] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_kanban_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s3_kanban_lib_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s2_kanban_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s3_kanban_lib_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s3_arrow_knowledge",
@@ -1097,7 +1359,7 @@
       "x": 380,
       "y": 400,
       "width": 0,
-      "height": 92,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#2f9e44",
       "backgroundColor": "transparent",
@@ -1111,10 +1373,27 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [0, 92] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_knowledge_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s3_knowledge_lib_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s2_knowledge_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s3_knowledge_lib_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s3_arrow_memory",
@@ -1122,7 +1401,7 @@
       "x": 560,
       "y": 400,
       "width": 0,
-      "height": 92,
+      "height": 80,
       "angle": 0,
       "strokeColor": "#2f9e44",
       "backgroundColor": "transparent",
@@ -1136,16 +1415,33 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [ [0, 0], [0, 92] ],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          80
+        ]
+      ],
       "lastCommittedPoint": null,
-      "startBinding": { "elementId": "s2_memory_rect", "focus": 0, "gap": 4 },
-      "endBinding": { "elementId": "s3_memory_lib_rect", "focus": 0, "gap": 4 }
+      "startBinding": {
+        "elementId": "s2_memory_rect",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "s3_memory_lib_rect",
+        "focus": 0,
+        "gap": 4
+      }
     },
     {
       "id": "s4_footer",
       "type": "text",
       "x": 100,
-      "y": 592,
+      "y": 600,
       "width": 400,
       "height": 18,
       "angle": 0,
@@ -1161,7 +1457,7 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "fontSize": 14,
+      "fontSize": 16,
       "fontFamily": 1,
       "text": "Last verified: 2026-04-20 (c8d2aacf)",
       "originalText": "Last verified: 2026-04-20 (c8d2aacf)",
