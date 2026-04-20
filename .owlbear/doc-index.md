@@ -17203,6 +17203,9 @@
 - ### `Channel B`
 - ### `Kanban protocol`
 
+## share/diagrams/project-overview.excalidraw
+describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
+
 ## share/instructions/README.md
 - # `instructions/`
 
@@ -17228,6 +17231,12 @@
 ## share/instructions/python.instructions.md
 
 ## share/instructions/research-docs.instructions.md
+
+## share/prompts/README.md
+- # `prompts/`
+- ## `Invocation Pattern`
+- ## `Naming Convention`
+- ## `Current Prompts`
 
 ## share/prompts/agent-audit.prompt.md
 - # `Agent Ecosystem Audit`
