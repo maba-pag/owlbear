@@ -66,7 +66,8 @@ _REQUIRED_DESCRIBES_GLOBS = [
 _VOLATILE_GLOB = ".owlbear/kanban/**"
 
 # AC4 — footer pattern: Last verified: YYYY-MM-DD (short-hash)
-_FOOTER_RE = re.compile(r"Last verified: \d{4}-\d{2}-\d{2} \([0-9a-f]+\)")
+# Note: _all_element_text() lowercases all text, so pattern must be lowercase too
+_FOOTER_RE = re.compile(r"last verified: \d{4}-\d{2}-\d{2} \([0-9a-f]+\)")
 
 
 # ---------------------------------------------------------------------------

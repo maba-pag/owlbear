@@ -17212,6 +17212,9 @@ describes: serve/mcp-*/src/**, serve/kanban/src/**, serve/knowledge/src/**, .vsc
 ## share/diagrams/memory-layers.excalidraw
 describes: serve/mcp-memory/src/**, store/memory/**, share/skills/h-memory-structure/**, share/skills/h-mcp-memory/**, share/instructions/owlbear-system.instructions.md
 
+## share/diagrams/pipeline.excalidraw
+describes: share/instructions/owlbear-system.instructions.md, share/skills/r-pipeline-protocol/**, share/agents/*.agent.md
+
 ## share/diagrams/project-overview.excalidraw
 describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
