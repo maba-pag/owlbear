@@ -104,8 +104,8 @@ both appear in the picker.
 
 The `.github/copilot-instructions.md` file in the project directory is the right place
 for project-specific rules (coding style, domain conventions, restricted tools). This
-file takes priority over the owlbear shared instructions and is already created by
-`init.py` — teammates just need to keep it in source control.
+This file takes priority over the owlbear shared instructions — create it in your project
+root and keep it in source control.
 
 ### Monorepo alternative
 

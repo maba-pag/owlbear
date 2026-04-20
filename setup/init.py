@@ -1,7 +1,7 @@
 """OwlBear workspace initialiser — setup/init.py.
 
 Usage (CLI):
-    python ../owlbear/setup/init.py [--name NAME] [--type TYPE]
+    python ../owlbear/setup/init.py [--name NAME]
 
 Run from the target project directory.  owlbear_dir is auto-detected from
 the location of this script.
