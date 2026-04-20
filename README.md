@@ -148,6 +148,16 @@ If `store/memory/curation-report.json` is present, a recommendation column is sh
 
 Exit codes: 0 on full success, 1 if any operation failed.
 
+## Doc Index
+
+Generate or update the workspace documentation index at `.owlbear/doc-index.md`:
+
+```bash
+uv run doc-index
+```
+
+Skips regeneration when the index is newer than all collected docs. Override output path with `--output <path>` (must stay inside workspace root).
+
 ## Development
 
 ```bash
