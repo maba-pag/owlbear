@@ -17203,6 +17203,12 @@
 - ### `Channel B`
 - ### `Kanban protocol`
 
+## share/diagrams/kanban.excalidraw
+describes: serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**
+
+## share/diagrams/memory-layers.excalidraw
+describes: serve/mcp-memory/src/**, store/memory/**, share/skills/h-memory-structure/**, share/skills/h-mcp-memory/**, share/instructions/owlbear-system.instructions.md
+
 ## share/diagrams/project-overview.excalidraw
 describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
