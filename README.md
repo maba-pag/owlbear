@@ -37,6 +37,7 @@ Open VS Code with `code .`.
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
 | `serve/mcp-memory/`       | MCP server for persistent agent memory (SQLite-backed) |
+| `serve/tools/`            | Workspace utility scripts — `doc-index` CLI            |
 | `share/agents/`           | Agent definitions (`.agent.md`)                        |
 | `share/skills/`           | Agent skills (`SKILL.md`, agentskills.io style)        |
 | `share/instructions/`     | Shared instruction files (`*.instructions.md`)         |
