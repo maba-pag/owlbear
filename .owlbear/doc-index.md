@@ -421,28 +421,36 @@
 ### Outbound links
 - [Encode OSS Ltd](https://www.encode.io/)
 
+## serve/browser/README.md
+- # `owlbear-browser — Browser Content Fetcher`
+- ## `Launch / Usage`
+- ### `Fetch a page with Playwright`
+- ### `Public API`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
 ## serve/cockpit/README.md
-- # `OwlBear Cockpit`
-- ## `Quick Start`
-- ## `Architecture`
+- # `owlbear-cockpit — Kanban Backend`
+- ## `Launch / Usage`
 - ## `Engine Surface — Allowlist`
 - ### `Via adapter (read-only)`
 - ### `Direct engine calls (mutations)`
 - ### `Excluded methods — why`
-- ## `Shell-to-Surface Contract`
-- ### `Grid areas (from `Shell.css`)`
-- ### `Three touchpoints`
-- ## `Hello-World Walkthrough — Adding a Second Surface`
-- ### `Step 1 — Create the component`
-- ### `Step 2 — Register the route`
-- ### `Step 3 — Add a nav-rail button`
-- ### `Step 4 — Navigate`
 - ## `Work Sessions Model`
 - ### `Derived states`
 - ### `Filter vocabulary`
-- ### `Event mapping (`activity.jsonl`)`
 - ## `Audit Trail — `actor: "cockpit"` Convention`
-- ## `API Reference`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [copilot-instructions.md](../../.github/copilot-instructions.md)
+- [README.md](../../README.md)
+- [copilot-instructions.md](../../.github/copilot-instructions.md)
+- [copilot-instructions.md](../../.github/copilot-instructions.md)
 
 ## serve/cockpit/web/node_modules/@ampproject/remapping/README.md
 - # `@ampproject/remapping`
@@ -16923,20 +16931,90 @@
 - [License](#license)
 - [](https://github.com/wooorm/mapz)
 
+## serve/kanban/README.md
+- # `owlbear-kanban — Kanban Engine`
+- ## `Launch / Usage`
+- ### `KanbanEngine methods`
+- ### `Dispatch helper`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
 ## serve/knowledge/README.md
-- # `owlbear-knowledge`
-- ## `Install`
-- ## `Optional dependencies`
-- ## `BGE-M3 model download`
-- ## `Module overview`
-- ### `Data stores`
-- ### `Schema / models`
-- ### `Ingestion pipeline`
-- ### `Graph construction`
-- ### `Retrieval and search`
-- ### `Utilities`
-- ## `Qdrant setup modes`
-- ## `Basic usage`
+- # `owlbear-knowledge — Knowledge Engine`
+- ## `Launch / Usage`
+- ### `Module groups`
+- ## `Configuration`
+- ### `Qdrant storage modes`
+- ## `Dependencies`
+- ### `Required`
+- ### `Optional extras`
+
+### Outbound links
+- [README.md](../../README.md)
+
+## serve/mcp-browser/README.md
+- # `owlbear-mcp-browser — Browser MCP Server`
+- ## `Launch / Usage`
+- ### `Tools`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
+## serve/mcp-kanban/README.md
+- # `owlbear-mcp-kanban — Kanban MCP Server`
+- ## `Launch / Usage`
+- ### `Tools`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
+## serve/mcp-knowledge/README.md
+- # `owlbear-mcp-knowledge — Knowledge MCP Server`
+- ## `Launch / Usage`
+- ### `Tools`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
+## serve/mcp-memory/README.md
+- # `owlbear-mcp-memory — Memory MCP Server`
+- ## `Launch / Usage`
+- ### `Tools`
+- ### `Entry schema`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
+## serve/orchestrator/README.md
+- # `owlbear — Orchestrator`
+- ## `Launch / Usage`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
+
+## serve/tools/README.md
+- # `owlbear-tools — Workspace Utilities`
+- ## `Launch / Usage`
+- ### `Public API`
+- ### `Excluded directories`
+- ## `Configuration`
+- ## `Dependencies`
+
+### Outbound links
+- [README.md](../../README.md)
 
 ## setup/setup-guide.md
 - # `OwlBear Setup Guide`
