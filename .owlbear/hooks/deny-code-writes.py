@@ -1,29 +1,23 @@
 """deny-code-writes.py — PreToolUse hook for the doc-writer agent.
 
-Deny-list path guard: blocks writes to source code and infrastructure directories.
-Reads VS Code hook stdin JSON, checks paths for write tools, denies writes to denied dirs.
+Extension allowlist guard: permits writes only to files with allowed extensions.
+Reads VS Code hook stdin JSON, checks paths for write tools, denies writes to
+files whose extension is not in the allowlist.
 Usage: invoked automatically by VS Code as a PreToolUse hook.
 
-Denied directories (deny-list):
-  serve/            — MCP server source code
-  v1/               — v1 legacy source code
-  tests/            — test suite
-  setup/            — setup scripts
-  seed/             — seed data
-  store/            — runtime data store
-  share/agents/     — agent config (self-modification guard)
-  .git/             — git internals (privilege escalation vector)
-  .owlbear/hooks/   — hook scripts (self-modification guard)
-  .owlbear/scripts/ — automation scripts (self-modification guard)
+Allowed extensions (owlbear-dev variant):
+  .md           — documentation files
+  .excalidraw   — diagram files
+  .py           — Python files (docstring edits only — agents may update module docstrings)
 
-Denied exact paths:
-  conftest.py       — root pytest configuration
+All other extensions (including no extension, dotfiles, directories) are denied.
 """
 
 from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path as _Path
 
 _WRITE_TOOLS = {
     "create_file",
@@ -34,20 +28,7 @@ _WRITE_TOOLS = {
     "editFiles",
 }
 
-_DENIED_PREFIXES = [
-    "serve/",
-    "v1/",
-    "tests/",
-    "setup/",
-    "seed/",
-    "store/",
-    "share/agents/",
-    ".git/",
-    ".owlbear/hooks/",
-    ".owlbear/scripts/",
-]
-
-_DENIED_EXACT = {"conftest.py"}
+_ALLOWED_EXTENSIONS = {".md", ".excalidraw", ".py"}
 
 
 def _extract_paths(tool_input: object) -> list[str]:
@@ -85,10 +66,9 @@ def _normalize(path: str) -> str:
 
 
 def _is_denied(normalized: str) -> bool:
-    for prefix in _DENIED_PREFIXES:
-        if normalized.startswith(prefix):
-            return True
-    return normalized in _DENIED_EXACT
+    """Return True if the path's extension is not in the allowed set."""
+    ext = _Path(normalized).suffix.lower()
+    return ext not in _ALLOWED_EXTENSIONS
 
 
 def main() -> None:
@@ -116,11 +96,9 @@ def main() -> None:
                 "hookSpecificOutput": {
                     "permissionDecision": "deny",
                     "permissionDecisionReason": (
-                        f"doc-writer path guard: write target '{normalized}' "
-                        "is in a denied directory. Doc-writer must not write "
-                        "to source code directories (deny-list: serve/, v1/, "
-                        "tests/, setup/, seed/, store/, share/agents/, .git/, "
-                        ".owlbear/hooks/, .owlbear/scripts/, conftest.py)."
+                        f"doc-writer path guard: write to '{normalized}' is denied. "
+                        "Only .md, .excalidraw, and .py extensions are allowed "
+                        "(owlbear-dev variant)."
                     ),
                 }
             }
@@ -130,5 +108,5 @@ def main() -> None:
     print("{}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
