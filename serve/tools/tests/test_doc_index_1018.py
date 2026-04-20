@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import os
+import sys
 import textwrap
 import time
 from pathlib import Path
@@ -27,6 +28,7 @@ import pytest
 from owlbear_tools.doc_index import (
     collect_docs,
     generate_index,
+    main,
     parse_index,
     should_regenerate,
 )
@@ -515,3 +517,69 @@ class TestFromAC_Parser:
         generate_index(tmp_path, index_path)
         entries = parse_index(index_path.read_text())
         assert len(entries) == 2
+
+
+# ===========================================================================
+# TestBuilderDiscovered
+# ===========================================================================
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests for uncovered paths in doc_index."""
+
+    def test_excalidraw_invalid_json_no_crash(self, tmp_path: Path) -> None:
+        """Invalid JSON in .excalidraw file is handled gracefully — no exception raised."""
+        _make_excalidraw(tmp_path, "broken.excalidraw", "not valid json {{")
+        index_path = tmp_path / "doc-index.md"
+        generate_index(tmp_path, index_path)
+        text = index_path.read_text()
+        assert "## broken.excalidraw" in text
+
+    def test_excalidraw_describes_as_string_is_rendered(self, tmp_path: Path) -> None:
+        """describes field stored as a plain JSON string (not a list) appears in the index."""
+        _make_excalidraw(
+            tmp_path,
+            "arch.excalidraw",
+            '{"describes": "serve/**"}',
+        )
+        index_path = tmp_path / "doc-index.md"
+        generate_index(tmp_path, index_path)
+        text = index_path.read_text()
+        entry_start = text.index("## arch.excalidraw")
+        next_entry = text.find("\n## ", entry_start + 1)
+        entry_text = text[entry_start:] if next_entry == -1 else text[entry_start:next_entry]
+        assert "describes" in entry_text
+        assert "serve/**" in entry_text
+
+    def test_parser_non_outbound_section_header_resets_outbound_flag(self) -> None:
+        """A ### header other than '### Outbound links' closes the outbound section."""
+        index_text = textwrap.dedent(
+            """\
+            <!-- AUTO-GENERATED ... -->
+
+            ## README.md
+            - # `Title`
+
+            ### Outbound links
+            - [first](https://first.example.com)
+
+            ### Notes
+            - [ignored](https://ignored.example.com)
+            """
+        )
+        entries = parse_index(index_text)
+        readme = next(e for e in entries if e["path"] == "README.md")
+        link_targets = [lnk["target"] for lnk in readme["outbound_links"]]
+        assert "https://first.example.com" in link_targets
+        assert "https://ignored.example.com" not in link_targets
+
+    def test_main_generates_index_when_absent(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """main() creates the index at .owlbear/doc-index.md when it does not exist."""
+        _make_md(tmp_path, "README.md", "# Root\n")
+        index_path = tmp_path / ".owlbear" / "doc-index.md"
+        monkeypatch.setattr(sys, "argv", ["doc-index", str(tmp_path)])
+        main()
+        assert index_path.exists()
+        assert "## README.md" in index_path.read_text()

@@ -22,7 +22,7 @@ validation = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
-pythonpath = ["serve/kanban/src"]
+pythonpath = ["serve/kanban/src", "serve/tools/src"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile -p no:logfire -p no:pytest_logfire"
 asyncio_mode = "strict"
 markers = [
@@ -44,6 +44,7 @@ src = [
   "serve/mcp-memory/src",
   "serve/browser/src",
   "serve/cockpit/src",
+  "serve/tools/src",
 ]
 
 [tool.ruff.lint]
