@@ -30,6 +30,7 @@
 - ## `Knowledge Base`
 - ## `Memory Migration`
 - ## `Memory Approval`
+- ## `Doc Index`
 - ## `Development`
 - ## `Pre-commit Hooks`
 - ### `VS Code auto-staging trap`
@@ -41,23 +42,20 @@
 - [Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli)
 
 ## SECURITY.md
-- # `OwlBear Security`
-- ## `Shell Execution`
-- ### `Design context`
-- ### `CommandSafetyGuard — defense-in-depth, not a security boundary`
-- ## `Mitigations`
-- ### `1. Approval gate (primary control)`
-- ### `2. CommandSafetyGuard regex blocklist (defense-in-depth)`
-- ### `3. Workspace confinement (sandbox_path)`
-- ## `Future Considerations`
-- ### `Allowlist mode`
-- ## `References`
+- # `Security Policy`
+- ## `Supported Versions`
+- ## `Reporting a Vulnerability`
+- ## `Disclosure Policy`
+
+### Outbound links
+- [private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability)
 
 ## .github/copilot-instructions.md
 - # `OwlBear — Copilot Workspace Instructions`
 - ## `1. Project Identity`
 - ## `2. Repository Branches`
 - ## `3. Cockpit Frontend`
+- ## `5. Tools Package`
 - ## `4. Cockpit Backend`
 
 ## .pytest_cache/README.md
@@ -17631,18 +17629,22 @@
 - ## `Known Pitfalls`
 
 ## share/skills/w-doc-update/SKILL.md
-- # `Documentation Update`
+- # `Documentation Update (v2)`
 - ## `Step 0 — Setup`
 - ### `Step 0a — Verify Upstream Review Evidence`
-- ## `Step 1 — Assess Documentation Impact`
-- ### `Item 1: Behavior/API Change`
+- ### `Step 0b — Load Doc-Index`
+- ## `Step 1 — Scope Classification`
+- ## `Step 2 — Relevance-Gated Checklist`
+- ### `Item 1: Descriptive Prose Docs`
 - ### `Item 2: Module Docstrings`
 - ### `Item 3: External Attribution`
-- ### `Item 4: CLI Changes`
-- ### `Item 5: Research Doc`
-- ## `Step 2 — Clean Scratch Files`
-- ## `Step 3 — Deliverables`
-- ## `Step 4 — Advance`
+- ### `Item 4: Research Doc`
+- ### `Item 5: Diagram Maintenance`
+- ### `Item 6: Explicit Diagram Creation`
+- ### `Item 7: Deletion Detection`
+- ## `Step 3 — Clean Scratch Files`
+- ## `Step 4 — Deliverables`
+- ## `Step 5 — Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`

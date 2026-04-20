@@ -31,7 +31,7 @@ memory — all scoped to your project directory and shared through the filesyste
 
 ```powershell
 # 1. Clone owlbear to a convenient parent directory
-git clone https://github.com/your-org/owlbear.git C:\Dev\owlbear
+git clone https://github.com/OWNER/owlbear.git C:\Dev\owlbear
 
 # 2. Create (or navigate to) your project directory — must be on the same drive
 mkdir C:\Dev\my-project

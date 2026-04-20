@@ -18,7 +18,7 @@ integration point.
 ## Quick Start
 
 ```bash
-git clone -b dev https://github.com/your-org/owlbear.git
+git clone -b dev https://github.com/OWNER/owlbear.git
 cd owlbear
 uv sync
 ```
@@ -32,8 +32,11 @@ Open VS Code with `code .`.
 | Directory                 | Purpose                                                |
 |---------------------------|--------------------------------------------------------|
 | `serve/orchestrator/`     | ACP client, dispatch planning, orchestration CLI hooks |
+| `serve/browser/`          | Web content extraction library (authenticated via Edge CDP) |
+| `serve/cockpit/`          | Steering Cockpit — browser UI for kanban board management |
 | `serve/knowledge/`        | Knowledge engine (graph + vector)                      |
 | `serve/kanban/`           | Kanban engine (transport-free; used by mcp-kanban)     |
+| `serve/mcp-browser/`      | MCP server for authenticated web content fetching      |
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
 | `serve/mcp-memory/`       | MCP server for persistent agent memory (SQLite-backed) |
@@ -43,11 +46,10 @@ Open VS Code with `code .`.
 | `share/instructions/`     | Shared instruction files (`*.instructions.md`)         |
 | `share/prompts/`          | User-facing one-shot prompt files (`*.prompt.md`)      |
 | `.owlbear/`               | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
+| `tests/`                  | Integration and unit test suite                        |
 | `store/`                  | Knowledge and memory data                              |
 | `seed/`                   | Template files copied to new projects by `setup/init.py` |
 | `setup/`                  | Workspace initialiser (`init.py`), setup guide, sharing guide |
-| `scripts/`                | Legacy setup script and pre-commit hooks (see `setup/init.py`) |
-| `v1/`                     | Archived v1 codebase for reference                     |
 
 ## How It Works
 
