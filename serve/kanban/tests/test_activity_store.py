@@ -11,7 +11,6 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
 
 from owlbear_kanban.activity_store import (  # NEW module — ImportError in RED
     append_activity_event,
@@ -91,7 +90,7 @@ class TestFromAC_ActivityAppendQuery:
 
         lines = (kanban_dir / "activity.jsonl").read_text(encoding="utf-8").strip().splitlines()
         assert len(lines) == 3
-        actions = [json.loads(l)["action"] for l in lines]
+        actions = [json.loads(line)["action"] for line in lines]
         assert actions == ["claim", "edit", "end_work"]
 
     def test_ac_c42_event_fields_match_activity_event_schema(self, tmp_path: Path) -> None:
@@ -181,7 +180,7 @@ class TestFromAC_ActivityAppendQuery:
 
         read_calls: list[str] = []
 
-        original_open = open  # noqa: WPS421
+        original_open = open
 
         def spy_open(path: object, *args: object, **kwargs: object) -> object:
             p = str(path)
@@ -308,7 +307,7 @@ class TestFromAC_ActivityCompaction:
         append_activity_event(_make_event(ts=recent_ts, task_id=2), kanban_dir)
 
         cutoff = now - timedelta(hours=1)
-        result1 = compact_activity_log(kanban_dir, before_dt=cutoff)
+        compact_activity_log(kanban_dir, before_dt=cutoff)
         result2 = compact_activity_log(kanban_dir, before_dt=cutoff)
 
         # Second run compacts zero additional records
@@ -329,3 +328,59 @@ class TestFromAC_ActivityCompaction:
         assert isinstance(result.before_bytes, int)
         assert isinstance(result.after_bytes, int)
         assert isinstance(result.records_compacted, int)
+
+
+# ---------------------------------------------------------------------------
+# TestBuilderDiscovered — additional coverage for activity_store.py
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Builder-discovered tests for activity_store edge cases."""
+
+    def test_list_activity_events_until_filter(self, tmp_path: Path) -> None:
+        """list_activity_events with until= excludes events after the cutoff."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        old_ts = (now - timedelta(hours=2)).isoformat()
+        recent_ts = now.isoformat()
+        append_activity_event(_make_event(ts=old_ts, task_id=1), kanban_dir)
+        append_activity_event(_make_event(ts=recent_ts, task_id=2), kanban_dir)
+
+        cutoff = (now - timedelta(hours=1)).isoformat()
+        results = list_activity_events(kanban_dir, until=cutoff)
+        task_ids = [e.task_id for e in results]
+        assert 1 in task_ids
+        assert 2 not in task_ids
+
+    def test_compact_activity_log_hard_floor_500(self, tmp_path: Path) -> None:
+        """compact_activity_log hard floor: with >500 old events and old cutoff, keeps >=500."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        # Write 600 old events
+        for i in range(600):
+            ts = (now - timedelta(hours=600 - i)).isoformat()
+            append_activity_event(_make_event(ts=ts, task_id=i % 10), kanban_dir)
+        # Compact with a cutoff that would remove most events
+        cutoff = now - timedelta(hours=500)
+        result = compact_activity_log(kanban_dir, before_dt=cutoff)
+        # Hard floor: should not compact below 500
+        assert result.records_compacted <= 100  # at most 100 removed (600-500=100)
+
+    def test_parse_dt_naive_datetime_gets_utc(self) -> None:
+        """_parse_dt adds UTC timezone to naive datetimes."""
+        from owlbear_kanban.activity_store import _parse_dt  # noqa: PLC0415
+
+        dt = _parse_dt("2026-04-20T10:00:00")
+        assert dt is not None
+        assert dt.tzinfo is not None
+        assert dt.tzinfo == UTC
+
+    def test_list_activity_events_source_filter(self, tmp_path: Path) -> None:
+        """list_activity_events with source= filter returns only matching events."""
+        kanban_dir = _make_board(tmp_path)
+        append_activity_event(_make_event(source="engine", task_id=1), kanban_dir)
+        append_activity_event(_make_event(source="agent", task_id=2), kanban_dir)
+        results = list_activity_events(kanban_dir, source="engine")
+        assert all(e.source == "engine" for e in results)
+        assert len(results) == 1
