@@ -1,8 +1,14 @@
 """Engine-internal Pydantic models for the native kanban engine.
 
-BoardConfig  — schema for .owlbear/kanban/config.yml
+BoardConfig  — schema for .owlbear/kanban/config.yml (accepts old and new schemas)
 Task         — schema for task file frontmatter + markdown body
 TaskSummary  — lightweight projection for list_tasks() results
+Section      — parsed markdown section (heading + content)
+ActivityEvent — one structured entry in activity.jsonl
+ActivityCompactionResult — result of compact_activity_log()
+SessionRecord — one agent work session derived from activity.jsonl
+RepairOutcome — result of attempt_repair()
+ConcurrencyError — raised when write_task_if_unchanged detects a stale version
 
 Timestamps are stored as plain strings to avoid Go nanosecond → Python
 microsecond precision drift on round-trips.
@@ -10,13 +16,13 @@ microsecond precision drift on round-trips.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class BoardInfo(BaseModel):
-    """Board identity sub-section of config.yml (board.name, etc.)."""
+    """Board identity sub-section of legacy config.yml (board.name, etc.)."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -24,44 +30,82 @@ class BoardInfo(BaseModel):
 
 
 class BoardDefaults(BaseModel):
-    """Default-values sub-section of config.yml.
-
-    Unknown keys (e.g. ``class``) are preserved via extra='allow' so that
-    round-trips do not lose non-standard vendor fields.
-    """
+    """Default-values sub-section of legacy config.yml."""
 
     model_config = ConfigDict(extra="allow")
 
-    status: str
-    priority: str
+    status: str = "research"
+    priority: str = "important"
 
 
 class BoardConfig(BaseModel):
     """Schema for .owlbear/kanban/config.yml.
 
-    All unknown/vendor fields (e.g. ``tui``, extra_vendor_field) are
-    preserved through parse → dump round-trips via extra='allow'.
+    Accepts both the legacy schema (version/board/tasks_dir/statuses as list[dict])
+    and the new Brief-C schema (flat statuses as list[str], entry_status, wave_size,
+    etc.). A ``model_validator`` normalises legacy data to the new shape before
+    field assignment. Unknown/vendor fields are preserved via extra='allow'.
     """
 
     model_config = ConfigDict(extra="allow")
 
-    version: int
-    board: BoardInfo
-    tasks_dir: str
-    archive_dir: str = "archive"
-    statuses: list[dict[str, Any]]
+    # Core fields — always present
+    statuses: list[str]
     priorities: list[str]
-    defaults: BoardDefaults
-    next_id: int
-    claim_timeout: str
-    activity_log: bool = False
+    claim_timeout: str = "1h"
+    next_id: int = 1
 
-    @model_validator(mode="after")
-    def _validate_dirs(self) -> BoardConfig:
-        if self.tasks_dir == self.archive_dir:
-            msg = f"tasks_dir and archive_dir must differ, both are {self.tasks_dir!r}"
-            raise ValueError(msg)
-        return self
+    # Directory layout — defaults cover new-schema boards; set from legacy schema
+    tasks_dir: str = "tasks"
+    archive_dir: str = "archive"
+
+    # New schema fields
+    entry_status: str = "research"
+    wave_size: int = 4
+    agent_map: dict[str, Any] = Field(default_factory=dict)
+    agent_types: dict[str, Any] = Field(default_factory=dict)
+    agent_compatibility: dict[str, Any] = Field(default_factory=dict)
+    non_impl_tags: list[str] = Field(default_factory=list)
+    archival_reasons: list[str] = Field(
+        default_factory=lambda: ["completed", "deprecated", "dropped", "duplicate", "wontfix"]
+    )
+    status_predicates: dict[str, Any] = Field(default_factory=dict)
+
+    # Legacy fields — kept for read access; not written in new schema
+    defaults: BoardDefaults = Field(default_factory=BoardDefaults)
+    activity_log: bool = True  # enabled by default for new-schema boards
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalise_legacy(cls, data: object) -> object:
+        """Convert legacy schema to new schema before field assignment."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+
+        # Normalise statuses: [{name: ...}, ...] or [{name: ...}, ...] → [str, ...]
+        raw_statuses = data.get("statuses")
+        if isinstance(raw_statuses, list) and raw_statuses:
+            first = raw_statuses[0]
+            if isinstance(first, dict):
+                data["statuses"] = [
+                    s.get("name", next(iter(s.values()), str(s)))
+                    for s in raw_statuses
+                    if isinstance(s, dict)
+                ]
+
+        # Propagate legacy defaults → entry_status
+        defaults = data.get("defaults")
+        if "entry_status" not in data and isinstance(defaults, dict):
+            data["entry_status"] = defaults.get("status", "research")
+
+        # Legacy tasks_dir/archive_dir passthrough (already present in dict; just keep)
+        return data
+
+    @property
+    def status_names(self) -> list[str]:
+        """Return statuses as a list of plain strings."""
+        return self.statuses
 
 
 class Task(BaseModel):
@@ -83,26 +127,32 @@ class Task(BaseModel):
     priority: str
     created: str
     updated: str
-    body: str = ""
+    # body can be str (raw markdown) or list[Section] (pre-parsed, Brief C in-memory)
+    body: str | list = Field(default="")  # list[Section] when constructed with parsed sections
 
-    # Optional fields
+    # Standard optional fields
     tags: list[str] = Field(default_factory=list)
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
     blocked: bool = False
     block_reason: str | None = None
+
+    # Claim fields — Brief C uses claimed_at only; claimed_by kept for legacy read
     claimed_by: str | None = None
     claimed_at: str | None = None
+
+    # Archive fields added in Brief C
+    archival_reason: str | None = None
+    archival_refs: list[str] = Field(default_factory=list)
 
 
 class TaskSummary(BaseModel):
     """Lightweight task summary for list operations.
 
-    Excludes ``body``, ``claimed_by``, ``created``, and ``updated`` from the
-    full :class:`Task` schema.  ``claimed_by`` is coerced to a boolean
-    ``claimed`` field; temporal fields are silently dropped via
-    ``extra="ignore"``.  Dict-style read access (``summary["field"]``) is
-    supported for MCP serialisation consumers.
+    Excludes ``body``, ``created``, and ``updated`` from the full Task schema.
+    Both ``claimed_by`` and ``claimed_at`` are coerced to a boolean ``claimed``
+    field. Dict-style read access (``summary["field"]``) is supported for MCP
+    serialisation consumers.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -121,12 +171,110 @@ class TaskSummary(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce_claimed(cls, data: object) -> object:
-        """Convert claimed_by string to a boolean claimed flag."""
-        if isinstance(data, dict) and "claimed_by" in data:
+        """Derive boolean claimed from claimed_by or claimed_at."""
+        if isinstance(data, dict):
             data = dict(data)
-            data["claimed"] = data.pop("claimed_by") is not None
+            if "claimed_by" in data:
+                data["claimed"] = data.pop("claimed_by") is not None
+            elif "claimed_at" in data and "claimed" not in data:
+                data["claimed"] = data["claimed_at"] is not None
         return data
 
     def __getitem__(self, key: str) -> object:
         """Allow dict-style read access for MCP serialisation consumers."""
         return getattr(self, key)
+
+
+# ---------------------------------------------------------------------------
+# Storage types — Brief C additions
+# ---------------------------------------------------------------------------
+
+
+class Section(BaseModel):
+    """One parsed section of a task body (heading + content)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    heading: str | None
+    level: int
+    content: str
+
+
+class ActivityEvent(BaseModel):
+    """One structured entry in activity.jsonl."""
+
+    model_config = ConfigDict(extra="allow")
+
+    timestamp: str
+    task_id: int | None = None
+    action: str
+    source: str
+    detail: str | None = None
+    # Optional: status of the task at time of claim event
+    task_status_at_start: str | None = None
+
+
+class ActivityCompactionResult(BaseModel):
+    """Result of compact_activity_log()."""
+
+    before_bytes: int
+    after_bytes: int
+    records_compacted: int
+
+
+class SessionRecord(BaseModel):
+    """One agent work session derived from activity.jsonl."""
+
+    task_id: int | None
+    task_status_at_start: str | None = None
+    state: str
+    started_at: str
+    ended_at: str | None = None
+    outcome: str | None = None
+    duration_s: float | None = None
+
+
+class RepairOutcome(BaseModel):
+    """Result of attempt_repair() — one corrupt file's repair outcome."""
+
+    task_id: int | None
+    file_path: str
+    code: str
+    action: Literal["fixed", "quarantined", "failed"]
+    detail: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Exception types
+# ---------------------------------------------------------------------------
+
+
+class ConcurrencyError(Exception):
+    """Raised by write_task_if_unchanged when the on-disk version is newer."""
+
+    def __init__(self, code: str, user_message: str) -> None:
+        super().__init__(user_message)
+        self.code = code
+        self.user_message = user_message
+
+
+class ConfigError(Exception):
+    """Raised when board configuration contains an invalid value."""
+
+    def __init__(self, code: str, user_message: str) -> None:
+        super().__init__(user_message)
+        self.code = code
+        self.user_message = user_message
+
+
+class MigrationRequiredError(Exception):
+    """The board requires migration before it can be used.
+
+    Raised by ``KanbanEngine.__init__`` when any active task file contains
+    the legacy ``claimed_by`` field (Brief C §1.5, AC-C47).
+    """
+
+    def __init__(self, code: str, user_message: str) -> None:
+        super().__init__(user_message)
+        self.code = code
+        self.user_message = user_message
