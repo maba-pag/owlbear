@@ -475,9 +475,10 @@ class TestFromAC_QuarantineRepair:
         assert len(ar_tasks) >= 1
         body = ar_tasks[0].body
 
-        assert "code" in body, f"'code' not found in AR body:\n{body}"
-        assert "path" in body, f"'path' not found in AR body:\n{body}"
-        assert "detail" in body, f"'detail' not found in AR body:\n{body}"
+        expected_quarantine_path = str(kanban_dir / "quarantine" / "1-test.md")
+        assert "ERR_CORRUPT_MISSING_FIELD" in body, f"Expected error code not found in AR body:\n{body}"
+        assert expected_quarantine_path in body, f"Expected quarantine path not found in AR body:\n{body}"
+        assert f"quarantined to {expected_quarantine_path}" in body, f"Expected detail value not found in AR body:\n{body}"
 
 
 # ---------------------------------------------------------------------------
