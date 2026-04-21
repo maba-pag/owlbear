@@ -11,10 +11,9 @@ import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
+import contextlib
 
-import pytest
 
-from owlbear_kanban.migrate import main as migrate_main  # NEW module — ImportError in RED
 
 # ---------------------------------------------------------------------------
 # Board helpers
@@ -124,6 +123,23 @@ priority: needed
 created: "2025-12-01T10:00:00+00:00"
 updated: "2026-01-10T10:00:00+00:00"
 class: tier-1
+---
+
+## Notes
+
+Archived content.
+"""
+
+_MODERN_ARCHIVE = """\
+---
+id: {task_id}
+title: Archive task {task_id}
+status: done
+priority: needed
+created: "2025-12-01T10:00:00+00:00"
+updated: "2026-01-10T10:00:00+00:00"
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Notes
@@ -275,7 +291,7 @@ class TestFromAC_LaneAlgorithms:
         kanban_dir = _make_legacy_board(tmp_path)
         task_content = (
             "---\nid: 1001\ntitle: t\nstatus: todo\npriority: needed\n"
-            "created: \"2026-01-15T08:00:00+00:00\"\nupdated: \"2026-01-15T08:00:00+00:00\"\n---\n"
+            'created: "2026-01-15T08:00:00+00:00"\nupdated: "2026-01-15T08:00:00+00:00"\n---\n'
         )
         task_file = kanban_dir / "tasks" / "1001-t.md"
         task_file.write_text(task_content, encoding="utf-8")
@@ -292,7 +308,7 @@ class TestFromAC_LaneAlgorithms:
         # Naive timestamp (no tz offset)
         task_content = (
             "---\nid: 1001\ntitle: t\nstatus: todo\npriority: needed\n"
-            "created: \"2026-01-15T08:00:00\"\nupdated: \"2026-01-15T08:00:00\"\n---\n"
+            'created: "2026-01-15T08:00:00"\nupdated: "2026-01-15T08:00:00"\n---\n'
         )
         task_file = kanban_dir / "tasks" / "1001-t.md"
         task_file.write_text(task_content, encoding="utf-8")
@@ -340,6 +356,39 @@ class TestFromAC_LaneAlgorithms:
 
         _run_migrate(kanban_dir, lane="tasks")
         assert task_file.stat().st_mtime == mtime_before
+
+    def test_ac_c33_archive_lane_adds_archival_reason(self, tmp_path: Path) -> None:
+        """AC-C33: archive lane adds archival_reason: completed to legacy archive files."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-old.md"
+        arc_file.write_text(_LEGACY_ARCHIVE.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        assert result.returncode == 0
+
+        content = arc_file.read_text(encoding="utf-8")
+        assert "archival_reason: completed" in content
+
+    def test_ac_c33_archive_lane_adds_archival_refs(self, tmp_path: Path) -> None:
+        """AC-C33: archive lane adds archival_refs: [] to legacy archive files."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-old.md"
+        arc_file.write_text(_LEGACY_ARCHIVE.format(task_id=1), encoding="utf-8")
+
+        _run_migrate(kanban_dir, lane="archive")
+        content = arc_file.read_text(encoding="utf-8")
+
+        assert "archival_refs:" in content
+
+    def test_ac_c35_archive_idempotency_check_skips_modern_archive(self, tmp_path: Path) -> None:
+        """AC-C35: archive lane skips files that already have non-null archival_reason + archival_refs."""
+        kanban_dir = _make_modern_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-modern.md"
+        arc_file.write_text(_MODERN_ARCHIVE.format(task_id=1), encoding="utf-8")
+        mtime_before = arc_file.stat().st_mtime
+
+        _run_migrate(kanban_dir, lane="archive")
+        assert arc_file.stat().st_mtime == mtime_before
 
 
 # ---------------------------------------------------------------------------
@@ -427,7 +476,6 @@ class TestFromAC_CrashRecovery:
 
     def test_ac_c37_no_partial_files_after_failure(self, tmp_path: Path) -> None:
         """AC-C37: if atomic_write is used, no .tmp-* files left after a failure."""
-        from unittest.mock import patch  # noqa: PLC0415
 
         kanban_dir = _make_legacy_board(tmp_path)
         (kanban_dir / "tasks" / "1001-t.md").write_text(
@@ -440,14 +488,12 @@ class TestFromAC_CrashRecovery:
         def crash_on_second_replace(src: str, dst: str) -> None:
             call_count["n"] += 1
             if call_count["n"] == 2:
-                raise OSError("simulated mid-migration crash")
+                msg = "simulated mid-migration crash"
+                raise OSError(msg)
             original_replace(src, dst)
 
-        with patch("os.replace", side_effect=crash_on_second_replace):
-            try:
-                _run_migrate(kanban_dir, lane="tasks")
-            except OSError:
-                pass
+        with patch("os.replace", side_effect=crash_on_second_replace), contextlib.suppress(OSError):
+            _run_migrate(kanban_dir, lane="tasks")
 
         tmp_leftovers = list((kanban_dir / "tasks").glob(".tmp-*"))
         assert tmp_leftovers == [], f"Leftover .tmp- files: {tmp_leftovers}"
