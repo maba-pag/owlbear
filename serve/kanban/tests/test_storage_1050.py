@@ -90,6 +90,35 @@ archive_dir: archive
 activity_log: false
 """
 
+# New-schema board config: no 'version' field — the migration gate in
+# KanbanEngine.__init__ is active for these boards.
+_NEW_SCHEMA_CONFIG_YAML = """\
+board:
+  name: TestBoard
+tasks_dir: tasks
+statuses:
+- name: research
+- name: backlog
+- name: todo
+- name: in-progress
+- name: review
+- name: docs
+- name: done
+priorities:
+- someday
+- nice-to-have
+- important
+- needed
+- critical
+defaults:
+  status: research
+  priority: important
+claim_timeout: 1h
+next_id: 10
+archive_dir: archive
+activity_log: false
+"""
+
 
 def _make_board(tmp_path: Path) -> Path:
     """Create a minimal board directory structure. Returns kanban_dir."""
@@ -525,14 +554,24 @@ class TestFromAC_ArchiveExemption:
     def test_engine_init_with_archive_claimed_by_no_migration_error(
         self, tmp_path: Path
     ) -> None:
-        """AC-C48: KanbanEngine.__init__ does NOT raise MigrationRequiredError for archive files."""
+        """AC-C48: KanbanEngine.__init__ does NOT raise MigrationRequiredError for archive files.
+
+        Uses a new-schema board (no 'version' field) so the migration gate at
+        engine.py:314 is active.  tasks/ is clean; archive/ has claimed_by.
+        The gate must not fire for archive-only legacy fields.
+        """
         from owlbear_kanban import KanbanEngine
 
-        kanban_dir = _make_board(tmp_path)
-        # Only archive/ has claimed_by — tasks/ is clean
+        # New-schema board: gate is active (legacy boards bypass it entirely)
+        kanban_dir = tmp_path / "board"
+        kanban_dir.mkdir(parents=True)
+        (kanban_dir / "config.yml").write_text(_NEW_SCHEMA_CONFIG_YAML, encoding="utf-8")
+        (kanban_dir / "tasks").mkdir()
+        (kanban_dir / "archive").mkdir()
+        # Only archive/ has claimed_by — tasks/ is intentionally clean
         _write_claimed_by_file(kanban_dir / "archive", task_id=5)
 
-        # Must not raise MigrationRequiredError
+        # Must not raise MigrationRequiredError even though gate is active
         try:
             engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
         except MigrationRequiredError:
