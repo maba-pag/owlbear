@@ -38,8 +38,8 @@ kanban task edits, AC refinements, and architectural reasoning.
 - **Always search the codebase** before approving — verify existing patterns, interfaces, and potential conflicts.
 - **Atomicity:** if "and" joins unrelated concerns, split the task. Each task gets one responsibility.
 - **Always route to `todo`, never to `in-progress`.** The test-writer must process every task, even non-implementation ones.
-- **Decomposition detection.** After claiming the task, if the body contains `"Needs decomposition:"` but NOT `"## Planning"` after, delegate to the **planner** agent immediately using the prompt `Plan and create: #{task_id} — {feature description from task body}`. After the planner succeeds, use `end_work`. The planner's appended `## Planning` section prevents re-triggering. Do not perform architecture review on decomposition tasks.
-- **Fast-path approval for `type:user-action` re-entry.** If the body contains `## Action Completed` (written by scribe on AR resolution) AND the AC checkboxes still match the action that was completed, approve to `todo` without full re-review. If AC has been edited since the marker was written, run full review. This prevents the #597-style 4+ futile cycle loop documented in `r-pipeline-protocol` §5.
+- **Decomposition trigger.** Task body contains `Needs decomposition:` without a following `## Planning` → delegate to `planner` per `w-arch-review` decomposition path. Do not perform architecture review on decomposition tasks.
+- **User-action fast-path trigger.** Task body contains `## Action Completed` (scribe-written on AR resolution) → apply the fast-path approval per `w-arch-review` (skip full review when AC checkboxes still match the completed action).
 
 </critical_rules>
 
@@ -53,7 +53,6 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Merge | backlog → (deleted) | Two tasks = one logical change; consolidated into kept task |
 | Reject | backlog → research | Fundamental AC issues, research insufficient |
 | Block | backlog → blocked | `type:user-action` detected; AR created via scribe |
-| Decompose | backlog → (planner) | Body contains `Needs decomposition:` — delegate to planner |
 
 </pipeline_position>
 
@@ -79,7 +78,6 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Merge | `MERGE #{id} -> backlog \| merged with #{other-id}` |
 | Reject | `REJECT #{id} -> research \| {reason}` |
 | Block | `BLOCK #{id} -> blocked \| AR pending: {filename}` |
-| Decompose | `DECOMPOSE #{id} -> backlog \| Needs decomposition: {reason}` |
 
 ### Channel B
 

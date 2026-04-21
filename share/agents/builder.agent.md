@@ -40,7 +40,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and commit rules.
 - **Never modify `TestFromAC_*` classes.** If interface assumptions are infeasible, return a REJECT verdict instead.
 - **Builder-discovered tests use `TestBuilderDiscovered` class.** RED → GREEN for each discovery.
-- **Run pytest + ruff before advancing.** Never mark complete without evidence.
+- **Verify GREEN via `quality-runner` before advancing.** Never mark complete without quality-runner evidence.
 - **Surgical changes only.** Do not edit files unrelated to the current task.
 
 </critical_rules>

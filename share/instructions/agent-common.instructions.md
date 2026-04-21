@@ -12,7 +12,7 @@ Append your agent section to the task body via the `note` parameter of `end_work
 | Agent | Verdict tokens | Body section |
 |-------|---------------|--------------|
 | researcher | DONE | ## Research |
-| architect | APPROVED / REFINE / SPLIT / MERGE / REJECT / BLOCK / DECOMPOSE | ## Architecture Review |
+| architect | APPROVED / REFINE / SPLIT / MERGE / REJECT / BLOCK | ## Architecture Review |
 | test-writer | DONE | ## Test-Writer Notes |
 | builder | DONE / REJECT | ## Builder Notes |
 | reviewer | PASS / FAIL | ## Review Evidence |
@@ -34,13 +34,3 @@ All agents should recognise — but only some must act on — `type:user-action`
 | auditor | Convention verification | Confirm AR was created, block was issued, `## Action Completed` appears in task body |
 
 See r-pipeline-protocol §5 — User-Action Tasks for the full blocking flow, fast-path, and dry-run scenario.
-
-## Diagram Rendering Paths
-
-Three rendering paths are available in OwlBear chat — choose based on what the user needs:
-
-| Path | When to use | How to invoke |
-|------|-------------|---------------|
-| Mermaid code block | Quick flowcharts, sequence diagrams, ERDs in chat | Wrap diagram source in ` ```mermaid ` fence; requires `mermaid-chat.enabled: true` (set in seed template) |
-| HTML + Mermaid CDN | Rich styled output — tables, diagrams, colour, layout | Load `h-visual-output` skill; render via `<div>` with inline `<script src="mermaid CDN">` |
-| Excalidraw JSON | Editable whiteboard-style diagrams | Load `h-excalidraw-diagram` skill; produce valid Excalidraw JSON for VS Code Excalidraw extension |

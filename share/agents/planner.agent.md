@@ -29,15 +29,11 @@ has already approved the scope.
 
 <critical_rules>
 
-- **Follow the `w-task-decomposition` skill** for the decomposition process, dependency graph construction, and priority/tag assignment.
+- **Follow the `w-task-decomposition` skill** for the decomposition process, prefix-based execution mode (`Plan and create:` / `Plan:` / fallback), dependency graph construction, and priority/tag assignment.
 - **Read `r-pipeline-protocol`** for task quality standards, follow-up task requirements, and entry-gate conventions.
 - **TDD pairing is mandatory.** Every implementation task has a preceding test task linked via dependency.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split.
 - **Single domain per task.** Each task targets exactly one domain. Multi-domain work gets split. See `r-architecture-standards` for the domain taxonomy.
-- **Execution mode — three-tier prefix detection:**
-  1. **`Plan and create: #{id} — ...`** → dispatch mode: claim task, auto-create subtasks immediately, no askQuestions.
-  2. **`Plan: ...`** → user mode: present the breakdown, then use `askQuestions` to request approval before creating any tasks. If user rejects, stop and report cancellation without creating tasks.
-  3. **Neither prefix detected** → compatibility fallback: apply existing NL-based parent-task-ID heuristic. If heuristic is inconclusive, default to approval mode (safe default). *(Tier 3 is a temporary compatibility layer — will be removed once callers adopt "Plan and create:" prefix via tasks #1007/#1008.)*
 
 </critical_rules>
 
