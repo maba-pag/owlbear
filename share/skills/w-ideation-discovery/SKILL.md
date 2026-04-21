@@ -28,9 +28,9 @@ Phase 1 of the ideation workflow. The discovery agent owns M1-M2, sharpens the p
 
 - Use when relaying early-challenge output or the first research bridge.
 - Require the structured context header:
-   - current phase and moment
-   - current sub-topic
-   - prior anchor
+  - current phase and moment
+  - current sub-topic
+  - prior anchor
 - Apply anchor-recall only when the anchor has changed in a meaningful way.
 
 ### Decision Turns
@@ -127,15 +127,18 @@ Phase 1 of the ideation workflow. The discovery agent owns M1-M2, sharpens the p
 **Decision to make:** ...
 
 **Options considered:**
+
 - A: ...
 - B: ...
 
 **Chosen:** ...
 
 **Rejected:**
+
 - B because ...
 
 **Source inputs (when relevant):**
+
 - User: "..."
 - Panel / research: ...
 ```

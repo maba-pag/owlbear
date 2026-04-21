@@ -1,9 +1,9 @@
 # doc-writer v2 Behavioral Verification Spec
 
-**Created:** 2026-04-20  
-**Brief reference:** `docs-currency-2026-04-19` §2 (Outcome 4)  
-**Task:** #1023  
-**Status:** COMPLETE — Cases 1, 2, 5, 6 verified via implementation review. Cases 3, 4 DEFERRED (Phase 2 diagram infrastructure required).  
+**Created:** 2026-04-20
+**Brief reference:** `docs-currency-2026-04-19` §2 (Outcome 4)
+**Task:** #1023
+**Status:** COMPLETE — Cases 1, 2, 5, 6 verified via implementation review. Cases 3, 4 DEFERRED (Phase 2 diagram infrastructure required).
 
 ---
 
@@ -66,12 +66,14 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 ### Pass/Fail Criteria
 
 **PASS** if all of:
+
 - `## Docs Gate` section is appended to task body.
 - All checklist items explicitly marked N/A or No with reasoning.
 - Zero doc files modified or created.
 - Task status is `done` after `end_work`.
 
 **FAIL** if any of:
+
 - doc-writer modifies or creates any file (false-positive action).
 - `## Docs Gate` section is absent from task body.
 - Any checklist item is left without a disposition.
@@ -110,12 +112,14 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 ### Pass/Fail Criteria
 
 **PASS** if all of:
+
 - `README.md` is updated with accurate `--port` / `COCKPIT_PORT` documentation.
 - Commit is made with only `README.md` staged (no application code staged).
 - `## Docs Gate` section appended to task body with item 4 marked Updated.
 - Task status is `done` after `end_work`.
 
 **FAIL** if any of:
+
 - `README.md` is not updated.
 - Commit stages any `.py` file (doc-writer touched application logic).
 - doc-writer writes no commit at all despite the doc change.
@@ -160,6 +164,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 ### Pass/Fail Criteria
 
 **PASS** if all of:
+
 - `share/diagrams/pipeline.excalidraw` footer is updated to today's date and current
   commit hash.
 - Commit stages only `share/diagrams/pipeline.excalidraw` (no source files).
@@ -167,6 +172,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 - Task status is `done` after `end_work`.
 
 **FAIL** if any of:
+
 - Diagram footer is not updated.
 - doc-writer skips the diagram (false-negative; glob match not detected).
 - Commit stages source code files alongside the diagram.
@@ -211,6 +217,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 ### Pass/Fail Criteria
 
 **PASS** if all of:
+
 - `share/diagrams/memory-layers.excalidraw` is created and is valid Excalidraw JSON.
 - Diagram includes a footer text element with date and commit hash.
 - doc-index updated to include the new diagram entry.
@@ -219,6 +226,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 - Task status is `done` after `end_work`.
 
 **FAIL** if any of:
+
 - Diagram is not created (doc-writer ignored explicit task body request).
 - Diagram file is not valid Excalidraw JSON.
 - doc-index is not updated.
@@ -268,6 +276,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 ### Pass/Fail Criteria
 
 **PASS** if all of:
+
 - Child kanban task created for `serve/browser/README.md` deletion.
 - DR file created under `.owlbear/decisions/pending/`.
 - Child task is in `blocked` state.
@@ -276,6 +285,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 - Current task status is `done` after `end_work`.
 
 **FAIL** if any of:
+
 - doc-writer modifies or deletes `serve/browser/README.md` directly.
 - No child kanban task created.
 - No DR file created under `.owlbear/decisions/pending/`.
@@ -316,6 +326,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 ### Pass/Fail Criteria
 
 **PASS** if all of:
+
 - `share/skills/w-tdd-green/SKILL.md` is **not** modified.
 - No false-positive child task created for the skill file.
 - `## Docs Gate` section explicitly notes the file is OUT of scope.
@@ -323,6 +334,7 @@ doc-writer is invoked via `start_work` after task reaches `docs` status.
 - Task status is `done` after `end_work`.
 
 **FAIL** if any of:
+
 - doc-writer edits `share/skills/w-tdd-green/SKILL.md` (scope violation).
 - doc-writer creates a deletion-proposal child task for an out-of-scope file.
 - `## Docs Gate` section is absent or does not mention the scope classification.

@@ -45,6 +45,7 @@ and `## Review Evidence` sections for file paths mentioned.
 Classify each file as **IN-scope** or **OUT-scope**:
 
 **IN scope (edit + deletion-proposal):**
+
 - Root: `README.md`, `README-consumer.md`, `SECURITY.md`
 - Package READMEs: `serve/*/README.md` (9 files)
 - Setup guides: `setup/setup-guide.md`, `setup/sharing-guide.md`
@@ -55,6 +56,7 @@ Classify each file as **IN-scope** or **OUT-scope**:
 - Docstrings in `.py` files
 
 **OUT scope (no edit, no deletion-proposal):**
+
 - `share/agents/*.agent.md` (agent-executable)
 - `share/skills/*/SKILL.md` (agent-executable)
 - `share/instructions/*.instructions.md` (agent-executable)
@@ -125,9 +127,9 @@ every task.
   2. Create a child kanban task:
      `owlbear-kanban/create_task(title="Delete stale docs in <path>", parent=<current_task_id>)`.
   3. Block the child: `owlbear-kanban/edit_task(task_id=<child_id>, blocked=true,
-     block_reason="awaiting deletion DR")`.
+block_reason="awaiting deletion DR")`.
   4. Invoke scribe: `Scribe: task_id=<current_task_id>, mode=check-or-create,
-     concern="delete stale <path> — references deleted <feature>"`. Scribe writes a DR to
+concern="delete stale <path> — references deleted <feature>"`. Scribe writes a DR to
      `.owlbear/decisions/pending/`.
   5. Record the child task id in `## Docs Gate`.
   6. **The current task advances to `done` without waiting for DR resolution.**

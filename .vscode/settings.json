@@ -18,6 +18,12 @@
   "[powershell]": {
     "editor.defaultFormatter": "ms-vscode.powershell"
   },
+  "[prompt]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[skill]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
   "[toml]": {
     "editor.defaultFormatter": "tamasfe.even-better-toml"
   },

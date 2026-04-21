@@ -15,10 +15,10 @@ User-facing phase agents should load their phase skill, not this file, for day-t
 
 ## Phase Map
 
-| Phase | User-facing Agent | Owns | Primary Outputs |
-|-------|-------------------|------|-----------------|
-| Phase 1 — Discovery | `ideation-discoverer` | M1-M2, early challenge lane, first research bridge | `context.md`, `decisions.md`, `research-notes.md`, optional `synthesis-idea-panel.md` |
-| Phase 2 — Mediation | `ideation-mediator` | M3-M6, late-domain panel, Critic validation, Brief, handoff | `synthesis.md`, `brief.md`, kanban parent task |
+| Phase               | User-facing Agent     | Owns                                                        | Primary Outputs                                                                       |
+| ------------------- | --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Phase 1 — Discovery | `ideation-discoverer` | M1-M2, early challenge lane, first research bridge          | `context.md`, `decisions.md`, `research-notes.md`, optional `synthesis-idea-panel.md` |
+| Phase 2 — Mediation | `ideation-mediator`   | M3-M6, late-domain panel, Critic validation, Brief, handoff | `synthesis.md`, `brief.md`, kanban parent task                                        |
 
 `ideator` remains as a thin compatibility router that directs users to the correct phase.
 
