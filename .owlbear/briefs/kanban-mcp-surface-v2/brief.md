@@ -2,7 +2,7 @@
 
 ## Summary
 
-Brief A is a complete redesign of the kanban MCP tool surface — every tool re-shaped, two folded away, one dropped, one (`pick_tasks`) substantially restructured. The redesign is motivated by archive-read pain (the original trigger) but the audit surfaced equally costly issues across the surface: N+1 read patterns, vestigial trap parameters, duplicated single-field tools, leaked storage details, missing structured fields for archival reason and dep status, ambiguous claim identity, and no batch-id lookup. The brief specifies only the contract that calling agents see and use; engine implementation is Brief B; persistence is Brief C.
+Brief A is a complete redesign of the kanban MCP tool surface — every tool re-shaped, three standalone tools folded into other operations, and `pick_tasks` substantially restructured. The redesign is motivated by archive-read pain (the original trigger) but the audit surfaced equally costly issues across the surface: N+1 read patterns, vestigial trap parameters, duplicated single-field tools, leaked storage details, missing structured fields for archival reason and dep status, ambiguous claim identity, and no batch-id lookup. The brief specifies only the contract that calling agents see and use; engine implementation is Brief B; persistence is Brief C.
 
 ## Problem Statement
 
@@ -87,7 +87,7 @@ list_tasks(
 show_task(
   id: int,
   section: str | None = None
-) -> TaskFull
+) -> ShowTaskResponse
 ```
 
 **Validation:**
@@ -98,7 +98,7 @@ show_task(
 **Behavior:**
 
 - When `id` references an archived task, returns the full task object with `status: "archived"` and `archival_reason` / `archival_refs` populated. No special handling required by the caller.
-- When `section` is set, returns body containing only matching `##` heading content (case-insensitive, all matches concatenated in document order). When the heading isn't found, `body: null` and the response includes `missing_sections: ["<section>"]`. When found multiple times, `guidance` includes occurrence count.
+- When `section` is set, returns body containing only matching heading content (case-insensitive heading match, regardless of heading level; all matches concatenated in document order). When the heading isn't found, `body: null` and the response includes `missing_sections: ["<section>"]`. When found multiple times, `guidance` includes occurrence count.
 - When `section` is unset, returns full body.
 
 ### 5.3 `pick_tasks`
@@ -121,7 +121,7 @@ pick_tasks(
 **Behavior:**
 
 - Returns `{waves: list[Wave], guidance: list[str]}` where `Wave = {index: int, tasks: list[DispatchEntry]}`.
-- Engine guarantees: no two tasks within a wave have a `depends_on` edge between them; no empty waves; claimed tasks excluded; tasks blocked by `dep_status: "blocked"` excluded.
+- Engine guarantees: no two tasks within a wave have a `depends_on` edge between them; no empty waves; **claimed tasks excluded; archived tasks excluded; tasks blocked by `dep_status: "blocked"` excluded; tasks with `blocked == true` excluded** (per Brief B D58 — dispatcher will not hand out a task that `start_work` would reject).
 - `DispatchEntry` includes computed `agent: str` (engine maps status→agent).
 
 ### 5.4 `create_task`
@@ -134,19 +134,22 @@ pick_tasks(
 create_task(
   title: str,
   body: str = "",
-  status: str = "backlog",
   priority: str = "needed",
   tags: list[str] | None = None,
   parent: int | None = None,
   depends_on: list[int] | None = None
-) -> TaskFull
+) -> SingleTaskResponse
 ```
 
 **Validation:**
 
 - `parent` references non-existent ID → `ToolError`
 - Any element of `depends_on` references non-existent ID → `ToolError`
-- Invalid `status` or `priority` enum value → `ToolError`
+- Invalid `priority` enum value → `ToolError`
+
+**Behavior:**
+
+- Tasks are created at the engine-configured entry status (typically `"research"`); callers cannot choose status at creation. Status changes go through `move_task`.
 
 ### 5.5 `edit_task`
 
@@ -169,7 +172,7 @@ edit_task(
   block_reason: str | None = None,         # set non-empty to block; "" or null to unblock
   archival_reason: str | None = None,      # only on archived tasks
   archival_refs: list[int] | None = None   # only on archived tasks
-) -> TaskFull
+) -> SingleTaskResponse
 ```
 
 **Validation:**
@@ -193,7 +196,7 @@ move_task(
   status: str,
   archival_reason: str | None = None,
   archival_refs: list[int] | None = None
-) -> TaskFull
+) -> SingleTaskResponse
 ```
 
 **Validation:**
@@ -202,7 +205,7 @@ move_task(
 - `archival_reason` set when `status != "archived"` → `ToolError`
 - `archival_reason="completed"` requires current status is `done` *(S4 gate)*
 - `archival_refs` rules per `archival_reason` (see §7)
-- Invalid `status` enum value or unsupported transition → `ToolError`
+- Invalid `status` enum value → `ToolError`. Any two valid statuses are a valid transition; the engine does not reject transitions on "unsupportedness" — only on enum invalidity.
 
 ### 5.7 `start_work`
 
@@ -211,7 +214,7 @@ move_task(
 **Signature:**
 
 ```text
-start_work(id: int) -> TaskFull
+start_work(id: int) -> SingleTaskResponse
 ```
 
 **Validation:**
@@ -226,34 +229,40 @@ start_work(id: int) -> TaskFull
 
 ### 5.8 `end_work`
 
-**Purpose:** Release the caller's claim, optionally moving status. Absorbs former `release_task` for self-release.
+**Purpose:** End an active work session, optionally moving or blocking the task. Absorbs former `release_task` for self-release.
 
 **Signature:**
 
 ```text
 end_work(
   id: int,
-  outcome: str,                              # "success" | "reject" | "release"
-  move_to: str | None = None,                # required for "reject"; ignored for "success"/"release"
+  outcome: str,                              # "success" | "reject" | "release" | "block"
+  move_to: str | None = None,                # required for "reject"; optional for "block"; forbidden for "success"/"release"
   note: str | None = None,                   # appended to body if set (with timestamp prefix)
-  archival_reason: str | None = None,        # required when reject + move_to="archived"
-  archival_refs: list[int] | None = None
-) -> TaskFull
+  archival_reason: str | None = None,        # required when reject + move_to="archived"; forbidden on success/release/block
+  archival_refs: list[int] | None = None,    # paired with archival_reason
+  block_reason: str | None = None            # required (non-empty) for "block"; forbidden on other outcomes
+) -> SingleTaskResponse
 ```
 
 **Validation:**
 
-- Caller did not hold the claim → `ToolError`
-- `outcome="success"` from non-`done` status → `ToolError`
+- Task is unclaimed and `outcome ∈ {"success", "reject", "block"}` → `ToolError`. (`outcome="release"` on an unclaimed task is idempotent — succeeds as a no-op.)
 - `outcome="reject"` without `move_to` → `ToolError`
-- `move_to="archived"` without `archival_reason` → `ToolError`
-- `archival_reason` set when not archiving → `ToolError`
+- `outcome="block"` without non-empty `block_reason` → `ToolError`
+- `outcome ∈ {"success", "release", "reject"}` with `block_reason` set → `ToolError`
+- `outcome ∈ {"success", "release", "block"}` with `archival_reason` or `archival_refs` set → `ToolError`
+- `outcome="success"` with `move_to` set → `ToolError` (success follows the configured status sequence; callers cannot override)
+- `outcome="release"` with `move_to` set → `ToolError`
+- `move_to="archived"` (under `outcome="reject"`) without `archival_reason` → `ToolError`
+- Invalid `outcome` enum value → `ToolError`
 
 **Behavior:**
 
-- `outcome="success"` from `done`: auto-archives with `archival_reason="completed"` and `archival_refs=[]`. Clears claim.
-- `outcome="reject"`: appends note (if set), moves status per `move_to`, archives with provided reason if `move_to="archived"`. Clears claim.
-- `outcome="release"`: clears claim, no status change. Note appended if set.
+- `outcome="success"` from any non-archive status: auto-advances one step in the engine-configured status sequence; from the terminal status (`done`): auto-archives with `archival_reason="completed"` and `archival_refs=[]`. Each transition fires the destination status's write-time predicate; predicate failure leaves the task unchanged (atomic). Clears claim. Note appended if set.
+- `outcome="reject"`: appends note (if set), moves status per `move_to` (any-to-any allowed), archives with provided reason if `move_to="archived"`. Clears claim. Predicate on destination fires atomically.
+- `outcome="release"`: clears claim, no status change. Note appended if set when a claim is actually released; if already unclaimed, the call is a pure no-op.
+- `outcome="block"`: sets `blocked=true` and `block_reason=<value>`. If `move_to` is set, also moves status (forward or backward; predicate fires atomically). Clears claim. Note appended if set. Engine response `guidance` includes a hint about creating an Action-Request or Decision-Request follow-up task
 
 ## Projection Schemas
 
@@ -327,6 +336,8 @@ When a task has no `depends_on` entries, `dep_status` is `null`. `pick_tasks` ex
 
 **`guidance` field.** Every response carries `guidance: string[]` — engine-generated hints, warnings, occurrence counts, or active-correction messages. This is the surface's primary channel for steering agents toward correct workflow.
 
+**Cross-cutting contracts.** Every MCP-facing `ToolError` raised by these tools carries the human-readable `user_message` only. Canonical machine-readable error codes (e.g. `ERR_NOT_FOUND`, `ERR_INVALID_STATUS`, `ERR_ARCHIVAL_REASON_REQUIRED`, `ERR_BLOCK_REASON_REQUIRED`, `ERR_PREDICATE_FAILED`) are owned by the engine contract in Brief B `decisions.md` (D57) and may be preserved in adapter logs, but they are not part of the MCP wire error shape.
+
 ## Acceptance Criteria
 
 **Archive readability:**
@@ -349,25 +360,25 @@ When a task has no `depends_on` entries, `dep_status` is `null`. `pick_tasks` ex
 - AC10. `show_task(id, section="audit")` returns body containing only `## Audit` content (case-insensitive).
 - AC11. `show_task(id, section="missing")` returns `body=null` and `missing_sections=["missing"]`.
 - AC12. Multiple `## Audit` blocks in the body are all returned, with `guidance` reporting occurrence count.
-
-**Surface cleanup:**
-
-- AC13. `edit_task(id, status="todo")` → `ToolError` (param removed).
-- AC14. `edit_task(id, body="x", append_body="y")` → `ToolError`.
+- AC13. `edit_task(id, status="todo")` → `ToolError`.
+- AC14. `edit_task(id, body="...", append_body="...")` → `ToolError`.
 - AC15. `list_tasks(ids=[1], status="todo")` → `ToolError`.
 - AC16. No projection includes a `file` field.
-- AC17. No projection includes a `claimed_by` field. `claimed_at` and `claimed` are present.
+- AC17. No projection includes `claimed_by`; `claimed_at` and derived `claimed` are the only claim-state outputs.
 
 **Lifecycle:**
 
-- AC18. `end_work(id, "success")` from `done` archives the task with `archival_reason="completed"` and clears the claim, in one call.
+- AC18. `end_work(id, "success")` from any non-archive status auto-advances one step in the engine-configured status sequence; from the terminal status (`done`) auto-archives with `archival_reason="completed"` and `archival_refs=[]`. In all cases the claim is cleared. Each transition fires the destination's write-time predicate atomically (predicate failure → no state change at all).
 - AC19. `end_work(id, "reject", move_to="archived", archival_reason="wontfix", note="...")` archives, appends note, clears claim, in one call.
-- AC20. `end_work(id, "release")` clears the claim without status change.
-- AC21. `end_work(id, ...)` by a non-claimant → `ToolError`.
+- AC20. `end_work(id, "release")` clears the claim without status change; idempotent on already-unclaimed.
+- AC-NEW-1. `end_work(id, "block", block_reason="<reason>")` sets `blocked=true`, `block_reason=<reason>`, clears the claim, leaves status unchanged. Optional `move_to` moves status (forward or backward) atomically.
+- AC-NEW-2. `end_work(id, "block")` without non-empty `block_reason` → `ToolError`.
+- AC-NEW-3. `end_work(id, "success" | "release" | "reject", block_reason="x")` → `ToolError`.
+- AC-NEW-4. `end_work(id, "block", ...)` response `guidance` includes a hint about creating an Action-Request or Decision-Request follow-up task.
 
 **Waves:**
 
-- AC22. `pick_tasks()` returns ≤3 waves; no two tasks within the same wave have a dep edge between them; no claimed tasks; no `dep_status="blocked"` tasks.
+- AC22. `pick_tasks()` returns ≤3 waves; no two tasks within the same wave have a dep edge between them; **no claimed tasks; no archived tasks; no `dep_status="blocked"` tasks; no `blocked==true` tasks**.
 - AC23. Each `DispatchEntry` includes computed `agent`.
 
 **Cross-ref validation:**
@@ -426,7 +437,7 @@ None at brief approval. All Critic-surfaced critical issues addressed. Three wer
 
 - Engine must expose enough to fulfill every tool contract in §5 with a single round trip per tool call (no internal N+1).
 - Engine must compute `dep_status` per §7 semantics; consumed by both `list_tasks` and `pick_tasks`.
-- Engine wave-composition must respect: no intra-wave dep edges, no empty waves, no claimed/blocked, default `wave_size` config-sourced.
+- Engine wave-composition must respect: no intra-wave dep edges, no empty waves, and exclusion of claimed tasks, archived tasks, `dep_status="blocked"` tasks, and `blocked==true` tasks. Default `wave_size` is config-sourced.
 - Engine TZ resolution policy defines what `+HH:MM` value appears in projections — must be consistent within a single call.
 - Cockpit GUI design picks up `list_sessions`-equivalent and admin release.
 
@@ -434,4 +445,4 @@ None at brief approval. All Critic-surfaced critical issues addressed. Three wer
 
 - Storage must enforce or support write-time existence checks for `parent`, `depends_on`, `archival_refs`.
 - Migration plan must populate `archival_reason` (and `archival_refs` where applicable) on every existing archived task before this surface ships. A bulk default to `completed` is acceptable for tasks that reached archival via the standard pipeline path; everything else needs human triage.
-- Section-as-schema (the `## Heading` extraction in `show_task(section=...)`) is implemented against body text — storage does not need a separate sections index unless performance demands it.
+- Section-as-schema (the heading-based extraction in `show_task(section=...)`) is implemented against body text — storage does not need a separate sections index unless performance demands it.

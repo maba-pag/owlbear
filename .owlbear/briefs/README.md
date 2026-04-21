@@ -1,87 +1,88 @@
 # Briefs
 
-This directory is the **Blackboard** for the Ideator agent system. Opinionated agents communicate through shared filesystem artifacts here — each agent reads and writes only the files it owns.
+This directory is the ideation **Blackboard**. Discovery, mediation, challengers, panelists, and synthesis agents communicate through shared filesystem artifacts here.
 
 ## Directory Structure
 
 Each ideation session lives in a named Working Directory:
 
-```
+```text
 .owlbear/briefs/draft-{project-name}/
-  input/                    ← User's reference materials (Excel, docs, screenshots, links)
-                               Drop files here before or at the start of the conversation.
-  context.md                ← Problem, Outcomes, Tier, Landscape summary
-                               Populated incrementally by the Mediator:
-                                 M1 → problem + tier
-                                 M2 → outcomes
-                                 M3 → landscape summary
-  research-notes.md         ← Detailed codebase / ecosystem findings
-                               Written by the research subagent during M3.
-  decisions.md              ← User decisions as they are made
-                               Created empty at invocation; populated after each user choice.
-  opinions/
-    {name}.md               ← Domain opinion final position (after Critic cycles)
-    {name}-debate.md        ← Domain opinion ↔ Critic debate log
-  synthesis.md              ← Pragmatist synthesis of all opinion results
-  brief.md                  ← Final Brief (written at user approval)
+  input/                    ← User reference materials
+  context.md                ← Narrow current-state snapshot
+  decisions.md              ← Chosen and rejected options with rationale
+  research-notes.md         ← First substantial research bridge
+  stances/
+    architect.md
+    data.md
+    enduser.md
+    firstprinciples.md
+    outsider.md
+    security.md
+    simplifier.md
+    *-debate.md             ← Present only for agents that ran an embedded Critic loop
+  synthesis-idea-panel.md   ← Optional denoised digest of the early challenge lane
+  synthesis.md              ← Late-domain panel synthesis
+  brief.md                  ← Final approved Brief
 ```
 
-**Standard opinionated agent names:** `architect`, `data-person`, `enduser`, `security`
+## Artifact Roles
 
-### `input/` subfolder convention
+### `context.md`
 
-Place any reference materials the Ideator should consider here before starting:
+- narrow snapshot only
+- problem, outcomes, constraints, current tensions
+- kept concise for subagent read use
 
-- Spreadsheets, screenshots, design documents, existing specs
-- Web links (as `.txt` or `.md` files)
-- Anything the user brings to the conversation
+### `decisions.md`
 
-The Mediator reads `input/*` at start and summarises what it found. Files are never modified.
+- append-only decision history
+- chosen and rejected options with rationale
+- phase boundary and handoff notes when relevant
 
-### `opinions/` subdirectory convention
+### `research-notes.md`
 
-Each domain opinion writes two files:
+Must separate:
 
-| File | Contents |
-|------|----------|
-| `opinions/{name}.md` | Final, hardened position — the conclusion after Critic cycles |
-| `opinions/{name}-debate.md` | Full Critic dialogue log — adversarial rounds, refinements |
+- `Verified findings`
+- `Candidate implications`
+- `Open research questions`
 
-The Pragmatist reads only `opinions/{name}.md` (final positions), never the debate logs.
+### `stances/`
+
+Contains both early-challenger and late-domain stance files. The invoker must name the active stance set for each synthesis call so unrelated old stances are not swept into the current pass.
+
+### `synthesis-idea-panel.md`
+
+Optional. Written only when the early challenge lane needs denoise.
+
+### `synthesis.md`
+
+Written by the Pragmatist after the late-domain panel.
 
 ## Agent Read / Write Matrix
 
 | Agent | Reads | Writes |
 |-------|-------|--------|
-| **Mediator** | `input/*`, `context.md`, `decisions.md`, `synthesis.md` | `context.md` (incremental), `decisions.md`, `brief.md` |
-| **Research subagent** | `context.md`, `input/*`, codebase (tools), ecosystem (web fetch) | `research-notes.md` (returns summary to Mediator) |
-| **Domain Opinion** | `context.md`, `decisions.md`, optionally `research-notes.md` | `opinions/{name}.md`, `opinions/{name}-debate.md` |
-| **Critic** (standalone, M1/M2/M4/M5) | `context.md` | Returns response to Mediator — no direct file write |
-| **Critic** (op-agent-embedded) | Opinionated agent's current draft + `context.md` | Returns response to invoking opinionated agent — no direct file write |
-| **Pragmatist** | `context.md`, `decisions.md`, ALL `opinions/*.md` | `synthesis.md` |
-| **Final Critic** (optional) | `context.md`, `synthesis.md` | Appends challenges to `synthesis.md` |
-| **Planner** | `brief.md` | Kanban tasks |
-
-**Rule:** The Mediator never reads raw research, debate logs, or individual opinion arguments. Its context window stays clean throughout the conversation.
+| **Discovery agent** | `input/*`, `context.md`, `decisions.md`, optional `synthesis-idea-panel.md` | `context.md`, `decisions.md`, `research-notes.md` |
+| **Research subagent** | `context.md`, `input/*`, codebase and ecosystem sources | `research-notes.md` |
+| **Early challenger** | `context.md`, `decisions.md`, optional `research-notes.md` | `stances/{name}.md` |
+| **Late domain panelist** | `context.md`, `decisions.md`, optional `research-notes.md` | `stances/{name}.md`, `stances/{name}-debate.md` |
+| **Pragmatist** | `context.md`, `decisions.md`, active `stances/*.md` set | `synthesis-idea-panel.md` or `synthesis.md` |
+| **Critic** | `context.md`, current position supplied by invoker | no file writes |
+| **Mediation agent** | `context.md`, `decisions.md`, `research-notes.md`, optional `synthesis-idea-panel.md`, `synthesis.md` | `decisions.md`, `brief.md` |
+| **Planner** | `brief.md` | kanban tasks |
 
 ## Brief Lifecycle
 
-1. **Invocation** — Mediator creates `.owlbear/briefs/draft-new/` with:
-   - `input/` (empty, for user to populate)
-   - `context.md` (empty scaffold — problem, outcomes, tier, landscape fields)
-   - `decisions.md` (empty scaffold — a header and blank body)
+1. **Discovery start** — `ideation-discoverer` creates or resumes the Working Directory.
+2. **Discovery phase** — problem and outcomes are locked; early challenge lane runs; first-pass research is curated.
+3. **Phase handoff** — discovery ends by naming `@ideation-mediator` and the artifact paths: `context.md`, `decisions.md`, `research-notes.md`.
+4. **Mediation phase** — late-domain panel runs; decisions are supported; `brief.md` is drafted and approved.
+5. **Handoff** — mediation creates a parent kanban task and invokes planner.
+6. **Audit trail** — Working Directory is preserved after handoff.
 
-2. **After M1 (project named)** — `draft-new/` renamed to `draft-{project-name}/`
-
-3. **During ideation** — `context.md` populated incrementally; opinionated agents write to `opinions/`; Pragmatist writes `synthesis.md`
-
-4. **At user approval** — Mediator writes `brief.md` from context + decisions + synthesis
-
-5. **At handoff** — Brief content transferred into a parent kanban task; Planner decomposes into subtasks. Agents work from kanban tasks, not from the Brief file. The Brief file is preserved as **audit trail**.
-
-6. **After handoff** — Working Directory preserved for audit. Cleaned up when the parent task is completed or archived.
-
-### `context.md` scaffold (created empty at invocation)
+## `context.md` scaffold
 
 ```markdown
 # Context
@@ -95,22 +96,46 @@ The Pragmatist reads only `opinions/{name}.md` (final positions), never the deba
 ## Tier
 
 
-## Landscape
+## Constraints
 
+
+## Current Tensions
 ```
 
-### `decisions.md` scaffold (created empty at invocation)
+## `decisions.md` scaffold
+
+Decision entry template:
+
+`## D{N} — {YYYY-MM-DD HH:MM} — {Topic}`
 
 ```markdown
 # Decisions
 
-<!-- Populated by Mediator after each user choice -->
+## D1 — YYYY-MM-DD HH:MM — Topic
+
+**Status quo:** ...
+**Decision to make:** ...
+
+**Options considered:**
+- A: ...
+- B: ...
+
+**Chosen:** ...
+
+**Rejected:**
+- B because ...
+
+**Source inputs (when relevant):**
+- User: "..."
+- Panel / research: ...
 ```
+
+Repeat the same entry shape for each real decision. Preserve chosen and rejected options with rationale rather than collapsing everything into a final summary.
 
 ## For users
 
-To start an ideation session, select **ideator** in the VS Code agent picker (or type `@ideator`).
+Start a new ideation session with `@ideation-discoverer`.
 
-**Argument hint:** `[idea, problem, or feature — drop reference files in .owlbear/briefs/draft-new/input/]`
+Continue a completed discovery session with `@ideation-mediator`.
 
-If a `draft-new/` already exists from a previous unfinished session, the Mediator will ask whether to continue or start fresh.
+Use `@ideator` only when you are not sure which phase you need.

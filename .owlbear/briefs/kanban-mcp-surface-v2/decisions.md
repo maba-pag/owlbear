@@ -20,21 +20,21 @@ All decisions made through walkthrough of synthesis with the Mediator. Engine-ag
 
 ## Read efficiency
 
-- **S6.** `show_task` gains `section: str` (singular) param. When set, response `body` contains only matching `##` heading content. Missing → `body: null` plus `missing_sections: ["requested_name"]`. Multiple matches → all returned, with occurrence count in `guidance`.
+- **S6.** `show_task` gains `section: str` (singular) param. When set, response `body` contains only matching heading content (case-insensitive, regardless of heading level). Missing → `body: null` plus `missing_sections: ["requested_name"]`. Multiple matches → all returned, with occurrence count in `guidance`.
 - **S7.** `list_tasks` gains `ids: list[int]` param. Exclusive with all other filters (ToolError on combine). Returns summaries for requested IDs including archived. Missing IDs reported in `missing_ids: list[int]` field on the response (mirror of `missing_sections`).
 - **S8.** **Dropped.** No `create_tasks` batch tool. Sequential `create_task` is already optimal for the planner's chain-shaped workload (caller knows each ID immediately and can wire `parent`/`depends_on` on the next call).
 - **S9.** `pick_tasks` returns waves instead of a flat list:
-  - Signature: `pick_tasks(wave_size: int = <engine_config_default>, max_waves: int = 3)`
-  - Returns `list[Wave]` where `Wave = {index: int, tasks: list[DispatchEntry]}`.
+  - Signature: `pick_tasks(wave_size: int | None = None, max_waves: int = 3)` (`None` falls back to the engine-configured default).
+  - Returns `PickTasksResponse {waves: list[Wave], guidance: list[str]}` where `Wave = {index: int, tasks: list[DispatchEntry]}`.
   - `DispatchEntry` includes `agent: str` (engine-computed assignee).
-  - Engine guarantees: no intra-wave dep edges; no empty waves; claimed tasks excluded.
+  - Engine guarantees: no intra-wave dep edges; no empty waves; claimed tasks, archived tasks, `dep_status="blocked"` tasks, and `blocked==true` tasks excluded.
 
 ## Surface cleanup
 
 - **S10.** Drop `file` field from all output projections. Prevents storage leak into caller code.
 - **S11.** `edit_task` drops `status`, `depends_on`, `tags` (vestigial trap params). Use `move_task` for status; `add_dep`/`remove_dep` for deps; `add_tag`/`remove_tag` for tags.
 - **F2.** Fold `block_task`, `unblock_task`, `release_task` into `edit_task` (block_reason set/clear) and `end_work` (`outcome="release"`). Reduces tool count to **8**.
-- **`list_sessions` not added.** No unique consumer; orchestrator doesn't need it; Cockpit can use `list_tasks(claimed=true)`.
+- **`list_sessions` not added.** No unique MCP consumer need remains; orchestrator doesn't need it, and cockpit/session history is handled on the Brief B cockpit/admin surface rather than the MCP tool surface.
 - **`claimed_by` field dropped** from all projections and from `start_work` (no name param, no name generation). Random-name generation is theater. `claimed_at: timestamp | null` is single source of truth; `claimed: bool` derives from `claimed_at is not None`.
 
 ## Validation
@@ -49,8 +49,8 @@ When task X has `depends_on: [Y]` and Y is archived:
 | Y archived as | Effect on X |
 |---|---|
 | `completed` | satisfies the dep — X is dispatchable |
-| `deprecated` | redirect — caller follows `Y.archival_refs` (the successor); engine treats X as dispatchable iff at least one redirect target is `done` or `completed`-archived |
-| `duplicate` | redirect — same rule as deprecated; targets are merge destinations |
+| `deprecated` | redirect — caller follows `Y.archival_refs` (the successor); X is dispatchable (`dep_status: redirect`); redirect-chain resolution is agent responsibility at pickup |
+| `duplicate` | redirect — same rule as deprecated; targets are merge destinations; X is dispatchable |
 | `dropped` | blocks — X stays un-dispatchable; `dep_status: blocked` |
 | `wontfix` | blocks — X stays un-dispatchable; `dep_status: blocked` |
 
@@ -76,7 +76,7 @@ Projection: `TaskSummary` and `TaskFull` gain `dep_status: "ok" | "redirect" | "
 1. `list_tasks` — extended (`ids` exclusive, drop `archived: bool`, archival fields + `dep_status` on output, `missing_ids` on response)
 2. `show_task` — transparent archived reads + `section` param + `missing_sections` on response
 3. `pick_tasks` — returns waves with computed `agent` field; honors `dep_status` when composing
-4. `create_task` — surface unchanged; cross-ref validation strengthened (S3 + F1)
+4. `create_task` — caller no longer chooses status; engine uses the configured entry status; cross-ref validation strengthened (S3 + F1)
 5. `edit_task` — drops trap params; absorbs block/unblock; archival metadata edits allowed on archived (subject to S4 gate at write site)
 6. `move_task` — required `archival_reason`, validated `archival_refs`, `completed` gated to `done`
 7. `start_work` — `claimed_by` dropped

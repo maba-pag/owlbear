@@ -142,6 +142,8 @@ These are not auto-resolvable — they involve genuine preference trade-offs.
 
 ### Q1. `list_sessions` — in Brief A or follow-up?
 
+Outcome note (post walkthrough): final Brief A approval resolved this by **excluding `list_sessions` from the MCP surface**. Session/history capability moved to the Cockpit/engine path in Brief B. The discussion below is retained as historical synthesis, not the approved contract.
+
 The Architect argues it's a concrete 1-tool addition with an identified consumer (orchestrator). The End-User scopes it out as non-archive. Both positions are defensible. **The question is scope discipline vs opportunistic cleanup.** If the Mediator wants Brief A to be archive+coherence only, defer it. If the Mediator wants "one surface pass, ship it all," include it.
 
 ### Q2. Multi-section projection — accept the V2 gap?
@@ -156,7 +158,7 @@ The synthesis recommends required (End-User position). The Architect's counterar
 
 ## 5. Final Recommended Surface
 
-**10 tools** (8 modified existing + 1 new + `list_sessions` conditional on Q1).
+Historical synthesis snapshot only: this section predates the final walkthrough decisions. The approved Brief A surface is the **8-tool** set in `brief.md` / `decisions.md`; `list_sessions` and `create_tasks` were both declined.
 
 ### Tool List
 
