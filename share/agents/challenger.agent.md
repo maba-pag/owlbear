@@ -4,6 +4,7 @@ description: "Adversarial pre-decision subagent — challenges proposed verdicts
 argument-hint: "Challenge: task_id={task_id}, proposed_verdict={verdict}, reasoning={reasoning}, ac_lines=[...], codebase_evidence={evidence}"
 user-invocable: false
 disable-model-invocation: true
+model: GPT-5.4 (copilot)
 tools: [read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
 agents: []
 hooks:

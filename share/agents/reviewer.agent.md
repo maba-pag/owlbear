@@ -4,7 +4,7 @@ description: "2nd line of defense — read-only quality verification with eviden
 argument-hint: "Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
+model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
   [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [code-reader, scribe, quality-runner]

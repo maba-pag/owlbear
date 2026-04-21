@@ -4,7 +4,7 @@ description: "Test suite curation — coverage-gap mining, task-test cleanup, mo
 argument-hint: "Curate tests"
 user-invocable: true
 disable-model-invocation: true
-model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
+model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
   [vscode/memory, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [quality-runner]

@@ -4,7 +4,7 @@ description: "Read-only adversarial code analysis — critical checks and inform
 argument-hint: "Analyze: task_id={task_id}, ac_lines=[...], changed_files=[...], test_files=[...]"
 user-invocable: false
 disable-model-invocation: true
-model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
+model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools: [read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
 agents: []
 hooks:
