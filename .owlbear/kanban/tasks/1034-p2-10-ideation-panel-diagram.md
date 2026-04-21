@@ -4,7 +4,7 @@ title: 'P2-10: Ideation panel diagram'
 status: in-progress
 priority: important
 created: 2026-04-19T23:53:28.594403+00:00
-updated: 2026-04-21T12:55:44.595834+00:00
+updated: 2026-04-21T17:54:38.399209+00:00
 tags:
 - phase-2
 - docs-currency
@@ -15,8 +15,8 @@ depends_on:
 - 1024
 blocked: false
 block_reason:
-claimed_by: strong-stag
-claimed_at: 2026-04-21T12:55:44.595834+00:00
+claimed_by:
+claimed_at:
 ---
 Brief: see parent #1016
 
@@ -86,3 +86,87 @@ Brief: see parent #1016
 - AC is entirely about creating `share/diagrams/ideation.excalidraw` (Excalidraw JSON diagram) and regenerating `doc-index.md`.
 - No Python interfaces, functions, or modules to test.
 - Passing through to builder.
+[[2026-04-21]]
+## Builder Notes
+- Implementation: created `share/diagrams/ideation.excalidraw`; regenerated `.owlbear/doc-index.md`.
+- Tests: JSON parse valid (`uv run python -m json.tool`); structural check confirmed 70 elements, duplicate IDs `[]`, text font-size violators `[]`; `uv run pytest -q tests/test_pipeline_diagram_1033.py serve/tools/tests/test_doc_index_1018.py` -> 88 passed.
+- Coverage: N/A (docs/diagram task; no Python module touched).
+- Ruff: N/A (no Python source changes for this task).
+- Evidence summary: `.owlbear/doc-index.md` includes `share/diagrams/ideation.excalidraw` with required `describes` globs; footer text element set to `Last verified: 2026-04-21 (32e0832a)`.
+- Additional note: `uv run pytest -q tests/test_ideation_overhaul_static.py` reports 1 unrelated pre-existing failure (`TestFromAC_AgentContracts::test_role_files_do_not_use_model_field_as_contract` in `share/agents/ideation-critic.agent.md`), outside this task scope and not modified here.
+[[2026-04-21]]
+## Review Evidence
+
+### Scope
+- Reviewed the task-scoped artifacts named in the task body: share/diagrams/ideation.excalidraw and .owlbear/doc-index.md.
+- Independent verification used parallel fan-out: quality-runner for tests, lint, and coverage; code-reader for AC and test-gap analysis.
+
+### Quality Report
+- Tests: 88 passed, 0 failed, 0 skipped.
+- Lint: clean.
+- Coverage: 100% overall in the scoped run; owlbear_tools.doc_index reported at 100%.
+- Errors: none.
+
+### AC Compliance
+| AC line | Evidence | Status |
+| --- | --- | --- |
+| Diagram file exists and is valid Excalidraw JSON at the required path | share/diagrams/ideation.excalidraw lines 1-10 contain type, version, source, describes, and elements | PASS |
+| Step 0 precondition and M1-M6 primary timeline | share/diagrams/ideation.excalidraw lines 462, 492, 522, 552, 582, 612, 642 | PASS |
+| Mediator orchestrator with Investigator and Facilitative modes | share/diagrams/ideation.excalidraw lines 148, 202, 256 and bound arrows in lines 1513-1575 | PASS |
+| Six panelist roles in the parallel batch between M3 and M4 | share/diagrams/ideation.excalidraw lines 695, 878, 908, 938, 968, 998, 1028 | PASS |
+| Critic-loop protocol and standalone boundary checks at M1, M2, M4, M5 | share/diagrams/ideation.excalidraw lines 1058, 1088 and bound arrows in lines 1688-2065 | PASS |
+| Pragmatist synthesis after the panelists complete | share/diagrams/ideation.excalidraw line 1028 and arrows in lines 1833-1995 | PASS |
+| Brief output at M5 and handoff at M6 to planner decomposition | share/diagrams/ideation.excalidraw lines 1141, 1194 and arrows in lines 1618-1645 | PASS |
+| Top-level describes field with required globs | share/diagrams/ideation.excalidraw lines 5-9 | PASS |
+| Footer text element with Last verified date and commit hash | share/diagrams/ideation.excalidraw line 1224 | PASS |
+| Diagram is descriptive, not authoritative | share/diagrams/ideation.excalidraw line 94 | PASS |
+| Excalidraw conventions: aligned grid, text sizing, bound arrows, unique IDs | gridSize at lines 2144-2145, text elements all at 16 or higher, arrows bound throughout lines 1230-2143; no duplicate IDs surfaced by builder structural check | PASS |
+| Doc-index contains the ideation diagram entry and describes globs | .owlbear/doc-index.md line 17212 and following describes line | PASS |
+
+### Test Audit
+| AC line | Current test mapping | Would fail if AC were violated? | Status |
+| --- | --- | --- | --- |
+| Diagram file and JSON validity | tests/test_pipeline_diagram_1033.py lines 33, 80-85, 114-119 read pipeline.excalidraw, not ideation.excalidraw | No | MISSING |
+| Diagram semantics for Step 0, M1-M6, mediator modes, panel batch, Critic protocol, Pragmatist synthesis, brief output, and handoff | No task-scoped tests found anywhere under tests/ or serve/**/tests/ for ideation.excalidraw | No | MISSING |
+| Describes field in generated doc index for the committed ideation artifact | tests/test_pipeline_diagram_1033.py lines 328-368 copy pipeline.excalidraw into a temp tree; serve/tools/tests/test_doc_index_1018.py lines 306-338 generate temp overview.excalidraw and kanban.excalidraw fixtures only | No | MISSING |
+| Footer and descriptive-note regression protection | No task-scoped tests found for ideation.excalidraw | No | MISSING |
+| Excalidraw convention regression protection on the ideation artifact | Existing convention tests are pipeline-specific in tests/test_pipeline_diagram_1033.py lines 279-319 | No | MISSING |
+
+### Test Integrity And Process Checks
+- No weakened or removed TestFromAC assertions were observed in the scoped suites. The problem is missing task-1034 coverage, not weakened existing assertions.
+- Builder loop detection: CLEAN. One Builder Notes section only; no retry loop in the task body.
+- Security/data-safety review: no issues in the static diagram and generated Markdown artifacts.
+
+### Deductions
+- Minus 0.18: no direct regression tests parse or validate share/diagrams/ideation.excalidraw.
+- Minus 0.04: no direct regression tests verify the committed ideation entry in .owlbear/doc-index.md.
+- Minus 0.02: test-writer passed through a mechanically testable docs artifact despite existing repo precedent for static diagram tests.
+
+### Verdict
+- FAIL with confidence 0.76.
+- Implementation appears AC-compliant on manual inspection, but the task does not meet the review bar because the passing tests do not protect the actual artifact shipped by task 1034.
+- Action: move back to todo so test-writer can add task-scoped static tests for share/diagrams/ideation.excalidraw and its generated doc-index entry, then builder can rerun review.
+
+### Reflection
+- Docs tasks with mechanical JSON or generated-file acceptance criteria still need regression tests when the artifact is machine-readable.
+- Reusing older diagram tests does not provide coverage unless those tests load the exact committed artifact for the current task.
+[[2026-04-21]]
+## Test-Writer Notes
+- Test file: tests/test_ideation_diagram_1034.py
+- Classes: TestFromAC_IdeationDiagramFile, TestFromAC_IdeationDiagramStructure, TestFromAC_IdeationDescribesField, TestFromAC_IdeationFooterElement, TestFromAC_IdeationDescriptiveNote, TestFromAC_IdeationExcalidrawConventions, TestFromAC_IdeationDocIndexIntegration
+- Tests per category: happy 30, edge 3, error 0, boundary 14
+- Total: 47 tests, all PASS (see retry note below)
+- ruff: clean
+
+**Retry cycle note:** This is a retry where the builder already delivered a complete, AC-compliant implementation. Per Step 1b, this scenario produces tests that PASS against the existing correct artifact — they are regression guards, not RED-phase failing stubs. The reviewer explicitly requested static tests for the machine-readable `.excalidraw` artifact following the test_pipeline_diagram_1033.py precedent.
+
+**AC coverage:**
+| AC line | Tests |
+| --- | --- |
+| AC1: file exists, valid JSON, source/type/elements | TestFromAC_IdeationDiagramFile (5 tests) |
+| AC2: Step 0, M1-M6, Mediator, Investigator/Facilitative modes, 6 panelists, Critic-loop ≤5, standalone Critic M1/M2/M4/M5, Pragmatist synthesis, Brief output, handoff | TestFromAC_IdeationDiagramStructure (14 tests) |
+| AC3: describes field with exactly 4 required globs | TestFromAC_IdeationDescribesField (7 tests) |
+| AC4: footer with Last verified: YYYY-MM-DD (commit-hash) | TestFromAC_IdeationFooterElement (2 tests) |
+| AC5: descriptive not authoritative | TestFromAC_IdeationDescriptiveNote (2 tests) |
+| AC6: unique IDs, fontSize >= 16, bound arrows | TestFromAC_IdeationExcalidrawConventions (4 tests) |
+| doc-index: describes entry for ideation.excalidraw with all 4 globs | TestFromAC_IdeationDocIndexIntegration (2 tests) |
