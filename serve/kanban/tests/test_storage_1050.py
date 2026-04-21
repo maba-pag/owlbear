@@ -587,10 +587,10 @@ class TestBuilderDiscovered:
         assert err.user_message == "board requires migration"
         assert str(err) == "board requires migration"
 
-    def test_detect_corruption_file_missing_closing_delimiter_returns_none(
+    def test_detect_corruption_file_missing_closing_delimiter_returns_error(
         self, tmp_path: Path
     ) -> None:
-        """detect_corruption on a file without a closing '---' returns None (not an error)."""
+        """detect_corruption on a file missing the closing '---' returns ERR_CORRUPT_DELIMITERS."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
         bad_file = kanban_dir / "tasks" / "99-no-close.md"
@@ -598,12 +598,13 @@ class TestBuilderDiscovered:
 
         result = detect_corruption(bad_file, config)
 
-        assert result is None
+        assert result is not None
+        assert result.code == "ERR_CORRUPT_DELIMITERS"
 
-    def test_detect_corruption_file_without_frontmatter_returns_none(
+    def test_detect_corruption_file_without_frontmatter_returns_error(
         self, tmp_path: Path
     ) -> None:
-        """detect_corruption on a plain-text file (no '---') returns None."""
+        """detect_corruption on a plain-text file (no '---') returns ERR_CORRUPT_DELIMITERS."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
         plain_file = kanban_dir / "tasks" / "99-plain.md"
@@ -611,4 +612,71 @@ class TestBuilderDiscovered:
 
         result = detect_corruption(plain_file, config)
 
-        assert result is None
+        assert result is not None
+        assert result.code == "ERR_CORRUPT_DELIMITERS"
+
+    def test_save_config_round_trip(self, tmp_path: Path) -> None:
+        """save_config writes a valid config that can be reloaded."""
+        from owlbear_kanban.storage import save_config
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        config.next_id = 9999
+        save_config(config, kanban_dir)
+        reloaded = load_config(kanban_dir)
+        assert reloaded.next_id == 9999
+
+    def test_move_to_archive_moves_file(self, tmp_path: Path) -> None:
+        """move_to_archive moves a task file from tasks/ to archive/."""
+        from owlbear_kanban.storage import move_to_archive
+        kanban_dir = _make_board(tmp_path)
+        task = _minimal_task(42)
+        write_task(task, kanban_dir)
+        dest = move_to_archive(42, kanban_dir)
+        assert dest.parent.name == "archive"
+        assert not (kanban_dir / "tasks" / dest.name).exists()
+
+    def test_normalize_timestamp_already_has_tz(self) -> None:
+        """_normalize_timestamp returns ts unchanged when it already has a timezone."""
+        from owlbear_kanban.storage import _normalize_timestamp
+        ts = "2026-04-20T10:00:00+02:00"
+        assert _normalize_timestamp(ts) == ts
+
+    def test_normalize_timestamp_z_suffix_is_normalized_to_explicit_utc(self) -> None:
+        """_normalize_timestamp rewrites Z-suffix timestamps to +00:00."""
+        from owlbear_kanban.storage import _normalize_timestamp
+        assert _normalize_timestamp("2026-04-20T10:00:00Z") == "2026-04-20T10:00:00+00:00"
+
+    def test_normalize_timestamp_non_matching_format(self) -> None:
+        """_normalize_timestamp returns ts unchanged when regex does not match."""
+        from owlbear_kanban.storage import _normalize_timestamp
+        ts = "not-a-timestamp"
+        assert _normalize_timestamp(ts) == ts
+
+    def test_attempt_repair_mode9_invalid_priority_auto_fixes(self, tmp_path: Path) -> None:
+        """attempt_repair for ERR_CORRUPT_INVALID_PRIORITY coerces priority to first configured."""
+        from owlbear_kanban.corruption import attempt_repair, ERR_CORRUPT_INVALID_PRIORITY
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        bad_file = kanban_dir / "tasks" / "1001-bad-priority.md"
+        bad_file.write_text(
+            "---\nid: 1001\ntitle: bad priority\nstatus: todo\npriority: invalid-prio\n"
+            "created: 2026-01-01T00:00:00+00:00\nupdated: 2026-01-01T00:00:00+00:00\n---\n",
+            encoding="utf-8",
+        )
+        outcome = attempt_repair(bad_file, ERR_CORRUPT_INVALID_PRIORITY, config)
+        assert outcome.action == "fixed"
+
+    def test_attempt_repair_mode6_id_filename_mismatch_renames(self, tmp_path: Path) -> None:
+        """attempt_repair for ERR_CORRUPT_ID_FILENAME_MISMATCH renames the file."""
+        from owlbear_kanban.corruption import attempt_repair, ERR_CORRUPT_ID_FILENAME_MISMATCH
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        bad_file = kanban_dir / "tasks" / "1001-wrong-name.md"
+        bad_file.write_text(
+            "---\nid: 1002\ntitle: mismatch\nstatus: todo\npriority: important\n"
+            "created: 2026-01-01T00:00:00+00:00\nupdated: 2026-01-01T00:00:00+00:00\n---\n",
+            encoding="utf-8",
+        )
+        outcome = attempt_repair(bad_file, ERR_CORRUPT_ID_FILENAME_MISMATCH, config)
+        assert outcome.action == "fixed"
+        assert not bad_file.exists()
