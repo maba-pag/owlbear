@@ -1,10 +1,10 @@
 ---
 id: 1050
 title: 'C-05: RED — storage surface tests'
-status: review
+status: backlog
 priority: critical
 created: 2026-04-21T10:42:50.277750+00:00
-updated: 2026-04-21T21:55:19.821445+00:00
+updated: 2026-04-21T22:07:24.821472+00:00
 tags:
 - phase:storage
 - brief:c
@@ -14,8 +14,8 @@ parent: 1043
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: jade-fern
-claimed_at: 2026-04-21T21:55:19.821445+00:00
+claimed_by:
+claimed_at:
 ---
 ## Brief
 Brief C (#1043) — paper-c.md §8.3, §8.6, §8.11
@@ -695,3 +695,97 @@ The 90% coverage gate applies to `owlbear_kanban.storage` (the primary deliverab
 - The blocker from prior cycles was test-contract alignment; this cycle validated that the non-vacuous AC-C48 path now executes and passes without further code edits.
 - Scoped quality evidence was required to separate task readiness from legacy lint debt in unrelated durable tests.
 - Keeping this cycle change-free avoided unnecessary churn and preserved the surgical intent of the build phase.
+[[2026-04-21]]
+## Review Evidence
+### Test Results
+- quality-runner scoped to serve/kanban/tests/test_storage_1050.py and serve/kanban/tests/test_engine_storage.py: 71 passed, 0 failed, 0 skipped
+
+### Lint
+- quality-runner scoped to serve/kanban/src/owlbear_kanban/storage.py, serve/kanban/src/owlbear_kanban/engine.py, serve/kanban/src/owlbear_kanban/corruption.py, serve/kanban/tests/test_storage_1050.py, and serve/kanban/tests/test_engine_storage.py: clean
+
+### Coverage
+- owlbear_kanban.storage: 96%
+- owlbear_kanban.engine: 40%
+- Gate application: per the task-body Architecture Review refinement, the 90% coverage gate is applied to the storage surface for this task. Storage clears that bar; engine full-module coverage is informational here.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC-C13 | serve/kanban/tests/test_storage_1050.py:192 | Yes for storage.write_task canonical ordering | COVERED |
+| AC-C14 | serve/kanban/tests/test_storage_1050.py:234, 249 | Yes | COVERED |
+| AC-C15 | serve/kanban/tests/test_storage_1050.py:271, 289, 913 | Yes | COVERED |
+| AC-C16 | serve/kanban/tests/test_storage_1050.py:323, 334 | Yes | COVERED |
+| AC-C28 | serve/kanban/tests/test_storage_1050.py:380 | Yes | COVERED |
+| AC-C29 | serve/kanban/tests/test_storage_1050.py:399 plus companion existence/removal/content checks in the same class | Yes | COVERED |
+| AC-C30 | serve/kanban/tests/test_storage_1050.py:449, 468, 489 and related repair_storage coverage in serve/kanban/tests/test_engine_storage.py:311, 333, 480 | Yes | COVERED |
+| AC-C48 | serve/kanban/tests/test_storage_1050.py:521, 531, 541, 554, 584, 953 | Yes for archive read, archive-init exemption, and archived list summary stripping | COVERED |
+
+#### Security Review
+- No issues found. The reviewed paths are board-local file operations and markdown generation; no injection or secret-handling concerns were introduced in the task scope.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| serve/kanban/tests/test_storage_1050.py:489 | Current file asserts concrete code/path/detail values for AC-C30; no builder weakening evident in the final task state | PRESERVED |
+| serve/kanban/tests/test_storage_1050.py:554 | Current file uses a new-schema board so the migration gate is live for AC-C48 | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | AC-C30 now asserts concrete error code, quarantine path, and detail text at serve/kanban/tests/test_storage_1050.py:489. |
+| Negative/error-path coverage | ADEQUATE | AC-C16 exact corruption detail is asserted at serve/kanban/tests/test_storage_1050.py:334, and archive exemption paths are covered at serve/kanban/tests/test_storage_1050.py:521, 541, 554. |
+| Manual mutation reasoning | WEAK | engine.py still writes claimed_by via claim_task at serve/kanban/src/owlbear_kanban/engine.py:881 and serve/kanban/src/owlbear_kanban/engine.py:884, while list_tasks now skips any tasks/ file that detect_corruption flags at serve/kanban/src/owlbear_kanban/engine.py:504 and serve/kanban/src/owlbear_kanban/corruption.py:231-236. No test covers start_work()/claim_task() followed by list_tasks() on a new-schema board. |
+| Test independence | STRONG | Task-scoped tests use tmp_path-isolated boards. |
+| Descriptive test names | STRONG | Test names map directly to the AC clauses. |
+
+#### Data Safety
+- No issues found. Quarantine remains a file move before AR creation, and failure handling preserves quarantined files.
+
+#### Implementation-Aware Gaps
+- FAIL: serve/kanban/src/owlbear_kanban/engine.py:47 still imports read_task/write_task from task_io instead of the storage surface. serve/kanban/src/owlbear_kanban/task_io.py:228, 247, and 251 serialize record.model_dump() directly, bypassing the storage-layer guarantees in serve/kanban/src/owlbear_kanban/storage.py:70, 281, and 286.
+- Concrete regression: serve/kanban/src/owlbear_kanban/engine.py:848-884 claim_task() sets claimed_by and persists it. serve/kanban/src/owlbear_kanban/engine.py:452-504 list_tasks() now prefilters active tasks through detect_corruption(), and serve/kanban/src/owlbear_kanban/corruption.py:231-236 treats non-null claimed_by in tasks/ as ERR_CORRUPT_MISSING_FIELD. A claimed task can therefore disappear from list_tasks() after start_work().
+- Missing coverage: the closest claim-path tests are activity/session assertions in serve/kanban/tests/test_engine_activity.py:101, 318, and 429. The task-scoped suite covers archive stripping at serve/kanban/tests/test_storage_1050.py:953, but there is no regression test for start_work()/claim_task() followed by list_tasks() or show_task() on a new-schema board.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 5 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- The task-specific storage API coverage is strong; the blocker is the unresolved engine/storage integration boundary, not the AC-C30 or AC-C48 tests.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC-C13 | storage.py canonical field order and claimed_by omission at serve/kanban/src/owlbear_kanban/storage.py:70, 281, 286 | serve/kanban/tests/test_storage_1050.py:192 | PASS |
+| AC-C14 | Task extra=allow at serve/kanban/src/owlbear_kanban/models.py:121 and storage round-trip at serve/kanban/tests/test_storage_1050.py:234, 249 | serve/kanban/tests/test_storage_1050.py:234 | PASS |
+| AC-C15 | Timestamp normalization in storage.py and Z-suffix regression test at serve/kanban/tests/test_storage_1050.py:271, 289, 913 | serve/kanban/tests/test_storage_1050.py:913 | PASS |
+| AC-C16 | detect_corruption claimed_by rule at serve/kanban/src/owlbear_kanban/corruption.py:231-236 and tests at serve/kanban/tests/test_storage_1050.py:323, 334 | serve/kanban/tests/test_storage_1050.py:323 | PASS |
+| AC-C28 | move_to_quarantine creates quarantine/ at serve/kanban/src/owlbear_kanban/storage.py:400-403 | serve/kanban/tests/test_storage_1050.py:380 | PASS |
+| AC-C29 | move_to_quarantine returns quarantine/{original-filename} at serve/kanban/src/owlbear_kanban/storage.py:402-404 | serve/kanban/tests/test_storage_1050.py:399 | PASS |
+| AC-C30 | repair_storage AR body generation at serve/kanban/src/owlbear_kanban/engine.py:1072-1098 and tests at serve/kanban/tests/test_storage_1050.py:449, 468, 489 | serve/kanban/tests/test_storage_1050.py:489 | PASS |
+| AC-C48 | archive read strips claimed_by in storage.py and archive init/list coverage at serve/kanban/tests/test_storage_1050.py:521, 531, 541, 554, 584, 953 | serve/kanban/tests/test_storage_1050.py:554 | PASS |
+
+### Deductions
+- Engine write paths still bypass the storage surface, creating a claim->list regression: -0.22
+- No regression coverage for start_work()/claim_task() followed by list_tasks() on a new-schema board: -0.12
+- This is a 3rd+ review failure on the same task, so loop-breaker routing applies: -0.06
+
+### Verdict
+- Confidence: 0.60
+- FAIL
+- Action: reject to backlog
+
+### Required fixes
+1. Route engine task-file read/write paths through owlbear_kanban.storage.read_task and owlbear_kanban.storage.write_task, or implement equivalent guarantees so claiming a task does not emit a claimed_by-corrupt file that list_tasks() later skips.
+2. Add a regression test on a new-schema board for start_work()/claim_task() followed by list_tasks() and show_task(), asserting the claimed task remains visible and readable.
+3. Keep the current AC-C30 and AC-C48 tests; they are not the blocker in the final task state.
+
+### Reflection
+- Fresh scoped quality evidence was green; the failure is a logic-level regression hidden by missing claim/list coverage.
+- The earlier AC-C30 contract dispute is resolved in the current task state.
+- The live blocker is the unresolved engine/storage boundary, which now conflicts with the list_tasks corruption filter.
+- Multiple prior review failures already exist in the task body, so the loop-breaker path is the correct routing.
