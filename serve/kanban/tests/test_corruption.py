@@ -637,3 +637,154 @@ class TestFromAC_AutoFixMatrix:
         assert hasattr(outcome, "action")
         assert hasattr(outcome, "detail")
         assert outcome.action in {"fixed", "quarantined", "failed"}
+
+
+class TestBuilderDiscovered:
+    """Additional edge cases discovered during implementation and review follow-up."""
+
+    def test_read_task_tasks_claimed_by_raises_mode3(self, tmp_path: Path) -> None:
+        """Tasks files with claimed_by must hard-raise mode 3 on targeted reads."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1030-claimed-by.md"
+        _write(
+            bad_file,
+            "---\nid: 1030\ntitle: legacy claim\nstatus: todo\npriority: needed\n"
+            "claimed_by: old-agent\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+
+        assert exc_info.value.code == "ERR_CORRUPT_MISSING_FIELD"
+
+    def test_read_task_invalid_status_raises_mode8(self, tmp_path: Path) -> None:
+        """Targeted reads must hard-raise mode 8 for invalid status values."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1031-bad-status.md"
+        _write(
+            bad_file,
+            "---\nid: 1031\ntitle: bad status\nstatus: definitely_not_real\npriority: needed\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+
+        assert exc_info.value.code == "ERR_CORRUPT_INVALID_STATUS"
+
+    def test_read_task_invalid_priority_raises_mode9(self, tmp_path: Path) -> None:
+        """Targeted reads must hard-raise mode 9 for invalid priority values."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1032-bad-priority.md"
+        _write(
+            bad_file,
+            "---\nid: 1032\ntitle: bad priority\nstatus: todo\npriority: impossible\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+
+        assert exc_info.value.code == "ERR_CORRUPT_INVALID_PRIORITY"
+
+    def test_attempt_repair_mode9_persists_priority_to_disk(self, tmp_path: Path) -> None:
+        """Mode 9 auto-fix must write the repaired priority value to disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1033-repair-priority.md"
+        _write(
+            bad_file,
+            "---\nid: 1033\ntitle: repair me\nstatus: todo\npriority: not_valid\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_INVALID_PRIORITY", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert f"priority: {config.priorities[0]}" in repaired_content
+        assert "priority: not_valid" not in repaired_content
+
+    def test_attempt_repair_mode3_persists_default_priority_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """Mode 3 missing priority auto-fix must persist the default priority field."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1034-missing-priority.md"
+        _write(
+            bad_file,
+            "---\nid: 1034\ntitle: missing priority\nstatus: todo\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert f"priority: {config.priorities[0]}" in repaired_content
+
+    def test_attempt_repair_mode3_no_changes_returns_fixed(self, tmp_path: Path) -> None:
+        """Mode 3 repair returns fixed/no-op when no defaultable fields are missing."""
+        kanban_dir = _make_board(tmp_path)
+        file_path = kanban_dir / "tasks" / "1035-no-change.md"
+        _write(file_path, _VALID_TASK.replace("id: 1001", "id: 1035", 1))
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(file_path, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        assert outcome.detail == "no changes needed"
+
+    def test_detect_corruption_frontmatter_not_mapping_reports_yaml_parse(
+        self, tmp_path: Path
+    ) -> None:
+        """A non-mapping frontmatter document is mode 5 corruption."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1036-frontmatter-list.md"
+        _write(
+            bad_file,
+            "---\n- id: 1036\n- title: not-a-mapping\n---\n",
+        )
+        config = load_config(kanban_dir)
+
+        err = detect_corruption(bad_file, config)
+
+        assert err is not None
+        assert err.code == "ERR_CORRUPT_YAML_PARSE"
+
+    def test_detect_corruption_blocked_string_reports_type_mismatch(
+        self, tmp_path: Path
+    ) -> None:
+        """Blocked as a string must be detected as mode 4 type mismatch."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1037-blocked-string.md"
+        _write(
+            bad_file,
+            "---\nid: 1037\ntitle: blocked string\nstatus: todo\npriority: needed\n"
+            'blocked: "true"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        err = detect_corruption(bad_file, config)
+
+        assert err is not None
+        assert err.code == "ERR_CORRUPT_TYPE_MISMATCH"
+
+    def test_normalize_code_falls_back_to_string_for_non_type_inputs(self) -> None:
+        """Internal code normalization stringifies unsupported code input types."""
+        import owlbear_kanban.corruption as corruption_module  # noqa: PLC0415
+
+        assert corruption_module._normalize_code(12345) == "12345"
+
+    def test_make_yaml_disables_timestamp_resolver(self) -> None:
+        """Internal YAML helper strips timestamp implicit resolvers."""
+        import owlbear_kanban.corruption as corruption_module  # noqa: PLC0415
+
+        yaml_rt = corruption_module._make_yaml()
+        timestamp_tag = "tag:yaml.org,2002:timestamp"
+        for char_key in yaml_rt.resolver.yaml_implicit_resolvers:
+            resolvers = yaml_rt.resolver.yaml_implicit_resolvers[char_key]
+            assert all(tag != timestamp_tag for tag, _ in resolvers)

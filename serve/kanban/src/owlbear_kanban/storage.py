@@ -37,6 +37,8 @@ from owlbear_kanban.activity_store import (
 )
 from owlbear_kanban.body_parser import parse_body, render_body
 from owlbear_kanban.corruption import (
+    ERR_CORRUPT_ID_FILENAME_MISMATCH,
+    ERR_CORRUPT_YAML_PARSE,
     CorruptionError,
     RepairOutcome,
     attempt_repair,
@@ -186,11 +188,20 @@ def read_task(path: Path) -> Task:
         CorruptionError: ERR_CORRUPT_DELIMITERS when ``---`` delimiters are absent.
         CorruptionError: ERR_CORRUPT_MISSING_FIELD when required frontmatter is absent.
         CorruptionError: ERR_CORRUPT_TYPE_MISMATCH when a field has an unexpected type.
+        CorruptionError: ERR_CORRUPT_INVALID_STATUS when status is outside config.
+        CorruptionError: ERR_CORRUPT_INVALID_PRIORITY when priority is outside config.
     """
+    import yaml  # noqa: PLC0415
     from pydantic import ValidationError  # noqa: PLC0415
 
     try:
         task = _task_io_read_task(path)
+    except yaml.YAMLError as exc:
+        raise CorruptionError(
+            code=ERR_CORRUPT_YAML_PARSE,
+            user_message=f"YAML parse error in {path.name}: {exc}",
+            file_path=str(path),
+        ) from exc
     except ValidationError as exc:
         # Determine the specific code based on error types
         for error in exc.errors():
@@ -212,6 +223,27 @@ def read_task(path: Path) -> Task:
             user_message=f"missing --- delimiters in {path.name}: {exc}",
             file_path=str(path),
         ) from exc
+
+    # Targeted reads (e.g. show_task) must surface board-level corruption modes.
+    board_dir = path.parent.parent
+    config_path = board_dir / "config.yml"
+    if config_path.exists():
+        config = load_config(board_dir)
+        corruption = detect_corruption(path, config)
+        if corruption is not None:
+            raise corruption
+
+    # Mode 6: filename prefix id must match frontmatter id.
+    try:
+        file_id = int(path.stem.split("-", 1)[0])
+    except ValueError:
+        file_id = None
+    if file_id is not None and task.id != file_id:
+        raise CorruptionError(
+            code=ERR_CORRUPT_ID_FILENAME_MISMATCH,
+            user_message=f"filename id {file_id} != frontmatter id {task.id}",
+            file_path=str(path),
+        )
 
     task.claimed_by = None
     return task
