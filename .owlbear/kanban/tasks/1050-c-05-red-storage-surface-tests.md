@@ -4,7 +4,7 @@ title: 'C-05: RED — storage surface tests'
 status: review
 priority: critical
 created: 2026-04-21T10:42:50.277750+00:00
-updated: 2026-04-21T21:43:42.462769+00:00
+updated: 2026-04-21T21:55:19.821445+00:00
 tags:
 - phase:storage
 - brief:c
@@ -14,8 +14,8 @@ parent: 1043
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: jade-fern
+claimed_at: 2026-04-21T21:55:19.821445+00:00
 ---
 ## Brief
 Brief C (#1043) — paper-c.md §8.3, §8.6, §8.11

@@ -1,10 +1,10 @@
 ---
 id: 1048
 title: 'C-03: RED — corruption detection & auto-fix tests'
-status: review
+status: backlog
 priority: needed
 created: 2026-04-21T10:42:50.258020+00:00
-updated: 2026-04-21T21:41:49.394748+00:00
+updated: 2026-04-21T21:53:46.203200+00:00
 tags:
 - phase:storage
 - brief:c
@@ -14,8 +14,8 @@ parent: 1043
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: jade-fern
-claimed_at: 2026-04-21T21:41:49.394748+00:00
+claimed_by:
+claimed_at:
 ---
 ## Brief
 Brief C (#1043) — paper-c.md §8.4
@@ -328,3 +328,85 @@ Tested and confirmed PASS for: `tags: []`, `depends_on: []`, `blocked: false`, `
 - Root cause was YAML rt-mode serializing Python None as bare key entries; explicit-null persistence assertions exposed this clearly.
 - Applying a localized post-dump normalization avoided wider changes to repair logic and kept the diff surgical in behavior.
 - Running scoped GREEN first and related-suite second gave clean signal separation between task closure and coverage gating.
+[[2026-04-21]]
+## Review Evidence
+
+### Test Results
+- quality-runner related-suite run: 136 passed, 0 failed, 0 skipped across [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py), [serve/kanban/tests/test_storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_storage.py), [serve/kanban/tests/test_storage_1050.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_storage_1050.py), and [serve/kanban/tests/test_engine_storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_engine_storage.py).
+- No independent test failures reproduced.
+
+### Lint
+- ruff: clean on [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py), [serve/kanban/src/owlbear_kanban/storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/storage.py), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py).
+
+### Coverage
+- owlbear_kanban.corruption: 91%
+- owlbear_kanban.storage: 97%
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC-C17 | Positive-detection tests for all 9 modes at [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L161), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L182), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L194), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L223), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L238), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L249), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L261), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L272), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L287) | Yes | COVERED |
+| AC-C18 | Direct targeted-read raises exist for the single-file read modes at [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L172), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L209), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L329), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L343), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L353), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L739), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L755), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L770). Cross-file duplicate modes are exercised at the engine layer in [serve/kanban/tests/test_engine_storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_engine_storage.py#L170) and [serve/kanban/tests/test_engine_storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_engine_storage.py#L355). | Yes for the modes `read_task` can surface directly | COVERED |
+| AC-C21 | Subclass assertion at [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L131) against exports in [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L83) and [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L89) | Yes | COVERED |
+| AC-C22 | Strong persisted-value checks exist for null and priority rows at [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L647), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L669), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L691), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L713), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L785), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L803). But several matrix rows still only assert `outcome.action == "fixed"` at [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L399), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L412), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L426), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L485), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L539), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L566), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L606). Those rows would still pass if the repaired value written to disk were wrong. | No | LAX |
+
+#### Security Review
+- No issues found in the task scope.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| TestFromAC suites in [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py) | Current task history shows additive follow-up tests and no present evidence of weakened or removed TestFromAC assertions. The latest builder cycle only records a source change in [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py). | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | WEAK | The AC-C22 rows for tags, depends_on, blocked, archival_refs, digit-string id, blocked=true, and blocked=false terminate at action-only assertions in [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L399), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L412), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L426), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L485), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L539), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L566), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L606). |
+| Negative/error-path coverage | ADEQUATE | Quarantine cases still cover non-defaultable and ambiguous values in [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L502), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L515), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L581), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L608). |
+| Manual mutation reasoning | WEAK | Defaults and coercions are implemented at [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L39), [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L424), [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L453), [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L455), and [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L464). If tags defaulted incorrectly, blocked coercion inverted, or string-id coercion wrote the wrong value, the action-only rows above would still pass. |
+| Test independence | STRONG | The suite isolates per-test board state via tmp_path. |
+| Descriptive names | STRONG | Test names remain AC-tagged and behavior-specific across [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py). |
+
+#### Data Safety
+- No task-scoped issues found.
+
+#### Implementation-Aware Gaps
+- The remaining gap is evidence quality, not reproduced runtime behavior. The broad related suite proves the implementation currently behaves, but AC-C22 is still not exhaustively value-asserted for several fixed-path matrix rows.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 3 |
+| Approach variation | Yes |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L1) still carries RED-phase header language even though the implementation exists and the suite is green. Non-blocking doc drift.
+- [serve/kanban/src/owlbear_kanban/storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/storage.py#L175) still documents only a subset of the corruption errors that `read_task` now raises. Non-blocking doc drift.
+- This task file already contains two prior `## Review Evidence` sections at [task 1048](/Users/markus/Projects/owlbear-dev/.owlbear/kanban/tasks/1048-c-03-red-corruption-detection-auto-fix-tests.md#L84) and [task 1048](/Users/markus/Projects/owlbear-dev/.owlbear/kanban/tasks/1048-c-03-red-corruption-detection-auto-fix-tests.md#L194). Under the loop-breaker rule, a third review failure routes to backlog.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC-C17 | All 9 detection modes have explicit positive-detection coverage in [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L161), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L182), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L194), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L223), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L238), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L249), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L261), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L272), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L287). | TestFromAC_CorruptionDetection | PASS |
+| AC-C18 | Direct read-path raises are covered for the single-file modes in [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L172), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L209), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L329), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L343), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L353), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L739), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L755), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L770), while duplicate modes are exercised where they are actually surfaced in [serve/kanban/tests/test_engine_storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_engine_storage.py#L170) and [serve/kanban/tests/test_engine_storage.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_engine_storage.py#L355). | TestFromAC_CorruptionDetection plus TestBuilderDiscovered | PASS |
+| AC-C21 | The subclass contract is asserted in [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L131) against the current exports in [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L83) and [serve/kanban/src/owlbear_kanban/corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/src/owlbear_kanban/corruption.py#L89). | TestFromAC_CorruptionShape | PASS |
+| AC-C22 | The suite now proves persisted values for null and priority rows, but it still does not verify written values for tags, depends_on, blocked, archival_refs, digit-string id, blocked=true, and blocked=false. Those rows stop at action-only assertions in [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L399), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L412), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L426), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L485), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L539), [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L566), and [serve/kanban/tests/test_corruption.py](/Users/markus/Projects/owlbear-dev/serve/kanban/tests/test_corruption.py#L606). | TestFromAC_AutoFixMatrix plus partial TestBuilderDiscovered compensation | FAIL |
+
+### Deductions
+- AC-C22 is still not exhaustively value-asserted for several fixed-path matrix rows: -0.08
+- Test quality remains WEAK because wrong defaults or coercions across those rows would still pass: -0.05
+
+### Confidence: 0.87
+### Verdict: FAIL
+### Action: Reject to backlog under the 3rd-review loop-breaker rule. The next pass should strengthen tests, not broaden production code:
+1. Add concrete repaired-content assertions for the remaining AC-C22 rows: tags, depends_on, blocked false, archival_refs, digit-string id coercion, blocked true, and blocked false string coercions.
+2. Keep all existing TestFromAC assertions intact; use additive coverage where needed.
+3. Re-run the same related-suite gate after the test additions to confirm the stronger assertions stay green.
+
+### Reflection
+- Independent quality evidence is clean; the remaining problem is proof quality, not a reproduced runtime defect.
+- The brief’s AC-C18 wording is broader than the engine-routing table, so I verified the engine paths before scoring duplicate modes; failing the task on that literal mismatch would have been a false blocker.
+- This is the third review cycle on the task, so the pipeline loop-breaker changes routing even though the underlying defect class is still test quality.
