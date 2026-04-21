@@ -64,7 +64,7 @@
 ### Outbound links
 - [the docs](https://docs.pytest.org/en/stable/how-to/cache.html)
 
-## .venv/lib/python3.12/site-packages/ddgs-9.14.0.dist-info/licenses/LICENSE.md
+## .venv/lib/python3.12/site-packages/ddgs-9.14.1.dist-info/licenses/LICENSE.md
 
 ## .venv/lib/python3.12/site-packages/fastapi/.agents/skills/fastapi/SKILL.md
 - # `FastAPI`
@@ -17075,19 +17075,14 @@
 - ### `Kanban protocol`
 
 ## share/agents/challenger.agent.md
-- ## `Input Contract`
-- ## `Output Contract`
-- ### `1. Challenges`
-- ### `2. Blind Spots`
-- ### `3. Alternative Angles`
-- ### `4. Risk Assessment`
-- ### `5. Confidence in Original`
-- ### `6. Recommendation`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Required Input Fields`
+- ### `Required Output Sections (all 6, in order)`
 
 ## share/agents/code-reader.agent.md
-- ## `Input Contract`
-- ## `Check Categories`
-- ## `Output Contract`
+- ### `Channel A`
+- ### `Channel B`
 
 ## share/agents/doc-writer.agent.md
 - ### `Channel A`
@@ -17095,19 +17090,13 @@
 - ### `Kanban protocol`
 
 ## share/agents/fix-attempt.agent.md
-- ## `Input Contract`
-- ## `Output Contract`
-- ## `Workflow`
-- ### `Step 1 — Parse Inputs`
-- ### `Step 2 — Read Failing Tests`
-- ### `Step 3 — Read Source Files`
-- ### `Step 4 — Apply Fix`
-- ### `Step 5 — Verify`
-- ### `Step 6 — Retry (max 1)`
-- ## `Constraints`
+- ### `Channel A`
+- ### `Channel B`
 
 ## share/agents/ideation-architect.agent.md
-- ## `Output Files`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output Files`
 
 ## share/agents/ideation-critic.agent.md
 - ## `Input Contract`
@@ -17116,38 +17105,64 @@
 - ### `Challenges`
 - ### `Blind Spots`
 - ### `Confidence in Position`
-- ### `Recommendation`
+- ### `Pressure Level`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Required Output Sections`
 
 ## share/agents/ideation-data.agent.md
-- ## `Output Files`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output Files`
+
+## share/agents/ideation-discoverer.agent.md
+- ### `Channel A`
+- ### `Channel B`
+- ### `Phase Boundary`
 
 ## share/agents/ideation-enduser.agent.md
-- ## `Output Files`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output Files`
+
+## share/agents/ideation-firstprinciples.agent.md
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output File`
+
+## share/agents/ideation-mediator.agent.md
+- ### `Channel A`
+- ### `Channel B`
+- ### `Phase Boundary`
+
+## share/agents/ideation-outsider.agent.md
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output File`
 
 ## share/agents/ideation-pragmatist.agent.md
 - ## `Input Contract`
 - ## `Output Contract`
-- ### `Convergences`
-- ### `Disagreements`
-- ### `Recommendation`
-- ### `Open Questions`
+- ### ``mode=converge``
+- ### ``mode=denoise``
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output Files (per mode)`
 
 ## share/agents/ideation-security.agent.md
-- ## `Output Files`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output Files`
+
+## share/agents/ideation-simplifier.agent.md
+- ### `Channel A`
+- ### `Channel B`
+- ### `Output File`
 
 ## share/agents/ideator.agent.md
-- ## `Entry Point Logic`
-- ## `Journey Narration`
-- ## `6-Moment Conversation Flow`
-- ### `M1 — Understanding (Investigator mode)`
-- ### `M2 — Outcomes (Investigator mode)`
-- ### `M3 — Landscape (Investigator mode → Transition)`
-- ### `M3→M4 Panelist Deliberation (Internal — not user-visible)`
-- ### `M4 — Decision (Facilitative mode)`
-- ### `M5 — The Brief (Facilitative mode)`
-- ### `M6 — Handoff (Facilitative mode)`
-- ## `Context Window Economy`
-- ## `Boundaries`
+- ### `Channel A`
+- ### `Channel B`
+- ### `Routing Logic`
 
 ## share/agents/memory-curator.agent.md
 - ### `Channel A`
@@ -17165,13 +17180,8 @@
 - ### `Kanban protocol`
 
 ## share/agents/quality-runner.agent.md
-- ## `Embedded Pitfalls (Skill-Loading Fallback)`
-- ## `Input Contract`
-- ## `Execution Protocol`
-- ### `Scoped run (mode=scoped)`
-- ### `Full run (mode=full)`
-- ### `Retry logic`
-- ## `Output Contract`
+- ### `Channel A`
+- ### `Channel B`
 
 ## share/agents/researcher.agent.md
 - ### `Channel A`
@@ -17184,15 +17194,8 @@
 - ### `Kanban protocol`
 
 ## share/agents/scribe.agent.md
-- ## `Input Contract`
-- ## `Modes`
-- ### `check-or-create`
-- ### `resolve`
-- ### `query`
-- ## `Output Contract`
-- ### `check-or-create`
-- ### `resolve`
-- ### `query`
+- ### `Channel A`
+- ### `Channel B`
 
 ## share/agents/test-curator.agent.md
 - ### `Channel A`
@@ -17205,6 +17208,9 @@
 
 ## share/diagrams/cockpit.excalidraw
 describes: serve/cockpit/src/**, serve/cockpit/web/src/**
+
+## share/diagrams/ideation.excalidraw
+describes: share/skills/w-ideation/**, share/skills/h-ideation-panel/**, share/agents/ideator.agent.md, share/agents/ideation-*.agent.md
 
 ## share/diagrams/kanban.excalidraw
 describes: serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**
@@ -17228,7 +17234,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Channel B`
 - ## `Per-Agent Section Mapping`
 - ## `User-Action Detection Responsibilities`
-- ## `Diagram Rendering Paths`
 
 ## share/instructions/agents-and-skills.instructions.md
 
@@ -17458,27 +17463,25 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/h-ideation-panel/SKILL.md
 - # `Ideation Panel Handbook`
-- ## `Panelist Roster`
-- ### `Behavioral Calibration Guidance`
-- ## `Panelist Selection Logic`
-- ## `Invocation Patterns`
-- ### `Parallel Batch (Standard)`
-- ### `Sequential Deep-Dive`
-- ### `Standalone Critic Invocations`
+- ## `Panel Surface Map`
+- ## `Early Challenge Lane`
+- ### `Roster`
+- ### `Selection Logic`
+- ### `Invocation Pattern`
+- ### `Early-Challenge Rules`
+- ## `Late Domain Panel`
+- ### `Roster`
+- ### `Selection Logic`
+- ### `Parallel Batch (Default)`
+- ### `Sequential Deep-Dive (Conditional)`
 - ## `Critic Loop Protocol`
-- ### `When to Challenge`
-- ### `The Stance Reasoning Cycle`
-- ### `Qualitative Exit Condition`
-- ### `Max Rounds`
+- ### `Stance Reasoning Cycle`
+- ### `Exit Conditions`
 - ### `Critic Rules`
+- ## `Pragmatist Modes`
+- ### ``mode=denoise``
+- ### ``mode=converge``
 - ## `Disagreement Resolution`
-- ### `How Disagreements Are Surfaced`
-- ### `Resolution Protocol`
-- ## `Synthesis Rules`
-- ### `Mediator Role in Synthesis`
-- ### `Pragmatist Synthesis Process`
-- ### `Convergence and Merge Mechanics`
-- ### `Synthesis Output Format (`synthesis.md`)`
 - ## `Panelist References`
 
 ## share/skills/h-kanban-md/SKILL.md
@@ -17679,6 +17682,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 2 — Run Tests Independently`
 - ### `Fallback: Quality-Runner Unavailable`
 - ## `Step 2.5 — Parallel Fan-Out Dispatch`
+- ### `Code-Reader Consumer Contract`
 - ## `Step 3 — Run Lint`
 - ### `Fallback: Quality-Runner Unavailable`
 - ## `Step 4 — Run Coverage`
@@ -17707,6 +17711,11 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/w-decision-routing/SKILL.md
 - # `Decision Routing`
 - ## `Step 0 — Setup`
+- ## `Consumer Invocation Contract`
+- ### `Mode-Specific Output Contracts`
+- #### `check-or-create`
+- #### `resolve`
+- #### `query`
 - ## `Modes`
 - ### `Mode 1: check-or-create`
 - ### `Mode 2: resolve`
@@ -17751,47 +17760,79 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
 
+## share/skills/w-fix-attempt/SKILL.md
+- # `Fix-Attempt`
+- ## `Input Contract`
+- ## `Output Contract`
+- ## `Step 1 — Parse Inputs`
+- ## `Step 2 — Read Failing Tests`
+- ## `Step 3 — Read Source Files`
+- ## `Step 4 — Apply Fix`
+- ## `Step 5 — Verify`
+- ## `Step 6 — Single Retry (max 1)`
+- ## `Known Pitfalls`
+
 ## share/skills/w-ideation/SKILL.md
 - # `Ideation Workflow`
+- ## `Phase Map`
+- ## `User-Facing Entry Points`
+- ### ``@ideation-discoverer``
+- ### ``@ideation-mediator``
+- ### ``@ideator``
+- ## `Blackboard Artifacts`
+- ## `Shared Artifact Meanings`
+- ### ``context.md``
+- ### ``decisions.md``
+- ### ``research-notes.md``
+- ### ``synthesis-idea-panel.md``
+- ### ``synthesis.md``
+- ## `Shared Interaction Contract`
+- ### `Investigative Turns`
+- ### `Synthesis Turns`
+- ### `Decision Turns`
+- ## `Shared Validation Disciplines`
+- ### `Conditional Denoise`
+- ### `Critic Validation (O15)`
+- ### `Disclosure Ladder`
+- ## `Handoff Contract`
+- ## `Cross-References`
+
+## share/skills/w-ideation-discovery/SKILL.md
+- # `Ideation Discovery`
+- ## `Working Rules`
+- ## `Interaction Modes`
+- ### `Investigative Turns`
+- ### `Synthesis Turns`
+- ### `Decision Turns`
 - ## `Step 0 — Setup and Entry`
-- ## `Step 1 — M1: Understanding — "What's really going on?"`
-- ## `Step 2 — M2: Outcomes — "What does winning look like?"`
-- ## `Step 3 — M3: Landscape — "What exists, what's possible?"`
-- ## `Step 4 — M4: Decision — "What are we doing and why?"`
-- ## `Step 5 — M5: The Brief — "Here's the plan"`
-- ## `Step 6 — M6: Handoff — "Go"`
-- ## `Panelist Deliberation Flow`
-- ### `Panelist Selection`
-- ### `Deliberation Steps`
-- ## `Blackboard Contract`
-- ### `Working Directory Layout`
-- ### `File Ownership (Read/Write Rules)`
-- ## `Brief Artifact`
-- ### `Structure`
-- ### `Brief Properties`
-- ### `Pipeline Handoff`
-- ## `Brief Walkthrough Protocol`
-- ### `Walkthrough Offer`
-- ### `Walkthrough Loop`
-- ### `Walkthrough Metrics`
-- ### `Walkthrough Worked Example`
-- ### `Post-Walkthrough Summary`
-- ## `Adaptive Depth`
-- ### `Investment Tier Calibration`
-- ## `Ad-hoc Critic Invocations`
-- ### `User-Request Path`
-- ### `Mediator Self-Trigger`
-- ### `Tier Gating`
-- ### `Recording`
-- ### `Worked Example`
-- ## `Re-Entry Protocol`
+- ## `Step 1 — M1: Understanding`
+- ## `Step 2 — M2: Outcomes and Early Challenge Lane`
+- ## `Step 3 — Research Bridge and Phase Handoff`
+- ## `Artifact Contract`
+- ### ``context.md``
+- ### ``decisions.md``
+- ### ``research-notes.md``
+- ### ``synthesis-idea-panel.md``
 - ## `Verification Checklist`
 
-### Outbound links
-- [Panelist Deliberation Flow](#panelist-deliberation-flow)
-- [Brief Walkthrough Protocol → Walkthrough Offer](#brief-walkthrough-protocol)
-- [Brief Artifact](#brief-artifact)
-- [Walkthrough Metrics](#walkthrough-metrics)
+## share/skills/w-ideation-mediation/SKILL.md
+- # `Ideation Mediation`
+- ## `Working Rules`
+- ## `Step 0 — Phase 2 Start`
+- ## `Step 1 — M3: Landscape Presentation and Research Follow-Up`
+- ## `Step 2 — Late Domain Panel Orchestration`
+- ## `Step 3 — M4: Decision Support`
+- ## `Step 4 — Critic Validation Pass (O15)`
+- ## `Step 5 — M5: Brief Drafting and Disclosure Ladder`
+- ## `Step 6 — M6: Handoff`
+- ## `Interaction Modes`
+- ### `Synthesis Turns`
+- ### `Decision Turns`
+- ## `Disclosure Ladder`
+- ### `Default Summary`
+- ### `Concrete Specifics`
+- ### `Inline Verbatim Evidence`
+- ## `Verification Checklist`
 
 ## share/skills/w-mem-curation/SKILL.md
 - # `Memory Curation`
