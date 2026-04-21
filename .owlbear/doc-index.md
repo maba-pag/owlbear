@@ -17203,6 +17203,9 @@
 - ### `Channel B`
 - ### `Kanban protocol`
 
+## share/diagrams/cockpit.excalidraw
+describes: serve/cockpit/src/**, serve/cockpit/web/src/**
+
 ## share/diagrams/kanban.excalidraw
 describes: serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**
 
