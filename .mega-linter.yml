@@ -56,6 +56,16 @@ PYTHON_RUFF_CLI_LINT_MODE: project
 PYTHON_DEFAULT_STYLE: ruff
 PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
 
+# CSS — use the Cockpit web policy instead of MegaLinter defaults.
+CSS_STYLELINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.css$'
+CSS_STYLELINT_CONFIG_FILE: .stylelintrc.json
+CSS_STYLELINT_RULES_PATH: serve/cockpit/web
+
+# HTML — use the Cockpit web policy instead of MegaLinter defaults.
+HTML_HTMLHINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.html$'
+HTML_HTMLHINT_CONFIG_FILE: .htmlhintrc
+HTML_HTMLHINT_RULES_PATH: serve/cockpit/web
+
 # Actionlint — restrict to workflow files
 ACTION_ACTIONLINT_FILTER_REGEX_INCLUDE: '^(\.github/workflows/.*\.ya?ml)$'
 
