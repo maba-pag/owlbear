@@ -1,8 +1,9 @@
-"""deny-scratch-only-writes.py — PreToolUse hook for the quality-runner agent.
+"""deny-non-doc-writes.py — PreToolUse hook for bounded-output non-code roles.
 
-Allow-list path guard: only writes to .owlbear/scratch/ are permitted.
-Reads VS Code hook stdin JSON, checks paths for write tools, denies writes outside .owlbear/scratch/.
-Usage: invoked automatically by VS Code as a PreToolUse hook.
+Allowlist hook: permits writes under `.owlbear/scratch/` and to a narrow set
+of documentation-adjacent file types (`.md`, `.excalidraw`). All other write
+targets are denied. Used by agents whose output is documentation or kanban
+artifacts, not source code.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path as _Path
 
 _WRITE_TOOLS = {
     "create_file",
@@ -20,7 +22,8 @@ _WRITE_TOOLS = {
     "editFiles",
 }
 
-_SCRATCH_RE = re.compile(r"(^|/)\.owlbear/scratch/")
+_ALLOWED_EXTENSIONS = {".md", ".excalidraw"}
+_SCRATCH_RE = re.compile(r"(^|/)\.owlbear/scratch(/|$)")
 
 
 def _extract_paths(tool_input: object) -> list[str]:
@@ -35,6 +38,14 @@ def _extract_paths(tool_input: object) -> list[str]:
     dp = tool_input.get("dirPath")
     if isinstance(dp, str) and dp:
         paths.append(dp)
+
+    patch_input = tool_input.get("input")
+    if isinstance(patch_input, str):
+        for line in patch_input.splitlines():
+            if line.startswith(("*** Update File: ", "*** Add File: ", "*** Delete File: ")):
+                path = line.split(": ", 1)[1].strip()
+                if path:
+                    paths.append(path)
 
     for r in tool_input.get("replacements") or []:
         if isinstance(r, dict):
@@ -51,6 +62,18 @@ def _extract_paths(tool_input: object) -> list[str]:
                 paths.append(efp)
 
     return paths
+
+
+def _normalize(path: str) -> str:
+    return path.replace("\\", "/").removeprefix("./")
+
+
+def _is_denied(normalized: str) -> bool:
+    """Return True if the path is outside scratch and not doc-adjacent."""
+    if _SCRATCH_RE.search(normalized):
+        return False
+    ext = _Path(normalized).suffix.lower()
+    return ext not in _ALLOWED_EXTENSIONS
 
 
 def main() -> None:
@@ -72,16 +95,14 @@ def main() -> None:
         return
 
     for p in paths:
-        normalized = p.replace("\\", "/")
-        if not _SCRATCH_RE.search(normalized):
+        normalized = _normalize(p)
+        if _is_denied(normalized):
             response = {
                 "hookSpecificOutput": {
                     "permissionDecision": "deny",
                     "permissionDecisionReason": (
-                        f"quality-runner path guard: write target "
-                        f"'{normalized}' is outside the allowed directory "
-                        "(.owlbear/scratch/). Only writes to "
-                        ".owlbear/scratch/ are permitted."
+                        f"bounded-output path guard: write to '{normalized}' is denied. "
+                        "Only .owlbear/scratch/, .md, and .excalidraw targets are allowed."
                     ),
                 }
             }
@@ -91,5 +112,5 @@ def main() -> None:
     print("{}")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()

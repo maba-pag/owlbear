@@ -27,24 +27,25 @@
   "accessibility.chat.showCheckmarks": true,
   "chat.agent.maxRequests": 99999,
   "chat.agentFilesLocations": {
-    "{{owlbear_path}}/share/agents": true
+    "{{owlbear_path}}/share/agents": true,
+    ".owlbear/agents": true
   },
   "chat.agentSkillsLocations": {
-    "{{owlbear_path}}/share/skills": true
+    "{{owlbear_path}}/share/skills": true,
+    ".owlbear/skills": true
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
-  "chat.hookFilesLocations": {
-    "{{owlbear_path}}/share/hooks": true
-  },
   "chat.instructionsFilesLocations": {
-    "{{owlbear_path}}/share/instructions": true
+    "{{owlbear_path}}/share/instructions": true,
+    ".owlbear/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
   "chat.promptFilesLocations": {
-    "{{owlbear_path}}/share/prompts": true
+    "{{owlbear_path}}/share/prompts": true,
+    ".owlbear/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.terminal.autoApprove": {

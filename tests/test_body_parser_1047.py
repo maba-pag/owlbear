@@ -81,3 +81,34 @@ class TestFromAC_BodyParserEdgeCases:
         sections = parse_body(md)
         headings = [s.heading for s in sections if s.heading]
         assert "still-inside-tilde" not in headings
+
+
+class TestBuilderDiscovered:
+    """Precision assertions added from reviewer feedback on weak checks."""
+
+    def test_ac_c6_crlf_normalises_to_exact_lf_content(self) -> None:
+        """AC-C6: CRLF becomes LF while preserving exact line boundaries."""
+        md = "## Notes\r\n\r\nLine one.\r\nLine two.\r\n"
+        sections = parse_body(md)
+
+        notes_sections = [s for s in sections if s.heading == "Notes"]
+        assert len(notes_sections) == 1
+        assert notes_sections[0].content == "\nLine one.\nLine two.\n"
+
+    def test_ac_c12_preserves_exact_triple_blank_between_sections(self) -> None:
+        """AC-C12: render preserves the exact blank-line count at section boundaries."""
+        md = "## Section A\n\nContent A.\n\n\n## Section B\n\nContent B.\n"
+        rendered = render_body(parse_body(md))
+
+        assert rendered == md
+        assert "Content A.\n\n\n## Section B" in rendered
+        assert "Content A.\n\n\n\n## Section B" not in rendered
+
+    def test_ac_c53_setext_level_one_renders_exact_atx_h1(self) -> None:
+        """AC-C53: setext level-1 heading renders to exact ATX H1 form."""
+        setext_md = "My Heading\n==========\n\nsome content\n"
+        rendered = render_body(parse_body(setext_md))
+
+        assert rendered == "# My Heading\n\nsome content\n"
+        assert rendered.startswith("# My Heading\n")
+        assert not rendered.startswith("## My Heading\n")

@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import warnings
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -59,6 +60,7 @@ _SKIP_IF_EXISTS_REL = frozenset(
 )
 
 _OWLBEAR_GITIGNORE_MARKER = "# --- OwlBear managed paths ---"
+_HOOKS_REL_PREFIX = ".owlbear/hooks/"
 
 # Regex: match // line-comments outside of strings.  Handles the common JSONC
 # patterns VS Code uses (trailing comments like `true, // old value`).  Does
@@ -194,6 +196,91 @@ def _write_mcp(src: Path, dest: Path, owlbear_path: str) -> None:
     dest.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
 
+def _write_seed_file(src: Path, dest: Path, owlbear_path: str) -> None:
+    """Write a generic seed file with placeholder replacement when needed."""
+    if src.suffix in (".json", ".yml"):
+        content = src.read_text(encoding="utf-8")
+        content = _replace_placeholders(content, {"owlbear_path": owlbear_path})
+        dest.write_text(content, encoding="utf-8")
+        return
+
+    shutil.copy2(src, dest)
+
+
+def _hook_files_match(src: Path, dest: Path) -> bool:
+    """Return True when the existing hook file already matches the seed file."""
+    return dest.exists() and src.read_bytes() == dest.read_bytes()
+
+
+def _is_interactive_session() -> bool:
+    """Return True when both stdin and stdout are attached to a TTY."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _should_replace_hook_file(
+    dest: Path,
+    *,
+    src: Path,
+    replace_hooks: bool,
+    interactive: bool,
+) -> bool:
+    """Decide whether a differing existing hook file should be overwritten."""
+    if replace_hooks:
+        return True
+
+    if not interactive:
+        warnings.warn(
+            (
+                f"Existing hook file differs and was left unchanged: {dest}. "
+                "Re-run with replace_hooks=True or --replace-hooks to overwrite it."
+            ),
+            stacklevel=2,
+        )
+        return False
+
+    diff = _hook_diff(src, dest)
+    if diff:
+        print(f"\nDiff for {dest} (seed -> existing):")
+        print(diff)
+
+    prompt = (
+        f"Hook file '{dest}' differs from the OwlBear seed. "
+        "Choose replace, skip, or cancel: "
+    )
+    while True:
+        choice = input(prompt).strip().lower()
+        if choice in {"replace", "r"}:
+            return True
+        if choice in {"skip", "s"}:
+            return False
+        if choice in {"cancel", "c"}:
+            raise RuntimeError("Hook seeding cancelled by user.")
+        print("Enter replace, skip, or cancel.")
+
+
+def _hook_diff(src: Path, dest: Path) -> str:
+    """Return a short unified diff between src (seed) and dest (existing)."""
+    import difflib
+
+    try:
+        seed_lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
+        existing_lines = dest.read_text(encoding="utf-8").splitlines(keepends=True)
+    except (OSError, UnicodeDecodeError):
+        return ""
+    diff_lines = list(
+        difflib.unified_diff(
+            seed_lines,
+            existing_lines,
+            fromfile=f"seed/{src.name}",
+            tofile=str(dest),
+            n=2,
+        )
+    )
+    if len(diff_lines) > 40:
+        diff_lines = diff_lines[:40] + ["... (diff truncated)\n"]
+    return "".join(diff_lines)
+
+
 def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
     """Write .vscode/mcp.json, merging owlbear servers with existing entries.
 
@@ -227,6 +314,8 @@ def init(
     owlbear_dir: Path,
     *,
     name: str | None = None,
+    replace_hooks: bool = False,
+    interactive: bool | None = None,
 ) -> None:
     """Initialise an OwlBear workspace in *target_dir*.
 
@@ -242,10 +331,13 @@ def init(
         target_dir: Destination project directory.
         owlbear_dir: Root of the owlbear installation (contains ``seed/``).
         name: Project name.  Defaults to *target_dir.name*.
+        replace_hooks: Overwrite differing existing hook runtime files.
+        interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
     """
     seed_dir = owlbear_dir / "seed"
     owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
     resolved_name = name if name is not None else target_dir.name
+    interactive_mode = _is_interactive_session() if interactive is None else interactive
 
     for src in sorted(seed_dir.rglob("*")):
         if src.is_dir():
@@ -281,12 +373,18 @@ def init(
         if rel_posix in _SKIP_IF_EXISTS_REL and dest.exists():
             continue
 
-        if src.suffix in (".json", ".yml"):
-            content = src.read_text(encoding="utf-8")
-            content = _replace_placeholders(content, {"owlbear_path": owlbear_path})
-            dest.write_text(content, encoding="utf-8")
-        else:
-            shutil.copy2(src, dest)
+        if rel_posix.startswith(_HOOKS_REL_PREFIX) and dest.exists():
+            if _hook_files_match(src, dest):
+                continue
+            if not _should_replace_hook_file(
+                dest,
+                src=src,
+                replace_hooks=replace_hooks,
+                interactive=interactive_mode,
+            ):
+                continue
+
+        _write_seed_file(src, dest, owlbear_path)
 
 
 # ---------------------------------------------------------------------------
@@ -298,9 +396,17 @@ if __name__ == "__main__":  # pragma: no cover
 
     parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
     parser.add_argument("--name", default=None, help="Project name (default: directory name)")
+    parser.add_argument(
+        "--replace-hooks",
+        action="store_true",
+        help="Overwrite differing existing .owlbear/hooks files instead of skipping or prompting.",
+    )
     args = parser.parse_args()
 
     _target = Path.cwd()
     _owlbear = Path(__file__).resolve().parent.parent
-    init(_target, _owlbear, name=args.name)
+    try:
+        init(_target, _owlbear, name=args.name, replace_hooks=args.replace_hooks)
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
     print(f"OwlBear workspace initialised in '{_target.name}'.")

@@ -85,7 +85,7 @@ def main() -> None:
 
     try:
         result = subprocess.run(  # noqa: S603
-            ["ruff", "check", "--ignore", "INP001", *existing_py],  # noqa: S607
+            ["uv", "run", "--quiet", "ruff", "check", "--ignore", "INP001", *existing_py],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,
