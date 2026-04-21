@@ -244,8 +244,8 @@ class TestFromAC_ListSessions:
 
         sessions = engine.list_sessions(filter="all")
         assert isinstance(sessions, list)
-        assert len(sessions) >= 1
-        assert isinstance(sessions[0], SessionRecord)
+        assert len(sessions) == 1, f"Expected exactly 1 session, got {len(sessions)}"
+        assert all(isinstance(s, SessionRecord) for s in sessions)
 
     def test_ac_c43_session_record_has_required_fields(self, tmp_path: Path) -> None:
         """AC-C43: SessionRecord has task_id, state, started_at, ended_at, outcome, duration_s."""
@@ -257,7 +257,7 @@ class TestFromAC_ListSessions:
         engine.end_work(1001, outcome="success", note="done")
 
         sessions = engine.list_sessions(filter="all")
-        assert sessions
+        assert len(sessions) == 1, f"Expected exactly 1 session, got {len(sessions)}"
         s = sessions[0]
         assert hasattr(s, "task_id")
         assert hasattr(s, "task_status_at_start")
@@ -266,6 +266,11 @@ class TestFromAC_ListSessions:
         assert hasattr(s, "ended_at")
         assert hasattr(s, "outcome")
         assert hasattr(s, "duration_s")
+        # Closed-session fields must not be None or bogus
+        assert s.ended_at is not None, "ended_at must be set for a closed session"
+        assert isinstance(s.ended_at, str), "ended_at must be a string"
+        assert s.duration_s is not None, "duration_s must be set for a closed session"
+        assert s.duration_s >= 0, "duration_s must be non-negative"
 
     def test_ac_c43_session_state_completed_on_success_end_work(self, tmp_path: Path) -> None:
         """AC-C43: closed session (success end_work) has state='completed', outcome='success'."""
