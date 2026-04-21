@@ -1023,6 +1023,38 @@ class KanbanEngine:
 
         return {"archived_moved": archived_moved, "claims_released": claims_released}
 
+    def repair_storage(self) -> list[dict]:
+        """Quarantine corrupt task files and create action-required tasks.
+
+        Scans ``tasks/`` for files containing forbidden fields (e.g. ``claimed_by``).
+        Each corrupt file is moved to ``quarantine/`` and an AR task tagged
+        ``type:user-action`` is created with a ``## Quarantined file`` body
+        section describing the issue (AC-C30).
+
+        Returns:
+            List of dicts ``{"path": str, "code": str}`` for each quarantined file.
+        """
+        from owlbear_kanban.storage import detect_corruption, move_to_quarantine  # noqa: PLC0415
+
+        outcomes: list[dict] = []
+        for path in sorted(self._tasks_dir.glob("*.md")):
+            error = detect_corruption(path, self._config)
+            if error is not None:
+                quarantine_path = move_to_quarantine(path, self._kanban_dir)
+                body = (
+                    "## Quarantined file\n\n"
+                    f"- code: {error.code}\n"
+                    f"- path: {quarantine_path}\n"
+                    f"- detail: {error.detail}\n"
+                )
+                self.create_task(
+                    title=f"Storage repair: {path.name}",
+                    tags=["type:user-action"],
+                    body=body,
+                )
+                outcomes.append({"path": str(path), "code": error.code})
+        return outcomes
+
     # ------------------------------------------------------------------
     # Session helpers
     # ------------------------------------------------------------------

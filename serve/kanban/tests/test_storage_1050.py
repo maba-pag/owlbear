@@ -567,3 +567,48 @@ class TestFromAC_ArchiveExemption:
 
         assert dumped.get("claimed_by") is None, "claimed_by must be stripped"
         assert dumped.get("class") == "epic", "vendor field 'class' must be preserved"
+
+
+# ---------------------------------------------------------------------------
+# Builder-discovered edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestBuilderDiscovered:
+    """Edge cases discovered during implementation; complementary to TestFromAC_* coverage."""
+
+    def test_migration_required_error_carries_code_and_user_message(self) -> None:
+        """MigrationRequiredError stores code and user_message on the instance."""
+        err = MigrationRequiredError(
+            code="ERR_MIGRATION_REQUIRED",
+            user_message="board requires migration",
+        )
+        assert err.code == "ERR_MIGRATION_REQUIRED"
+        assert err.user_message == "board requires migration"
+        assert str(err) == "board requires migration"
+
+    def test_detect_corruption_file_missing_closing_delimiter_returns_none(
+        self, tmp_path: Path
+    ) -> None:
+        """detect_corruption on a file without a closing '---' returns None (not an error)."""
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        bad_file = kanban_dir / "tasks" / "99-no-close.md"
+        bad_file.write_text("---\nid: 99\ntitle: broken\nclaimed_by: agent\n", encoding="utf-8")
+
+        result = detect_corruption(bad_file, config)
+
+        assert result is None
+
+    def test_detect_corruption_file_without_frontmatter_returns_none(
+        self, tmp_path: Path
+    ) -> None:
+        """detect_corruption on a plain-text file (no '---') returns None."""
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        plain_file = kanban_dir / "tasks" / "99-plain.md"
+        plain_file.write_text("Just some text\nclaimed_by: agent\n", encoding="utf-8")
+
+        result = detect_corruption(plain_file, config)
+
+        assert result is None
