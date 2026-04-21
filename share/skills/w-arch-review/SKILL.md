@@ -68,8 +68,8 @@ Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, and res
 
 | Challenger output | Architect action |
 |-------------------|------------------|
-| `proceed` + confidence 0.80+ | Continue with original verdict |
-| `reconsider` OR confidence < 0.80 | Re-evaluate, may revise or justify override |
+| `proceed` + confidence ≥ Challenger threshold (`r-pipeline-protocol`) | Continue with original verdict |
+| `reconsider` OR confidence below threshold | Re-evaluate, may revise or justify override |
 | `block` | Strong signal to reject to research; must provide rebuttal if overriding |
 
 The architect retains final authority.

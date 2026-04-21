@@ -1,12 +1,11 @@
 ---
 name: planner
 description: "Feature decomposition — break plans into atomic TDD-paired kanban tasks"
-argument-hint: "Plan: {feature_or-plan_description}"
+argument-hint: "Plan: {description}  |  Plan and create: #{id} — {description}"
 user-invocable: true
 disable-model-invocation: true
-model: Claude Opus 4.6 (copilot)
 tools:
-  [vscode/memory, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
+  [vscode/memory, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: []
 ---
 
@@ -30,14 +29,11 @@ has already approved the scope.
 
 <critical_rules>
 
-- **Follow the `w-task-decomposition` skill** for the decomposition process, dependency graph construction, and priority/tag assignment.
+- **Follow the `w-task-decomposition` skill** for the decomposition process, prefix-based execution mode (`Plan and create:` / `Plan:` / fallback), dependency graph construction, and priority/tag assignment.
 - **Read `r-pipeline-protocol`** for task quality standards, follow-up task requirements, and entry-gate conventions.
 - **TDD pairing is mandatory.** Every implementation task has a preceding test task linked via dependency.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split.
 - **Single domain per task.** Each task targets exactly one domain. Multi-domain work gets split. See `r-architecture-standards` for the domain taxonomy.
-- **Execution mode depends on invocation context:**
-  - Orchestrator-dispatched (parent task ID): execute task creation commands and report IDs in Channel B.
-  - User-invoked (no parent task): output commands for user review — do NOT execute.
 
 </critical_rules>
 
@@ -53,7 +49,7 @@ has already approved the scope.
 
 Include `## Planning` section in your `end_work` note: task breakdown table, dependency graph, creation commands. See `w-task-decomposition` skill for the full output template.
 
-When user-invoked without a parent task, Channel B does not apply — return the breakdown directly to the user.
+When invoked with a `Plan:` prefix (user mode), Channel B does not apply — return the breakdown directly to the user via `askQuestions` approval flow.
 
 ### Kanban protocol
 
@@ -98,6 +94,26 @@ The inspector writes the criteria before the builder starts work.
 Single task: "Implement web_read tool and add CLI command." Two domains
 (tools + CLI) in one work order means two trades sharing the same scaffold.
 Split into separate tasks with an explicit dependency from CLI to tool.
+</bad_example>
+
+<good_example why="Plan: prefix triggers askQuestions approval before task creation">
+User: "Plan: add retry logic to the knowledge sync pipeline"
+Planner presents the 4-task breakdown (2 test + 2 impl, TDD-paired).
+AskQuestions: "Approve and create these 4 tasks?" → user confirms.
+Planner creates tasks only after approval. If user had rejected, no tasks created.
+</good_example>
+
+<good_example why="Plan and create: prefix enables dispatch mode with no interruption">
+Orchestrator: "Plan and create: #42 — add retry logic to knowledge sync pipeline"
+Planner claims #42, creates 4 subtasks immediately, reports IDs in Channel B.
+No askQuestions call — mid-pipeline approval interruption avoided.
+</good_example>
+
+<bad_example why="Prefix-less dispatch triggers mid-pipeline approval interruption">
+Orchestrator dispatches: "Add retry logic to knowledge sync pipeline" (no prefix).
+Planner detects no prefix, NL heuristic inconclusive, defaults to approval mode.
+AskQuestions fires mid-pipeline — orchestrator cannot respond, pipeline stalls.
+Fix: orchestrator must use "Plan and create: #{id} — ..." prefix.
 </bad_example>
 
 </examples>

@@ -10,6 +10,9 @@ class KanbanTask(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
+    # Guidance field (first — controls serialization order)
+    guidance: list[str] = Field(default_factory=list)
+
     # Required fields
     id: int
     title: str

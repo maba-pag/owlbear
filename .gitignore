@@ -1,3 +1,6 @@
+# Node.js (first Node code lives at serve/cockpit/web/)
+node_modules/
+
 # Python bytecode and cache
 __pycache__/
 *.pyc
@@ -37,6 +40,8 @@ htmlcov/
 .hypothesis/
 .benchmarks/
 megalinter-reports/
+test-results/
+playwright-report/
 
 # IDE and editor
 .vscode/*

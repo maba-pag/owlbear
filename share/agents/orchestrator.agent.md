@@ -4,7 +4,6 @@ description: "Dispatch loop — plan, dispatch agents, re-plan from fresh board 
 argument-hint: "Orchestrate: {scope_or-filter — e.g., 'phase-2', 'all todos', 'tag:parser'}"
 user-invocable: true
 disable-model-invocation: true
-model: Claude Opus 4.6 (copilot)
 tools: [vscode/memory, read/readFile, agent, 'owlbear-kanban/pick_tasks', 'owlbear-kanban/list_tasks', 'owlbear-kanban/show_task', 'owlbear-memory/*']
 agents:
   - planner
@@ -44,7 +43,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and agent-signal mapping.
 - **Never interpret pipeline-agent output.** A pipeline agent (builder, reviewer, etc.) either returned (success) or crashed (error). You do not parse their Channel A signals for routing decisions. After the scribe returns in resolve mode, read `.owlbear/decisions/resolve-summary.json` via `readFile` for structured dispatch data (see w-orchestration Step 1).
 - **ONE task per subagent dispatch.** Never batch multiple tasks into a single subagent call.
-- **Never stop until the user says stop.** There is no "good stopping point" you may choose. Keep cycling until the board is clear or the user intervenes.
+- **Never stop early.** There is no "good stopping point" you may choose. Keep cycling until `pick_tasks` returns an empty list or the user intervenes — those are the only valid stop conditions.
 
 </critical_rules>
 

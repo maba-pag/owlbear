@@ -74,6 +74,32 @@ prompt: |
 
 Collect both reports before continuing to Step 8. If either subagent returns an **execution error** (crash, timeout, exception — not a FAIL verdict), run the full sequential workflow (steps 3–7). Note in Channel B: "Parallel fan-out failed: {reason}. Fell back to sequential."
 
+### Code-Reader Consumer Contract
+
+Code-reader is a read-only adversarial subagent invoked from this workflow. Consumers (reviewer) must pass:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `task_id` | string | Kanban task ID for correlation |
+| `ac_lines` | string[] | Every AC line from the task body — source of truth for coverage assessment |
+| `changed_files` | string[] | Files modified by the builder — scope for all checks |
+| `test_files` | string[] | Test files for the task — scope for test integrity and quality |
+
+Code-reader executes Critical Checks §5.0–5.7 and Informational Checks §6.1–6.4 (defined below) and returns exactly these 8 sections, each populated with findings + evidence or an explicit "No issues found" with brief justification:
+
+```
+## test_writer-audit
+## security_review
+## test_integrity
+## test_quality
+## data_safety
+## test_gaps
+## necessity_check
+## informational
+```
+
+The reviewer synthesises the final verdict from code-reader's 8-section report plus quality-runner's 5-section report.
+
 ## Step 3 — Run Lint
 
 Invoke Quality-Runner for lint if not already done in Step 2 report:

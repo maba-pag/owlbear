@@ -12,9 +12,72 @@ Create, check, and resolve decision and action requests. The scribe is the exclu
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
-This skill does NOT claim a task — the scribe operates on behalf of the calling agent. It receives three parameters: `task_id`, `mode`, and optionally `request_type`/`concern`.
+This skill does NOT claim a task — the scribe operates on behalf of the calling agent.
 
 **Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
+
+> **Block-time guidance:** When the kanban MCP server returns a `guidance` field containing the DR-required message on a block operation, it is directing the calling agent to this workflow. Follow Mode 1 (check-or-create) with the task ID from the blocked operation.
+
+## Consumer Invocation Contract
+
+Callers invoke the scribe via subagent dispatch. Required and optional fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `task_id` | yes | Kanban task ID |
+| `mode` | yes | `check-or-create`, `resolve`, or `query` |
+| `agent` | yes | Name of the calling agent (for frontmatter attribution) |
+| `concern` | check-or-create only | What the agent wants to ask the user |
+| `request_type` | check-or-create only | `decision` or `action` (default: `decision`) |
+
+### Mode-Specific Output Contracts
+
+Scribe returns one of three output shapes depending on `mode`.
+
+#### check-or-create
+
+```
+EXISTING #{task_id} | {request_type} already {resolved|pending}: "{title}"
+User notes: {notes}
+```
+
+or:
+
+```
+CREATED #{task_id} | .owlbear/decisions/pending/{filename}
+Task blocked. End your work with outcome=block and reference this DR in your note.
+```
+
+#### resolve
+
+After processing all DRs, write `.owlbear/decisions/resolve-summary.json`:
+
+```json
+{
+  "resolved": [{"task_id": 616, "response": "approved"}],
+  "needs_info": [{"task_id": 616, "agent": "researcher"}],
+  "pending": [{"task_id": 617, "filename": "617-something.md"}]
+}
+```
+
+Write the file even when all arrays are empty — the orchestrator reads it and deletes it after reading.
+
+Always emit all three lines (set N/M/P to 0 when none):
+
+```
+RESOLVED {N} requests | {details per request}
+NEEDS-INFO {M} requests | #{task_id} agent={originating_agent}, ...
+PENDING {P} awaiting user | #{task_id} ({filename}), ...
+```
+
+The orchestrator uses PENDING to surface unanswered DRs to the user and reads `resolve-summary.json` for structured dispatch data.
+
+#### query
+
+```
+QUERY #{task_id} | {N} requests found
+{summary per request}
+```
 
 ## Modes
 
@@ -74,6 +137,8 @@ The user has follow-up questions in `notes:`. Do NOT treat as approval.
 Search pending and resolved DRs for the task without creating. Return findings.
 
 ## When to Create a Decision Request
+
+> **Block-time guidance:** If the MCP tool response from `edit_task(block=...)` or `end_work(outcome="block")` contains a non-empty `guidance` field with "ACTION REQUIRED: Create a Decision Request", this skill is where you land. Follow the instructions below to create the DR, then call `end_work(outcome="block", block_reason="DR pending: {filename}")` if not already blocked.
 
 Create when:
 
@@ -195,11 +260,7 @@ When a user resolves a DR, their `notes:` field carries **binding constraints** 
 
 ## Output Template
 
-Channel A signal:
-
-```
-DONE #{task_id} -> {status} | {mode}: {result summary}
-```
+See `## Consumer Invocation Contract → Mode-Specific Output Contracts` above for the per-mode output shapes.
 
 ## Verification Checklist
 

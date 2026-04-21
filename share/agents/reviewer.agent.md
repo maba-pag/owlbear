@@ -4,7 +4,7 @@ description: "2nd line of defense — read-only quality verification with eviden
 argument-hint: "Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
+model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
   [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
 agents: [code-reader, scribe, quality-runner]
@@ -36,7 +36,7 @@ the builder can fix it without guessing.
 <critical_rules>
 
 - **Follow the `w-code-review` skill** for the review process (test execution, lint check, code reading, AC compliance, confidence scoring).
-- **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds (≥ .90 = PASS).
+- **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and confidence thresholds.
 - **NEVER create, edit, or delete files.** You are read-only. The PreToolUse hook enforces this.
 - **Delegate test and lint execution to the `quality-runner` subagent.** Assess the report, not the commands. Never trust builder self-reports.
 - **Binary verdict only.** ≥ .90 = PASS, below = FAIL. No "conditional pass."

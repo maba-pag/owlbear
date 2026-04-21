@@ -63,6 +63,14 @@ Researcher, architect, and planner must reject invalid task inputs immediately:
 - Never trust self-reports. Verify deliverables yourself — run tests, read files, check the board.
 - Cite specifics: file paths, line numbers, test names, command output. "It looks fine" is never acceptable.
 
+### Quality-Runner Mandate
+
+All pipeline agents (test-writer, builder, reviewer, auditor) **must** delegate test, lint, and coverage execution to the `quality-runner` subagent. Direct `pytest` / `ruff` invocation in agent terminals is prohibited — it bypasses the canonical evidence pipeline and produces non-comparable reports across agents.
+
+If `quality-runner` is unavailable (not in the calling agent's `agents:` array, or subagent dispatch fails), the agent **blocks the task** via `end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run {tests|lint|coverage} independently")`. Never improvise with direct shell commands.
+
+Exception: the `quality-runner` agent itself runs the underlying tools — that's its job.
+
 ### Defense-in-Depth
 
 The pipeline uses three lines of defense. Trust upstream lines' detailed work; focus on your own scope.
@@ -82,6 +90,9 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 | Reviewer | < .90, 3rd+ FAIL | FAIL — always backlog (loop-breaker) |
 | Auditor | ≥ .95 | Archive |
 | Auditor | < .95 | Reject to backlog |
+| Challenger | ≥ 0.80 | `proceed` — caller continues with original verdict |
+| Challenger | < 0.80 OR `reconsider` | Caller revises or justifies override with rebuttal |
+| Challenger | `block` | Caller revisits scope; rebuttal required to proceed |
 
 ### Process Habits
 
@@ -190,6 +201,12 @@ The kanban `block` action is reserved for:
 
 Blocking and unblocking outside the standard lifecycle (e.g., orchestrator triage) uses `edit_task(block="reason")` / `edit_task(unblock=True)` (see `h-mcp-kanban`).
 
+#### DR Required on Agent Block
+
+**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via the scribe agent (see `w-decision-routing`).
+
+**Exemption — user-driven blocks:** Tasks blocked via the Cockpit carry the `block:user` tag. If `block:user` is present on the task after blocking, the guidance field will be empty — no DR is required. Agents **must not** create DRs for Cockpit-initiated blocks.
+
 ### Decision Tiers
 
 | Tier | When | Action |
@@ -229,18 +246,7 @@ Researcher may provisionally tag `type:user-action` during research; architect c
 
 **Dual-nature tasks:** When the same feature requires both user action and code change, split into two tasks: a `type:user-action` task (AR + block) and a code task. The code task sets `depends_on` to the user-action task to enforce ordering.
 
-**Dry-run scenario — #597-style loop prevented:**
-
-1. Task created: "Verify Teams Workflows availability" with `type:user-action` tag
-2. Researcher: validates research, confirms `type:user-action`
-3. Architect: detects tag → creates AR via scribe → blocks → `end_work(outcome="block")`
-4. Orchestrator cycle: `pick_tasks` returns nothing for this task (blocked) — no agents dispatched
-5. User: performs action → sets `response: completed` in AR file
-6. Scribe resolve: appends `## Action Completed`, unblocks task
-7. Architect (re-entry): sees `## Action Completed` + `type:user-action` → verifies AC → approves
-8. Pipeline: test-writer/builder pass through (NON_IMPL_TAGS), reviewer/auditor verify → archive
-
-Result: **2 architect cycles** (initial block + post-completion review) vs #597's **4+ futile cycles** with no resolution.
+**Dry-run scenario — #597-style loop prevented:** Because the task is `blocked` between architect cycles 1 and 2, `pick_tasks` returns nothing for it — the orchestrator dispatches no other agents until scribe unblocks. Result: **≤2 architect cycles** vs #597's **4+ futile cycles** with no resolution.
 
 ### Handoff
 

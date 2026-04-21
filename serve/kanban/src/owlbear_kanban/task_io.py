@@ -30,6 +30,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import yaml
 from ruamel.yaml import YAML
 
 from owlbear_kanban.models import Task
@@ -42,6 +43,31 @@ from owlbear_kanban.models import Task
 # (e.g. 2026-04-09T03:24:26.6974428+02:00) are preserved verbatim instead of
 # being parsed to Python datetime / ruamel TimeStamp objects.
 _TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
+_BOOL_TAG = "tag:yaml.org,2002:bool"
+
+
+class YAML12SafeLoader(yaml.SafeLoader):
+    """PyYAML SafeLoader with YAML 1.2 semantics for task frontmatter parsing.
+
+    - Timestamps preserved as plain strings (Go 7-digit nanosecond safe).
+    - YAML 1.1 bool aliases (yes/no/on/off) kept as strings.
+    - YAML 1.2 bools (true/false, case-insensitive) parsed as Python bool.
+
+    Defined at module level (constructed once at import time).
+    yaml_implicit_resolvers is rebuilt from SafeLoader before mutation to
+    prevent corrupting the global yaml.SafeLoader state.
+    """
+
+
+YAML12SafeLoader.yaml_implicit_resolvers = {
+    k: [(tag, regexp) for tag, regexp in v if tag not in (_TIMESTAMP_TAG, _BOOL_TAG)]
+    for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+YAML12SafeLoader.add_implicit_resolver(
+    _BOOL_TAG,
+    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
+    list("tTfF"),
+)
 
 
 def _make_yaml() -> YAML:
@@ -58,15 +84,6 @@ def _make_yaml() -> YAML:
                 (tag, regexp) for tag, regexp in resolver_dict[char_key] if tag != _TIMESTAMP_TAG
             ]
     return y
-
-
-def _to_plain(obj: Any) -> Any:  # noqa: ANN401
-    """Recursively convert ruamel.yaml containers to plain Python types."""
-    if isinstance(obj, dict):
-        return {k: _to_plain(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_to_plain(item) for item in obj]
-    return obj
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +219,7 @@ def read_task(path: Path) -> Task:
     frontmatter_str = "\n".join(lines[1:closing_idx])
     body = "\n".join(lines[closing_idx + 1 :])
 
-    data: dict[str, Any] = _to_plain(_make_yaml().load(frontmatter_str) or {})
+    data: dict[str, Any] = yaml.load(frontmatter_str, Loader=YAML12SafeLoader) or {}  # noqa: S506
     data["body"] = body
 
     return Task.model_validate(data)

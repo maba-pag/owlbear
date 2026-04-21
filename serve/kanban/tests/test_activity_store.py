@@ -1,0 +1,331 @@
+"""TDD RED: C-04 — activity_store append/query/compact tests.
+
+Task: #1049 (Brief C #1043) — paper-c.md §8.9
+AC:   C42, C44, C44a
+All tests FAIL (RED phase — activity_store not yet implemented).
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+
+from owlbear_kanban.activity_store import (  # NEW module — ImportError in RED
+    append_activity_event,
+    list_activity_events,
+    compact_activity_log,
+)
+from owlbear_kanban.storage import (  # NEW module — ImportError in RED
+    ActivityEvent,
+    ActivityCompactionResult,
+)
+
+# ---------------------------------------------------------------------------
+# Board helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_board(base_dir: Path) -> Path:
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
+
+
+def _ts(delta: timedelta | None = None) -> str:
+    t = datetime.now(tz=UTC)
+    if delta is not None:
+        t = t + delta
+    return t.isoformat()
+
+
+def _make_event(
+    *,
+    task_id: int | None = 1001,
+    action: str = "claim",
+    source: str = "agent",
+    detail: str = "test event",
+    ts: str | None = None,
+) -> ActivityEvent:
+    return ActivityEvent(
+        timestamp=ts or _ts(),
+        task_id=task_id,
+        action=action,
+        source=source,
+        detail=detail,
+    )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ActivityAppendQuery — AC-C42, AC-C44
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ActivityAppendQuery:
+    """AC-C42, AC-C44: append_activity_event / list_activity_events contract."""
+
+    def test_ac_c42_append_writes_to_activity_jsonl(self, tmp_path: Path) -> None:
+        """AC-C42: append_activity_event writes a JSONL record to activity.jsonl."""
+        kanban_dir = _make_board(tmp_path)
+        event = _make_event(task_id=1001, action="claim")
+        append_activity_event(event, kanban_dir)
+
+        activity_file = kanban_dir / "activity.jsonl"
+        assert activity_file.exists()
+        lines = activity_file.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 1
+        record = json.loads(lines[0])
+        assert record["task_id"] == 1001
+        assert record["action"] == "claim"
+        assert record["source"] == "agent"
+
+    def test_ac_c42_append_multiple_events_each_on_own_line(self, tmp_path: Path) -> None:
+        """AC-C42: multiple appends produce one JSON record per line (JSONL)."""
+        kanban_dir = _make_board(tmp_path)
+        for action in ("claim", "edit", "end_work"):
+            append_activity_event(_make_event(action=action), kanban_dir)
+
+        lines = (kanban_dir / "activity.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == 3
+        actions = [json.loads(l)["action"] for l in lines]
+        assert actions == ["claim", "edit", "end_work"]
+
+    def test_ac_c42_event_fields_match_activity_event_schema(self, tmp_path: Path) -> None:
+        """AC-C42: written JSONL line contains all ActivityEvent fields."""
+        kanban_dir = _make_board(tmp_path)
+        event = _make_event(task_id=42, action="move", source="cockpit", detail="todo→in-progress")
+        append_activity_event(event, kanban_dir)
+
+        line = (kanban_dir / "activity.jsonl").read_text(encoding="utf-8").strip()
+        record = json.loads(line)
+        assert "timestamp" in record
+        assert record["task_id"] == 42
+        assert record["action"] == "move"
+        assert record["source"] == "cockpit"
+        assert record["detail"] == "todo→in-progress"
+
+    def test_ac_c42_list_filter_by_task_id(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events(task_id=X) returns only events for task X."""
+        kanban_dir = _make_board(tmp_path)
+        append_activity_event(_make_event(task_id=1, action="claim"), kanban_dir)
+        append_activity_event(_make_event(task_id=2, action="claim"), kanban_dir)
+        append_activity_event(_make_event(task_id=1, action="end_work"), kanban_dir)
+
+        result = list_activity_events(kanban_dir, task_id=1)
+        assert len(result) == 2
+        assert all(e.task_id == 1 for e in result)
+
+    def test_ac_c42_list_filter_by_action(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events(action='claim') returns only claim events."""
+        kanban_dir = _make_board(tmp_path)
+        append_activity_event(_make_event(action="claim"), kanban_dir)
+        append_activity_event(_make_event(action="edit"), kanban_dir)
+        append_activity_event(_make_event(action="claim", task_id=2), kanban_dir)
+
+        result = list_activity_events(kanban_dir, action="claim")
+        assert len(result) == 2
+        assert all(e.action == "claim" for e in result)
+
+    def test_ac_c42_list_filter_by_source(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events(source='cockpit') filters by source."""
+        kanban_dir = _make_board(tmp_path)
+        append_activity_event(_make_event(source="agent"), kanban_dir)
+        append_activity_event(_make_event(source="cockpit"), kanban_dir)
+
+        result = list_activity_events(kanban_dir, source="cockpit")
+        assert len(result) == 1
+        assert result[0].source == "cockpit"
+
+    def test_ac_c42_list_filter_by_since(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events(since=T) returns events at or after T."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        past = (now - timedelta(hours=2)).isoformat()
+        future = (now + timedelta(seconds=5)).isoformat()
+
+        append_activity_event(_make_event(ts=(now - timedelta(hours=3)).isoformat()), kanban_dir)
+        append_activity_event(_make_event(ts=(now - timedelta(hours=1)).isoformat()), kanban_dir)
+        append_activity_event(_make_event(ts=future), kanban_dir)
+
+        result = list_activity_events(kanban_dir, since=past)
+        assert len(result) == 2
+
+    def test_ac_c42_list_filter_by_limit(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events(limit=N) returns at most N events."""
+        kanban_dir = _make_board(tmp_path)
+        for i in range(10):
+            append_activity_event(_make_event(task_id=i), kanban_dir)
+
+        result = list_activity_events(kanban_dir, limit=3)
+        assert len(result) == 3
+
+    def test_ac_c42_list_no_filters_returns_all(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events with no filters returns all events."""
+        kanban_dir = _make_board(tmp_path)
+        for i in range(5):
+            append_activity_event(_make_event(task_id=i), kanban_dir)
+
+        result = list_activity_events(kanban_dir)
+        assert len(result) == 5
+
+    def test_ac_c42_does_not_scan_task_frontmatter(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events never reads task .md files (storage separation)."""
+        from unittest.mock import patch  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        append_activity_event(_make_event(), kanban_dir)
+
+        read_calls: list[str] = []
+
+        original_open = open  # noqa: WPS421
+
+        def spy_open(path: object, *args: object, **kwargs: object) -> object:
+            p = str(path)
+            if p.endswith(".md"):
+                read_calls.append(p)
+            return original_open(path, *args, **kwargs)  # type: ignore[call-overload]
+
+        with patch("builtins.open", side_effect=spy_open):
+            list_activity_events(kanban_dir, task_id=1001)
+
+        assert read_calls == [], f"Unexpectedly read .md files: {read_calls}"
+
+    def test_ac_c44_no_session_jsonl_file_on_disk(self, tmp_path: Path) -> None:
+        """AC-C44: no session table on disk — only activity.jsonl."""
+        kanban_dir = _make_board(tmp_path)
+        append_activity_event(_make_event(action="claim"), kanban_dir)
+        append_activity_event(_make_event(action="end_work"), kanban_dir)
+
+        json_files = list(kanban_dir.glob("*.jsonl"))
+        assert len(json_files) == 1
+        assert json_files[0].name == "activity.jsonl"
+
+    def test_ac_c44_empty_log_returns_empty_list(self, tmp_path: Path) -> None:
+        """AC-C44: empty or missing activity.jsonl → list_activity_events returns []."""
+        kanban_dir = _make_board(tmp_path)
+        result = list_activity_events(kanban_dir)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ActivityCompaction — AC-C44a (a through e)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ActivityCompaction:
+    """AC-C44a: compact_activity_log contract — cutoff, open sessions, floor, atomic, idempotent."""
+
+    def test_ac_c44a_a_before_dt_none_resolves_to_latest_closed_session(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C44a (a): before_dt=None uses most-recently-closed session ended_at as cutoff."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        # Old closed session
+        old_ts = (now - timedelta(hours=3)).isoformat()
+        append_activity_event(_make_event(action="claim", ts=old_ts, task_id=1), kanban_dir)
+        close_ts = (now - timedelta(hours=2)).isoformat()
+        append_activity_event(
+            _make_event(action="end_work", ts=close_ts, task_id=1, source="agent", detail="success: done"),
+            kanban_dir,
+        )
+        # Recent entries (after cutoff)
+        for i in range(3):
+            recent_ts = (now - timedelta(minutes=30 - i * 5)).isoformat()
+            append_activity_event(_make_event(ts=recent_ts, task_id=2), kanban_dir)
+
+        result = compact_activity_log(kanban_dir, before_dt=None)
+        assert isinstance(result, ActivityCompactionResult)
+        # Before > after (something was compacted)
+        assert result.before_bytes > result.after_bytes
+
+    def test_ac_c44a_b_open_sessions_always_retained(self, tmp_path: Path) -> None:
+        """AC-C44a (b): entries in open sessions (no matching end event) always retained."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        # An old claim with no close event = open session
+        old_claim_ts = (now - timedelta(hours=5)).isoformat()
+        append_activity_event(
+            _make_event(action="claim", ts=old_claim_ts, task_id=99),
+            kanban_dir,
+        )
+
+        # Compact with explicit past cutoff that would otherwise remove the claim
+        cutoff = now - timedelta(hours=4)
+        compact_activity_log(kanban_dir, before_dt=cutoff)
+
+        # The open-session claim must still be present
+        remaining = list_activity_events(kanban_dir, task_id=99)
+        assert len(remaining) >= 1
+        assert any(e.action == "claim" for e in remaining)
+
+    def test_ac_c44a_c_last_500_entries_always_retained(self, tmp_path: Path) -> None:
+        """AC-C44a (c): at least last 500 entries always retained regardless of cutoff."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        # Write 600 old entries
+        for i in range(600):
+            ts = (now - timedelta(hours=600 - i)).isoformat()
+            append_activity_event(_make_event(ts=ts, task_id=i % 10), kanban_dir)
+
+        # Compact with a cutoff that would remove all 600 entries
+        past_cutoff = now - timedelta(hours=10)
+        compact_activity_log(kanban_dir, before_dt=past_cutoff)
+
+        remaining = list_activity_events(kanban_dir)
+        assert len(remaining) >= 500
+
+    def test_ac_c44a_d_rewritten_atomically(self, tmp_path: Path) -> None:
+        """AC-C44a (d): compaction rewrites activity.jsonl via atomic_write (no .tmp- left)."""
+        kanban_dir = _make_board(tmp_path)
+        for i in range(10):
+            append_activity_event(_make_event(task_id=i), kanban_dir)
+
+        compact_activity_log(kanban_dir)
+
+        # No leftover .tmp- files
+        tmp_files = list(kanban_dir.glob(".tmp-*"))
+        assert tmp_files == [], f"Leftover tmp files after compaction: {tmp_files}"
+
+    def test_ac_c44a_e_idempotent_no_new_appends(self, tmp_path: Path) -> None:
+        """AC-C44a (e): re-running compaction with same before_dt and no new appends is idempotent."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        old_ts = (now - timedelta(hours=3)).isoformat()
+        recent_ts = (now - timedelta(minutes=10)).isoformat()
+        append_activity_event(_make_event(ts=old_ts, task_id=1, action="claim"), kanban_dir)
+        append_activity_event(
+            _make_event(ts=(now - timedelta(hours=2)).isoformat(), task_id=1, action="end_work"),
+            kanban_dir,
+        )
+        append_activity_event(_make_event(ts=recent_ts, task_id=2), kanban_dir)
+
+        cutoff = now - timedelta(hours=1)
+        result1 = compact_activity_log(kanban_dir, before_dt=cutoff)
+        result2 = compact_activity_log(kanban_dir, before_dt=cutoff)
+
+        # Second run compacts zero additional records
+        assert result2.records_compacted == 0
+        assert result2.before_bytes == result2.after_bytes
+
+    def test_ac_c44a_returns_activity_compaction_result(self, tmp_path: Path) -> None:
+        """AC-C44a: compact_activity_log returns ActivityCompactionResult with required fields."""
+        kanban_dir = _make_board(tmp_path)
+        for i in range(5):
+            append_activity_event(_make_event(task_id=i), kanban_dir)
+
+        result = compact_activity_log(kanban_dir)
+
+        assert hasattr(result, "before_bytes")
+        assert hasattr(result, "after_bytes")
+        assert hasattr(result, "records_compacted")
+        assert isinstance(result.before_bytes, int)
+        assert isinstance(result.after_bytes, int)
+        assert isinstance(result.records_compacted, int)

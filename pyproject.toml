@@ -6,15 +6,15 @@ members = ["serve/*"]
 
 [dependency-groups]
 dev = [
-  "ddgs[mcp]>=9.13,<10",
-  "msal>=1.27",
+  "ddgs[mcp]>=9.14.1,<10",
+  "msal>=1.36.0",
   "pytest>=9.0.3",
   "pytest-asyncio>=1.3.0",
   "pytest-cov>=7.1.0",
-  "pytest-xdist>=3.5",
+  "pytest-xdist>=3.8.0",
   "pyyaml>=6.0.3",
-  "ruff>=0.15",
-  "strictyaml>=1.7",
+  "ruff>=0.15.11",
+  "strictyaml>=1.7.3",
 ]
 validation = [
   "skills-ref==0.1.1",
@@ -22,7 +22,7 @@ validation = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "serve"]
-pythonpath = ["serve/kanban/src"]
+pythonpath = ["serve/kanban/src", "serve/tools/src"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile -p no:logfire -p no:pytest_logfire"
 asyncio_mode = "strict"
 markers = [
@@ -43,6 +43,8 @@ src = [
   "serve/mcp-knowledge/src",
   "serve/mcp-memory/src",
   "serve/browser/src",
+  "serve/cockpit/src",
+  "serve/tools/src",
 ]
 
 [tool.ruff.lint]
@@ -120,6 +122,7 @@ ignore = [
   "E501",    # long assertion messages in test strings are acceptable
   "EM102",   # f-string in exception message — acceptable in test helpers
   "I001",    # isort — pre-existing test-writer files may have non-standard order
+  "INP001",  # serve/*/tests/ dirs without __init__.py — importlib mode handles discovery
   "N801",    # TestFromAC_* class naming convention required by test-writer workflow
   "PERF401", # list comprehension recommendation — readability preference in tests
   "PLW1510", # subprocess.run without check — intentional in test assertions
@@ -128,6 +131,7 @@ ignore = [
   "RUF100",  # unused noqa — pre-existing marker suppression in test files
   "S101",    # assert is fine in tests
   "S105",    # token/password false positives in test assertions
+  "S506",    # yaml.load with custom SafeLoader subclass — YAML12SafeLoader IS safe
   "S106",    # hardcoded password in function args — test fixtures
   "S603",    # subprocess security — test-controlled inputs
   "S607",    # partial executable path — test-controlled commands
@@ -157,4 +161,5 @@ source_pkgs = [
   "owlbear_mcp_knowledge",
   "owlbear_mcp_memory",
   "owlbear_browser",
+  "owlbear_tools",
 ]

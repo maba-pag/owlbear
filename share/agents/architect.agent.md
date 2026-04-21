@@ -4,7 +4,6 @@ description: "Backlog gate — refine acceptance criteria, ensure architectural 
 argument-hint: "Architect Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
-model: Claude Opus 4.6 (copilot)
 tools:
   [vscode/memory, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
 agents: [challenger, scribe, planner]
@@ -39,7 +38,8 @@ kanban task edits, AC refinements, and architectural reasoning.
 - **Always search the codebase** before approving — verify existing patterns, interfaces, and potential conflicts.
 - **Atomicity:** if "and" joins unrelated concerns, split the task. Each task gets one responsibility.
 - **Always route to `todo`, never to `in-progress`.** The test-writer must process every task, even non-implementation ones.
-- **Decomposition detection.** After claiming the task, if the body contains `"Needs decomposition:"` but NOT `"## Planning"` after, delegate to the **planner** agent immediately. After the planner succeeds, use `end_work`. The planner's appended `## Planning` section prevents re-triggering. Do not perform architecture review on decomposition tasks.
+- **Decomposition trigger.** Task body contains `Needs decomposition:` without a following `## Planning` → delegate to `planner` per `w-arch-review` decomposition path. Do not perform architecture review on decomposition tasks.
+- **User-action fast-path trigger.** Task body contains `## Action Completed` (scribe-written on AR resolution) → apply the fast-path approval per `w-arch-review` (skip full review when AC checkboxes still match the completed action).
 
 </critical_rules>
 
@@ -50,8 +50,9 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Approve | backlog → todo | AC verifiable, architecture sound, codebase checked |
 | Refine | backlog → backlog | AC needs tightening, returns with feedback |
 | Split | backlog → backlog | Task covers unrelated concerns, new subtasks created |
+| Merge | backlog → (deleted) | Two tasks = one logical change; consolidated into kept task |
 | Reject | backlog → research | Fundamental AC issues, research insufficient |
-| Decompose | backlog → (planner) | Body contains `Needs decomposition:` — delegate to planner |
+| Block | backlog → blocked | `type:user-action` detected; AR created via scribe |
 
 </pipeline_position>
 
@@ -61,7 +62,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 |-------|------|---------|
 | challenger | Validate design decisions before approval | `Challenge the decision to use a singleton registry pattern` |
 | scribe | Design choice with product implications needs user input | `Scribe: task_id=42, mode=check-or-create, concern="API surface area for skill loading"` |
-| planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan: {feature description from task body}` |
+| planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan and create: #{task_id} — {feature description from task body}` |
 
 </subagents>
 
@@ -74,7 +75,9 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Approve | `APPROVED #{id} -> todo \| {one-line summary}` |
 | Refine | `REFINE #{id} -> backlog \| {what needs tightening}` |
 | Split | `SPLIT #{id} -> backlog \| split into #{new-ids}` |
+| Merge | `MERGE #{id} -> backlog \| merged with #{other-id}` |
 | Reject | `REJECT #{id} -> research \| {reason}` |
+| Block | `BLOCK #{id} -> blocked \| AR pending: {filename}` |
 
 ### Channel B
 

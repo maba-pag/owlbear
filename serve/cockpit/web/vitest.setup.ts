@@ -1,0 +1,47 @@
+import '@porsche-design-system/components-react/jsdom-polyfill'
+import { skipPorscheDesignSystemCDNRequestsDuringTests } from '@porsche-design-system/components-react'
+import { vi } from 'vitest'
+
+skipPorscheDesignSystemCDNRequestsDuringTests()
+
+// PDS global keydown handler (hideAllPopoversUntil) throws TypeError when
+// accessing ownerDocument on a null element in jsdom. This is a known PDS/jsdom
+// incompatibility: document.ownerDocument is null (document IS the document).
+// Suppress this specific error so it does not surface as an Unhandled Error.
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'error',
+    (event: ErrorEvent) => {
+      if (
+        event.error instanceof TypeError &&
+        event.error.message === "Cannot read properties of null (reading 'ownerDocument')"
+      ) {
+        event.preventDefault()
+      }
+    },
+    { capture: true },
+  )
+}
+
+// jsdom does not implement showModal/close on HTMLDialogElement
+if (typeof HTMLDialogElement !== 'undefined') {
+  if (!HTMLDialogElement.prototype.showModal) {
+    HTMLDialogElement.prototype.showModal = vi.fn()
+  }
+  if (!HTMLDialogElement.prototype.close) {
+    HTMLDialogElement.prototype.close = vi.fn()
+  }
+}
+
+// jsdom does not implement attachInternals (needed by some PDS form components)
+// attachInternals lives on HTMLElement, not Element
+if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.attachInternals) {
+  ;(HTMLElement.prototype as unknown as Record<string, unknown>)['attachInternals'] = vi.fn(
+    () => ({
+      setFormValue: vi.fn(),
+      setValidity: vi.fn(),
+      checkValidity: vi.fn(() => true),
+      reportValidity: vi.fn(() => true),
+    }),
+  )
+}

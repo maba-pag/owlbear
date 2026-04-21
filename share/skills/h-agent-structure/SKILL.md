@@ -17,6 +17,7 @@ Content reaches agents through four mechanisms, ordered by reliability:
 | `copilot-instructions.md` | Every interaction | Guaranteed | Universal foundation (80%+ of agents need it) |
 | Agent file body | Agent invocation | Guaranteed | Identity, constraints, communication format |
 | Skills (SKILL.md) | Explicit `read_file` or auto-load by relevance | High | Procedures, protocol, domain knowledge |
+| Authority instructions (.instructions.md) | `<critical_rules>` attachment | Guaranteed | Full protocol definitions (cross-agent conventions) |
 | Instruction stubs (.instructions.md) | `applyTo` glob matches a touched file | Medium | Safety nets — pointers to skills |
 
 Pipeline agents load `r-pipeline-protocol` and `r-project-standards` from their `<critical_rules>` reference. This is deterministic because the agent body always loads.
@@ -31,14 +32,44 @@ Pipeline agents load `r-pipeline-protocol` and `r-project-standards` from their 
 
 Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or co-located resources are needed.
 
+### Boundary Fitness
+
+| Condition | Tier |
+|-----------|------|
+| ≥ 80% of agents need this content | `copilot-instructions.md` |
+| Content is loaded from `<critical_rules>` | Skill-tier minimum (SKILL.md or authority `.instructions.md`) |
+| Content applies to a single agent only | Agent file body |
+| Content is a step-by-step procedure invoked on-demand | Workflow skill (SKILL.md) |
+| Content is a file-type safety net pointing to a skill | Instruction stub (`.instructions.md`) |
+
 ## Agent Tiers
 
 | Tier | Agents | Pipeline protocol needed? |
 |------|--------|--------------------------|
-| T1 — Orchestrator | orchestrator, ideator | From agent critical_rules |
+| T1 — Orchestrator | orchestrator, ideator, ideation-discoverer, ideation-mediator | From agent critical_rules |
 | T2 — Pipeline | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor | Yes — critical_rules reference |
 | T3 — Support | scribe, planner, memory-curator | If applicable — from critical_rules |
-| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, test-curator, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-pragmatist, ideation-security | Not needed |
+| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, test-curator, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier | Not needed |
+
+## Agent Extraction Markers
+
+### Extract when (≥ 2 apply)
+
+- Concern requires a distinct `tools:` allowlist.
+- Concern has an independent failure domain (its failure should not abort the parent).
+- Same delegation pattern appears in 2+ agents.
+- Concern requires a distinct model (cost, capability, or context-length profile).
+- Concern's procedure would exceed one screen inline in the parent's `<critical_rules>`.
+
+### Defer extraction when (< 2 extract conditions apply)
+
+- No distinct `tools:` or model requirements — parent's allowlist covers the concern.
+- Concern never fails independently — any failure aborts the parent.
+- Concern fits in a single `<critical_rules>` bullet.
+
+### Precedent
+
+`quality-runner` extracted from `builder`: independent failure domain (quality failures reported, not propagated) + distinct tool needs (test runner, linter) + reused by reviewer.
 
 ## Principles
 
@@ -240,7 +271,11 @@ Rules skills define shared conventions referenced by multiple agents. Organized 
 
 Handbook skills carry domain-specific knowledge. Organized by domain topics with recipes and patterns.
 
-## Instruction Stub Format (.instructions.md)
+## Instruction File Types
+
+Instruction files (`.instructions.md`) serve two distinct roles. Knowing which role a file plays determines its permitted content.
+
+### Stubs — Safety Nets
 
 Instruction stubs are **safety nets** — minimal files that catch agents working in a domain without having loaded the relevant skill.
 
@@ -260,11 +295,32 @@ A stub is justified when there is a realistic scenario where an agent edits file
 Current stubs:
 
 | File | applyTo | Points to |
-|------|---------|-----------|
+|------|---------|----------|
 | `python.instructions.md` | `"**/*.py"` | `h-python-conventions` |
 | `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
 | `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
 | `agents-and-skills.instructions.md` | `"share/agents/**,share/skills/**"` | `h-agent-structure` |
+
+### Authority Files — Embedded Rules
+
+| Use authority `.instructions.md` when | Rationale |
+|---------------------------------------|-----------|
+| Rules are universal or near-universal | No single skill boundary fits |
+| Content is always needed for the target scope | Loading a skill on every interaction would be wasteful |
+| `applyTo` scope is broad enough that no single skill owns the content | Authority files cross skill boundaries |
+
+Current authority files:
+
+| File | applyTo | Role |
+|------|---------|------|
+| `agent-common.instructions.md` | `share/agents/**` | Channel B protocol and per-agent section-header mapping (domain-scoped) |
+| `owlbear-system.instructions.md` | `**` | Decision heuristics, system awareness, memory governance (universal) |
+
+| Rule | Value |
+|------|-------|
+| Naming | Hyphenated lowercase; generic cross-cutting names (not domain-specific like `python.instructions.md`) |
+| `applyTo` scope | Domain-scoped: specific directory tree. Universal: `**`. Stub: file-extension pattern (`**/*.py`). |
+| `copilot-instructions.md` | Not an instruction file — separate loading mechanism, not governed by `applyTo`. See Loading Model. |
 
 ## Formatting Rules
 
