@@ -86,6 +86,64 @@ class TestFromAC_BodyParserEdgeCases:
 class TestBuilderDiscovered:
     """Precision assertions added from reviewer feedback on weak checks."""
 
+    def test_ac_c5_roundtrip_preserves_fenced_and_indented_content_verbatim(self) -> None:
+        """AC-C5: fenced and indented code content survives round-trip byte-exactly."""
+        md = (
+            "## Section\n\n"
+            "```\n"
+            "line in fence\n"
+            "## not-a-heading\n"
+            "```\n\n"
+            "    indented line\n"
+            "    ## still-not-a-heading\n"
+        )
+
+        sections = parse_body(md)
+        assert len(sections) == 1
+        assert sections[0].heading == "Section"
+        assert sections[0].content == (
+            "\n"
+            "```\n"
+            "line in fence\n"
+            "## not-a-heading\n"
+            "```\n\n"
+            "    indented line\n"
+            "    ## still-not-a-heading\n"
+        )
+        assert parse_body(render_body(sections)) == sections
+
+    def test_ac_c10_three_backtick_fence_accepts_five_backtick_close(self) -> None:
+        """AC-C10: longer closing backtick fence closes a shorter opening fence."""
+        md = (
+            "## Real\n\n"
+            "```\n"
+            "## inside\n"
+            "`````\n"
+            "## After\n\n"
+            "outside\n"
+        )
+
+        sections = parse_body(md)
+        headings = [s.heading for s in sections if s.heading]
+        assert "inside" not in headings
+        assert "After" in headings
+
+    def test_ac_c10_three_tilde_fence_accepts_five_tilde_close(self) -> None:
+        """AC-C10: longer closing tilde fence closes a shorter opening fence."""
+        md = (
+            "## Real\n\n"
+            "~~~\n"
+            "## inside-tilde\n"
+            "~~~~~\n"
+            "## After Tilde\n\n"
+            "outside\n"
+        )
+
+        sections = parse_body(md)
+        headings = [s.heading for s in sections if s.heading]
+        assert "inside-tilde" not in headings
+        assert "After Tilde" in headings
+
     def test_ac_c6_crlf_normalises_to_exact_lf_content(self) -> None:
         """AC-C6: CRLF becomes LF while preserving exact line boundaries."""
         md = "## Notes\r\n\r\nLine one.\r\nLine two.\r\n"

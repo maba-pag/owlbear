@@ -4,7 +4,7 @@ title: 'C-02: RED — body_parser round-trip tests'
 status: in-progress
 priority: needed
 created: 2026-04-21T10:42:50.247058+00:00
-updated: 2026-04-21T21:46:29.166991+00:00
+updated: 2026-04-21T23:24:27.521431+00:00
 tags:
 - phase:storage
 - brief:c
@@ -14,8 +14,8 @@ parent: 1043
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: royal-storm
+claimed_at: 2026-04-21T23:24:27.521431+00:00
 ---
 ## Brief
 Brief C (#1043) — paper-c.md §8.2, §8.11

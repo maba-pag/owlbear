@@ -4,7 +4,7 @@ title: 'C-09a: Realign AC-C43 tests to SessionRecord contract'
 status: review
 priority: critical
 created: 2026-04-21T18:31:42.942691+00:00
-updated: 2026-04-21T22:01:23.002196+00:00
+updated: 2026-04-21T23:24:27.848460+00:00
 tags:
 - phase:storage
 - brief:c
@@ -14,8 +14,8 @@ parent: 1043
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: royal-storm
+claimed_at: 2026-04-21T23:24:27.848460+00:00
 ---
 ## Brief
 Brief C (#1043) — Architecture review correction.

@@ -1,10 +1,10 @@
 ---
 id: 1046
 title: 'C-01: RED — storage_io atomic-write & ID-allocation tests'
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-21T10:42:50.236472+00:00
-updated: 2026-04-21T21:36:12.007498+00:00
+updated: 2026-04-21T23:23:46.684754+00:00
 tags:
 - phase:storage
 - brief:c
@@ -369,3 +369,19 @@ Reject to `todo`. No implementation change is required by the current evidence. 
 
 - ruff: clean
 - commit: 8d51932c
+[[2026-04-21]]
+## Builder Notes
+- Implementation: No code changes in this cycle; existing behavior in serve/kanban/src/owlbear_kanban/storage_io.py and serve/kanban/src/owlbear_kanban/storage.py satisfies the refined AC.
+- RED verification context: `TestFromAC_*` tests are already GREEN in this retry cycle (implementation landed previously); quality-runner evidence captured before advancement.
+- Tests: 13 TestFromAC passed in serve/kanban/tests/test_storage_io.py; 0 TestBuilderDiscovered added.
+- Regression check: 73 passed, 0 failed, 0 skipped across serve/kanban/tests/test_storage_io.py, serve/kanban/tests/test_storage.py, serve/kanban/tests/test_storage_1050.py.
+- Coverage: owlbear_kanban.storage_io 100%; owlbear_kanban.storage 96%.
+- Ruff: clean for serve/kanban/src/owlbear_kanban/storage_io.py, serve/kanban/src/owlbear_kanban/storage.py, and serve/kanban/tests/test_storage_io.py.
+- Evidence summary: quality-runner scoped verification returned failed_test_names: [] and lint_clean: true.
+- Fixes applied: none.
+- Post-task reflection:
+  - Problem faced: Task remained in-progress for formal builder advancement despite already-green implementation.
+  - Workaround applied: Performed fresh quality-runner verification with module-level storage tests to produce canonical, current evidence.
+  - Pattern discovered: Retroactive formalization passes should capture both task-scoped and adjacent module-level evidence to avoid stale gate decisions.
+  - Time sink: Evidence refresh only; no code/debug loop.
+  - Quality gap: None blocking this task after strengthened AC assertions and module-level coverage run.
