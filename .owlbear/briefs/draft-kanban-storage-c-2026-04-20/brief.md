@@ -25,6 +25,7 @@ Functions:
 ```python
 def read_task(path: Path) -> Task
 def write_task(task: Task, kanban_dir: Path) -> Path
+def write_task_if_unchanged(task: Task, expected_updated: str, kanban_dir: Path) -> Path
 def list_task_files(kanban_dir: Path) -> list[Path]
 def list_archive_files(kanban_dir: Path) -> list[Path]
 def move_to_archive(task_id: int, kanban_dir: Path) -> Path
@@ -47,7 +48,7 @@ Types:
 - `Section(heading, level, content)` — body building block (paper §1.2).
 - `CorruptionError(code, user_message, file_path)` — extends `KanbanError` per Brief B D27/D57 (paper §4.8).
 - `RepairOutcome(task_id, file_path, code, action, detail)` — outcome of one file’s repair pass. `action` values: `"fixed"` (auto-repaired in place), `"quarantined"` (file moved; AR creation still pending or already delegated to the engine layer), `"failed"` (the repair pass did not complete cleanly; e.g. quarantine failed or AR creation failed after quarantine).
-- `ActivityEvent(timestamp, task_id, action, source, detail)` — structured board-level runtime activity record. `source` is one of `"agent"` | `"cockpit"` | `"orchestrator"` | `"engine"`, populated by the engine based on which role view (or auto-operation) performed the mutation.
+- `ActivityEvent(timestamp, task_id, action, source, detail)` — structured board-level runtime activity record. `source` is one of `"agent"` | `"cockpit"` | `"engine"`, populated by the engine based on which role view (or auto-operation) performed the mutation. Legacy pre-Brief-C `activity.jsonl` history is not migrated; rollout starts a fresh canonical stream.
 - `SessionRecord(task_id, task_status_at_start, state, started_at, ended_at, outcome, duration_s)` — derived work session view for Cockpit admin surfaces. `state` exposes the claim-cycle classifier used by cockpit history (`running`, `stuck`, `completed`, `blocked`, `rejected`, `released`, `expired`) without replacing task-level claimed state. Derived by the engine from the activity stream by pairing `start_work` events with their corresponding close events per task_id. `task_status_at_start` is stored in the `start_work` event’s `detail` field at write time.
 - `ActivityCompactionResult(before_bytes, after_bytes, records_compacted)` — semantic compaction telemetry for the activity stream.
 

@@ -51,7 +51,7 @@ class ActivityEvent(BaseModel):
     timestamp: str                   # ISO-8601 UTC
     task_id: int | None              # None allowed for board-level maintenance events (e.g. sweep)
     action: str                      # structured event verb, e.g. claim/edit/move/end_work/sweep
-    source: str                      # "agent" | "cockpit" | "orchestrator" | "engine"
+    source: str                      # "agent" | "cockpit" | "engine"
     detail: str                      # human-readable structured detail payload
 
 class ActivityCompactionResult(BaseModel):
@@ -66,6 +66,8 @@ class ActivityCompactionResult(BaseModel):
 
 ```python
 def read_task(path: Path) -> Task: ...
+def write_task(task: Task, kanban_dir: Path) -> Path: ...
+def write_task_if_unchanged(task: Task, expected_updated: str, kanban_dir: Path) -> Path: ...
 def write_task(task: Task, kanban_dir: Path) -> Path: ...
 def list_task_files(kanban_dir: Path) -> list[Path]: ...
 def list_archive_files(kanban_dir: Path) -> list[Path]: ...
@@ -221,11 +223,20 @@ Lives in `storage_io.py:atomic_write(target: Path, content: str) -> None`. All h
 
 ### 3.2 Concurrency guarantees
 
-Single-laptop reality: no multi-process write contention is expected. The atomic primitive guarantees:
+Single-laptop reality: cockpit (FastAPI) and the MCP server are typically the two writer processes; multi-agent autonomous runs can produce real cross-process write contention against the same task file. The atomic primitive guarantees:
 
 - A reader that opens `target` always sees either the pre-write content or the post-write content — never partial bytes.
 - A crash mid-write (between `mkstemp` and `os.replace`) leaves `target` untouched and a `.tmp-XXXX` file in the parent directory; `list_task_files` filters out `.tmp-*` patterns.
 - Directory entry fsync ensures the rename survives a power loss on POSIX systems.
+
+**Per-task CAS via `write_task_if_unchanged`.** For read-modify-write windows that need consistency across concurrent writers (engine OCC on Cockpit edits/moves; lazy-release of expired claims in `start_work`), `write_task_if_unchanged(task, expected_updated, kanban_dir)`:
+
+1. Acquires `flock(LOCK_EX)` on `tasks/.<id>.lock` (or `archive/.<id>.lock` for archive writes).
+2. Re-reads the on-disk file via `read_task`.
+3. Compares `current.updated == expected_updated`. Mismatch → release lock, raise `ConcurrencyError(code="ERR_STALE", user_message="task {id} changed since read; reload and retry")`.
+4. Otherwise calls `write_task` (which uses the atomic primitive) and releases the lock.
+
+The lock file lives next to the task file and is created on demand. Lock files are gitignored (paper-c §2.1) and never quarantined. Engine consumers (`AgentView` writes that don't take an `expected_updated` parameter) continue to use plain `write_task` directly, accepting last-writer-wins semantics by design (per Brief B D46 — OCC is Cockpit-only).
 
 ### 3.3 ID allocation flow (per AM-9)
 
@@ -449,6 +460,7 @@ Invocation: `uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all]
 - Active task files: `{kanban_dir}/tasks/*.md` — full migration to the Brief B + Brief C active-task shape.
 - Archive files: `{kanban_dir}/archive/*.md` — metadata-only normalization of the contract-critical archive fields required by Brief A (`archival_reason`, `archival_refs`). Archive body text and legacy vendor fields are not otherwise normalised.
 - Config file: `config.yml` — schema format migration (Lane C). Legacy dict-statuses, dropped fields, new required fields.
+- Activity stream: existing legacy `activity.jsonl` is **not migrated**. It is runtime data, not canonical board state. If present at cutover, remove it and let the new engine/backend recreate a fresh canonical file on first append.
 - Quarantine untouched (it shouldn't exist at migration time, but if it does, ignored).
 
 Lane selection is controlled by `--lane`. `tasks`, `archive`, and `config` run only the named lane. `all` runs all three lanes in the documented order.
@@ -513,8 +525,9 @@ For the dev/main dual-checkout workflow, migration is not treated as a single op
 1. Rehearse `--lane config --dry-run` early.
 2. Run `--lane config` before final cutover so config incompatibilities are discovered while task files are still untouched.
 3. Run `--lane archive` when archive metadata normalisation is needed.
-4. If the config or archive lanes emit unresolved manual actions (for example empty config stubs or ambiguous archive metadata), materialise them as visible `type:user-action` tasks before running the final task migration.
-5. Run `--lane tasks` last, immediately before merge/cutover.
+4. Delete any pre-Brief-C `activity.jsonl` file. The activity stream is reset at cutover rather than migrated.
+5. If the config or archive lanes emit unresolved manual actions (for example empty config stubs or ambiguous archive metadata), materialise them as visible `type:user-action` tasks before running the final task migration.
+6. Run `--lane tasks` last, immediately before merge/cutover.
 
 **Note on `config.defaults.priority`** in the Brief C corruption auto-fix matrix (§4.2, C7): since `defaults` is dropped from `BoardConfig`, the auto-fix for `MISSING_FIELD priority` uses `config.priorities[0]` (first declared priority = highest priority = safest default).
 
@@ -573,6 +586,8 @@ The predicate engine (`predicates.py` in current code) takes a `Task` instance w
 
 `activity.jsonl` is a **gitignored board-level runtime activity stream**, not a diagnostic log. One JSON object per line, each matching `ActivityEvent` (§1.2). Storage owns three responsibilities for this file:
 
+There is **no backward-compatibility contract** for older activity-log shapes. Pre-Brief-C `activity.jsonl` files that lack the canonical `source` field are dropped at cutover and replaced by a fresh canonical stream. Readers and compaction logic may assume the file matches `ActivityEvent` exactly.
+
 1. **Append** — every mutating engine operation appends one or more structured activity events.
 2. **Query** — `list_activity_events(...)` filters by task, action, source, and time window for cockpit/admin reads.
 3. **Compaction** — `compact_activity_log(kanban_dir, before_dt=None)` rewrites the file under a concrete retention rule:
@@ -582,6 +597,13 @@ The predicate engine (`predicates.py` in current code) takes a `Task` instance w
    - Algorithm: (1) read all entries; (2) resolve `before_dt`; (3) mark retained = `entry.dt >= before_dt` OR entry is in an open session; (4) also mark retained if total retained count < 500 (extend from oldest kept forward); (5) write survivors via `atomic_write`; (6) return `ActivityCompactionResult`.
 
 The stream is append-only between compactions. Task files remain the authoritative board state; `activity.jsonl` is the authoritative operational history surface for cockpit/admin use.
+
+**Compaction triggers:**
+
+1. **Engine init (opportunistic, automatic).** `KanbanEngine.__init__` checks `activity.jsonl` size; if > 1 MB, calls `compact_activity_log(kanban_dir)` once. Failures are caught and logged; init never raises on compaction failure (it is best-effort housekeeping, not a correctness gate).
+2. **Cockpit `compact_activity()` (manual, on-demand).** `CockpitEngineView.compact_activity()` invokes `compact_activity_log(kanban_dir)` unconditionally and returns the `ActivityCompactionResult`. For operator use independent of the size threshold.
+
+No cron, no scheduled task, no CLI script. The two triggers above are exhaustive.
 
 ### 7.2 `list_sessions(filter=...)` algorithm (per C10 + AM-15)
 
@@ -642,6 +664,8 @@ Each AC has a unique ID `AC-C{N}` and cites the C-decision or AM-disposition it 
 - **AC-C2.** `atomic_write` cleans up the `.tmp-*` file on any exception path; target file is unaffected. Test: simulated `os.replace` failure.
 - **AC-C3.** `list_task_files` filters out `.tmp-*` files. Source: §3.2.
 - **AC-C4.** `allocate_next_id` holds `.next_id.lock` during read+increment+save sequence. Concurrent test: 50 threads × 1 ID each yields 50 distinct IDs. Source: C8.2.
+- **AC-C4a.** `write_task_if_unchanged(task, expected_updated, kanban_dir)` acquires `flock(LOCK_EX)` on `tasks/.<id>.lock`, re-reads the on-disk task, and either (i) writes when `current.updated == expected_updated` and returns the new path, or (ii) raises `ConcurrencyError(code="ERR_STALE")` when stale. Concurrent test: 20 threads racing on the same `(id, expected_updated)` produce exactly one success and 19 `ERR_STALE`s; the survivor write is intact. Source: §3.2.
+- **AC-C4b.** Lock files live at `tasks/.<id>.lock` (and `archive/.<id>.lock` for archive writes), are gitignored, are never returned by `list_task_files`/`list_archive_files`, and are never quarantined. Source: §3.2.
 
 ### 8.2 Body round-trip
 

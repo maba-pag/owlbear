@@ -32,8 +32,8 @@ O7 locked. Engine API refers to models and operations, not persistence details. 
 ### D8 — Wave + agent_map Ownership (Choice B1) — SUPERSEDED-IN-PART by D42, D58
 **Engine owns wave composition AND agent_map.** Introduces `agent_map: dict[str, str]` field on BoardConfig (status → agent). New engine method: ~~`pick_waves(wave_size, max_waves) → list[Wave]`~~ **renamed to `pick_tasks` per Brief A and D42** with intra-wave dep guarantee. Orchestrator wave logic (if any) retires. **Dispatchability filters extended by D58 (`blocked==true` excluded).** The original D8 method name is retired; the agent_map ownership and intra-wave dep guarantee remain in force.
 
-### D9 — Role Views (Choice C2) — EXTENDED by D59
-**Type-level capability contract.** `KanbanEngine` full surface; `AgentEngineView` and `CockpitEngineView` thin facades exposing method subsets. Accessed via `engine.agent_view()` / `engine.cockpit_view()`. Cockpit mutation routes rewire to use `CockpitEngineView` exclusively (in Brief B scope). **D59 extends D9 with a third role view (`OrchestratorView`) for `pick_tasks`.**
+### D9 — Role Views (Choice C2) — D59 extension RETIRED
+**Type-level capability contract.** `KanbanEngine` full surface; `AgentEngineView` and `CockpitEngineView` thin facades exposing method subsets. Accessed via `engine.agent_view()` / `engine.cockpit_view()`. Cockpit mutation routes rewire to use `CockpitEngineView` exclusively (in Brief B scope). **D59 (third `OrchestratorView` role view) is retired during M5 cleanup as over-engineering — `pick_tasks` lives on `AgentEngineView`. Role isolation for the dispatcher capability is documentary (skill + tool docstring), not type-enforced. D61 (naming lock) is consequently vacated.**
 
 ### D10 — Board-level Activity Stream in Engine/Admin Semantics (Choice D2, revised)
 **`activity.jsonl` is a first-class board-level runtime activity stream inside engine/admin semantics.** `list_sessions(filter=...)` becomes a derived cockpit/admin read model over that stream, and raw activity is exposed separately for cockpit/admin history use. Agent-facing MCP surfaces still do not expose raw activity.
@@ -49,6 +49,7 @@ O7 locked. Engine API refers to models and operations, not persistence details. 
 - `start_work` on active claim → fails unconditionally. No same-agent idempotency.
 - `release`/`end_work` require no caller identity check.
 - Orchestrator is responsible for releasing before dispatching a retry after agent crash.
+- Harness invariant: the orchestrator is not independently liveness-aware from the worker. A stuck worker also stalls the orchestrator, so the system does not admit a "late zombie end_work after successful re-dispatch" path. Brief B therefore treats that scenario as out of scope rather than adding an agent-side OCC token.
 - ~~`KanbanEngine.agent_name` becomes vestigial (only used by activity log writes, which are audit-only per D10). Not removed in Brief B to keep scope tight; open as a follow-up.~~ **SUPERSEDED by D33:** `agent_name` constructor parameter is removed in Brief B (D43 confirms D33 stands; D10 retired the activity log entirely).
 
 ### D12 — Wave Composition (Conflict 3) — per D8
@@ -191,7 +192,7 @@ Limits apply to the markdown wire shape on input. **SUPERSEDED-IN-PART by D47:**
 **Resolved by D43 in the opposite direction.** Cockpit history views are in scope through the board-level activity stream. Brief B must provide cockpit/admin read surfaces for raw activity and derived sessions; Brief C must persist the stream and its compaction policy. The open question is storage and query shape, not whether cockpit history exists.
 
 ### D46 — OCC token mechanics narrowed (Finding 5) — amends D22
-**OCC tokens apply only to Cockpit writes.** D22's "optional on MCP" is tightened to **"not used by MCP."** `start_work` / `claim_task` / other agent-side writes have no `expected_updated` parameter; the existing claim-already-held check is the only concurrency gate on the agent path. The dispatch prompt (per F4 / D42) remains task-ID-only. Race window: a Cockpit edit between dispatch and claim shows up to the agent as the post-edit body; agent acts on current state.
+**OCC tokens apply only to Cockpit writes.** D22's "optional on MCP" is tightened to **"not used by MCP."** `start_work` / `claim_task` / other agent-side writes have no `expected_updated` parameter; the existing claim-already-held check is the only concurrency gate on the agent path. The dispatch prompt (per F4 / D42) remains task-ID-only. Race window: a Cockpit edit between dispatch and claim shows up to the agent as the post-edit body; agent acts on current state. This relies on D11's harness invariant: retries happen only after the original worker has actually exited, not while a later `end_work` can still arrive.
 
 ### D47 — Body input limits (Finding 10) — amends D35
 **Body size measured in UTF-8 bytes of the markdown `body: str` parameter at the engine input boundary**, before parsing. 100 KB warn (D35) and 500 KB hard error (D35) thresholds stand and apply to that measurement. **No caps on title, tags, or frontmatter** — over-engineering for an attack surface that does not exist on a single-user laptop tool.
@@ -246,7 +247,7 @@ Limits apply to the markdown wire shape on input. **SUPERSEDED-IN-PART by D47:**
 - `ERR_INVALID_WAVE_PARAM` (`ValidationError`) — `pick_tasks(wave_size<1 \| max_waves<1)`.
 - `ERR_PARENT_NOT_FOUND` / `ERR_DEP_NOT_FOUND` (`ValidationError`) — cross-ref validation per Brief A §7.
 - `ERR_ARCHIVAL_REASON_INVALID` / `ERR_ARCHIVAL_REASON_REQUIRED` / `ERR_ARCHIVAL_FIELDS_FORBIDDEN` / `ERR_ARCHIVAL_REFS_REQUIRED` / `ERR_ARCHIVAL_REFS_FORBIDDEN` / `ERR_ARCHIVAL_REF_MISSING` / `ERR_ARCHIVAL_REF_SELF` / `ERR_ARCHIVAL_REF_CYCLE` / `ERR_COMPLETED_REQUIRES_DONE` (`ValidationError`) — D37 archival matrix.
-- `ERR_TERMINAL_STATUS_INVALID` (`ConfigError`) — D65: `BoardConfig.statuses` missing literal `"done"` or `"done"` not last.
+- `ERR_TERMINAL_STATUS_INVALID` (`ConfigError`) — D65: `BoardConfig.terminal_status` not in `statuses` or not the final element.
 - `ERR_INVALID_OUTCOME` / `ERR_REJECT_REQUIRES_MOVE_TO` / `ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK` / `ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS` / `ERR_MOVE_TO_FORBIDDEN_ON_RELEASE` / `ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS` (`ValidationError`) — D52 + D51 `end_work` forbidden-parameter matrix.
 - `ERR_PREDICATE_FAILED` (`ValidationError`) — D15 destination-status predicate failure on `create_task` (entry-status), `move_task`, `end_work(success/reject/block with move_to)`. Detail field carries predicate name.
 - `ERR_ENTRY_STATUS_INVALID` (`ConfigError`) — `BoardConfig.entry_status` does not reference a declared status. Raised at engine init per D50.
@@ -279,7 +280,10 @@ When drafting brief.md (M5), Brief A receives the following edits, applied as pa
 10. §5.3 `pick_tasks` and §8 AC22: add `blocked==true` to dispatchability exclusions — D58 (round-4 contract repair, resolves dispatcher ↔ `start_work` contradiction).
 11. §7 decisions C3 `deprecated`/`duplicate` dep effect: remove “engine treats X as dispatchable iff at least one redirect target is done or completed-archived” clause. `dep_status="redirect"` tasks are **always dispatchable**; redirect-chain resolution is agent responsibility at pickup. This is a deliberate KISS simplification (Brief B): computing transitive chain completeness at dispatch time requires unbounded depth traversal and is deferred to the agent, who has full task context when starting work.
 
-### D59 — OrchestratorView extends D9 (round-5 decision-set repair)
+### D59 — OrchestratorView extends D9 (round-5 decision-set repair) — RETIRED in M5 cleanup
+**Status: RETIRED.** Post-M5 review concluded that adding a third role view for a single method paid architecture cost without enforcement value (single-user system, all agents can call MCP tools regardless). `pick_tasks` is exposed on `AgentEngineView`. Role isolation is documented in the orchestrator skill and the tool's docstring. The MCP adapter no longer carries a view-selection branch for `pick_tasks`.
+
+*Original text retained below for traceability.*
 **D9 is extended with a third role view: `OrchestratorView`.** Locks the dispatcher capability into the same role-view model as `AgentEngineView` and `CockpitEngineView`. `OrchestratorView` exposes exactly `pick_tasks` (per D42; the round-3 wave-assembly position is hereby elevated into the locked decision set as part of D9's extension). Accessed via `engine.orchestrator_view()`. The MCP `pick_tasks` tool is dispatched via this view only; not exposed on `AgentEngineView`, not exposed on `CockpitEngineView`. **Naming locked separately by D61.** Rationale: round-4 critic correctly identified that D9 alone defined only two views, while paper and D42 referenced three; D59 closes that gap inside the decision set.
 
 ## M5 — Open-Item Locks (Brief B contract closure per O5: no TBD past M5)
@@ -291,7 +295,10 @@ When drafting brief.md (M5), Brief A receives the following edits, applied as pa
 3. `id` ascending — final tiebreak for total order.
 Then processes the sorted list per D42 wave-composition rules (size + agent-compatibility + intra-wave dep-disjointness). Replaces D28's `(priority_rank, status_rank, id)` triple with the simpler `(priority_rank, age, id)`: status_rank is unnecessary because `BoardConfig.agent_map` already binds status to a single agent, so wave assembly handles status mixing via the compatibility matrix. Closes paper §7 #1.
 
-### D61 — Role view naming locked: `OrchestratorView`
+### D61 — Role view naming locked: `OrchestratorView` — VACATED
+**Status: VACATED** with D59. No `OrchestratorView` exists post-M5 cleanup; naming lock is moot.
+
+*Original text retained below for traceability.*
 **The third role view is named `OrchestratorView`.** Alternatives `DispatcherView` / `PlannerView` rejected: "orchestrator" is the consumer agent's name in the existing pipeline (`share/agents/orchestrator.agent.md`); naming the view after the consumer keeps the call site self-documenting (`engine.orchestrator_view().pick_tasks(...)`). Closes paper §7 #2.
 
 ### D62 — `BoardConfig.agent_types` shape
@@ -318,10 +325,12 @@ A bucket is always self-compatible (allows multiple instances of the same agent 
 
 Brief B does not lock additional operators. Brief C planning may extend the DSL with new keys (e.g., regex matchers, frontmatter requirements) as concrete decomposition tasks; each extension is a discrete decision, not a Brief B contract drift. Closes paper §7 #5.
 
-### D65 — Terminal-status lock (`done` mandatory and last)
-**`BoardConfig.statuses` MUST contain the literal `"done"` and `"done"` MUST be the final element of the list.** Engine validates at init; failure → `ConfigError(code="ERR_TERMINAL_STATUS_INVALID")`. This locks two semantics that prior decisions assumed but never stated:
+### D65 — Terminal-status configurability (`terminal_status` field, default `"done"`)
+**`BoardConfig.terminal_status: str = "done"`. Engine validates at init that `terminal_status in BoardConfig.statuses` AND `terminal_status == BoardConfig.statuses[-1]`** (i.e., it must be the last element). Failure → `ConfigError(code="ERR_TERMINAL_STATUS_INVALID")`. Default `"done"` preserves existing OwlBear convention; consumers can rename the terminal column without engine code changes.
 
-1. The completed-archival gate (the "completed-requires-done" gate referenced in paper §2/§3 and AC5/AC6) is over the literal status name `"done"` — not over a structurally-inferred terminal status.
-2. D52's `end_work(outcome="success")` definition ("from the last non-archive status … auto-archives") is now unambiguous: `"done"` IS the last non-archive status, so `success` from `"done"` auto-archives with `archival_reason="completed"`; `success` from any earlier status advances exactly one step in `BoardConfig.statuses` order. There is no second-archival-hop semantics.
+This locks two semantics that prior decisions assumed but never stated:
 
-`"done"` is therefore both a stable visible state (tasks reside there until an explicit `end_work(success)` archives them) and the unique terminal pre-archive status. The error code `ERR_TERMINAL_STATUS_INVALID` is added to D57. AC-NEW-23 added to paper §4 covers init-time validation.
+1. The completed-archival gate (the "completed-requires-terminal" gate referenced in paper §2/§3 and AC5/AC6) checks `current.status == BoardConfig.terminal_status` — not a hardcoded literal.
+2. D52's `end_work(outcome="success")` definition ("from the terminal status … auto-archives") is now unambiguous: `terminal_status` IS the last non-archive status, so `success` from terminal auto-archives with `archival_reason="completed"`; `success` from any earlier status advances exactly one step in `BoardConfig.statuses` order. There is no second-archival-hop semantics.
+
+*M5 follow-up:* the original D65 locked the literal name `"done"`. Post-M5 consistency review made `terminal_status` symmetric with `entry_status` (configurable, defaulted, init-validated). The error code `ERR_TERMINAL_STATUS_INVALID` remains in D57. AC-NEW-23 (paper §4) is reworded to cover the configurable form.

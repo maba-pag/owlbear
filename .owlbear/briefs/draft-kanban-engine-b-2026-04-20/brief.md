@@ -20,12 +20,12 @@
 
 ### In scope (Brief B owns)
 1. **Engine API contract.** Public method signatures, parameter semantics, validation rules, response envelopes, error taxonomy.
-2. **Role views.** `AgentEngineView`, `CockpitEngineView`, `OrchestratorView` — type-level capability subsets of `KanbanEngine` (D9 + D59).
+2. **Role views.** `AgentEngineView`, `CockpitEngineView` — type-level capability subsets of `KanbanEngine` (D9; D59 retired in M5 cleanup, see decisions).
 3. **Projection schemas.** `TaskSummary`, `TaskFull`, `DispatchEntry`, `Wave`, response envelopes — engine-side definitions.
 4. **Structured task-body contract.** Brief B intentionally changes the engine's internal body model to `list[Section]`; parser/render behavior and predicate migration are first-class scope, not incidental storage cleanup.
 5. **Cross-cutting contracts.** `dep_status` semantics; `archival_reason` + `archival_refs` rules; cross-reference validation; timestamp wire format; no-silent-ignore principle; `guidance` envelope field.
 6. **MCP adapter mapping.** For each Brief A tool, the engine call(s) and view that fulfill it. Adapter is mechanical translator.
-7. **Cockpit engine surface.** Methods exposed via `CockpitEngineView` to back the Cockpit GUI's read/admin/write paths. Includes `release_task`, claim-only `sweep`, read-only `scan_corruption`, user-triggered two-phase `repair_storage`, and OCC-required mutations. This is deliberate scope expansion: the cockpit is an operator surface for board health and repair, not only a board viewer/editor.
+7. **Cockpit engine and backend/API surface.** Methods exposed via `CockpitEngineView` and the cockpit backend/API contract that serves them. Includes `release_task`, claim-only `sweep`, read-only `scan_corruption`, user-triggered two-phase `repair_storage`, and OCC-required mutations. Brief B owns the service-side interface end to end: engine capability, cockpit adapter/backend rewiring, and backend exposure of the locked admin/history methods. The cockpit *product/UI* decisions for how these capabilities are consumed (polling cadence, repair confirmations, history layouts, operator affordances) remain **out of scope** and live in a separate ideation task (§7).
 8. **Brief A revisions.** Surface contract issues found during paper integration are recorded as edits to Brief A (11 items, see §8).
 9. **Reality-conflict dispositions.** Every conflict between prior decision and current code has a recorded outcome with rationale (decisions D11–D48 trace the M3/M4 dispositions). Code citations were collected during M3 (`landscape.md`) and inform but are not duplicated into individual decision entries.
 
@@ -45,13 +45,11 @@
 
 ### 3.1 Public types
 
-- **`KanbanEngine`** — full surface. Constructor: `KanbanEngine(kanban_dir: Path, board_config: BoardConfig | None = None)`. Single board per construction. **No `agent_name` parameter** (D33+D43). Engine init validates config and startup gates: invalid `entry_status` / `claim_timeout` raise `ConfigError(ERR_ENTRY_STATUS_INVALID | ERR_INVALID_CLAIM_TIMEOUT)`, and unmigrated active `claimed_by` fields raise `MigrationRequiredError(ERR_MIGRATION_REQUIRED)` (D50+D57 + Brief C C11/AM-12/AM-15).
+- **`KanbanEngine`** — full surface. Constructor: `KanbanEngine(kanban_dir: Path, board_config: BoardConfig | None = None)`. Single board per construction. **No `agent_name` parameter** (D33+D43). Engine init validates config and startup gates: invalid `entry_status` / `claim_timeout` raise `ConfigError(ERR_ENTRY_STATUS_INVALID | ERR_INVALID_CLAIM_TIMEOUT)`, and unmigrated active `claimed_by` fields raise `MigrationRequiredError(ERR_MIGRATION_REQUIRED)` (D50+D57 + Brief C C11/AM-12/AM-15). **Engine init also performs opportunistic activity-log compaction:** if `activity.jsonl` exceeds 1 MB, `__init__` calls `storage.compact_activity_log(kanban_dir)` once. Failures are logged but never raise (compaction is best-effort housekeeping; the cockpit method is the explicit fallback).
 
-- **`AgentEngineView`** — agent-facing facade. Constructed via `engine.agent_view()`. Methods: `list_tasks`, `show_task`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work`. **No OCC** parameter on writes (D46). MCP server dispatches every agent-facing tool through this view.
+- **`AgentEngineView`** — agent-facing facade. Constructed via `engine.agent_view()`. Methods: `list_tasks`, `show_task`, `pick_tasks`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work`. **No OCC** parameter on writes (D46). MCP server dispatches every agent-facing tool through this view. `pick_tasks` is on the agent view (per D59-revised): role isolation is documented in skill / tool docstring, not in the type system.
 
-- **`CockpitEngineView`** — Cockpit-facing facade. Constructed via `engine.cockpit_view()`. Methods: `list_tasks`, `show_task`, `list_activity`, `list_sessions`, `edit_task` (OCC required), `move_task` (OCC required), `release_task`, `sweep`, `scan_corruption`, `repair_storage`. **No `create_task`** (task creation is an agent action via MCP). **No `start_work` / `end_work`** (humans don't claim via Cockpit). Cockpit's unclaim path is `release_task` (admin force-release). This means downstream cockpit work must explicitly cover history, health, and repair affordances; they are not optional follow-on polish.
-
-- **`OrchestratorView`** — dispatcher facade (D59 + D61). Constructed via `engine.orchestrator_view()`. Methods: `pick_tasks` only. The MCP `pick_tasks` tool is dispatched via this view exclusively (per D42 + D59); not exposed on the agent or cockpit views. Naming is locked per D61.
+- **`CockpitEngineView`** — Cockpit-facing facade. Constructed via `engine.cockpit_view()`. Methods: `list_tasks`, `show_task`, `list_activity`, `list_sessions`, `edit_task` (OCC required), `move_task` (OCC required), `release_task`, `sweep`, `scan_corruption`, `repair_storage`, `compact_activity`. **No `create_task`** (task creation is an agent action via MCP). **No `start_work` / `end_work`** (humans don't claim via Cockpit). Cockpit's unclaim path is `release_task` (admin force-release). The maintenance surface (`scan_corruption`, `repair_storage`, plus the activity/session reads) is engine-side; **Brief B does not commit cockpit *product* scope to consume them.** A separate ideation task (created at handoff, blocked by user DR) carries the question of how/whether the cockpit grows operator-console UI for these capabilities. Treat the engine surface as ready, the cockpit consumption as TBD.
 
 **Response / session types:**
 
@@ -70,27 +68,29 @@
 
 ### 3.2 Method exposure matrix
 
-| Method | AgentView | CockpitView | OrchestratorView |
-|---|---|---|---|
-| `list_tasks` | ✓ | ✓ | — |
-| `show_task` | ✓ | ✓ | — |
-| `list_activity` | — | ✓ | — |
-| `list_sessions` | — | ✓ | — |
-| `pick_tasks` | — | — | ✓ |
-| `create_task` | ✓ | — | — |
-| `edit_task` | ✓ (no OCC) | ✓ (OCC required) | — |
-| `move_task` | ✓ (no OCC) | ✓ (OCC required) | — |
-| `start_work` | ✓ | — | — |
-| `end_work` | ✓ | — | — |
-| `release_task` | — | ✓ | — |
-| `sweep` | — | ✓ | — |
-| `scan_corruption` | — | ✓ | — |
-| `repair_storage` | — | ✓ | — |
+| Method | AgentView | CockpitView |
+|---|---|---|
+| `list_tasks` | ✓ | ✓ |
+| `show_task` | ✓ | ✓ |
+| `list_activity` | — | ✓ |
+| `list_sessions` | — | ✓ |
+| `pick_tasks` | ✓ | — |
+| `create_task` | ✓ | — |
+| `edit_task` | ✓ (no OCC) | ✓ (OCC required) |
+| `move_task` | ✓ (no OCC) | ✓ (OCC required) |
+| `start_work` | ✓ | — |
+| `end_work` | ✓ | — |
+| `release_task` | — | ✓ |
+| `sweep` | — | ✓ |
+| `scan_corruption` | — | ✓ |
+| `repair_storage` | — | ✓ |
+| `compact_activity` | — | ✓ |
 
 ### 3.3 Configuration
 
 `BoardConfig` (Pydantic):
-- `statuses: list[str]` — ordered status enum (e.g., `["research", "backlog", "todo", "in-progress", "review", "docs", "done"]`). MUST contain literal `"done"` and `"done"` MUST be the final element (D65); else `ConfigError(ERR_TERMINAL_STATUS_INVALID)`.
+- `statuses: list[str]` — ordered status enum (e.g., `["research", "backlog", "todo", "in-progress", "review", "docs", "done"]`).
+- `terminal_status: str = "done"` — the unique pre-archive terminal status. MUST equal `statuses[-1]` (D65); else `ConfigError(ERR_TERMINAL_STATUS_INVALID)`. Default preserves OwlBear convention; consumers can rename without engine code changes.
 - `entry_status: str = "research"` — status assigned by `create_task`. Must be in `statuses` (D50).
 - `priorities: list[str]` — priority enum.
 - `archival_reasons: list[str] = ["completed", "deprecated", "dropped", "duplicate", "wontfix"]` — frozen literal (D37).
@@ -121,7 +121,7 @@ Canonical error code list: see `decisions.md` §D57. Every code referenced in `p
 
 Authoritative definitions in `paper-integration.md` §3. Summary:
 
-1. **`archival_reason` enum** — 5 values; engine validates at every write site that accepts the field; `completed` requires current status `done` (the gate where archived-completion is only valid out of the terminal status).
+1. **`archival_reason` enum** — 5 values; engine validates at every write site that accepts the field; `completed` requires current status equal to `BoardConfig.terminal_status` (the gate where archived-completion is only valid out of the terminal status).
 2. **`archival_refs` rules** — D37 matrix: required for `deprecated`/`duplicate`, forbidden for `completed`/`dropped`/`wontfix`, all IDs must exist, no self-ref, no cycle.
 3. **`dep_status` semantics** — D38: pure function of dep states; computed every read; precedence `blocked > redirect > ok`.
 4. **Cross-reference validation** — every write that sets/mutates `parent`, `depends_on`, `add_dep`, `archival_refs` validates existence at the engine layer.
@@ -167,7 +167,7 @@ Concretely: tests must verify that a failed `end_work(success)` with a malformed
 The MCP server is a **mechanical translator** (per O1+O6). Its responsibilities are exhausted by:
 
 1. **Schema validation.** Pydantic-level rejection of malformed input before reaching the engine. Example: `edit_task(status=…)` is rejected at the MCP Pydantic schema; the engine's `edit_task` does not accept `status` either. The Cockpit adapter's Pydantic request schema applies the symmetric rejection (§4.2 #1) so AC13 holds at both consumer boundaries. Schema validation is the only "logic" in the adapter — and it is structural, not semantic.
-2. **View selection.** `list_tasks`, `show_task`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work` → `AgentEngineView`. `pick_tasks` → `OrchestratorView`. `release_task` is **dropped from MCP entirely** (Cockpit-only per Brief A "Declined entirely" + §3.2).
+2. **View selection.** `list_tasks`, `show_task`, `pick_tasks`, `create_task`, `edit_task`, `move_task`, `start_work`, `end_work` → `AgentEngineView`. `release_task` is **dropped from MCP entirely** (Cockpit-only per Brief A "Declined entirely" + §3.2).
 3. **Error wrapping.** `KanbanError(code, user_message)` → `ToolError(user_message)`. The `code` is preserved in the adapter logs; the user-facing surface gets `user_message`.
 4. **Response envelope construction.** The engine returns the typed envelope (`ListTasksResponse`, `ShowTaskResponse`, `PickTasksResponse`, `SingleTaskResponse`); the adapter serialises to MCP wire format.
 
@@ -177,7 +177,7 @@ No business logic. No fallback handling. No "best effort." If the adapter contai
 
 The Cockpit FastAPI backend (`serve/cockpit/src/owlbear_cockpit/`) constructs `KanbanEngine` and uses `engine.cockpit_view()` exclusively for mutations (D9+D21). Its responsibilities:
 
-1. **HTTP route → view method.** Each `POST /api/tasks/{id}/move`, `/edit`, `/release` route maps to one `CockpitEngineView` method. Request-body Pydantic schemas mirror the engine view's parameter set; in particular the `/edit` request schema MUST NOT accept `status` (AC13 symmetric rejection at the Cockpit boundary). If the Cockpit GUI ever needs to change a task's status, it MUST call the `/move` route, not `/edit`.
+1. **HTTP route → view method.** Each served cockpit backend route maps to one `CockpitEngineView` method. Brief B scope includes not only the existing `/tasks/{id}/move`, `/edit`, and `/release` mutations, but also backend exposure of the new admin/history methods (`list_activity`, `list_sessions`, `scan_corruption`, `repair_storage`, `compact_activity`) so later cockpit work can consume a finished service-side interface. Request-body Pydantic schemas mirror the engine view's parameter set; in particular the `/edit` request schema MUST NOT accept `status` (AC13 symmetric rejection at the Cockpit boundary). If the Cockpit GUI ever needs to change a task's status, it MUST call the `/move` route, not `/edit`.
 2. **OCC token plumbing.** `expected_updated` from request body → view method parameter (D22+D46). Mismatch → `ConcurrencyError(ERR_STALE)` → HTTP 409.
 3. **Error → HTTP status mapping** (per D27). `ValidationError` → 422, `NotFoundError` → 404, `ConcurrencyError` → 409, `CorruptionError` → 500. `code` and `user_message` returned in response body.
 4. **Read caching.** `MtimeScanCache` (existing) — engine reload skipped when task-dir mtime is unchanged. Brief B does not specify caching policy; the engine itself does no caching.
@@ -194,7 +194,7 @@ The full AC table is `paper-integration.md` §4. This brief locks the AC contrac
 **AC inventory (post-Brief A revisions per §8):**
 - 29 retained Brief A ACs (AC1–AC30 minus AC21, which is removed; AC18 reworded for any-status `success` per D52).
 - Of those, **AC13** is an **adapter-layer** rejection (Pydantic-level `edit_task(status=...)` rejection at the MCP and Cockpit boundaries). The engine `edit_task` signature does not accept `status`; the engine therefore has no AC13 element. AC13 is documented in the paper for completeness and is the only Brief A AC that is not an engine contract.
-- **23 new Brief B ACs (AC-NEW-1 through AC-NEW-23)** covering: `block` outcome validation, `release` idempotency, `success`/`reject`/`block` on unclaimed, invalid outcome, skip-transition guidance (1–8); deterministic `end_work` forbidden-parameter combinations + atomic-rollback (9–13); `BoardConfig.entry_status` config validation (14); `edit_task(parent=...)` (15); parametric missing-id across writes (16); `end_work(reject, archived)` without reason / `end_work(release, move_to)` / `end_work(release, archival_*)` / `end_work(block, archival_*)` (17–20); `release_task` idempotency / `sweep` return contract (21–22); `BoardConfig.statuses` terminal-status init-time validation per D65 (23).
+- **23 new Brief B ACs (AC-NEW-1 through AC-NEW-23)** covering: `block` outcome validation, `release` idempotency, `success`/`reject`/`block` on unclaimed, invalid outcome, skip-transition guidance (1–8); deterministic `end_work` forbidden-parameter combinations + atomic-rollback (9–13); `BoardConfig.entry_status` config validation (14); `edit_task(parent=...)` (15); parametric missing-id across writes (16); `end_work(reject, archived)` without reason / `end_work(release, move_to)` / `end_work(release, archival_*)` / `end_work(block, archival_*)` (17–20); `release_task` idempotency / `sweep` return contract (21–22); `BoardConfig.terminal_status` init-time validation (in `statuses` and equal `statuses[-1]`) per D65 (23).
 - **AC-NEW-24** covers the Cockpit-side AC13 mirror: `POST /api/tasks/{id}/edit` with `status` in body → HTTP 422 (Pydantic request schema rejects before reaching the engine).
 
 **Auditability claim (narrowed).** Every AC row in `paper-integration.md` §4 maps to one or more engine method invocations described in `paper-integration.md` §1 (or, in the singular case of AC13, to an adapter-layer rejection). The reverse direction is **not** strictly enforced: some engine validation rows (e.g., enum validations on read tools, empty-string section, `start_work` on archived/blocked) are not mirrored 1:1 by an AC row, because they are either trivial enum/Pydantic checks or covered indirectly. Brief B does not promise exhaustive bidirectional coverage; Brief C planning may add ACs as decomposition tasks where useful.
@@ -210,7 +210,7 @@ One rollout precondition is explicit: first-class archived reads in Brief A are 
 One new storage dependency is also explicit: cockpit/admin history is no longer "out of scope." Brief C must own a single gitignored board-level `activity.jsonl` runtime file, the query substrate behind `list_activity`, and the semantic compaction policy that keeps that file bounded without silently deleting open-session or recent history.
 
 1. **`pick_tasks` ordering algorithm** — locked by D60: greedy, sorted by `(priority_rank ASC, age DESC, id ASC)`.
-2. **`OrchestratorView` naming** — locked by D61.
+2. **`pick_tasks` view placement** — on `AgentEngineView`. (`OrchestratorView` retired per D59-revised; D61 vacated. Role isolation is documentary, not type-enforced.)
 3. **`BoardConfig.agent_types` shape** — locked by D62: `dict[str, str]` over the four-bucket label set.
 4. **`BoardConfig.agent_compatibility` shape** — locked by D63: `dict[str, list[str]]`, symmetric, with default value codifying the current orchestrator skill matrix.
 5. **Predicate config DSL** — locked by D64 to the three keys + `non_impl_tags` from D15's sketch. Brief C planning may add new keys as discrete decomposition tasks.
@@ -230,13 +230,11 @@ This matrix is intentionally **interface-adjacent**: it names only the downstrea
 |---|---|---|---|
 | Brief A ↔ Brief B MCP surface | `share/skills/h-mcp-kanban/SKILL.md`, `serve/mcp-kanban/README.md` | Tool semantics changed (`pick_tasks`, archived-task contract, claim model, admin-only surfaces). | Update handbook + README to the new wire contract before implementation is called complete. |
 | Brief B dispatcher ↔ orchestration workflow | `share/skills/w-orchestration/SKILL.md` | Dispatcher assumptions changed from flat `pick_tasks(limit, tag)` results to the redesigned engine-owned dispatch model, and ownership of compatibility policy moves from the skill into BoardConfig. | Rewrite orchestration guidance so it consumes engine-returned waves as-is and no longer carries its own status→agent or compatibility matrix. |
-| Brief B cockpit/admin surface ↔ cockpit product | `serve/cockpit/README.md`, cockpit adapter/routes/frontend implementation | Cockpit now depends on `list_activity`, derived session history, claim-only `sweep()`, `scan_corruption()` for health-check polling, and user-triggered `repair_storage()`. | Update cockpit docs and implementation plan together. Treat the current lighter cockpit assumptions as stale, and create explicit backend/frontend tasks for history views, health badge/polling, repair trigger, confirmation, and results rendering. |
+| Brief B cockpit/admin surface ↔ cockpit backend/API and later cockpit product | `serve/cockpit/src/owlbear_cockpit/**`, existing task 1042 | Engine grows `list_activity`, `list_sessions`, `scan_corruption`, `repair_storage`, claim-only `sweep`, and `compact_activity`. Brief B now commits the served cockpit backend/API interface for these capabilities so later cockpit work can build against a finished surface; cockpit product/UI scope is still a separate decision. | Implement the cockpit backend/API exposure now as part of Brief B. Keep task 1042 as the follow-on ideation gate for cockpit UI/product decisions; do not infer frontend/operator-console tasks from Brief B alone. |
 | Brief B/C contracts ↔ test suite | `tests/test_cockpit_read_api.py`, `tests/test_cockpit_mutation_api.py`, `serve/kanban/tests/test_list_sessions.py` | Tests still lock `claimed_by`, legacy activity assumptions, and old sweep/repair coupling. | Add explicit test-migration tasks covering task detail shape, activity stream semantics, session derivation, and split maintenance surfaces. |
 | Brief B/C ↔ implementation handoff artifacts | Brief C kickoff prompt, planner decomposition inputs, implementation checklists | The planner can otherwise under-scope the real downstream work. | Treat every touched row above as part of implementation scope, not optional documentation cleanup. |
 
 Planner rule: any implementation plan derived from Brief B or Brief C must include the relevant rollout rows above whenever it changes the interface named in that row.
-
-Planner rule extension: cockpit rollout is incomplete unless the plan contains explicit product tasks for the maintenance surfaces above; they may not be collapsed into generic "admin polish" or deferred implicitly.
 
 Cutover note: in the dev/main dual-checkout flow, Brief C migration is rehearsed by lane rather than treated as a single opaque event. Rehearse the config lane first, surface unresolved manual follow-up as visible `type:user-action` tasks, and migrate active tasks last at merge/cutover.
 
@@ -257,6 +255,9 @@ The following edits to `kanban-mcp-surface-v2/brief.md` are part of Brief B fina
 9. **AC list:** add ACs for `block` outcome (validation, claim release, optional move_to, guidance emission); revise AC18 wording for any-status `success`.
 10. **§5.3 `pick_tasks` and §8 AC22:** add `blocked==true` to dispatchability exclusions — D58 (resolves dispatcher ↔ `start_work` contradiction).
 11. **§7 decisions C3 redirect semantics:** remove the deferred transitive redirect-completeness clause. `dep_status="redirect"` tasks remain dispatchable; redirect-chain resolution is agent responsibility at pickup.
+12. **§5.3 `pick_tasks`:** note in the tool description that this is the dispatcher's primary tool (used by the orchestrator agent); no engine-side enforcement of caller identity (per D59 retired).
+13. **§5.6 `move_task`:** note that "any two valid statuses are a valid transition" remains true at the **enum** level, but the destination's write-time predicate (configured via `BoardConfig.status_predicates` per D15) fires atomically; predicate failure → `ToolError` and no state change.
+14. **§5.2 `show_task` `section`:** clarify match is case-insensitive AND whitespace-stripped on both heading and parameter (per D56), not case-insensitive only.
 
 ---
 
@@ -283,5 +284,5 @@ On approval of Brief B, the following pipeline tasks are created. **The normativ
 
 1. **Brief A sync status.** The §8 revision set is already applied in `.owlbear/briefs/kanban-mcp-surface-v2/brief.md`; downstream work should treat that brief as updated, not as a pending follow-up.
 2. **Brief C status.** The storage-layer companion brief already exists at `.owlbear/briefs/draft-kanban-storage-c-2026-04-20/`; its storage constraints inherit this engine contract and should be treated as the active downstream storage brief, not a future kickoff.
-3. **Engine implementation tasks.** Decomposed by `planner` subagent **from `paper-integration.md`** (the normative contract), with this brief as scope/context. Bottom-up: BoardConfig + types → engine core → AgentEngineView/CockpitEngineView/OrchestratorView → MCP adapter → Cockpit adapter rewire. Each engine method gets a TDD-RED + TDD-GREEN pair. The planner does NOT author contract decisions; all surface choices are locked by D1–D65 + `paper-integration.md`.
+3. **Engine implementation tasks.** Decomposed by `planner` subagent **from `paper-integration.md`** (the normative contract), with this brief as scope/context. Bottom-up: BoardConfig + types → engine core → AgentEngineView/CockpitEngineView → MCP adapter → cockpit backend/API contract and adapter rewire. Each engine method gets a TDD-RED + TDD-GREEN pair. Brief B-derived implementation includes backend exposure of the new cockpit admin/history methods; cockpit UI/product tasks remain gated by task 1042 or a later cockpit brief. The planner does NOT author contract decisions; all surface choices are locked by D1–D65 + `paper-integration.md`.
 

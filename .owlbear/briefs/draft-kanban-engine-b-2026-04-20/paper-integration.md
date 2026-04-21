@@ -8,9 +8,9 @@ References:
 
 Conventions:
 - `Engine.method(...)` is a method on `KanbanEngine` (full surface).
-- `AgentView.method(...)`, `CockpitView.method(...)`, `OrchestratorView.method(...)` are role-view facades per D9 + D59 (which extends D9 with the orchestrator role).
+- `AgentView.method(...)`, `CockpitView.method(...)` are role-view facades per D9 (D59 retired — `pick_tasks` lives on `AgentView`; role isolation is documentary).
 - All engine writes raise `KanbanError` subclasses (D27, D48, D57). MCP adapter maps `code` to `ToolError(user_message)`. Cockpit adapter maps subclass to HTTP status.
-- All MCP tools dispatched via `AgentView` per D9, except `pick_tasks` which is `OrchestratorView`-only (per D42 + D59).
+- All MCP tools dispatched via `AgentView` per D9 (including `pick_tasks`).
 - Brief A revisions tracked in `decisions.md` "Brief A Revision List" — paper-integration here reflects the **post-revision** Brief A.
 
 Scope notes:
@@ -46,7 +46,7 @@ Scope notes:
 | **Behavior:** multiple matches | Engine emits guidance string e.g. `"section '{name}' matched {n} times"` when n > 1. Per D39+D54-style. | |
 | **Return:** `ShowTaskResponse = TaskFull ⊕ {missing_sections: list[str] \| None, guidance: list[str]}` | Engine returns the envelope | `body: str \| None` per D30. |
 
-### 1.3 `pick_tasks` (orchestrator-gated; `OrchestratorView` only)
+### 1.3 `pick_tasks` (orchestrator-intended; `AgentView`)
 
 **Algorithm (4-step pipeline; the consolidated form of D42 + D58 + D60 + D62 + D63):**
 
@@ -64,7 +64,7 @@ Scope notes:
 
 | Brief A surface | Engine API | Notes |
 |---|---|---|
-| **Signature** `pick_tasks(wave_size, max_waves) → PickTasksResponse` | `OrchestratorView.pick_tasks(wave_size: int \| None = None, max_waves: int = 3) → PickTasksResponse` | Per D42 + D59: this view exposes `pick_tasks` and is reached via MCP only by the orchestrator agent. Not on `AgentView`. Not on `CockpitView`. |
+| **Signature** `pick_tasks(wave_size, max_waves) → PickTasksResponse` | `AgentView.pick_tasks(wave_size: int \| None = None, max_waves: int = 3) → PickTasksResponse` | Per D42: dispatcher capability lives on the agent surface. Role isolation (orchestrator-only-in-practice) is documented in the tool docstring and the orchestrator skill, not type-enforced. Not on `CockpitView`. |
 | **Validation:** `wave_size < 1` or `max_waves < 1` | `ValidationError(code="ERR_INVALID_WAVE_PARAM")` | Per D57. |
 | **Default `wave_size`** | Falls back to `BoardConfig.wave_size` (new field per D42, default 4) | Pydantic-validated. |
 | **Behavior:** filter + sort + assemble + return | Per the 4-step algorithm above. | Locks D42 (composition), D58 (dispatchability filter), D60 (sort), D62 (agent buckets), D63 (compatibility matrix). Default wave-assembly behaviour codifies `share/skills/w-orchestration/SKILL.md` "Wave Assembly" section. |
@@ -95,13 +95,13 @@ Scope notes:
 | **Validation:** `body` AND `append_body` both set | `ValidationError(code="ERR_BODY_EXCLUSIVE")` | AC14. Per D57. |
 | **Validation:** `add_dep` non-existent | `ValidationError(code="ERR_DEP_NOT_FOUND")` | AC25. |
 | **Validation:** `archival_reason` / `archival_refs` on non-archived task | `ValidationError(code="ERR_ARCHIVAL_FIELDS_FORBIDDEN")` per D37+D57 | |
-| **Validation:** `archival_reason="completed"` (target task is archived → not in `done`) | `ValidationError(code="ERR_COMPLETED_REQUIRES_DONE")` per D37 + D65 (literal `"done"`) | AC6. The completed-requires-done gate. |
+| **Validation:** `archival_reason="completed"` (target task is archived → not in terminal) | `ValidationError(code="ERR_COMPLETED_REQUIRES_DONE")` per D37 + D65 (`BoardConfig.terminal_status`) | AC6. The completed-requires-terminal gate. |
 | **Validation:** `archival_refs` rules per `archival_reason` (D37 matrix) | Codes per §3.2: `ERR_ARCHIVAL_REFS_REQUIRED`, `ERR_ARCHIVAL_REFS_FORBIDDEN`, `ERR_ARCHIVAL_REF_MISSING`, `ERR_ARCHIVAL_REF_SELF`, `ERR_ARCHIVAL_REF_CYCLE` | |
 | **Validation:** invalid `archival_reason` enum | `ValidationError(code="ERR_ARCHIVAL_REASON_INVALID")` | Per D37. |
 | **Validation:** invalid `priority` enum | `ValidationError(code="ERR_INVALID_PRIORITY")` | |
 | **Validation:** no-op call (no field would change) | `ValidationError(code="ERR_NO_OP")` raised by engine after computing the diff | Per Brief A §5.5 + D57. |
 | **Validation:** body size (per D47) | If `body=` provided: UTF-8 byte length checked against 100 KB warn / 500 KB error. **For `append_body=`: post-append total body byte length checked against same caps.** Fail → `ValidationError(code="ERR_BODY_TOO_LARGE")`. | Resolves Critic Finding 10 ambiguity by extending D47 measurement to post-append result. |
-| **Validation (CockpitView only):** OCC | If `current_updated != expected_updated`, raise `ConcurrencyError(code="ERR_STALE")` per D22+D23+D46 | AgentView has no token check. |
+| **Validation (CockpitView only):** OCC | Engine routes the write through `storage.write_task_if_unchanged(task, expected_updated, kanban_dir)` (Brief C §3.2 + AC-C4a). The storage primitive holds a per-task `flock`, re-reads, compares, and either writes atomically or raises `ConcurrencyError(code="ERR_STALE")` per D22+D23+D46. AgentView has no token check and uses plain `write_task` (last-writer-wins by design). |
 | **Behavior:** `block_reason` non-empty sets blocked; empty/null clears block | Engine maps semantics: non-empty sets `blocked=true` + `block_reason`; empty/null clears both | Replaces former `block_task`/`unblock_task`. Per D53 retained for state-assertion use. |
 | **Behavior:** `append_body` with `timestamp=true` prepends ISO 8601 with offset | Engine prepends per D20 + D14 | AC30. |
 | **Behavior:** `updated` advanced to current time on any successful change | Per D14 | Required for D23/D46 OCC tokens (Cockpit). |
@@ -114,11 +114,11 @@ Scope notes:
 | **Validation:** `id` not found | `NotFoundError(code="ERR_NOT_FOUND")` | Per D57. |
 | **Validation:** `status="archived"` requires `archival_reason` | `ValidationError(code="ERR_ARCHIVAL_REASON_REQUIRED")` per D37 | AC4. |
 | **Validation:** `archival_reason` set when `status != "archived"` | `ValidationError(code="ERR_ARCHIVAL_FIELDS_FORBIDDEN")` per D37 | |
-| **Validation:** `archival_reason="completed"` requires current status = `done` | `ValidationError(code="ERR_COMPLETED_REQUIRES_DONE")` per D37 + D65 (literal `"done"`) | AC5 (the completed-requires-done gate). |
+| **Validation:** `archival_reason="completed"` requires current status = `BoardConfig.terminal_status` | `ValidationError(code="ERR_COMPLETED_REQUIRES_DONE")` per D37 + D65 (configurable terminal_status) | AC5 (the completed-requires-terminal gate). |
 | **Validation:** `archival_refs` rules | Per D37 matrix (same set as `edit_task`) | AC7, AC8, AC26. |
 | **Validation:** invalid `status` enum | `ValidationError(code="ERR_INVALID_STATUS")` | Per D49: there is **no `ERR_TRANSITION_FORBIDDEN`** code; "unsupported transition" wording in Brief A §5.6 re-reads as "invalid status enum." Brief A Revision List #3. |
 | **Validation:** invalid `archival_reason` enum | `ValidationError(code="ERR_ARCHIVAL_REASON_INVALID")` | |
-| **Validation (CockpitView only):** OCC | `ConcurrencyError(code="ERR_STALE")` on stale `expected_updated` | |
+| **Validation (CockpitView only):** OCC | Engine routes the write through `storage.write_task_if_unchanged` (same primitive as `edit_task`); `ConcurrencyError(code="ERR_STALE")` on mismatch | |
 | **Behavior:** D15 write-time predicate on destination `status` | If `BoardConfig.status_predicates[status]` exists, engine parses body and evaluates the predicate. Failure → `ValidationError(code="ERR_PREDICATE_FAILED", detail=<predicate name>)`. Transition does NOT occur (D41 atomicity). | Per D15 + D49. |
 | **Behavior:** archive operation clears claim atomically | Per D17. If `status="archived"` and task was claimed: claim cleared as part of the move. On transition failure (predicate or archival validation), claim NOT cleared (D41 atomicity). | |
 | **Behavior:** skip-transition guidance | Per D54: if transition skips more than one position in `BoardConfig.statuses` order, response `guidance` includes a soft warning. | Doesn't block. |
@@ -130,7 +130,7 @@ Scope notes:
 |---|---|---|
 | **Signature** `start_work(id) → SingleTaskResponse` | `AgentView.start_work(id: int) → SingleTaskResponse` | **Not on `CockpitView`** (no human "claims" via Cockpit). No identity per D11. No OCC token per D46. |
 | **Validation:** `id` not found | `NotFoundError(code="ERR_NOT_FOUND")` | Per D57. |
-| **Validation:** task already claimed | `ConcurrencyError(code="ERR_ALREADY_CLAIMED", detail="claimed_at={ts}")` | If `claimed_at is not None` and `claimed_at + claim_timeout > now`. If claim is expired, lazy-release first per D18+D36, then re-attempt. |
+| **Validation:** task already claimed | `ConcurrencyError(code="ERR_ALREADY_CLAIMED", detail="claimed_at={ts}")` | If `claimed_at is not None` and `claimed_at + claim_timeout > now`. If claim is expired, lazy-release first per D18+D36 by routing the release through `storage.write_task_if_unchanged(cleared_task, expected_updated=current.updated, ...)`; on `ERR_STALE` (another writer beat us to it), re-read and re-evaluate from the top; otherwise proceed to claim via the same CAS primitive. |
 | **Validation:** task is archived | `ValidationError(code="ERR_ARCHIVED_NOT_CLAIMABLE")` | |
 | **Validation:** task is blocked (`blocked==true`) | `ValidationError(code="ERR_BLOCKED_NOT_CLAIMABLE")` | |
 | **Behavior:** sets `claimed_at = now()` | Per D11. No `claimed_by`. | |
@@ -140,7 +140,7 @@ Scope notes:
 
 | Brief A surface | Engine API | Notes |
 |---|---|---|
-| **Signature (post-revision)** `end_work(id, outcome, move_to, note, block_reason, archival_reason, archival_refs) → SingleTaskResponse` | `AgentView.end_work(id: int, outcome: str, move_to: str \| None = None, note: str \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None) → SingleTaskResponse` | **Adds `block_reason` parameter** per D52. **Not on `CockpitView`** (no human end-work via Cockpit; admin release uses `release_task`). Brief A Revision List #4. |
+| **Signature (post-revision)** `end_work(id, outcome, move_to, note, block_reason, archival_reason, archival_refs) → SingleTaskResponse` | `AgentView.end_work(id: int, outcome: str, move_to: str \| None = None, note: str \| None = None, block_reason: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None) → SingleTaskResponse` | **Adds `block_reason` parameter** per D52. **Not on `CockpitView`** (no human end-work via Cockpit; admin release uses `release_task`). No agent-side OCC token per D46: by harness invariant, the orchestrator does not re-dispatch a task while the original worker can still later emit `end_work`. Brief A Revision List #4. |
 | **Validation:** `id` not found | `NotFoundError(code="ERR_NOT_FOUND")` | Per D57. |
 | **Validation:** outcome enum (4 values per D52) | `outcome not in {"success", "reject", "release", "block"}` → `ValidationError(code="ERR_INVALID_OUTCOME")` per D52+D57 | |
 | **Validation:** ~~`outcome="success"` from non-`done` status → ToolError~~ | **Removed per D52.** `success` is now valid from any non-archive status (auto-advances one step). Brief A Revision List #5; AC18 wording revised. | |
@@ -234,7 +234,7 @@ Extends `TaskSummary` with:
 
 `BoardConfig.archival_reasons = {"completed", "deprecated", "dropped", "duplicate", "wontfix"}` (frozen literal). Validated at every write site that accepts the field per D37: `move_task`, `edit_task`, `end_work` (when archiving via reject path; engine-set on success path per D51). Invalid → `ValidationError(code="ERR_ARCHIVAL_REASON_INVALID")`.
 
-The completed-requires-done gate (`archival_reason="completed"` requires current status `done`): engine checks current status before allowing the field to be set or changed to `"completed"`. Failure → `ValidationError(code="ERR_COMPLETED_REQUIRES_DONE")`. The literal status name `"done"` is enforced by **D65**: `BoardConfig.statuses` MUST contain `"done"` and `"done"` MUST be the final element (init-time `ConfigError(ERR_TERMINAL_STATUS_INVALID)` else); this is what makes the gate well-defined for any board configuration.
+The completed-requires-terminal gate (`archival_reason="completed"` requires current status equal to `BoardConfig.terminal_status`): engine checks current status before allowing the field to be set or changed to `"completed"`. Failure → `ValidationError(code="ERR_COMPLETED_REQUIRES_DONE")`. The terminal status name is configurable via **D65**: `BoardConfig.terminal_status: str = "done"`, validated at init to be in `statuses` and to equal `statuses[-1]` (init-time `ConfigError(ERR_TERMINAL_STATUS_INVALID)` else); this is what makes the gate well-defined for any board configuration.
 
 ### 3.2 `archival_refs` rules
 
@@ -286,6 +286,13 @@ Per D14: UTC, ISO 8601 with explicit offset (`+00:00` or `Z`). Engine produces v
 
 Per D27+D57: every engine validation failure raises a `KanbanError` subclass with a `code` and `user_message`. Adapter (MCP or Cockpit) maps to surface error. There is no "best effort," no warning mode, no silent drop.
 
+**Engine-init failure modes** (raised by `KanbanEngine.__init__`, not request-time):
+
+- `ConfigError(code="ERR_ENTRY_STATUS_INVALID")` — `BoardConfig.entry_status` not in `BoardConfig.statuses` (D50).
+- `ConfigError(code="ERR_INVALID_CLAIM_TIMEOUT")` — malformed `claim_timeout` string (D29).
+- `ConfigError(code="ERR_TERMINAL_STATUS_INVALID")` — `BoardConfig.terminal_status` not in `statuses` or not the final element (D65).
+- `MigrationRequiredError(code="ERR_MIGRATION_REQUIRED")` — active task files still carry `claimed_by` frontmatter; user must run `uv run kanban-migrate` (Brief C C11/AM-12, AC-C47). Surfaced from Brief C as an engine-init gate; included here so Brief B's error catalogue is complete.
+
 ### 3.7 `guidance` field
 
 Per D39: engine emits guidance on response envelopes only. Never on `Task` model. Never persisted. Sources include:
@@ -302,7 +309,7 @@ Board-level activity is first-class admin data, not diagnostic logging. Brief B 
 - `CockpitView.list_activity(...)` exposes filtered raw events for cockpit/admin use.
 - `CockpitView.list_sessions(filter=...)` is a derived read model over the same event stream.
 - Agent-facing MCP surfaces do not expose raw activity.
-- **`ActivityEvent.source`** is populated by the engine based on which role view (or auto-operation) performed the mutation: `"agent"` (AgentView), `"cockpit"` (CockpitView), `"orchestrator"` (OrchestratorView), `"engine"` (auto-archive, sweep, repair). No caller identity (`claimed_by` or similar) is recorded — consistent with D11. The `actor` field has been removed; `source` is the single identity field.
+- **`ActivityEvent.source`** is populated by the engine based on which role view (or auto-operation) performed the mutation: `"agent"` (AgentView, including `pick_tasks` — the dispatcher mutation surface is part of AgentView post D59-revised), `"cockpit"` (CockpitView), `"engine"` (auto-archive, sweep, repair). The enum has three values; `"orchestrator"` is retired together with `OrchestratorView`. No caller identity (`claimed_by` or similar) is recorded — consistent with D11. The `actor` field has been removed; `source` is the single identity field.
 
 ### 3.9 Archived-task rollout precondition
 
@@ -342,7 +349,7 @@ This is a rollout gate, not a full archive rewrite. Brief C need only backfill c
 | AC19 | `end_work(id, "reject", move_to="archived", reason, note)` archives + appends + clears in one call | `Engine.end_work(outcome="reject")` per D52; full D37 archival validation matrix |
 | AC20 | `end_work(id, "release")` clears claim, no status change | `Engine.end_work(outcome="release")` per D52; idempotent on unclaimed per D55 |
 | ~~AC21~~ | ~~Non-claimant `end_work` → ToolError~~ | **Removed per D4 (D11 invariant).** Brief A Revision List #1. |
-| AC22 | `pick_tasks()` returns ≤3 waves; no intra-wave dep edges; no claimed; no archived; no `dep_status="blocked"`; no `blocked==true` (per D58) | `OrchestratorView.pick_tasks` per D42+D58 |
+| AC22 | `pick_tasks()` returns ≤3 waves; no intra-wave dep edges; no claimed; no archived; no `dep_status="blocked"`; no `blocked==true` (per D58) | `AgentView.pick_tasks` per D42+D58 |
 | AC23 | Each `DispatchEntry` includes computed `agent` | Engine sets per `BoardConfig.agent_map` per D24 |
 | AC24 | `create_task(..., depends_on=[99999])` → ToolError | `ValidationError(ERR_DEP_NOT_FOUND)` per §3.4 |
 | AC25 | `edit_task(id, add_dep=[99999])` → ToolError | `ValidationError(ERR_DEP_NOT_FOUND)` per §3.4 |
@@ -378,7 +385,7 @@ This is a rollout gate, not a full archive rewrite. Brief C need only backfill c
 | AC-NEW-20 | `end_work(id, "block", block_reason="x", archival_reason=...)` or `archival_refs=...` → ToolError | `ValidationError(ERR_ARCHIVAL_FIELDS_FORBIDDEN)` per D51 |
 | AC-NEW-21 | `release_task(<unclaimed_id>)` succeeds idempotently (no-op for claim, `updated` NOT advanced when state unchanged); response is `SingleTaskResponse` | Per D55-style idempotency extended to admin-release; engine returns current `TaskFull` |
 | AC-NEW-22 | `sweep()` returns list of released task IDs (may be empty); idempotent (second call with no expired claims returns `[]`) | Per D18+D36 compare-and-clear semantics |
-| AC-NEW-23 | Engine init with `BoardConfig.statuses` missing literal `"done"`, OR with `"done"` not as the final element → ConfigError | `ConfigError(ERR_TERMINAL_STATUS_INVALID)` per D65+D57 |
+| AC-NEW-23 | Engine init with `BoardConfig.terminal_status` not in `statuses`, OR not equal to `statuses[-1]` → ConfigError | `ConfigError(ERR_TERMINAL_STATUS_INVALID)` per D65+D57 |
 | AC-NEW-24 | `POST /api/tasks/{id}/edit` with `status` in request body → HTTP 422 at the Cockpit boundary (request never reaches the engine) | Cockpit Pydantic request schema mirrors the engine view: no `status` field accepted. Symmetric to AC13 on the MCP side. |
 
 ---
@@ -391,39 +398,39 @@ Cockpit consumes `CockpitView` exclusively (per D9). Mutation routes rewire (per
 |---|---|---|
 | `list_tasks(...)` | Read board, identical signature to AgentView | No OCC; reads do not mutate `updated`. |
 | `show_task(id, section=...)` | Read single task | No OCC. |
-| `list_activity(...)` | Filtered raw activity events for cockpit/admin history views | Reads the board-level `activity.jsonl` stream defined in §3.8. Supports cockpit/admin filtering by task_id, action, source, and time window; not exposed on AgentView. `ActivityEvent.source` values: `"agent"` (AgentView mutations), `"cockpit"` (CockpitView mutations), `"orchestrator"` (OrchestratorView), `"engine"` (auto-operations: auto-archive on `end_work(success)` from terminal status, sweep claim releases, repair AR creation). Engine populates `source` automatically based on the role view or internal operation; no caller parameter needed. |
+| `list_activity(...)` | Filtered raw activity events for cockpit/admin history views | Reads the board-level `activity.jsonl` stream defined in §3.8. Supports cockpit/admin filtering by task_id, action, source, and time window; not exposed on AgentView. `ActivityEvent.source` values: `"agent"` (AgentView mutations, including dispatcher `pick_tasks`), `"cockpit"` (CockpitView mutations), `"engine"` (auto-operations: auto-archive on `end_work(success)` from terminal status, sweep claim releases, repair AR creation). Engine populates `source` automatically based on the role view or internal operation; no caller parameter needed. |
 | `list_sessions(filter="active")` | Derived work-session view for cockpit/admin use | Returns `list[SessionRecord]`. Derived from the board-level activity stream by pairing `start_work` events with their corresponding close events per task_id. `SessionRecord` fields: `task_id`, `task_status_at_start` (from event detail), `state` (`"running"` / `"stuck"` / `"completed"` / `"blocked"` / `"rejected"` / `"released"` / `"expired"`), `started_at`, `ended_at` (None while still claimed), `outcome` (`"success"` / `"block"` / `"reject"` / `"release"` / `"expired"` / None), `duration_s` (None when active). Filter values per D31: `"active"` (`state in {"running", "stuck"}`), `"all"`, `"blocked-or-rejected"`, `"released"`. `state` is for cockpit/history classification and does not replace task-level claimed state. |
-| `edit_task(..., expected_updated: str)` | OCC required per D22+D46; `expected_updated` mandatory | Mismatch → `ConcurrencyError(ERR_STALE)`. |
-| `move_task(..., expected_updated: str)` | OCC required per D22+D46 | Same. |
+| `edit_task(..., expected_updated: str)` | OCC required per D22+D46; `expected_updated` mandatory; routed through `storage.write_task_if_unchanged` (Brief C §3.2) | Mismatch → `ConcurrencyError(ERR_STALE)`. Cross-process safe via per-task flock. |
+| `move_task(..., expected_updated: str)` | OCC required per D22+D46; routed through `storage.write_task_if_unchanged` | Same. |
 | `release_task(id)` | Admin force-release (Cockpit-only) | Clears `claimed_at` unconditionally on a claimed task. **Idempotent on already-unclaimed:** succeeds as no-op, `updated` NOT advanced (state unchanged per D14 contract). Missing `id` → `NotFoundError(ERR_NOT_FOUND)` per D57. No OCC (admin override). Returns `SingleTaskResponse` (current `TaskFull` post-release). Per Brief A "Declined entirely": `release_task` is dropped from MCP but kept in GUI; this is the Brief B engine method that backs the GUI. |
-| `sweep()` | Force claim sweep only; releases all claims where `claimed_at + claim_timeout <= now()` per D18+D36. | Returns `list[int]` of released task IDs (empty list if no expired claims). Idempotent: second call with no newly-expired claims returns `[]`. Per-task release uses compare-and-clear per D36 (concurrency-safe). `updated` advanced on each released task per D14. Cockpit calls on init per D18. No quarantine, no AR creation, no corruption repair. |
-| `scan_corruption()` | Read-only corruption scan for Cockpit health-check polling. | Calls `storage.detect_corruption(path, config)` for every file in `tasks/` and `archive/`; aggregates and returns `list[CorruptionError]`. Makes **no writes**. Cockpit polls this on a timer to surface a badge/count when issues are found. Never triggers repair. |
+| `sweep()` | Force claim sweep only; releases all claims where `claimed_at + claim_timeout <= now()` per D18+D36. | Returns `list[int]` of released task IDs (empty list if no expired claims). Idempotent. Per-task release routes through `storage.write_task_if_unchanged` (compare-and-clear is implemented as the CAS primitive's compare-step). On `ERR_STALE` for any task, that task is skipped this cycle (a concurrent writer already touched it). `updated` advanced on each released task per D14. Cockpit calls on init per D18. No quarantine, no AR creation, no corruption repair. |
+| `scan_corruption()` | Read-only corruption scan for cockpit/admin health surfaces. | Calls `storage.detect_corruption(path, config)` for every file in `tasks/` and `archive/`; aggregates and returns `list[CorruptionError]`. Makes **no writes**. Polling cadence, presentation, and operator affordances are product concerns outside Brief B. |
 | `repair_storage()` | User-triggered two-phase repair. **Phase 1:** calls `storage.scan_and_fix(kanban_dir, config)` (detection + auto-fix + quarantine, no AR creation). **Phase 2:** for each `action="quarantined"` outcome, calls the underlying engine `create_task` path to create the Action Request. Returns merged `list[RepairOutcome]`. | Never called implicitly at startup. The two-phase split is required: `storage.scan_and_fix` cannot import engine (circular); AR creation is always an engine responsibility. |
+| `compact_activity()` | User-triggered activity-stream compaction. Calls `storage.compact_activity_log(kanban_dir)` and returns the resulting `ActivityCompactionResult`. | Cockpit/backend method available for later operator surfaces or direct invocation. Engine *also* runs opportunistic compaction at `__init__` when `activity.jsonl` exceeds 1 MB (best-effort, failures logged not raised). |
 
-The maintenance rows above are not placeholders for a later admin brief. Approval of Brief B means the downstream cockpit product scope includes board-health polling and user-invoked repair flows, and implementation planning must schedule them explicitly.
+The maintenance rows above are part of the served cockpit backend/API interface for Brief B implementation. Approval of Brief B means engine capability plus cockpit backend/API exposure are in scope now. It does **not**, by itself, commit cockpit UI/product decisions such as polling cadence, confirmations, layouts, or operator affordances; those stay with task 1042 or a later cockpit brief.
 
-Three role views (per D9 + D59): **`AgentView`**, **`CockpitView`**, **`OrchestratorView`**.
+Two role views (per D9): **`AgentView`**, **`CockpitView`**. (`OrchestratorView` retired per D59-revised — `pick_tasks` lives on `AgentView`; D61 vacated.)
 
 **Method exposure summary:**
 
-| Method | AgentView | CockpitView | OrchestratorView |
-|---|---|---|---|
-| `list_tasks` | ✓ | ✓ | — |
-| `show_task` | ✓ | ✓ | — |
-| `list_activity` | — | ✓ | — |
-| `list_sessions` | — | ✓ | — |
-| `pick_tasks` | — | — | ✓ |
-| `create_task` | ✓ | — | — |
-| `edit_task` | ✓ (no OCC) | ✓ (OCC required) | — |
-| `move_task` | ✓ (no OCC) | ✓ (OCC required) | — |
-| `start_work` | ✓ | — | — |
-| `end_work` | ✓ | — | — |
-| `release_task` | — | ✓ | — |
-| `sweep` | — | ✓ | — |
-| `scan_corruption` | — | ✓ | — |
-| `repair_storage` | — | ✓ | — |
-
-`OrchestratorView` naming is **locked by D61**.
+| Method | AgentView | CockpitView |
+|---|---|---|
+| `list_tasks` | ✓ | ✓ |
+| `show_task` | ✓ | ✓ |
+| `list_activity` | — | ✓ |
+| `list_sessions` | — | ✓ |
+| `pick_tasks` | ✓ | — |
+| `create_task` | ✓ | — |
+| `edit_task` | ✓ (no OCC) | ✓ (OCC required) |
+| `move_task` | ✓ (no OCC) | ✓ (OCC required) |
+| `start_work` | ✓ | — |
+| `end_work` | ✓ | — |
+| `release_task` | — | ✓ |
+| `sweep` | — | ✓ |
+| `scan_corruption` | — | ✓ |
+| `repair_storage` | — | ✓ |
+| `compact_activity` | — | ✓ |
 
 ---
 
@@ -446,7 +453,7 @@ These decisions affect engine API but have no Brief A counterpart; collected her
 - **D50** — `BoardConfig.entry_status` (new field).
 - **D52** + **D53** + **D54** — `end_work` 4-outcome enum; `edit_task(block_reason=...)` retained; engine guidance on block + skip-transition.
 - **D55** — `end_work(release)` idempotent on unclaimed.
-- **D65** — terminal-status lock: `BoardConfig.statuses` MUST contain literal `"done"` and `"done"` MUST be the final element. Engine `__init__` raises `ConfigError(ERR_TERMINAL_STATUS_INVALID)` else. Anchors the completed-requires-done gate (§2/§3, AC5/AC6) and disambiguates D52's `success` semantics on the terminal status.
+- **D65** — terminal-status configurability: `BoardConfig.terminal_status: str = "done"`, init-validated to be in `statuses` and equal `statuses[-1]`. Engine `__init__` raises `ConfigError(ERR_TERMINAL_STATUS_INVALID)` else. Anchors the completed-requires-terminal gate (§2/§3, AC5/AC6) and disambiguates D52's `success` semantics on the terminal status.
 
 ---
 

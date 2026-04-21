@@ -98,12 +98,12 @@ show_task(
 **Behavior:**
 
 - When `id` references an archived task, returns the full task object with `status: "archived"` and `archival_reason` / `archival_refs` populated. No special handling required by the caller.
-- When `section` is set, returns body containing only matching heading content (case-insensitive heading match, regardless of heading level; all matches concatenated in document order). When the heading isn't found, `body: null` and the response includes `missing_sections: ["<section>"]`. When found multiple times, `guidance` includes occurrence count.
+- When `section` is set, returns body containing only matching heading content (case-insensitive AND whitespace-stripped match on both heading and parameter, regardless of heading level; all matches concatenated in document order). When the heading isn't found, `body: null` and the response includes `missing_sections: ["<section>"]`. When found multiple times, `guidance` includes occurrence count.
 - When `section` is unset, returns full body.
 
 ### 5.3 `pick_tasks`
 
-**Purpose:** Return the next dispatchable wave(s) of work.
+**Purpose:** Return the next dispatchable wave(s) of work. This is the dispatcher's primary tool — used by the orchestrator agent. The engine does not enforce caller identity; role isolation is documentary.
 
 **Signature:**
 
@@ -205,7 +205,7 @@ move_task(
 - `archival_reason` set when `status != "archived"` → `ToolError`
 - `archival_reason="completed"` requires current status is `done` *(S4 gate)*
 - `archival_refs` rules per `archival_reason` (see §7)
-- Invalid `status` enum value → `ToolError`. Any two valid statuses are a valid transition; the engine does not reject transitions on "unsupportedness" — only on enum invalidity.
+- Invalid `status` enum value → `ToolError`. Any two valid statuses are a valid transition at the enum level; the engine does not reject on "unsupportedness." The destination status's write-time predicate (configured via `BoardConfig.status_predicates`) fires atomically — predicate failure → `ToolError` and no state change.
 
 ### 5.7 `start_work`
 

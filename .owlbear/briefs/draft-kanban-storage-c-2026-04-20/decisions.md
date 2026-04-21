@@ -257,6 +257,8 @@ One Python script, invocable via `uv run kanban-migrate` (entry point in `serve/
 
 **Decision:** Storage owns a single gitignored board-level runtime file, `.owlbear/kanban/activity.jsonl`, containing structured JSONL `ActivityEvent` records. Every mutating engine operation appends an event to this stream. `list_activity(...)` reads filtered raw events from the file; `list_sessions(filter=...)` is **derived at call time** from the same stream. There is **no separate session table**.
 
+Canonical `ActivityEvent.source` values are `agent`, `cockpit`, and `engine`. `orchestrator` is retired with Brief B's role-view cleanup. Existing pre-Brief-C `activity.jsonl` files are not migrated or read compatibly; rollout deletes the old runtime file and starts a fresh canonical stream.
+
 The activity stream is first-class admin data, not diagnostic logging. This keeps the persistent source layout honest:
 
 - task files + archive remain the canonical board state,
