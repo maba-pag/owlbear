@@ -638,6 +638,100 @@ class TestFromAC_AutoFixMatrix:
         assert hasattr(outcome, "detail")
         assert outcome.action in {"fixed", "quarantined", "failed"}
 
+    # ------------------------------------------------------------------
+    # AC-C22 persistence assertions — verify repaired null-default fields on disk
+    # These tests expose a real serialisation bug: YAML(typ="rt") with
+    # CommentedMap writes Python None as bare `field:` instead of `field: null`.
+    # ------------------------------------------------------------------
+
+    def test_ac_c22_mode3_missing_block_reason_persists_null_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, block_reason absent → repaired file must contain 'block_reason: null' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "2004-noblockreason.md"
+        _write(
+            bad_file,
+            "---\nid: 2004\ntitle: no block_reason\nstatus: todo\npriority: needed\n"
+            "tags: []\ndepends_on: []\nblocked: false\nclaimed_at: null\n"
+            "archival_reason: null\narchival_refs: []\nparent: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "block_reason:" in repaired_content
+        assert "block_reason: null" in repaired_content
+
+    def test_ac_c22_mode3_missing_claimed_at_persists_null_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, claimed_at absent → repaired file must contain 'claimed_at: null' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "2005-noclaimedat.md"
+        _write(
+            bad_file,
+            "---\nid: 2005\ntitle: no claimed_at\nstatus: todo\npriority: needed\n"
+            "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "archival_reason: null\narchival_refs: []\nparent: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "claimed_at:" in repaired_content
+        assert "claimed_at: null" in repaired_content
+
+    def test_ac_c22_mode3_missing_archival_reason_persists_null_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, archival_reason absent → repaired file must contain 'archival_reason: null' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "2006-noarchivalreason.md"
+        _write(
+            bad_file,
+            "---\nid: 2006\ntitle: no archival_reason\nstatus: todo\npriority: needed\n"
+            "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
+            "archival_refs: []\nparent: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "archival_reason:" in repaired_content
+        assert "archival_reason: null" in repaired_content
+
+    def test_ac_c22_mode3_missing_parent_persists_null_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, parent absent → repaired file must contain 'parent: null' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "2008-noparent.md"
+        _write(
+            bad_file,
+            "---\nid: 2008\ntitle: no parent\nstatus: todo\npriority: needed\n"
+            "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
+            "archival_reason: null\narchival_refs: []\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "parent:" in repaired_content
+        assert "parent: null" in repaired_content
+
 
 class TestBuilderDiscovered:
     """Additional edge cases discovered during implementation and review follow-up."""
