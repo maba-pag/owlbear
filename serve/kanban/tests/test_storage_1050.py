@@ -90,6 +90,35 @@ archive_dir: archive
 activity_log: false
 """
 
+# New-schema board config: no 'version' field — the migration gate in
+# KanbanEngine.__init__ is active for these boards.
+_NEW_SCHEMA_CONFIG_YAML = """\
+board:
+  name: TestBoard
+tasks_dir: tasks
+statuses:
+- name: research
+- name: backlog
+- name: todo
+- name: in-progress
+- name: review
+- name: docs
+- name: done
+priorities:
+- someday
+- nice-to-have
+- important
+- needed
+- critical
+defaults:
+  status: research
+  priority: important
+claim_timeout: 1h
+next_id: 10
+archive_dir: archive
+activity_log: false
+"""
+
 
 def _make_board(tmp_path: Path) -> Path:
     """Create a minimal board directory structure. Returns kanban_dir."""
@@ -475,9 +504,10 @@ class TestFromAC_QuarantineRepair:
         assert len(ar_tasks) >= 1
         body = ar_tasks[0].body
 
-        assert "code" in body, f"'code' not found in AR body:\n{body}"
-        assert "path" in body, f"'path' not found in AR body:\n{body}"
-        assert "detail" in body, f"'detail' not found in AR body:\n{body}"
+        expected_quarantine_path = str(kanban_dir / "quarantine" / "1-test.md")
+        assert "ERR_CORRUPT_MISSING_FIELD" in body, f"Expected error code not found in AR body:\n{body}"
+        assert expected_quarantine_path in body, f"Expected quarantine path not found in AR body:\n{body}"
+        assert f"quarantined to {expected_quarantine_path}" in body, f"Expected detail value not found in AR body:\n{body}"
 
 
 # ---------------------------------------------------------------------------
@@ -524,14 +554,24 @@ class TestFromAC_ArchiveExemption:
     def test_engine_init_with_archive_claimed_by_no_migration_error(
         self, tmp_path: Path
     ) -> None:
-        """AC-C48: KanbanEngine.__init__ does NOT raise MigrationRequiredError for archive files."""
+        """AC-C48: KanbanEngine.__init__ does NOT raise MigrationRequiredError for archive files.
+
+        Uses a new-schema board (no 'version' field) so the migration gate at
+        engine.py:314 is active.  tasks/ is clean; archive/ has claimed_by.
+        The gate must not fire for archive-only legacy fields.
+        """
         from owlbear_kanban import KanbanEngine
 
-        kanban_dir = _make_board(tmp_path)
-        # Only archive/ has claimed_by — tasks/ is clean
+        # New-schema board: gate is active (legacy boards bypass it entirely)
+        kanban_dir = tmp_path / "board"
+        kanban_dir.mkdir(parents=True)
+        (kanban_dir / "config.yml").write_text(_NEW_SCHEMA_CONFIG_YAML, encoding="utf-8")
+        (kanban_dir / "tasks").mkdir()
+        (kanban_dir / "archive").mkdir()
+        # Only archive/ has claimed_by — tasks/ is intentionally clean
         _write_claimed_by_file(kanban_dir / "archive", task_id=5)
 
-        # Must not raise MigrationRequiredError
+        # Must not raise MigrationRequiredError even though gate is active
         try:
             engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
         except MigrationRequiredError:
@@ -587,10 +627,74 @@ class TestBuilderDiscovered:
         assert err.user_message == "board requires migration"
         assert str(err) == "board requires migration"
 
-    def test_detect_corruption_file_missing_closing_delimiter_returns_none(
+    def test_normalize_timestamp_none_returns_none(self) -> None:
+        """_normalize_timestamp returns None when the input timestamp is None."""
+        from owlbear_kanban.storage import _normalize_timestamp
+
+        assert _normalize_timestamp(None) is None
+
+    def test_read_task_missing_field_maps_to_missing_field_error(
         self, tmp_path: Path
     ) -> None:
-        """detect_corruption on a file without a closing '---' returns None (not an error)."""
+        """read_task maps missing required fields to ERR_CORRUPT_MISSING_FIELD."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "501-missing-updated.md"
+        bad_file.write_text(
+            "---\n"
+            "id: 501\n"
+            "title: Missing updated\n"
+            "status: todo\n"
+            "priority: important\n"
+            "created: 2026-04-20T10:00:00+00:00\n"
+            "---\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+
+        assert exc_info.value.code == "ERR_CORRUPT_MISSING_FIELD"
+
+    def test_read_task_type_mismatch_maps_to_type_mismatch_error(
+        self, tmp_path: Path
+    ) -> None:
+        """read_task maps type errors to ERR_CORRUPT_TYPE_MISMATCH."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "502-bad-id-type.md"
+        bad_file.write_text(
+            "---\n"
+            "id: not-an-int\n"
+            "title: Bad id type\n"
+            "status: todo\n"
+            "priority: important\n"
+            "created: 2026-04-20T10:00:00+00:00\n"
+            "updated: 2026-04-20T10:00:00+00:00\n"
+            "---\n",
+            encoding="utf-8",
+        )
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+
+        assert exc_info.value.code == "ERR_CORRUPT_TYPE_MISMATCH"
+
+    def test_read_task_missing_delimiters_maps_to_delimiters_error(
+        self, tmp_path: Path
+    ) -> None:
+        """read_task maps delimiter errors to ERR_CORRUPT_DELIMITERS."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "503-no-delimiters.md"
+        bad_file.write_text("id: 503\ntitle: no delimiters\n", encoding="utf-8")
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+
+        assert exc_info.value.code == "ERR_CORRUPT_DELIMITERS"
+
+    def test_detect_corruption_file_missing_closing_delimiter_returns_error(
+        self, tmp_path: Path
+    ) -> None:
+        """detect_corruption on a file missing the closing '---' returns ERR_CORRUPT_DELIMITERS."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
         bad_file = kanban_dir / "tasks" / "99-no-close.md"
@@ -598,12 +702,13 @@ class TestBuilderDiscovered:
 
         result = detect_corruption(bad_file, config)
 
-        assert result is None
+        assert result is not None
+        assert result.code == "ERR_CORRUPT_DELIMITERS"
 
-    def test_detect_corruption_file_without_frontmatter_returns_none(
+    def test_detect_corruption_file_without_frontmatter_returns_error(
         self, tmp_path: Path
     ) -> None:
-        """detect_corruption on a plain-text file (no '---') returns None."""
+        """detect_corruption on a plain-text file (no '---') returns ERR_CORRUPT_DELIMITERS."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
         plain_file = kanban_dir / "tasks" / "99-plain.md"
@@ -611,4 +716,249 @@ class TestBuilderDiscovered:
 
         result = detect_corruption(plain_file, config)
 
-        assert result is None
+        assert result is not None
+        assert result.code == "ERR_CORRUPT_DELIMITERS"
+
+    def test_save_config_round_trip(self, tmp_path: Path) -> None:
+        """save_config writes a valid config that can be reloaded."""
+        from owlbear_kanban.storage import save_config
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        config.next_id = 9999
+        save_config(config, kanban_dir)
+        reloaded = load_config(kanban_dir)
+        assert reloaded.next_id == 9999
+
+    def test_write_task_reuses_existing_filename_for_same_id(self, tmp_path: Path) -> None:
+        """write_task keeps filename stable when a file for the same ID already exists."""
+        kanban_dir = _make_board(tmp_path)
+        original = Task(
+            id=55,
+            title="Original title",
+            status="todo",
+            priority="important",
+            created="2026-04-20T10:00:00+00:00",
+            updated="2026-04-20T10:00:00+00:00",
+        )
+        first_path = write_task(original, kanban_dir)
+
+        updated = original.model_copy(deep=True)
+        updated.title = "New title"
+        updated.updated = "2026-04-20T10:05:00+00:00"
+        second_path = write_task(updated, kanban_dir)
+
+        assert second_path == first_path
+
+    def test_move_to_archive_moves_file(self, tmp_path: Path) -> None:
+        """move_to_archive moves a task file from tasks/ to archive/."""
+        from owlbear_kanban.storage import move_to_archive
+        kanban_dir = _make_board(tmp_path)
+        task = _minimal_task(42)
+        write_task(task, kanban_dir)
+        dest = move_to_archive(42, kanban_dir)
+        assert dest.parent.name == "archive"
+        assert not (kanban_dir / "tasks" / dest.name).exists()
+
+    def test_move_to_archive_missing_task_raises_file_not_found(
+        self, tmp_path: Path
+    ) -> None:
+        """move_to_archive raises FileNotFoundError when task file does not exist."""
+        from owlbear_kanban.storage import move_to_archive
+
+        kanban_dir = _make_board(tmp_path)
+
+        with pytest.raises(FileNotFoundError):
+            move_to_archive(9999, kanban_dir)
+
+    def test_write_task_if_unchanged_writes_when_timestamp_matches(
+        self, tmp_path: Path
+    ) -> None:
+        """write_task_if_unchanged writes successfully when expected_updated matches disk."""
+        from owlbear_kanban.storage import write_task_if_unchanged
+
+        kanban_dir = _make_board(tmp_path)
+        task = _minimal_task(88)
+        path = write_task(task, kanban_dir)
+        current = read_task(path)
+
+        updated = current.model_copy(deep=True)
+        updated.title = "OCC updated"
+        updated.updated = "2026-04-20T11:00:00+00:00"
+
+        written_path = write_task_if_unchanged(
+            updated,
+            expected_updated=current.updated,
+            kanban_dir=kanban_dir,
+        )
+
+        assert written_path.exists()
+        assert read_task(written_path).title == "OCC updated"
+
+    def test_write_task_if_unchanged_raises_stale_on_timestamp_mismatch(
+        self, tmp_path: Path
+    ) -> None:
+        """write_task_if_unchanged raises ERR_STALE on optimistic-concurrency mismatch."""
+        from owlbear_kanban.storage import ConcurrencyError, write_task_if_unchanged
+
+        kanban_dir = _make_board(tmp_path)
+        task = _minimal_task(89)
+        path = write_task(task, kanban_dir)
+        current = read_task(path)
+
+        updated = current.model_copy(deep=True)
+        updated.title = "Should fail"
+        updated.updated = "2026-04-20T12:00:00+00:00"
+
+        with pytest.raises(ConcurrencyError) as exc_info:
+            write_task_if_unchanged(
+                updated,
+                expected_updated="2020-01-01T00:00:00+00:00",
+                kanban_dir=kanban_dir,
+            )
+
+        assert exc_info.value.code == "ERR_STALE"
+
+    def test_write_task_if_unchanged_raises_file_not_found_when_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """write_task_if_unchanged raises FileNotFoundError for missing task files."""
+        from owlbear_kanban.storage import write_task_if_unchanged
+
+        kanban_dir = _make_board(tmp_path)
+        missing_task = _minimal_task(777)
+
+        with pytest.raises(FileNotFoundError):
+            write_task_if_unchanged(
+                missing_task,
+                expected_updated=missing_task.updated,
+                kanban_dir=kanban_dir,
+            )
+
+    def test_list_task_files_returns_only_visible_markdown_files(
+        self, tmp_path: Path
+    ) -> None:
+        """list_task_files includes only visible .md files and excludes temp/hidden files."""
+        from owlbear_kanban.storage import list_task_files
+
+        kanban_dir = _make_board(tmp_path)
+        task = _minimal_task(901)
+        written = write_task(task, kanban_dir)
+        (kanban_dir / "tasks" / ".tmp-scratch.md").write_text("tmp", encoding="utf-8")
+        (kanban_dir / "tasks" / ".hidden.md").write_text("hidden", encoding="utf-8")
+        (kanban_dir / "tasks" / "note.txt").write_text("note", encoding="utf-8")
+
+        files = list_task_files(kanban_dir)
+
+        assert [p.name for p in files] == [written.name]
+
+    def test_list_task_files_returns_empty_when_tasks_dir_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """list_task_files returns [] when the configured tasks directory is absent."""
+        from owlbear_kanban.storage import list_task_files
+
+        kanban_dir = _make_board(tmp_path)
+        (kanban_dir / "tasks").rmdir()
+
+        assert list_task_files(kanban_dir) == []
+
+    def test_list_archive_files_returns_only_visible_markdown_files(
+        self, tmp_path: Path
+    ) -> None:
+        """list_archive_files includes only visible .md files and excludes temp/hidden files."""
+        from owlbear_kanban.storage import list_archive_files
+
+        kanban_dir = _make_board(tmp_path)
+        kept = _write_claimed_by_file(kanban_dir / "archive", task_id=902)
+        (kanban_dir / "archive" / ".tmp-scratch.md").write_text("tmp", encoding="utf-8")
+        (kanban_dir / "archive" / ".hidden.md").write_text("hidden", encoding="utf-8")
+        (kanban_dir / "archive" / "note.txt").write_text("note", encoding="utf-8")
+
+        files = list_archive_files(kanban_dir)
+
+        assert [p.name for p in files] == [kept.name]
+
+    def test_list_archive_files_returns_empty_when_archive_dir_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """list_archive_files returns [] when the configured archive directory is absent."""
+        from owlbear_kanban.storage import list_archive_files
+
+        kanban_dir = _make_board(tmp_path)
+        (kanban_dir / "archive").rmdir()
+
+        assert list_archive_files(kanban_dir) == []
+
+    def test_allocate_next_id_returns_current_and_persists_increment(
+        self, tmp_path: Path
+    ) -> None:
+        """allocate_next_id returns current next_id and persists incremented config value."""
+        from owlbear_kanban.storage import allocate_next_id
+
+        kanban_dir = _make_board(tmp_path)
+        before = load_config(kanban_dir).next_id
+
+        allocated = allocate_next_id(kanban_dir)
+        after = load_config(kanban_dir).next_id
+
+        assert allocated == before
+        assert after == before + 1
+
+    def test_normalize_timestamp_already_has_tz(self) -> None:
+        """_normalize_timestamp returns ts unchanged when it already has a timezone."""
+        from owlbear_kanban.storage import _normalize_timestamp
+        ts = "2026-04-20T10:00:00+02:00"
+        assert _normalize_timestamp(ts) == ts
+
+    def test_normalize_timestamp_z_suffix_is_normalized_to_explicit_utc(self) -> None:
+        """_normalize_timestamp rewrites Z-suffix timestamps to +00:00."""
+        from owlbear_kanban.storage import _normalize_timestamp
+        assert _normalize_timestamp("2026-04-20T10:00:00Z") == "2026-04-20T10:00:00+00:00"
+
+    def test_normalize_timestamp_non_matching_format(self) -> None:
+        """_normalize_timestamp returns ts unchanged when regex does not match."""
+        from owlbear_kanban.storage import _normalize_timestamp
+        ts = "not-a-timestamp"
+        assert _normalize_timestamp(ts) == ts
+
+    def test_attempt_repair_mode9_invalid_priority_auto_fixes(self, tmp_path: Path) -> None:
+        """attempt_repair for ERR_CORRUPT_INVALID_PRIORITY coerces priority to first configured."""
+        from owlbear_kanban.corruption import attempt_repair, ERR_CORRUPT_INVALID_PRIORITY
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        bad_file = kanban_dir / "tasks" / "1001-bad-priority.md"
+        bad_file.write_text(
+            "---\nid: 1001\ntitle: bad priority\nstatus: todo\npriority: invalid-prio\n"
+            "created: 2026-01-01T00:00:00+00:00\nupdated: 2026-01-01T00:00:00+00:00\n---\n",
+            encoding="utf-8",
+        )
+        outcome = attempt_repair(bad_file, ERR_CORRUPT_INVALID_PRIORITY, config)
+        assert outcome.action == "fixed"
+
+    def test_attempt_repair_mode6_id_filename_mismatch_renames(self, tmp_path: Path) -> None:
+        """attempt_repair for ERR_CORRUPT_ID_FILENAME_MISMATCH renames the file."""
+        from owlbear_kanban.corruption import attempt_repair, ERR_CORRUPT_ID_FILENAME_MISMATCH
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        bad_file = kanban_dir / "tasks" / "1001-wrong-name.md"
+        bad_file.write_text(
+            "---\nid: 1002\ntitle: mismatch\nstatus: todo\npriority: important\n"
+            "created: 2026-01-01T00:00:00+00:00\nupdated: 2026-01-01T00:00:00+00:00\n---\n",
+            encoding="utf-8",
+        )
+        outcome = attempt_repair(bad_file, ERR_CORRUPT_ID_FILENAME_MISMATCH, config)
+        assert outcome.action == "fixed"
+        assert not bad_file.exists()
+
+    def test_engine_list_tasks_archived_strips_legacy_claimed_by(self, tmp_path: Path) -> None:
+        """Archived list summaries should not surface legacy claimed_by as claimed=True."""
+        from owlbear_kanban import KanbanEngine
+
+        kanban_dir = _make_board(tmp_path)
+        _write_claimed_by_file(kanban_dir / "archive", task_id=77)
+
+        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        archived = {task.id: task for task in engine.list_tasks(archived=True)}
+
+        assert 77 in archived
+        assert archived[77].claimed is False

@@ -62,7 +62,7 @@ For tasks tagged `research`:
 Evaluate the architect's upstream work. This is the only pipeline stage where architect quality is assessed.
 
 1. **AC specificity:** Were AC lines specific enough to verify? Flag vague AC that "passed" because tests and implementation were equally vague.
-2. **Edge case coverage:** Did AC miss obvious edge cases? Check builder/reviewer notes for improvisation signs (TestBuilderDiscovered tests, reviewer MISSING flags).
+2. **Edge case coverage:** Did AC miss obvious edge cases? Check builder/reviewer notes for missing-coverage handback signs or reviewer MISSING flags.
 3. **Design direction:** If architect left design notes, did they help or hinder?
 4. **AC quality score (1-5):**
    - **5** — Specific, complete, clean implementation path

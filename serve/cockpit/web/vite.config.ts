@@ -1,6 +1,6 @@
-/// <reference types="vitest" />
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vitest/config'
+import react, { reactCompilerPreset } from '@vitejs/plugin-react'
+import babel from '@rolldown/plugin-babel'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
@@ -43,7 +43,7 @@ function pdsPartialsPlugin() {
 }
 
 export default defineConfig({
-  plugins: [react({ babel: { plugins: ['babel-plugin-react-compiler'] } }), pdsPartialsPlugin(), cspPlugin()],
+  plugins: [react(), babel({ presets: [reactCompilerPreset()] }), pdsPartialsPlugin(), cspPlugin()],
   build: {
     outDir: '../dist',
     emptyOutDir: true,

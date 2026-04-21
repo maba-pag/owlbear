@@ -163,7 +163,7 @@ Any finding in Pass 1 = automatic FAIL verdict. These are non-negotiable.
 |---------|-------------|---------------------------|---------|
 | {line} | {test or "none"} | {Yes/No — reasoning} | COVERED / MISSING / LAX |
 
-**Any MISSING = FAIL.** LAX = note (does not auto-FAIL unless no compensating `TestBuilderDiscovered` test exists).
+**Any MISSING = FAIL.** LAX = note. Builder-authored compensating tests are not part of the target process.
 
 ### 5.1 Security Review
 

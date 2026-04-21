@@ -47,9 +47,11 @@ python ..\owlbear\setup\init.py --name my-project --type webapp
 code .
 ```
 
-Setup creates `.vscode/settings.json`, `.vscode/mcp.json`, a kanban board directory, and
-an `owlbear-project.json` file in your project directory. All paths are relative — the
-owlbear repo can be shared across multiple projects on your machine.
+Setup creates merged VS Code settings/MCP config plus copied runtime files such as
+`.owlbear/hooks/`, `.owlbear/kanban/`, and `owlbear-project.json` in your project
+directory. Agents, skills, instructions, and prompts still load live from the owlbear
+clone via relative paths, so the same owlbear repo can be shared across multiple
+projects on your machine.
 
 For more detail on what each file does and how to customise see
 [setup/setup-guide.md](setup/setup-guide.md).
@@ -95,8 +97,16 @@ cd C:\Dev\owlbear
 git pull
 ```
 
-No reinstall or re-run of `setup/init.py` is needed after a pull — VS Code reads agents
-and skills directly from the owlbear directory at runtime.
+Shared live surfaces update immediately after a pull because VS Code reads agents,
+skills, instructions, and prompts directly from the owlbear directory at runtime.
+
+If you want copied runtime files refreshed — especially `.owlbear/hooks/` or other
+seed-managed files — re-run `setup/init.py`. Existing differing hook files are skipped
+unless you pass `--replace-hooks` or choose `replace` in an interactive prompt. The
+prompt shows a unified diff (seed → existing) so you can see what changed before
+choosing. Re-running `init.py` after every owlbear update is the recommended way
+to stay current on hooks; the script is idempotent and only touches files that
+differ.
 
 ## Sharing with Teammates
 

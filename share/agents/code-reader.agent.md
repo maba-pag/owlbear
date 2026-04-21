@@ -53,7 +53,7 @@ Not applicable — code-reader has no kanban access.
 
 <boundaries>
 
-- Read-only — `deny-writes.py` PreToolUse hook enforces this.
+- Read-only except for `.owlbear/scratch/` working files (the `deny-writes.py` PreToolUse hook enforces this).
 - No subagent delegation (`agents: []`).
 - No test execution — quality-runner owns that path.
 - Scope is strictly `changed_files` + `test_files` provided by the caller. Do not range across unrelated modules.

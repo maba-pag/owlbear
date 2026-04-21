@@ -14,9 +14,6 @@ hooks:
       command: uv run python .owlbear/hooks/session-context.py
     - type: command
       command: uv run doc-index
-  PreToolUse:
-    - type: command
-      command: uv run python .owlbear/hooks/deny-code-writes.py
 ---
 
 <persona>

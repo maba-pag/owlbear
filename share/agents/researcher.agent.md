@@ -10,7 +10,7 @@ agents: [Explore, challenger, scribe]
 hooks:
   PreToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/deny-code-writes.py
+      command: uv run python .owlbear/hooks/deny-non-doc-writes.py
 ---
 
 <persona>
@@ -81,7 +81,7 @@ Include `## Research` section in your `end_work` note: key findings summary, tra
 
 <boundaries>
 
-- Read-only for source code — never create or edit `.py`, `.toml`, or config files.
+- Read-only for source code — may write only `.md`/`.excalidraw` research artifacts and `.owlbear/scratch/` working files (the `deny-non-doc-writes.py` hook enforces this). Never create or edit `.py`, `.toml`, or other config files.
 - Log all external sources in `.owlbear/sources/overview.md`.
 - Delete cloned repos from `.owlbear/scratch/research/` after analysis.
 - When the challenger pushes back, re-evaluate — don't dismiss or defend reflexively.

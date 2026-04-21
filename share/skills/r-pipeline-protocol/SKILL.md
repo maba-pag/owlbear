@@ -157,7 +157,7 @@ To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanb
 | Agent | Commits | When |
 |-------|---------|------|
 | Test-writer | Test files | Before moving to in-progress |
-| Builder | Source code + builder-discovered tests | Before moving to review |
+| Builder | Source code | Before moving to review |
 | Doc-writer | Documentation files | Before moving to done |
 | Auditor | Kanban board files + any uncommitted leftovers | During exit-gate Step 5 |
 

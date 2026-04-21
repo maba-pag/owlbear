@@ -9,14 +9,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import MigrationRequiredError  # NEW exception — AttributeError in RED
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
-    RepairOutcome,
     load_config,
 )
 from owlbear_kanban.corruption import CorruptionError  # NEW module — ImportError in RED
@@ -156,7 +155,7 @@ class TestFromAC_ListTasksCorruption:
         # Mode 8: invalid status
         (kanban_dir / "tasks" / "1003-badstatus.md").write_text(
             "---\nid: 1003\ntitle: bad\nstatus: NONEXISTENT_STATUS\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
             encoding="utf-8",
         )
 
@@ -179,6 +178,45 @@ class TestFromAC_ListTasksCorruption:
             engine.list_tasks()
 
         assert exc_info.value.code == "ERR_CORRUPT_DUPLICATE_ID"
+
+    def test_ac_c19_list_tasks_skips_mode6_id_filename_mismatch(self, tmp_path: Path) -> None:
+        """AC-C19: list_tasks silently skips files where frontmatter id != filename id (mode 6)."""
+        kanban_dir = _make_new_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-good.md").write_text(
+            _VALID_TASK.format(task_id=1001), encoding="utf-8"
+        )
+        # Mode 6: file named 9999-mismatch.md but frontmatter id=2001 (9999 ≠ 2001)
+        mismatch_content = _VALID_TASK.format(task_id=2001)
+        (kanban_dir / "tasks" / "9999-mismatch.md").write_text(mismatch_content, encoding="utf-8")
+
+        engine = KanbanEngine(kanban_dir)
+        tasks = engine.list_tasks()
+
+        task_ids = [t.id for t in tasks]
+        assert 1001 in task_ids
+        assert 2001 not in task_ids, "mode-6 file (id-filename mismatch) must be silently skipped"
+        assert 9999 not in task_ids
+
+    def test_ac_c19_list_tasks_skips_mode9_invalid_priority(self, tmp_path: Path) -> None:
+        """AC-C19: list_tasks silently skips files with an invalid priority value (mode 9)."""
+        kanban_dir = _make_new_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-good.md").write_text(
+            _VALID_TASK.format(task_id=1001), encoding="utf-8"
+        )
+        # Mode 9: priority not in the configured list
+        bad_priority_content = _VALID_TASK.format(task_id=1002).replace(
+            "priority: needed", "priority: ultra-mega-important"
+        )
+        (kanban_dir / "tasks" / "1002-badpriority.md").write_text(
+            bad_priority_content, encoding="utf-8"
+        )
+
+        engine = KanbanEngine(kanban_dir)
+        tasks = engine.list_tasks()
+
+        task_ids = [t.id for t in tasks]
+        assert 1001 in task_ids
+        assert 1002 not in task_ids, "mode-9 file (invalid priority) must be silently skipped"
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +242,7 @@ class TestFromAC_Sweep:
         # Write a task with an expired claimed_at
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=3)).isoformat()
         task_content = _VALID_TASK.format(task_id=1001).replace(
-            "claimed_at: null", f"claimed_at: \"{expired_ts}\""
+            "claimed_at: null", f'claimed_at: "{expired_ts}"'
         )
         (kanban_dir / "tasks" / "1001-expired.md").write_text(task_content, encoding="utf-8")
         (kanban_dir / "tasks" / "1002-unclaimed.md").write_text(
@@ -223,7 +261,7 @@ class TestFromAC_Sweep:
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=3)).isoformat()
         (kanban_dir / "tasks" / "1001-expired.md").write_text(
             _VALID_TASK.format(task_id=1001).replace(
-                "claimed_at: null", f"claimed_at: \"{expired_ts}\""
+                "claimed_at: null", f'claimed_at: "{expired_ts}"'
             ),
             encoding="utf-8",
         )
@@ -244,9 +282,9 @@ class TestFromAC_Sweep:
         original_body = "\n## Notes\n\nThis is the body.\n"
         task_content = (
             "---\nid: 1001\ntitle: Sweep test\nstatus: in-progress\npriority: needed\n"
-            f"created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n"
+            f'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
             f"tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
-            f"claimed_at: \"{expired_ts}\"\narchival_reason: null\narchival_refs: []\n---\n"
+            f'claimed_at: "{expired_ts}"\narchival_reason: null\narchival_refs: []\n---\n'
             + original_body
         )
         (kanban_dir / "tasks" / "1001-sweep.md").write_text(task_content, encoding="utf-8")
@@ -289,7 +327,8 @@ class TestFromAC_RepairStorage:
             engine.repair_storage()
 
         # File was already in quarantine when create_task was called
-        assert quarantine_check and all(quarantine_check)
+        assert quarantine_check
+        assert all(quarantine_check)
 
     def test_ac_c25_repair_records_failed_when_ar_creation_fails(
         self, tmp_path: Path
@@ -299,8 +338,9 @@ class TestFromAC_RepairStorage:
         corrupt_file = kanban_dir / "tasks" / "1001-corrupt.md"
         corrupt_file.write_text(_CORRUPT_TASK, encoding="utf-8")
 
-        def raise_on_create(self_engine: KanbanEngine, *args: object, **kwargs: object) -> object:
-            raise RuntimeError("simulated AR creation failure")
+        def raise_on_create(_self_engine: KanbanEngine, *_args: object, **_kwargs: object) -> object:
+            msg = "simulated AR creation failure"
+            raise RuntimeError(msg)
 
         with patch.object(KanbanEngine, "create_task", side_effect=raise_on_create):
             engine = KanbanEngine(kanban_dir)
@@ -341,7 +381,7 @@ class TestFromAC_MigrationGate:
         (kanban_dir / "tasks" / "1001-legacy.md").write_text(
             "---\nid: 1001\ntitle: legacy\nstatus: todo\npriority: needed\n"
             "claimed_by: some-agent\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
             encoding="utf-8",
         )
 
@@ -362,7 +402,7 @@ class TestFromAC_MigrationGate:
         assert engine is not None
 
     def test_ac_c47_migration_error_has_err_migration_required_code(
-        self, tmp_path: Path
+        self, _tmp_path: Path
     ) -> None:
         """AC-C47: MigrationRequiredError carries code='ERR_MIGRATION_REQUIRED'."""
         err = MigrationRequiredError(
@@ -445,7 +485,7 @@ class TestFromAC_ARCreationSignature:
         captured_calls: list[dict] = []
         original_create = KanbanEngine.create_task
 
-        def spy_create(
+        def spy_create(  # noqa: PLR0913
             self_engine: KanbanEngine,
             title: str,
             *,

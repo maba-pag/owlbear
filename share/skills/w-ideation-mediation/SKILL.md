@@ -37,6 +37,7 @@ Phase 2 of the ideation workflow. The mediation agent starts from the discovery 
 **Synthesis turn shape:** structured context header, findings, tensions, recommendation or next question.
 
 **Structured context header:**
+
 - current phase and moment
 - current sub-topic
 - prior anchor
@@ -128,15 +129,18 @@ Apply O15 to every Critic pass.
 **Decision to make:** ...
 
 **Options considered:**
+
 - A: ...
 - B: ...
 
 **Chosen:** ...
 
 **Rejected:**
+
 - B because ...
 
 **Source inputs (when relevant):**
+
 - User: "..."
 - Panel / research: ...
 ```

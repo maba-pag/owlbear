@@ -6,7 +6,7 @@
 
 OwlBear uses a **shared installation** model: a single owlbear repository lives on a
 developer's machine alongside their project directories. Each project references owlbear
-using relative paths (e.g., `../owlbear/agents`). There is no packaging step — clone is
+using relative paths (e.g., `../owlbear/share/agents`). There is no packaging step — clone is
 install.
 
 This means sharing owlbear with a teammate means they clone <strong>both</strong>:
@@ -60,7 +60,7 @@ troubleshooting reference.
 
 No platform-specific configuration is required:
 
-- **Hooks** — all 7 hooks are Python scripts (`allow-stances-only.py`, `deny-code-writes.py`, `deny-scratch-only-writes.py`, `deny-src-writes.py`, `deny-writes.py`, `lint-changed.py`, `session-context.py`) executed by VS Code's extension host — no shell dependency
+- **Hooks** — all 6 hooks are Python scripts (`allow-stances-only.py`, `deny-non-doc-writes.py`, `deny-src-writes.py`, `deny-writes.py`, `lint-changed.py`, `session-context.py`) executed by VS Code's extension host — no shell dependency
 - **MCP servers** — started via `uv run`, which works identically on macOS, Linux, and Windows
 
 ### Windows
@@ -77,13 +77,17 @@ No platform-specific configuration is required:
 | Agents (`.agent.md`) | `../owlbear/share/agents/` | Yes — all teammates get the same agents |
 | Skills (`SKILL.md`) | `../owlbear/share/skills/` | Yes — all teammates get the same skills |
 | Instructions (`*.instructions.md`) | `../owlbear/share/instructions/` | Yes — shared baseline |
+| Prompts (`*.prompt.md`) | `../owlbear/share/prompts/` | Yes — shared baseline |
 | MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
+| Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
 | Kanban board | `.owlbear/kanban/tasks/` in project | No — per-project |
 | `owlbear-project.json` | project root | No — per-project |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
 
-Project-local resources can override or extend shared owlbear resources. See the
+Project-local resources can override or extend shared owlbear resources. Hook files are
+the exception: they are project-local runtime copies, not a live-shared customization
+surface. See the
 [Customization](setup-guide.md#adding-local-agents) section of the setup guide.
 
 ---
@@ -134,5 +138,6 @@ organization agent registry as a complement to the local installation.
 |---------|------------|
 | `ValueError` during `init.py` | Ensure owlbear and project are on the same Windows drive |
 | Agents missing after setup | Run `init.py` again; check that `.vscode/settings.json` was created and contains `chat.agentFilesLocations` pointing to the owlbear installation |
+| Hook updates not taking effect after `git pull` | Re-run `init.py`; use `--replace-hooks` if local hook files differ and you want the seeded versions restored |
 | `uv` not found | Install uv globally: `pip install uv` or see [uv docs](https://docs.astral.sh/uv/) |
 | Different owlbear versions between teammates | Pin owlbear to a tag or commit SHA in team onboarding docs; `git pull` + re-run `init.py` to update |

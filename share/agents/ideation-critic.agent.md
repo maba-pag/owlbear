@@ -94,7 +94,7 @@ Not applicable — no kanban access; no file writes.
 
 <boundaries>
 
-- Read-only — `deny-writes.py` PreToolUse hook enforces this.
+- Read-only except for `.owlbear/scratch/` working files (the `deny-writes.py` PreToolUse hook enforces this).
 - No subagent delegation (`agents: []`).
 - Never propose alternatives or fixes — challenge only.
 - Never write to disk; return challenges only to the invoking agent.

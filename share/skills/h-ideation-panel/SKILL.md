@@ -12,23 +12,23 @@ Reference for panel-facing ideation agents only. The user-facing phase agents sh
 
 Ideation now has two panel surfaces.
 
-| Surface | Phase | Default Participants | Purpose |
-|---------|-------|----------------------|---------|
-| Early challenge lane | Phase 1 — Discovery | `ideation-simplifier`, `ideation-firstprinciples` | Pressure-test framing, scope, and hidden assumptions before approach choice |
-| Conditional early challenge | Phase 1 — Discovery | `ideation-outsider` | Break tunnel vision when the current framing is trapped inside local assumptions |
-| Late domain panel | Phase 2 — Mediation | `ideation-architect`, `ideation-data`, `ideation-enduser`, `ideation-security` | Evaluate viable approaches through domain lenses |
-| Shared synthesis role | Phase 1 or 2 | `ideation-pragmatist` | Denoise early challenges or converge late-domain stances |
-| Shared adversarial role | Phase 2 by default, embedded in late domain loops | `ideation-critic` | Stress-test positions without proposing alternatives |
+| Surface                     | Phase                                             | Default Participants                                                           | Purpose                                                                          |
+| --------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| Early challenge lane        | Phase 1 — Discovery                               | `ideation-simplifier`, `ideation-firstprinciples`                              | Pressure-test framing, scope, and hidden assumptions before approach choice      |
+| Conditional early challenge | Phase 1 — Discovery                               | `ideation-outsider`                                                            | Break tunnel vision when the current framing is trapped inside local assumptions |
+| Late domain panel           | Phase 2 — Mediation                               | `ideation-architect`, `ideation-data`, `ideation-enduser`, `ideation-security` | Evaluate viable approaches through domain lenses                                 |
+| Shared synthesis role       | Phase 1 or 2                                      | `ideation-pragmatist`                                                          | Denoise early challenges or converge late-domain stances                         |
+| Shared adversarial role     | Phase 2 by default, embedded in late domain loops | `ideation-critic`                                                              | Stress-test positions without proposing alternatives                             |
 
 ## Early Challenge Lane
 
 ### Roster
 
-| Agent | Role | Default? | Output |
-|-------|------|----------|--------|
-| `ideation-simplifier` | Scope reduction and decomposition pressure | Yes | `stances/simplifier.md` |
-| `ideation-firstprinciples` | Strips the framing to irreducible claims | Yes | `stances/firstprinciples.md` |
-| `ideation-outsider` | Reframes through analogous domains or audiences | Conditional | `stances/outsider.md` |
+| Agent                      | Role                                            | Default?    | Output                       |
+| -------------------------- | ----------------------------------------------- | ----------- | ---------------------------- |
+| `ideation-simplifier`      | Scope reduction and decomposition pressure      | Yes         | `stances/simplifier.md`      |
+| `ideation-firstprinciples` | Strips the framing to irreducible claims        | Yes         | `stances/firstprinciples.md` |
+| `ideation-outsider`        | Reframes through analogous domains or audiences | Conditional | `stances/outsider.md`        |
 
 ### Selection Logic
 
@@ -58,22 +58,22 @@ Discoverer
 
 ### Roster
 
-| Agent | Domain | Output |
-|-------|--------|--------|
-| `ideation-architect` | System design, structure, boundaries | `stances/architect.md` |
-| `ideation-data` | Data quality, validation, schema | `stances/data.md` |
-| `ideation-enduser` | Human experience, usability, clarity | `stances/enduser.md` |
-| `ideation-security` | Trust boundaries, blast radius, access control | `stances/security.md` |
+| Agent                | Domain                                         | Output                 |
+| -------------------- | ---------------------------------------------- | ---------------------- |
+| `ideation-architect` | System design, structure, boundaries           | `stances/architect.md` |
+| `ideation-data`      | Data quality, validation, schema               | `stances/data.md`      |
+| `ideation-enduser`   | Human experience, usability, clarity           | `stances/enduser.md`   |
+| `ideation-security`  | Trust boundaries, blast radius, access control | `stances/security.md`  |
 
 ### Selection Logic
 
-| Problem Signal | Panelists Activated |
-|----------------|---------------------|
-| Data processing / ETL / analytics | `ideation-data`, `ideation-architect` |
-| User-facing tool / interface | `ideation-enduser`, `ideation-architect` |
-| Automation / scripting | `ideation-architect`, `ideation-data` when data-heavy |
-| Sensitive data / multi-user | `ideation-security` plus relevant domain panelists |
-| Novel / uncharted territory | all relevant domain panelists |
+| Problem Signal                    | Panelists Activated                                   |
+| --------------------------------- | ----------------------------------------------------- |
+| Data processing / ETL / analytics | `ideation-data`, `ideation-architect`                 |
+| User-facing tool / interface      | `ideation-enduser`, `ideation-architect`              |
+| Automation / scripting            | `ideation-architect`, `ideation-data` when data-heavy |
+| Sensitive data / multi-user       | `ideation-security` plus relevant domain panelists    |
+| Novel / uncharted territory       | all relevant domain panelists                         |
 
 ### Parallel Batch (Default)
 
@@ -153,16 +153,16 @@ Use after the Phase 2 late domain panel completes.
 
 ## Panelist References
 
-| Canonical Name | File | Role |
-|---------------|------|------|
-| `ideation-firstprinciples` | `share/agents/ideation-firstprinciples.agent.md` | Early assumption challenger |
-| `ideation-simplifier` | `share/agents/ideation-simplifier.agent.md` | Early scope challenger |
-| `ideation-outsider` | `share/agents/ideation-outsider.agent.md` | Early outsider lens |
-| `ideation-critic` | `share/agents/ideation-critic.agent.md` | Adversarial challenger |
-| `ideation-architect` | `share/agents/ideation-architect.agent.md` | Structural panelist |
-| `ideation-data` | `share/agents/ideation-data.agent.md` | Data panelist |
-| `ideation-enduser` | `share/agents/ideation-enduser.agent.md` | UX panelist |
-| `ideation-security` | `share/agents/ideation-security.agent.md` | Security panelist |
-| `ideation-pragmatist` | `share/agents/ideation-pragmatist.agent.md` | Denoise/convergence synthesizer |
+| Canonical Name             | File                                             | Role                            |
+| -------------------------- | ------------------------------------------------ | ------------------------------- |
+| `ideation-firstprinciples` | `share/agents/ideation-firstprinciples.agent.md` | Early assumption challenger     |
+| `ideation-simplifier`      | `share/agents/ideation-simplifier.agent.md`      | Early scope challenger          |
+| `ideation-outsider`        | `share/agents/ideation-outsider.agent.md`        | Early outsider lens             |
+| `ideation-critic`          | `share/agents/ideation-critic.agent.md`          | Adversarial challenger          |
+| `ideation-architect`       | `share/agents/ideation-architect.agent.md`       | Structural panelist             |
+| `ideation-data`            | `share/agents/ideation-data.agent.md`            | Data panelist                   |
+| `ideation-enduser`         | `share/agents/ideation-enduser.agent.md`         | UX panelist                     |
+| `ideation-security`        | `share/agents/ideation-security.agent.md`        | Security panelist               |
+| `ideation-pragmatist`      | `share/agents/ideation-pragmatist.agent.md`      | Denoise/convergence synthesizer |
 
 The invoking agent must name the active panelists explicitly in its `agents:` frontmatter before attempting to call them.

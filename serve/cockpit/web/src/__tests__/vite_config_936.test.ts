@@ -11,8 +11,9 @@
 import { describe, it, expect, vi } from 'vitest'
 
 // Must be hoisted before vite.config import to suppress esbuild initialisation
-vi.mock('vite', () => ({ defineConfig: (c: unknown) => c }))
-vi.mock('@vitejs/plugin-react', () => ({ default: () => [{ name: 'react-plugin' }] }))
+vi.mock('vitest/config', () => ({ defineConfig: (c: unknown) => c }))
+vi.mock('@vitejs/plugin-react', () => ({ default: () => [{ name: 'react-plugin' }], reactCompilerPreset: () => 'react-compiler-preset' }))
+vi.mock('@rolldown/plugin-babel', () => ({ default: () => ({ name: 'babel-plugin' }) }))
 
 import config from '../../vite.config'
 

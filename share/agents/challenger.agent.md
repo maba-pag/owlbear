@@ -78,7 +78,7 @@ Read all referenced files before producing output. Use search to verify claims a
 
 <boundaries>
 
-- Read-only — `deny-writes.py` PreToolUse hook enforces this.
+- Read-only except for `.owlbear/scratch/` working files (the `deny-writes.py` PreToolUse hook enforces this).
 - No subagent delegation (`agents: []`).
 - Never propose alternatives or fixes — challenge only.
 - Never validate or echo the original verdict — that adds no value.

@@ -90,7 +90,7 @@ Include `## Test-Writer Notes` section in your `end_work` note: test file path, 
 <boundaries>
 
 - Source files are read-only. Read `src/` to understand interfaces — never create or edit files there.
-- Test class naming: `TestFromAC_{Feature}` for AC-derived tests. Builder uses `TestBuilderDiscovered` for edge cases found during GREEN phase.
+- Test class naming: `TestFromAC_{Feature}` for AC-derived tests. If builder reports missing blocking edge-case coverage, the test-writer adds the needed coverage under the `TestFromAC_` convention.
 - Non-implementation pass-through: if AC describes only non-code deliverables and no testable Python interfaces exist, pass through per `w-tdd-red` skill.
 
 | Rationalization | Response |

@@ -7,14 +7,13 @@ All tests FAIL (RED phase — predicates module not yet implemented with Section
 
 from __future__ import annotations
 
-import pytest
 
 from owlbear_kanban.predicates import (  # NEW module — ImportError in RED
     required_sections,
     require_list_in_section,
 )
 from owlbear_kanban.storage import Section  # NEW type — ImportError in RED
-from owlbear_kanban.models import Task, BoardConfig
+from owlbear_kanban.models import Task
 
 
 # ---------------------------------------------------------------------------

@@ -88,7 +88,7 @@ Create `tests/test_{module}_{task_id}.py` with class `TestFromAC_{Feature}`:
 **Class naming convention:**
 
 - `TestFromAC_{Feature}` — tests written by the test-writer from AC.
-- Never use `TestBuilderDiscovered` — that is the builder's convention.
+- `TestBuilderDiscovered` is retired. If builder reports missing blocking edge-case coverage, add the needed tests under the `TestFromAC_` convention.
 
 **TestFromAC immutability:** During the active pipeline (task creation through archive), `TestFromAC_*` classes are immutable — the builder cannot weaken, remove, or modify them. Post-archive, the test-curator gains authority to promote, consolidate, or remove assertions.
 

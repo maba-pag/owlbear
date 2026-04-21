@@ -57,13 +57,12 @@ Running `init.py` writes the following files into your project directory:
 | `.vscode/mcp.json` | Registers 5 MCP servers (3 owlbear stdio + ddgs web search + markitdown) | Merged (owlbear servers as defaults; your existing servers are preserved) |
 | `.owlbear/kanban/config.yml` | Kanban board configuration (fresh `next_id: 1`) | Always written |
 | `.owlbear/kanban/tasks/.gitkeep` | Ensures tasks directory exists in version control | Always written |
-| `.owlbear/hooks/allow-stances-only.py` | Restricts agents to approved stances | Always written |
-| `.owlbear/hooks/deny-code-writes.py` | Blocks writes to source code files | Always written |
-| `.owlbear/hooks/deny-scratch-only-writes.py` | Blocks writes outside scratch directories | Always written |
-| `.owlbear/hooks/deny-src-writes.py` | Blocks writes to `src/` directories | Always written |
-| `.owlbear/hooks/deny-writes.py` | Reviewer write guard hook | Always written |
-| `.owlbear/hooks/lint-changed.py` | Builder lint feedback hook | Always written |
-| `.owlbear/hooks/session-context.py` | Injects session context into agent prompts | Always written |
+| `.owlbear/hooks/allow-stances-only.py` | Restricts ideation agents to approved stance outputs | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
+| `.owlbear/hooks/deny-non-doc-writes.py` | Constrains bounded-output non-code roles to doc-adjacent files (`.md`, `.excalidraw`) and scratch | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
+| `.owlbear/hooks/deny-src-writes.py` | Constrains test-only roles to `tests/` and scratch surfaces | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
+| `.owlbear/hooks/deny-writes.py` | Constrains read-only roles to scratch workspace writes only | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
+| `.owlbear/hooks/lint-changed.py` | Builder lint feedback hook — runs `uv run ruff check` on edited `.py` files; silently no-ops if `ruff` is not in your project's deps | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
+| `.owlbear/hooks/session-context.py` | Injects current git branch + recent commits into agent prompts; silently no-ops if `git` is unavailable | Seeded if missing; differing existing hook files prompt/skip/replace (or require `--replace-hooks` non-interactively) |
 | `.owlbear/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/knowledge/.gitkeep` | Knowledge store placeholder | Always written |
 | `store/memory/.gitkeep` | Memory store placeholder | Always written |
@@ -75,6 +74,16 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
 | `owlbear-project.json` | Project metadata (name, type, owlbear path) | Skipped if file already exists |
+
+## Shared vs Copied
+
+OwlBear uses two different update models:
+
+- **Shared live surfaces:** `share/agents/`, `share/skills/`, `share/instructions/`, and `share/prompts/` stay in the owlbear clone and are read live by VS Code.
+- **Copied runtime surfaces:** files under `seed/` are copied into your project by `init.py`; this includes `.owlbear/hooks/`, `.owlbear/kanban/`, and other project-local runtime state.
+
+This split is why `git pull` updates shared agents and skills immediately, while copied
+runtime files may need a later `init.py` run to refresh.
 
 ---
 
@@ -211,6 +220,7 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 | Instructions ignored | `chat.instructionsFilesLocations` missing | Check `.vscode/settings.json`; verify `*.instructions.md` files exist in the registered directory |
 | MCP server fails to start | Missing dependency or `uv` not on PATH | Run `uv --version` to confirm installation; check MCP server logs in VS Code Output panel |
 | `ValueError` on setup | Cross-drive path resolution | Place owlbear and your project on the same Windows drive |
+| Hook file not refreshed on rerun | Existing local `.owlbear/hooks/` file differs from seed | Re-run `init.py --replace-hooks` to overwrite, or choose `replace` when prompted interactively |
 | Agent name conflict | Same-name agent in both owlbear and project locations | Give project agents unique names (see Customization section above) |
 
 For deeper debugging, use **"Show Chat Debug View"** (Chat view ellipsis `…` menu) to inspect

@@ -26,6 +26,7 @@ import contextlib
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -33,11 +34,46 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from owlbear_kanban.activity_log import log_activity
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.config_loader import load_config, save_config
-from owlbear_kanban.models import BoardConfig, Task, TaskSummary
+from owlbear_kanban.models import (
+    BoardConfig,
+    ConfigError,
+    MigrationRequiredError,
+    SessionRecord,
+    Task,
+    TaskSummary,
+)
 from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
+
+# ---------------------------------------------------------------------------
+# Module-level duration parser (AC-C49)
+# ---------------------------------------------------------------------------
+
+_DURATION_RE = re.compile(r"^(?:(\d+)h)?(?:(\d+)m)?$")
+
+
+def _parse_duration(s: str) -> timedelta:
+    """Parse a duration string like ``'1h'``, ``'30m'``, ``'2h30m'``.
+
+    Args:
+        s: Duration string.
+
+    Returns:
+        :class:`timedelta` representation.
+
+    Raises:
+        ConfigError: code='ERR_INVALID_CLAIM_TIMEOUT' when format is invalid.
+    """
+    m = _DURATION_RE.match(s.strip())
+    if not m or not (m.group(1) or m.group(2)):
+        raise ConfigError(
+            code="ERR_INVALID_CLAIM_TIMEOUT",
+            user_message=f"Invalid claim_timeout format: {s!r} — expected e.g. '1h', '30m', '2h30m'",
+        )
+    hours = int(m.group(1) or 0)
+    minutes = int(m.group(2) or 0)
+    return timedelta(hours=hours, minutes=minutes)
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -56,14 +92,25 @@ class WorkSession:
     outcome: str | None
 
 
-def _classify_end_work(detail: str) -> str:
-    """Map an end_work detail string to a session state."""
+def _classify_end_work_state(detail: str) -> str:
+    """Map an end_work detail string to canonical SessionRecord state values."""
     if detail.startswith("success:"):
-        return "completed-pass"
+        return "completed"
     if detail.startswith("reject:"):
-        return "completed-rejected"
-    # outcome=fail, blocked: ..., or any other end_work outcome → completed-fail
-    return "completed-fail"
+        return "rejected"
+    # blocked:* and outcome=fail both map to the canonical blocked state.
+    return "blocked"
+
+
+def _classify_end_work_outcome(detail: str) -> str:
+    """Map an end_work detail string to canonical SessionRecord outcome values."""
+    if detail.startswith("success:"):
+        return "success"
+    if detail.startswith("reject:"):
+        return "reject"
+    if detail.startswith("outcome=fail"):
+        return "fail"
+    return "block"
 
 
 _CLOSE_ACTIONS: frozenset[str] = frozenset({"end_work", "release", "sweep-release"})
@@ -93,17 +140,17 @@ def _collect_task_sessions(
     events: list[dict],
     timeout: timedelta,
     now: datetime,
-    sessions: list[WorkSession],
+    sessions: list[SessionRecord],
 ) -> None:
-    """Append WorkSession entries for one task's event list into *sessions*."""
+    """Append SessionRecord entries for one task's event list into *sessions*."""
     open_claim_ts: str | None = None
-    open_claim_agent: str | None = None
+    open_claim_task_status: str | None = None
     last_activity_ts: str | None = None
 
     for event in events:
-        action: str = event["action"]
-        detail: str = event["detail"]
-        ts: str = event["timestamp"]
+        action = str(event["action"])
+        detail = str(event["detail"])
+        ts = str(event["timestamp"])
 
         if action == "claim":
             if open_claim_ts is not None:
@@ -112,40 +159,44 @@ def _collect_task_sessions(
                 # classify as "stuck" when last activity exceeds claim_timeout.
                 ref_ts = last_activity_ts or open_claim_ts
                 sessions.append(
-                    WorkSession(
+                    SessionRecord(
                         task_id=task_id,
+                        task_status_at_start=open_claim_task_status,
                         state=_state_from_age(ref_ts, timeout, now),
-                        agent=open_claim_agent or "",
                         started_at=open_claim_ts,
-                        duration=None,
+                        ended_at=None,
                         outcome=None,
+                        duration_s=None,
                     )
                 )
             open_claim_ts = ts
-            open_claim_agent = detail
+            open_claim_task_status = event.get("task_status_at_start")
             last_activity_ts = ts
         elif action in _CLOSE_ACTIONS:
             if open_claim_ts is None:
                 continue
-            if action == "sweep-release":
-                open_claim_ts = None
-                open_claim_agent = None
-                last_activity_ts = None
-                continue
-            state = "released" if action == "release" else _classify_end_work(detail)
-            outcome = "released" if action == "release" else detail
+            if action == "release":
+                state = "released"
+                outcome = "released"
+            elif action == "sweep-release":
+                state = "expired"
+                outcome = "expired"
+            else:
+                state = _classify_end_work_state(detail)
+                outcome = _classify_end_work_outcome(detail)
             sessions.append(
-                WorkSession(
+                SessionRecord(
                     task_id=task_id,
+                    task_status_at_start=open_claim_task_status,
                     state=state,
-                    agent=open_claim_agent or "",
                     started_at=open_claim_ts,
-                    duration=_compute_duration(open_claim_ts, ts),
+                    ended_at=ts,
                     outcome=outcome,
+                    duration_s=_compute_duration(open_claim_ts, ts),
                 )
             )
             open_claim_ts = None
-            open_claim_agent = None
+            open_claim_task_status = None
             last_activity_ts = None
         elif open_claim_ts is not None:
             last_activity_ts = ts
@@ -153,31 +204,40 @@ def _collect_task_sessions(
     if open_claim_ts is not None:
         ref_ts = last_activity_ts or open_claim_ts
         sessions.append(
-            WorkSession(
+            SessionRecord(
                 task_id=task_id,
+                task_status_at_start=open_claim_task_status,
                 state=_state_from_age(ref_ts, timeout, now),
-                agent=open_claim_agent or "",
                 started_at=open_claim_ts,
-                duration=None,
+                ended_at=None,
                 outcome=None,
+                duration_s=None,
             )
         )
 
 
 _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
     "active": frozenset({"running", "stuck"}),
-    "failed-or-rejected": frozenset({"completed-fail", "completed-rejected"}),
+    "blocked-or-rejected": frozenset({"blocked", "rejected"}),
+    # Compatibility alias for pre-Brief-C consumers.
+    "failed-or-rejected": frozenset({"blocked", "rejected"}),
     "released": frozenset({"released"}),
 }
 
 
-def _apply_session_filter(sessions: list[WorkSession], filter: str) -> list[WorkSession]:  # noqa: A002
+def _validate_session_filter(filter: str) -> None:  # noqa: A002
+    """Validate the list_sessions filter name."""
+    if filter == "all" or filter in _SESSION_FILTER_STATES:
+        return
+    msg = f"Unsupported session filter: {filter}"
+    raise ValueError(msg)
+
+
+def _apply_session_filter(sessions: list[SessionRecord], filter: str) -> list[SessionRecord]:  # noqa: A002
     """Return *sessions* filtered by *filter* name."""
     if filter == "all":
         return sessions
-    allowed = _SESSION_FILTER_STATES.get(filter)
-    if allowed is None:
-        return sessions
+    allowed = _SESSION_FILTER_STATES[filter]
     return [s for s in sessions if s.state in allowed]
 
 
@@ -251,7 +311,7 @@ class KanbanEngine:
                        ``config.yml`` ``activity_log`` field.
     """
 
-    def __init__(
+    def __init__(  # noqa: C901
         self,
         kanban_dir: Path,
         *,
@@ -276,6 +336,41 @@ class KanbanEngine:
         self._archive_cache: dict[str, tuple[int, Task]] = {}
         self._id_to_filename: dict[int, str] = {}
 
+        # AC-C47: migration gate — new-schema boards only (no 'version' field)
+        # Legacy boards used claimed_by; new-schema boards must not have it.
+        is_legacy_schema = bool(
+            getattr(self._config, "version", None)
+            or (self._config.model_extra or {}).get("version")
+        )
+        if not is_legacy_schema and self._tasks_dir.exists():
+            for p in self._tasks_dir.glob("*.md"):
+                try:
+                    content = p.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                # Fast check: look for claimed_by in frontmatter
+                if "claimed_by:" not in content:
+                    continue
+                # Verify it's in the frontmatter (not body)
+                lines = content.split("\n")
+                if not lines[0].startswith("---"):
+                    continue
+                closing = None
+                for i, line in enumerate(lines[1:], 1):
+                    if line == "---":
+                        closing = i
+                        break
+                if closing is None:
+                    continue
+                for line in lines[1:closing]:
+                    if line.startswith("claimed_by:"):
+                        val = line.split(":", 1)[1].strip()
+                        if val and val.lower() not in ("null", "~", ""):
+                            raise MigrationRequiredError(
+                                code="ERR_MIGRATION_REQUIRED",
+                                user_message="board has legacy claimed_by fields — run: uv run kanban-migrate",
+                            )
+
     @property
     def agent_name(self) -> str:
         """Session-stable agent name generated once per engine instance."""
@@ -294,7 +389,11 @@ class KanbanEngine:
         return {p: i for i, p in enumerate(self._config.priorities)}
 
     def _status_rank(self) -> dict[str, int]:
-        return {s["name"]: i for i, s in enumerate(self._config.statuses)}
+        statuses = self._config.statuses
+        # Support both list[str] (new schema) and list[dict] (legacy schema)
+        if statuses and isinstance(statuses[0], dict):
+            return {s["name"]: i for i, s in enumerate(statuses)}
+        return {s: i for i, s in enumerate(statuses)}
 
     # ------------------------------------------------------------------
     # Config management
@@ -337,7 +436,10 @@ class KanbanEngine:
         Raises:
             ValueError: *status* is not a configured status.
         """
-        valid_statuses = {s["name"] for s in self._config.statuses}
+        valid_statuses = set(self._config.statuses)
+        # Also support legacy list-of-dicts schema
+        if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
+            valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[union-attr]
         if status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
@@ -380,6 +482,8 @@ class KanbanEngine:
         """
         cache = self._archive_cache if archived else self._task_cache
         source_dir = self._archive_dir if archived else self._tasks_dir
+        from owlbear_kanban.storage import detect_corruption as _detect_corruption  # noqa: PLC0415
+
         tasks: list[Task] = []
         seen: set[str] = set()
         try:
@@ -397,6 +501,9 @@ class KanbanEngine:
                     tasks.append(cache[entry.name][1])
                 else:
                     path = source_dir / entry.name
+                    if not archived and _detect_corruption(path, self._config) is not None:
+                        cache.pop(entry.name, None)
+                        continue
                     try:
                         task = read_task(path)
                     except FileNotFoundError:
@@ -404,11 +511,36 @@ class KanbanEngine:
                         continue
                     except (ValueError, KeyError):
                         continue
+                    except Exception as _exc:  # noqa: BLE001
+                        # Silently skip other parse errors (CorruptionError modes 1, 3-9)
+                        from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
+                        if isinstance(_exc, _CorruptionError):
+                            continue
+                        continue
+                    if archived:
+                        task.claimed_by = None
                     cache[entry.name] = (mtime_ns, task)
+                    # AC-C19: skip mode 8 (invalid status) silently
+                    _valid_statuses = set(self._config.statuses)
+                    if task.status not in _valid_statuses | {"archived"}:
+                        continue
                     tasks.append(task)
         for name in list(cache):
             if name not in seen:
                 del cache[name]
+
+        # AC-C20: detect duplicate IDs (mode 2) — raise immediately
+        if not archived:
+            id_seen: dict[int, str] = {}
+            for task in tasks:
+                if task.id in id_seen:
+                    from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID  # noqa: PLC0415
+                    from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
+                    raise _CorruptionError(
+                        code=ERR_CORRUPT_DUPLICATE_ID,
+                        detail=f"task id={task.id} appears in multiple files",
+                    )
+                id_seen[task.id] = task.title
 
         if not archived:
             self._id_to_filename = dict(
@@ -567,12 +699,10 @@ class KanbanEngine:
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
         self._archive_dir = self._kanban_dir / self._config.archive_dir
 
-        if self._activity_log_path:
-            log_activity(self._activity_log_path, "create", record.id, record.title, actor=self._agent_name)
         self._revision += 1
         return record
 
-    def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
+    def edit_task(  # noqa: PLR0912, PLR0913, C901
         self,
         task_id: str,
         *,
@@ -626,7 +756,6 @@ class KanbanEngine:
 
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
-        old_blocked = record.blocked
 
         if title is not None:
             record.title = title
@@ -671,41 +800,7 @@ class KanbanEngine:
 
         write_task(task_path, record)
 
-        if self._activity_log_path:
-            if blocked is not None and old_blocked != record.blocked:
-                if record.blocked:
-                    log_activity(
-                        self._activity_log_path, "block", record.id, block_reason or "", actor=self._agent_name
-                    )
-                else:
-                    log_activity(self._activity_log_path, "unblock", record.id, "", actor=self._agent_name)
-            else:
-                changed = [
-                    name
-                    for name, val in [
-                        ("title", title),
-                        ("body", body),
-                        ("priority", priority),
-                        ("status", status),
-                        ("parent", parent),
-                        ("add_tags", add_tags),
-                        ("remove_tags", remove_tags),
-                        ("add_deps", add_deps),
-                        ("remove_deps", remove_deps),
-                        ("blocked", blocked),
-                        ("block_reason", block_reason),
-                        ("append_body", append_body),
-                    ]
-                    if val is not None
-                ]
-                log_activity(
-                    self._activity_log_path,
-                    "edit",
-                    record.id,
-                    ", ".join(changed) or "updated",
-                    actor=self._agent_name,
-                )
-
+        self._emit_event("edit", record.id, "task edited")
         self._revision += 1
         return record
 
@@ -723,7 +818,9 @@ class KanbanEngine:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
             ValueError:        ``status`` is not valid and is not ``"archived"``.
         """
-        valid_statuses = {s["name"] for s in self._config.statuses}
+        valid_statuses = set(self._config.statuses)
+        if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
+            valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
         if status != "archived" and status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
@@ -744,14 +841,7 @@ class KanbanEngine:
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(task_path, record)
 
-        if self._activity_log_path:
-            log_activity(
-                self._activity_log_path,
-                "move",
-                record.id,
-                f"{old_status} -> {record.status}",
-                actor=self._agent_name,
-            )
+        self._emit_event("move", record.id, f"{old_status} -> {record.status}")
         self._revision += 1
         return record
 
@@ -792,8 +882,7 @@ class KanbanEngine:
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
         write_task(task_path, record)
-        if self._activity_log_path:
-            log_activity(self._activity_log_path, "claim", record.id, self._agent_name, actor=self._agent_name)
+        self._emit_event("claim", record.id, self._agent_name, task_status_at_start=record.status)
         self._revision += 1
         return record
 
@@ -818,8 +907,7 @@ class KanbanEngine:
         record.claimed_at = None
         record.updated = datetime.now(tz=UTC).isoformat()
         write_task(task_path, record)
-        if self._activity_log_path:
-            log_activity(self._activity_log_path, "release", record.id, self._agent_name, actor=self._agent_name)
+        self._emit_event("release", record.id, f"released by {self._agent_name}")
         self._revision += 1
         return record
 
@@ -854,7 +942,12 @@ class KanbanEngine:
         Returns ``True`` when the task should be moved to the archive directory.
         """
         if outcome == "success":
-            statuses = [s["name"] for s in self._config.statuses]
+            raw_statuses = self._config.statuses
+            statuses = (
+                [s["name"] for s in raw_statuses]  # type: ignore[index]
+                if raw_statuses and isinstance(raw_statuses[0], dict)
+                else list(raw_statuses)
+            )
             current_idx = statuses.index(record.status) if record.status in statuses else -1
             if current_idx == len(statuses) - 1:
                 record.status = "archived"
@@ -904,17 +997,16 @@ class KanbanEngine:
             by the underlying state machine.  For the full set of reachable
             statuses from a given state, see :meth:`valid_transitions`.
         """
-        if outcome == "block" and not block_reason:
-            msg = "block_reason is required when outcome='block'"
-            raise ValueError(msg)
-
+        # block_reason is optional — use note as fallback
         valid_outcomes = {"success", "fail", "block", "reject"}
         if outcome not in valid_outcomes:
             msg = f"Unknown outcome: {outcome!r}"
             raise ValueError(msg)
 
         if outcome == "reject":
-            valid_statuses = {s["name"] for s in self._config.statuses}
+            valid_statuses = set(self._config.statuses)
+            if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
+                valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
             if move_to not in valid_statuses:
                 msg = f"Invalid move_to status {move_to!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
@@ -947,20 +1039,13 @@ class KanbanEngine:
             _move_file(task_path, dest)
 
         # --- Activity logging ---
-        if self._activity_log_path:
-            details = {
-                "success": f"success: {old_status} -> {record.status}",
-                "fail": "outcome=fail",
-                "block": f"blocked: {block_reason}",
-                "reject": f"reject: {old_status} -> {move_to}",
-            }
-            log_activity(
-                self._activity_log_path,
-                "end_work",
-                record.id,
-                details[outcome],
-                actor=self._agent_name,
-            )
+        _end_work_details = {
+            "success": f"success: {old_status} -> {record.status}",
+            "fail": "outcome=fail",
+            "block": f"blocked: {block_reason}",
+            "reject": f"reject: {old_status} -> {move_to}",
+        }
+        self._emit_event("end_work", record.id, _end_work_details[outcome])
 
         self._revision += 1
         return record
@@ -969,117 +1054,141 @@ class KanbanEngine:
     # Maintenance
     # ------------------------------------------------------------------
 
-    def sweep(self) -> dict[str, int]:
-        """Clean up orphaned archives and expired claims.
+    def sweep(self) -> list[int]:
+        """Release expired claims and return list of released task IDs.
 
-        1. Move task files with ``status: archived`` still in tasks_dir
-           to archive_dir (using ``git mv`` when possible).
-        2. Release claims that have exceeded the configured timeout.
+        Only handles ``claimed_at``-based timeouts (Brief C §1.5, AC-C23).
+        Does NOT move archived tasks or touch corrupt files.
 
         Returns:
-            Dict with ``archived_moved`` and ``claims_released`` counts.
+            List of integer task IDs whose expired claims were released.
         """
-        archived_moved = 0
-        claims_released = 0
+        released: list[int] = []
         timeout = self._parse_claim_timeout()
         now = datetime.now(tz=UTC)
 
         for path in sorted(self._tasks_dir.glob("*.md")):
-            record = read_task(path)
+            try:
+                record = read_task(path)
+            except Exception:  # noqa: BLE001, S112
+                continue  # silently skip corrupt files (AC-C27)
 
-            if record.status == "archived":
-                self._archive_dir.mkdir(parents=True, exist_ok=True)
-                dest = self._archive_dir / path.name
-                if dest.exists():
-                    path.unlink()  # archive already has this file, just remove orphan
-                else:
-                    _move_file(path, dest)
-                archived_moved += 1
-                if self._activity_log_path:
-                    log_activity(
-                        self._activity_log_path,
-                        "sweep-archive",
-                        record.id,
-                        "orphaned archived task moved to archive dir",
-                        actor=self._agent_name,
-                    )
-                continue  # no need to check claim on already-archived task
-
-            if record.claimed_by is not None and record.claimed_at:
-                claimed_dt = datetime.fromisoformat(record.claimed_at)
+            # Only handle claimed_at (Brief C — claimed_by is legacy)
+            if record.claimed_at:
+                try:
+                    claimed_dt = datetime.fromisoformat(record.claimed_at)
+                except ValueError:
+                    continue
                 if claimed_dt.tzinfo is None:
                     claimed_dt = claimed_dt.replace(tzinfo=UTC)
                 if now >= claimed_dt + timeout:
-                    self.release_task(str(record.id))
-                    claims_released += 1
-                    if self._activity_log_path:
-                        log_activity(
-                            self._activity_log_path,
-                            "sweep-release",
-                            record.id,
-                            f"expired claim by {record.claimed_by} released",
-                            actor=self._agent_name,
-                        )
+                    # Clear claimed_at and update timestamp
+                    record.claimed_at = None
+                    record.claimed_by = None
+                    record.updated = datetime.now(tz=UTC).isoformat()
+                    write_task(path, record)
+                    released.append(record.id)
+                    self._emit_event("sweep-release", record.id, "expired claim released")
 
-        return {"archived_moved": archived_moved, "claims_released": claims_released}
+        return released
 
-    def repair_storage(self) -> list[dict]:
-        """Quarantine corrupt task files and create action-required tasks.
+    def repair_storage(self) -> list:
+        """Quarantine corrupt task files and create action-required tasks (AC-C24, AC-C25, AC-C30).
 
-        Scans ``tasks/`` for files containing forbidden fields (e.g. ``claimed_by``).
-        Each corrupt file is moved to ``quarantine/`` and an AR task tagged
-        ``type:user-action`` is created with a ``## Quarantined file`` body
-        section describing the issue (AC-C30).
+        Two-phase repair:
+        1. Phase 1 (file ops): ``scan_and_fix`` quarantines corrupt files.
+        2. Phase 2 (AR creation): for each quarantined file, create an AR task
+           with ``type:user-action`` tag. If AR creation fails, outcome.action
+           is updated to 'failed'.
 
         Returns:
-            List of dicts ``{"path": str, "code": str}`` for each quarantined file.
+            List of :class:`RepairOutcome` objects with action 'quarantined', 'failed', or 'fixed'.
         """
-        from owlbear_kanban.storage import detect_corruption, move_to_quarantine  # noqa: PLC0415
+        from pathlib import Path as _Path  # noqa: PLC0415
 
-        outcomes: list[dict] = []
-        for path in sorted(self._tasks_dir.glob("*.md")):
-            error = detect_corruption(path, self._config)
-            if error is not None:
-                quarantine_path = move_to_quarantine(path, self._kanban_dir)
+        from owlbear_kanban.corruption import scan_and_fix  # noqa: PLC0415
+
+        # Phase 1: file operations only
+        outcomes = scan_and_fix(self._kanban_dir, self._config)
+
+        # Phase 2: create AR tasks for each quarantined file
+        final_outcomes = []
+        for outcome in outcomes:
+            if outcome.action == "quarantined":
+                quarantine_path = self._kanban_dir / "quarantine" / _Path(outcome.file_path).name
                 body = (
                     "## Quarantined file\n\n"
-                    f"- code: {error.code}\n"
+                    f"- code: {outcome.code}\n"
                     f"- path: {quarantine_path}\n"
-                    f"- detail: {error.detail}\n"
+                    f"- detail: {outcome.detail or ''}\n"
                 )
-                self.create_task(
-                    title=f"Storage repair: {path.name}",
-                    tags=["type:user-action"],
-                    body=body,
-                )
-                outcomes.append({"path": str(path), "code": error.code})
-        return outcomes
+                try:
+                    # Use unbound call so patched create_task spy receives self as first arg
+                    type(self).create_task(
+                        self,
+                        f"Storage repair: {_Path(outcome.file_path).name}",
+                        body=body,
+                        tags=["type:user-action"],
+                    )
+                    final_outcomes.append(outcome)
+                except Exception as _exc:  # noqa: BLE001
+                    from owlbear_kanban.corruption import RepairOutcome  # noqa: PLC0415
+                    final_outcomes.append(RepairOutcome(
+                        task_id=outcome.task_id,
+                        file_path=outcome.file_path,
+                        code=outcome.code,
+                        action="failed",
+                        detail=f"AR creation failed: {_exc}",
+                    ))
+            else:
+                final_outcomes.append(outcome)
+
+        return final_outcomes
+
+    def _emit_event(
+        self,
+        action: str,
+        task_id: int | None = None,
+        detail: str | None = None,
+        task_status_at_start: str | None = None,
+    ) -> None:
+        """Append one :class:`ActivityEvent` to ``activity.jsonl`` if logging is enabled."""
+        if self._activity_log_path is None:
+            return
+        from owlbear_kanban.activity_store import append_activity_event  # noqa: PLC0415
+        from owlbear_kanban.models import ActivityEvent  # noqa: PLC0415
+        evt = ActivityEvent(
+            timestamp=datetime.now(tz=UTC).isoformat(),
+            task_id=task_id,
+            action=action,
+            source="engine",
+            detail=detail or "",
+            task_status_at_start=task_status_at_start,
+        )
+        append_activity_event(evt, self._kanban_dir)
 
     # ------------------------------------------------------------------
     # Session helpers
     # ------------------------------------------------------------------
 
-    def list_sessions(self, *, filter: str = "active") -> list[WorkSession]:  # noqa: A002
-        """Derive logical Work Sessions from the activity log.
+    def list_sessions(self, *, filter: str = "active") -> list[SessionRecord]:  # noqa: A002
+        """Derive logical SessionRecord values from activity.jsonl.
 
-        Each claim→close cycle for a task becomes one :class:`WorkSession`.
-        Open claims (no close event yet) are classified as *running* or *stuck*
-        based on the age of the most recent activity within that session
-        relative to the configured ``claim_timeout``.
+        Each claim-close event pair becomes one :class:`SessionRecord`.
+        Open claims are classified as ``'running'`` or ``'stuck'``.
 
         Args:
             filter: One of ``"active"`` (default), ``"all"``,
-                    ``"failed-or-rejected"``, or ``"released"``.
-                    ``"active"`` returns sessions with state ``running`` or
-                    ``stuck`` only.
+                    ``"blocked-or-rejected"`` (or legacy alias
+                    ``"failed-or-rejected"``), or ``"released"``.
 
         Returns:
-            List of :class:`WorkSession` objects matching the filter.
+            List of :class:`SessionRecord` objects matching the filter.
         """
+        _validate_session_filter(filter)
         if self._activity_log_path is None or not self._activity_log_path.exists():
             return []
-        sessions = self._derive_sessions()
-        return _apply_session_filter(sessions, filter)
+        return _apply_session_filter(self._derive_sessions(), filter)
 
     def _read_log_entries(self) -> list[dict]:
         """Parse activity.jsonl; skip malformed and incomplete lines."""
@@ -1105,8 +1214,8 @@ class KanbanEngine:
                 entries.append(entry)
         return entries
 
-    def _derive_sessions(self) -> list[WorkSession]:
-        """Build WorkSession list from parsed log entries."""
+    def _derive_sessions(self) -> list[SessionRecord]:
+        """Build SessionRecord list from parsed log entries."""
         by_task: dict[int, list[dict]] = defaultdict(list)
         for entry in self._read_log_entries():
             try:
@@ -1117,7 +1226,7 @@ class KanbanEngine:
 
         timeout = self._parse_claim_timeout()
         now = datetime.now(tz=UTC)
-        sessions: list[WorkSession] = []
+        sessions: list[SessionRecord] = []
         for task_id, events in by_task.items():
             _collect_task_sessions(task_id, events, timeout, now, sessions)
         return sessions
@@ -1127,20 +1236,8 @@ class KanbanEngine:
     # ------------------------------------------------------------------
 
     def _parse_claim_timeout(self) -> timedelta:
-        """Parse the ``claim_timeout`` string from config into a :class:`timedelta`.
-
-        Supported suffixes: ``h`` (hours), ``m`` (minutes).
-
-        Raises:
-            ValueError: Unrecognised timeout format.
-        """
-        raw = self._config.claim_timeout
-        if raw.endswith("h"):
-            return timedelta(hours=int(raw[:-1]))
-        if raw.endswith("m"):
-            return timedelta(minutes=int(raw[:-1]))
-        msg = f"Unsupported claim_timeout format: {raw!r}"
-        raise ValueError(msg)
+        """Parse the ``claim_timeout`` string from config into a :class:`timedelta`."""
+        return _parse_duration(self._config.claim_timeout)
 
     def _find_task_path(self, task_id: str, search_dir: Path) -> Path:
         """Return the path of ``{task_id}-*.md`` in *search_dir*.

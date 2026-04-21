@@ -58,6 +58,20 @@ def load_config(kanban_dir: Path) -> BoardConfig:
     return BoardConfig.model_validate(_to_plain(raw))
 
 
+def _validate_claim_timeout(config: BoardConfig) -> None:
+    """Validate claim_timeout format; raise ConfigError for invalid values (AC-C50)."""
+    import re  # noqa: PLC0415
+
+    from owlbear_kanban.models import ConfigError  # noqa: PLC0415
+    pat = re.compile(r"^(?:\d+h)?(?:\d+m)?$")
+    val = config.claim_timeout
+    if not pat.match(val) or not val.endswith(("h", "m")):
+        raise ConfigError(
+            code="ERR_INVALID_CLAIM_TIMEOUT",
+            user_message=f"Invalid claim_timeout in config: {val!r}",
+        )
+
+
 def save_config(kanban_dir: Path, config: BoardConfig) -> None:
     """Write *config* back to ``config.yml`` in *kanban_dir*.
 

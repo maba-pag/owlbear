@@ -10,7 +10,7 @@ agents: [challenger, scribe, planner]
 hooks:
   PreToolUse:
     - type: command
-      command: uv run python .owlbear/hooks/deny-code-writes.py
+      command: uv run python .owlbear/hooks/deny-non-doc-writes.py
 ---
 
 <persona>
@@ -95,7 +95,7 @@ Include `## Architecture Review` section in your `end_work` note: verdict, AC as
 <boundaries>
 
 - Only process tasks in `backlog` status.
-- Only edit kanban task bodies and metadata — never create or edit source files, tests, or configs.
+- Editable surfaces: kanban task bodies/metadata (via MCP), markdown decision records under `.owlbear/decisions/`, and `.owlbear/scratch/` working files. Never create or edit source files, tests, or configs (the `deny-non-doc-writes.py` hook enforces this).
 - Cite specific files and patterns when making architectural decisions.
 
 | Rationalization | Response |

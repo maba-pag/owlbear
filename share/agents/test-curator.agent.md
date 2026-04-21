@@ -36,7 +36,7 @@ gap, transplant it — an extra plant is cheaper than a bare patch.
 - **Coverage is the gate.** Modules already at ≥ 90% get fast-pathed (task-tests deleted without mining). Below-target modules get gap analysis.
 - **Atomic per module.** Each module must leave the full suite green after changes. Revert on failure, move to next.
 - **Conservative mining.** When unsure whether a task-test assertion closes a coverage gap, include it. Missing a useful test is worse than keeping a borderline one.
-- **Never touch source files.** The `deny-src-writes.py` PreToolUse hook enforces this. Only `tests/` is writable.
+- **Never touch source files.** Writes are limited to `tests/` and `.owlbear/scratch/` (the `deny-src-writes.py` PreToolUse hook enforces this).
 
 </critical_rules>
 

@@ -115,16 +115,22 @@ end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot ve
 
 Do not run pytest directly.
 
-## Step 4 — Add Builder-Discovered Tests (Optional)
+## Step 4 — Handle Missing Blocking Edge Cases
 
-During implementation you may discover edge cases not covered by the test-writer's `TestFromAC_*` tests. Add these in a **separate** `TestBuilderDiscovered` class in the same task-scoped file. Never add to `TestFromAC_*` classes.
+During implementation you may discover a blocking edge case not covered by the
+test-writer's `TestFromAC_*` tests.
 
-Each builder-discovered test follows RED-GREEN within this step:
+When that happens:
 
-1. Write the test in `TestBuilderDiscovered` — verify it **fails**.
-2. Implement the fix — verify it **passes**.
+1. Do **not** write a new test.
+2. Do **not** modify `TestFromAC_*` classes.
+3. Reject back to the test-writer via `end_work(outcome="reject", move_to="todo")`.
+4. Record exactly what behavior is missing, why it blocks correct implementation,
+  and what coverage the test-writer needs to add.
+5. Do not commit partial GREEN-phase work when rejecting for missing test
+  coverage.
 
-Skip if `TestFromAC_*` tests already cover the behavior adequately.
+Skip this step when existing `TestFromAC_*` coverage is sufficient.
 
 ## Step 5 — Refactor (If Needed)
 
@@ -220,7 +226,7 @@ Include builder notes in your `end_work` note.
 Commit per `r-project-standards` → Commit Discipline:
 
 ```shell
-git add serve/{package}/src/{namespace}/{module}.py tests/test_{module}_{task_id}.py
+git add serve/{package}/src/{namespace}/{module}.py
 git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 
@@ -239,7 +245,7 @@ Append to task body before advancing:
 ```
 ## Builder Notes
 - Implementation: {files changed}
-- Tests: {N} TestFromAC passed, {M} TestBuilderDiscovered added
+- Tests: {N} TestFromAC passed
 - Coverage: {X}% on touched modules
 - ruff: clean
 - Approach: {brief description of implementation strategy}
@@ -250,7 +256,7 @@ Append to task body before advancing:
 - [ ] Test-writer's `TestFromAC_*` tests verified as failing before implementation
 - [ ] All `TestFromAC_*` tests pass after implementation
 - [ ] No `TestFromAC_*` classes modified
-- [ ] Any builder-added tests are in `TestBuilderDiscovered` class
+- [ ] No tests were added or modified by the builder
 - [ ] Implementation is the minimum code to pass all tests
 - [ ] `pytest` all pass, `ruff` clean
 - [ ] Coverage 90% or higher on touched modules
@@ -262,7 +268,7 @@ Append to task body before advancing:
 
 ## Known Pitfalls
 
-- **Modifying TestFromAC classes:** The builder must never weaken, remove, or modify test-writer tests. This is an automatic FAIL in review.
+- **Modifying or adding tests:** The builder must never weaken, remove, or add tests. Missing blocking edge-case coverage goes back to the test-writer.
 - **Scoped test runs:** Always scope to task-specific files. The full suite has hundreds of tests and will time out.
 - **Coverage measurement failures:** Load `h-pytest-and-linting` before retrying flag variations. The skill documents the exact approach.
 - **Symbol renames breaking other tests:** When renaming imports or mock targets, grep all test files for the old name. Single-file updates cause 10–40 regressions when other files still reference the old symbol.
