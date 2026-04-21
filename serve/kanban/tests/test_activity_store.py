@@ -338,6 +338,47 @@ class TestFromAC_ActivityCompaction:
 class TestBuilderDiscovered:
     """Builder-discovered tests for activity_store edge cases."""
 
+    def test_list_activity_events_skips_malformed_rows(self, tmp_path: Path) -> None:
+        """Malformed JSONL rows are ignored and valid rows are still returned."""
+        kanban_dir = _make_board(tmp_path)
+        activity_file = kanban_dir / "activity.jsonl"
+        valid_ts = datetime.now(tz=UTC).isoformat()
+
+        activity_file.write_text(
+            "\n"  # blank line
+            "{not-json}\n"  # invalid JSON
+            "[]\n"  # non-dict JSON value
+            '{"timestamp":"2026-04-21T10:00:00+00:00"}\n'  # missing required action
+            '{"timestamp":"2026-04-21T10:00:00+00:00","action":"claim","task_id":{"bad":1}}\n'  # invalid schema
+            f'{{"timestamp":"{valid_ts}","task_id":77,"action":"claim","source":"agent","detail":"ok"}}\n',
+            encoding="utf-8",
+        )
+
+        result = list_activity_events(kanban_dir)
+        assert len(result) == 1
+        assert result[0].task_id == 77
+
+    def test_compact_activity_log_missing_file_returns_zeroes(self, tmp_path: Path) -> None:
+        """Compaction on a missing activity.jsonl returns zero-byte/zero-record result."""
+        kanban_dir = _make_board(tmp_path)
+
+        result = compact_activity_log(kanban_dir)
+
+        assert result.before_bytes == 0
+        assert result.after_bytes == 0
+        assert result.records_compacted == 0
+
+    def test_compact_activity_log_empty_file_returns_noop(self, tmp_path: Path) -> None:
+        """Compaction on an empty activity.jsonl is a no-op preserving file size."""
+        kanban_dir = _make_board(tmp_path)
+        activity_file = kanban_dir / "activity.jsonl"
+        activity_file.write_text("\n\n", encoding="utf-8")
+
+        result = compact_activity_log(kanban_dir)
+
+        assert result.before_bytes == result.after_bytes
+        assert result.records_compacted == 0
+
     def test_list_activity_events_until_filter(self, tmp_path: Path) -> None:
         """list_activity_events with until= excludes events after the cutoff."""
         kanban_dir = _make_board(tmp_path)
@@ -360,12 +401,13 @@ class TestBuilderDiscovered:
         # Write 600 old events
         for i in range(600):
             ts = (now - timedelta(hours=600 - i)).isoformat()
-            append_activity_event(_make_event(ts=ts, task_id=i % 10), kanban_dir)
-        # Compact with a cutoff that would remove most events
-        cutoff = now - timedelta(hours=500)
+            append_activity_event(_make_event(ts=ts, task_id=i % 10, action="edit"), kanban_dir)
+        # Compact with a cutoff newer than all entries so floor logic is required.
+        cutoff = now + timedelta(hours=1)
         result = compact_activity_log(kanban_dir, before_dt=cutoff)
         # Hard floor: should not compact below 500
-        assert result.records_compacted <= 100  # at most 100 removed (600-500=100)
+        assert result.records_compacted == 100
+        assert len(list_activity_events(kanban_dir)) == 500
 
     def test_parse_dt_naive_datetime_gets_utc(self) -> None:
         """_parse_dt adds UTC timezone to naive datetimes."""
@@ -375,6 +417,12 @@ class TestBuilderDiscovered:
         assert dt is not None
         assert dt.tzinfo is not None
         assert dt.tzinfo == UTC
+
+    def test_parse_dt_invalid_returns_none(self) -> None:
+        """_parse_dt returns None for invalid ISO-8601 strings."""
+        from owlbear_kanban.activity_store import _parse_dt  # noqa: PLC0415
+
+        assert _parse_dt("not-a-datetime") is None
 
     def test_list_activity_events_source_filter(self, tmp_path: Path) -> None:
         """list_activity_events with source= filter returns only matching events."""
