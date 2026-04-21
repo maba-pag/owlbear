@@ -4,7 +4,7 @@ title: Ideation overhaul Wave 1 foundation implementation
 status: review
 priority: important
 created: 2026-04-20T22:46:36.851409+00:00
-updated: 2026-04-20T23:29:31.406452+00:00
+updated: 2026-04-21T13:41:32.872692+00:00
 tags:
 - ideation-overhaul
 - wave-1
@@ -13,8 +13,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: jade-fern
+claimed_at: 2026-04-21T13:41:32.872692+00:00
 ---
 Implement Wave 1 of the ideation overhaul directly in owlbear-dev, using the canonical brief at .owlbear/briefs/draft-ideation-overhaul-2026-04-20/brief.md as source of truth.
 
