@@ -8,17 +8,15 @@ All tests FAIL (RED phase — new engine activity methods not yet implemented).
 from __future__ import annotations
 
 import json
+import pytest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.storage import (  # NEW module — ImportError in RED
-    ActivityEvent,
+from owlbear_kanban.storage import (
     SessionRecord,
-    append_activity_event,
     list_activity_events,
 )
 
@@ -410,7 +408,7 @@ class TestFromAC_ListSessions:
         engine.end_work(1001, outcome="success", note="done")
 
         read_calls: list[str] = []
-        original_open = open  # noqa: WPS421
+        original_open = open
 
         def spy_open(path: object, *args: object, **kwargs: object) -> object:
             p = str(path)
@@ -426,7 +424,7 @@ class TestFromAC_ListSessions:
     def test_ac_c43_task_status_at_start_captured_from_activity_event(
         self, tmp_path: Path
     ) -> None:
-        """AC-C43: task_status_at_start in SessionRecord matches task status at claim time."""
+        """AC-C43: SessionRecord.task_status_at_start captures the task status when claimed."""
         kanban_dir = _make_board(tmp_path)
         _make_task_file(kanban_dir, 1001, "todo")
 
@@ -459,3 +457,28 @@ class TestFromAC_ListSessions:
         sessions = engine.list_sessions(filter="all")
         for s in sessions:
             assert s.state in _allowed, f"Invalid state: {s.state}"
+
+    def test_ac_c43_sweep_released_session_visible_in_all_filter(self, tmp_path: Path) -> None:
+        """AC-C43 / §7.2: session closed by sweep-release appears in list_sessions(filter='all')."""
+        kanban_dir = _make_board(tmp_path)
+        _make_task_file(kanban_dir, 1001, "todo")
+
+        past_time = datetime.now(tz=UTC) - timedelta(hours=3)
+        engine = KanbanEngine(kanban_dir)
+        # Claim with past timestamp → claimed_at 3h ago → will be swept on next sweep()
+        engine.start_work(1001, now=past_time)
+        released = engine.sweep()
+
+        assert 1001 in released, "Expected task 1001 to be sweep-released"
+
+        # The sweep-closed session must be visible in list_sessions — currently silently dropped
+        sessions = engine.list_sessions(filter="all")
+        matching = [s for s in sessions if s.task_id == 1001]
+        assert matching, "Sweep-released session must appear in list_sessions(filter='all')"
+
+    def test_ac_c43_unknown_filter_raises_value_error(self, tmp_path: Path) -> None:
+        """AC-C43: unsupported filter name raises ValueError (not silently returns all)."""
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        with pytest.raises(ValueError):
+            engine.list_sessions(filter="not-a-valid-filter")
