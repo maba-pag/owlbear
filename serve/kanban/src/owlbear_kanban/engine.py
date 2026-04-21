@@ -36,7 +36,14 @@ from typing import TYPE_CHECKING
 
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.config_loader import load_config, save_config
-from owlbear_kanban.models import BoardConfig, ConfigError, MigrationRequiredError, Task, TaskSummary
+from owlbear_kanban.models import (
+    BoardConfig,
+    ConfigError,
+    MigrationRequiredError,
+    SessionRecord,
+    Task,
+    TaskSummary,
+)
 from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
 
 # ---------------------------------------------------------------------------
@@ -85,14 +92,25 @@ class WorkSession:
     outcome: str | None
 
 
-def _classify_end_work(detail: str) -> str:
-    """Map an end_work detail string to a session state."""
+def _classify_end_work_state(detail: str) -> str:
+    """Map an end_work detail string to canonical SessionRecord state values."""
     if detail.startswith("success:"):
-        return "completed-pass"
+        return "completed"
     if detail.startswith("reject:"):
-        return "completed-rejected"
-    # outcome=fail, blocked: ..., or any other end_work outcome → completed-fail
-    return "completed-fail"
+        return "rejected"
+    # blocked:* and outcome=fail both map to the canonical blocked state.
+    return "blocked"
+
+
+def _classify_end_work_outcome(detail: str) -> str:
+    """Map an end_work detail string to canonical SessionRecord outcome values."""
+    if detail.startswith("success:"):
+        return "success"
+    if detail.startswith("reject:"):
+        return "reject"
+    if detail.startswith("outcome=fail"):
+        return "fail"
+    return "block"
 
 
 _CLOSE_ACTIONS: frozenset[str] = frozenset({"end_work", "release", "sweep-release"})
@@ -122,17 +140,17 @@ def _collect_task_sessions(
     events: list[dict],
     timeout: timedelta,
     now: datetime,
-    sessions: list[WorkSession],
+    sessions: list[SessionRecord],
 ) -> None:
-    """Append WorkSession entries for one task's event list into *sessions*."""
+    """Append SessionRecord entries for one task's event list into *sessions*."""
     open_claim_ts: str | None = None
-    open_claim_agent: str | None = None
+    open_claim_task_status: str | None = None
     last_activity_ts: str | None = None
 
     for event in events:
-        action: str = event["action"]
-        detail: str = event["detail"]
-        ts: str = event["timestamp"]
+        action = str(event["action"])
+        detail = str(event["detail"])
+        ts = str(event["timestamp"])
 
         if action == "claim":
             if open_claim_ts is not None:
@@ -141,40 +159,44 @@ def _collect_task_sessions(
                 # classify as "stuck" when last activity exceeds claim_timeout.
                 ref_ts = last_activity_ts or open_claim_ts
                 sessions.append(
-                    WorkSession(
+                    SessionRecord(
                         task_id=task_id,
+                        task_status_at_start=open_claim_task_status,
                         state=_state_from_age(ref_ts, timeout, now),
-                        agent=open_claim_agent or "",
                         started_at=open_claim_ts,
-                        duration=None,
+                        ended_at=None,
                         outcome=None,
+                        duration_s=None,
                     )
                 )
             open_claim_ts = ts
-            open_claim_agent = detail
+            open_claim_task_status = event.get("task_status_at_start")
             last_activity_ts = ts
         elif action in _CLOSE_ACTIONS:
             if open_claim_ts is None:
                 continue
-            if action == "sweep-release":
-                open_claim_ts = None
-                open_claim_agent = None
-                last_activity_ts = None
-                continue
-            state = "released" if action == "release" else _classify_end_work(detail)
-            outcome = "released" if action == "release" else detail
+            if action == "release":
+                state = "released"
+                outcome = "released"
+            elif action == "sweep-release":
+                state = "expired"
+                outcome = "expired"
+            else:
+                state = _classify_end_work_state(detail)
+                outcome = _classify_end_work_outcome(detail)
             sessions.append(
-                WorkSession(
+                SessionRecord(
                     task_id=task_id,
+                    task_status_at_start=open_claim_task_status,
                     state=state,
-                    agent=open_claim_agent or "",
                     started_at=open_claim_ts,
-                    duration=_compute_duration(open_claim_ts, ts),
+                    ended_at=ts,
                     outcome=outcome,
+                    duration_s=_compute_duration(open_claim_ts, ts),
                 )
             )
             open_claim_ts = None
-            open_claim_agent = None
+            open_claim_task_status = None
             last_activity_ts = None
         elif open_claim_ts is not None:
             last_activity_ts = ts
@@ -182,31 +204,40 @@ def _collect_task_sessions(
     if open_claim_ts is not None:
         ref_ts = last_activity_ts or open_claim_ts
         sessions.append(
-            WorkSession(
+            SessionRecord(
                 task_id=task_id,
+                task_status_at_start=open_claim_task_status,
                 state=_state_from_age(ref_ts, timeout, now),
-                agent=open_claim_agent or "",
                 started_at=open_claim_ts,
-                duration=None,
+                ended_at=None,
                 outcome=None,
+                duration_s=None,
             )
         )
 
 
 _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
     "active": frozenset({"running", "stuck"}),
-    "failed-or-rejected": frozenset({"completed-fail", "completed-rejected"}),
+    "blocked-or-rejected": frozenset({"blocked", "rejected"}),
+    # Compatibility alias for pre-Brief-C consumers.
+    "failed-or-rejected": frozenset({"blocked", "rejected"}),
     "released": frozenset({"released"}),
 }
 
 
-def _apply_session_filter(sessions: list[WorkSession], filter: str) -> list[WorkSession]:  # noqa: A002
+def _validate_session_filter(filter: str) -> None:  # noqa: A002
+    """Validate the list_sessions filter name."""
+    if filter == "all" or filter in _SESSION_FILTER_STATES:
+        return
+    msg = f"Unsupported session filter: {filter}"
+    raise ValueError(msg)
+
+
+def _apply_session_filter(sessions: list[SessionRecord], filter: str) -> list[SessionRecord]:  # noqa: A002
     """Return *sessions* filtered by *filter* name."""
     if filter == "all":
         return sessions
-    allowed = _SESSION_FILTER_STATES.get(filter)
-    if allowed is None:
-        return sessions
+    allowed = _SESSION_FILTER_STATES[filter]
     return [s for s in sessions if s.state in allowed]
 
 
@@ -1140,19 +1171,21 @@ class KanbanEngine:
     # Session helpers
     # ------------------------------------------------------------------
 
-    def list_sessions(self, *, filter: str = "active") -> list[WorkSession]:  # noqa: A002
-        """Derive logical Work Sessions from activity.jsonl.
+    def list_sessions(self, *, filter: str = "active") -> list[SessionRecord]:  # noqa: A002
+        """Derive logical SessionRecord values from activity.jsonl.
 
-        Each claim-close event pair becomes one :class:`WorkSession`.
+        Each claim-close event pair becomes one :class:`SessionRecord`.
         Open claims are classified as ``'running'`` or ``'stuck'``.
 
         Args:
             filter: One of ``"active"`` (default), ``"all"``,
-                    ``"failed-or-rejected"``, or ``"released"``.
+                    ``"blocked-or-rejected"`` (or legacy alias
+                    ``"failed-or-rejected"``), or ``"released"``.
 
         Returns:
-            List of :class:`WorkSession` objects matching the filter.
+            List of :class:`SessionRecord` objects matching the filter.
         """
+        _validate_session_filter(filter)
         if self._activity_log_path is None or not self._activity_log_path.exists():
             return []
         return _apply_session_filter(self._derive_sessions(), filter)
@@ -1181,8 +1214,8 @@ class KanbanEngine:
                 entries.append(entry)
         return entries
 
-    def _derive_sessions(self) -> list[WorkSession]:
-        """Build WorkSession list from parsed log entries (legacy path)."""
+    def _derive_sessions(self) -> list[SessionRecord]:
+        """Build SessionRecord list from parsed log entries."""
         by_task: dict[int, list[dict]] = defaultdict(list)
         for entry in self._read_log_entries():
             try:
@@ -1193,7 +1226,7 @@ class KanbanEngine:
 
         timeout = self._parse_claim_timeout()
         now = datetime.now(tz=UTC)
-        sessions: list[WorkSession] = []
+        sessions: list[SessionRecord] = []
         for task_id, events in by_task.items():
             _collect_task_sessions(task_id, events, timeout, now, sessions)
         return sessions

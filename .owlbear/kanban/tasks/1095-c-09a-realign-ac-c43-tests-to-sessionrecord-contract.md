@@ -1,10 +1,10 @@
 ---
 id: 1095
 title: 'C-09a: Realign AC-C43 tests to SessionRecord contract'
-status: in-progress
+status: review
 priority: critical
 created: 2026-04-21T18:31:42.942691+00:00
-updated: 2026-04-21T21:55:35.336417+00:00
+updated: 2026-04-21T22:01:23.002196+00:00
 tags:
 - phase:storage
 - brief:c
@@ -14,8 +14,8 @@ parent: 1043
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: jade-fern
-claimed_at: 2026-04-21T21:55:35.336417+00:00
+claimed_by:
+claimed_at:
 ---
 ## Brief
 Brief C (#1043) — Architecture review correction.
@@ -348,3 +348,26 @@ Reject to `todo` for test-writer follow-up. Keep the current RED failure profile
 
 - Lint: ruff clean
 - Commit: 1652379b
+[[2026-04-21]]
+## Builder Notes
+- Implementation: updated session derivation in engine to emit canonical SessionRecord values for list_sessions.
+- Files changed: serve/kanban/src/owlbear_kanban/engine.py
+- Fixes applied:
+  - list_sessions now returns list[SessionRecord] and validates filter names up front.
+  - Unknown filters now raise ValueError (including when activity.jsonl is missing).
+  - end_work detail mapping now yields canonical states: completed, blocked, rejected.
+  - SessionRecord outcome mapping now yields canonical values (success/reject/fail/block), plus released/expired for release and sweep-release closures.
+  - _collect_task_sessions now populates task_status_at_start, ended_at, and duration_s.
+  - sweep-release now closes and records a visible expired session instead of being silently dropped.
+  - Added blocked-or-rejected filter and kept failed-or-rejected as compatibility alias.
+- Test results:
+  - RED verification before code changes: serve/kanban/tests/test_engine_activity.py::TestFromAC_ListSessions -> 6 passed, 10 failed.
+  - GREEN verification after implementation: serve/kanban/tests/test_engine_activity.py::TestFromAC_ListSessions -> 16 passed, 0 failed.
+- Lint: uv run ruff check serve/kanban/src/owlbear_kanban/engine.py -> clean.
+- Coverage: owlbear_kanban.engine 44% in scoped AC-C43 class run.
+- Evidence summary: all 10 previously failing SessionRecord assertions in TestFromAC_ListSessions now pass.
+- Reflection:
+  - Problem faced: the legacy WorkSession path dropped sweep-release closures and silently accepted unknown filters.
+  - Workaround applied: centralized canonical state/outcome/filter handling in the session derivation helpers.
+  - Pattern discovered: filter validation must happen before file-existence short-circuit to preserve deterministic API behavior.
+  - Quality gap: module-wide coverage remains below 90% with class-scoped verification; broader session-suite alignment remains a follow-up concern outside this surgical fix.
