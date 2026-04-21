@@ -20,7 +20,6 @@ from owlbear_kanban.storage import (  # NEW module — ImportError in RED
     read_task,
     scan_and_fix,
     load_config,
-    RepairOutcome,
 )
 
 # ---------------------------------------------------------------------------
@@ -129,6 +128,27 @@ class TestFromAC_CorruptionShape:
         err = CorruptionError(code="ERR_CORRUPT_DELIMITERS", user_message="msg", file_path=None)
         assert err.file_path is None
 
+    def test_ac_c21_each_err_corrupt_code_is_subclass_of_corruption_error(self) -> None:
+        """AC-C21: every ERR_CORRUPT_* exported name is a Python subclass of CorruptionError."""
+        import owlbear_kanban.corruption as m  # noqa: PLC0415
+
+        expected_codes = [
+            "ERR_CORRUPT_DELIMITERS",
+            "ERR_CORRUPT_DUPLICATE_ID",
+            "ERR_CORRUPT_MISSING_FIELD",
+            "ERR_CORRUPT_TYPE_MISMATCH",
+            "ERR_CORRUPT_YAML_PARSE",
+            "ERR_CORRUPT_ID_FILENAME_MISMATCH",
+            "ERR_CORRUPT_DUPLICATE_LOCATION",
+            "ERR_CORRUPT_INVALID_STATUS",
+            "ERR_CORRUPT_INVALID_PRIORITY",
+        ]
+        for name in expected_codes:
+            cls = getattr(m, name, None)
+            assert cls is not None, f"{name} not exported from corruption module"
+            assert isinstance(cls, type), f"{name} is not a class — expected subclass of CorruptionError"
+            assert issubclass(cls, CorruptionError), f"{name} is not a subclass of CorruptionError"
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_CorruptionDetection — AC-C17, AC-C18: all 9 modes
@@ -178,7 +198,7 @@ class TestFromAC_CorruptionDetection:
         _write(
             bad_file,
             "---\nid: 1002\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
 
@@ -193,7 +213,7 @@ class TestFromAC_CorruptionDetection:
         _write(
             bad_file,
             "---\nid: 1002\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
 
         with pytest.raises(CorruptionError) as exc_info:
@@ -206,8 +226,8 @@ class TestFromAC_CorruptionDetection:
         bad_file = kanban_dir / "tasks" / "1003-badtype.md"
         _write(
             bad_file,
-            "---\nid: \"notanint\"\ntitle: bad type\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            '---\nid: "notanint"\ntitle: bad type\nstatus: todo\npriority: needed\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
 
@@ -256,7 +276,7 @@ class TestFromAC_CorruptionDetection:
         _write(
             bad_file,
             "---\nid: 1005\ntitle: bad status\nstatus: nonexistent_status\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
 
@@ -271,7 +291,7 @@ class TestFromAC_CorruptionDetection:
         _write(
             bad_file,
             "---\nid: 1006\ntitle: bad priority\nstatus: todo\npriority: not_a_real_priority\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
 
@@ -279,7 +299,7 @@ class TestFromAC_CorruptionDetection:
         assert err is not None
         assert err.code == "ERR_CORRUPT_INVALID_PRIORITY"
 
-    def test_ac_c17_all_9_codes_covered(self, tmp_path: Path) -> None:
+    def test_ac_c17_all_9_codes_covered(self, _tmp_path: Path) -> None:
         """AC-C17: verify all 9 ERR_CORRUPT_* codes exist as constants/attributes."""
         expected = {
             "ERR_CORRUPT_DELIMITERS",
@@ -306,6 +326,41 @@ class TestFromAC_CorruptionDetection:
         err = detect_corruption(good_file, config)
         assert err is None
 
+    def test_ac_c18_mode4_read_task_raises(self, tmp_path: Path) -> None:
+        """AC-C18: read_task raises CorruptionError for mode 4 (type mismatch — string id)."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "notanint-strid.md"
+        _write(
+            bad_file,
+            '---\nid: "notanint"\ntitle: bad type\nstatus: todo\npriority: needed\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+        assert exc_info.value.code == "ERR_CORRUPT_TYPE_MISMATCH"
+
+    def test_ac_c18_mode5_read_task_raises(self, tmp_path: Path) -> None:
+        """AC-C18: read_task raises CorruptionError for mode 5 (YAML parse error)."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1099-badyaml.md"
+        _write(bad_file, "---\n: bad yaml: [unclosed\n---\n")
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+        assert exc_info.value.code == "ERR_CORRUPT_YAML_PARSE"
+
+    def test_ac_c18_mode6_read_task_raises(self, tmp_path: Path) -> None:
+        """AC-C18: read_task raises CorruptionError for mode 6 (ID/filename mismatch)."""
+        kanban_dir = _make_board(tmp_path)
+        # File named 9999-... but frontmatter has id: 1001
+        bad_file = kanban_dir / "tasks" / "9999-wrongid.md"
+        _write(bad_file, _VALID_TASK)
+
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(bad_file)
+        assert exc_info.value.code == "ERR_CORRUPT_ID_FILENAME_MISMATCH"
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_AutoFixMatrix — AC-C22
@@ -324,7 +379,7 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\nid: 1010\ntitle: no prio\nstatus: todo\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -337,7 +392,7 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\nid: 1011\ntitle: no tags\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -350,7 +405,7 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\nid: 1012\ntitle: no deps\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -364,7 +419,7 @@ class TestFromAC_AutoFixMatrix:
             bad_file,
             "---\nid: 1013\ntitle: no blocked\nstatus: todo\npriority: needed\n"
             "tags: []\ndepends_on: []\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -378,7 +433,7 @@ class TestFromAC_AutoFixMatrix:
             bad_file,
             "---\nid: 1014\ntitle: no br\nstatus: todo\npriority: needed\n"
             "tags: []\ndepends_on: []\nblocked: false\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -392,7 +447,7 @@ class TestFromAC_AutoFixMatrix:
             bad_file,
             "---\nid: 1015\ntitle: no claim\nstatus: todo\npriority: needed\n"
             "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -406,7 +461,7 @@ class TestFromAC_AutoFixMatrix:
             bad_file,
             "---\nid: 1016\ntitle: no ar\nstatus: todo\npriority: needed\n"
             "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -423,7 +478,7 @@ class TestFromAC_AutoFixMatrix:
             "---\nid: 1017\ntitle: no arr\nstatus: todo\npriority: needed\n"
             "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
             "archival_reason: null\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -438,7 +493,7 @@ class TestFromAC_AutoFixMatrix:
             "---\nid: 1018\ntitle: no parent\nstatus: todo\npriority: needed\n"
             "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
             "archival_reason: null\narchival_refs: []\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -451,7 +506,7 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\ntitle: no id\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -464,7 +519,7 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\nid: 1019\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
@@ -476,8 +531,8 @@ class TestFromAC_AutoFixMatrix:
         bad_file = kanban_dir / "tasks" / "1003-strid.md"
         _write(
             bad_file,
-            "---\nid: \"1003\"\ntitle: string id\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            '---\nid: "1003"\ntitle: string id\nstatus: todo\npriority: needed\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
@@ -489,8 +544,8 @@ class TestFromAC_AutoFixMatrix:
         bad_file = kanban_dir / "tasks" / "abc-badid.md"
         _write(
             bad_file,
-            "---\nid: \"abc\"\ntitle: bad id\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            '---\nid: "abc"\ntitle: bad id\nstatus: todo\npriority: needed\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
@@ -503,8 +558,8 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\nid: 1020\ntitle: str bool\nstatus: todo\npriority: needed\n"
-            "blocked: \"true\"\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'blocked: "true"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
@@ -517,11 +572,52 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\nid: 1021\ntitle: bad prio\nstatus: todo\npriority: not_valid\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_INVALID_PRIORITY", config)
         assert outcome.action == "fixed"
+
+    def test_ac_c22_mode3_missing_created_quarantines(self, tmp_path: Path) -> None:
+        """AC-C22: mode 3, created absent (no safe default) → quarantined."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1023-nocreated.md"
+        _write(
+            bad_file,
+            "---\nid: 1023\ntitle: no created\nstatus: todo\npriority: needed\n"
+            'updated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+        assert outcome.action == "quarantined"
+
+    def test_ac_c22_mode4_string_bool_false_coerced(self, tmp_path: Path) -> None:
+        """AC-C22: mode 4, blocked='false' (string) → coerced to False, action='fixed'."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1024-strboolfalse.md"
+        _write(
+            bad_file,
+            "---\nid: 1024\ntitle: str bool false\nstatus: todo\npriority: needed\n"
+            'blocked: "false"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
+        assert outcome.action == "fixed"
+
+    def test_ac_c22_mode4_ambiguous_bool_quarantines(self, tmp_path: Path) -> None:
+        """AC-C22: mode 4, blocked='maybe' (non-true/false string) → cannot coerce → quarantined."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "1025-ambiguousbool.md"
+        _write(
+            bad_file,
+            "---\nid: 1025\ntitle: ambiguous bool\nstatus: todo\npriority: needed\n"
+            'blocked: "maybe"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
+        assert outcome.action == "quarantined"
 
     def test_ac_c22_repair_outcome_shape(self, tmp_path: Path) -> None:
         """AC-C22: RepairOutcome has task_id, file_path, code, action, detail attributes."""
@@ -530,7 +626,7 @@ class TestFromAC_AutoFixMatrix:
         _write(
             bad_file,
             "---\nid: 1022\ntitle: t\nstatus: todo\npriority: not_valid\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
         )
         config = load_config(kanban_dir)
         outcome = attempt_repair(bad_file, "ERR_CORRUPT_INVALID_PRIORITY", config)
