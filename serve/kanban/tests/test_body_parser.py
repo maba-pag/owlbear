@@ -7,7 +7,6 @@ All tests FAIL (RED phase — body_parser not yet implemented).
 
 from __future__ import annotations
 
-import pytest
 
 from owlbear_kanban.body_parser import parse_body, render_body  # NEW module — ImportError in RED
 from owlbear_kanban.storage import Section  # NEW type — ImportError in RED
