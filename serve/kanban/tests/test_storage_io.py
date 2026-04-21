@@ -92,39 +92,56 @@ class TestFromAC_AtomicWrite:
     """AC-C1, AC-C2, AC-C3: atomic_write primitive contract."""
 
     def test_ac_c1_writes_via_tmp_sibling(self, tmp_path: Path) -> None:
-        """AC-C1: atomic_write uses .tmp-* sibling before os.replace."""
+        """AC-C1: atomic_write uses .tmp-* sibling (same parent dir) before os.replace."""
         target = tmp_path / "output.md"
         content = "hello world\n"
-        tmp_files_seen: list[str] = []
+        tmp_paths_seen: list[Path] = []
         original_replace = os.replace
 
         def spy_replace(src: str, dst: str) -> None:
-            tmp_files_seen.append(Path(src).name)
+            tmp_paths_seen.append(Path(src))
             original_replace(src, dst)
 
         with patch("os.replace", side_effect=spy_replace):
             atomic_write(target, content)
 
         assert target.read_text(encoding="utf-8") == content
-        assert len(tmp_files_seen) == 1
-        assert tmp_files_seen[0].startswith(".tmp-")
+        assert len(tmp_paths_seen) == 1
+        tmp_used = tmp_paths_seen[0]
+        assert tmp_used.name.startswith(".tmp-"), f"Expected .tmp-* name, got {tmp_used.name}"
+        assert tmp_used.parent == target.parent, (
+            f"tmp file must be a sibling of target; got {tmp_used.parent} vs {target.parent}"
+        )
 
     def test_ac_c1_posix_fsyncs_file_and_dir(self, tmp_path: Path) -> None:
         """AC-C1: on POSIX, atomic_write fsyncs file fd then parent-dir fd."""
         target = tmp_path / "output.md"
+        parent_dir = str(target.parent)
+        original_open = os.open
+        original_fsync = os.fsync
+
+        dir_fds: list[int] = []
         fsync_calls: list[int] = []
 
-        original_fsync = os.fsync
+        def spy_open(path: str, flags: int, *args: object, **kwargs: object) -> int:
+            fd = original_open(path, flags, *args, **kwargs)
+            if isinstance(path, str) and path == parent_dir:
+                dir_fds.append(fd)
+            return fd
 
         def spy_fsync(fd: int) -> None:
             fsync_calls.append(fd)
             original_fsync(fd)
 
-        with patch("os.fsync", side_effect=spy_fsync):
+        with patch("os.open", side_effect=spy_open), patch("os.fsync", side_effect=spy_fsync):
             atomic_write(target, "data\n")
 
         # At least 2 fsyncs: file fd + parent-directory fd (POSIX)
-        assert len(fsync_calls) >= 2
+        assert len(fsync_calls) >= 2, f"Expected >=2 fsyncs, got {len(fsync_calls)}"
+        assert len(dir_fds) >= 1, "Expected os.open call for parent directory (POSIX dir-fsync)"
+        assert any(fd in set(dir_fds) for fd in fsync_calls), (
+            f"No fsync on parent-dir fd; fsynced: {fsync_calls}, parent-dir fds: {dir_fds}"
+        )
 
     def test_ac_c1_final_content_is_correct(self, tmp_path: Path) -> None:
         """AC-C1: target file contains exactly the written content after atomic_write."""
@@ -139,9 +156,8 @@ class TestFromAC_AtomicWrite:
         original = "original content\n"
         target.write_text(original, encoding="utf-8")
 
-        with patch("os.replace", side_effect=OSError("simulated replace failure")):
-            with pytest.raises(OSError, match="simulated replace failure"):
-                atomic_write(target, "new content\n")
+        with patch("os.replace", side_effect=OSError("simulated replace failure")), pytest.raises(OSError, match="simulated replace failure"):
+            atomic_write(target, "new content\n")
 
         tmp_leftovers = list(tmp_path.glob(".tmp-*"))
         assert tmp_leftovers == [], f"Leftover .tmp- files: {tmp_leftovers}"
@@ -193,7 +209,7 @@ class TestFromAC_IDAllocation:
     """AC-C4, AC-C4a, AC-C4b, AC-C51: ID allocation and CAS contract."""
 
     def test_ac_c4_50_concurrent_threads_yield_distinct_ids(self, tmp_path: Path) -> None:
-        """AC-C4: 50 threads × 1 allocation → 50 distinct IDs, no duplicates."""
+        """AC-C4: 50 threads x 1 allocation -> 50 distinct IDs, no duplicates."""
         kanban_dir = _make_board(tmp_path)
         results: list[int] = []
         errors: list[Exception] = []
@@ -316,6 +332,26 @@ class TestFromAC_IDAllocation:
 
         assert "0001-old.md" in names
         assert ".0001.lock" not in names
+
+    def test_ac_c4b_write_task_if_unchanged_creates_lock_at_per_task_path(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C4b: write_task_if_unchanged creates lock file at tasks/.<id>.lock."""
+        kanban_dir = _make_board(tmp_path)
+        task = _make_task(1001)
+        write_task(task, kanban_dir)
+        tasks_dir = kanban_dir / "tasks"
+        expected_lock = tasks_dir / ".1001.lock"
+
+        assert not expected_lock.exists(), "Lock file must not exist before first write_task_if_unchanged"
+
+        updated = task.model_copy(update={"updated": "2026-04-21T12:00:00+00:00"})
+        write_task_if_unchanged(updated, task.updated, kanban_dir)
+
+        assert expected_lock.exists(), (
+            f"write_task_if_unchanged must create lock at {expected_lock}; "
+            "per-task lock must be at tasks/.<id>.lock"
+        )
 
     def test_ac_c51_crash_between_save_config_and_write_task(self, tmp_path: Path) -> None:
         """AC-C51: crash after save_config burns ID N; next allocation is N+1; config ends at N+2."""
