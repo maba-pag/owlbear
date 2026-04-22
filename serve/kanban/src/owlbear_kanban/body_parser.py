@@ -17,10 +17,8 @@ from owlbear_kanban.models import Section
 
 __all__ = ["Section", "parse_body", "render_body"]
 
-# ATX heading: 1-6 `#`, with optional CommonMark closing hash sequence stripped.
-# - Requires whitespace after opening hashes (or end-of-line for empty heading).
-# - Accepts optional closing `#` run when preceded by whitespace.
-_ATX_RE = re.compile(r"^(#{1,6})(?:[ \t]+|$)(.*?)(?:[ \t]+#+[ \t]*)?$")
+# ATX heading: 1-6 '#' followed by a space.
+_ATX_RE = re.compile(r"^(#{1,6}) (.*)$")
 
 # Setext underline: line of only `=` or `-` (3+ chars)
 _SETEXT_EQ_RE = re.compile(r"^={3,}\s*$")
