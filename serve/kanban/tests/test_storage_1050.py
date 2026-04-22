@@ -962,3 +962,74 @@ class TestBuilderDiscovered:
 
         assert 77 in archived
         assert archived[77].claimed is False
+
+
+# ---------------------------------------------------------------------------
+# AC-REGR: claimed tasks must not vanish from list_tasks()
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ClaimListRegression:
+    """AC-REGR: list_tasks() must not silently drop actively-claimed tasks.
+
+    Regression: claim_task() writes claimed_by to disk (via task_io.write_task
+    which preserves the field).  list_tasks() detects a cache miss on the new
+    mtime, calls detect_corruption(), receives a mode-3 CorruptionError for the
+    claimed_by field, and silently skips the file.  Net effect: every task
+    disappears from list_tasks() immediately after start_work().
+    """
+
+    def _make_new_schema_board(self, tmp_path: Path, task_id: int = 1) -> Path:
+        """Return a new-schema board with one clean task in tasks/."""
+        kanban_dir = tmp_path / "board"
+        kanban_dir.mkdir(parents=True)
+        (kanban_dir / "config.yml").write_text(_NEW_SCHEMA_CONFIG_YAML, encoding="utf-8")
+        (kanban_dir / "tasks").mkdir()
+        (kanban_dir / "archive").mkdir()
+        write_task(_minimal_task(task_id), kanban_dir)
+        return kanban_dir
+
+    def test_claimed_task_remains_in_list_tasks_same_engine(self, tmp_path: Path) -> None:
+        """AC-REGR: claim_task() then list_tasks() on same engine — task must be visible."""
+        from owlbear_kanban import KanbanEngine
+
+        kanban_dir = self._make_new_schema_board(tmp_path, task_id=1)
+        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine.claim_task("1")
+
+        task_ids = {t.id for t in engine.list_tasks()}
+
+        assert 1 in task_ids, "Claimed task must appear in list_tasks() after claim_task()"
+
+    def test_claimed_task_remains_in_list_tasks_after_cache_miss(self, tmp_path: Path) -> None:
+        """AC-REGR: Warm cache, then claim_task() triggers mtime change — task must survive cache miss.
+
+        Flow: list_tasks() (warms cache) → claim_task() (file mtime changes)
+        → list_tasks() (cache miss: detect_corruption runs) — task must still appear.
+        """
+        from owlbear_kanban import KanbanEngine
+
+        kanban_dir = self._make_new_schema_board(tmp_path, task_id=2)
+        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+
+        # Warm the cache so next call exercises the cache-miss path
+        engine.list_tasks()
+
+        # claim_task writes claimed_by to disk → new mtime → cache miss on next list_tasks
+        engine.claim_task("2")
+
+        task_ids = {t.id for t in engine.list_tasks()}
+
+        assert 2 in task_ids, "Claimed task must appear in list_tasks() after cache miss"
+
+    def test_start_work_then_list_tasks_includes_task(self, tmp_path: Path) -> None:
+        """AC-REGR: start_work() is the public API for claiming — task must stay in list."""
+        from owlbear_kanban import KanbanEngine
+
+        kanban_dir = self._make_new_schema_board(tmp_path, task_id=3)
+        engine = KanbanEngine(kanban_dir=kanban_dir, agent_name="test-agent")
+        engine.start_work("3")
+
+        task_ids = {t.id for t in engine.list_tasks()}
+
+        assert 3 in task_ids, "Task claimed via start_work() must appear in list_tasks()"
