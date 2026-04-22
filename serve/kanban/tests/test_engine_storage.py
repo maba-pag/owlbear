@@ -518,26 +518,37 @@ class TestFromAC_RepairStorage:
     """AC-C24, AC-C25, AC-C26: repair_storage() two-phase quarantine + AR contract."""
 
     def test_ac_c24_file_moved_before_ar_creation(self, tmp_path: Path) -> None:
-        """AC-C24: corrupt file is quarantined BEFORE AR task creation attempt."""
+        """AC-C24: corrupt file is quarantined BEFORE AR task creation attempt.
+
+        Asserts both that the quarantine destination exists AND that the original
+        tasks/ file is already gone at the moment create_task() is entered.
+        """
         kanban_dir = _make_new_board(tmp_path)
         corrupt_file = kanban_dir / "tasks" / "1001-corrupt.md"
         corrupt_file.write_text(_CORRUPT_TASK, encoding="utf-8")
 
         quarantine_check: list[bool] = []
+        original_gone_check: list[bool] = []
         original_create = KanbanEngine.create_task
 
         def spy_create(self_engine: KanbanEngine, *args: object, **kwargs: object) -> object:
             quarantine_file = kanban_dir / "quarantine" / "1001-corrupt.md"
             quarantine_check.append(quarantine_file.exists())
+            original_gone_check.append(not corrupt_file.exists())  # original must be GONE
             return original_create(self_engine, *args, **kwargs)
 
         with patch.object(KanbanEngine, "create_task", side_effect=spy_create):
             engine = KanbanEngine(kanban_dir)
             engine.repair_storage()
 
-        # File was already in quarantine when create_task was called
+        # Quarantine destination existed when create_task was entered
         assert quarantine_check
         assert all(quarantine_check)
+        # Original corrupt file was already gone from tasks/ at that moment (§4.4 move-before-AR)
+        assert original_gone_check
+        assert all(original_gone_check), (
+            "corrupt file must be GONE from tasks/ before AR creation attempt (AC-C24 §4.4)"
+        )
 
     def test_ac_c25_repair_records_failed_when_ar_creation_fails(
         self, tmp_path: Path
@@ -660,7 +671,12 @@ class TestFromAC_ParseDuration:
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
     def test_ac_c50_board_config_eager_validation_on_load(self, tmp_path: Path) -> None:
-        """AC-C50: load_config with invalid claim_timeout raises ConfigError at load time."""
+        """AC-C50: config_loader.load_config with invalid claim_timeout raises ConfigError at load time.
+
+        Targets the real production entry point used by KanbanEngine.__init__ (engine.py:39/328):
+        owlbear_kanban.config_loader.load_config, not storage.load_config.
+        """
+        from owlbear_kanban.config_loader import load_config as cl_load_config  # noqa: PLC0415
         from owlbear_kanban.models import ConfigError  # noqa: PLC0415
 
         kanban_dir = _make_new_board(tmp_path)
@@ -668,7 +684,7 @@ class TestFromAC_ParseDuration:
         (kanban_dir / "config.yml").write_text(bad_config, encoding="utf-8")
 
         with pytest.raises(ConfigError) as exc_info:
-            load_config(kanban_dir)
+            cl_load_config(kanban_dir)
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
     def test_ac_c50_valid_claim_timeout_loads_without_error(self, tmp_path: Path) -> None:
@@ -678,20 +694,23 @@ class TestFromAC_ParseDuration:
         assert config is not None
 
     def test_ac_c50_config_load_calls_parse_duration_not_only_regex(self, tmp_path: Path) -> None:
-        """AC-C50: load_config must call engine._parse_duration, NOT only a regex wrapper.
+        """AC-C50: config_loader.load_config must call engine._parse_duration at load time.
 
         The AC states 'BoardConfig validation calls _parse_duration(claim_timeout) at
-        config load time (eager validation)'. The current implementation delegates
-        claim_timeout validation to config_loader._validate_claim_timeout which uses a
-        plain regex — it does NOT call engine._parse_duration. This test exposes that
-        gap by patching _parse_duration as a spy and asserting it is called during load.
+        config load time (eager validation)'. KanbanEngine.__init__ uses
+        config_loader.load_config (engine.py:39/328), NOT storage.load_config.
+        config_loader.load_config currently returns at BoardConfig.model_validate() before
+        _validate_claim_timeout() is wired in — so _parse_duration is never reached via
+        this path. This test targets the actual engine load path and asserts the spy is
+        called exactly once.
         """
+        import owlbear_kanban.config_loader as _config_loader  # noqa: PLC0415
         import owlbear_kanban.engine as _eng  # noqa: PLC0415
 
         kanban_dir = _make_new_board(tmp_path)
         with patch.object(_eng, "_parse_duration", wraps=_eng._parse_duration) as mock_pd:
-            load_config(kanban_dir)  # storage.load_config
-        mock_pd.assert_called_once()  # FAILS: _parse_duration is not in the config-load path
+            _config_loader.load_config(kanban_dir)  # real engine path (not storage.load_config)
+        mock_pd.assert_called_once()  # FAILS: config_loader.load_config returns before _validate_claim_timeout
 
 
 # ---------------------------------------------------------------------------
