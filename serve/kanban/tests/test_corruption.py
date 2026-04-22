@@ -1,8 +1,7 @@
-"""TDD RED: C-03 — corruption detection & auto-fix tests.
+"""C-03 — corruption detection & auto-fix tests.
 
 Task: #1048 (Brief C #1043) — paper-c.md §8.4
 AC:   C17, C18, C21, C22
-All tests FAIL (RED phase — corruption module not yet implemented).
 """
 
 from __future__ import annotations

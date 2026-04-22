@@ -172,11 +172,13 @@ def _normalize_timestamp(ts: str | None) -> str | None:
 
 
 def read_task(path: Path) -> Task:
-    """Parse a task file into a :class:`Task`, silently stripping ``claimed_by``.
+    """Parse a task file into a :class:`Task`.
 
-    Archive files containing the legacy ``claimed_by`` field are read without
-    raising :class:`CorruptionError`; the field is stripped from the returned
-    model (AC-C48).
+    For ``tasks/`` files, board-aware corruption detection runs before the model
+    is returned: corrupt fields (non-null ``claimed_by``, invalid status or
+    priority, id/filename mismatch) raise :class:`CorruptionError`. For
+    ``archive/`` files the legacy ``claimed_by`` field is stripped silently
+    (AC-C48).
 
     Args:
         path: Path to the task ``.md`` file.
@@ -186,8 +188,10 @@ def read_task(path: Path) -> Task:
 
     Raises:
         CorruptionError: ERR_CORRUPT_DELIMITERS when ``---`` delimiters are absent.
+        CorruptionError: ERR_CORRUPT_YAML_PARSE when YAML cannot be parsed.
         CorruptionError: ERR_CORRUPT_MISSING_FIELD when required frontmatter is absent.
         CorruptionError: ERR_CORRUPT_TYPE_MISMATCH when a field has an unexpected type.
+        CorruptionError: ERR_CORRUPT_ID_FILENAME_MISMATCH when filename id differs from frontmatter id.
         CorruptionError: ERR_CORRUPT_INVALID_STATUS when status is outside config.
         CorruptionError: ERR_CORRUPT_INVALID_PRIORITY when priority is outside config.
     """
