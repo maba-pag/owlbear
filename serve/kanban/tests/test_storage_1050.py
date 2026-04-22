@@ -311,6 +311,40 @@ class TestFromAC_Frontmatter:
                     f"Expected +00:00 suffix on naive timestamp: {line.rstrip()!r}"
                 )
 
+    def test_non_utc_offset_timestamps_are_converted_to_utc(self, tmp_path: Path) -> None:
+        """AC-C15 boundary: Canonical TS fields with non-UTC offsets (+02:00) are
+        converted to the UTC equivalent (+00:00) when written by write_task()."""
+        kanban_dir = _make_board(tmp_path)
+        task = Task(
+            id=4,
+            title="Non-UTC offset",
+            status="todo",
+            priority="important",
+            created="2026-04-20T10:00:00+02:00",  # +02:00 → must become 08:00+00:00
+            updated="2026-04-20T12:00:00+02:00",  # +02:00 → must become 10:00+00:00
+        )
+        write_task(task, kanban_dir)
+
+        files = list((kanban_dir / "tasks").glob("*.md"))
+        assert len(files) == 1
+        content = files[0].read_text(encoding="utf-8")
+        closing_idx = content.index("---\n", 4)
+        frontmatter = content[4:closing_idx]
+
+        ts_re = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
+        for line in frontmatter.splitlines():
+            if ts_re.search(line):
+                assert line.rstrip().endswith("+00:00"), (
+                    f"Non-UTC offset not converted to +00:00: {line.rstrip()!r}"
+                )
+        # Verify the actual UTC values were written (not just the offset)
+        assert "2026-04-20T08:00:00+00:00" in frontmatter, (
+            "created +02:00 should be converted to UTC 08:00+00:00"
+        )
+        assert "2026-04-20T10:00:00+00:00" in frontmatter, (
+            "updated +02:00 should be converted to UTC 10:00+00:00"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC-C16 — Corruption detection: claimed_by in tasks/
@@ -905,10 +939,10 @@ class TestBuilderDiscovered:
         assert after == before + 1
 
     def test_normalize_timestamp_already_has_tz(self) -> None:
-        """_normalize_timestamp returns ts unchanged when it already has a timezone."""
+        """_normalize_timestamp converts non-UTC offset to UTC per AC-C15 / Brief C §5.3."""
         from owlbear_kanban.storage import _normalize_timestamp
-        ts = "2026-04-20T10:00:00+02:00"
-        assert _normalize_timestamp(ts) == ts
+        # +02:00 input → UTC equivalent 08:00+00:00
+        assert _normalize_timestamp("2026-04-20T10:00:00+02:00") == "2026-04-20T08:00:00+00:00"
 
     def test_normalize_timestamp_z_suffix_is_normalized_to_explicit_utc(self) -> None:
         """_normalize_timestamp rewrites Z-suffix timestamps to +00:00."""
