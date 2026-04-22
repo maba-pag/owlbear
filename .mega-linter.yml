@@ -76,8 +76,9 @@ YAML_YAMLLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/kanban/'
 # JSON — quiet output
 JSON_JSONLINT_ARGUMENTS: "--quiet"
 
-# Markdown
-MARKDOWN_MARKDOWNLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/kanban/'
+# Markdown — keep machine-generated brief drafts out; global excludes already
+# handle kanban tasks/archive, research, scratch, and decisions.
+MARKDOWN_MARKDOWNLINT_FILTER_REGEX_EXCLUDE: '\.owlbear/briefs/'
 
 # EditorConfig — GitHub Actions annotations
 # --disable-indent-size: ruff handles Python indent; editorconfig-checker
