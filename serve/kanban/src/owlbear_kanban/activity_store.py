@@ -279,4 +279,6 @@ def _entry_in_open_session(
     starts = open_session_starts.get(task_id)
     if not starts:
         return False
-    return any(start_index <= index for start_index in starts)
+    # In malformed streams with repeated unmatched claims for a task, treat only
+    # the latest unmatched claim as the active open cycle.
+    return starts[-1] <= index
