@@ -24,10 +24,11 @@ AC coverage:
        globs; no extra entries
   AC4: footer text element with "Last verified: YYYY-MM-DD (commit-hash)" format
   AC5: descriptive (not authoritative) note present
-  AC6: h-excalidraw-diagram conventions (refined 3rd-cycle) — 5 mechanical
+  AC6: h-excalidraw-diagram conventions (refined 4th-cycle) — 6 mechanical
        sub-criteria: unique IDs, fontSize >= 16, arrows have BOTH
        startBinding+endBinding referencing valid IDs, top-left non-arrow element
-       at (100, 100), all non-arrow x/y are multiples of 20
+       at (100, 100), all non-arrow x/y are multiples of 20, no two non-deleted
+       standalone text elements (containerId: null) have overlapping bounding boxes
   AC-idx: uv run doc-index includes a "describes:" entry for ideation.excalidraw
 """
 
@@ -351,7 +352,7 @@ class TestFromAC_IdeationDescriptiveNote:
 
 
 class TestFromAC_IdeationExcalidrawConventions:
-    """AC6 (refined, 3rd-cycle): 5 mechanical sub-criteria from h-excalidraw-diagram.
+    """AC6 (refined, 4th-cycle): 6 mechanical sub-criteria from h-excalidraw-diagram.
 
     1. All element IDs unique (no duplicates).
     2. Text elements: fontSize >= 16.
@@ -359,6 +360,8 @@ class TestFromAC_IdeationExcalidrawConventions:
     4. Origin: the top-left non-deleted non-arrow element starts at (100, 100).
     5. Grid: all non-arrow element x and y coordinates are multiples of 20.
        Arrow coordinates are exempt (they are computed from bindings, not placed).
+    6. No standalone text overlap: no two non-deleted text elements with
+       containerId=null have overlapping bounding boxes.
     """
 
     def test_all_elements_have_unique_ids(self, diagram_data: dict) -> None:
@@ -470,6 +473,40 @@ class TestFromAC_IdeationExcalidrawConventions:
         assert not violators, (
             f"{len(violators)} non-arrow elements have off-grid coordinates "
             f"(not multiples of 20): {violators}"
+        )
+
+    def test_no_standalone_text_elements_overlap(
+        self, diagram_data: dict
+    ) -> None:
+        """Boundary (sub-criterion 6): no two non-deleted text elements with
+        containerId=null have overlapping bounding boxes.
+
+        Two elements A and B overlap when ALL of:
+          A.x < B.x + B.width  AND  B.x < A.x + A.width
+          A.y < B.y + B.height AND  B.y < A.y + A.height
+
+        Current defect: subtitle_text and descriptive_note_text both at (100, 160)
+        overlap completely — this test documents and guards that defect.
+        """
+        elements = diagram_data.get("elements", [])
+        standalone_texts = [
+            e for e in elements
+            if e.get("type") == "text"
+            and not e.get("isDeleted")
+            and e.get("containerId") is None
+        ]
+        overlapping_pairs: list[tuple[str, str]] = []
+        for i, a in enumerate(standalone_texts):
+            for b in standalone_texts[i + 1 :]:
+                ax, ay = a.get("x", 0), a.get("y", 0)
+                aw, ah = a.get("width", 0), a.get("height", 0)
+                bx, by = b.get("x", 0), b.get("y", 0)
+                bw, bh = b.get("width", 0), b.get("height", 0)
+                if ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah:
+                    overlapping_pairs.append((a.get("id", "?"), b.get("id", "?")))
+        assert not overlapping_pairs, (
+            f"{len(overlapping_pairs)} overlapping standalone text element pair(s) found "
+            f"(violates AC6 sub-criterion 6): {overlapping_pairs}"
         )
 
 
