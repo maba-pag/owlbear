@@ -24,8 +24,10 @@ AC coverage:
        globs; no extra entries
   AC4: footer text element with "Last verified: YYYY-MM-DD (commit-hash)" format
   AC5: descriptive (not authoritative) note present
-  AC6: h-excalidraw-diagram conventions — all element IDs unique,
-       text elements have fontSize >= 16, arrows have at least one binding
+  AC6: h-excalidraw-diagram conventions (refined 3rd-cycle) — 5 mechanical
+       sub-criteria: unique IDs, fontSize >= 16, arrows have BOTH
+       startBinding+endBinding referencing valid IDs, top-left non-arrow element
+       at (100, 100), all non-arrow x/y are multiples of 20
   AC-idx: uv run doc-index includes a "describes:" entry for ideation.excalidraw
 """
 
@@ -349,10 +351,18 @@ class TestFromAC_IdeationDescriptiveNote:
 
 
 class TestFromAC_IdeationExcalidrawConventions:
-    """AC6: h-excalidraw-diagram conventions — unique IDs, fontSize >= 16, bound arrows."""
+    """AC6 (refined, 3rd-cycle): 5 mechanical sub-criteria from h-excalidraw-diagram.
+
+    1. All element IDs unique (no duplicates).
+    2. Text elements: fontSize >= 16.
+    3. Arrows: both startBinding and endBinding reference valid element IDs.
+    4. Origin: the top-left non-deleted non-arrow element starts at (100, 100).
+    5. Grid: all non-arrow element x and y coordinates are multiples of 20.
+       Arrow coordinates are exempt (they are computed from bindings, not placed).
+    """
 
     def test_all_elements_have_unique_ids(self, diagram_data: dict) -> None:
-        """Boundary: every element has an 'id' field and no two IDs are the same."""
+        """Boundary (sub-criterion 1): every element has an 'id' and no two are the same."""
         elements = diagram_data.get("elements", [])
         ids = [e.get("id") for e in elements]
         missing = [i for i, eid in enumerate(ids) if eid is None]
@@ -363,7 +373,7 @@ class TestFromAC_IdeationExcalidrawConventions:
     def test_text_elements_font_size_at_least_16(
         self, diagram_data: dict
     ) -> None:
-        """Boundary: no text element has fontSize < 16px (per h-excalidraw-diagram)."""
+        """Boundary (sub-criterion 2): no text element has fontSize < 16px."""
         elements = diagram_data.get("elements", [])
         violators = [
             e.get("id", f"idx:{i}")
@@ -372,9 +382,7 @@ class TestFromAC_IdeationExcalidrawConventions:
             and isinstance(e.get("fontSize"), (int, float))
             and e["fontSize"] < 16
         ]
-        assert not violators, (
-            f"Text elements with fontSize < 16px: {violators}"
-        )
+        assert not violators, f"Text elements with fontSize < 16px: {violators}"
 
     def test_arrow_elements_present(self, diagram_data: dict) -> None:
         """Happy: the diagram contains arrow elements connecting stages."""
@@ -382,20 +390,86 @@ class TestFromAC_IdeationExcalidrawConventions:
         arrows = [e for e in elements if e.get("type") == "arrow"]
         assert len(arrows) > 0, "Diagram has no arrow elements — stages must be connected"
 
-    def test_arrow_elements_have_at_least_one_binding(
+    def test_all_arrows_have_both_bindings_referencing_valid_ids(
         self, diagram_data: dict
     ) -> None:
-        """Boundary: all arrow elements must have at least one binding (start or end)
-        — floating arrows violate h-excalidraw-diagram conventions."""
+        """Boundary (sub-criterion 3): every arrow must have startBinding AND
+        endBinding, each referencing an element ID that exists in the diagram.
+        One-sided or floating arrows violate h-excalidraw-diagram conventions."""
         elements = diagram_data.get("elements", [])
+        valid_ids = {e.get("id") for e in elements if e.get("id")}
         arrows = [e for e in elements if e.get("type") == "arrow"]
-        floating = [
+
+        missing_start = [
             e.get("id", f"idx:{i}")
             for i, e in enumerate(arrows)
-            if not e.get("startBinding") and not e.get("endBinding")
+            if not e.get("startBinding")
         ]
-        assert not floating, (
-            f"Arrow elements with no bindings (floating): {floating}"
+        missing_end = [
+            e.get("id", f"idx:{i}")
+            for i, e in enumerate(arrows)
+            if not e.get("endBinding")
+        ]
+        invalid_start = [
+            (e.get("id"), e["startBinding"]["elementId"])
+            for e in arrows
+            if e.get("startBinding")
+            and e["startBinding"].get("elementId") not in valid_ids
+        ]
+        invalid_end = [
+            (e.get("id"), e["endBinding"]["elementId"])
+            for e in arrows
+            if e.get("endBinding")
+            and e["endBinding"].get("elementId") not in valid_ids
+        ]
+        assert not missing_start, f"Arrows missing startBinding: {missing_start}"
+        assert not missing_end, f"Arrows missing endBinding: {missing_end}"
+        assert not invalid_start, f"Arrows with invalid startBinding elementId: {invalid_start}"
+        assert not invalid_end, f"Arrows with invalid endBinding elementId: {invalid_end}"
+
+    def test_origin_top_left_non_arrow_element_at_100_100(
+        self, diagram_data: dict
+    ) -> None:
+        """Boundary (sub-criterion 4): the topmost-leftmost non-deleted non-arrow
+        element must start at exactly (x=100, y=100), per h-excalidraw-diagram
+        origin convention. Current diagram has title_text at (100, 40) — FAIL."""
+        elements = diagram_data.get("elements", [])
+        candidates = [
+            e for e in elements
+            if e.get("type") != "arrow" and not e.get("isDeleted")
+        ]
+        assert candidates, "No non-deleted non-arrow elements found"
+        top_left = min(candidates, key=lambda e: (e.get("y", 0), e.get("x", 0)))
+        x, y = top_left.get("x", 0), top_left.get("y", 0)
+        assert x == 100, (
+            f"Top-left non-arrow element '{top_left.get('id')}' has x={x} — expected 100"
+        )
+        assert y == 100, (
+            f"Top-left non-arrow element '{top_left.get('id')}' starts at y={y} — "
+            f"expected y=100 per h-excalidraw-diagram origin rule"
+        )
+
+    def test_all_non_arrow_elements_on_20px_grid(
+        self, diagram_data: dict
+    ) -> None:
+        """Boundary (sub-criterion 5): every non-deleted non-arrow element must
+        have x and y coordinates that are exact multiples of 20. Arrow element
+        coordinates are exempt (they are computed from bindings, not manually placed)."""
+        elements = diagram_data.get("elements", [])
+        violators = [
+            {"id": e.get("id"), "x": e.get("x"), "y": e.get("y")}
+            for e in elements
+            if e.get("type") != "arrow"
+            and not e.get("isDeleted")
+            and (
+                isinstance(e.get("x"), (int, float))
+                and isinstance(e.get("y"), (int, float))
+                and (int(e["x"]) % 20 != 0 or int(e["y"]) % 20 != 0)
+            )
+        ]
+        assert not violators, (
+            f"{len(violators)} non-arrow elements have off-grid coordinates "
+            f"(not multiples of 20): {violators}"
         )
 
 
