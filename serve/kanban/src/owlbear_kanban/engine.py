@@ -8,7 +8,7 @@ Architecture:
   - list_tasks() scans tasks_dir (or archive dir), applies filters,
     sorts by config-ranked field, and returns list[TaskSummary].
   - show_task() finds a single task file by ID and returns its Task.
-  - create_task() allocates next_id, writes a new task file, increments config.
+  - create_task() allocates next_id via allocate_next_id (persists config.next_id before write), then writes a new task file.
   - edit_task() modifies task fields in-place; slug/filename never changes.
   - move_task() changes status; "archived" moves file to archive/.
   - claim_task() marks a task as claimed by this engine's agent_name; rejects
