@@ -732,6 +732,163 @@ class TestFromAC_AutoFixMatrix:
         assert "parent:" in repaired_content
         assert "parent: null" in repaired_content
 
+    # ------------------------------------------------------------------
+    # AC-C22 persistence assertions — remaining fixed-path triples
+    # These verify the concrete repaired value written to disk (not just
+    # action == "fixed"). Architecture Review (#1048) confirmed these
+    # pass against existing implementation and must be retained.
+    # ------------------------------------------------------------------
+
+    def test_ac_c22_mode3_missing_tags_persists_empty_list_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, tags absent → repaired file must contain 'tags: []' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "3001-notags.md"
+        _write(
+            bad_file,
+            "---\nid: 3001\ntitle: no tags\nstatus: todo\npriority: needed\n"
+            "depends_on: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
+            "archival_reason: null\narchival_refs: []\nparent: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "tags:" in repaired_content
+        assert "tags: []" in repaired_content
+
+    def test_ac_c22_mode3_missing_depends_on_persists_empty_list_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, depends_on absent → repaired file must contain 'depends_on: []' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "3002-nodeps.md"
+        _write(
+            bad_file,
+            "---\nid: 3002\ntitle: no depends_on\nstatus: todo\npriority: needed\n"
+            "tags: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
+            "archival_reason: null\narchival_refs: []\nparent: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "depends_on:" in repaired_content
+        assert "depends_on: []" in repaired_content
+
+    def test_ac_c22_mode3_missing_blocked_persists_false_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, blocked absent → repaired file must contain 'blocked: false' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "3003-noblocked.md"
+        _write(
+            bad_file,
+            "---\nid: 3003\ntitle: no blocked\nstatus: todo\npriority: needed\n"
+            "tags: []\ndepends_on: []\nblock_reason: null\nclaimed_at: null\n"
+            "archival_reason: null\narchival_refs: []\nparent: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "blocked:" in repaired_content
+        assert "blocked: false" in repaired_content
+
+    def test_ac_c22_mode3_missing_archival_refs_persists_empty_list_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 3, archival_refs absent → repaired file must contain 'archival_refs: []' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "3004-noarchiverefs.md"
+        _write(
+            bad_file,
+            "---\nid: 3004\ntitle: no archival_refs\nstatus: todo\npriority: needed\n"
+            "tags: []\ndepends_on: []\nblocked: false\nblock_reason: null\nclaimed_at: null\n"
+            "archival_reason: null\nparent: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_MISSING_FIELD", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "archival_refs:" in repaired_content
+        assert "archival_refs: []" in repaired_content
+
+    def test_ac_c22_mode4_string_id_persists_int_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 4, id='3005' (digit string) → repaired file must contain 'id: 3005' (int) on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "3005-strid.md"
+        _write(
+            bad_file,
+            '---\nid: "3005"\ntitle: string id\nstatus: todo\npriority: needed\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "id: 3005" in repaired_content
+        assert 'id: "3005"' not in repaired_content
+
+    def test_ac_c22_mode4_string_bool_true_persists_true_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 4, blocked='true' (string) → repaired file must contain 'blocked: true' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "3006-strbool-true.md"
+        _write(
+            bad_file,
+            "---\nid: 3006\ntitle: str bool true\nstatus: todo\npriority: needed\n"
+            'blocked: "true"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "blocked: true" in repaired_content
+        assert 'blocked: "true"' not in repaired_content
+
+    def test_ac_c22_mode4_string_bool_false_persists_false_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C22: mode 4, blocked='false' (string) → repaired file must contain 'blocked: false' on disk."""
+        kanban_dir = _make_board(tmp_path)
+        bad_file = kanban_dir / "tasks" / "3007-strbool-false.md"
+        _write(
+            bad_file,
+            "---\nid: 3007\ntitle: str bool false\nstatus: todo\npriority: needed\n"
+            'blocked: "false"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
+        )
+        config = load_config(kanban_dir)
+
+        outcome = attempt_repair(bad_file, "ERR_CORRUPT_TYPE_MISMATCH", config)
+
+        assert outcome.action == "fixed"
+        repaired_content = bad_file.read_text(encoding="utf-8")
+        assert "blocked: false" in repaired_content
+        assert 'blocked: "false"' not in repaired_content
+
 
 class TestBuilderDiscovered:
     """Additional edge cases discovered during implementation and review follow-up."""
