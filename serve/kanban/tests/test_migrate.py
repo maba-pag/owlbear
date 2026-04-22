@@ -7,6 +7,7 @@ All tests FAIL (RED phase — migrate module not yet implemented).
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -171,6 +172,7 @@ def _run_migrate(
     *,
     lane: str = "all",
     dry_run: bool = False,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     cmd = [
         sys.executable, "-m", "owlbear_kanban.migrate",
@@ -179,7 +181,8 @@ def _run_migrate(
     ]
     if dry_run:
         cmd.append("--dry-run")
-    return subprocess.run(cmd, capture_output=True, text=True)
+    env = {**os.environ, **(extra_env or {})}
+    return subprocess.run(cmd, capture_output=True, text=True, env=env)
 
 
 # ---------------------------------------------------------------------------
@@ -556,3 +559,405 @@ class TestFromAC_ExitCode:
         combined = result.stdout + result.stderr
         # Should mention the stub fields that require manual attention
         assert "agent_map" in combined or "WARNING" in combined or "manual" in combined.lower()
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_LaneSelectionStrict — AC-C32 (stricter assertions, retry-cycle)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_LaneSelectionStrict:
+    """AC-C32: success-path invocations must exit 0 (not 0-or-1)."""
+
+    def test_ac_c32_tasks_lane_exits_0_on_success_path(self, tmp_path: Path) -> None:
+        """AC-C32: --lane tasks exits 0 when a legacy task is successfully migrated."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-t.md").write_text(
+            _LEGACY_TASK.format(task_id=1001), encoding="utf-8"
+        )
+        result = _run_migrate(kanban_dir, lane="tasks")
+        assert result.returncode == 0
+
+    def test_ac_c32_archive_lane_exits_0_on_success_path(self, tmp_path: Path) -> None:
+        """AC-C32: --lane archive exits 0 when a legacy archive is successfully migrated."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        (kanban_dir / "archive" / "0001-old.md").write_text(
+            _LEGACY_ARCHIVE.format(task_id=1), encoding="utf-8"
+        )
+        result = _run_migrate(kanban_dir, lane="archive")
+        assert result.returncode == 0
+
+    def test_ac_c32_all_lane_exits_0_on_full_legacy_board(self, tmp_path: Path) -> None:
+        """AC-C32: --lane all exits 0 when all lanes migrate successfully."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-t.md").write_text(
+            _LEGACY_TASK.format(task_id=1001), encoding="utf-8"
+        )
+        (kanban_dir / "archive" / "0001-old.md").write_text(
+            _LEGACY_ARCHIVE.format(task_id=1), encoding="utf-8"
+        )
+        result = _run_migrate(kanban_dir, lane="all")
+        assert result.returncode == 0
+
+    def test_ac_c32_single_lane_does_not_touch_other_dir(self, tmp_path: Path) -> None:
+        """AC-C32: --lane tasks must not modify archive files; archive content asserted intact."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-old.md"
+        arc_content = _LEGACY_ARCHIVE.format(task_id=1)
+        arc_file.write_text(arc_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-t.md").write_text(
+            _LEGACY_TASK.format(task_id=1001), encoding="utf-8"
+        )
+        _run_migrate(kanban_dir, lane="tasks")
+        assert arc_file.read_text(encoding="utf-8") == arc_content
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ArchiveLaneAlgorithmsStrict — AC-C33 (stricter, retry-cycle)
+# ---------------------------------------------------------------------------
+
+
+_ARCHIVE_ONE_REASON_NO_REFS = """\
+---
+id: {task_id}
+title: Archive partial {task_id}
+status: done
+priority: needed
+archival_reason: completed
+---
+
+## Notes
+
+Has reason, missing refs.
+"""
+
+_ARCHIVE_NO_REASON_EMPTY_REFS = """\
+---
+id: {task_id}
+title: Archive partial {task_id}
+status: done
+priority: needed
+archival_refs: []
+---
+
+## Notes
+
+Has refs, missing reason.
+"""
+
+_ARCHIVE_EMPTY_REASON = """\
+---
+id: {task_id}
+title: Archive bad reason {task_id}
+status: done
+priority: needed
+archival_reason: ""
+archival_refs: []
+---
+
+## Notes
+
+Empty reason is invalid.
+"""
+
+_ARCHIVE_WITH_INT_REFS = """\
+---
+id: {task_id}
+title: Archive int refs {task_id}
+status: done
+priority: needed
+archival_reason: completed
+archival_refs:
+- 1001
+- 1002
+---
+
+## Notes
+
+Integer refs from pre-C model.
+"""
+
+
+class TestFromAC_ArchiveLaneAlgorithmsStrict:
+    """AC-C33 strict: one-field-present auto-fill, invalid field failures, body preservation."""
+
+    def test_ac_c33_archive_with_reason_fills_absent_refs(self, tmp_path: Path) -> None:
+        """AC-C33: archive with valid reason but missing refs gets refs: [] auto-filled."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001.md"
+        arc_file.write_text(_ARCHIVE_ONE_REASON_NO_REFS.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        assert result.returncode == 0
+
+        content = arc_file.read_text(encoding="utf-8")
+        assert "archival_reason: completed" in content
+        assert "archival_refs:" in content
+
+    def test_ac_c33_archive_with_refs_fills_absent_reason(self, tmp_path: Path) -> None:
+        """AC-C33: archive with valid refs but missing reason gets reason: completed auto-filled."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001.md"
+        arc_file.write_text(_ARCHIVE_NO_REASON_EMPTY_REFS.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        assert result.returncode == 0
+
+        content = arc_file.read_text(encoding="utf-8")
+        assert "archival_reason: completed" in content
+
+    def test_ac_c33_archive_empty_string_reason_records_failure(self, tmp_path: Path) -> None:
+        """AC-C33: archive with empty-string archival_reason records manual-action failure."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001.md"
+        arc_file.write_text(_ARCHIVE_EMPTY_REASON.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        assert result.returncode == 1
+        assert "manual-action required" in result.stderr
+
+    def test_ac_c33_archive_preserves_body_text_verbatim(self, tmp_path: Path) -> None:
+        """AC-C33: archive lane does NOT rewrite body — body text preserved verbatim."""
+        body = "\n## Notes\n\nOriginal body content with *markdown*.\n"
+        arc_content = (
+            f"---\nid: 1\ntitle: t\nstatus: done\npriority: needed\n---\n{body}"
+        )
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001.md"
+        arc_file.write_text(arc_content, encoding="utf-8")
+
+        _run_migrate(kanban_dir, lane="archive")
+        written = arc_file.read_text(encoding="utf-8")
+        # Body text after closing --- must be preserved
+        after_fm = written.split("---\n", 2)[-1]
+        assert "Original body content with *markdown*." in after_fm
+
+    def test_ac_c33_config_lane_warning_mentions_readme(self, tmp_path: Path) -> None:
+        """AC-C33: config lane emits warning line mentioning serve/kanban/README.md."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        result = _run_migrate(kanban_dir, lane="config")
+        assert "serve/kanban/README.md" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_IdempotencyEdgeCases — AC-C35 (edge cases, retry-cycle)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_IdempotencyEdgeCases:
+    """AC-C35: idempotency predicates for tasks and archives — edge cases."""
+
+    def test_ac_c35_task_missing_one_canonical_field_is_migrated(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35: task missing archival_refs (even with archival_reason) is NOT skipped."""
+        # Has archival_reason but NOT archival_refs → is_task_migrated returns False
+        task_content = (
+            "---\n"
+            "id: 1001\n"
+            "title: partial\n"
+            "status: todo\n"
+            "priority: needed\n"
+            'created: "2026-01-15T08:00:00+00:00"\n'
+            'updated: "2026-01-15T08:00:00+00:00"\n'
+            "tags: []\n"
+            "parent: null\n"
+            "depends_on: []\n"
+            "blocked: false\n"
+            "block_reason: null\n"
+            "claimed_at: null\n"
+            "archival_reason: null\n"
+            "---\n\n## Notes\n\nContent.\n"
+        )
+        kanban_dir = _make_legacy_board(tmp_path)
+        task_file = kanban_dir / "tasks" / "1001-partial.md"
+        task_file.write_text(task_content, encoding="utf-8")
+        mtime_before = task_file.stat().st_mtime
+
+        _run_migrate(kanban_dir, lane="tasks")
+        # File must have been written (not skipped)
+        assert task_file.stat().st_mtime != mtime_before or (
+            "archival_refs:" in task_file.read_text(encoding="utf-8")
+        )
+        assert "archival_refs:" in task_file.read_text(encoding="utf-8")
+
+    def test_ac_c35_archive_empty_reason_not_treated_as_idempotent(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35: archive with empty-string reason is NOT skipped (fails for manual action)."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001.md"
+        arc_file.write_text(_ARCHIVE_EMPTY_REASON.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        # Must NOT be treated as already-migrated; should fail for manual action
+        assert result.returncode == 1
+        assert "manual-action required" in result.stderr
+
+    def test_ac_c35_archive_list_int_refs_not_rejected_as_invalid(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35: archive with list[int] archival_refs must be treated as idempotent.
+
+        Architecture Notes: 'The idempotency predicate should not reject list[int] values.'
+        A file with archival_reason: completed and archival_refs: [1001, 1002] (integers)
+        is already migrated and must be skipped without failure.
+        """
+        kanban_dir = _make_modern_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-int-refs.md"
+        arc_file.write_text(_ARCHIVE_WITH_INT_REFS.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        # Must exit 0 (no failures) — list[int] refs are valid per Architecture Notes
+        assert result.returncode == 0
+        assert "manual-action required" not in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_DryRunStrict — AC-C36 (stricter, retry-cycle)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DryRunStrict:
+    """AC-C36: dry-run writes nothing across all lanes; file mtimes unchanged."""
+
+    def test_ac_c36_dry_run_archive_leaves_file_unchanged(self, tmp_path: Path) -> None:
+        """AC-C36: --lane archive --dry-run leaves archive file content and mtime unchanged."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-old.md"
+        original = _LEGACY_ARCHIVE.format(task_id=1)
+        arc_file.write_text(original, encoding="utf-8")
+        mtime_before = arc_file.stat().st_mtime
+
+        result = _run_migrate(kanban_dir, lane="archive", dry_run=True)
+        assert result.returncode == 0
+        assert arc_file.read_text(encoding="utf-8") == original
+        assert arc_file.stat().st_mtime == mtime_before
+
+    def test_ac_c36_dry_run_tasks_exits_0_and_reports_scanned(self, tmp_path: Path) -> None:
+        """AC-C36: --dry-run on legacy tasks exits 0 and reports Scanned count in output."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-t.md").write_text(
+            _LEGACY_TASK.format(task_id=1001), encoding="utf-8"
+        )
+        result = _run_migrate(kanban_dir, lane="tasks", dry_run=True)
+        assert result.returncode == 0
+        assert "Scanned: 1" in result.stdout
+        assert "Migrated: 1" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_CrashRecoverySubprocess — AC-C37 (subprocess seam, retry-cycle)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CrashRecoverySubprocess:
+    """AC-C37: crash via KANBAN_MIGRATE_CRASH_AFTER env var — subprocess seam."""
+
+    def _write_tasks(self, kanban_dir: Path, count: int = 3) -> list[Path]:
+        files = []
+        for i in range(1001, 1001 + count):
+            f = kanban_dir / "tasks" / f"{i}-task.md"
+            f.write_text(_LEGACY_TASK.format(task_id=i), encoding="utf-8")
+            files.append(f)
+        return files
+
+    def test_ac_c37_crash_after_first_write_exits_nonzero(self, tmp_path: Path) -> None:
+        """AC-C37: KANBAN_MIGRATE_CRASH_AFTER=1 causes subprocess to exit non-zero."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        self._write_tasks(kanban_dir)
+
+        result = _run_migrate(kanban_dir, lane="tasks", extra_env={"KANBAN_MIGRATE_CRASH_AFTER": "1"})
+        assert result.returncode != 0
+
+    def test_ac_c37_crash_leaves_no_tmp_files_in_tasks_dir(self, tmp_path: Path) -> None:
+        """AC-C37: crash after write leaves no .tmp-* partial files in tasks/."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        self._write_tasks(kanban_dir)
+
+        _run_migrate(kanban_dir, lane="tasks", extra_env={"KANBAN_MIGRATE_CRASH_AFTER": "1"})
+        leftovers = list((kanban_dir / "tasks").glob(".tmp-*"))
+        assert leftovers == [], f"Partial .tmp- files found: {leftovers}"
+
+    def test_ac_c37_resume_after_crash_exits_0(self, tmp_path: Path) -> None:
+        """AC-C37: re-running after a crash (without crash env) converges to exit 0."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        self._write_tasks(kanban_dir)
+
+        # First run: crash after 1 write
+        _run_migrate(kanban_dir, lane="tasks", extra_env={"KANBAN_MIGRATE_CRASH_AFTER": "1"})
+        # Resume: must succeed
+        result2 = _run_migrate(kanban_dir, lane="tasks")
+        assert result2.returncode == 0
+
+    def test_ac_c37_final_state_fully_migrated_after_crash_and_resume(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C37: after crash + resume, all task files have claimed_by removed."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        files = self._write_tasks(kanban_dir)
+
+        _run_migrate(kanban_dir, lane="tasks", extra_env={"KANBAN_MIGRATE_CRASH_AFTER": "1"})
+        _run_migrate(kanban_dir, lane="tasks")
+
+        for f in files:
+            content = f.read_text(encoding="utf-8")
+            assert "claimed_by" not in content, f"{f.name} still has claimed_by after resume"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ManualActionSummaryStrict — AC-C38a (stricter, retry-cycle)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ManualActionSummaryStrict:
+    """AC-C38a: MANUAL ACTION SUMMARY output pinned with all required keywords."""
+
+    def test_ac_c38a_config_migration_emits_manual_action_summary_header(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C38a: config lane migration emits 'MANUAL ACTION SUMMARY:' on stderr."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        result = _run_migrate(kanban_dir, lane="config")
+        assert "MANUAL ACTION SUMMARY:" in result.stderr
+
+    def test_ac_c38a_config_summary_mentions_agent_map(self, tmp_path: Path) -> None:
+        """AC-C38a: config manual-action summary mentions agent_map."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        result = _run_migrate(kanban_dir, lane="config")
+        assert "agent_map" in result.stderr
+
+    def test_ac_c38a_config_summary_mentions_agent_types(self, tmp_path: Path) -> None:
+        """AC-C38a: config manual-action summary mentions agent_types."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        result = _run_migrate(kanban_dir, lane="config")
+        assert "agent_types" in result.stderr
+
+    def test_ac_c38a_config_summary_mentions_agent_compatibility(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C38a: config manual-action summary mentions agent_compatibility."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        result = _run_migrate(kanban_dir, lane="config")
+        assert "agent_compatibility" in result.stderr
+
+    def test_ac_c38a_config_summary_mentions_type_user_action(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C38a: config manual-action summary mentions type:user-action task materialisation."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        result = _run_migrate(kanban_dir, lane="config")
+        assert "type:user-action" in result.stderr
+
+    def test_ac_c38a_archive_invalid_reason_produces_fail_line_on_stderr(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C38a: archive lane manual-action failure emits FAIL line with reason on stderr."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-bad.md"
+        arc_file.write_text(_ARCHIVE_EMPTY_REASON.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        assert result.returncode == 1
+        assert "FAIL" in result.stderr
+        assert "manual-action required" in result.stderr
