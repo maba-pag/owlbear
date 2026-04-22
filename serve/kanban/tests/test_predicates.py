@@ -1,18 +1,17 @@
-"""TDD RED: C-06 — predicate tests.
+"""C-06 — predicate tests.
 
 Task: #1051 (Brief C #1043) — paper-c.md §8.8
-AC:   C39, C40, C41
-All tests FAIL (RED phase — predicates module not yet implemented with Section-based substrate).
+AC:   C39, C40, C40a, C40b, C41
 """
 
 from __future__ import annotations
 
 
-from owlbear_kanban.predicates import (  # NEW module — ImportError in RED
+from owlbear_kanban.predicates import (
     required_sections,
     require_list_in_section,
 )
-from owlbear_kanban.storage import Section  # NEW type — ImportError in RED
+from owlbear_kanban.storage import Section
 from owlbear_kanban.models import Task
 
 
