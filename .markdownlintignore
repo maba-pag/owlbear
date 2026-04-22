@@ -3,6 +3,5 @@
 .owlbear/kanban/tasks
 .owlbear/research
 .owlbear/scratch
-.github
 .venv
 node_modules
