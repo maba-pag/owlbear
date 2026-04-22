@@ -112,7 +112,10 @@ def _is_archive_reason_valid(value: object) -> bool:
 
 
 def _is_archive_refs_valid(value: object) -> bool:
-    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+    return isinstance(value, list) and all(
+        (isinstance(item, str) or (isinstance(item, int) and not isinstance(item, bool)))
+        for item in value
+    )
 
 
 def _is_task_migrated(fm: dict[str, Any]) -> bool:
