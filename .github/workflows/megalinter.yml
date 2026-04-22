@@ -94,32 +94,33 @@ jobs:
         if: always()
         shell: bash
         run: |
-          echo "## MegaLinter Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Auto-fix enabled: ${{ inputs.fix }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Auto-fix mode: ${{ inputs.fix && inputs.fix_mode || 'disabled' }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ inputs.fix }}" = "true" ] && [ "${{ steps.megalinter.outputs.has_updated_sources }}" = "1" ]; then
-            if [ "${{ inputs.fix_mode }}" = "pull_request" ] && [ "${{ steps.fix_pr.outcome }}" = "success" ]; then
-              echo "Created or updated fix PR: ${{ steps.fix_pr.outputs.pull-request-url }}" >> "$GITHUB_STEP_SUMMARY"
-            elif [ "${{ steps.fix_commit.outcome }}" = "success" ]; then
-              echo "Applied fixes were committed back to branch ${{ github.ref_name }}." >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo "MegaLinter updated files, but publishing those fixes did not complete." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## MegaLinter Results"
+            echo ""
+            echo "Auto-fix enabled: ${{ inputs.fix }}"
+            echo "Auto-fix mode: ${{ inputs.fix && inputs.fix_mode || 'disabled' }}"
+            echo ""
+            if [ "${{ inputs.fix }}" = "true" ] && [ "${{ steps.megalinter.outputs.has_updated_sources }}" = "1" ]; then
+              if [ "${{ inputs.fix_mode }}" = "pull_request" ] && [ "${{ steps.fix_pr.outcome }}" = "success" ]; then
+                echo "Created or updated fix PR: ${{ steps.fix_pr.outputs.pull-request-url }}"
+              elif [ "${{ steps.fix_commit.outcome }}" = "success" ]; then
+                echo "Applied fixes were committed back to branch ${{ github.ref_name }}."
+              else
+                echo "MegaLinter updated files, but publishing those fixes did not complete."
+              fi
+              echo ""
+            elif [ "${{ inputs.fix }}" = "true" ]; then
+              echo "Auto-fix was enabled, but MegaLinter did not report updated files."
+              echo ""
             fi
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${{ inputs.fix }}" = "true" ]; then
-            echo "Auto-fix was enabled, but MegaLinter did not report updated files." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ "${{ steps.megalinter.outcome }}" = "success" ]; then
-            echo "All linters passed." >> "$GITHUB_STEP_SUMMARY"
-          else
-            ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            echo "Some linters reported issues." \
-              "See [megalinter-reports artifact](${ARTIFACT_URL})" \
-              >> "$GITHUB_STEP_SUMMARY"
-          fi
+            if [ "${{ steps.megalinter.outcome }}" = "success" ]; then
+              echo "All linters passed."
+            else
+              ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              echo "Some linters reported issues." \
+                "See [megalinter-reports artifact](${ARTIFACT_URL})"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if lint failed
         if: steps.megalinter.outcome != 'success'
