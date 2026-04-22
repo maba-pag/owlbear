@@ -150,6 +150,42 @@ class TestFromAC_AtomicWrite:
         atomic_write(target, content)
         assert target.read_text(encoding="utf-8") == content
 
+    def test_ac_c1_fsyncs_in_correct_order(self, tmp_path: Path) -> None:
+        """AC-C1: operation order must be fsync(file-fd) → replace → fsync(dir-fd)."""
+        target = tmp_path / "output.md"
+        parent_dir = str(target.parent)
+        original_open = os.open
+        original_fsync = os.fsync
+        original_replace = os.replace
+
+        dir_fds: set[int] = set()
+        sequence: list[str] = []
+
+        def spy_open(path: str, flags: int, *args: object, **kwargs: object) -> int:
+            fd = original_open(path, flags, *args, **kwargs)
+            if path == parent_dir:
+                dir_fds.add(fd)
+            return fd
+
+        def spy_fsync(fd: int) -> None:
+            sequence.append("fsync_dir" if fd in dir_fds else "fsync_file")
+            original_fsync(fd)
+
+        def spy_replace(src: str, dst: str) -> None:
+            sequence.append("replace")
+            original_replace(src, dst)
+
+        with (
+            patch("os.open", side_effect=spy_open),
+            patch("os.fsync", side_effect=spy_fsync),
+            patch("os.replace", side_effect=spy_replace),
+        ):
+            atomic_write(target, "test content\n")
+
+        assert sequence == ["fsync_file", "replace", "fsync_dir"], (
+            f"Expected ['fsync_file', 'replace', 'fsync_dir'], got {sequence}"
+        )
+
     def test_ac_c2_cleans_up_tmp_on_replace_failure(self, tmp_path: Path) -> None:
         """AC-C2: .tmp-* file removed when os.replace raises; target unaffected."""
         target = tmp_path / "existing.md"
@@ -233,6 +269,20 @@ class TestFromAC_IDAllocation:
         assert errors == [], f"Unexpected errors during allocation: {errors}"
         assert len(results) == 50
         assert len(set(results)) == 50, f"Duplicate IDs found: {sorted(results)}"
+
+    def test_ac_c4_next_id_lock_file_exists_after_allocation(self, tmp_path: Path) -> None:
+        """AC-C4: allocate_next_id uses kanban_dir/.next_id.lock — file exists after call."""
+        kanban_dir = _make_board(tmp_path)
+        expected_lock = kanban_dir / ".next_id.lock"
+
+        assert not expected_lock.exists(), "Lock file must not exist before first allocation"
+
+        allocate_next_id(kanban_dir)
+
+        assert expected_lock.exists(), (
+            f".next_id.lock must exist at {expected_lock} after allocate_next_id; "
+            "using a threading.Lock or a different path would fail this assertion"
+        )
 
     def test_ac_c4a_cas_20_threads_one_success_19_stale(self, tmp_path: Path) -> None:
         """AC-C4a: 20 threads racing write_task_if_unchanged → exactly 1 success, 19 ERR_STALE."""
