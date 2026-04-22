@@ -254,3 +254,35 @@ class TestFromAC_RequireListInSection:
             body="## Tests\n- item\n",
         )
         assert require_list_in_section(task, "Tests") is True
+
+    def test_ac_c40_star_bullet_returns_true(self) -> None:
+        """AC-C40: '* item' is a CommonMark bullet_list — must return True (mutation guard: [-*+] not narrowed to [-])."""
+        task = _make_task_with_sections(
+            _make_sections(("Steps", 2, "* first step\n* second step\n"))
+        )
+        assert require_list_in_section(task, "Steps") is True
+
+    def test_ac_c40_plus_bullet_returns_true(self) -> None:
+        """AC-C40: '+ item' is a CommonMark bullet_list — must return True (mutation guard: [-*+] not narrowed to [-])."""
+        task = _make_task_with_sections(
+            _make_sections(("Steps", 2, "+ first step\n+ second step\n"))
+        )
+        assert require_list_in_section(task, "Steps") is True
+
+    def test_ac_c40_tilde_fence_excludes_list_items(self) -> None:
+        """AC-C40: list-like lines inside tilde fence are NOT a CommonMark list (mutation guard: ~{3,} recognised)."""
+        content = "~~~\n- fake list item\n1. also fake\n~~~\n"
+        task = _make_task_with_sections(
+            _make_sections(("Code", 2, content))
+        )
+        assert require_list_in_section(task, "Code") is False
+
+    def test_ac_c41_all_bullet_markers_recognised(self) -> None:
+        """AC-C41: Brief B D64 semantics covered all three CommonMark bullet markers; new substrate must match."""
+        for marker in ("-", "*", "+"):
+            task = _make_task_with_sections(
+                _make_sections(("Items", 2, f"{marker} first\n{marker} second\n"))
+            )
+            assert require_list_in_section(task, "Items") is True, (
+                f"Bullet marker '{marker}' not recognised — AC-C41 semantic equivalence broken"
+            )
