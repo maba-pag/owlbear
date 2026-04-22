@@ -193,6 +193,44 @@ class TestFromAC_ActivityAppendQuery:
 
         assert read_calls == [], f"Unexpectedly read .md files: {read_calls}"
 
+    def test_ac_c42_frontmatter_exclusion_via_path_read_text(self, tmp_path: Path) -> None:
+        """AC-C42: list_activity_events never reads .md files via Path.read_text or Path.open.
+
+        Complements test_ac_c42_does_not_scan_task_frontmatter by also patching
+        Path.read_text and Path.open — the actual file-read paths used by the implementation.
+        """
+        from unittest.mock import patch  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        append_activity_event(_make_event(), kanban_dir)
+
+        # Create a task md file to ensure one is present in the board
+        task_file = kanban_dir / "tasks" / "0001-test.md"
+        task_file.write_text("---\nid: 1\n---\n## Body\n", encoding="utf-8")
+
+        md_read_calls: list[str] = []
+
+        original_path_read_text = Path.read_text  # type: ignore[attr-defined]
+        original_path_open = Path.open  # type: ignore[attr-defined]
+
+        def spy_read_text(self: Path, *args: object, **kwargs: object) -> str:
+            if str(self).endswith(".md"):
+                md_read_calls.append(str(self))
+            return original_path_read_text(self, *args, **kwargs)
+
+        def spy_path_open(self: Path, *args: object, **kwargs: object) -> object:
+            if str(self).endswith(".md"):
+                md_read_calls.append(str(self))
+            return original_path_open(self, *args, **kwargs)
+
+        with (
+            patch.object(Path, "read_text", spy_read_text),
+            patch.object(Path, "open", spy_path_open),
+        ):
+            list_activity_events(kanban_dir, task_id=1001)
+
+        assert md_read_calls == [], f"Unexpectedly read .md files via Path: {md_read_calls}"
+
     def test_ac_c44_no_session_jsonl_file_on_disk(self, tmp_path: Path) -> None:
         """AC-C44: no session table on disk — only activity.jsonl."""
         kanban_dir = _make_board(tmp_path)
@@ -243,6 +281,60 @@ class TestFromAC_ActivityCompaction:
         # Before > after (something was compacted)
         assert result.before_bytes > result.after_bytes
 
+    def test_ac_c44a_a_resolves_to_most_recent_close_not_oldest(self, tmp_path: Path) -> None:
+        """AC-C44a(a): before_dt=None resolves to the MOST RECENTLY closed session timestamp.
+
+        Two closed sessions exist. Verifies the cutoff is the newer one, not the older,
+        by checking which event survives compaction. An event between the two close timestamps
+        must be removed (proves newer cutoff), whereas it would be retained if the older
+        cutoff was erroneously selected.
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        older_close_dt = now - timedelta(hours=4)
+        newer_close_dt = now - timedelta(hours=2)
+
+        # Older closed session
+        append_activity_event(
+            _make_event(action="claim", ts=(now - timedelta(hours=6)).isoformat(), task_id=1),
+            kanban_dir,
+        )
+        append_activity_event(
+            _make_event(action="end_work", ts=older_close_dt.isoformat(), task_id=1),
+            kanban_dir,
+        )
+
+        # Event BETWEEN the two close timestamps — removed only if newer cutoff is used
+        between_ts = (now - timedelta(hours=3)).isoformat()
+        append_activity_event(
+            _make_event(action="edit", ts=between_ts, task_id=2),
+            kanban_dir,
+        )
+
+        # Newer closed session
+        append_activity_event(
+            _make_event(action="end_work", ts=newer_close_dt.isoformat(), task_id=2),
+            kanban_dir,
+        )
+
+        # Event after newer close — must always be retained
+        append_activity_event(
+            _make_event(action="edit", ts=(now - timedelta(hours=1)).isoformat(), task_id=3),
+            kanban_dir,
+        )
+
+        compact_activity_log(kanban_dir, before_dt=None)
+        remaining = list_activity_events(kanban_dir)
+
+        # The edit event between the two close timestamps must be gone (newer cutoff applied)
+        assert not any(
+            e.task_id == 2 and e.action == "edit" for e in remaining
+        ), "Edit between older and newer close must be removed — proves newer cutoff was used"
+
+        # Event after newer close must be present
+        assert any(e.task_id == 3 for e in remaining), "Event after newer close must be retained"
+
     def test_ac_c44a_b_open_sessions_always_retained(self, tmp_path: Path) -> None:
         """AC-C44a (b): entries in open sessions (no matching end event) always retained."""
         kanban_dir = _make_board(tmp_path)
@@ -263,6 +355,50 @@ class TestFromAC_ActivityCompaction:
         remaining = list_activity_events(kanban_dir, task_id=99)
         assert len(remaining) >= 1
         assert any(e.action == "claim" for e in remaining)
+
+    def test_ac_c44a_b_reclaim_same_task_compacts_closed_cycle_entries(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C44a(b): compaction removes closed-cycle entries for a task that was later re-claimed.
+
+        A task claimed, then closed/released, then re-claimed: only the current open cycle
+        must survive compaction. The old closed cycle's entries are eligible for removal.
+        Reference domain path: test_list_sessions.py:444-459.
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        # First (closed) claim cycle for task 7
+        first_claim_ts = (now - timedelta(hours=6)).isoformat()
+        first_close_ts = (now - timedelta(hours=5)).isoformat()
+        append_activity_event(
+            _make_event(action="claim", ts=first_claim_ts, task_id=7), kanban_dir
+        )
+        append_activity_event(
+            _make_event(action="end_work", ts=first_close_ts, task_id=7), kanban_dir
+        )
+
+        # Second (open) claim cycle for the same task 7
+        second_claim_ts = (now - timedelta(minutes=30)).isoformat()
+        append_activity_event(
+            _make_event(action="claim", ts=second_claim_ts, task_id=7), kanban_dir
+        )
+
+        # Compact with cutoff that makes the first cycle eligible for removal
+        cutoff = now - timedelta(hours=4)
+        compact_activity_log(kanban_dir, before_dt=cutoff)
+
+        remaining = list_activity_events(kanban_dir, task_id=7)
+
+        # Old closed-cycle claim must be gone (closed cycle, before cutoff)
+        assert not any(
+            e.action == "claim" and e.timestamp == first_claim_ts for e in remaining
+        ), "Old closed-cycle claim must be compacted"
+
+        # Current open-cycle claim must be retained (open session always kept)
+        assert any(
+            e.action == "claim" and e.timestamp == second_claim_ts for e in remaining
+        ), "Current open-cycle claim must always be retained"
 
     def test_ac_c44a_c_last_500_entries_always_retained(self, tmp_path: Path) -> None:
         """AC-C44a (c): at least last 500 entries always retained regardless of cutoff."""
@@ -292,6 +428,33 @@ class TestFromAC_ActivityCompaction:
         # No leftover .tmp- files
         tmp_files = list(kanban_dir.glob(".tmp-*"))
         assert tmp_files == [], f"Leftover tmp files after compaction: {tmp_files}"
+
+    def test_ac_c44a_d_delegates_to_atomic_write(self, tmp_path: Path) -> None:
+        """AC-C44a(d): compact_activity_log delegates the file rewrite to atomic_write.
+
+        Patches atomic_write at the module level and asserts it is called exactly once
+        with the activity.jsonl path as the first argument and a string as the second.
+        """
+        from unittest.mock import patch  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        for i in range(5):
+            ts = (now - timedelta(hours=10 + i)).isoformat()
+            append_activity_event(_make_event(task_id=i, ts=ts), kanban_dir)
+
+        # Use a future cutoff so compaction actually rewrites the file
+        cutoff = now + timedelta(hours=1)
+
+        with patch("owlbear_kanban.activity_store.atomic_write") as mock_atomic_write:
+            compact_activity_log(kanban_dir, before_dt=cutoff)
+
+        mock_atomic_write.assert_called_once()
+        call_args = mock_atomic_write.call_args
+        # First positional arg: the activity.jsonl path
+        assert call_args[0][0] == kanban_dir / "activity.jsonl"
+        # Second positional arg: string content (new file body)
+        assert isinstance(call_args[0][1], str)
 
     def test_ac_c44a_e_idempotent_no_new_appends(self, tmp_path: Path) -> None:
         """AC-C44a (e): re-running compaction with same before_dt and no new appends is idempotent."""
