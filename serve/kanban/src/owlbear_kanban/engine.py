@@ -34,8 +34,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from owlbear_kanban import storage
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
-from owlbear_kanban.config_loader import load_config, save_config
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.models import (
     BoardConfig,
     ConfigError,
@@ -44,7 +45,12 @@ from owlbear_kanban.models import (
     Task,
     TaskSummary,
 )
-from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
+from owlbear_kanban.task_io import (
+    make_task_filename,
+    read_task,
+    validate_path_containment,
+    write_task,
+)
 
 # ---------------------------------------------------------------------------
 # Module-level duration parser (AC-C49)
@@ -654,11 +660,12 @@ class KanbanEngine:
         parent: int | None = None,
         depends_on: list[int] | None = None,
     ) -> Task:
-        """Allocate next_id, write a new task file, and increment config next_id.
+        """Allocate next_id, then write a new task file.
 
-        The entire read→write→save critical section is protected by an exclusive
-        cross-process file lock (``.next_id.lock``), preventing duplicate IDs
-        when concurrent engine instances call this method simultaneously.
+        ID allocation is delegated to ``storage.allocate_next_id()``, which
+        advances and persists ``config.next_id`` under the shared file lock.
+        If writing the task file fails after allocation, the allocated ID is
+        intentionally burned to preserve crash safety.
 
         Args:
             title:      Task title (used to generate the filename slug).
@@ -675,42 +682,41 @@ class KanbanEngine:
         Raises:
             ValueError: ``status`` or ``priority`` is not a valid configured value.
         """
-        with _exclusive_file_lock(self._kanban_dir / ".next_id.lock"):
-            config: BoardConfig = load_config(self._kanban_dir)
+        config: BoardConfig = load_config(self._kanban_dir)
 
-            if status:
-                valid_statuses = {s["name"] for s in config.statuses}
-                if status not in valid_statuses:
-                    msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
-                    raise ValueError(msg)
-            if priority and priority not in config.priorities:
-                msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
+        if status:
+            valid_statuses = {
+                s["name"] if isinstance(s, dict) else str(s)
+                for s in config.statuses
+            }
+            if status not in valid_statuses:
+                msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
+        if priority and priority not in config.priorities:
+            msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
+            raise ValueError(msg)
 
-            task_id = config.next_id
-            now = datetime.now(tz=UTC).isoformat()
+        task_id = storage.allocate_next_id(self._kanban_dir)
+        now = datetime.now(tz=UTC).isoformat()
 
-            record = Task(
-                id=task_id,
-                title=title,
-                status=status or config.defaults.status,
-                priority=priority or config.defaults.priority,
-                created=now,
-                updated=now,
-                body=body,
-                tags=list(tags) if tags else [],
-                parent=parent,
-                depends_on=list(depends_on) if depends_on else [],
-            )
+        record = Task(
+            id=task_id,
+            title=title,
+            status=status or config.defaults.status,
+            priority=priority or config.defaults.priority,
+            created=now,
+            updated=now,
+            body=body,
+            tags=list(tags) if tags else [],
+            parent=parent,
+            depends_on=list(depends_on) if depends_on else [],
+        )
 
-            filename = make_task_filename(task_id, title)
-            task_path = self._tasks_dir / filename
-            validate_path_containment(self._tasks_dir, task_path)
-            write_task(task_path, record)
-
-            config.next_id = task_id + 1
-            save_config(self._kanban_dir, config)
-            self._config = config
+        filename = make_task_filename(task_id, title)
+        task_path = self._tasks_dir / filename
+        validate_path_containment(self._tasks_dir, task_path)
+        write_task(task_path, record)
+        self._config = load_config(self._kanban_dir)
 
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
         self._archive_dir = self._kanban_dir / self._config.archive_dir
@@ -898,7 +904,13 @@ class KanbanEngine:
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
         write_task(task_path, record)
-        self._emit_event("claim", record.id, self._agent_name, task_status_at_start=record.status)
+        self._emit_event(
+            "claim",
+            record.id,
+            self._agent_name,
+            task_status_at_start=record.status,
+            timestamp=effective_now,
+        )
         self._revision += 1
         return record
 
@@ -1167,14 +1179,16 @@ class KanbanEngine:
         task_id: int | None = None,
         detail: str | None = None,
         task_status_at_start: str | None = None,
+        timestamp: datetime | None = None,
     ) -> None:
         """Append one :class:`ActivityEvent` to ``activity.jsonl`` if logging is enabled."""
         if self._activity_log_path is None:
             return
         from owlbear_kanban.activity_store import append_activity_event  # noqa: PLC0415
         from owlbear_kanban.models import ActivityEvent  # noqa: PLC0415
+        event_time = timestamp if timestamp is not None else datetime.now(tz=UTC)
         evt = ActivityEvent(
-            timestamp=datetime.now(tz=UTC).isoformat(),
+            timestamp=event_time.isoformat(),
             task_id=task_id,
             action=action,
             source="engine",
