@@ -453,3 +453,233 @@ class TestFromAC_IdeationDocIndexIntegration:
             assert glob in entry_text, (
                 f"Required glob '{glob}' not found in doc-index entry"
             )
+
+
+# ===========================================================================
+# TestFromAC_IdeationStructuralConnections — AC2 (structural, strengthened)
+# ===========================================================================
+
+# Canonical element IDs from share/diagrams/ideation.excalidraw
+_TIMELINE_ELEMENT_IDS = [
+    "step0_rect", "m1_rect", "m2_rect", "m3_rect",
+    "m4_rect", "m5_rect", "m6_rect",
+]
+
+_DOMAIN_PANELIST_IDS = [
+    "architect_rect", "modeler_rect", "enduser_rect", "skeptic_rect",
+]
+
+_BOUNDARY_MOMENT_IDS = ["m1_rect", "m2_rect", "m4_rect", "m5_rect"]
+
+
+def _arrows_from_to(data: dict, start_id: str, end_id: str) -> list[dict]:
+    """Return arrows with startBinding→start_id and endBinding→end_id."""
+    result: list[dict] = []
+    for elem in data.get("elements", []):
+        if elem.get("type") != "arrow":
+            continue
+        sb = (elem.get("startBinding") or {}).get("elementId")
+        eb = (elem.get("endBinding") or {}).get("elementId")
+        if sb == start_id and eb == end_id:
+            result.append(elem)
+    return result
+
+
+def _elem_by_id(data: dict, eid: str) -> dict | None:
+    for elem in data.get("elements", []):
+        if elem.get("id") == eid:
+            return elem
+    return None
+
+
+class TestFromAC_IdeationStructuralConnections:
+    """AC2 (structural): key structural relationships are encoded as arrow
+    bindings between named element IDs, not only as text labels."""
+
+    def test_m3_arrow_triggers_panel_batch(self, diagram_data: dict) -> None:
+        """Structural: an arrow from m3_rect to panel_batch_rect encodes the
+        panel-batch trigger point — removing it breaks the M3→batch connection."""
+        arrows = _arrows_from_to(diagram_data, "m3_rect", "panel_batch_rect")
+        assert len(arrows) >= 1, (
+            "No arrow from 'm3_rect' to 'panel_batch_rect'. "
+            "The panel batch must be structurally triggered from M3."
+        )
+
+    def test_pragmatist_arrow_feeds_m4(self, diagram_data: dict) -> None:
+        """Structural: an arrow from pragmatist_rect to m4_rect encodes that
+        Pragmatist synthesis outputs flow into M4."""
+        arrows = _arrows_from_to(diagram_data, "pragmatist_rect", "m4_rect")
+        assert len(arrows) >= 1, (
+            "No arrow from 'pragmatist_rect' to 'm4_rect'. "
+            "Pragmatist synthesis must structurally feed M4."
+        )
+
+    @pytest.mark.parametrize("panelist_id", _DOMAIN_PANELIST_IDS)
+    def test_domain_panelist_converges_into_pragmatist(
+        self, diagram_data: dict, panelist_id: str
+    ) -> None:
+        """Structural: each of the 4 domain panelists has an outbound arrow
+        ending at pragmatist_rect — encoding the convergence after deliberation."""
+        arrows = _arrows_from_to(diagram_data, panelist_id, "pragmatist_rect")
+        assert len(arrows) >= 1, (
+            f"No arrow from '{panelist_id}' to 'pragmatist_rect'. "
+            "Domain panelist outputs must converge into Pragmatist synthesis."
+        )
+
+    def test_brief_output_arrow_bound_to_m5(self, diagram_data: dict) -> None:
+        """Structural: an arrow from m5_rect to brief_output_ellipse encodes
+        that Brief output is produced at M5, not elsewhere."""
+        arrows = _arrows_from_to(diagram_data, "m5_rect", "brief_output_ellipse")
+        assert len(arrows) >= 1, (
+            "No arrow from 'm5_rect' to 'brief_output_ellipse'. "
+            "Brief output must be structurally bound to M5."
+        )
+
+    def test_handoff_arrow_bound_to_m6(self, diagram_data: dict) -> None:
+        """Structural: an arrow from m6_rect to handoff_rect encodes that
+        the pipeline handoff occurs at M6, not elsewhere."""
+        arrows = _arrows_from_to(diagram_data, "m6_rect", "handoff_rect")
+        assert len(arrows) >= 1, (
+            "No arrow from 'm6_rect' to 'handoff_rect'. "
+            "Pipeline handoff must be structurally bound to M6."
+        )
+
+    @pytest.mark.parametrize("moment_id", _BOUNDARY_MOMENT_IDS)
+    def test_standalone_critic_arrow_from_boundary_moment(
+        self, diagram_data: dict, moment_id: str
+    ) -> None:
+        """Structural: M1, M2, M4, and M5 each have an arrow pointing to
+        critic_rect — encoding the standalone Critic boundary checks."""
+        arrows = _arrows_from_to(diagram_data, moment_id, "critic_rect")
+        assert len(arrows) >= 1, (
+            f"No arrow from '{moment_id}' to 'critic_rect'. "
+            f"Standalone Critic boundary check at {moment_id} must be structurally encoded."
+        )
+
+    def test_investigator_mode_connects_to_m1_region(
+        self, diagram_data: dict
+    ) -> None:
+        """Structural: mode_investigator_rect has an arrow to m1_rect, encoding
+        that the Investigator mode covers the M1 entry point."""
+        arrows = _arrows_from_to(diagram_data, "mode_investigator_rect", "m1_rect")
+        assert len(arrows) >= 1, (
+            "No arrow from 'mode_investigator_rect' to 'm1_rect'. "
+            "Investigator mode must be structurally connected to the M1 region."
+        )
+
+    def test_facilitative_mode_connects_to_m4(self, diagram_data: dict) -> None:
+        """Structural: mode_facilitative_rect has an arrow to m4_rect, encoding
+        that the Facilitative mode covers the M4-M6 region."""
+        arrows = _arrows_from_to(diagram_data, "mode_facilitative_rect", "m4_rect")
+        assert len(arrows) >= 1, (
+            "No arrow from 'mode_facilitative_rect' to 'm4_rect'. "
+            "Facilitative mode must be structurally connected to M4."
+        )
+
+    def test_timeline_elements_in_left_to_right_order(
+        self, diagram_data: dict
+    ) -> None:
+        """Boundary: Step 0 and M1-M6 elements appear in ascending x-position
+        order, matching the documented left-to-right timeline sequence."""
+        id_to_x: dict[str, float] = {}
+        for elem in diagram_data.get("elements", []):
+            if elem.get("id") in _TIMELINE_ELEMENT_IDS:
+                id_to_x[elem["id"]] = elem.get("x", 0)
+        missing = [eid for eid in _TIMELINE_ELEMENT_IDS if eid not in id_to_x]
+        assert not missing, f"Timeline elements not found by ID: {missing}"
+        ordered = sorted(id_to_x.items(), key=lambda kv: kv[1])
+        ordered_ids = [k for k, _ in ordered]
+        assert ordered_ids == _TIMELINE_ELEMENT_IDS, (
+            f"Timeline elements not in left-to-right order.\n"
+            f"Expected: {_TIMELINE_ELEMENT_IDS}\n"
+            f"Got (left→right): {ordered_ids}"
+        )
+
+
+# ===========================================================================
+# TestFromAC_IdeationPanelBatchSpatial — AC2 (spatial, strengthened)
+# ===========================================================================
+
+_BATCH_CONTAINED_IDS = [
+    "architect_rect", "modeler_rect", "enduser_rect",
+    "skeptic_rect", "critic_rect", "pragmatist_rect",
+]
+
+
+class TestFromAC_IdeationPanelBatchSpatial:
+    """AC2 (spatial): panelists, Critic, and Pragmatist are spatially contained
+    within the panel_batch_rect, confirming 'parallel batch between M3 and M4'."""
+
+    def _batch_bounds(self, data: dict) -> tuple[float, float, float, float]:
+        elem = _elem_by_id(data, "panel_batch_rect")
+        if elem is None:
+            pytest.fail("panel_batch_rect element not found in diagram")
+        return (elem["x"], elem["y"],
+                elem["x"] + elem["width"], elem["y"] + elem["height"])
+
+    @pytest.mark.parametrize("role_id", _BATCH_CONTAINED_IDS)
+    def test_role_rect_center_inside_panel_batch_bounds(
+        self, diagram_data: dict, role_id: str
+    ) -> None:
+        """Spatial: center of each role rect falls within panel_batch_rect bounds,
+        confirming the element lives inside the batch grouping."""
+        xmin, ymin, xmax, ymax = self._batch_bounds(diagram_data)
+        elem = _elem_by_id(diagram_data, role_id)
+        assert elem is not None, f"Element '{role_id}' not found in diagram"
+        cx = elem["x"] + elem.get("width", 0) / 2
+        cy = elem["y"] + elem.get("height", 0) / 2
+        assert xmin <= cx <= xmax, (
+            f"{role_id} center x={cx} is outside panel_batch_rect "
+            f"x-range [{xmin}, {xmax}]"
+        )
+        assert ymin <= cy <= ymax, (
+            f"{role_id} center y={cy} is outside panel_batch_rect "
+            f"y-range [{ymin}, {ymax}]"
+        )
+
+
+# ===========================================================================
+# TestFromAC_IdeationCommittedDocIndex — AC-idx (committed, strengthened)
+# ===========================================================================
+
+_DOC_INDEX_PATH = _PROJECT_ROOT / ".owlbear" / "doc-index.md"
+
+
+class TestFromAC_IdeationCommittedDocIndex:
+    """AC-idx (committed): the checked-in .owlbear/doc-index.md contains the
+    ideation.excalidraw section with all required describes globs.
+
+    Distinct from TestFromAC_IdeationDocIndexIntegration which tests
+    generate_index() in a temp tree — this class tests the committed artifact.
+    """
+
+    def _ideation_entry_text(self) -> str:
+        assert _DOC_INDEX_PATH.exists(), (
+            f"Committed doc-index not found: {_DOC_INDEX_PATH}"
+        )
+        text = _DOC_INDEX_PATH.read_text()
+        assert "## share/diagrams/ideation.excalidraw" in text, (
+            "Committed .owlbear/doc-index.md has no entry for "
+            "share/diagrams/ideation.excalidraw — doc-index regen was not committed"
+        )
+        start = text.index("## share/diagrams/ideation.excalidraw")
+        nxt = text.find("\n## ", start + 1)
+        return text[start:] if nxt == -1 else text[start:nxt]
+
+    def test_committed_doc_index_has_ideation_entry(self) -> None:
+        """Regression: the checked-in doc-index contains the ideation.excalidraw
+        section header; stale or missing regen would remove it."""
+        entry = self._ideation_entry_text()
+        assert "## share/diagrams/ideation.excalidraw" in entry
+
+    @pytest.mark.parametrize("glob", _REQUIRED_DESCRIBES_GLOBS)
+    def test_committed_doc_index_ideation_entry_contains_glob(
+        self, glob: str
+    ) -> None:
+        """Regression: each required describes glob appears in the committed
+        doc-index ideation entry; a stale regen would drop them."""
+        entry = self._ideation_entry_text()
+        assert glob in entry, (
+            f"Required glob '{glob}' not found in committed "
+            ".owlbear/doc-index.md ideation entry"
+        )
