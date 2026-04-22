@@ -24,9 +24,5 @@ max_line_length = unset
 [store/**]
 indent_size = unset
 insert_final_newline = false
-trim_trailing_whitespace = false
-
-# VS Code profile export — auto-generated, do not lint
-[*.code-profile]
 max_line_length = unset
-indent_size = unset
+trim_trailing_whitespace = false

@@ -1,12 +1,11 @@
 {
-    "ignores": [
-        ".owlbear/briefs/*/**",
-        ".owlbear/decisions/**",
-        ".owlbear/kanban/tasks/**",
-        ".owlbear/research/**",
-        ".owlbear/scratch/**",
-        ".github/**",
-        ".venv/**",
-        "node_modules/**"
-    ]
+  "ignores": [
+    ".owlbear/briefs/*/**",
+    ".owlbear/decisions/**",
+    ".owlbear/kanban/tasks/**",
+    ".owlbear/research/**",
+    ".owlbear/scratch/**",
+    ".venv/**",
+    "node_modules/**"
+  ]
 }
