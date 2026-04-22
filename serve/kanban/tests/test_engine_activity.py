@@ -1,8 +1,8 @@
-"""TDD RED: C-09 — engine activity/session tests.
+"""C-09 — engine activity/session tests.
 
 Task: #1054 (Brief C #1043) — paper-c.md §8.9
 AC:   C42 (engine side), C43, fresh canonical stream
-All tests FAIL (RED phase — new engine activity methods not yet implemented).
+AC-C43 (TestFromAC_ListSessions) realigned to SessionRecord contract (#1095).
 """
 
 from __future__ import annotations
