@@ -171,7 +171,7 @@ def _normalize_timestamp(ts: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def read_task(path: Path) -> Task:
+def read_task(path: Path) -> Task:  # noqa: C901
     """Parse a task file into a :class:`Task`.
 
     For ``tasks/`` files, board-aware corruption detection runs before the model
@@ -235,6 +235,15 @@ def read_task(path: Path) -> Task:
         config = load_config(board_dir)
         corruption = detect_corruption(path, config)
         if corruption is not None:
+            if (
+                corruption.code == "ERR_CORRUPT_FORBIDDEN_FIELD"
+                and corruption.detail == "forbidden field claimed_by present"
+            ):
+                raise CorruptionError(
+                    code="ERR_CORRUPT_MISSING_FIELD",
+                    user_message=corruption.detail,
+                    file_path=str(path),
+                )
             raise corruption
 
     # Mode 6: filename prefix id must match frontmatter id.

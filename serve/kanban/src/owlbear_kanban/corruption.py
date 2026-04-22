@@ -82,12 +82,14 @@ def _make_corruption_code_type(name: str) -> type[CorruptionError]:
 
 ERR_CORRUPT_DELIMITERS = _make_corruption_code_type("ERR_CORRUPT_DELIMITERS")
 ERR_CORRUPT_DUPLICATE_ID = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_ID")
+ERR_CORRUPT_FORBIDDEN_FIELD = _make_corruption_code_type("ERR_CORRUPT_FORBIDDEN_FIELD")
 ERR_CORRUPT_MISSING_FIELD = _make_corruption_code_type("ERR_CORRUPT_MISSING_FIELD")
 ERR_CORRUPT_TYPE_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_TYPE_MISMATCH")
 ERR_CORRUPT_YAML_PARSE = _make_corruption_code_type("ERR_CORRUPT_YAML_PARSE")
 ERR_CORRUPT_ID_FILENAME_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_ID_FILENAME_MISMATCH")
 ERR_CORRUPT_DUPLICATE_LOCATION = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_LOCATION")
 ERR_CORRUPT_INVALID_STATUS = _make_corruption_code_type("ERR_CORRUPT_INVALID_STATUS")
+ERR_CORRUPT_ORPHAN_ARCHIVE_REF = _make_corruption_code_type("ERR_CORRUPT_ORPHAN_ARCHIVE_REF")
 ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type("ERR_CORRUPT_INVALID_PRIORITY")
 
 
@@ -232,7 +234,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
         val = fm["claimed_by"]
         if val not in (None, ""):
             return CorruptionError(
-                code=ERR_CORRUPT_MISSING_FIELD,
+                code=ERR_CORRUPT_FORBIDDEN_FIELD,
                 detail="forbidden field claimed_by present",
                 path=path,
             )
@@ -436,6 +438,10 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
             )
 
         return _write_repaired(path, fm, body_text, code_name, task_id)
+
+    # Forbidden-field mode uses quarantine-only migration path.
+    if code_name == ERR_CORRUPT_FORBIDDEN_FIELD.__name__:
+        return _quarantine()
 
     # Mode 4: type mismatch
     if code_name == ERR_CORRUPT_TYPE_MISMATCH.__name__:
