@@ -334,9 +334,11 @@ def write_task_if_unchanged(
 
     config = load_config(kanban_dir)
     tasks_dir = kanban_dir / config.tasks_dir
+    archive_dir = kanban_dir / config.archive_dir
     lock_path = tasks_dir / f".{task.id}.lock"
+    archive_lock_path = archive_dir / f".{task.id}.lock"
 
-    with _exclusive_file_lock(lock_path):
+    with _exclusive_file_lock(lock_path), _exclusive_file_lock(archive_lock_path):
         matches = list(tasks_dir.glob(f"{task.id}-*.md"))
         if not matches:
             msg = f"Task file for id={task.id} not found"
@@ -397,9 +399,11 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     tasks_dir = kanban_dir / config.tasks_dir
     archive_dir = kanban_dir / config.archive_dir
     archive_dir.mkdir(parents=True, exist_ok=True)
-    lock_path = archive_dir / f".{task_id}.lock"
+    task_lock_path = tasks_dir / f".{task_id}.lock"
+    archive_lock_path = archive_dir / f".{task_id}.lock"
 
-    with _exclusive_file_lock(lock_path):
+    # Keep lock order consistent with write_task_if_unchanged to avoid deadlocks.
+    with _exclusive_file_lock(task_lock_path), _exclusive_file_lock(archive_lock_path):
         matches = list(tasks_dir.glob(f"{task_id}-*.md"))
         if not matches:
             msg = f"No task file found for id={task_id}"
