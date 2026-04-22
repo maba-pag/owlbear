@@ -685,10 +685,7 @@ class KanbanEngine:
         config: BoardConfig = load_config(self._kanban_dir)
 
         if status:
-            valid_statuses = {
-                s["name"] if isinstance(s, dict) else str(s)
-                for s in config.statuses
-            }
+            valid_statuses = set(config.statuses)
             if status not in valid_statuses:
                 msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
