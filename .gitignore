@@ -106,4 +106,5 @@ store/audit/
 
 # Lock files (transient runtime artifacts)
 .owlbear/kanban/.next_id.lock
+.owlbear/kanban/activity.jsonl
 .coverage.*
