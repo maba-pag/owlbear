@@ -362,7 +362,8 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
         return []
     return sorted(
         p for p in tasks_dir.iterdir()
-        if p.suffix == ".md"
+        if p.is_file()
+        and p.suffix == ".md"
         and not p.name.startswith(".tmp-")
         and not p.name.startswith(".")
     )
@@ -376,7 +377,8 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
         return []
     return sorted(
         p for p in archive_dir.iterdir()
-        if p.suffix == ".md"
+        if p.is_file()
+        and p.suffix == ".md"
         and not p.name.startswith(".tmp-")
         and not p.name.startswith(".")
     )
