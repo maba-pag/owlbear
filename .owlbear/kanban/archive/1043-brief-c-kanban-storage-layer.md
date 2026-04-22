@@ -1,20 +1,23 @@
 ---
 id: 1043
 title: Brief C — Kanban Storage Layer
-status: backlog
+status: archived
 priority: needed
 created: 2026-04-21T09:47:55.186057+00:00
-updated: 2026-04-21T21:47:02.830385+00:00
+updated: 2026-04-22T03:31:59.627497+00:00
 tags:
 - phase:storage
 - brief:c
 - scope:kanban
+- quality
 parent:
 depends_on: []
 blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 
@@ -575,3 +578,165 @@ Reviewer rejected (confidence 0.15) for two metadata gaps from the previous arch
 ### Verdict: FAIL
 ### Action
 Reject to backlog. Required fixes are still metadata-only but they remain unapplied: add a valid non-implementation pass-through tag such as `quality` to #1043, and add #1095 to #1063 depends_on before this container task can be accepted.
+[[2026-04-22]]
+## Architecture Review (Return Cycle 2)
+
+### Context
+Third reviewer rejection (confidence 0.15) — same two metadata gaps from cycles 1 and 2. Both findings valid and now applied directly.
+
+### Fixes Applied
+1. **Added `quality` pass-through tag** to #1043 — satisfies w-arch-review non-implementation tagging requirement.
+2. **Added #1095 to #1063 `depends_on`** — (now [1054, 1058, 1062, 1095]) — satisfies architecture-mandated dependency from contract reconciliation.
+
+### Evaluation (unchanged)
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Container delegates to 21 focused children |
+| Interface clarity | PASS | SessionRecord canonical per Brief C decisions.md |
+| Dependency correctness | PASS | #1063 → #1095 dependency now applied |
+| Module layering | PASS | Storage → Engine direction respected |
+| TDD compliance | PASS | RED/GREEN pairs for all implementation tasks |
+| KISS/YAGNI | PASS | Minimal scope aligned with Brief C |
+| Premise challenge | PASS | Storage layer refactoring justified per Brief C |
+| Pattern consistency | PASS | SessionRecord follows Brief C decisions.md |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | All within kanban domain |
+
+### Challenge Results
+- Challenger: FALLBACK — not available in session
+- Prior cycle challenger (confidence 0.24, BLOCK) fully addressed in cycle 1: revised to SessionRecord-canonical, created #1095
+
+### Verdict: APPROVE
+### Action: Metadata fixes applied directly. Container task advanced to todo.
+[[2026-04-22]]
+## Test-Writer Notes
+- Non-implementation task (tagged `quality`) — no tests applicable.
+- Container task with 21 child tasks; all RED/GREEN pairs assigned to children (#1046–#1054, #1095).
+- Architecture review cycle 2 confirmed all metadata fixes applied: `quality` tag added, #1063 depends on #1095.
+- Passing through to builder.
+[[2026-04-22]]
+## Builder Notes
+- Non-implementation task confirmed from latest Test-Writer Notes (`quality` pass-through container).
+- Implementation: none (no source files changed).
+- Tests: not run in this builder cycle because this parent task has no direct executable AC; all executable coverage belongs to child tasks.
+- Lint: not run in this builder cycle for the same reason.
+- Evidence summary: task body already documents child-task decomposition and prior architecture metadata fixes; builder action here is Step 0a pass-through to review.
+[[2026-04-22]]
+## Review Evidence
+### Test Results
+- Independent quality-runner scoped check on empty `test_paths` and `lint_paths` returned 0 passed, 0 failed, 0 skipped.
+- `pytest` exit code was 5 (`no tests collected`). This is the expected null-scope result for this `quality`-tagged container task.
+
+### Lint
+- Clean by null scope. No violations reported.
+
+### Coverage
+- Not applicable. The parent container has no direct code-under-test surface.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Skipped for direct test mapping. This parent task has no direct `TestFromAC_*` scope; executable coverage lives in child tasks. Evidence: `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:12` carries the `quality` pass-through tag, and the latest pass-through notes confirm no direct tests are applicable at `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:613`, `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:619`, and `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:623`.
+
+#### Security Review
+- No new code or interface changes in the current cycle. No security finding on the parent container.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| N/A | No direct test-file changes in the current builder cycle for #1043; this cycle is metadata-only pass-through per `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:619-623`. | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | N/A | Parent task has no direct tests in scope. |
+| Negative and error-path coverage | N/A | Parent task has no direct tests in scope. |
+| Manual mutation resistance | N/A | Parent task has no direct tests in scope. |
+| Test independence | N/A | Parent task has no direct tests in scope. |
+| Descriptive names | N/A | Parent task has no direct tests in scope. |
+
+#### Data Safety
+- No code changes in the current cycle. No data-safety issue on the parent task.
+
+#### Implementation-Aware Gaps
+- No blocking gap remains on the parent container. `share/skills/w-arch-review/SKILL.md:105` requires a non-implementation pass-through tag before approval, and `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:12` now contains `quality`.
+- The required dependency correction is applied. `.owlbear/kanban/tasks/1095-c-09a-realign-ac-c43-tests-to-sessionrecord-contract.md:86` requires task #1063 to depend on #1095, `.owlbear/kanban/tasks/1063-c-18-green-engine-activity-session-wiring.md:18` now includes `1095`, and `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:589` records the fix in the latest architecture cycle.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 5 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- The historical planning line at `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:44` still says 19 tasks, but a live workspace search for `parent: 1043` returns 21 child task files, so the newer pass-through note at `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:614` is consistent with current board state.
+- Code-reader fan-out was not needed here because the current cycle is a non-implementation metadata review with no source or task-scoped test file surface.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| Parent container may pass through review only if non-implementation tagging is correct | `share/skills/w-arch-review/SKILL.md:105` requires a pass-through tag before approval; `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:12` contains `quality`. | None; metadata inspection | PASS |
+| Required dependency correction from the SessionRecord reconciliation must be applied before parent acceptance | `.owlbear/kanban/tasks/1095-c-09a-realign-ac-c43-tests-to-sessionrecord-contract.md:86` requires the dependency; `.owlbear/kanban/tasks/1063-c-18-green-engine-activity-session-wiring.md:18` includes `1095`; `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:589` records the fix. | None; metadata inspection | PASS |
+| Parent remains a non-implementation container with no direct executable AC on this cycle | Independent quality-runner result: 0 passed, 0 failed, `pytest` exit 5 on empty scoped paths; latest task notes confirm no direct tests are applicable at `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:613`, `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:619`, `.owlbear/kanban/tasks/1043-brief-c-kanban-storage-layer.md:623`. | None; null-scope audit | PASS |
+
+### Deductions
+- 0.02 repeated review-cycle friction on the parent task
+- 0.02 historical planning count remains stale but is cosmetic only
+
+### Confidence: 0.96
+### Verdict: PASS
+### Action
+Advance to docs.
+
+### Reflection
+- Prior reviewer findings on this container task were metadata-only; re-reading live frontmatter prevented rubber-stamping stale failures.
+- Null-scope parent reviews still benefit from an independent quality-runner run to prove the absence of task-scoped executable coverage.
+- Append-only task bodies can preserve stale planning counts; the gating facts are current tags, dependencies, and latest cycle notes.
+[[2026-04-22]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Non-implementation container task; all builder cycles confirmed no source files changed; no API/behavior/CLI/config changes |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified across any builder cycle |
+| 3 | External attribution | No | N/A | Planning/architecture task; no external patterns cited |
+| 4 | Research doc | No | N/A | Brief files in `.owlbear/briefs/` (not `research/`); no `.owlbear/research/` slug referenced in task body |
+| 5 | Diagram maintenance | No | N/A | Empty diff — no changed files to match against doc-index `describes` globs |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No deleted files in any cycle |
+
+**No docs impact.** `quality`-tagged non-implementation container; 21 child tasks carry all executable scope. Null diff across all five builder/test-writer pass-through cycles.
+
+### Files updated
+None.
+
+### Child tasks created
+None.
+
+### Scratch files
+`.owlbear/scratch/1043-*` — none found.
+[[2026-04-22]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Non-implementation container carries `quality` pass-through tag | `show_task(1043)` → tags include `quality` | PASS |
+| #1063 depends on #1095 per architecture reconciliation | `show_task(1063)` → depends_on: [1054, 1058, 1062, 1095] | PASS |
+| Non-implementation container with no direct executable AC | quality-runner full mode: 0 task-scoped tests; container has no source files | PASS |
+
+### Test Results
+- pytest (full suite): 1093 passed, 37 failed, 113 errors, 4 skipped
+- 113 errors: all from `engine.py:682` — `config.statuses` is `list[str]` (per Brief C models.py), but 4 engine sites still index `s["name"]` as dicts. Fix is in scope of pending children #1062 (engine storage GREEN, todo) and #1063 (engine activity GREEN, todo). This is expected interim breakage per the 5-layer dependency graph — Layer 3 children have not executed yet.
+- 37 failures: mix of SessionRecord contract issues (pending #1063/#1095 scope) and pre-existing unrelated failures (react-compiler devDependencies, ideation-critic model-field contract).
+- No failures attributable to the container task itself (no code changes).
+- ruff: 5 W292 violations in unrelated test files — not from this task.
+
+### Architect Quality: 3/5
+Strong decomposition: 5-layer dependency graph with proper RED/GREEN TDD pairs, clear workstreams. Good contract reconciliation (SessionRecord canonical per Brief C decisions.md, #1095 created for test realignment). However, metadata follow-through was poor — `quality` tag and #1063→#1095 dependency required 3 reviewer rejections before being applied directly by the architect. Original planning also missed the WorkSession/SessionRecord contract conflict which only surfaced during the first builder cycle.
+
+### Deduction Breakdown
+- AC quality score = 3: -.03 (metadata follow-through required 3 review cycles; contract conflict missed in original planning)
+
+### Confidence: 0.97
+### Action: archive

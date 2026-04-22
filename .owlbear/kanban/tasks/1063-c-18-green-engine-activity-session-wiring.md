@@ -15,6 +15,7 @@ depends_on:
 - 1054
 - 1058
 - 1062
+- 1095
 blocked: false
 block_reason:
 claimed_by:

@@ -1,10 +1,10 @@
 ---
 id: 1044
 title: Brief B — Kanban Engine + Cockpit Backend/API Surface
-status: todo
+status: done
 priority: needed
 created: 2026-04-21T09:48:03.854046+00:00
-updated: 2026-04-21T10:51:25.509707+00:00
+updated: 2026-04-22T06:21:52.145783+00:00
 tags:
 - phase:engine
 - brief:b
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 
@@ -78,3 +80,109 @@ Cross-brief: B-01 (#1065) depends on C-14 (#1059 storage.py public surface GREEN
 - B-17/B-18 MCP adapter removed per constraint — Brief A (#1045) owns serve/mcp-kanban/
 - B-19 added for w-orchestration/SKILL.md rewrite (documentation-only, depends on pick_tasks GREEN)
 - CockpitView (B-15/B-16) may additionally depend on C-18 (#1063 engine activity/session wiring) at build time for list_activity/list_sessions — not added as formal dependency since tests can mock the activity store
+[[2026-04-22]]
+## Test-Writer Notes
+- Non-implementation pass-through: parent planning/coordination task with no Acceptance Criteria section.
+- Decomposition into 19 sub-tasks was already completed (B-01 through B-19, IDs #1065–#1083).
+- Testable interfaces live in the sub-tasks; each RED sub-task (e.g. #1065, #1067, #1069, etc.) carries its own AC and will receive a test file scoped to that task.
+- No test file created for this parent task.
+- Passing through to builder.
+[[2026-04-22]]
+## Builder Notes
+- Non-implementation pass-through task confirmed from Test-Writer Notes.
+- No code changes required; parent coordination/decomposition task only.
+- Files changed: none.
+- Tests/lint/coverage: not applicable for this parent pass-through task.
+- Passing through to review.
+[[2026-04-22]]
+## Review Evidence
+### Test Results
+- pytest: not applicable. This parent task has no Acceptance Criteria section, no task-scoped test file, and no implementation surface. Evidence: .owlbear/kanban/tasks/1044-brief-b-kanban-engine-cockpit-backend-api-surface.md:85 states it is a non-implementation pass-through with no Acceptance Criteria section, and :93 states no code changes were required.
+- quality-runner: not invoked because there were no task-scoped test, lint, or coverage targets to execute for this coordination-only parent task.
+
+### Lint
+- Not applicable. No source files were changed for this parent task. Evidence: .owlbear/kanban/tasks/1044-brief-b-kanban-engine-cockpit-backend-api-surface.md:93.
+
+### Coverage
+- Not applicable. No implementation modules were changed for this parent task. Evidence: .owlbear/kanban/tasks/1044-brief-b-kanban-engine-cockpit-backend-api-surface.md:93.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| No Acceptance Criteria section present in parent task | None | N/A | PASS - correct pass-through handling. Evidence: grep for "## Acceptance Criteria" in the task file returned no matches, and the task file states the parent has no Acceptance Criteria section at :85. |
+
+#### Security Review
+- No issues found. This task contains kanban decomposition metadata only; no code, dependency, secret, input-validation, or persistence changes are attached to this parent task.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| No TestFromAC tests exist for this parent task | None | N/A |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | N/A | No task-scoped tests exist because this parent task has no executable AC. |
+| Negative/error-path coverage | N/A | Child RED tasks own executable coverage. |
+| Manual mutation reasoning | N/A | No implementation belongs to this parent task. |
+| Test independence | N/A | No task-scoped tests exist. |
+| Descriptive test names | N/A | No task-scoped tests exist. |
+
+#### Data Safety
+- No issues found. No runtime or persisted-data behavior changed in this parent task.
+
+#### Implementation-Aware Gaps
+- No untested implementation paths in this task because no implementation was delivered here. The planning section records decomposition into 19 child tasks at .owlbear/kanban/tasks/1044-brief-b-kanban-engine-cockpit-backend-api-surface.md:44, and workspace search for "parent: 1044" under .owlbear/kanban/tasks returned 19 matches.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 1 |
+| Approach variation | N/A |
+| Assessment | CLEAN |
+
+### Pass 2 - INFORMATIONAL
+- Verified the parent task's actual deliverable was decomposition: the planning section records 19 child tasks at .owlbear/kanban/tasks/1044-brief-b-kanban-engine-cockpit-backend-api-surface.md:44.
+- Verified downstream relevance: .owlbear/kanban/tasks/1045-brief-a-kanban-mcp-surface-docs-sync.md:14 lists 1044 as a dependency, and :23 cites parent task 1044 as the upstream engine contract.
+- Verified this is the first review cycle for the task: grep for "## Review Evidence" in the task file returned no matches before this review.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| No Acceptance Criteria section present in parent task | .owlbear/kanban/tasks/1044-brief-b-kanban-engine-cockpit-backend-api-surface.md:85 states non-implementation pass-through with no Acceptance Criteria section; :44 records 19 child tasks; workspace search for "parent: 1044" under .owlbear/kanban/tasks returned 19 matches; .owlbear/kanban/tasks/1045-brief-a-kanban-mcp-surface-docs-sync.md:14 and :23 confirm downstream work depends on this parent as the upstream contract. | N/A | PASS |
+
+### Confidence: 0.96
+### Verdict: PASS
+[[2026-04-22]]
+## Docs Gate
+
+### Step 0
+- 0a Review Evidence: PRESENT ✓
+- 0b Doc-index: loaded from `.owlbear/doc-index.md` ✓
+
+### Step 1 — Scope Classification
+Changed-files set: **empty**. Builder Notes state "Files changed: none." This task is a parent coordination/decomposition task that produced 19 child sub-tasks; no source, test, or doc files were touched.
+
+### Step 2 — Relevance-Gated Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No behavior/API/CLI/config/package structure changed. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external patterns used; planning-only task. |
+| 4 | Research doc | No | N/A | No research doc linked or produced for this parent task. |
+| 5 | Diagram maintenance | No | N/A | No changed files to match against diagram `describes` globs. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files. No orphaned IN-scope docs detected. |
+
+**No docs impact.** All seven items N/A.
+
+### Step 3 — Scratch Files
+No `.owlbear/scratch/1044-*` files found. Nothing to clean.
+
+### Step 4 — Commit
+No files updated; no commit required.
+
+### Child Tasks Created
+None.

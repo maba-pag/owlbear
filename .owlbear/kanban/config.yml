@@ -3,13 +3,13 @@ board:
   name: OwlBear
 tasks_dir: tasks
 statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
+- research
+- backlog
+- todo
+- in-progress
+- review
+- docs
+- done
 priorities:
 - someday
 - nice-to-have
@@ -24,6 +24,19 @@ claim_timeout: 1h
 tui:
   title_lines: 2
   hide_empty_columns: true
-next_id: 1097
+next_id: 1103
 archive_dir: archive
 activity_log: false
+entry_status: research
+wave_size: 4
+agent_map: {}
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons:
+- completed
+- deprecated
+- dropped
+- duplicate
+- wontfix
+status_predicates: {}

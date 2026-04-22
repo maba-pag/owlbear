@@ -1,10 +1,10 @@
 ---
 id: 1046
 title: 'C-01: RED — storage_io atomic-write & ID-allocation tests'
-status: review
+status: todo
 priority: needed
 created: 2026-04-21T10:42:50.236472+00:00
-updated: 2026-04-21T23:23:46.684754+00:00
+updated: 2026-04-22T06:28:24.765689+00:00
 tags:
 - phase:storage
 - brief:c
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 Brief C (#1043) — paper-c.md §8.1, §8.11
@@ -385,3 +387,516 @@ Reject to `todo`. No implementation change is required by the current evidence. 
   - Pattern discovered: Retroactive formalization passes should capture both task-scoped and adjacent module-level evidence to avoid stale gate decisions.
   - Time sink: Evidence refresh only; no code/debug loop.
   - Quality gap: None blocking this task after strengthened AC assertions and module-level coverage run.
+[[2026-04-22]]
+## Review Evidence
+### Test Results
+- Quality-Runner scoped run on serve/kanban/tests/test_storage_io.py: 13 passed, 0 failed, 0 skipped.
+- Supplemental storage-module run on serve/kanban/tests/test_storage_io.py, serve/kanban/tests/test_storage.py, and serve/kanban/tests/test_storage_1050.py: 73 passed, 0 failed, 0 skipped.
+
+### Lint
+- Ruff clean for serve/kanban/src/owlbear_kanban/storage_io.py, serve/kanban/src/owlbear_kanban/storage.py, and serve/kanban/tests/test_storage_io.py.
+
+### Coverage
+- owlbear_kanban.storage_io: 100 percent.
+- owlbear_kanban.storage: 75 percent in task-only scope; 96 percent when related storage tests are included.
+- Coverage is not the blocker for this review. The supplemental run clears the touched-module gate.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC-C1 | test_ac_c1_writes_via_tmp_sibling; test_ac_c1_posix_fsyncs_file_and_dir; test_ac_c1_final_content_is_correct | No. serve/kanban/tests/test_storage_io.py:128-142 only proves at least two fsync calls and that one of them hit a parent-dir fd. A bad implementation could fsync the parent dir twice, never fsync the temp file fd, or fsync in the wrong order around replace and still pass. | LAX |
+| AC-C2 | test_ac_c2_cleans_up_tmp_on_replace_failure; test_ac_c2_target_unaffected_on_fsync_failure | Yes. serve/kanban/tests/test_storage_io.py:153-187 covers replace failure and pre-replace fsync failure with cleanup and unchanged-target assertions, matching the refined commit-point contract. | COVERED |
+| AC-C3 | test_ac_c3_list_task_files_excludes_tmp | Yes. serve/kanban/tests/test_storage_io.py:189-200 rejects .tmp-* entries. | COVERED |
+| AC-C4 | test_ac_c4_50_concurrent_threads_yield_distinct_ids | No. serve/kanban/tests/test_storage_io.py:211-235 proves uniqueness under 50 threads, but it does not prove that serve/kanban/src/owlbear_kanban/storage.py:418-423 held .next_id.lock across read, increment, and save. A same-process-only lock would still pass. | LAX |
+| AC-C4a | test_ac_c4a_cas_20_threads_one_success_19_stale; test_ac_c4a_survivor_write_intact | Yes. serve/kanban/tests/test_storage_io.py:237-308 enforces exact stale/success counts and verifies the survivor write. | COVERED |
+| AC-C4b | test_ac_c4b_lock_files_not_in_list_task_files; test_ac_c4b_lock_files_not_in_list_archive_files; test_ac_c4b_write_task_if_unchanged_creates_lock_at_per_task_path | Yes for the refined AC. serve/kanban/tests/test_storage_io.py:310-351 now guards both list exclusion and the tasks/.<id>.lock location used at serve/kanban/src/owlbear_kanban/storage.py:331. | COVERED |
+| AC-C51 | test_ac_c51_crash_between_save_config_and_write_task | Yes for the refined helper-level AC. serve/kanban/tests/test_storage_io.py:356-377 asserts next allocation = original_next_id + 1, config next_id = original_next_id + 2, and no burned task file. | COVERED |
+
+#### Security Review
+- No security issues found in scope. The reviewed code paths are local filesystem writes and file locks only.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| TestFromAC_AtomicWrite | Current snapshot strengthens the earlier weak area with sibling-path and dir-fsync assertions at serve/kanban/tests/test_storage_io.py:109-142. No skip/xfail markers observed. | PRESERVED (current snapshot) |
+| TestFromAC_IDAllocation | Current snapshot strengthens AC-C4b with a direct per-task lock-path assertion at serve/kanban/tests/test_storage_io.py:336-351. No skip/xfail markers observed. | PRESERVED (current snapshot) |
+- Historical immutability against the original RED commit was not independently re-verified with the available tool set.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | Most assertions are exact, including exact stale counts, exact success counts, exact lock-path existence, and exact burned-ID state. |
+| Negative and error-path coverage | ADEQUATE | Replace failure, pre-replace fsync failure, and stale CAS paths are all exercised in serve/kanban/tests/test_storage_io.py:153-308. |
+| Manual mutation reasoning | WEAK | AC-C1 still passes if the code fsyncs the parent dir twice and never fsyncs the temp file fd; AC-C4 still passes if uniqueness comes from some other serialization strategy instead of .next_id.lock. |
+| Test independence | STRONG | Each case uses its own tmp_path board and local thread collectors. |
+| Descriptive names | STRONG | Test names map directly to the refined AC lines. |
+
+#### Data Safety
+- Brief/task drift remains unresolved around the real create path. Brief C §1.4 says engine.py should consume storage as the boundary, and Brief C §3.3 / AC-C51 describes crash safety for create_task after save_config but before write_task. The current production create path still imports config_loader and task_io directly at serve/kanban/src/owlbear_kanban/engine.py:38 and :47, then writes the task before save_config at serve/kanban/src/owlbear_kanban/engine.py:662-696. The task suite only exercises allocate_next_id directly. That means the current tests can green-light helper behavior while the real consumer path still permits duplicate-ID-on-crash behavior.
+
+#### Implementation-Aware Gaps
+- No task-scoped test proves that atomic_write fsyncs the temp file fd before replace. serve/kanban/src/owlbear_kanban/storage_io.py:37-49 implements it, but the current AC-C1 assertions do not kill the wrong-order or missing-file-fsync mutations.
+- No task-scoped test proves that allocate_next_id specifically uses .next_id.lock at serve/kanban/src/owlbear_kanban/storage.py:418-423.
+- No task-scoped test exercises KanbanEngine.create_task crash behavior, even though paper-c.md:100 and :747 describe engine-boundary and create-task crash semantics.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability is involved.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 3 |
+| Approach variation | Yes. The retries changed the review basis from original AC to refined AC and then strengthened test assertions for AC-C1 and AC-C4b. |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- serve/kanban/tests/test_storage_io.py:1-5 still describes the file as an all-failing RED suite even though the current snapshot is green.
+- .gitignore:108 and seed/.gitignore:68 still only ignore .owlbear/kanban/.next_id.lock. That is outside the refined AC-C4b scope because architect split gitignore work to follow-up task #1096.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-C1 | serve/kanban/src/owlbear_kanban/storage_io.py:16-53 implements the refined sequence, but the TestFromAC assertions do not fully certify file-fsync and ordering semantics. | PASS with test-quality risk |
+| AC-C2 | Refined commit-point behavior is exercised by the replace-failure and pre-replace-fsync-failure tests at serve/kanban/tests/test_storage_io.py:153-187. | PASS |
+| AC-C3 | list_task_files excludes hidden temp files at serve/kanban/src/owlbear_kanban/storage.py:346-356 and the task test passes. | PASS |
+| AC-C4 | allocate_next_id uses .next_id.lock at serve/kanban/src/owlbear_kanban/storage.py:418-423 and the 50-thread uniqueness test passes, but the lock-path contract is not directly protected by assertions. | PASS with test-quality risk |
+| AC-C4a | write_task_if_unchanged locks tasks/.<id>.lock at serve/kanban/src/owlbear_kanban/storage.py:331 and the race tests pass. | PASS |
+| AC-C4b | The refined list-exclusion and per-task lock-path clauses are both exercised by serve/kanban/tests/test_storage_io.py:310-351. | PASS |
+| AC-C51 | The refined helper-level burned-ID behavior is covered by serve/kanban/tests/test_storage_io.py:356-377. | PASS |
+
+### Deductions
+- 0.10 AC-C1 still allows false-green mutations around temp-file fsync and ordering.
+- 0.08 AC-C4 still allows false-green mutations around the .next_id.lock contract.
+- 0.10 Brief/task drift around AC-C51 leaves the real engine create_task crash path outside this task’s protection.
+
+### Confidence: 0.72
+### Verdict: FAIL
+### Action
+Reject to backlog. This is the third review failure on #1046, so the loop-breaker route applies. Architect and test-writer need to realign the task with the paper-c consumer-path contract and strengthen the remaining AC-C1 and AC-C4 assertions before another builder pass.
+[[2026-04-22]]
+## Architecture Review (Cycle 3 — Loop-Breaker Resolution)
+
+### Previous Cycle Summary
+3 review cycles: 0.37, 0.88, 0.72. Implementation correct, all 13 tests pass. Loop caused by test assertion quality gaps, not AC or implementation defects.
+
+### Loop-Breaker Analysis
+Reviewer deductions stem from three issues:
+1. AC-C1 (0.10): Tests don't verify fsync ordering (file-fd fsync, replace, dir-fd fsync). Count/set-membership assertions pass wrong implementations.
+2. AC-C4 (0.08): Tests don't verify .next_id.lock file is used by allocate_next_id specifically.
+3. AC-C51 (0.10): Engine create_task crash path not tested. Out of this task's scope (storage helpers only). Confirmed no existing task owns this AC (#1053, #1062, #1097 all lack it). Follow-up #1101 created.
+
+### AC Assessment
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC-C1 | IMPRECISE — ordering stated but not enforceable. Test-writer interpreted as count/membership checks. | Refined: explicit ordering verification requirement |
+| AC-C2 | PASS — commit-point semantics clear | None |
+| AC-C3 | PASS — straightforward filter | None |
+| AC-C4 | IMPRECISE — .next_id.lock mentioned but no verification clause | Refined: added lock-file existence clause |
+| AC-C4a | PASS — exact counts, survivor check | None |
+| AC-C4b | PASS — strengthened in cycle 2 with lock-path test | None |
+| AC-C51 | SCOPE MISMATCH — original said create_task (engine scope). Cycle 1 refined to allocate_next_id (correct for storage layer). | Clarified: explicit scope boundary. Follow-up #1101. |
+
+### Refined AC (cycle 3 — authoritative, supersedes all prior AC)
+
+- [ ] AC-C1: atomic_write(target, content) writes to .tmp-* sibling, fsyncs file fd, then os.replace to target, then fsyncs parent dir fd on POSIX. Tests must verify operation ordering: a shared sequence spy must prove file-fd fsync precedes replace which precedes dir-fd fsync. Count-only or set-membership-only assertions are insufficient.
+- [ ] AC-C2: .tmp-* cleaned up on any exception. Target unaffected when exception occurs before os.replace (the commit point). Simulated: os.replace failure, pre-replace fsync failure.
+- [ ] AC-C3: list_task_files filters out .tmp-* files.
+- [ ] AC-C4: allocate_next_id holds .next_id.lock during read+increment+save. (a) 50 threads x 1 allocation yields 50 distinct IDs. (b) After first allocation, .next_id.lock file exists at kanban_dir/.next_id.lock.
+- [ ] AC-C4a: write_task_if_unchanged CAS test: 20 threads racing yields exactly 1 success, 19 ERR_STALE; survivor write intact.
+- [ ] AC-C4b: Lock files at tasks/.<id>.lock, never returned by list_task_files/list_archive_files.
+- [ ] AC-C51: ID burn on crash: simulate crash after allocate_next_id bumps config but before write_task; next allocate_next_id returns original_next_id + 1; config ends at original_next_id + 2 (one ID burned, no task file for burned ID). Scope: allocate_next_id helper only; engine create_task crash safety tracked in #1101.
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Storage I/O + ID allocation — cohesive primitives |
+| Interface clarity | PASS (after refinement) | AC-C1 ordering, AC-C4 lock-existence now explicit |
+| Dependency correctness | PASS | No deps; downstream tasks depend on this |
+| Module layering | PASS | storage_io below storage; no upward imports |
+| TDD compliance | PASS | RED task; implementation present from prior cycles |
+| KISS/YAGNI | PASS | Minimal scope aligned with Brief C |
+| Premise challenge | PASS | Atomic write and ID allocation are core storage primitives |
+| Pattern consistency | PASS | flock, atomic_write, ConcurrencyError follow Brief C conventions |
+| Security surface | PASS | No external input boundaries |
+| Single domain | PASS | kanban storage domain only |
+
+### Challenge Results
+- Challenger: BLOCK (confidence: 0.33)
+- 6 findings: AC-C51 scope ownership (critical), contract drift (critical), proposal-to-record mismatch (moderate), AC-C4 evidence insufficiency (moderate), evidence weighting (moderate), cross-task traceability (moderate)
+- Architect response:
+  - AC-C51 scope ownership: ACCEPTED. Confirmed #1053/#1062 lack AC-C51 engine crash AC. Created #1101 with explicit engine crash-safety AC.
+  - Contract drift: OVERRIDDEN. Previous architect correctly refined AC-C51 from engine to helper scope. Test file is test_storage_io.py (storage layer). Engine-level crash safety now has explicit owner (#1101).
+  - Proposal-to-record mismatch: ACCEPTED. Refinements written to body in this note.
+  - AC-C4 evidence insufficiency: PARTIALLY ACCEPTED. Lock-file-exists proves mechanism is file-based (not threading.Lock). Behavioral guarantee from 50-thread uniqueness. Full critical-section proof unfalsifiable via unit test.
+  - Evidence weighting: OVERRIDDEN. AC precision is the architect's scope. Refinements give the test-writer concrete direction for ordering verification.
+  - Cross-task traceability: NOTED. #1055 (GREEN counterpart) undergoes its own architect review.
+
+### Follow-up Tasks
+- #1101: Engine create_task crash-safety test (AC-C51-engine). Created at research (create_task tool cannot set status to backlog). Should be moved to backlog. Tags needed: phase:storage, brief:c, scope:kanban. Parent: #1043. Depends on: #1062.
+- Cleanup needed: #1098, #1099, #1100 are artifacts from create_task tool debugging. Should be deleted.
+
+### Verdict: APPROVE (REFINE + APPROVE)
+### Action: AC refined in cycle 3 above. Key changes: (1) AC-C1 requires ordering verification via shared sequence spy, (2) AC-C4 adds lock-file existence clause, (3) AC-C51 adds explicit scope boundary with follow-up #1101. Reviewer should evaluate against cycle 3 refined AC only.
+[[2026-04-22]]
+## Test-Writer Notes
+- Retry cycle (cycle 3): reviewer FAILed for weak assertions on AC-C1 and AC-C4 (confidence 0.72); architect refined AC with ordering requirement and lock-file existence clause.
+- Test file: `serve/kanban/tests/test_storage_io.py`
+- Classes: `TestFromAC_AtomicWrite`, `TestFromAC_IDAllocation`
+- Changes made (assertion strengthening):
+
+| Change | Target | What was added |
+|--------|--------|----------------|
+| Added | `test_ac_c1_fsyncs_in_correct_order` | Sequence spy tracking `spy_open`/`spy_fsync`/`spy_replace`; asserts `sequence == ["fsync_file", "replace", "fsync_dir"]` — wrong ordering or wrong fd type fails |
+| Added | `test_ac_c4_next_id_lock_file_exists_after_allocation` | Asserts `.next_id.lock` exists at `kanban_dir/.next_id.lock` after `allocate_next_id` — a `threading.Lock` or different path fails |
+
+- Total: 15 tests (13 existing preserved + 2 new)
+- ruff: clean
+- commit: f992689d
+- All 15 pass (implementation already correct from prior cycle)
+
+**AC coverage (cycle 3 refined AC):**
+| AC | Test(s) | Status |
+|----|---------|--------|
+| AC-C1 (ordering) | `test_ac_c1_writes_via_tmp_sibling`, `test_ac_c1_posix_fsyncs_file_and_dir`, `test_ac_c1_final_content_is_correct`, `test_ac_c1_fsyncs_in_correct_order` (NEW) | COVERED with ordering guard |
+| AC-C2 | `test_ac_c2_cleans_up_tmp_on_replace_failure`, `test_ac_c2_target_unaffected_on_fsync_failure` | COVERED |
+| AC-C3 | `test_ac_c3_list_task_files_excludes_tmp` | COVERED |
+| AC-C4 (lock-file existence) | `test_ac_c4_50_concurrent_threads_yield_distinct_ids`, `test_ac_c4_next_id_lock_file_exists_after_allocation` (NEW) | COVERED with lock-path guard |
+| AC-C4a | `test_ac_c4a_cas_20_threads_one_success_19_stale`, `test_ac_c4a_survivor_write_intact` | COVERED |
+| AC-C4b | `test_ac_c4b_lock_files_not_in_list_task_files`, `test_ac_c4b_lock_files_not_in_list_archive_files`, `test_ac_c4b_write_task_if_unchanged_creates_lock_at_per_task_path` | COVERED |
+| AC-C51 | `test_ac_c51_crash_between_save_config_and_write_task` | COVERED |
+[[2026-04-22]]
+## Builder Notes
+- Implementation: no code changes in this cycle (existing implementation remains in `serve/kanban/src/owlbear_kanban/storage_io.py` and `serve/kanban/src/owlbear_kanban/storage.py`).
+- Tests: 15 `TestFromAC_*` passed in scoped verification (`serve/kanban/tests/test_storage_io.py`); supplemental storage-module run: 78 passed, 0 failed, 0 skipped across `serve/kanban/tests/test_storage_io.py`, `serve/kanban/tests/test_storage.py`, `serve/kanban/tests/test_storage_1050.py`.
+- Coverage: `owlbear_kanban.storage_io` 100%; `owlbear_kanban.storage` 75% in task-only scope and 96% with related storage tests (gate-clearing touched-module evidence).
+- Ruff: clean for `serve/kanban/src/owlbear_kanban/storage_io.py`, `serve/kanban/src/owlbear_kanban/storage.py`, and `serve/kanban/tests/test_storage_io.py`.
+- Evidence summary: quality-runner scoped and supplemental runs both returned `failed: []`, pytest exit code 0, and ruff exit code 0.
+- Fixes applied: none.
+- Post-task reflection:
+  - Problem faced: this was a formalization cycle on already-correct code, so evidence freshness (not implementation) was the key risk.
+  - Workaround applied: ran both task-scoped and supplemental storage-module quality-runner passes to avoid false gating from narrow-scope coverage.
+  - Pattern discovered: dual evidence (scoped + module-level) is the most reliable closeout pattern for retroactive GREEN tasks.
+  - Time sink: repeated re-verification overhead due to prior review-loop context.
+  - Quality gap: none blocking after cycle-3 assertion-strengthening and current verification.
+[[2026-04-22]]
+## Review Evidence
+### Test Results
+- Quality-Runner scoped run: 15 passed, 0 failed, 0 skipped for serve/kanban/tests/test_storage_io.py.
+- Supplemental storage-module run: 78 passed, 0 failed, 0 skipped for serve/kanban/tests/test_storage_io.py, serve/kanban/tests/test_storage.py, and serve/kanban/tests/test_storage_1050.py.
+
+### Lint
+- Clean for serve/kanban/src/owlbear_kanban/storage_io.py, serve/kanban/src/owlbear_kanban/storage.py, and serve/kanban/tests/test_storage_io.py.
+
+### Coverage
+- owlbear_kanban.storage_io: 100 percent.
+- owlbear_kanban.storage: 75 percent in task-only scope; 96 percent when related storage tests are included.
+- Coverage clears the touched-module gate when the related storage tests are included.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC-C1 | test_ac_c1_writes_via_tmp_sibling; test_ac_c1_posix_fsyncs_file_and_dir; test_ac_c1_final_content_is_correct; test_ac_c1_fsyncs_in_correct_order | Partially. The new ordering and sibling assertions are strong on POSIX, but the AC is explicitly POSIX-scoped while the dir-fsync assertions are unconditional at serve/kanban/tests/test_storage_io.py:116-186. Since atomic_write only performs the parent-dir fsync behind serve/kanban/src/owlbear_kanban/storage_io.py:46-49, these tests false-fail on supported Windows setups. | LAX |
+| AC-C2 | test_ac_c2_cleans_up_tmp_on_replace_failure; test_ac_c2_target_unaffected_on_fsync_failure | Yes. Pre-commit exception cleanup and unchanged-target behavior are covered in serve/kanban/tests/test_storage_io.py. | COVERED |
+| AC-C3 | test_ac_c3_list_task_files_excludes_tmp | Yes. Hidden temp files are rejected by list_task_files and by the task test. | COVERED |
+| AC-C4 | test_ac_c4_50_concurrent_threads_yield_distinct_ids; test_ac_c4_next_id_lock_file_exists_after_allocation | Yes for the cycle-3 refined AC. The tests enforce 50 unique IDs and lock-file existence at kanban_dir/.next_id.lock, matching serve/kanban/src/owlbear_kanban/storage.py:418-427. | COVERED |
+| AC-C4a | test_ac_c4a_cas_20_threads_one_success_19_stale; test_ac_c4a_survivor_write_intact | Yes. Exact success and stale counts plus readable survivor state are covered in serve/kanban/tests/test_storage_io.py. | COVERED |
+| AC-C4b | test_ac_c4b_lock_files_not_in_list_task_files; test_ac_c4b_lock_files_not_in_list_archive_files; test_ac_c4b_write_task_if_unchanged_creates_lock_at_per_task_path | Yes. List exclusion and tasks/.<id>.lock creation match serve/kanban/src/owlbear_kanban/storage.py:310-381. | COVERED |
+| AC-C51 | test_ac_c51_crash_between_save_config_and_write_task | Yes for the refined helper-scope AC. The task test covers burn-one-ID behavior after config advance and before write_task. | COVERED |
+
+#### Security Review
+- No issues found in scope. The reviewed code paths are local filesystem writes and file locks only.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| TestFromAC_AtomicWrite | Current snapshot strengthens AC-C1 with sibling-path and ordering assertions; no skip or xfail markers observed. | STRENGTHENED |
+| TestFromAC_IDAllocation | Current snapshot strengthens AC-C4 with a direct .next_id.lock existence assertion; no skip or xfail markers observed. | STRENGTHENED |
+- Historical immutability against the original RED commit was not independently re-verified with the available tool set, but no weakening is visible in the current snapshot.
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | AC-C1 ordering and AC-C4 lock existence are now asserted exactly in serve/kanban/tests/test_storage_io.py. |
+| Negative and error-path coverage | ADEQUATE | AC-C2 replace failure and pre-replace fsync failure, plus AC-C4a stale OCC behavior, are covered. |
+| Manual mutation reasoning | ADEQUATE | Wrong fsync order and wrong lock path now fail on POSIX. |
+| Test independence | STRONG | Each case creates its own temp board and uses local thread collectors. |
+| Descriptive names | STRONG | Test names map directly to the refined AC lines. |
+| Platform scoping | WEAK | AC-C1 is explicitly POSIX-scoped in the task body, but serve/kanban/tests/test_storage_io.py:116-186 asserts dir-fsync behavior unconditionally even though serve/kanban/src/owlbear_kanban/storage_io.py:46-49 gates that behavior by platform. The repo documents Windows support at setup/sharing-guide.md:64-68 and carries Windows code paths at serve/kanban/src/owlbear_kanban/engine.py:274-278. |
+
+#### Data Safety
+- No implementation-side data-safety issues found in the refined task scope.
+
+#### Implementation-Aware Gaps
+- No refined-scope implementation gap found. The blocker is test portability, not storage-helper behavior.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability is involved.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 4 |
+| Approach variation | Yes. The task history shows multiple evidence-refresh and assertion-strengthening passes rather than the same retry repeated. |
+| Assessment | CLEAN |
+
+### Pass 2 - INFORMATIONAL
+- serve/kanban/tests/test_storage_io.py:1-5 still describes the file as an all-failing RED suite even though the current snapshot is GREEN.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-C1 | The refined AC is POSIX-scoped, but the current tests encode dir-fsync behavior unconditionally at serve/kanban/tests/test_storage_io.py:116-186 while the implementation only performs it behind serve/kanban/src/owlbear_kanban/storage_io.py:46-49. That makes the task's AC-C1 test artifact invalid on supported Windows environments. | FAIL |
+| AC-C2 | Pre-commit cleanup and unchanged-target behavior are covered by the two AC-C2 tests and match the refined commit-point semantics. | PASS |
+| AC-C3 | list_task_files excludes .tmp files and the task test passes. | PASS |
+| AC-C4 | allocate_next_id uses .next_id.lock and the task tests now cover both uniqueness and lock-file existence. | PASS |
+| AC-C4a | write_task_if_unchanged enforces one winner, stale losers, and intact survivor state. | PASS |
+| AC-C4b | Per-task lock-path creation and lock-file exclusion from listings are both covered. | PASS |
+| AC-C51 | The helper-scope burned-ID contract is covered by the task test; engine-level crash safety is tracked separately in #1101. | PASS |
+
+### Deductions
+- 0.12 AC-C1 tests are platform-mis-scoped and false-fail on supported Windows setups.
+
+### Confidence: 0.88
+### Verdict: FAIL
+### Action
+Reject to backlog. This is the fourth review cycle on #1046, so the loop-breaker route applies. No implementation change is required by current evidence. The next cycle should fix the AC-C1 tests so POSIX-only dir-fsync assertions are conditional on platforms that expose that behavior, then rerun task-scoped quality checks.
+[[2026-04-22]]
+## Architecture Review (Cycle 4 — Loop-Breaker Resolution)
+
+### Previous Cycle Summary
+4 review cycles: 0.37, 0.88, 0.72, 0.88. Implementation correct across all cycles. All 15 tests pass. Cycle 4 reviewer's sole deduction (0.12): `test_ac_c1_posix_fsyncs_file_and_dir` and `test_ac_c1_fsyncs_in_correct_order` assert dir-fsync behavior unconditionally, but `storage_io.py:46` gates it with `hasattr(os, "O_DIRECTORY")`.
+
+### Loop-Breaker Analysis
+The remaining issue is test platform-scoping, not AC precision or implementation correctness. Two tests encode POSIX-specific assertions without platform guards. The fix is surgical: skip or condition the dir-fsync assertions on platforms without `O_DIRECTORY`.
+
+### AC Assessment
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC-C1 | IMPRECISE on platform scope — cycle 3 said "on POSIX" but didn't require test guards. Challenger correctly noted: (a) "POSIX" should be `hasattr(os, "O_DIRECTORY")` (feature detection, not platform identity), (b) full-ordering test skip would lose file-fsync-before-replace verification cross-platform. | Refined: split platform-conditional from platform-unconditional assertions |
+| AC-C2 | PASS | None |
+| AC-C3 | PASS | None |
+| AC-C4 | PASS | None |
+| AC-C4a | PASS | None |
+| AC-C4b | PASS | None |
+| AC-C51 | PASS | None |
+
+### Refined AC (cycle 4 — authoritative, supersedes all prior AC)
+
+- [ ] AC-C1: `atomic_write(target, content)` writes to `.tmp-*` sibling, fsyncs file fd, `os.replace` to target. When `hasattr(os, "O_DIRECTORY")`, fsyncs parent dir fd after replace. Tests must verify: (a) file-fd fsync precedes replace — unconditional, all platforms; (b) dir-fd fsync follows replace — conditional on `hasattr(os, "O_DIRECTORY")`. Concretely: ordering spy must assert `["fsync_file", "replace"]` always, and `["fsync_file", "replace", "fsync_dir"]` only when `O_DIRECTORY` available. The dir-fsync count/membership test (`test_ac_c1_posix_fsyncs_file_and_dir`) must be guarded with `pytest.mark.skipif(not hasattr(os, "O_DIRECTORY"), reason="dir-fsync requires O_DIRECTORY")`.
+- [ ] AC-C2: `.tmp-*` cleaned up on any exception. Target unaffected when exception occurs before `os.replace` (the commit point). Simulated: `os.replace` failure, pre-replace `fsync` failure.
+- [ ] AC-C3: `list_task_files` filters out `.tmp-*` files.
+- [ ] AC-C4: `allocate_next_id` holds `.next_id.lock` during read+increment+save. (a) 50 threads × 1 allocation → 50 distinct IDs. (b) After first allocation, `.next_id.lock` file exists at `kanban_dir/.next_id.lock`.
+- [ ] AC-C4a: `write_task_if_unchanged` CAS test: 20 threads racing → exactly 1 success, 19 `ERR_STALE`; survivor write intact.
+- [ ] AC-C4b: Lock files at `tasks/.<id>.lock`, never returned by `list_task_files`/`list_archive_files`.
+- [ ] AC-C51: ID burn on crash: simulate crash after `allocate_next_id` bumps config but before `write_task`; next `allocate_next_id` returns `original_next_id + 1`; config ends at `original_next_id + 2` (one ID burned, no task file for burned ID). Scope: `allocate_next_id` helper only; engine `create_task` crash safety tracked in #1101.
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Storage I/O + ID allocation — cohesive primitives |
+| Interface clarity | PASS (after refinement) | AC-C1 platform scoping now explicit with feature detection |
+| Dependency correctness | PASS | No deps; downstream tasks depend on this |
+| Module layering | PASS | storage_io below storage; no upward imports |
+| TDD compliance | PASS | RED+GREEN complete from prior cycles |
+| KISS/YAGNI | PASS | Minimal scope aligned with Brief C |
+| Premise challenge | PASS | Core storage primitives |
+| Pattern consistency | PASS | flock, atomic_write, ConcurrencyError follow Brief C conventions |
+| Security surface | PASS | No external input boundaries |
+| Single domain | PASS | kanban storage domain only |
+
+### Challenge Results
+- Challenger: RECONSIDER (confidence: 0.63)
+- 4 findings: contract drift (moderate), gate evidence gap (moderate), unsupported stability claim (minor), terminology mismatch (minor)
+- Architect response:
+  - Contract drift: ACCEPTED. Refined AC-C1 to split unconditional (file-fsync before replace) from conditional (dir-fsync after replace) with explicit test guidance. Ordering test should assert `["fsync_file", "replace"]` on all platforms, full `["fsync_file", "replace", "fsync_dir"]` only when `O_DIRECTORY` available.
+  - Gate evidence gap: OVERRIDDEN. Pipeline flow: architect refines AC → task advances to `todo` → test-writer implements → builder verifies → reviewer checks fresh evidence. This is normal pipeline operation, not a gate bypass.
+  - Unsupported stability claim: NOTED. Implementation is correct. Tests would only false-fail on Windows, not produce incorrect behavior.
+  - Terminology mismatch: ACCEPTED. AC now uses `hasattr(os, "O_DIRECTORY")` (feature detection) instead of "POSIX".
+
+### Verdict: APPROVE (REFINE + APPROVE)
+### Action: AC-C1 refined to require platform-conditional test assertions using feature detection. Reviewer should evaluate against cycle 4 refined AC only.
+[[2026-04-22]]
+## Test-Writer Notes
+- Retry cycle (cycle 4): reviewer FAILed for platform-mis-scoped AC-C1 assertions (confidence 0.88); architect refined AC-C1 with explicit `hasattr(os, "O_DIRECTORY")` feature-detection requirement.
+- Test file: `serve/kanban/tests/test_storage_io.py`
+- Classes: `TestFromAC_AtomicWrite`, `TestFromAC_IDAllocation`
+- Total: 15 tests — all GREEN (implementation already correct from prior cycle)
+
+**Changes made (platform scoping):**
+
+| Change | Target | What was changed |
+|--------|--------|-----------------|
+| Modified | `test_ac_c1_posix_fsyncs_file_and_dir` | Added `@pytest.mark.skipif(not hasattr(os, "O_DIRECTORY"), reason="dir-fsync requires O_DIRECTORY (POSIX only)")` — test skips on platforms without `O_DIRECTORY` |
+| Modified | `test_ac_c1_fsyncs_in_correct_order` | Replaced unconditional `assert sequence == ["fsync_file", "replace", "fsync_dir"]` with conditional: asserts `["fsync_file", "replace", "fsync_dir"]` when `O_DIRECTORY` available, `["fsync_file", "replace"]` otherwise — cross-platform correct |
+
+**Why these changes and not new tests:** Architect cycle 4 AC refinement explicitly directed these modifications. The reviewer's sole deduction (0.12) was platform-mis-scoped assertions on the two AC-C1 tests — a test quality issue with specific architect guidance, not missing test coverage.
+
+**AC coverage (cycle 4 refined AC):**
+| AC | Test(s) | Status |
+|----|---------|--------|
+| AC-C1 (ordering, platform-conditional) | `test_ac_c1_writes_via_tmp_sibling`, `test_ac_c1_posix_fsyncs_file_and_dir` (skipif guarded), `test_ac_c1_final_content_is_correct`, `test_ac_c1_fsyncs_in_correct_order` (conditional) | COVERED with platform guards |
+| AC-C2 | `test_ac_c2_cleans_up_tmp_on_replace_failure`, `test_ac_c2_target_unaffected_on_fsync_failure` | COVERED |
+| AC-C3 | `test_ac_c3_list_task_files_excludes_tmp` | COVERED |
+| AC-C4 | `test_ac_c4_50_concurrent_threads_yield_distinct_ids`, `test_ac_c4_next_id_lock_file_exists_after_allocation` | COVERED |
+| AC-C4a | `test_ac_c4a_cas_20_threads_one_success_19_stale`, `test_ac_c4a_survivor_write_intact` | COVERED |
+| AC-C4b | `test_ac_c4b_lock_files_not_in_list_task_files`, `test_ac_c4b_lock_files_not_in_list_archive_files`, `test_ac_c4b_write_task_if_unchanged_creates_lock_at_per_task_path` | COVERED |
+| AC-C51 | `test_ac_c51_crash_between_save_config_and_write_task` | COVERED |
+
+- ruff: clean
+- pytest: 15 passed, 0 failed (macOS — `O_DIRECTORY` available, POSIX tests run)
+- commit: 37bb8027
+[[2026-04-22]]
+## Builder Notes
+- Implementation: no code changes in this cycle; existing implementation in serve/kanban/src/owlbear_kanban/storage_io.py and serve/kanban/src/owlbear_kanban/storage.py already satisfies the cycle-4 refined AC.
+- Tests: 15 TestFromAC cases in serve/kanban/tests/test_storage_io.py remain GREEN; supplemental storage-module verification passed for serve/kanban/tests/test_storage_io.py, serve/kanban/tests/test_storage.py, and serve/kanban/tests/test_storage_1050.py.
+- Verification results (quality-runner): 78 passed, 0 failed, 0 skipped; pytest exit 0.
+- Coverage: owlbear_kanban.storage 96%; owlbear_kanban.storage_io 100%.
+- Ruff: clean for serve/kanban/src/owlbear_kanban/storage_io.py, serve/kanban/src/owlbear_kanban/storage.py, and serve/kanban/tests/test_storage_io.py (ruff exit 0).
+- Evidence summary: quality-runner report returned failed: [] and clean: true with no execution errors.
+- Fixes applied: none required.
+- Post-task reflection:
+  - Problem faced: repeated review loops had left the task in in-progress despite implementation being stable.
+  - Workaround applied: refreshed canonical evidence via quality-runner using scoped + related module paths.
+  - Pattern discovered: retroactive GREEN closeout is reliable when both task scope and adjacent module paths are verified together.
+  - Time sink: prior cycle context reconciliation, not code debugging.
+  - Quality gap: none blocking after cycle-4 AC-C1 platform-scoping updates.
+[[2026-04-22]]
+## Review Evidence
+### Test Results
+- Independent quality-runner scoped run on `serve/kanban/tests/test_storage_io.py`: 15 passed, 0 failed, 0 skipped.
+- Independent quality-runner supplemental storage-module run on `serve/kanban/tests/test_storage_io.py`, `serve/kanban/tests/test_storage.py`, and `serve/kanban/tests/test_storage_1050.py`: 78 passed, 0 failed, 0 skipped.
+
+### Lint
+- Ruff clean for `serve/kanban/src/owlbear_kanban/storage_io.py`, `serve/kanban/src/owlbear_kanban/storage.py`, and `serve/kanban/tests/test_storage_io.py`.
+
+### Coverage
+- Task-scoped: `owlbear_kanban.storage_io` 100%, `owlbear_kanban.storage` 75%.
+- Supplemental related-storage run: `owlbear_kanban.storage` 96%.
+- Coverage is not the blocker.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-C1 | `atomic_write` sequence is implemented at `serve/kanban/src/owlbear_kanban/storage_io.py:16-52` and guarded by task tests at `serve/kanban/tests/test_storage_io.py:94-193`, including platform-conditional ordering. | PASS |
+| AC-C2 | The implementation only cleans up temp files under `except Exception:` at `serve/kanban/src/owlbear_kanban/storage_io.py:52-54`, while the task AC says `.tmp-*` is cleaned up on any exception. The task suite only proves `OSError` paths at `serve/kanban/tests/test_storage_io.py:201-224`. A non-`Exception` failure after temp creation would leak `.tmp-*`. | FAIL |
+| AC-C3 | Hidden/temp filtering is implemented by `list_task_files` at `serve/kanban/src/owlbear_kanban/storage.py:355-367` and exercised at `serve/kanban/tests/test_storage_io.py:231-242`. | PASS |
+| AC-C4 | `allocate_next_id` holds `.next_id.lock` around load/increment/save at `serve/kanban/src/owlbear_kanban/storage.py:418-427`; the tests verify 50 distinct IDs and lock-file existence at `serve/kanban/tests/test_storage_io.py:253-289`. | PASS |
+| AC-C4a | `write_task_if_unchanged` locks `tasks/.<id>.lock` and enforces `ERR_STALE` at `serve/kanban/src/owlbear_kanban/storage.py:310-347`; the race and survivor tests pass at `serve/kanban/tests/test_storage_io.py:293-364`. | PASS |
+| AC-C4b | Per-task lock path and list exclusion are implemented at `serve/kanban/src/owlbear_kanban/storage.py:331-379` and exercised at `serve/kanban/tests/test_storage_io.py:366-410`. | PASS |
+| AC-C51 | Burn-one-ID helper behavior is exercised at `serve/kanban/tests/test_storage_io.py:412-433`, matching `allocate_next_id` at `serve/kanban/src/owlbear_kanban/storage.py:418-427`. | PASS |
+
+#### Security Review
+- No security issues found in scope. Reviewed code is local filesystem write/lock logic only.
+
+#### Test Integrity
+- No weakened `TestFromAC_*` assertions observed in the current snapshot. The cycle-4 changes strengthen AC-C1 and AC-C4 coverage rather than relaxing them.
+
+#### Test Quality
+- STRONG/ADEQUATE overall after the cycle-4 refinements, except for the AC-C2 gap above: the suite does not exercise the non-`Exception` branch implied by the current AC wording.
+
+#### Data Safety
+- Blocking issue: `.tmp-*` cleanup does not currently cover all exception types promised by AC-C2 because the handler is `except Exception:` instead of a broader cleanup path.
+
+#### Implementation-Aware Gaps
+- The gap is narrow but real: no task-scoped test proves cleanup on a non-`Exception` failure path after temp creation.
+
+#### Builder Process Quality
+- CLEAN. The task body shows multiple retries with changed approach, not the same retry repeated.
+- Loop-breaker routing still applies because this is now the fifth review cycle on #1046.
+
+### Pass 2 — INFORMATIONAL
+- `serve/kanban/tests/test_storage_io.py:1-5` still describes the file as an all-failing RED suite even though the current snapshot is green.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-C1 | `serve/kanban/src/owlbear_kanban/storage_io.py:16-52`; `serve/kanban/tests/test_storage_io.py:94-193` | PASS |
+| AC-C2 | `serve/kanban/src/owlbear_kanban/storage_io.py:52-54`; `serve/kanban/tests/test_storage_io.py:201-224` | FAIL |
+| AC-C3 | `serve/kanban/src/owlbear_kanban/storage.py:355-367`; `serve/kanban/tests/test_storage_io.py:231-242` | PASS |
+| AC-C4 | `serve/kanban/src/owlbear_kanban/storage.py:418-427`; `serve/kanban/tests/test_storage_io.py:253-289` | PASS |
+| AC-C4a | `serve/kanban/src/owlbear_kanban/storage.py:310-347`; `serve/kanban/tests/test_storage_io.py:293-364` | PASS |
+| AC-C4b | `serve/kanban/src/owlbear_kanban/storage.py:331-379`; `serve/kanban/tests/test_storage_io.py:366-410` | PASS |
+| AC-C51 | `serve/kanban/tests/test_storage_io.py:412-433`; `serve/kanban/src/owlbear_kanban/storage.py:418-427` | PASS |
+
+### Deductions
+- 0.12 AC-C2 contract miss: cleanup is implemented only for `Exception`, but the authoritative AC still says cleanup happens on any exception; the task tests only cover `OSError`-style failures.
+
+### Confidence: 0.88
+### Verdict: FAIL
+### Action
+Reject to `backlog`.
+
+This is the fifth review cycle, so the loop-breaker route applies. The next cycle should resolve the contract mismatch explicitly:
+1. If AC-C2 truly means all exception types after temp creation, builder must broaden cleanup in `atomic_write` and test-writer must add a regression that proves the cleanup path.
+2. If AC-C2 is intended to cover only normal `Exception`/`OSError` failure modes, architect must narrow the AC wording so the implementation and tests match the contract.
+[[2026-04-22]]
+## Architecture Review (Cycle 5 — Loop-Breaker Resolution)
+
+### Previous Cycle Summary
+5 review cycles: 0.37, 0.88, 0.72, 0.88, 0.88. Implementation correct, all 15 tests pass. Cycle 5 reviewer's sole deduction (0.12): AC-C2 says "any exception" but `storage_io.py:52` uses `except Exception:`, excluding `BaseException` subclasses (`KeyboardInterrupt`, `SystemExit`).
+
+### Loop-Breaker Analysis
+The reviewer's deduction is technically precise — `except Exception:` doesn't catch `BaseException` subclasses. But the brief's own evidence resolves this:
+
+1. **Brief pseudocode (paper-c.md line 203)**: Explicitly uses `except Exception:`, not `except BaseException:`. The implementation follows the brief's reference code exactly.
+2. **Brief crash model (paper-c.md §3.2 line 229)**: "A crash mid-write (between mkstemp and os.replace) leaves target untouched and a .tmp-XXXX file in the parent directory; list_task_files filters out .tmp-* patterns." — `BaseException` scenarios (KeyboardInterrupt, SystemExit) are process-termination events modeled as "crash mid-write," not as normal exception paths.
+3. **Brief AC-C2 (paper-c.md line 664)**: "any exception path" is ordinary-language shorthand that drifts from the brief's own pseudocode. The intended contract scope is `Exception`-subclass failures, with crash-mid-write handled separately by the §3.2 tolerance model.
+
+The resolution: align AC-C2 wording with the brief's pseudocode and crash model. This is a wording clarification, not a contract narrowing — the brief already defines two distinct layers.
+
+### AC Assessment
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| AC-C1 | PASS — platform-conditional ordering verified | None |
+| AC-C2 | BRIEF DRIFT — "any exception" in AC conflicts with brief's own `except Exception:` pseudocode. The brief models crash-mid-write (.tmp-* leftovers) separately in §3.2. | Refined: specify `Exception`-subclass scope; note crash-mid-write is §3.2 domain |
+| AC-C3 | PASS | None |
+| AC-C4 | PASS — lock-file existence verified | None |
+| AC-C4a | PASS | None |
+| AC-C4b | PASS | None |
+| AC-C51 | PASS — helper scope with #1101 for engine | None |
+
+### Refined AC (cycle 5 — authoritative, supersedes all prior AC)
+
+- [ ] AC-C1: `atomic_write(target, content)` writes to `.tmp-*` sibling, fsyncs file fd, `os.replace` to target. When `hasattr(os, "O_DIRECTORY")`, fsyncs parent dir fd after replace. Tests must verify: (a) file-fd fsync precedes replace — unconditional, all platforms; (b) dir-fd fsync follows replace — conditional on `hasattr(os, "O_DIRECTORY")`. The dir-fsync count/membership test must be guarded with `pytest.mark.skipif(not hasattr(os, "O_DIRECTORY"), reason="dir-fsync requires O_DIRECTORY")`.
+- [ ] AC-C2: `.tmp-*` cleaned up on any `Exception`-subclass failure (matching brief pseudocode §3.1 line 203). Target unaffected when exception occurs before `os.replace` (the commit point). Simulated: `os.replace` failure, pre-replace `fsync` failure. Note: `BaseException` scenarios (KeyboardInterrupt, process kill) are crash-mid-write events per brief §3.2 — `.tmp-*` leftovers are tolerated by `list_task_files` filtering (AC-C3).
+- [ ] AC-C3: `list_task_files` filters out `.tmp-*` files.
+- [ ] AC-C4: `allocate_next_id` holds `.next_id.lock` during read+increment+save. (a) 50 threads × 1 allocation → 50 distinct IDs. (b) After first allocation, `.next_id.lock` file exists at `kanban_dir/.next_id.lock`.
+- [ ] AC-C4a: `write_task_if_unchanged` CAS test: 20 threads racing → exactly 1 success, 19 `ERR_STALE`; survivor write intact.
+- [ ] AC-C4b: Lock files at `tasks/.<id>.lock`, never returned by `list_task_files`/`list_archive_files`.
+- [ ] AC-C51: ID burn on crash: simulate crash after `allocate_next_id` bumps config but before `write_task`; next `allocate_next_id` returns `original_next_id + 1`; config ends at `original_next_id + 2` (one ID burned, no task file for burned ID). Scope: `allocate_next_id` helper only; engine `create_task` crash safety tracked in #1101.
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Storage I/O + ID allocation — cohesive primitives |
+| Interface clarity | PASS (after refinement) | AC-C2 exception scope now matches brief pseudocode |
+| Dependency correctness | PASS | No deps; downstream tasks depend on this |
+| Module layering | PASS | storage_io below storage; no upward imports |
+| TDD compliance | PASS | RED+GREEN complete from prior cycles |
+| KISS/YAGNI | PASS | Minimal scope aligned with Brief C |
+| Premise challenge | PASS | Core storage primitives |
+| Pattern consistency | PASS | flock, atomic_write, ConcurrencyError follow Brief C |
+| Security surface | PASS | No external input boundaries |
+| Single domain | PASS | kanban storage domain only |
+
+### Challenge Results
+- Challenger: RECONSIDER (confidence: 0.66)
+- 5 findings: record mismatch (moderate), brief-contract change framing (moderate), safety argument scope (moderate), docstring over-read (minor), anti-pattern claim (minor)
+- Architect response:
+  - Record mismatch: ACCEPTED. Refinement written to body in this note via standard REFINE+APPROVE flow.
+  - Brief-contract change framing: OVERRIDDEN. The brief's own pseudocode (paper-c.md line 203) uses `except Exception:`. The brief's crash model (§3.2) separately handles process-termination leftovers. The AC refinement aligns with the brief's intended two-layer contract, not against it.
+  - Safety argument scope: PARTIALLY ACCEPTED. All `atomic_write` callers (config, task, activity, migration, corruption) use the same cleanup-and-reraise pattern — the caller always receives the exception. A `.tmp-*` leftover from a `BaseException` is a crash-mid-write artifact per §3.2, handled by list filtering and normal cleanup on next startup. The safety argument extends beyond `list_task_files` to the brief's entire crash tolerance model.
+  - Docstring over-read: ACCEPTED. Removed from reasoning; the brief pseudocode is the authoritative source.
+  - Anti-pattern claim: PARTIALLY ACCEPTED. The stronger argument is architectural: `BaseException` is a process-termination signal, and the brief models this as "crash mid-write" (§3.2), not as an exception-handling path. The cleanup-and-reraise pattern under `except Exception:` is the intended scope per the brief's own reference implementation.
+
+### Verdict: APPROVE (REFINE + APPROVE)
+### Action: AC-C2 refined to specify `Exception`-subclass scope with brief §3.2 crash-model cross-reference. No code or test changes needed — implementation and tests already match the refined AC. Reviewer should evaluate against cycle 5 refined AC only.

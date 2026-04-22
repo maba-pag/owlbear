@@ -1,10 +1,10 @@
 ---
 id: 1048
 title: 'C-03: RED — corruption detection & auto-fix tests'
-status: backlog
+status: archived
 priority: needed
 created: 2026-04-21T10:42:50.258020+00:00
-updated: 2026-04-21T21:53:46.203200+00:00
+updated: 2026-04-22T03:35:52.503680+00:00
 tags:
 - phase:storage
 - brief:c
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 Brief C (#1043) — paper-c.md §8.4
@@ -410,3 +412,231 @@ Tested and confirmed PASS for: `tags: []`, `depends_on: []`, `blocked: false`, `
 - Independent quality evidence is clean; the remaining problem is proof quality, not a reproduced runtime defect.
 - The brief’s AC-C18 wording is broader than the engine-routing table, so I verified the engine paths before scoring duplicate modes; failing the task on that literal mismatch would have been a false blocker.
 - This is the third review cycle on the task, so the pipeline loop-breaker changes routing even though the underlying defect class is still test quality.
+[[2026-04-22]]
+## Architecture Review
+
+### Context
+3rd reviewer FAIL (confidence 0.87) via loop-breaker rule. All prior rejections cite the same defect class: AC-C22 fixed-path tests assert only `outcome.action == "fixed"` without verifying repaired values on disk. 7 of 12 (mode, field, default) triples lack persistence assertions.
+
+Root cause: process conflict between RED phase "all tests fail" rule and reviewer's exhaustive-assertion requirement. The test-writer wrote persistence tests for the 7 remaining triples, confirmed they passed, then removed them citing RED rules. The reviewer then rejected because those assertions are missing.
+
+### AC Refinement
+
+**AC-C22 refined interpretation:** "Exhaustively unit-tested per (mode, field, default) triple" requires each fixed-path test to verify the concrete repaired value persisted to disk (not just `action == "fixed"`). The existing null-field persistence tests (`block_reason: null`, `claimed_at: null`, `archival_reason: null`, `parent: null`) are the reference pattern.
+
+**"All tests fail" line:** Historically inaccurate since C-05's partial implementation (37 of 41 original tests pass). This line must not be interpreted as a gate — persistence assertions that pass against existing implementation must be retained. They document the repair contract and have already proven their value (the null-serialisation bug was caught only by persistence assertions).
+
+**Triples requiring persistence assertions (currently action-only):**
+
+| Triple | Field | Expected persisted value |
+|--------|-------|--------------------------|
+| (3, tags, []) | tags | `tags: []` |
+| (3, depends_on, []) | depends_on | `depends_on: []` |
+| (3, blocked, false) | blocked | `blocked: false` |
+| (3, archival_refs, []) | archival_refs | `archival_refs: []` |
+| (4, id, int) | id | integer id value |
+| (4, blocked, true) | blocked | `blocked: true` |
+| (4, blocked, false) | blocked | `blocked: false` |
+
+### Test-Writer Guidance (retry cycle)
+
+The reviewer cited **missing assertions** (not just weak tests). Per `w-tdd-red` Step 1b, write NEW tests for the 7 triples above following the `_persists_*_to_disk` pattern already established in the test file. These tests will pass against existing implementation — **retain them**. They are contract documentation that closes the AC-C22 exhaustiveness requirement. Do NOT remove passing persistence assertions.
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Corruption detection and auto-fix test coverage only |
+| Interface clarity | PASS | AC-C22 refined to require explicit persistence verification per triple |
+| Dependency correctness | PASS | No deps; parent #1043 |
+| Module layering | PASS | Tests depend on corruption.py and storage.py only |
+| TDD compliance | PASS | RED task; #1057 is GREEN counterpart |
+| KISS/YAGNI | PASS | Minimal: complete the existing persistence assertion pattern |
+| Premise challenge | PASS | Corruption tests are necessary for storage layer integrity |
+| Pattern consistency | PASS | Follows TestFromAC convention; persistence pattern already established |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | Kanban domain only |
+
+### Challenge Results
+- Challenger: reconsider (confidence: 0.56)
+- Findings: (1) root cause is retry-cycle process gap, not just AC wording; (2) persistence assertions belong in RED not GREEN; (3) AC refinement alone doesn't add missing assertions; (4) cross-task drift in #1057 mode list
+- Architect response: ACCEPTED on points 1-3 — revised approach to include explicit test-writer guidance about retaining passing persistence tests. Point 4 (#1057 drift) noted but is outside #1048 scope; will be evaluated when #1057 reaches backlog.
+
+### Informational
+- #1057 (GREEN counterpart) lists mode names that may not match the actual corruption module exports. Architect reviewing #1057 should verify alignment.
+- `TestBuilderDiscovered` class still exists in the test file (retired convention per w-tdd-red). Non-blocking; test-curator scope.
+
+### Verdict: APPROVE
+### Action: Advanced to todo. AC-C22 refined to require disk-persistence verification per triple. Test-writer guided to add 7 passing persistence assertions and retain them.
+[[2026-04-22]]
+## Test-Writer Notes
+
+**File:** `serve/kanban/tests/test_corruption.py`
+**Commit:** `2a2ad6e6`
+
+### Retry cycle summary
+Architecture Review (#1048) clarified AC-C22: "exhaustively unit-tested per (mode, field, default) triple" requires each fixed-path test to verify the concrete repaired value persisted to disk — not just `outcome.action == "fixed"`. Reviewer cited 7 triples with action-only assertions. Architecture Review also explicitly authorised retaining passing persistence tests (exception to normal RED rule).
+
+### 7 new persistence tests added to `TestFromAC_AutoFixMatrix`
+
+| Test | Triple | Expected disk value |
+|---|---|---|
+| `test_ac_c22_mode3_missing_tags_persists_empty_list_to_disk` | (3, tags, []) | `tags: []` |
+| `test_ac_c22_mode3_missing_depends_on_persists_empty_list_to_disk` | (3, depends_on, []) | `depends_on: []` |
+| `test_ac_c22_mode3_missing_blocked_persists_false_to_disk` | (3, blocked, false) | `blocked: false` |
+| `test_ac_c22_mode3_missing_archival_refs_persists_empty_list_to_disk` | (3, archival_refs, []) | `archival_refs: []` |
+| `test_ac_c22_mode4_string_id_persists_int_to_disk` | (4, id, int) | `id: 3005` (no quotes) |
+| `test_ac_c22_mode4_string_bool_true_persists_true_to_disk` | (4, blocked, true) | `blocked: true` |
+| `test_ac_c22_mode4_string_bool_false_persists_false_to_disk` | (4, blocked, false) | `blocked: false` |
+
+### Result
+All 7 tests PASS against existing implementation (Architecture Review authorised retention). Total: **61 tests, 61 PASS**. ruff: clean.
+
+### AC coverage
+| AC | Status |
+|---|---|
+| C17 | COVERED — 9 detection tests |
+| C18 | COVERED — targeted-read raises for all surfaceable modes |
+| C21 | COVERED — subclass shape assertions |
+| C22 | COVERED — all (mode, field, default) triples now have disk-persistence assertions |
+[[2026-04-22]]
+## Builder Notes
+- Implementation: no code changes in this builder cycle; verified current branch state against AC after latest test-writer retry.
+- Files changed: none.
+- Tests: 146 passed, 0 failed, 0 skipped across `serve/kanban/tests/test_corruption.py`, `serve/kanban/tests/test_storage.py`, `serve/kanban/tests/test_storage_1050.py`, `serve/kanban/tests/test_engine_storage.py`.
+- Coverage: `owlbear_kanban.corruption` 91%, `owlbear_kanban.storage` 97% (related-suite coverage run).
+- ruff: clean on `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/src/owlbear_kanban/storage.py`, `serve/kanban/tests/test_corruption.py`.
+- Evidence summary: AC-C22 persistence assertions from latest test-writer cycle are present and green; no further implementation gaps reproduced.
+
+### Reflection
+- The task had prior implementation already in place; this cycle functioned as GREEN verification and handoff.
+- A narrow coverage run under-reported module coverage, so I used the related-suite coverage pass for gate-quality percentages.
+- Keeping this cycle code-free avoided unnecessary churn and preserved a surgical task boundary.
+[[2026-04-22]]
+## Review Evidence
+
+### Test Results
+- quality-runner related-suite run: 146 passed, 0 failed, 0 skipped across `serve/kanban/tests/test_corruption.py`, `serve/kanban/tests/test_storage.py`, `serve/kanban/tests/test_storage_1050.py`, and `serve/kanban/tests/test_engine_storage.py`.
+- No independent test failures reproduced.
+
+### Lint
+- ruff: clean on `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/src/owlbear_kanban/storage.py`, and `serve/kanban/tests/test_corruption.py`.
+
+### Coverage
+- `owlbear_kanban.corruption`: 91%
+- `owlbear_kanban.storage`: 97%
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC-C17 | Positive-detection tests for all 9 modes at `serve/kanban/tests/test_corruption.py:161,182,194,223,238,249,261,272,287` | Yes | COVERED |
+| AC-C18 | Direct targeted-read raises at `serve/kanban/tests/test_corruption.py:172,209,329,343,353,896,912,927`, backed by `read_task` re-raising board-level corruption at `serve/kanban/src/owlbear_kanban/storage.py:232-234` | Yes | COVERED |
+| AC-C21 | Subclass assertion at `serve/kanban/tests/test_corruption.py:131` against exported subclasses at `serve/kanban/src/owlbear_kanban/corruption.py:83-91` | Yes | COVERED |
+| AC-C22 | Quarantine/fix-path coverage now includes persistence assertions for all fixed-path matrix rows at `serve/kanban/tests/test_corruption.py:647,669,691,713,742,764,786,808,830,850,871,942,960`, with quarantine cases retained at `serve/kanban/tests/test_corruption.py:502,515,541,581,608` | Yes | COVERED |
+
+#### Security Review
+- No issues found in the review scope.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `TestFromAC_*` suites in `serve/kanban/tests/test_corruption.py` | Current retry is additive only: new persistence assertions and direct-read checks were added; no weakened or removed assertions observed | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | The retry now verifies concrete repaired file contents on disk at `serve/kanban/tests/test_corruption.py:647,669,691,713,742,764,786,808,830,850,871,942,960` rather than relying on action-only checks. |
+| Negative/error-path coverage | STRONG | Quarantine/error cases remain covered at `serve/kanban/tests/test_corruption.py:502,515,541,581,608`, and targeted-read raises are covered at `serve/kanban/tests/test_corruption.py:172,209,329,343,353,896,912,927`. |
+| Manual mutation reasoning | ADEQUATE | Wrong persisted defaults, bool coercions, int coercion, or null serialization now fail the new disk-assertion tests. Residual ambiguity around missing `status` or `updated` is outside Brief C §4.2's fixed-path matrix and did not reproduce as a runtime gap. |
+| Test independence | STRONG | The suite builds isolated `tmp_path` boards per test throughout `serve/kanban/tests/test_corruption.py`. |
+| Descriptive names | STRONG | Test names remain AC-tagged and behavior-specific throughout the task file. |
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gaps
+- No significant untested runtime gap reproduced. The earlier AC-C22 failure mode is closed: the remaining fixed-path/default-value rows now assert on-disk repaired content, and the targeted-read AC-C18 gap is covered by direct tests plus the `read_task` corruption re-raise hook.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 4 |
+| Approach variation | Yes |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- `serve/kanban/tests/test_corruption.py:1` still carries historical RED-phase header text even though the task is now green. Non-blocking doc drift.
+- `TestFromAC_AutoFixMatrix` still says "mode 3 and mode 4" while the class now also includes mode-9 persistence coverage. Non-blocking doc drift.
+- `serve/kanban/src/owlbear_kanban/storage.py` `read_task` docstring still understates the current raise surface. Non-blocking doc drift.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC-C17 | All 9 corruption modes have explicit positive-detection coverage in `serve/kanban/tests/test_corruption.py:161,182,194,223,238,249,261,272,287`. | `TestFromAC_CorruptionDetection` | PASS |
+| AC-C18 | `read_task` re-runs `detect_corruption` at `serve/kanban/src/owlbear_kanban/storage.py:232-234`, and direct raise tests cover the surfaceable targeted-read modes at `serve/kanban/tests/test_corruption.py:172,209,329,343,353,896,912,927`. | `TestFromAC_CorruptionDetection` plus additive direct-read tests | PASS |
+| AC-C21 | The subclass contract is asserted at `serve/kanban/tests/test_corruption.py:131` against the current exports at `serve/kanban/src/owlbear_kanban/corruption.py:83-91`. | `TestFromAC_CorruptionShape` | PASS |
+| AC-C22 | The matrix now has persisted-value assertions for the fixed-path/default rows at `serve/kanban/tests/test_corruption.py:647,669,691,713,742,764,786,808,830,850,871,942,960`, with quarantine cases still covered at `serve/kanban/tests/test_corruption.py:502,515,541,581,608`. This matches the architecture-review clarification recorded in task body at `.owlbear/kanban/tasks/1048-c-03-red-corruption-detection-auto-fix-tests.md:478`. | `TestFromAC_AutoFixMatrix` plus additive persistence tests | PASS |
+
+### Deductions
+- Residual ambiguity around the shared `missing_required` membership set in `serve/kanban/src/owlbear_kanban/corruption.py:418` is not covered field-by-field for `status` and `updated`, but it is outside the fixed-path matrix AC and did not reproduce as a defect: -0.02
+- Informational doc drift in the test/storage docstrings and header comments: -0.02
+
+### Confidence: 0.96
+### Verdict: PASS
+### Action: Advance to docs.
+
+### Reflection
+- Independent quality evidence stayed green on the broader related-suite gate: 146 passed, ruff clean, 91% and 97% coverage on the review modules.
+- The architecture retry guidance for AC-C22 was precise: the missing fixed-path persistence assertions were the blocker, and the latest test-writer cycle closes that exact gap.
+- Remaining issues are documentation drift and a minor shared-branch coverage ambiguity, not a blocking quality failure.
+[[2026-04-22]]
+## Docs Gate
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 0a | Review Evidence present | Y | PASS | Four `## Review Evidence` sections present; latest verdict PASS (confidence 0.96) |
+| 0b | Doc-index loaded | Y | PASS | `.owlbear/doc-index.md` read |
+| 1 | Prose docs (READMEs) | N | N/A | `serve/kanban/README.md` has no references to `corruption.py`, `storage.py`, or `read_task` |
+| 2 | Module docstrings | Y | UPDATED | `storage.py` `read_task` summary rewritten (stale "silently stripping claimed_by"); added `ERR_CORRUPT_YAML_PARSE` and `ERR_CORRUPT_ID_FILENAME_MISMATCH` to Raises. `test_corruption.py` module docstring: removed stale RED-phase header ("All tests FAIL — corruption module not yet implemented") |
+| 3 | External attribution | N | N/A | No external patterns cited in task |
+| 4 | Research doc | N | N/A | No `.owlbear/research/` doc produced |
+| 5 | Diagram maintenance | Y | UPDATED | `kanban.excalidraw` (describes `serve/kanban/src/**`) and `mcp-topology.excalidraw` (describes `serve/kanban/src/**`) footers updated to `Last verified: 2026-04-22 (46e91c0e)` |
+| 6 | Explicit diagram creation | N | N/A | No diagram creation requested |
+| 7 | Deletion detection | N | N/A | No files deleted in this task |
+
+**Files updated:** `serve/kanban/src/owlbear_kanban/storage.py`, `serve/kanban/tests/test_corruption.py`, `share/diagrams/kanban.excalidraw`, `share/diagrams/mcp-topology.excalidraw`
+
+**Commit:** `72d82715` — docs: update docstrings and diagram footers for corruption/storage (#1048, doc-writer)
+
+**Child tasks created:** none
+
+**Scratch files cleaned:** none (no `.owlbear/scratch/1048-*` files found)
+[[2026-04-22]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-C17 | 9 positive-detection tests at test_corruption.py:161–287, one per ERR_CORRUPT_* mode | PASS |
+| AC-C18 | Direct read_task raises for modes 1,3,4,5,6 + builder-discovered modes 3/8/9 at test_corruption.py:172–353,896–927; storage.py:232 re-raise hook | PASS |
+| AC-C21 | Subclass assertion at test_corruption.py:131 iterates all 9 codes, verifies issubclass(CorruptionError) | PASS |
+| AC-C22 | Persistence assertions for all fixed-path triples at test_corruption.py:647–871 (null fields, tags, depends_on, blocked, archival_refs, id coercion, bool coercions) — each reads repaired file from disk | PASS |
+
+### Test Results
+- pytest (full suite): 1094 passed, 36 failed, 113 errors, 4 skipped — all failures/errors outside task scope (engine.py config parsing TypeError, crash safety #1101, yaml loader #940, ideation, cockpit)
+- ruff (full suite): 5 W292 violations — all in unrelated test files
+- Task-scoped: 0 failures, ruff clean
+
+### Architect Quality: 3/5
+AC-C17/C18/C21 were specific and verifiable. AC-C22 "exhaustively unit-tested" lacked assertion-depth specification, causing 3 review-reject cycles before architect AC refinement. "All tests fail" line was historically inaccurate (C-05 partial impl). The architect self-corrected, but the churn was avoidable.
+
+### Deduction Breakdown
+- AC quality score 3 ≤ 3: -0.03
+- No AC lines without evidence: -0.00
+- No lint violations in task scope: -0.00
+- No full-suite failures in task scope: -0.00
+- Reviewer evidence present and detailed: -0.00
+
+### Confidence: 0.97
+### Action: archive
