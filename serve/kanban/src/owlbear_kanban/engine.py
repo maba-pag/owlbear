@@ -485,6 +485,13 @@ class KanbanEngine:
         from owlbear_kanban.storage import detect_corruption as _detect_corruption  # noqa: PLC0415
 
         tasks: list[Task] = []
+        archive_ids: set[int] = set()
+        if not archived and self._archive_dir.exists():
+            for archive_path in self._archive_dir.glob("*.md"):
+                archive_stem = archive_path.stem
+                archive_head = archive_stem.split("-", 1)[0]
+                if archive_head.isdigit():
+                    archive_ids.add(int(archive_head))
         seen: set[str] = set()
         try:
             scan_iter = os.scandir(source_dir)
@@ -525,6 +532,10 @@ class KanbanEngine:
                     if archived:
                         task.claimed_by = None
                     cache[entry.name] = (mtime_ns, task)
+                    if not archived and task.id in archive_ids:
+                        # AC-C19 mode 7: if an archive copy exists, skip tasks/ copy.
+                        cache.pop(entry.name, None)
+                        continue
                     # AC-C19: skip mode 8 (invalid status) silently
                     _valid_statuses = set(self._config.statuses)
                     if task.status not in _valid_statuses | {"archived"}:

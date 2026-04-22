@@ -246,6 +246,7 @@ def write_task(path: Path, record: Task) -> None:
     """
     data = record.model_dump()
     body: str = data.pop("body", "") or ""
+    data.pop("claimed_by", None)
 
     _stream = io.StringIO()
     _make_yaml().dump(data, _stream)
