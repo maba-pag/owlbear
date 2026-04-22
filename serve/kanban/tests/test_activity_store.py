@@ -332,6 +332,11 @@ class TestFromAC_ActivityCompaction:
             e.task_id == 2 and e.action == "edit" for e in remaining
         ), "Edit between older and newer close must be removed — proves newer cutoff was used"
 
+        # The newer close event itself must be retained (proves cutoff <= newer_close_dt)
+        assert any(
+            e.task_id == 2 and e.action == "end_work" for e in remaining
+        ), "Newer close event (task_id=2, end_work) must be retained — proves cutoff <= newer close timestamp"
+
         # Event after newer close must be present
         assert any(e.task_id == 3 for e in remaining), "Event after newer close must be retained"
 
