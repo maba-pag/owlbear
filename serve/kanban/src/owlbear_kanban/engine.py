@@ -501,9 +501,14 @@ class KanbanEngine:
                     tasks.append(cache[entry.name][1])
                 else:
                     path = source_dir / entry.name
-                    if not archived and _detect_corruption(path, self._config) is not None:
-                        cache.pop(entry.name, None)
-                        continue
+                    if not archived:
+                        corruption = _detect_corruption(path, self._config)
+                        if corruption is not None and not (
+                            corruption.code == "ERR_CORRUPT_MISSING_FIELD"
+                            and corruption.detail == "forbidden field claimed_by present"
+                        ):
+                            cache.pop(entry.name, None)
+                            continue
                     try:
                         task = read_task(path)
                     except FileNotFoundError:
