@@ -391,22 +391,30 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
 
 def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     """Move the task file for *task_id* from ``tasks/`` to ``archive/``."""
+    from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
+
     config = load_config(kanban_dir)
     tasks_dir = kanban_dir / config.tasks_dir
     archive_dir = kanban_dir / config.archive_dir
     archive_dir.mkdir(parents=True, exist_ok=True)
-    matches = list(tasks_dir.glob(f"{task_id}-*.md"))
-    if not matches:
-        msg = f"No task file found for id={task_id}"
-        raise FileNotFoundError(msg)
-    src = matches[0]
-    dest = archive_dir / src.name
-    src.replace(dest)
-    return dest
+    lock_path = archive_dir / f".{task_id}.lock"
+
+    with _exclusive_file_lock(lock_path):
+        matches = list(tasks_dir.glob(f"{task_id}-*.md"))
+        if not matches:
+            msg = f"No task file found for id={task_id}"
+            raise FileNotFoundError(msg)
+        src = matches[0]
+        dest = archive_dir / src.name
+        src.replace(dest)
+        return dest
 
 
 def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
     """Move *task_path* to ``quarantine/``, creating the dir if absent (AC-C28, AC-C29)."""
+    if task_path.name.startswith(".") and task_path.name.endswith(".lock"):
+        return task_path
+
     quarantine_dir = kanban_dir / "quarantine"
     quarantine_dir.mkdir(parents=True, exist_ok=True)
     dest = quarantine_dir / task_path.name
