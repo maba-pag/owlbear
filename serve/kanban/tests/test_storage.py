@@ -13,14 +13,12 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
-    Section,
     detect_corruption,
     load_config,
     move_to_quarantine,
     read_task,
     write_task,
 )
-from owlbear_kanban.corruption import CorruptionError  # NEW module — ImportError in RED
 from owlbear_kanban.models import Task
 
 # ---------------------------------------------------------------------------
@@ -163,7 +161,7 @@ content
 
         # Both created and updated must end with +00:00
         for field in ("created", "updated"):
-            matching = [l for l in content.splitlines() if l.startswith(f"{field}:")]
+            matching = [line for line in content.splitlines() if line.startswith(f"{field}:")]
             assert matching, f"Field '{field}' not found in frontmatter"
             assert "+00:00" in matching[0], (
                 f"Field '{field}' is not UTC+00:00: {matching[0]}"
@@ -185,7 +183,7 @@ content
         path = write_task(task, kanban_dir)
         content = path.read_text(encoding="utf-8")
 
-        matching = [l for l in content.splitlines() if l.startswith("claimed_at:")]
+        matching = [line for line in content.splitlines() if line.startswith("claimed_at:")]
         assert matching
         assert "+00:00" in matching[0]
 
@@ -205,7 +203,7 @@ class TestFromAC_ClaimedByDetection:
         bad_file.write_text(
             "---\nid: 1001\ntitle: legacy\nstatus: todo\npriority: needed\n"
             "claimed_by: some-agent\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
             encoding="utf-8",
         )
         config = load_config(kanban_dir)
@@ -224,7 +222,7 @@ class TestFromAC_ClaimedByDetection:
         archive_file.write_text(
             "---\nid: 1001\ntitle: old task\nstatus: done\npriority: needed\n"
             "claimed_by: some-agent\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
             "archival_reason: completed\narchival_refs: []\n---\n",
             encoding="utf-8",
         )
@@ -245,13 +243,13 @@ class TestFromAC_ClaimedByDetection:
         (kanban_dir / "archive" / "1001-old.md").write_text(
             "---\nid: 1001\ntitle: old\nstatus: done\npriority: needed\n"
             "claimed_by: agent\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
             "archival_reason: completed\narchival_refs: []\n---\n",
             encoding="utf-8",
         )
 
         # Engine instantiation must succeed (no tasks/ files have claimed_by)
-        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415, F401
 
         with pytest.raises(MigrationRequiredError):
             # This proves MigrationRequiredError is the NEW exception type
@@ -278,7 +276,7 @@ class TestFromAC_Quarantine:
         task_file = kanban_dir / "tasks" / "1001-corrupt.md"
         task_file.write_text(
             "---\nid: 1001\ntitle: corrupt\nstatus: todo\npriority: needed\n"
-            "created: \"2026-04-21T10:00:00+00:00\"\nupdated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n---\n',
             encoding="utf-8",
         )
 
@@ -292,8 +290,8 @@ class TestFromAC_Quarantine:
         original_name = "1001-corrupt.md"
         task_file = kanban_dir / "tasks" / original_name
         task_file.write_text("---\nid: 1001\ntitle: c\nstatus: todo\npriority: needed\n"
-                              "created: \"2026-04-21T10:00:00+00:00\"\n"
-                              "updated: \"2026-04-21T10:00:00+00:00\"\n---\n",
+                              'created: "2026-04-21T10:00:00+00:00"\n'
+                              'updated: "2026-04-21T10:00:00+00:00"\n---\n',
                               encoding="utf-8")
 
         quarantined_path = move_to_quarantine(task_file, kanban_dir)
