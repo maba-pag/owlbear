@@ -113,8 +113,12 @@ class TestFromAC_AtomicWrite:
             f"tmp file must be a sibling of target; got {tmp_used.parent} vs {target.parent}"
         )
 
+    @pytest.mark.skipif(
+        not hasattr(os, "O_DIRECTORY"),
+        reason="dir-fsync requires O_DIRECTORY (POSIX only)",
+    )
     def test_ac_c1_posix_fsyncs_file_and_dir(self, tmp_path: Path) -> None:
-        """AC-C1: on POSIX, atomic_write fsyncs file fd then parent-dir fd."""
+        """AC-C1: when O_DIRECTORY available, atomic_write fsyncs file fd then parent-dir fd."""
         target = tmp_path / "output.md"
         parent_dir = str(target.parent)
         original_open = os.open
@@ -136,9 +140,9 @@ class TestFromAC_AtomicWrite:
         with patch("os.open", side_effect=spy_open), patch("os.fsync", side_effect=spy_fsync):
             atomic_write(target, "data\n")
 
-        # At least 2 fsyncs: file fd + parent-directory fd (POSIX)
+        # At least 2 fsyncs: file fd + parent-directory fd (O_DIRECTORY platforms)
         assert len(fsync_calls) >= 2, f"Expected >=2 fsyncs, got {len(fsync_calls)}"
-        assert len(dir_fds) >= 1, "Expected os.open call for parent directory (POSIX dir-fsync)"
+        assert len(dir_fds) >= 1, "Expected os.open call for parent directory (dir-fsync)"
         assert any(fd in set(dir_fds) for fd in fsync_calls), (
             f"No fsync on parent-dir fd; fsynced: {fsync_calls}, parent-dir fds: {dir_fds}"
         )
@@ -151,7 +155,7 @@ class TestFromAC_AtomicWrite:
         assert target.read_text(encoding="utf-8") == content
 
     def test_ac_c1_fsyncs_in_correct_order(self, tmp_path: Path) -> None:
-        """AC-C1: operation order must be fsync(file-fd) → replace → fsync(dir-fd)."""
+        """AC-C1: fsync(file-fd) → replace always; fsync(dir-fd) only when O_DIRECTORY available."""
         target = tmp_path / "output.md"
         parent_dir = str(target.parent)
         original_open = os.open
@@ -182,9 +186,11 @@ class TestFromAC_AtomicWrite:
         ):
             atomic_write(target, "test content\n")
 
-        assert sequence == ["fsync_file", "replace", "fsync_dir"], (
-            f"Expected ['fsync_file', 'replace', 'fsync_dir'], got {sequence}"
-        )
+        if hasattr(os, "O_DIRECTORY"):
+            expected = ["fsync_file", "replace", "fsync_dir"]
+        else:
+            expected = ["fsync_file", "replace"]
+        assert sequence == expected, f"Expected {expected}, got {sequence}"
 
     def test_ac_c2_cleans_up_tmp_on_replace_failure(self, tmp_path: Path) -> None:
         """AC-C2: .tmp-* file removed when os.replace raises; target unaffected."""
