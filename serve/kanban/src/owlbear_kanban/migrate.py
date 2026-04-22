@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +44,16 @@ _LEGACY_CONFIG_KEYS = frozenset({
 })
 
 _TS_FIELDS = frozenset({"created", "updated", "claimed_at"})
+_ACTIVE_TASK_DEFAULTS: dict[str, Any] = {
+    "tags": [],
+    "parent": None,
+    "depends_on": [],
+    "blocked": False,
+    "block_reason": None,
+    "claimed_at": None,
+    "archival_reason": None,
+    "archival_refs": [],
+}
 
 
 def _make_yaml_rt() -> YAML:
@@ -67,32 +79,52 @@ def _normalise_timestamp(ts: object) -> str | None:
         return None
     if not isinstance(ts, str):
         return str(ts)
-    ts = ts.strip()
-    import re  # noqa: PLC0415
-    m = re.match(
-        r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})((?:\.\d+)?)([+-]\d{2}:\d{2}|Z)?$",
-        ts,
-    )
-    if not m:
+    text = ts.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
         return ts
-    base, frac, tz = m.groups()
-    if tz:
-        return ts  # already has tz
-    return f"{base}{frac}+00:00"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat()
 
 
-def _is_task_migrated(fm: dict) -> bool:
+def _has_canonical_order(fm: dict[str, Any]) -> bool:
+    """Return True when canonical keys appear in canonical relative order."""
+    keys = list(fm.keys())
+    seen = [key for key in keys if key in _CANONICAL_FIELDS]
+    return seen == [key for key in _CANONICAL_FIELDS if key in fm]
+
+
+def _is_timestamp_utc_plus_00(value: object) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, str):
+        return False
+    return value.endswith("+00:00")
+
+
+def _is_archive_reason_valid(value: object) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_archive_refs_valid(value: object) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _is_task_migrated(fm: dict[str, Any]) -> bool:
     """Return True if the task frontmatter is already fully migrated."""
     if "claimed_by" in fm:
         return False
-    ts_fields = ("created", "updated", "claimed_at")
-    for field in ts_fields:
-        val = fm.get(field)
-        if isinstance(val, str) and val and not val.endswith("+00:00") and not val.endswith("Z"):
+    for field in _TS_FIELDS:
+        if not _is_timestamp_utc_plus_00(fm.get(field)):
             return False
-    if "archival_reason" not in fm:
-        return False
-    return "archival_refs" in fm
+    for field in _ACTIVE_TASK_DEFAULTS:
+        if field not in fm:
+            return False
+    return _has_canonical_order(fm)
 
 
 def _migrate_task_file(  # noqa: C901, PLR0911, PLR0912
@@ -147,10 +179,9 @@ def _migrate_task_file(  # noqa: C901, PLR0911, PLR0912
             if normalised:
                 fm[field] = normalised
 
-    if "archival_reason" not in fm:
-        fm["archival_reason"] = None
-    if "archival_refs" not in fm:
-        fm["archival_refs"] = []
+    for key, default in _ACTIVE_TASK_DEFAULTS.items():
+        if key not in fm:
+            fm[key] = default
 
     # Reorder frontmatter to canonical order
     ordered = CommentedMap()
@@ -175,7 +206,7 @@ def _migrate_task_file(  # noqa: C901, PLR0911, PLR0912
     return "migrated", None
 
 
-def _migrate_archive_file(  # noqa: C901, PLR0911
+def _migrate_archive_file(  # noqa: C901, PLR0911, PLR0912
     path: Path,
     *,
     dry_run: bool = False,
@@ -207,18 +238,27 @@ def _migrate_archive_file(  # noqa: C901, PLR0911
     except Exception as exc:  # noqa: BLE001
         return "failed", f"YAML parse error: {exc}"
 
-    has_ar = "archival_reason" in fm and fm.get("archival_reason") is not None
+    reason = fm.get("archival_reason")
+    refs = fm.get("archival_refs")
+    has_reason = "archival_reason" in fm
     has_refs = "archival_refs" in fm
+    reason_valid = _is_archive_reason_valid(reason)
+    refs_valid = _is_archive_refs_valid(refs)
 
-    if has_ar and has_refs:
+    if has_reason and reason_valid and has_refs and refs_valid:
         return "already", None
+
+    if has_reason and not reason_valid:
+        return "failed", "manual-action required: invalid archival_reason"
+    if has_refs and not refs_valid:
+        return "failed", "manual-action required: invalid archival_refs"
 
     if dry_run:
         return "migrated", None
 
-    if "archival_reason" not in fm:
+    if not has_reason:
         fm["archival_reason"] = "completed"
-    if "archival_refs" not in fm:
+    if not has_refs:
         fm["archival_refs"] = []
 
     y_rt = _make_yaml_rt()
@@ -340,22 +380,34 @@ def _to_plain(obj: Any) -> Any:  # noqa: ANN401
     return obj
 
 
-def _run_lane(
+def _run_lane(  # noqa: C901
     kanban_dir: Path,
     lane: str,
     *,
     dry_run: bool,
-) -> dict[str, int]:
+) -> tuple[dict[str, int], list[str]]:
     """Run the requested migration lane(s). Returns summary counts."""
     counts = {"scanned": 0, "migrated": 0, "already": 0, "failed": 0}
+    manual_actions: list[str] = []
+    crash_after_env = os.environ.get("KANBAN_MIGRATE_CRASH_AFTER")
+    crash_after = int(crash_after_env) if crash_after_env and crash_after_env.isdigit() else None
+    successful_writes = 0
 
     def _process_files(files: list[Path], migrate_fn: Any) -> None:  # noqa: ANN401
+        nonlocal successful_writes
         for path in files:
             counts["scanned"] += 1
             result, reason = migrate_fn(path, dry_run=dry_run)
             counts[result] += 1  # type: ignore[literal-required]
             if result == "failed":
                 sys.stderr.write(f"FAIL {path}: {reason}\n")
+                if reason and "manual-action required" in reason:
+                    manual_actions.append(f"archive: {path} - {reason}")
+            if result == "migrated" and not dry_run:
+                successful_writes += 1
+                if crash_after is not None and successful_writes >= crash_after:
+                    msg = "simulated crash via KANBAN_MIGRATE_CRASH_AFTER"
+                    raise OSError(msg)
 
     if lane in ("tasks", "all"):
         tasks_dir = kanban_dir / "tasks"
@@ -375,8 +427,14 @@ def _run_lane(
         counts[result] += 1  # type: ignore[literal-required]
         if result == "failed":
             sys.stderr.write(f"FAIL {kanban_dir / 'config.yml'}: {reason}\n")
+        if result == "migrated" and not dry_run:
+            manual_actions.append(
+                "config: populate agent_map, agent_types, and "
+                "agent_compatibility, then create type:user-action task(s) "
+                "before final --lane tasks cutover"
+            )
 
-    return counts
+    return counts, manual_actions
 
 
 def main() -> None:
@@ -419,7 +477,11 @@ def main() -> None:
         sys.stderr.write(f"Error: kanban directory not found: {kanban_dir}\n")
         sys.exit(1)
 
-    counts = _run_lane(kanban_dir, args.lane, dry_run=args.dry_run)
+    try:
+        counts, manual_actions = _run_lane(kanban_dir, args.lane, dry_run=args.dry_run)
+    except OSError as exc:
+        sys.stderr.write(f"FAIL migration run: {exc}\n")
+        sys.exit(1)
 
     # Summary output
     print(  # noqa: T201
@@ -428,6 +490,15 @@ def main() -> None:
         f"Already: {counts['already']}\n"
         f"Failed: {counts['failed']}"
     )
+
+    if manual_actions:
+        sys.stderr.write(
+            "MANUAL ACTION SUMMARY: unresolved follow-up remains. "
+            "Materialise as type:user-action task(s) before final "
+            "--lane tasks cutover.\n"
+        )
+        for item in manual_actions:
+            sys.stderr.write(f" - {item}\n")
 
     sys.exit(0 if counts["failed"] == 0 else 1)
 
