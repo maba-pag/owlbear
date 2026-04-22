@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import io
 import re
+from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
 from typing import Any
 
@@ -155,14 +156,15 @@ def _normalize_timestamp(ts: str | None) -> str | None:
     """Return *ts* with an explicit UTC +00:00 suffix when it lacks a timezone."""
     if ts is None:
         return None
-    m = _TS_RE.match(ts.strip())
+    normalized = ts.strip()
+    m = _TS_RE.match(normalized)
     if not m:
         return ts
     base, frac, tz = m.groups()
     if tz:
         if tz == "Z":
             return f"{base}{frac}+00:00"
-        return ts
+        return datetime.fromisoformat(normalized).astimezone(UTC).isoformat()
     return f"{base}{frac}+00:00"
 
 
