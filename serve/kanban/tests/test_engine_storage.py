@@ -631,6 +631,64 @@ class TestFromAC_MigrationGate:
         )
         assert err.code == "ERR_MIGRATION_REQUIRED"
 
+    def test_ac_c47_claimed_by_null_does_not_raise(self, tmp_path: Path) -> None:
+        """AC-C47 (refined): claimed_by: null is treated as already-cleared — no migration error.
+
+        YAML null is a cleared field remnant, not an active legacy claim.
+        Regression guard for AC-C47 refinement from arch review cycle 3.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-nullcb.md").write_text(
+            "---\nid: 1001\ntitle: null cb\nstatus: todo\npriority: needed\n"
+            "claimed_by: null\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "claimed_at: null\narchival_reason: null\narchival_refs: []\n---\n",
+            encoding="utf-8",
+        )
+        # Must not raise — null claimed_by is a cleared field, not a migration target
+        engine = KanbanEngine(kanban_dir)
+        assert engine is not None
+
+    def test_ac_c47_claimed_by_tilde_does_not_raise(self, tmp_path: Path) -> None:
+        """AC-C47 (refined): claimed_by: ~ is treated as already-cleared — no migration error.
+
+        YAML tilde (~) is the shorthand null variant; treated identically to null.
+        Regression guard for AC-C47 refinement from arch review cycle 3.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-tildecb.md").write_text(
+            "---\nid: 1001\ntitle: tilde cb\nstatus: todo\npriority: needed\n"
+            "claimed_by: ~\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "claimed_at: null\narchival_reason: null\narchival_refs: []\n---\n",
+            encoding="utf-8",
+        )
+        # Must not raise — tilde is YAML null shorthand, treated as cleared field
+        engine = KanbanEngine(kanban_dir)
+        assert engine is not None
+
+    def test_ac_c47_claimed_by_empty_does_not_raise(self, tmp_path: Path) -> None:
+        """AC-C47 (refined): claimed_by: '' (empty) is treated as already-cleared — no migration error.
+
+        An empty claimed_by value indicates an already-cleared field (e.g. from a legacy
+        migration tool that zero-filled rather than deleted the key). Not a migration target.
+        Regression guard for AC-C47 refinement from arch review cycle 3.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-emptycb.md").write_text(
+            "---\nid: 1001\ntitle: empty cb\nstatus: todo\npriority: needed\n"
+            'claimed_by: ""\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "claimed_at: null\narchival_reason: null\narchival_refs: []\n---\n",
+            encoding="utf-8",
+        )
+        # Must not raise — empty string claimed_by is already-cleared, not a migration target
+        engine = KanbanEngine(kanban_dir)
+        assert engine is not None
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ParseDuration — AC-C49, AC-C50
