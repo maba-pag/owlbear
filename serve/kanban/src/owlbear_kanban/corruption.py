@@ -234,7 +234,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
         val = fm["claimed_by"]
         if val not in (None, ""):
             return CorruptionError(
-                code=ERR_CORRUPT_FORBIDDEN_FIELD,
+                code=ERR_CORRUPT_MISSING_FIELD,
                 detail="forbidden field claimed_by present",
                 path=path,
             )
