@@ -1,8 +1,8 @@
-"""TDD RED: C-01 — storage_io atomic-write & ID-allocation tests.
+"""TDD: C-01 — storage_io atomic-write & ID-allocation tests.
 
 Task: #1046 (Brief C #1043) — paper-c.md §8.1, §8.11
 AC:   C1, C2, C3, C4, C4a, C4b, C51
-All tests FAIL (RED phase — storage_io not yet implemented).
+All 15 tests GREEN (implementation in storage_io.py and storage.py).
 """
 
 from __future__ import annotations
