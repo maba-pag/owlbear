@@ -400,6 +400,11 @@ class TestFromAC_ActivityCompaction:
             e.action == "claim" and e.timestamp == first_claim_ts for e in remaining
         ), "Old closed-cycle claim must be compacted"
 
+        # Old closed-cycle close/end_work must also be gone — entire closed cycle eligible
+        assert not any(
+            e.action == "end_work" and e.timestamp == first_close_ts for e in remaining
+        ), "Old closed-cycle end_work must also be compacted — not just the claim row"
+
         # Current open-cycle claim must be retained (open session always kept)
         assert any(
             e.action == "claim" and e.timestamp == second_claim_ts for e in remaining
@@ -421,6 +426,13 @@ class TestFromAC_ActivityCompaction:
 
         remaining = list_activity_events(kanban_dir)
         assert len(remaining) >= 500
+        # Survivors must be the chronologically LAST 500 entries, not the first 500.
+        # Entry at index 100 (0-based) is the 101st written: ts = now - timedelta(hours=500).
+        expected_first_survivor_ts = (now - timedelta(hours=500)).isoformat()
+        assert remaining[0].timestamp == expected_first_survivor_ts, (
+            "Survivors must be the last 500 entries — earliest retained timestamp must match "
+            "entry 101 (0-indexed), not entry 1"
+        )
 
     def test_ac_c44a_d_rewritten_atomically(self, tmp_path: Path) -> None:
         """AC-C44a (d): compaction rewrites activity.jsonl via atomic_write (no .tmp- left)."""
