@@ -21,6 +21,7 @@ from typing import Any
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
+from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.storage_io import atomic_write
 
 # ---------------------------------------------------------------------------
@@ -166,9 +167,6 @@ def _migrate_task_file(  # noqa: C901, PLR0911, PLR0912
     if _is_task_migrated(fm):
         return "already", None
 
-    if dry_run:
-        return "migrated", None
-
     # Apply transformations
     fm.pop("claimed_by", None)
 
@@ -182,6 +180,14 @@ def _migrate_task_file(  # noqa: C901, PLR0911, PLR0912
     for key, default in _ACTIVE_TASK_DEFAULTS.items():
         if key not in fm:
             fm[key] = default
+
+    try:
+        parse_body(body_text)
+    except Exception as exc:  # noqa: BLE001
+        return "failed", f"body parse error: {exc}"
+
+    if dry_run:
+        return "migrated", None
 
     # Reorder frontmatter to canonical order
     ordered = CommentedMap()
@@ -366,6 +372,7 @@ def _migrate_config(  # noqa: C901, PLR0911
     sys.stderr.write(
         "WARNING: config.yml migrated. agent_map, agent_types, and agent_compatibility\n"
         "are empty stubs — populate them before starting the engine.\n"
+        "See serve/kanban/README.md for the standard pipeline configuration.\n"
     )
 
     return "migrated", None
