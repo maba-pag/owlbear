@@ -487,3 +487,54 @@ class TestFromAC_ListSessions:
         engine = KanbanEngine(kanban_dir)
         with pytest.raises(ValueError):
             engine.list_sessions(filter="not-a-valid-filter")
+
+    def test_ac_c43_aged_open_claim_classified_as_stuck(self, tmp_path: Path) -> None:
+        """AC-C43: open claim older than claim_timeout is classified as 'stuck', not 'running'.
+
+        Directly exercises the _state_from_age stuck branch (engine.py:136-141).
+        The claim is backdated 2 hours — exceeding the 1h claim_timeout in config.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _make_task_file(kanban_dir, 1001, "todo")
+
+        engine = KanbanEngine(kanban_dir)
+        past_time = datetime.now(tz=UTC) - timedelta(hours=2)
+        engine.start_work(1001, now=past_time)
+
+        sessions = engine.list_sessions(filter="all")
+        matching = [s for s in sessions if s.task_id == 1001]
+        assert matching, "Aged open claim must produce a SessionRecord"
+        assert matching[0].state == "stuck", (
+            f"Open claim 2h old (> 1h timeout) must be classified as 'stuck', "
+            f"got {matching[0].state!r}"
+        )
+
+    def test_ac_c43_stuck_session_included_in_active_filter(self, tmp_path: Path) -> None:
+        """AC-C43: filter='active' returns stuck sessions as well as running ones.
+
+        Proves that the active-filter frozenset includes 'stuck' and that a
+        genuinely stuck session (aged open claim) reaches the caller.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _make_task_file(kanban_dir, 1001, "todo")
+        _make_task_file(kanban_dir, 1002, "todo")
+
+        engine = KanbanEngine(kanban_dir)
+        # task 1001: stuck — claimed 2h ago, never closed
+        past_time = datetime.now(tz=UTC) - timedelta(hours=2)
+        engine.start_work(1001, now=past_time)
+        # task 1002: running — claimed now, never closed
+        engine.start_work(1002)
+
+        sessions = engine.list_sessions(filter="active")
+        task_ids = {s.task_id for s in sessions}
+        states_by_id = {s.task_id: s.state for s in sessions}
+
+        assert 1001 in task_ids, "Stuck session must appear in filter='active'"
+        assert 1002 in task_ids, "Running session must appear in filter='active'"
+        assert states_by_id[1001] == "stuck", (
+            f"Task 1001 (aged claim) must be 'stuck', got {states_by_id[1001]!r}"
+        )
+        assert states_by_id[1002] == "running", (
+            f"Task 1002 (fresh claim) must be 'running', got {states_by_id[1002]!r}"
+        )
