@@ -15,11 +15,12 @@ AC coverage:
   AC1: share/diagrams/ideation.excalidraw exists, valid JSON, "source": "owlbear",
        "type": "excalidraw", non-empty "elements" list
   AC2: structural elements present — Step 0 precondition, M1-M6 timeline,
-       Mediator orchestrator, Investigator and Facilitative modes, 6 panelist
-       roles (Critic, Architect, Modeler, End User, Skeptic, Pragmatist),
-       Critic-loop protocol (<=5 cycles), standalone Critic boundary checks
-       (M1, M2, M4, M5), Pragmatist synthesis, Brief output (M5), pipeline
-       handoff (M6: kanban -> planner decomposition)
+       Mediator orchestrator (bound arrows to Investigator and Facilitative modes),
+       Investigator and Facilitative modes, 6 panelist roles (Critic, Architect,
+       Modeler, End User, Skeptic, Pragmatist), Critic-loop protocol (<=5 cycles),
+       standalone Critic boundary checks (M1, M2, M4, M5), bidirectional domain-
+       panelist→Critic cycle arrows, Pragmatist synthesis, Brief output (M5),
+       pipeline handoff (M6: kanban -> planner decomposition)
   AC3: top-level "describes" field is a list containing exactly the 4 required
        globs; no extra entries
   AC4: footer text element with "Last verified: YYYY-MM-DD (commit-hash)" format
@@ -685,6 +686,49 @@ class TestFromAC_IdeationStructuralConnections:
         assert len(arrows) >= 1, (
             "No arrow from 'mode_facilitative_rect' to 'm4_rect'. "
             "Facilitative mode must be structurally connected to M4."
+        )
+
+    def test_mediator_arrow_to_investigator_mode(self, diagram_data: dict) -> None:
+        """Structural (AC2, 5th-cycle): a bound arrow from mediator_rect to
+        mode_investigator_rect encodes the Mediator orchestrating the Investigator
+        mode for M1-M3; removes false-confidence from label-presence only."""
+        arrows = _arrows_from_to(diagram_data, "mediator_rect", "mode_investigator_rect")
+        assert len(arrows) >= 1, (
+            "No arrow from 'mediator_rect' to 'mode_investigator_rect'. "
+            "Mediator orchestration of Investigator mode must be structurally encoded."
+        )
+
+    def test_mediator_arrow_to_facilitative_mode(self, diagram_data: dict) -> None:
+        """Structural (AC2, 5th-cycle): a bound arrow from mediator_rect to
+        mode_facilitative_rect encodes the Mediator orchestrating the Facilitative
+        mode for M4-M6; removes false-confidence from label-presence only."""
+        arrows = _arrows_from_to(diagram_data, "mediator_rect", "mode_facilitative_rect")
+        assert len(arrows) >= 1, (
+            "No arrow from 'mediator_rect' to 'mode_facilitative_rect'. "
+            "Mediator orchestration of Facilitative mode must be structurally encoded."
+        )
+
+    @pytest.mark.parametrize("panelist_id", _DOMAIN_PANELIST_IDS)
+    def test_domain_panelist_critic_cycle_is_bidirectional(
+        self, diagram_data: dict, panelist_id: str
+    ) -> None:
+        """Structural (AC2, 5th-cycle): each of the 4 domain panelists has a
+        bidirectional arrow to critic_rect — both startArrowhead and endArrowhead
+        must be non-null, encoding the Critic-loop cycle semantics (panelist
+        invokes Critic; Critic feeds result back to panelist)."""
+        arrows = _arrows_from_to(diagram_data, panelist_id, "critic_rect")
+        assert len(arrows) >= 1, (
+            f"No arrow from '{panelist_id}' to 'critic_rect'. "
+            "Domain-panelist Critic cycle arrow must be structurally encoded."
+        )
+        bidirectional = [
+            a for a in arrows
+            if a.get("startArrowhead") is not None and a.get("endArrowhead") is not None
+        ]
+        assert len(bidirectional) >= 1, (
+            f"Arrow from '{panelist_id}' to 'critic_rect' is not bidirectional. "
+            "Both startArrowhead and endArrowhead must be non-null to encode "
+            "the Critic-loop cycle semantics."
         )
 
     def test_timeline_elements_in_left_to_right_order(
