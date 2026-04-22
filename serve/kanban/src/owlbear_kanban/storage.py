@@ -110,6 +110,7 @@ def load_config(kanban_dir: Path) -> BoardConfig:
     """
     from owlbear_kanban.config_loader import _validate_claim_timeout  # noqa: PLC0415
     from owlbear_kanban.config_loader import load_config as _load  # noqa: PLC0415
+
     config = _load(kanban_dir)
     _validate_claim_timeout(config)
     return config
@@ -355,7 +356,8 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
     if not tasks_dir.exists():
         return []
     return sorted(
-        p for p in tasks_dir.iterdir()
+        p
+        for p in tasks_dir.iterdir()
         if p.suffix == ".md"
         and not p.name.startswith(".tmp-")
         and not p.name.startswith(".")
@@ -369,7 +371,8 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
     if not archive_dir.exists():
         return []
     return sorted(
-        p for p in archive_dir.iterdir()
+        p
+        for p in archive_dir.iterdir()
         if p.suffix == ".md"
         and not p.name.startswith(".tmp-")
         and not p.name.startswith(".")
@@ -457,5 +460,3 @@ __all__ = [
     "write_task",
     "write_task_if_unchanged",
 ]
-
-

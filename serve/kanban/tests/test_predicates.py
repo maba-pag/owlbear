@@ -63,18 +63,14 @@ class TestFromAC_RequiredSections:
 
     def test_ac_c39_mixed_case_match(self) -> None:
         """AC-C39: 'Tests' matches 'tests', 'TESTS', '  Tests  '."""
-        task = _make_task_with_sections(
-            _make_sections(("Tests", 2, "- test one\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Tests", 2, "- test one\n")))
         assert required_sections(task, ["tests"]) is True
         assert required_sections(task, ["TESTS"]) is True
         assert required_sections(task, ["  Tests  "]) is True
 
     def test_ac_c39_whitespace_stripped_from_query(self) -> None:
         """AC-C39: surrounding whitespace stripped from the required section name."""
-        task = _make_task_with_sections(
-            _make_sections(("Notes", 2, "some notes\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Notes", 2, "some notes\n")))
         assert required_sections(task, ["  Notes  "]) is True
 
     def test_ac_c39_whitespace_stripped_from_section_heading(self) -> None:
@@ -93,10 +89,12 @@ class TestFromAC_RequiredSections:
 
     def test_ac_c39_multiple_required_all_present(self) -> None:
         """AC-C39: all required sections present → True."""
-        task = _make_task_with_sections([
-            Section(heading="Acceptance Criteria", level=2, content="- ac\n"),
-            Section(heading="Tests", level=2, content="- test\n"),
-        ])
+        task = _make_task_with_sections(
+            [
+                Section(heading="Acceptance Criteria", level=2, content="- ac\n"),
+                Section(heading="Tests", level=2, content="- test\n"),
+            ]
+        )
         assert required_sections(task, ["Acceptance Criteria", "Tests"]) is True
 
     def test_ac_c39_multiple_required_one_missing(self) -> None:
@@ -113,21 +111,21 @@ class TestFromAC_RequiredSections:
 
     def test_ac_c39_preamble_section_heading_none_not_matched(self) -> None:
         """AC-C39: preamble (heading=None) does not satisfy any named required section."""
-        task = _make_task_with_sections(
-            _make_sections((None, 0, "intro text"))
-        )
+        task = _make_task_with_sections(_make_sections((None, 0, "intro text")))
         assert required_sections(task, ["intro text"]) is False
 
     def test_ac_c41_no_space_heading_is_content_not_matched(self) -> None:
         """AC-C41: '##NotASection' in content is NOT a section heading; predicate fails."""
         # A Section whose content includes ##NotASection verbatim (per AC-C7)
-        task = _make_task_with_sections([
-            Section(
-                heading="Parent",
-                level=2,
-                content="##NotASection\nsome text\n",
-            )
-        ])
+        task = _make_task_with_sections(
+            [
+                Section(
+                    heading="Parent",
+                    level=2,
+                    content="##NotASection\nsome text\n",
+                )
+            ]
+        )
         # Looking for 'NotASection' as a heading should fail
         assert required_sections(task, ["NotASection"]) is False
 
@@ -163,50 +161,42 @@ class TestFromAC_RequireListInSection:
 
     def test_ac_c40_empty_section_content_returns_false(self) -> None:
         """AC-C40: empty section content → False."""
-        task = _make_task_with_sections(
-            _make_sections(("Tests", 2, ""))
-        )
+        task = _make_task_with_sections(_make_sections(("Tests", 2, "")))
         assert require_list_in_section(task, "Tests") is False
 
     def test_ac_c40_section_lookup_case_insensitive(self) -> None:
         """AC-C40: heading lookup for require_list_in_section is case-insensitive."""
-        task = _make_task_with_sections(
-            _make_sections(("TESTS", 2, "- item\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("TESTS", 2, "- item\n")))
         assert require_list_in_section(task, "tests") is True
         assert require_list_in_section(task, "Tests") is True
 
     def test_ac_c40_section_lookup_whitespace_stripped(self) -> None:
         """AC-C40: whitespace stripped in require_list_in_section heading lookup."""
-        task = _make_task_with_sections(
-            _make_sections(("Tests", 2, "- item\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Tests", 2, "- item\n")))
         assert require_list_in_section(task, "  Tests  ") is True
 
     def test_ac_c40_section_not_present_returns_false(self) -> None:
         """AC-C40: section name not found → False (not an error)."""
-        task = _make_task_with_sections(
-            _make_sections(("Other", 2, "- item\n"))
-        )
+        task = _make_task_with_sections(_make_sections(("Other", 2, "- item\n")))
         assert require_list_in_section(task, "Tests") is False
 
     def test_ac_c40_list_inside_code_fence_not_counted(self) -> None:
         """AC-C40: list-like lines inside code fence are NOT a CommonMark list."""
         content = "```\n- fake list\n1. also fake\n```\n"
-        task = _make_task_with_sections(
-            _make_sections(("Code", 2, content))
-        )
+        task = _make_task_with_sections(_make_sections(("Code", 2, content)))
         assert require_list_in_section(task, "Code") is False
 
     def test_ac_c41_no_space_heading_does_not_satisfy_require_list(self) -> None:
         """AC-C41: '##ListSection' in content (not a heading) can't satisfy require_list_in_section."""
-        task = _make_task_with_sections([
-            Section(
-                heading="Parent",
-                level=2,
-                content="##ListSection\n- item\n",
-            )
-        ])
+        task = _make_task_with_sections(
+            [
+                Section(
+                    heading="Parent",
+                    level=2,
+                    content="##ListSection\n- item\n",
+                )
+            ]
+        )
         # 'ListSection' is NOT a heading (no space after ##)
         assert require_list_in_section(task, "ListSection") is False
 
@@ -214,10 +204,14 @@ class TestFromAC_RequireListInSection:
         """AC-C41: structured predicate matches the Brief B D64 regex semantics."""
         # Under the old regex, '## Tests' heading + a list item satisfied the gate.
         # Under the new substrate, the same logical structure must satisfy the gate.
-        task = _make_task_with_sections([
-            Section(heading=None, level=0, content=""),
-            Section(heading="Acceptance Criteria", level=2, content="- ac line\n"),
-            Section(heading="Tests", level=2, content="- test case 1\n- test case 2\n"),
-        ])
+        task = _make_task_with_sections(
+            [
+                Section(heading=None, level=0, content=""),
+                Section(heading="Acceptance Criteria", level=2, content="- ac line\n"),
+                Section(
+                    heading="Tests", level=2, content="- test case 1\n- test case 2\n"
+                ),
+            ]
+        )
         assert required_sections(task, ["Acceptance Criteria", "Tests"]) is True
         assert require_list_in_section(task, "Tests") is True

@@ -78,7 +78,9 @@ class RefreshOrchestrator:
     ) -> None:
         self._store = store
         self._pipeline = pipeline
-        self._workspace_root = workspace_root if workspace_root is not None else Path.cwd()
+        self._workspace_root = (
+            workspace_root if workspace_root is not None else Path.cwd()
+        )
         self._content_fetcher = content_fetcher
         self._inter_doc_builder = inter_doc_builder
         self._graph_store = graph_store
@@ -164,7 +166,9 @@ class RefreshOrchestrator:
                 break
             try:
                 intake_result = await _intake.read_url(url)
-                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
+                ingest_result: IngestResult = await self._pipeline.ingest(
+                    intake_result, scope=source.scope
+                )
                 if ingest_result.status == "ok":
                     refreshed += 1
                     self._schedule_inter_doc_build(source, ingest_result.document_id)
@@ -213,8 +217,12 @@ class RefreshOrchestrator:
                 break
             try:
                 safe_path = sandbox_path(self._workspace_root, file_path)
-                intake_result = await _intake.read_file(safe_path, workspace_root=self._workspace_root)
-                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
+                intake_result = await _intake.read_file(
+                    safe_path, workspace_root=self._workspace_root
+                )
+                ingest_result: IngestResult = await self._pipeline.ingest(
+                    intake_result, scope=source.scope
+                )
                 if ingest_result.status == "ok":
                     refreshed += 1
                     self._schedule_inter_doc_build(source, ingest_result.document_id)
@@ -275,7 +283,9 @@ class RefreshOrchestrator:
                     source=url,
                     metadata={"source_type": "authenticated_web"},
                 )
-                ingest_result: IngestResult = await self._pipeline.ingest(intake_result, scope=source.scope)
+                ingest_result: IngestResult = await self._pipeline.ingest(
+                    intake_result, scope=source.scope
+                )
                 if ingest_result.status == "ok":
                     refreshed += 1
                     self._schedule_inter_doc_build(source, ingest_result.document_id)
@@ -295,7 +305,9 @@ class RefreshOrchestrator:
             errors=errors,
         )
 
-    def _schedule_inter_doc_build(self, source: KnowledgeSource, document_id: str) -> None:
+    def _schedule_inter_doc_build(
+        self, source: KnowledgeSource, document_id: str
+    ) -> None:
         """Schedule an inter-doc graph build as a non-blocking background task."""
         if self._inter_doc_builder is None or self._graph_store is None:
             return
@@ -305,7 +317,10 @@ class RefreshOrchestrator:
 
         async def _run() -> None:
             try:
-                if len(graph_store.list_documents(scopes=[source.scope])) < _MIN_SCOPE_DOCS:
+                if (
+                    len(graph_store.list_documents(scopes=[source.scope]))
+                    < _MIN_SCOPE_DOCS
+                ):
                     return
                 entities = graph_store.list_entities_for_document(document_id)
                 result = await builder.build(entities, scope=source.scope)

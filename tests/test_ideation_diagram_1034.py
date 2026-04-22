@@ -189,9 +189,7 @@ class TestFromAC_IdeationDiagramStructure:
             "Parallel panel batch label not found — required by AC2"
         )
 
-    def test_critic_loop_protocol_element_present(
-        self, diagram_data: dict
-    ) -> None:
+    def test_critic_loop_protocol_element_present(self, diagram_data: dict) -> None:
         """Happy: the Critic-loop protocol note is present (domain panelist → Critic ≤5 cycles)."""
         all_text = _all_element_text(diagram_data)
         assert "critic loop" in all_text, (
@@ -214,9 +212,7 @@ class TestFromAC_IdeationDiagramStructure:
             "Standalone Critic boundary-check annotation not found — required by AC2"
         )
 
-    def test_standalone_critic_mentions_m1_m2_m4_m5(
-        self, diagram_data: dict
-    ) -> None:
+    def test_standalone_critic_mentions_m1_m2_m4_m5(self, diagram_data: dict) -> None:
         """Boundary: the standalone-Critic annotation references M1, M2, M4, and M5."""
         # Find the specific element text that describes standalone checks
         for elem in diagram_data.get("elements", []):
@@ -279,9 +275,7 @@ class TestFromAC_IdeationDescribesField:
             f"Required glob '{glob}' not found in describes: {describes}"
         )
 
-    def test_describes_has_exactly_four_entries(
-        self, diagram_data: dict
-    ) -> None:
+    def test_describes_has_exactly_four_entries(self, diagram_data: dict) -> None:
         """Boundary: 'describes' contains exactly 4 entries — no extra or missing globs."""
         describes: list = diagram_data.get("describes", [])
         assert len(describes) == len(_REQUIRED_DESCRIBES_GLOBS), (
@@ -298,18 +292,14 @@ class TestFromAC_IdeationDescribesField:
 class TestFromAC_IdeationFooterElement:
     """AC4: footer text element with 'Last verified: YYYY-MM-DD (commit-hash)' format."""
 
-    def test_footer_element_contains_last_verified(
-        self, diagram_data: dict
-    ) -> None:
+    def test_footer_element_contains_last_verified(self, diagram_data: dict) -> None:
         """Happy: at least one diagram element contains the text 'Last verified:'."""
         all_text = _all_element_text(diagram_data)
         assert "last verified:" in all_text, (
             "No element contains 'Last verified:' — footer element missing"
         )
 
-    def test_footer_text_matches_date_hash_pattern(
-        self, diagram_data: dict
-    ) -> None:
+    def test_footer_text_matches_date_hash_pattern(self, diagram_data: dict) -> None:
         """Boundary: footer matches 'Last verified: YYYY-MM-DD (short-hash)' pattern."""
         all_text = _all_element_text(diagram_data)
         assert _FOOTER_RE.search(all_text), (
@@ -360,9 +350,7 @@ class TestFromAC_IdeationExcalidrawConventions:
         duplicates = {eid for eid in ids if ids.count(eid) > 1}
         assert not duplicates, f"Duplicate element IDs found: {duplicates}"
 
-    def test_text_elements_font_size_at_least_16(
-        self, diagram_data: dict
-    ) -> None:
+    def test_text_elements_font_size_at_least_16(self, diagram_data: dict) -> None:
         """Boundary: no text element has fontSize < 16px (per h-excalidraw-diagram)."""
         elements = diagram_data.get("elements", [])
         violators = [
@@ -372,19 +360,17 @@ class TestFromAC_IdeationExcalidrawConventions:
             and isinstance(e.get("fontSize"), (int, float))
             and e["fontSize"] < 16
         ]
-        assert not violators, (
-            f"Text elements with fontSize < 16px: {violators}"
-        )
+        assert not violators, f"Text elements with fontSize < 16px: {violators}"
 
     def test_arrow_elements_present(self, diagram_data: dict) -> None:
         """Happy: the diagram contains arrow elements connecting stages."""
         elements = diagram_data.get("elements", [])
         arrows = [e for e in elements if e.get("type") == "arrow"]
-        assert len(arrows) > 0, "Diagram has no arrow elements — stages must be connected"
+        assert len(arrows) > 0, (
+            "Diagram has no arrow elements — stages must be connected"
+        )
 
-    def test_arrow_elements_have_at_least_one_binding(
-        self, diagram_data: dict
-    ) -> None:
+    def test_arrow_elements_have_at_least_one_binding(self, diagram_data: dict) -> None:
         """Boundary: all arrow elements must have at least one binding (start or end)
         — floating arrows violate h-excalidraw-diagram conventions."""
         elements = diagram_data.get("elements", [])
@@ -394,9 +380,7 @@ class TestFromAC_IdeationExcalidrawConventions:
             for i, e in enumerate(arrows)
             if not e.get("startBinding") and not e.get("endBinding")
         ]
-        assert not floating, (
-            f"Arrow elements with no bindings (floating): {floating}"
-        )
+        assert not floating, f"Arrow elements with no bindings (floating): {floating}"
 
 
 # ===========================================================================
@@ -407,9 +391,7 @@ class TestFromAC_IdeationExcalidrawConventions:
 class TestFromAC_IdeationDocIndexIntegration:
     """AC-idx: uv run doc-index includes a describes entry for ideation.excalidraw."""
 
-    def test_doc_index_entry_includes_describes_line(
-        self, tmp_path: Path
-    ) -> None:
+    def test_doc_index_entry_includes_describes_line(self, tmp_path: Path) -> None:
         """Happy: generate_index on a tree containing ideation.excalidraw emits
         a 'describes:' line in the entry for that file."""
         dest = tmp_path / "share" / "diagrams" / "ideation.excalidraw"
@@ -432,9 +414,7 @@ class TestFromAC_IdeationDocIndexIntegration:
             "No 'describes:' line in ideation.excalidraw doc-index entry"
         )
 
-    def test_doc_index_entry_includes_all_required_globs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_doc_index_entry_includes_all_required_globs(self, tmp_path: Path) -> None:
         """Happy: all 4 required globs appear in the ideation.excalidraw doc-index entry."""
         dest = tmp_path / "share" / "diagrams" / "ideation.excalidraw"
         dest.parent.mkdir(parents=True)

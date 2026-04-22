@@ -132,7 +132,9 @@ def compact_activity_log(
     """
     activity_path = kanban_dir / _ACTIVITY_FILE
     if not activity_path.exists():
-        return ActivityCompactionResult(before_bytes=0, after_bytes=0, records_compacted=0)
+        return ActivityCompactionResult(
+            before_bytes=0, after_bytes=0, records_compacted=0
+        )
 
     before_bytes = activity_path.stat().st_size
     text = activity_path.read_text(encoding="utf-8")
@@ -166,7 +168,12 @@ def compact_activity_log(
         entry_dt = _parse_dt(entry_data.get("timestamp"))
         entry_task_id = entry_data.get("task_id")
 
-        if before_dt is None or entry_dt is None or entry_dt >= before_dt or entry_task_id in open_task_ids:
+        if (
+            before_dt is None
+            or entry_dt is None
+            or entry_dt >= before_dt
+            or entry_task_id in open_task_ids
+        ):
             to_keep.append(entry_line)
 
     # Hard floor: always keep last _HARD_FLOOR entries (only matters when total > floor)
@@ -176,7 +183,9 @@ def compact_activity_log(
         # Merge: union of to_keep and floor_lines, preserving order
         floor_set = set(floor_lines)
         keep_set = set(to_keep)
-        to_keep_final = [line for line, _ in parsed if line in keep_set or line in floor_set]
+        to_keep_final = [
+            line for line, _ in parsed if line in keep_set or line in floor_set
+        ]
     else:
         to_keep_final = to_keep
 

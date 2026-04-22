@@ -56,10 +56,18 @@ def assemble_waves(
     Returns:
         List of Wave objects ready for sequential dispatch.
     """
-    auditors = [e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.AUDITOR]
-    builders = [e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.BUILDER]
-    light_flex = [e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.LIGHT_FLEX]
-    heavy_flex = [e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.HEAVY_FLEX]
+    auditors = [
+        e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.AUDITOR
+    ]
+    builders = [
+        e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.BUILDER
+    ]
+    light_flex = [
+        e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.LIGHT_FLEX
+    ]
+    heavy_flex = [
+        e for e in entries if AGENT_CATEGORY.get(e.agent) == AgentCategory.HEAVY_FLEX
+    ]
 
     remaining_light = list(light_flex)
     remaining_heavy = list(heavy_flex)
@@ -84,7 +92,10 @@ def assemble_waves(
 
     # Phase 4 — Overflow: remaining flex agents chunked into wave_size batches
     remaining_all = remaining_light + remaining_heavy
-    waves += [Wave(entries=remaining_all[i : i + wave_size]) for i in range(0, len(remaining_all), wave_size)]
+    waves += [
+        Wave(entries=remaining_all[i : i + wave_size])
+        for i in range(0, len(remaining_all), wave_size)
+    ]
 
     # Phase 5 — Periodic curator: inject into last wave with a free slot
     if cycle % 5 == 0 and waves:
@@ -99,7 +110,10 @@ def assemble_waves(
     # Phase 7 — Drop rule: remove solo non-auditor waves unless doing so would
     # leave an empty wave list (exception: keep the first one in that case).
     solo_non_auditor = [
-        w for w in waves if len(w.entries) == 1 and AGENT_CATEGORY.get(w.entries[0].agent) != AgentCategory.AUDITOR
+        w
+        for w in waves
+        if len(w.entries) == 1
+        and AGENT_CATEGORY.get(w.entries[0].agent) != AgentCategory.AUDITOR
     ]
     solo_ids = {id(w) for w in solo_non_auditor}
     non_solo = [w for w in waves if id(w) not in solo_ids]

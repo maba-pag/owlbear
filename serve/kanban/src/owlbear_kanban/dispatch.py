@@ -136,7 +136,9 @@ def _passes_dependency_gate(task: Task, active_ids: frozenset[int]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -> list[Task]:
+def pick_dispatchable(
+    engine: KanbanEngine, *, limit: int = 25, tag: str = ""
+) -> list[Task]:
     """Return a gate-filtered, sorted list of dispatchable tasks.
 
     Reads full Task objects (including body) directly from the filesystem so

@@ -70,14 +70,21 @@ def deny_src_module(request: pytest.FixtureRequest) -> types.ModuleType:
 
 class TestDenyWrites:
     def test_allows_scratch_file(self, deny_writes_module: types.ModuleType) -> None:
-        payload = {"tool_name": "create_file", "tool_input": {"filePath": ".owlbear/scratch/report.txt"}}
+        payload = {
+            "tool_name": "create_file",
+            "tool_input": {"filePath": ".owlbear/scratch/report.txt"},
+        }
         assert _is_allowed(_invoke(deny_writes_module, payload))
 
-    def test_denies_non_scratch_file(self, deny_writes_module: types.ModuleType) -> None:
+    def test_denies_non_scratch_file(
+        self, deny_writes_module: types.ModuleType
+    ) -> None:
         payload = {"tool_name": "create_file", "tool_input": {"filePath": "README.md"}}
         assert _is_denied(_invoke(deny_writes_module, payload))
 
-    def test_allows_apply_patch_in_scratch(self, deny_writes_module: types.ModuleType) -> None:
+    def test_allows_apply_patch_in_scratch(
+        self, deny_writes_module: types.ModuleType
+    ) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -86,7 +93,9 @@ class TestDenyWrites:
         }
         assert _is_allowed(_invoke(deny_writes_module, payload))
 
-    def test_denies_apply_patch_outside_scratch(self, deny_writes_module: types.ModuleType) -> None:
+    def test_denies_apply_patch_outside_scratch(
+        self, deny_writes_module: types.ModuleType
+    ) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -98,7 +107,10 @@ class TestDenyWrites:
 
 class TestDenySrcWrites:
     def test_allows_test_file(self, deny_src_module: types.ModuleType) -> None:
-        payload = {"tool_name": "create_file", "tool_input": {"filePath": "tests/test_feature.py"}}
+        payload = {
+            "tool_name": "create_file",
+            "tool_input": {"filePath": "tests/test_feature.py"},
+        }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
     def test_allows_scratch_file(self, deny_src_module: types.ModuleType) -> None:
@@ -109,10 +121,15 @@ class TestDenySrcWrites:
         assert _is_allowed(_invoke(deny_src_module, payload))
 
     def test_denies_source_file(self, deny_src_module: types.ModuleType) -> None:
-        payload = {"tool_name": "create_file", "tool_input": {"filePath": "serve/app.py"}}
+        payload = {
+            "tool_name": "create_file",
+            "tool_input": {"filePath": "serve/app.py"},
+        }
         assert _is_denied(_invoke(deny_src_module, payload))
 
-    def test_allows_apply_patch_in_tests(self, deny_src_module: types.ModuleType) -> None:
+    def test_allows_apply_patch_in_tests(
+        self, deny_src_module: types.ModuleType
+    ) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {
@@ -121,7 +138,9 @@ class TestDenySrcWrites:
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
-    def test_denies_apply_patch_in_source(self, deny_src_module: types.ModuleType) -> None:
+    def test_denies_apply_patch_in_source(
+        self, deny_src_module: types.ModuleType
+    ) -> None:
         payload = {
             "tool_name": "apply_patch",
             "tool_input": {

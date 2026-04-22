@@ -168,7 +168,13 @@ def _is_blocked_ip(ip_str: str) -> bool:
         check = addr.ipv4_mapped
     else:
         check = addr
-    return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
+    return (
+        check.is_loopback
+        or check.is_private
+        or check.is_link_local
+        or check.is_reserved
+        or check.is_unspecified
+    )
 
 
 async def _web_read(url: str) -> str | None:
@@ -192,7 +198,9 @@ async def _web_read(url: str) -> str | None:
     port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
 
     try:
-        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC)
+        addrs = await asyncio.to_thread(
+            socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC
+        )
     except OSError:
         return None
 
@@ -204,9 +212,22 @@ async def _web_read(url: str) -> str | None:
     import ipaddress  # noqa: PLC0415
 
     first_ip = ipaddress.ip_address(addrs[0][4][0])
-    ip_host = f"[{first_ip}]" if isinstance(first_ip, ipaddress.IPv6Address) else str(first_ip)
+    ip_host = (
+        f"[{first_ip}]"
+        if isinstance(first_ip, ipaddress.IPv6Address)
+        else str(first_ip)
+    )
     netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
-    ip_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+    ip_url = urlunparse(
+        (
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
 
     try:
         import httpx  # noqa: PLC0415
@@ -223,26 +244,37 @@ async def _web_read(url: str) -> str | None:
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  # noqa: PLR0915
     """Initialise knowledge-base services; close the DB connection on exit."""
     global _app_context  # noqa: PLW0603
-    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get("OWLBEAR_KB_PATH", _DEFAULT_KB_PATH)
+    path = os.environ.get("OWLBEAR_LOCAL_KB_PATH") or os.environ.get(
+        "OWLBEAR_KB_PATH", _DEFAULT_KB_PATH
+    )
     conn = init_db(path)
     try:
         gs = GraphStore(conn)
         vs = QdrantVectorStore()
         emb = BgeM3EmbeddingProvider()
         structured_extractor = None
-        api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        api_key = os.environ.get("OWLBEAR_LLM_API_KEY") or os.environ.get(
+            "OPENAI_API_KEY"
+        )
         if api_key:
             try:
                 from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
 
                 model = os.environ.get("OWLBEAR_LLM_MODEL", "gpt-4o-mini")
-                base_url = os.environ.get("OWLBEAR_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL")
-                structured_extractor = LLMExtractor(model=model, api_key=api_key, base_url=base_url)
+                base_url = os.environ.get("OWLBEAR_LLM_BASE_URL") or os.environ.get(
+                    "OPENAI_BASE_URL"
+                )
+                structured_extractor = LLMExtractor(
+                    model=model, api_key=api_key, base_url=base_url
+                )
             except ImportError:
                 structured_extractor = None
         else:
             try:
-                from owlbear_knowledge.copilot_auth import detect_editor_versions, get_copilot_token  # noqa: PLC0415
+                from owlbear_knowledge.copilot_auth import (
+                    detect_editor_versions,
+                    get_copilot_token,
+                )  # noqa: PLC0415
                 from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
 
                 copilot_token = await get_copilot_token()
@@ -259,10 +291,14 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
         extractor = EntityExtractor(extractor=structured_extractor)
         intra_doc_builder = IntraDocGraphBuilder(extractor=structured_extractor)
         inter_doc_builder = (
-            InterDocGraphBuilder(structured_extractor, vs, gs) if structured_extractor is not None else None
+            InterDocGraphBuilder(structured_extractor, vs, gs)
+            if structured_extractor is not None
+            else None
         )
         gar = GraphAugmentedRetriever(vs, gs, emb)
-        qs = KnowledgeQueryService(vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar)
+        qs = KnowledgeQueryService(
+            vector_store=vs, graph_store=gs, embedding_provider=emb, retriever=gar
+        )
         doc_store = DocumentStore(conn, gs, vs, emb)
         chunker = TextChunker()
         pipeline = IngestPipeline(doc_store, extractor, chunker)
@@ -281,7 +317,9 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
             pipeline=pipeline,
             workspace_root=Path.cwd(),
         )
-        consolidation_service: ConsolidationService | None = ConsolidationService(conn, make_text_completion_fn())
+        consolidation_service: ConsolidationService | None = ConsolidationService(
+            conn, make_text_completion_fn()
+        )
         ctx = AppContext(
             conn=conn,
             query_service=qs,
@@ -345,7 +383,15 @@ async def search_knowledge(
     if qs is None:
         return "error: Knowledge service not available."
     results = await qs.query(query, top_k=limit, scopes=scopes)
-    return [{"title": r.title, "score": r.score, "snippet": r.snippet, "entity_type": r.entity_type} for r in results]
+    return [
+        {
+            "title": r.title,
+            "score": r.score,
+            "snippet": r.snippet,
+            "entity_type": r.entity_type,
+        }
+        for r in results
+    ]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -357,7 +403,10 @@ async def list_sources(ctx: Context, scope: str | None = None) -> list[SourceInf
         msg = "source store not available"
         raise ToolError(msg)
     sources = await asyncio.to_thread(store.list_all, scope=scope)
-    return [{"name": s.name, "source_type": s.source_type, "scope": s.scope} for s in sources]
+    return [
+        {"name": s.name, "source_type": s.source_type, "scope": s.scope}
+        for s in sources
+    ]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -404,12 +453,17 @@ async def list_entities(
         except ValueError:
             valid = ", ".join(e.value for e in EntityType)
             return f"error: Invalid entity_type '{entity_type}'. Valid types: {valid}"
-        entities = await asyncio.to_thread(gs.list_entities, entity_type=et, scopes=scopes)
+        entities = await asyncio.to_thread(
+            gs.list_entities, entity_type=et, scopes=scopes
+        )
     else:
         entities = await asyncio.to_thread(gs.list_entities, scopes=scopes)
 
     page = entities[offset : offset + limit]
-    return [{"name": e.name, "entity_type": e.entity_type, "description": e.description} for e in page]
+    return [
+        {"name": e.name, "entity_type": e.entity_type, "description": e.description}
+        for e in page
+    ]
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
@@ -489,10 +543,22 @@ async def list_bookmarks(
     if store is None:
         return []
     bookmarks = await asyncio.to_thread(store.list, tag=tag, min_score=min_score)
-    return [{"url": b.url, "title": b.title, "relevance_score": b.relevance_score, "tags": b.tags} for b in bookmarks]
+    return [
+        {
+            "url": b.url,
+            "title": b.title,
+            "relevance_score": b.relevance_score,
+            "tags": b.tags,
+        }
+        for b in bookmarks
+    ]
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, destructiveHint=False, idempotentHint=True
+    )
+)
 async def update_bookmark_tags(
     ctx: Context,
     url: str,
@@ -510,7 +576,12 @@ async def update_bookmark_tags(
         msg = f"bookmark not found for URL: {url}"
         raise ToolError(msg)
     await asyncio.to_thread(store.update_tags, bookmark.id, tags)
-    return {"url": bookmark.url, "title": bookmark.title, "relevance_score": bookmark.relevance_score, "tags": tags}
+    return {
+        "url": bookmark.url,
+        "title": bookmark.title,
+        "relevance_score": bookmark.relevance_score,
+        "tags": tags,
+    }
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False))
@@ -615,7 +686,9 @@ async def sync_to_global(ctx: Context) -> str:
         global_conn = sqlite3.connect(str(global_path))
         try:
             _schema_init_db(global_conn)
-            raw = _core_do_import(local_conn, global_conn, target_scope="global", source_scope="global")
+            raw = _core_do_import(
+                local_conn, global_conn, target_scope="global", source_scope="global"
+            )
         finally:
             global_conn.close()
         # Reformat raw "Imported N documents (skipped M duplicates) into scope global"

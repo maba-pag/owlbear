@@ -14,7 +14,9 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.engine import MigrationRequiredError  # NEW exception — AttributeError in RED
+from owlbear_kanban.engine import (
+    MigrationRequiredError,
+)  # NEW exception — AttributeError in RED
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
     load_config,
 )
@@ -131,13 +133,17 @@ def _make_new_board(base_dir: Path) -> Path:
 class TestFromAC_ListTasksCorruption:
     """AC-C19, AC-C20: list_tasks behaviour with corrupt files."""
 
-    def test_ac_c19_list_tasks_skips_mode1_corrupt_silently(self, tmp_path: Path) -> None:
+    def test_ac_c19_list_tasks_skips_mode1_corrupt_silently(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C19: list_tasks silently skips file with missing delimiters (mode 1)."""
         kanban_dir = _make_new_board(tmp_path)
         (kanban_dir / "tasks" / "1001-good.md").write_text(
             _VALID_TASK.format(task_id=1001), encoding="utf-8"
         )
-        (kanban_dir / "tasks" / "1002-bad.md").write_text(_CORRUPT_TASK, encoding="utf-8")
+        (kanban_dir / "tasks" / "1002-bad.md").write_text(
+            _CORRUPT_TASK, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir)
         tasks = engine.list_tasks()
@@ -146,7 +152,9 @@ class TestFromAC_ListTasksCorruption:
         assert 1001 in task_ids
         assert 1002 not in task_ids
 
-    def test_ac_c19_list_tasks_skips_all_non_mode2_corrupt(self, tmp_path: Path) -> None:
+    def test_ac_c19_list_tasks_skips_all_non_mode2_corrupt(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C19: list_tasks silently skips modes 3-9 corrupt files."""
         kanban_dir = _make_new_board(tmp_path)
         (kanban_dir / "tasks" / "1001-good.md").write_text(
@@ -166,12 +174,18 @@ class TestFromAC_ListTasksCorruption:
         assert 1001 in task_ids
         assert 1003 not in task_ids
 
-    def test_ac_c20_list_tasks_hard_raises_on_duplicate_id(self, tmp_path: Path) -> None:
+    def test_ac_c20_list_tasks_hard_raises_on_duplicate_id(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C20: list_tasks raises CorruptionError(code=ERR_CORRUPT_DUPLICATE_ID) for mode 2."""
         kanban_dir = _make_new_board(tmp_path)
         task_content = _VALID_TASK.format(task_id=1001)
-        (kanban_dir / "tasks" / "1001-original.md").write_text(task_content, encoding="utf-8")
-        (kanban_dir / "tasks" / "1001-duplicate.md").write_text(task_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-original.md").write_text(
+            task_content, encoding="utf-8"
+        )
+        (kanban_dir / "tasks" / "1001-duplicate.md").write_text(
+            task_content, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir)
         with pytest.raises(CorruptionError) as exc_info:
@@ -179,7 +193,9 @@ class TestFromAC_ListTasksCorruption:
 
         assert exc_info.value.code == "ERR_CORRUPT_DUPLICATE_ID"
 
-    def test_ac_c19_list_tasks_skips_mode6_id_filename_mismatch(self, tmp_path: Path) -> None:
+    def test_ac_c19_list_tasks_skips_mode6_id_filename_mismatch(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C19: list_tasks silently skips files where frontmatter id != filename id (mode 6)."""
         kanban_dir = _make_new_board(tmp_path)
         (kanban_dir / "tasks" / "1001-good.md").write_text(
@@ -187,17 +203,23 @@ class TestFromAC_ListTasksCorruption:
         )
         # Mode 6: file named 9999-mismatch.md but frontmatter id=2001 (9999 ≠ 2001)
         mismatch_content = _VALID_TASK.format(task_id=2001)
-        (kanban_dir / "tasks" / "9999-mismatch.md").write_text(mismatch_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "9999-mismatch.md").write_text(
+            mismatch_content, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir)
         tasks = engine.list_tasks()
 
         task_ids = [t.id for t in tasks]
         assert 1001 in task_ids
-        assert 2001 not in task_ids, "mode-6 file (id-filename mismatch) must be silently skipped"
+        assert 2001 not in task_ids, (
+            "mode-6 file (id-filename mismatch) must be silently skipped"
+        )
         assert 9999 not in task_ids
 
-    def test_ac_c19_list_tasks_skips_mode9_invalid_priority(self, tmp_path: Path) -> None:
+    def test_ac_c19_list_tasks_skips_mode9_invalid_priority(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C19: list_tasks silently skips files with an invalid priority value (mode 9)."""
         kanban_dir = _make_new_board(tmp_path)
         (kanban_dir / "tasks" / "1001-good.md").write_text(
@@ -216,7 +238,9 @@ class TestFromAC_ListTasksCorruption:
 
         task_ids = [t.id for t in tasks]
         assert 1001 in task_ids
-        assert 1002 not in task_ids, "mode-9 file (invalid priority) must be silently skipped"
+        assert 1002 not in task_ids, (
+            "mode-9 file (invalid priority) must be silently skipped"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +268,9 @@ class TestFromAC_Sweep:
         task_content = _VALID_TASK.format(task_id=1001).replace(
             "claimed_at: null", f'claimed_at: "{expired_ts}"'
         )
-        (kanban_dir / "tasks" / "1001-expired.md").write_text(task_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-expired.md").write_text(
+            task_content, encoding="utf-8"
+        )
         (kanban_dir / "tasks" / "1002-unclaimed.md").write_text(
             _VALID_TASK.format(task_id=1002), encoding="utf-8"
         )
@@ -255,7 +281,9 @@ class TestFromAC_Sweep:
         assert 1001 in released
         assert 1002 not in released
 
-    def test_ac_c27_sweep_independent_of_corruption_repair(self, tmp_path: Path) -> None:
+    def test_ac_c27_sweep_independent_of_corruption_repair(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C27: sweep() releases expired claims without touching corrupt files."""
         kanban_dir = _make_new_board(tmp_path)
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=3)).isoformat()
@@ -265,7 +293,9 @@ class TestFromAC_Sweep:
             ),
             encoding="utf-8",
         )
-        (kanban_dir / "tasks" / "9999-corrupt.md").write_text(_CORRUPT_TASK, encoding="utf-8")
+        (kanban_dir / "tasks" / "9999-corrupt.md").write_text(
+            _CORRUPT_TASK, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir)
         released = engine.sweep()
@@ -287,7 +317,9 @@ class TestFromAC_Sweep:
             f'claimed_at: "{expired_ts}"\narchival_reason: null\narchival_refs: []\n---\n'
             + original_body
         )
-        (kanban_dir / "tasks" / "1001-sweep.md").write_text(task_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-sweep.md").write_text(
+            task_content, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir)
         released = engine.sweep()
@@ -317,7 +349,9 @@ class TestFromAC_RepairStorage:
         quarantine_check: list[bool] = []
         original_create = KanbanEngine.create_task
 
-        def spy_create(self_engine: KanbanEngine, *args: object, **kwargs: object) -> object:
+        def spy_create(
+            self_engine: KanbanEngine, *args: object, **kwargs: object
+        ) -> object:
             quarantine_file = kanban_dir / "quarantine" / "1001-corrupt.md"
             quarantine_check.append(quarantine_file.exists())
             return original_create(self_engine, *args, **kwargs)
@@ -338,7 +372,9 @@ class TestFromAC_RepairStorage:
         corrupt_file = kanban_dir / "tasks" / "1001-corrupt.md"
         corrupt_file.write_text(_CORRUPT_TASK, encoding="utf-8")
 
-        def raise_on_create(_self_engine: KanbanEngine, *_args: object, **_kwargs: object) -> object:
+        def raise_on_create(
+            _self_engine: KanbanEngine, *_args: object, **_kwargs: object
+        ) -> object:
             msg = "simulated AR creation failure"
             raise RuntimeError(msg)
 
@@ -351,12 +387,18 @@ class TestFromAC_RepairStorage:
         # File still in quarantine
         assert (kanban_dir / "quarantine" / "1001-corrupt.md").exists()
 
-    def test_ac_c26_duplicate_location_resolved_archive_wins(self, tmp_path: Path) -> None:
+    def test_ac_c26_duplicate_location_resolved_archive_wins(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C26: ERR_CORRUPT_DUPLICATE_LOCATION → archive file wins; tasks/ file removed."""
         kanban_dir = _make_new_board(tmp_path)
         task_content = _VALID_TASK.format(task_id=1001)
-        (kanban_dir / "tasks" / "1001-active.md").write_text(task_content, encoding="utf-8")
-        (kanban_dir / "archive" / "1001-active.md").write_text(task_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-active.md").write_text(
+            task_content, encoding="utf-8"
+        )
+        (kanban_dir / "archive" / "1001-active.md").write_text(
+            task_content, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir)
         engine.repair_storage()
@@ -422,7 +464,9 @@ class TestFromAC_ParseDuration:
 
     def test_ac_c49_parse_duration_30m(self) -> None:
         """AC-C49: _parse_duration('30m') returns timedelta(minutes=30)."""
-        from owlbear_kanban.engine import _parse_duration  # NEW function signature  # noqa: PLC0415
+        from owlbear_kanban.engine import (
+            _parse_duration,
+        )  # NEW function signature  # noqa: PLC0415
 
         result = _parse_duration("30m")
         assert result == timedelta(minutes=30)
@@ -444,7 +488,9 @@ class TestFromAC_ParseDuration:
     def test_ac_c49_malformed_raises_config_error(self) -> None:
         """AC-C49: _parse_duration with malformed input raises ConfigError(code=ERR_INVALID_CLAIM_TIMEOUT)."""
         from owlbear_kanban.engine import _parse_duration  # noqa: PLC0415
-        from owlbear_kanban.models import ConfigError  # NEW exception type  # noqa: PLC0415
+        from owlbear_kanban.models import (
+            ConfigError,
+        )  # NEW exception type  # noqa: PLC0415
 
         with pytest.raises(ConfigError) as exc_info:
             _parse_duration("not_valid_duration")
@@ -455,14 +501,18 @@ class TestFromAC_ParseDuration:
         from owlbear_kanban.models import ConfigError  # noqa: PLC0415
 
         kanban_dir = _make_new_board(tmp_path)
-        bad_config = _NEW_CONFIG_YAML.replace("claim_timeout: 1h", "claim_timeout: BADVALUE")
+        bad_config = _NEW_CONFIG_YAML.replace(
+            "claim_timeout: 1h", "claim_timeout: BADVALUE"
+        )
         (kanban_dir / "config.yml").write_text(bad_config, encoding="utf-8")
 
         with pytest.raises(ConfigError) as exc_info:
             load_config(kanban_dir)
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
-    def test_ac_c50_valid_claim_timeout_loads_without_error(self, tmp_path: Path) -> None:
+    def test_ac_c50_valid_claim_timeout_loads_without_error(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C50: valid claim_timeout format does not raise at config load time."""
         kanban_dir = _make_new_board(tmp_path)
         config = load_config(kanban_dir)
@@ -477,10 +527,14 @@ class TestFromAC_ParseDuration:
 class TestFromAC_ARCreationSignature:
     """AC-C54: repair_storage() creates AR tasks using body=str, no status argument."""
 
-    def test_ac_c54_create_task_called_with_body_str_no_status(self, tmp_path: Path) -> None:
+    def test_ac_c54_create_task_called_with_body_str_no_status(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C54: AR creation uses keyword body=str (markdown) and does NOT pass status."""
         kanban_dir = _make_new_board(tmp_path)
-        (kanban_dir / "tasks" / "1001-corrupt.md").write_text(_CORRUPT_TASK, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-corrupt.md").write_text(
+            _CORRUPT_TASK, encoding="utf-8"
+        )
 
         captured_calls: list[dict] = []
         original_create = KanbanEngine.create_task
@@ -496,16 +550,24 @@ class TestFromAC_ARCreationSignature:
             parent: int | None = None,
             depends_on: list[int] | None = None,
         ) -> object:
-            captured_calls.append({
-                "title": title,
-                "body": body,
-                "body_is_str": isinstance(body, str),
-                "status": status,
-                "tags": tags,
-            })
+            captured_calls.append(
+                {
+                    "title": title,
+                    "body": body,
+                    "body_is_str": isinstance(body, str),
+                    "status": status,
+                    "tags": tags,
+                }
+            )
             return original_create(
-                self_engine, title, body=body, tags=tags,
-                priority=priority, status=status, parent=parent, depends_on=depends_on,
+                self_engine,
+                title,
+                body=body,
+                tags=tags,
+                priority=priority,
+                status=status,
+                parent=parent,
+                depends_on=depends_on,
             )
 
         with patch.object(KanbanEngine, "create_task", side_effect=spy_create):
@@ -515,4 +577,6 @@ class TestFromAC_ARCreationSignature:
         assert captured_calls, "Expected create_task to be called for AR"
         for call in captured_calls:
             assert call["body_is_str"], "body must be str (markdown), not list[Section]"
-            assert call["status"] == "", "status must NOT be passed (no status arg per Brief B D50)"
+            assert call["status"] == "", (
+                "status must NOT be passed (no status arg per Brief B D50)"
+            )

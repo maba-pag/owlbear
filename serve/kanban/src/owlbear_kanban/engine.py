@@ -44,7 +44,12 @@ from owlbear_kanban.models import (
     Task,
     TaskSummary,
 )
-from owlbear_kanban.task_io import make_task_filename, read_task, validate_path_containment, write_task
+from owlbear_kanban.task_io import (
+    make_task_filename,
+    read_task,
+    validate_path_containment,
+    write_task,
+)
 
 # ---------------------------------------------------------------------------
 # Module-level duration parser (AC-C49)
@@ -74,6 +79,7 @@ def _parse_duration(s: str) -> timedelta:
     hours = int(m.group(1) or 0)
     minutes = int(m.group(2) or 0)
     return timedelta(hours=hours, minutes=minutes)
+
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -233,7 +239,9 @@ def _validate_session_filter(filter: str) -> None:  # noqa: A002
     raise ValueError(msg)
 
 
-def _apply_session_filter(sessions: list[SessionRecord], filter: str) -> list[SessionRecord]:  # noqa: A002
+def _apply_session_filter(
+    sessions: list[SessionRecord], filter: str
+) -> list[SessionRecord]:  # noqa: A002
     """Return *sessions* filtered by *filter* name."""
     if filter == "all":
         return sessions
@@ -329,8 +337,12 @@ class KanbanEngine:
             else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         )
         # fmt: on
-        effective_activity_log = activity_log if activity_log is not None else self._config.activity_log
-        self._activity_log_path: Path | None = kanban_dir / "activity.jsonl" if effective_activity_log else None
+        effective_activity_log = (
+            activity_log if activity_log is not None else self._config.activity_log
+        )
+        self._activity_log_path: Path | None = (
+            kanban_dir / "activity.jsonl" if effective_activity_log else None
+        )
         self._revision: int = 0
         self._task_cache: dict[str, tuple[int, Task]] = {}
         self._archive_cache: dict[str, tuple[int, Task]] = {}
@@ -501,7 +513,10 @@ class KanbanEngine:
                     tasks.append(cache[entry.name][1])
                 else:
                     path = source_dir / entry.name
-                    if not archived and _detect_corruption(path, self._config) is not None:
+                    if (
+                        not archived
+                        and _detect_corruption(path, self._config) is not None
+                    ):
                         cache.pop(entry.name, None)
                         continue
                     try:
@@ -513,7 +528,10 @@ class KanbanEngine:
                         continue
                     except Exception as _exc:  # noqa: BLE001
                         # Silently skip other parse errors (CorruptionError modes 1, 3-9)
-                        from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
+                        from owlbear_kanban.corruption import (
+                            CorruptionError as _CorruptionError,
+                        )  # noqa: PLC0415
+
                         if isinstance(_exc, _CorruptionError):
                             continue
                         continue
@@ -535,7 +553,10 @@ class KanbanEngine:
             for task in tasks:
                 if task.id in id_seen:
                     from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID  # noqa: PLC0415
-                    from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
+                    from owlbear_kanban.corruption import (
+                        CorruptionError as _CorruptionError,
+                    )  # noqa: PLC0415
+
                     raise _CorruptionError(
                         code=ERR_CORRUPT_DUPLICATE_ID,
                         detail=f"task id={task.id} appears in multiple files",
@@ -544,7 +565,10 @@ class KanbanEngine:
 
         if not archived:
             self._id_to_filename = dict(
-                sorted((cached_task.id, filename) for filename, (_, cached_task) in self._task_cache.items())
+                sorted(
+                    (cached_task.id, filename)
+                    for filename, (_, cached_task) in self._task_cache.items()
+                )
             )
 
         # --- Filters ---
@@ -560,7 +584,11 @@ class KanbanEngine:
             tasks = [t for t in tasks if t.claimed_by is None]
         if search:
             needle = search.lower()
-            tasks = [t for t in tasks if needle in t.title.lower() or needle in t.body.lower()]
+            tasks = [
+                t
+                for t in tasks
+                if needle in t.title.lower() or needle in t.body.lower()
+            ]
 
         # --- Sort ---
         if sort:
@@ -611,7 +639,10 @@ class KanbanEngine:
                 del self._id_to_filename[int_id]
                 msg = f"Task {task_id!r} not found in {self._tasks_dir}"
                 raise FileNotFoundError(msg) from None
-            if filename in self._task_cache and self._task_cache[filename][0] == mtime_ns:
+            if (
+                filename in self._task_cache
+                and self._task_cache[filename][0] == mtime_ns
+            ):
                 return self._task_cache[filename][1]
             task = read_task(path)
             self._task_cache[filename] = (mtime_ns, task)
@@ -668,7 +699,9 @@ class KanbanEngine:
                     msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                     raise ValueError(msg)
             if priority and priority not in config.priorities:
-                msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
+                msg = (
+                    f"Invalid priority {priority!r}. Valid options: {config.priorities}"
+                )
                 raise ValueError(msg)
 
             task_id = config.next_id
@@ -882,7 +915,9 @@ class KanbanEngine:
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
         write_task(task_path, record)
-        self._emit_event("claim", record.id, self._agent_name, task_status_at_start=record.status)
+        self._emit_event(
+            "claim", record.id, self._agent_name, task_status_at_start=record.status
+        )
         self._revision += 1
         return record
 
@@ -948,7 +983,9 @@ class KanbanEngine:
                 if raw_statuses and isinstance(raw_statuses[0], dict)
                 else list(raw_statuses)
             )
-            current_idx = statuses.index(record.status) if record.status in statuses else -1
+            current_idx = (
+                statuses.index(record.status) if record.status in statuses else -1
+            )
             if current_idx == len(statuses) - 1:
                 record.status = "archived"
                 return True
@@ -1088,7 +1125,9 @@ class KanbanEngine:
                     record.updated = datetime.now(tz=UTC).isoformat()
                     write_task(path, record)
                     released.append(record.id)
-                    self._emit_event("sweep-release", record.id, "expired claim released")
+                    self._emit_event(
+                        "sweep-release", record.id, "expired claim released"
+                    )
 
         return released
 
@@ -1115,7 +1154,9 @@ class KanbanEngine:
         final_outcomes = []
         for outcome in outcomes:
             if outcome.action == "quarantined":
-                quarantine_path = self._kanban_dir / "quarantine" / _Path(outcome.file_path).name
+                quarantine_path = (
+                    self._kanban_dir / "quarantine" / _Path(outcome.file_path).name
+                )
                 body = (
                     "## Quarantined file\n\n"
                     f"- code: {outcome.code}\n"
@@ -1133,13 +1174,16 @@ class KanbanEngine:
                     final_outcomes.append(outcome)
                 except Exception as _exc:  # noqa: BLE001
                     from owlbear_kanban.corruption import RepairOutcome  # noqa: PLC0415
-                    final_outcomes.append(RepairOutcome(
-                        task_id=outcome.task_id,
-                        file_path=outcome.file_path,
-                        code=outcome.code,
-                        action="failed",
-                        detail=f"AR creation failed: {_exc}",
-                    ))
+
+                    final_outcomes.append(
+                        RepairOutcome(
+                            task_id=outcome.task_id,
+                            file_path=outcome.file_path,
+                            code=outcome.code,
+                            action="failed",
+                            detail=f"AR creation failed: {_exc}",
+                        )
+                    )
             else:
                 final_outcomes.append(outcome)
 
@@ -1157,6 +1201,7 @@ class KanbanEngine:
             return
         from owlbear_kanban.activity_store import append_activity_event  # noqa: PLC0415
         from owlbear_kanban.models import ActivityEvent  # noqa: PLC0415
+
         evt = ActivityEvent(
             timestamp=datetime.now(tz=UTC).isoformat(),
             task_id=task_id,

@@ -40,7 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     audit_dir = Path(args.audit_dir)
-    window = timedelta(hours=args.window) if args.window is not None else _DEFAULT_WINDOW
+    window = (
+        timedelta(hours=args.window) if args.window is not None else _DEFAULT_WINDOW
+    )
 
     try:
         proposals = analyze(audit_dir, window=window)

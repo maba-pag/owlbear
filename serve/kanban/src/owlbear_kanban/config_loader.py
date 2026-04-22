@@ -63,6 +63,7 @@ def _validate_claim_timeout(config: BoardConfig) -> None:
     import re  # noqa: PLC0415
 
     from owlbear_kanban.models import ConfigError  # noqa: PLC0415
+
     pat = re.compile(r"^(?:\d+h)?(?:\d+m)?$")
     val = config.claim_timeout
     if not pat.match(val) or not val.endswith(("h", "m")):
@@ -136,7 +137,11 @@ def _merge_into(target: CommentedMap, source: dict[str, Any]) -> None:
         existing = target[key]
         if isinstance(existing, CommentedMap) and isinstance(new_value, dict):
             _merge_into(existing, new_value)
-        elif isinstance(existing, CommentedSeq) and isinstance(new_value, list) and len(existing) == len(new_value):
+        elif (
+            isinstance(existing, CommentedSeq)
+            and isinstance(new_value, list)
+            and len(existing) == len(new_value)
+        ):
             for i, item in enumerate(new_value):
                 existing[i] = item
         else:

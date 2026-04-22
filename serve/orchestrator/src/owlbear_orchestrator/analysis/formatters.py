@@ -19,7 +19,10 @@ def format_markdown(proposals: list[AnalysisProposal]) -> str:
     if not proposals:
         return "No analysis proposals."
 
-    rows = [f"| {p.pattern} | {p.category} | {p.target_agent} | {p.rationale} |" for p in proposals]
+    rows = [
+        f"| {p.pattern} | {p.category} | {p.target_agent} | {p.rationale} |"
+        for p in proposals
+    ]
     lines = [
         "| Pattern | Category | Agent | Rationale |",
         "|---|---|---|---|",

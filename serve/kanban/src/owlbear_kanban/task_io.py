@@ -81,7 +81,9 @@ def _make_yaml() -> YAML:
     for resolver_dict in y.resolver._version_implicit_resolver.values():  # noqa: SLF001
         for char_key in list(resolver_dict.keys()):
             resolver_dict[char_key] = [
-                (tag, regexp) for tag, regexp in resolver_dict[char_key] if tag != _TIMESTAMP_TAG
+                (tag, regexp)
+                for tag, regexp in resolver_dict[char_key]
+                if tag != _TIMESTAMP_TAG
             ]
     return y
 
@@ -91,7 +93,9 @@ def _make_yaml() -> YAML:
 # ---------------------------------------------------------------------------
 
 _WINDOWS_RESERVED: frozenset[str] = frozenset(
-    ["con", "prn", "aux", "nul"] + [f"com{i}" for i in range(1, 10)] + [f"lpt{i}" for i in range(1, 10)]
+    ["con", "prn", "aux", "nul"]
+    + [f"com{i}" for i in range(1, 10)]
+    + [f"lpt{i}" for i in range(1, 10)]
 )
 
 # ---------------------------------------------------------------------------

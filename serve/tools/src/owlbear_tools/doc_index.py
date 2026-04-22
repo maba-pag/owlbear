@@ -208,7 +208,9 @@ def parse_index(text: str) -> list[DocEntry]:
 
 def main() -> None:
     """CLI entry point: regenerate the doc index for a workspace root."""
-    parser = argparse.ArgumentParser(description="Generate or update the OwlBear doc index.")
+    parser = argparse.ArgumentParser(
+        description="Generate or update the OwlBear doc index."
+    )
     parser.add_argument("root", nargs="?", default=".", help="Workspace root directory")
     parser.add_argument(
         "--output",

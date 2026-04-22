@@ -14,7 +14,6 @@ from unittest.mock import patch
 import contextlib
 
 
-
 # ---------------------------------------------------------------------------
 # Board helpers
 # ---------------------------------------------------------------------------
@@ -173,9 +172,13 @@ def _run_migrate(
     dry_run: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     cmd = [
-        sys.executable, "-m", "owlbear_kanban.migrate",
-        "--kanban-dir", str(kanban_dir),
-        "--lane", lane,
+        sys.executable,
+        "-m",
+        "owlbear_kanban.migrate",
+        "--kanban-dir",
+        str(kanban_dir),
+        "--lane",
+        lane,
     ]
     if dry_run:
         cmd.append("--dry-run")
@@ -302,7 +305,9 @@ class TestFromAC_LaneAlgorithms:
         assert "archival_reason:" in content
         assert "archival_refs:" in content
 
-    def test_ac_c33_tasks_lane_normalises_timestamps_to_utc(self, tmp_path: Path) -> None:
+    def test_ac_c33_tasks_lane_normalises_timestamps_to_utc(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C33: tasks lane ensures created/updated timestamps end with +00:00."""
         kanban_dir = _make_legacy_board(tmp_path)
         # Naive timestamp (no tz offset)
@@ -335,7 +340,14 @@ class TestFromAC_LaneAlgorithms:
         _run_migrate(kanban_dir, lane="config")
         content = (kanban_dir / "config.yml").read_text(encoding="utf-8")
 
-        for dropped in ("board:", "version:", "tasks_dir:", "archive_dir:", "defaults:", "activity_log:"):
+        for dropped in (
+            "board:",
+            "version:",
+            "tasks_dir:",
+            "archive_dir:",
+            "defaults:",
+            "activity_log:",
+        ):
             assert dropped not in content, f"Legacy field '{dropped}' still present"
 
     def test_ac_c33_config_lane_adds_new_required_fields(self, tmp_path: Path) -> None:
@@ -344,10 +356,17 @@ class TestFromAC_LaneAlgorithms:
         _run_migrate(kanban_dir, lane="config")
         content = (kanban_dir / "config.yml").read_text(encoding="utf-8")
 
-        for new_field in ("entry_status:", "wave_size:", "non_impl_tags:", "archival_reasons:"):
+        for new_field in (
+            "entry_status:",
+            "wave_size:",
+            "non_impl_tags:",
+            "archival_reasons:",
+        ):
             assert new_field in content, f"New required field '{new_field}' missing"
 
-    def test_ac_c35_tasks_idempotency_check_skips_modern_task(self, tmp_path: Path) -> None:
+    def test_ac_c35_tasks_idempotency_check_skips_modern_task(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C35: idempotency check skips tasks/ files already in canonical form."""
         kanban_dir = _make_modern_board(tmp_path)
         task_file = kanban_dir / "tasks" / "1001-modern.md"
@@ -380,7 +399,9 @@ class TestFromAC_LaneAlgorithms:
 
         assert "archival_refs:" in content
 
-    def test_ac_c35_archive_idempotency_check_skips_modern_archive(self, tmp_path: Path) -> None:
+    def test_ac_c35_archive_idempotency_check_skips_modern_archive(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C35: archive lane skips files that already have non-null archival_reason + archival_refs."""
         kanban_dir = _make_modern_board(tmp_path)
         arc_file = kanban_dir / "archive" / "0001-modern.md"
@@ -412,7 +433,9 @@ class TestFromAC_Idempotency:
         result2 = _run_migrate(kanban_dir, lane="all")
 
         assert result2.returncode == 0
-        assert "Migrated:         0" in result2.stdout or "Migrated: 0" in result2.stdout
+        assert (
+            "Migrated:         0" in result2.stdout or "Migrated: 0" in result2.stdout
+        )
 
     def test_ac_c34_modern_board_zero_migrations(self, tmp_path: Path) -> None:
         """AC-C34: modern board with fully migrated tasks reports Migrated: 0 on first run."""
@@ -452,7 +475,9 @@ class TestFromAC_DryRun:
 
         _run_migrate(kanban_dir, lane="config", dry_run=True)
 
-        assert (kanban_dir / "config.yml").read_text(encoding="utf-8") == original_config
+        assert (kanban_dir / "config.yml").read_text(
+            encoding="utf-8"
+        ) == original_config
 
     def test_ac_c36_dry_run_prints_what_would_change(self, tmp_path: Path) -> None:
         """AC-C36: --dry-run prints at least some output describing what would be migrated."""
@@ -492,7 +517,10 @@ class TestFromAC_CrashRecovery:
                 raise OSError(msg)
             original_replace(src, dst)
 
-        with patch("os.replace", side_effect=crash_on_second_replace), contextlib.suppress(OSError):
+        with (
+            patch("os.replace", side_effect=crash_on_second_replace),
+            contextlib.suppress(OSError),
+        ):
             _run_migrate(kanban_dir, lane="tasks")
 
         tmp_leftovers = list((kanban_dir / "tasks").glob(".tmp-*"))
@@ -555,4 +583,8 @@ class TestFromAC_ExitCode:
 
         combined = result.stdout + result.stderr
         # Should mention the stub fields that require manual attention
-        assert "agent_map" in combined or "WARNING" in combined or "manual" in combined.lower()
+        assert (
+            "agent_map" in combined
+            or "WARNING" in combined
+            or "manual" in combined.lower()
+        )
