@@ -1,10 +1,10 @@
 ---
 id: 1053
 title: 'C-08: RED — engine storage-integration tests'
-status: review
+status: backlog
 priority: needed
 created: 2026-04-21T10:42:50.306120+00:00
-updated: 2026-04-22T06:29:21.527452+00:00
+updated: 2026-04-22T06:45:29.062304+00:00
 tags:
 - phase:storage
 - brief:c
@@ -14,8 +14,8 @@ parent: 1043
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: open-jay
-claimed_at: 2026-04-22T06:29:21.527452+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -311,3 +311,59 @@ Module: `serve/kanban/tests/test_engine_storage.py`
 - Reusing the canonical parser removes duplicated duration grammar and aligns validation semantics in one place.
 - The smallest safe fix was to swap validation implementation rather than moving validators across modules.
 - Scoped quality-runner evidence was sufficient to confirm the AC-C50 mechanism regression and verify the GREEN transition.
+[[2026-04-22]]
+## Review Evidence
+
+### Tests
+- Quality-runner scoped pytest on `serve/kanban/tests/test_engine_storage.py`: 32 passed, 0 failed, 0 skipped.
+
+### Lint
+- Quality-runner scoped lint on `serve/kanban/src/owlbear_kanban/config_loader.py` and `serve/kanban/tests/test_engine_storage.py`: clean.
+- VS Code diagnostics on `serve/kanban/src/owlbear_kanban/config_loader.py`, `serve/kanban/src/owlbear_kanban/storage.py`, and `serve/kanban/tests/test_engine_storage.py`: no errors.
+
+### Coverage
+- overall: 37%
+- `owlbear_kanban.config_loader`: 57%
+
+### AC Compliance
+| AC | Evidence | Status |
+| --- | --- | --- |
+| AC-C19 | `TestFromAC_ListTasksCorruption` covers modes 1 and 3-9 in `serve/kanban/tests/test_engine_storage.py:133-308`. | PASS |
+| AC-C20 | `test_ac_c20_list_tasks_hard_raises_on_duplicate_id` asserts exact `ERR_CORRUPT_DUPLICATE_ID` in `serve/kanban/tests/test_engine_storage.py:169-180`. | PASS |
+| AC-C23 | `test_ac_c23_sweep_returns_exact_released_id_set` asserts exact released IDs in `serve/kanban/tests/test_engine_storage.py:349-379`. | PASS |
+| AC-C24 | `test_ac_c24_file_moved_before_ar_creation` only proves the quarantine destination exists before `create_task()` in `serve/kanban/tests/test_engine_storage.py:517-540`; it does not prove the original file is already gone at that moment. | LAX |
+| AC-C25 | `test_ac_c25_repair_records_failed_when_ar_creation_fails` forces AR creation failure and requires a `failed` outcome plus a quarantined file in `serve/kanban/tests/test_engine_storage.py:542-561`. | PASS |
+| AC-C26 | `test_ac_c26_duplicate_location_resolved_archive_wins` asserts archive survives and tasks copy is gone in `serve/kanban/tests/test_engine_storage.py:563-577`. | PASS |
+| AC-C27 | `test_ac_c27_sweep_independent_of_corruption_repair` keeps the corrupt file in `tasks/` and no `quarantine/` in `serve/kanban/tests/test_engine_storage.py:381-399`. | PASS |
+| AC-C47 | Migration gate tests in `serve/kanban/tests/test_engine_storage.py:584-610` cover raise, no-raise, and exact `ERR_MIGRATION_REQUIRED`. | PASS |
+| AC-C49 | Parse-duration tests in `serve/kanban/tests/test_engine_storage.py:629-660` cover valid values and exact `ERR_INVALID_CLAIM_TIMEOUT`. | PASS |
+| AC-C50 | FAIL. `BoardConfig.claim_timeout` is a plain field in `serve/kanban/src/owlbear_kanban/models.py:55`, and the only BoardConfig validator in that model is the legacy normalizer at `serve/kanban/src/owlbear_kanban/models.py:78-99`. `serve/kanban/src/owlbear_kanban/config_loader.py:58` returns `BoardConfig.model_validate(...)` immediately. The parser hook is separate at `serve/kanban/src/owlbear_kanban/config_loader.py:61-65`. The actual engine path imports `load_config` from `config_loader` at `serve/kanban/src/owlbear_kanban/engine.py:39` and uses it in `KanbanEngine.__init__` at `serve/kanban/src/owlbear_kanban/engine.py:328`, so constructor-time config loading still bypasses `_parse_duration()`. The current TestFromAC only spies `storage.load_config()` in `serve/kanban/tests/test_engine_storage.py:680-694`, so this real load path is not exercised. | FAIL |
+| AC-C52 | Sweep mutation tests now cover `claimed_at` clearing, `updated` advance, exact body equality, and `claimed_by` omission in `serve/kanban/tests/test_engine_storage.py:401-506`. | PASS |
+| AC-C54 | `test_ac_c54_status_not_explicitly_passed_in_create_task_kwargs` proves status omission via captured kwargs in `serve/kanban/tests/test_engine_storage.py:745-770`. | PASS |
+| RED-phase historical gate | Earlier task-body evidence recorded a failing RED phase before builder retries. | PASS |
+
+### Critical Findings
+- AC-C50 is still not satisfied on the actual engine config-load path. The builder retry made the storage wrapper call `_parse_duration()`, but `KanbanEngine.__init__` still loads config through `config_loader.load_config()`, which returns immediately after `BoardConfig.model_validate(...)` without any `claim_timeout` parser validation.
+- The current AC-C50 test is green for the wrong reason. It exercises `storage.load_config()` only, so it cannot catch the constructor-path violation above.
+
+### Deductions
+- 0.30 deduction: AC-C50 implementation still misses the constructor/config-loader path used by `KanbanEngine`.
+- 0.10 deduction: AC-C50 TestFromAC scope does not cover the actual load path named by the AC.
+- 0.06 deduction: AC-C24 move-before-AR proof is partial.
+- 0.06 deduction: touched-module coverage remains below the 90% review target (`owlbear_kanban.config_loader` 57%).
+
+### Verdict
+- FAIL
+- Confidence: 0.48
+- Routing: backlog
+- Reason: third review rejection on the same task; loop-breaker applies.
+
+### Action
+- Builder or architect must move `claim_timeout` validation into the actual BoardConfig/config-loader path used by `KanbanEngine`, or narrow the AC if only the storage wrapper is intended to own validation.
+- Test-writer must add a failing AC-C50 check on the real constructor/load path, for example invalid `claim_timeout` through `KanbanEngine(kanban_dir)` and/or direct `config_loader.load_config()`.
+- Test-writer should tighten AC-C24 so it proves the original corrupt file is already gone before AR creation, not only that the quarantine destination exists.
+
+### Post-task Reflection
+- A green wrapper-level test can still miss the real production call chain when the engine imports a lower-level loader directly.
+- The latest builder fix aligned one API path with the AC, but not the path actually used by `KanbanEngine`.
+- On a third review cycle, loop-breaker routing matters more than squeezing in another local retry.
