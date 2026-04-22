@@ -131,6 +131,19 @@ class TestFromAC_RequiredSections:
         # Looking for 'NotASection' as a heading should fail
         assert required_sections(task, ["NotASection"]) is False
 
+    def test_ac_c40b_string_body_required_sections(self) -> None:
+        """AC-C40b: required_sections works when task.body is a str (triggers parse_body at predicates.py:31)."""
+        task = Task(
+            id=1,
+            title="str-body-test",
+            status="todo",
+            priority="needed",
+            created="2026-04-21T10:00:00+00:00",
+            updated="2026-04-21T10:00:00+00:00",
+            body="## Acceptance Criteria\n- item\n",
+        )
+        assert required_sections(task, ["Acceptance Criteria"]) is True
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_RequireListInSection — AC-C40, AC-C41
@@ -220,4 +233,24 @@ class TestFromAC_RequireListInSection:
             Section(heading="Tests", level=2, content="- test case 1\n- test case 2\n"),
         ])
         assert required_sections(task, ["Acceptance Criteria", "Tests"]) is True
+        assert require_list_in_section(task, "Tests") is True
+
+    def test_ac_c40a_heading_side_whitespace_stripped(self) -> None:
+        """AC-C40a: require_list_in_section strips surrounding whitespace from Section.heading (heading-side proof)."""
+        task = _make_task_with_sections(
+            _make_sections(("  Tests  ", 2, "- item\n"))
+        )
+        assert require_list_in_section(task, "Tests") is True
+
+    def test_ac_c40b_string_body_require_list_in_section(self) -> None:
+        """AC-C40b: require_list_in_section works when task.body is a str (triggers parse_body at predicates.py:31)."""
+        task = Task(
+            id=1,
+            title="str-body-test",
+            status="todo",
+            priority="needed",
+            created="2026-04-21T10:00:00+00:00",
+            updated="2026-04-21T10:00:00+00:00",
+            body="## Tests\n- item\n",
+        )
         assert require_list_in_section(task, "Tests") is True
