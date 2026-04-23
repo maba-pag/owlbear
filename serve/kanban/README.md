@@ -46,7 +46,7 @@ engine.release_task(42)
 | `refresh_config()` | Reload config from disk |
 | `sweep()` | Release stale claims exceeding `claim_timeout` |
 | `repair_storage()` | Quarantine corrupt task files and create action-required tasks |
-| `list_sessions(**kwargs)` | Derived `WorkSession` objects from `activity.jsonl` |
+| `list_sessions(**kwargs)` | Derived `SessionRecord` objects from `activity.jsonl` |
 
 ### Dispatch helper
 
