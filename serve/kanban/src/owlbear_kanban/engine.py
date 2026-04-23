@@ -731,7 +731,7 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def edit_task(  # noqa: PLR0912, PLR0913, C901
+    def edit_task(  # noqa: PLR0912, PLR0913, PLR0915, C901
         self,
         task_id: str,
         *,
@@ -785,6 +785,7 @@ class KanbanEngine:
 
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
+        original = record.model_copy(deep=True)
 
         if title is not None:
             record.title = title
@@ -829,7 +830,12 @@ class KanbanEngine:
 
         write_task(task_path, record)
 
-        self._emit_event("edit", record.id, "task edited")
+        try:
+            self._emit_event("edit", record.id, "task edited")
+        except OSError:
+            with contextlib.suppress(Exception):
+                write_task(task_path, original)
+            raise
         self._revision += 1
         return record
 
@@ -856,21 +862,31 @@ class KanbanEngine:
 
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
+        original = record.model_copy(deep=True)
         old_status = record.status
+        archived = False
+        dest = self._archive_dir / task_path.name
 
         if status == "archived":
             self._archive_dir.mkdir(parents=True, exist_ok=True)
-            dest = self._archive_dir / task_path.name
             record.status = "archived"
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(task_path, record)
             _move_file(task_path, dest)
+            archived = True
         else:
             record.status = status
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(task_path, record)
 
-        self._emit_event("move", record.id, f"{old_status} -> {record.status}")
+        try:
+            self._emit_event("move", record.id, f"{old_status} -> {record.status}")
+        except OSError:
+            with contextlib.suppress(Exception):
+                if archived and dest.exists():
+                    _move_file(dest, task_path)
+                write_task(task_path, original)
+            raise
         self._revision += 1
         return record
 
@@ -892,6 +908,7 @@ class KanbanEngine:
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
+        original = record.model_copy(deep=True)
 
         if record.blocked:
             msg = f"Task {task_id!r} is blocked and cannot be claimed"
@@ -911,13 +928,18 @@ class KanbanEngine:
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
         write_task(task_path, record)
-        self._emit_event(
-            "claim",
-            record.id,
-            self._agent_name,
-            task_status_at_start=record.status,
-            timestamp=effective_now,
-        )
+        try:
+            self._emit_event(
+                "claim",
+                record.id,
+                self._agent_name,
+                task_status_at_start=record.status,
+                timestamp=effective_now,
+            )
+        except OSError:
+            with contextlib.suppress(Exception):
+                write_task(task_path, original)
+            raise
         self._revision += 1
         return record
 
@@ -937,12 +959,18 @@ class KanbanEngine:
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
+        original = record.model_copy(deep=True)
 
         record.claimed_by = None
         record.claimed_at = None
         record.updated = datetime.now(tz=UTC).isoformat()
         write_task(task_path, record)
-        self._emit_event("release", record.id, f"released by {self._agent_name}")
+        try:
+            self._emit_event("release", record.id, f"released by {self._agent_name}")
+        except OSError:
+            with contextlib.suppress(Exception):
+                write_task(task_path, original)
+            raise
         self._revision += 1
         return record
 
@@ -1049,6 +1077,7 @@ class KanbanEngine:
         # --- Single read ---
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
+        original = record.model_copy(deep=True)
         old_status = record.status
 
         # --- Append timestamped note ---
@@ -1068,9 +1097,9 @@ class KanbanEngine:
         write_task(task_path, record)
 
         # --- Archive move (only after successful write) ---
+        dest = self._archive_dir / task_path.name
         if needs_archive:
             self._archive_dir.mkdir(parents=True, exist_ok=True)
-            dest = self._archive_dir / task_path.name
             _move_file(task_path, dest)
 
         # --- Activity logging ---
@@ -1080,7 +1109,14 @@ class KanbanEngine:
             "block": f"blocked: {block_reason}",
             "reject": f"reject: {old_status} -> {move_to}",
         }
-        self._emit_event("end_work", record.id, _end_work_details[outcome])
+        try:
+            self._emit_event("end_work", record.id, _end_work_details[outcome])
+        except OSError:
+            with contextlib.suppress(Exception):
+                if needs_archive and dest.exists():
+                    _move_file(dest, task_path)
+                write_task(task_path, original)
+            raise
 
         self._revision += 1
         return record
@@ -1122,13 +1158,19 @@ class KanbanEngine:
                 if claimed_dt.tzinfo is None:
                     claimed_dt = claimed_dt.replace(tzinfo=UTC)
                 if now >= claimed_dt + timeout:
+                    original = record.model_copy(deep=True)
                     # Clear claimed_at and update timestamp
                     record.claimed_at = None
                     record.claimed_by = None
                     record.updated = datetime.now(tz=UTC).isoformat()
                     write_task(path, record)
+                    try:
+                        self._emit_event("sweep-release", record.id, "expired claim released")
+                    except OSError:
+                        with contextlib.suppress(Exception):
+                            write_task(path, original)
+                        continue
                     released.append(record.id)
-                    self._emit_event("sweep-release", record.id, "expired claim released")
 
         return released
 
