@@ -14,9 +14,6 @@ updates:
       github-actions:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
       github-actions-security:
         applies-to: "security-updates"
         patterns:
@@ -35,9 +32,6 @@ updates:
       python-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
       python-security:
         applies-to: "security-updates"
         patterns:
@@ -56,9 +50,6 @@ updates:
       npm-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
       npm-security:
         applies-to: "security-updates"
         patterns:

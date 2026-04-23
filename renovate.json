@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "baseBranches": ["dev"],
+  "labels": ["dependencies", "renovate"],
+  "schedule": ["before 9am on monday"],
+  "packageRules": [
+    {
+      "description": "Group all non-major Python updates",
+      "matchManagers": ["pip_requirements", "pip-compile", "pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "python minor/patch",
+      "automerge": true
+    },
+    {
+      "description": "Group all non-major npm updates",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "npm minor/patch",
+      "automerge": true
+    },
+    {
+      "description": "Major version bumps get individual PRs",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ],
+  "pip_requirements": {
+    "fileMatch": ["pyproject\\.toml$"]
+  }
+}
