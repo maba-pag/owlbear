@@ -37,7 +37,7 @@ from owlbear_tools.doc_index import (
 # Expected exclusion dirs (§4.3 + Architecture Review refinements)
 # ---------------------------------------------------------------------------
 
-_EXCLUDED_DIRS = [
+_EXCLUDED_PATHS = [
     ".owlbear/scratch",
     ".owlbear/research",
     ".owlbear/kanban",
@@ -46,11 +46,17 @@ _EXCLUDED_DIRS = [
     ".owlbear/sources",
     "store",
     "tests",
+]
+
+_EXCLUDED_NAMES = [
     "node_modules",
     ".git",
+    ".venv",
     "dist",
     "build",
 ]
+
+_EXCLUDED_DIRS = _EXCLUDED_PATHS + _EXCLUDED_NAMES
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -138,6 +144,17 @@ class TestFromAC_FilesystemWalk:
         similar.write_text("# Backup\n")
         result = collect_docs(tmp_path)
         assert similar in result
+
+    @pytest.mark.parametrize("excluded_name", _EXCLUDED_NAMES)
+    def test_excludes_name_based_dirs_at_any_depth(
+        self, tmp_path: Path, excluded_name: str
+    ) -> None:
+        """Boundary: name-based exclusions (node_modules, .venv, etc.) work at any nesting depth."""
+        nested = tmp_path / "serve" / "cockpit" / "web" / excluded_name / "pkg" / "README.md"
+        nested.parent.mkdir(parents=True)
+        nested.write_text("# Nested excluded\n")
+        result = collect_docs(tmp_path)
+        assert nested not in result
 
     def test_empty_directory_returns_empty_list(self, tmp_path: Path) -> None:
         """Edge: a tree with no doc files returns an empty list."""
