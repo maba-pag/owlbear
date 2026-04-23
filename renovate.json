@@ -1,9 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "baseBranches": ["dev"],
-  "labels": ["dependencies", "renovate"],
-  "schedule": ["before 9am on monday"],
+  "extends": [
+    "config:recommended"
+  ],
+  "baseBranchPatterns": [
+    "dev"
+  ],
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "schedule": [
+    "before 9am on monday"
+  ],
   "dependencyDashboard": true,
   "rangeStrategy": "bump",
   "vulnerabilityAlerts": {
@@ -11,30 +20,48 @@
   },
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["before 6am on the first day of the month"]
+    "schedule": [
+      "before 6am on the first day of the month"
+    ]
   },
   "packageRules": [
     {
       "description": "Group all non-major Python updates",
-      "matchManagers": ["pip_requirements", "pip-compile", "pep621"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "pip_requirements",
+        "pip-compile",
+        "pep621"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "python minor/patch",
       "automerge": true
     },
     {
       "description": "Group all non-major npm updates",
-      "matchManagers": ["npm"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "groupName": "npm minor/patch",
       "automerge": true
     },
     {
       "description": "Major version bumps get individual PRs",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "automerge": false
     }
   ],
   "pip_requirements": {
-    "fileMatch": ["pyproject\\.toml$"]
+    "managerFilePatterns": [
+      "/pyproject\\.toml$/"
+    ]
   }
 }
