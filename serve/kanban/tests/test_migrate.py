@@ -305,6 +305,43 @@ class TestFromAC_LaneSelection:
         assert "name: research" not in config_content, "--lane all did not process config lane"
         assert "- research" in config_content, "--lane all did not produce list[str] statuses"
 
+    def test_ac_c32_archive_lane_does_not_touch_config(self, tmp_path: Path) -> None:
+        """AC-C32 (exclusivity): --lane archive must NOT modify config.yml content or mtime."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        (kanban_dir / "archive" / "0001-old.md").write_text(
+            _LEGACY_ARCHIVE.format(task_id=1), encoding="utf-8"
+        )
+        config_content_before = (kanban_dir / "config.yml").read_text(encoding="utf-8")
+        config_mtime_before = (kanban_dir / "config.yml").stat().st_mtime
+
+        result = _run_migrate(kanban_dir, lane="archive")
+        assert result.returncode == 0
+
+        assert (kanban_dir / "config.yml").stat().st_mtime == config_mtime_before, (
+            "--lane archive must not modify config.yml mtime"
+        )
+        assert (kanban_dir / "config.yml").read_text(encoding="utf-8") == config_content_before, (
+            "--lane archive must not modify config.yml content"
+        )
+
+    def test_ac_c32_config_lane_does_not_touch_archive(self, tmp_path: Path) -> None:
+        """AC-C32 (exclusivity): --lane config must NOT modify archive file content or mtime."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-old.md"
+        arc_content_before = _LEGACY_ARCHIVE.format(task_id=1)
+        arc_file.write_text(arc_content_before, encoding="utf-8")
+        arc_mtime_before = arc_file.stat().st_mtime
+
+        result = _run_migrate(kanban_dir, lane="config")
+        assert result.returncode == 0
+
+        assert arc_file.stat().st_mtime == arc_mtime_before, (
+            "--lane config must not modify archive file mtime"
+        )
+        assert arc_file.read_text(encoding="utf-8") == arc_content_before, (
+            "--lane config must not modify archive file content"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_LaneAlgorithms — AC-C33, AC-C35
@@ -771,6 +808,22 @@ archival_refs: "not-a-list"
 Invalid archival_refs — non-list value triggers manual-action failure.
 """
 
+_ARCHIVE_BOOL_REFS = """\
+---
+id: {task_id}
+title: Archive bool refs {task_id}
+status: done
+priority: needed
+archival_reason: completed
+archival_refs:
+- true
+---
+
+## Notes
+
+Boolean in archival_refs list — triggers manual-action failure.
+"""
+
 
 class TestFromAC_ArchiveLaneAlgorithmsStrict:
     """AC-C33 strict: one-field-present auto-fill, invalid field failures, body preservation."""
@@ -1063,6 +1116,35 @@ class TestFromAC_IdempotencyEdgeCases:
         assert "manual-action required: invalid archival_refs" in result.stderr, (
             "stderr must contain 'manual-action required: invalid archival_refs' "
             "per _migrate_archive_file at migrate.py:267-268"
+        )
+
+    def test_ac_c35_archive_boolean_list_refs_not_treated_as_already(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35 (branch matrix): archive with boolean in archival_refs list must fail, not be skipped.
+
+        AC-C35 specifies invalid archival_refs includes lists containing booleans (e.g. [true]).
+        _is_archive_refs_valid checks `not isinstance(item, bool)` at migrate.py:116.
+        Expected: Failed: 1, Migrated: 0, exit code 1, manual-action required: invalid archival_refs.
+        """
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-bool-refs.md"
+        arc_file.write_text(_ARCHIVE_BOOL_REFS.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+
+        assert result.returncode == 1, (
+            "archive with boolean in archival_refs must exit 1 (failed count > 0)"
+        )
+        assert "Failed: 1" in result.stdout or "Failed:         1" in result.stdout, (
+            "archive with boolean in archival_refs must report Failed: 1 in stdout"
+        )
+        assert "Migrated: 0" in result.stdout or "Migrated:         0" in result.stdout, (
+            "archive with boolean in archival_refs must NOT increment Migrated counter"
+        )
+        assert "manual-action required: invalid archival_refs" in result.stderr, (
+            "stderr must contain 'manual-action required: invalid archival_refs' "
+            "per _is_archive_refs_valid boolean check at migrate.py:116"
         )
 
 
