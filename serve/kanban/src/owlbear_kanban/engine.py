@@ -373,13 +373,19 @@ class KanbanEngine:
                     if line.startswith("claimed_by:"):
                         val = line.split(":", 1)[1].strip()
                         quote = val[:1]
-                        if quote in {'"', "'"} and val.endswith(quote):
-                            val = val.removeprefix(quote).removesuffix(quote).strip()
-                        if val and val.lower() not in ("null", "~", ""):
-                            raise MigrationRequiredError(
-                                code="ERR_MIGRATION_REQUIRED",
-                                user_message="board has legacy claimed_by fields — run: uv run kanban-migrate",
-                            )
+                        is_quoted = quote in {'"', "'"} and val.endswith(quote)
+                        is_cleared = (
+                            not val
+                            or val.lower() in ("null", "~")
+                            or (is_quoted and not val.removeprefix(quote).removesuffix(quote).strip())
+                        )
+                        if is_cleared:
+                            continue
+
+                        raise MigrationRequiredError(
+                            code="ERR_MIGRATION_REQUIRED",
+                            user_message="board has legacy claimed_by fields — run: uv run kanban-migrate",
+                        )
 
     @property
     def agent_name(self) -> str:
@@ -1095,12 +1101,17 @@ class KanbanEngine:
         released: list[int] = []
         timeout = self._parse_claim_timeout()
         now = datetime.now(tz=UTC)
+        from owlbear_kanban.storage import detect_corruption as _detect_corruption  # noqa: PLC0415
 
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
                 record = read_task(path)
             except Exception:  # noqa: BLE001, S112
                 continue  # silently skip corrupt files (AC-C27)
+
+            # AC-C27: do not mutate parseable-but-corrupt files.
+            if _detect_corruption(path, self._config) is not None:
+                continue
 
             # Only handle claimed_at (Brief C — claimed_by is legacy)
             if record.claimed_at:
