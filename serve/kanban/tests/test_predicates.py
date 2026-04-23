@@ -285,3 +285,11 @@ class TestFromAC_RequireListInSection:
             assert require_list_in_section(task, "Items") is True, (
                 f"Bullet marker '{marker}' not recognised — AC-C41 semantic equivalence broken"
             )
+
+    def test_ac_c40c_post_fence_resume_returns_true(self) -> None:
+        """AC-C40c: list-like lines inside fence are excluded, but a real list item after the closing fence IS counted."""
+        content = "```\n- fake inside fence\n1. also fake\n```\n- real item after fence\n"
+        task = _make_task_with_sections(
+            _make_sections(("Steps", 2, content))
+        )
+        assert require_list_in_section(task, "Steps") is True
