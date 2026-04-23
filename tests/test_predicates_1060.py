@@ -188,3 +188,22 @@ class TestFromAC_PredicateCommonMarkSubstrate:
         content = "~~~~\n- hidden inside 4-tilde fence\n~~~\n- still inside fence (not leaked)\n~~~~\n"
         task = _make_task([_make_section("Steps", 2, content)])
         assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_three_space_indented_fence_close_resumes_list_detection(self) -> None:
+        """AC-C40: list detection resumes after a valid 3-space-indented fence closes.
+
+        CommonMark spec §4.5: both opener and closer may be indented up to 3
+        spaces.  Content after the closing fence is ordinary paragraph/list
+        content and must be classified normally.  This proves the
+        indented-fence close + post-fence resume branch:
+        ``require_list_in_section`` must return True when a real list item
+        follows a matched 3-space-indented close.
+
+        Regression guard: ``_FENCE_RE`` accepts 0-3 indent on the opener and
+        the closing regex in ``_remove_fenced_blocks`` also accepts 0-3
+        indent, so the fence is stripped and the post-fence list item is
+        detected.
+        """
+        content = "   ```\n- inside fence (excluded)\n   ```\n- real list item after close\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is True
