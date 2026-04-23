@@ -756,6 +756,21 @@ archival_refs:
 Integer refs from pre-C model.
 """
 
+_ARCHIVE_INVALID_REFS = """\
+---
+id: {task_id}
+title: Archive invalid refs {task_id}
+status: done
+priority: needed
+archival_reason: completed
+archival_refs: "not-a-list"
+---
+
+## Notes
+
+Invalid archival_refs — non-list value triggers manual-action failure.
+"""
+
 
 class TestFromAC_ArchiveLaneAlgorithmsStrict:
     """AC-C33 strict: one-field-present auto-fill, invalid field failures, body preservation."""
@@ -1020,6 +1035,36 @@ class TestFromAC_IdempotencyEdgeCases:
             "(_is_config_migrated bug: checks only list[dict], not list[int])"
         )
 
+    def test_ac_c35_archive_invalid_archival_refs_not_treated_as_already(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35 (branch matrix): archive with invalid archival_refs must fail, not be skipped.
+
+        Files with archival_refs: "not-a-list" (non-list) are contract-invalid.
+        _migrate_archive_file must return ("failed", "manual-action required: invalid archival_refs")
+        rather than treating the file as already migrated.
+        Expected: Failed: 1, Migrated: 0, exit code 1, manual-action required in stderr.
+        """
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-invalid-refs.md"
+        arc_file.write_text(_ARCHIVE_INVALID_REFS.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+
+        assert result.returncode == 1, (
+            "archive with invalid archival_refs must exit 1 (failed count > 0)"
+        )
+        assert "Failed: 1" in result.stdout or "Failed:         1" in result.stdout, (
+            "archive with invalid archival_refs must report Failed: 1 in stdout"
+        )
+        assert "Migrated: 0" in result.stdout or "Migrated:         0" in result.stdout, (
+            "archive with invalid archival_refs must NOT increment Migrated counter"
+        )
+        assert "manual-action required: invalid archival_refs" in result.stderr, (
+            "stderr must contain 'manual-action required: invalid archival_refs' "
+            "per _migrate_archive_file at migrate.py:267-268"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_DryRunStrict — AC-C36 (stricter, retry-cycle)
@@ -1273,3 +1318,27 @@ class TestFromAC_ManualActionSummaryStrict:
         )
         assert "agent_types" in r2.stderr
         assert "agent_compatibility" in r2.stderr
+
+    def test_ac_c38a_archive_invalid_refs_emits_manual_action_summary(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C38a (branch matrix): archive with invalid archival_refs emits MANUAL ACTION SUMMARY.
+
+        AC-C38a requires both invalid archival_reason AND invalid archival_refs archive failures
+        to produce entries in 'MANUAL ACTION SUMMARY:' on stderr.
+        This test exercises the archival_refs variant at migrate.py:450-451 → :506.
+        """
+        kanban_dir = _make_legacy_board(tmp_path)
+        arc_file = kanban_dir / "archive" / "0001-invalid-refs.md"
+        arc_file.write_text(_ARCHIVE_INVALID_REFS.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="archive")
+
+        assert result.returncode == 1
+        assert "MANUAL ACTION SUMMARY:" in result.stderr, (
+            "archive with invalid archival_refs must feed into MANUAL ACTION SUMMARY: on stderr "
+            "via _run_lane manual_actions list at migrate.py:450-451"
+        )
+        assert str(arc_file) in result.stderr or "0001-invalid-refs.md" in result.stderr, (
+            "MANUAL ACTION SUMMARY must include the archive file path"
+        )
