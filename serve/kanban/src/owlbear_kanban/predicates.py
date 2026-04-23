@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 
 # CommonMark list item: up to 3 leading spaces, then marker + space.
 # Four-space or tab-indented lines are indented code blocks, not lists.
-_MAX_INDENT = 3
 _BULLET_RE = re.compile(r"^ {0,3}[-*+] ", re.MULTILINE)
 _ORDERED_RE = re.compile(r"^ {0,3}\d{1,9}[\.)] ", re.MULTILINE)
 _FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})", re.MULTILINE)
@@ -96,8 +95,6 @@ def _remove_fenced_blocks(text: str) -> str:
     fence_char = ""
     fence_len = 0
     for line in text.split("\n"):
-        stripped = line.lstrip(" ")
-        indent = len(line) - len(stripped)
         fence_match = _FENCE_RE.match(line)
         if fence_match and not in_fence:
             in_fence = True
@@ -105,11 +102,7 @@ def _remove_fenced_blocks(text: str) -> str:
             fence_len = len(fence_match.group(1))
             result.append("")  # blank placeholder
         elif in_fence:
-            closing = (
-                indent <= _MAX_INDENT
-                and stripped.rstrip() == fence_char * len(stripped.rstrip())
-                and len(stripped.rstrip()) >= fence_len
-            )
+            closing = re.match(rf"^ {{0,3}}[{re.escape(fence_char)}]{{{fence_len},}}\s*$", line)
             if closing:
                 in_fence = False
                 fence_char = ""
