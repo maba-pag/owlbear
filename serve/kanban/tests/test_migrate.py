@@ -206,6 +206,15 @@ class TestFromAC_MigrateEntryPoint:
         # On a fully migrated board: exit code 0
         assert result.returncode == 0
 
+    def test_ac_c31_pyproject_scripts_exact_key_value(self) -> None:
+        """AC-C31 (strict): pyproject.toml maps kanban-migrate to owlbear_kanban.migrate:main exactly."""
+        pyproject = Path(__file__).parent.parent / "pyproject.toml"
+        content = pyproject.read_text(encoding="utf-8")
+        assert 'kanban-migrate = "owlbear_kanban.migrate:main"' in content, (
+            "pyproject.toml [project.scripts] must have "
+            'kanban-migrate = "owlbear_kanban.migrate:main"'
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_LaneSelection — AC-C32
@@ -269,6 +278,32 @@ class TestFromAC_LaneSelection:
         assert "Migrated:" in result.stdout
         assert "Already:" in result.stdout
         assert "Failed:" in result.stdout
+
+    def test_ac_c32_all_lane_processes_task_archive_and_config_content(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C32 (strict): --lane all must modify task, archive, AND config file content."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        task_file = kanban_dir / "tasks" / "1001-t.md"
+        arc_file = kanban_dir / "archive" / "0001-old.md"
+        task_file.write_text(_LEGACY_TASK.format(task_id=1001), encoding="utf-8")
+        arc_file.write_text(_LEGACY_ARCHIVE.format(task_id=1), encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="all")
+        assert result.returncode == 0
+
+        # Task lane evidence: claimed_by removed
+        task_content = task_file.read_text(encoding="utf-8")
+        assert "claimed_by" not in task_content, "--lane all did not process task lane"
+
+        # Archive lane evidence: archival_reason added
+        arc_content = arc_file.read_text(encoding="utf-8")
+        assert "archival_reason:" in arc_content, "--lane all did not process archive lane"
+
+        # Config lane evidence: statuses converted from list[dict] to list[str]
+        config_content = (kanban_dir / "config.yml").read_text(encoding="utf-8")
+        assert "name: research" not in config_content, "--lane all did not process config lane"
+        assert "- research" in config_content, "--lane all did not produce list[str] statuses"
 
 
 # ---------------------------------------------------------------------------
@@ -444,20 +479,24 @@ class TestFromAC_DryRun:
         task_file = kanban_dir / "tasks" / "1001-t.md"
         original = _LEGACY_TASK.format(task_id=1001)
         task_file.write_text(original, encoding="utf-8")
+        mtime_before = task_file.stat().st_mtime
 
         result = _run_migrate(kanban_dir, lane="tasks", dry_run=True)
         assert result.returncode == 0
-        # File unchanged
+        # File unchanged — both content and mtime must be unmodified
         assert task_file.read_text(encoding="utf-8") == original
+        assert task_file.stat().st_mtime == mtime_before
 
     def test_ac_c36_dry_run_writes_nothing_config(self, tmp_path: Path) -> None:
         """AC-C36: --dry-run leaves config.yml unchanged."""
         kanban_dir = _make_legacy_board(tmp_path)
         original_config = (kanban_dir / "config.yml").read_text(encoding="utf-8")
+        mtime_before = (kanban_dir / "config.yml").stat().st_mtime
 
         _run_migrate(kanban_dir, lane="config", dry_run=True)
 
         assert (kanban_dir / "config.yml").read_text(encoding="utf-8") == original_config
+        assert (kanban_dir / "config.yml").stat().st_mtime == mtime_before
 
     def test_ac_c36_dry_run_prints_what_would_change(self, tmp_path: Path) -> None:
         """AC-C36: --dry-run prints at least some output describing what would be migrated."""
@@ -467,8 +506,11 @@ class TestFromAC_DryRun:
         )
 
         result = _run_migrate(kanban_dir, lane="tasks", dry_run=True)
-        # Some output expected
-        assert result.stdout or result.stderr
+        # Pin all four summary labels in stdout
+        assert "Scanned:" in result.stdout
+        assert "Migrated:" in result.stdout
+        assert "Already:" in result.stdout
+        assert "Failed:" in result.stdout
 
     def test_ac_c36_dry_run_stdout_pins_specific_summary_labels(self, tmp_path: Path) -> None:
         """AC-C36 (strict): --dry-run stdout must contain Scanned:/Migrated:/Already:/Failed: labels.
@@ -565,7 +607,8 @@ class TestFromAC_ExitCode:
         bad_file.write_text("NOT VALID\x00\x00\x00", encoding="utf-8")
 
         result = _run_migrate(kanban_dir, lane="tasks")
-        assert "FAIL" in result.stderr
+        assert "FAIL " in result.stderr
+        assert "9999-bad.md" in result.stderr
 
     def test_ac_c38_stderr_fail_line_format_contains_path_and_colon_reason(
         self, tmp_path: Path
@@ -866,6 +909,72 @@ class TestFromAC_IdempotencyEdgeCases:
         assert config_file.stat().st_mtime == mtime_before
         assert "Already: 1" in result.stdout or "Already:         1" in result.stdout
 
+    def test_ac_c35_task_missing_created_is_migrated_not_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35: task without 'created' field must be migrated, not treated as already-migrated."""
+        task_content = (
+            "---\n"
+            "id: 1001\n"
+            "title: missing created\n"
+            "status: todo\n"
+            "priority: needed\n"
+            # 'created' intentionally absent — idempotency predicate must reject
+            'updated: "2026-01-15T08:00:00+00:00"\n'
+            "tags: []\n"
+            "parent: null\n"
+            "depends_on: []\n"
+            "blocked: false\n"
+            "block_reason: null\n"
+            "claimed_at: null\n"
+            "archival_reason: null\n"
+            "archival_refs: []\n"
+            "---\n\n## Notes\n\nContent.\n"
+        )
+        kanban_dir = _make_modern_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-no-created.md").write_text(
+            task_content, encoding="utf-8"
+        )
+        result = _run_migrate(kanban_dir, lane="tasks")
+        assert result.returncode == 0
+        assert "Migrated: 1" in result.stdout or "Migrated:         1" in result.stdout, (
+            "task missing 'created' was incorrectly treated as already-migrated "
+            "(_is_task_migrated must require 'created' field presence)"
+        )
+
+    def test_ac_c35_task_missing_updated_is_migrated_not_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35: task without 'updated' field must be migrated, not treated as already-migrated."""
+        task_content = (
+            "---\n"
+            "id: 1002\n"
+            "title: missing updated\n"
+            "status: todo\n"
+            "priority: needed\n"
+            'created: "2026-01-15T08:00:00+00:00"\n'
+            # 'updated' intentionally absent — idempotency predicate must reject
+            "tags: []\n"
+            "parent: null\n"
+            "depends_on: []\n"
+            "blocked: false\n"
+            "block_reason: null\n"
+            "claimed_at: null\n"
+            "archival_reason: null\n"
+            "archival_refs: []\n"
+            "---\n\n## Notes\n\nContent.\n"
+        )
+        kanban_dir = _make_modern_board(tmp_path)
+        (kanban_dir / "tasks" / "1002-no-updated.md").write_text(
+            task_content, encoding="utf-8"
+        )
+        result = _run_migrate(kanban_dir, lane="tasks")
+        assert result.returncode == 0
+        assert "Migrated: 1" in result.stdout or "Migrated:         1" in result.stdout, (
+            "task missing 'updated' was incorrectly treated as already-migrated "
+            "(_is_task_migrated must require 'updated' field presence)"
+        )
+
     def test_ac_c35_config_integer_statuses_not_treated_as_already_migrated(
         self, tmp_path: Path
     ) -> None:
@@ -1103,6 +1212,7 @@ class TestFromAC_ManualActionSummaryStrict:
         assert result.returncode == 1
         assert "FAIL" in result.stderr
         assert "manual-action required" in result.stderr
+        assert "MANUAL ACTION SUMMARY:" in result.stderr
 
     def test_ac_c38a_archive_invalid_reason_emits_manual_action_summary_header(
         self, tmp_path: Path
@@ -1120,3 +1230,46 @@ class TestFromAC_ManualActionSummaryStrict:
         assert result.returncode == 1
         # Archive manual-action failures must trigger the MANUAL ACTION SUMMARY: header
         assert "MANUAL ACTION SUMMARY:" in result.stderr
+
+    def test_ac_c38a_config_rerun_already_migrated_with_empty_stubs_emits_summary(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C38a: rerunning --lane config on already-migrated config with empty stubs emits MANUAL ACTION SUMMARY.
+
+        Proves the 'already' config result branch still emits the summary when
+        agent_map/agent_types/agent_compatibility remain unresolved empty dicts.
+        """
+        # _make_modern_board writes _NEW_CONFIG_YAML which has agent_map: {}, agent_types: {},
+        # agent_compatibility: {} — unresolved stubs; config is already in new schema.
+        kanban_dir = _make_modern_board(tmp_path)
+
+        # Prerequisite: confirm this is the 'already' path (not a fresh migration)
+        result1 = _run_migrate(kanban_dir, lane="config")
+        assert "Already: 1" in result1.stdout or "Already:         1" in result1.stdout, (
+            "prerequisite failed: _make_modern_board must produce an already-migrated config"
+        )
+
+        # Rerun: even on 'already' path, MANUAL ACTION SUMMARY must be emitted
+        result2 = _run_migrate(kanban_dir, lane="config")
+        assert "MANUAL ACTION SUMMARY:" in result2.stderr, (
+            "rerunning --lane config on already-migrated config with empty agent_map/"
+            "agent_types/agent_compatibility stubs must emit MANUAL ACTION SUMMARY: on stderr"
+        )
+
+    def test_ac_c38a_config_rerun_summary_mentions_stub_fields(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C38a: config rerun on already-migrated config names stub fields in the summary."""
+        kanban_dir = _make_modern_board(tmp_path)
+
+        # First pass confirms 'already' path
+        r1 = _run_migrate(kanban_dir, lane="config")
+        assert "Already: 1" in r1.stdout or "Already:         1" in r1.stdout
+
+        # Rerun: stub field names must appear in stderr summary
+        r2 = _run_migrate(kanban_dir, lane="config")
+        assert "agent_map" in r2.stderr, (
+            "config rerun MANUAL ACTION SUMMARY must mention agent_map"
+        )
+        assert "agent_types" in r2.stderr
+        assert "agent_compatibility" in r2.stderr
