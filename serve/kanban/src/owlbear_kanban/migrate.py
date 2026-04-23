@@ -45,6 +45,8 @@ _LEGACY_CONFIG_KEYS = frozenset({
 })
 
 _TS_FIELDS = frozenset({"created", "updated", "claimed_at"})
+_REQUIRED_TASK_TS_FIELDS = frozenset({"created", "updated"})
+_CONFIG_STUB_FIELDS = ("agent_map", "agent_types", "agent_compatibility")
 _ACTIVE_TASK_DEFAULTS: dict[str, Any] = {
     "tags": [],
     "parent": None,
@@ -122,6 +124,9 @@ def _is_task_migrated(fm: dict[str, Any]) -> bool:
     """Return True if the task frontmatter is already fully migrated."""
     if "claimed_by" in fm:
         return False
+    for field in _REQUIRED_TASK_TS_FIELDS:
+        if field not in fm:
+            return False
     for field in _TS_FIELDS:
         if not _is_timestamp_utc_plus_00(fm.get(field)):
             return False
@@ -298,6 +303,35 @@ def _is_config_migrated(raw: dict) -> bool:
     return not missing_new and not has_legacy
 
 
+def _has_unresolved_config_stubs(raw: dict[str, Any]) -> bool:
+    """Return True when config still has unresolved stub mapping fields."""
+    for field in _CONFIG_STUB_FIELDS:
+        value = raw.get(field)
+        if not isinstance(value, dict) or not value:
+            return True
+    return False
+
+
+def _config_requires_manual_action(kanban_dir: Path) -> bool:
+    """Check whether config lane still leaves manual follow-up work."""
+    config_path = kanban_dir / "config.yml"
+    try:
+        y_safe = _make_yaml_safe()
+        with config_path.open("r", encoding="utf-8") as fh:
+            loaded: Any = y_safe.load(fh)
+    except Exception:  # noqa: BLE001
+        return False
+
+    if not isinstance(loaded, dict):
+        return False
+
+    plain_loaded = _to_plain(loaded)
+    if not isinstance(plain_loaded, dict):
+        return False
+
+    return _has_unresolved_config_stubs(plain_loaded)
+
+
 def _migrate_config(  # noqa: C901, PLR0911
     kanban_dir: Path,
     *,
@@ -439,7 +473,7 @@ def _run_lane(  # noqa: C901
         counts[result] += 1  # type: ignore[literal-required]
         if result == "failed":
             sys.stderr.write(f"FAIL {kanban_dir / 'config.yml'}: {reason}\n")
-        if result == "migrated" and not dry_run:
+        if result in {"migrated", "already"} and not dry_run and _config_requires_manual_action(kanban_dir):
             manual_actions.append(
                 "config: populate agent_map, agent_types, and "
                 "agent_compatibility, then create type:user-action task(s) "
