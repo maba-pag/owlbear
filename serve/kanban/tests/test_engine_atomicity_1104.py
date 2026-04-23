@@ -150,7 +150,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.edit_task("1001", title="Mutated Title")
 
         after = read_task(task_path)
@@ -165,7 +165,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.edit_task("1001", append_body="injected note")
 
         after = read_task(task_path)
@@ -181,7 +181,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.move_task("1001", "in-progress")
 
         after = read_task(task_path)
@@ -197,7 +197,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.move_task("1001", "archived")
 
         assert task_path.exists(), "task file must not be moved to archive/ on emit failure"
@@ -217,7 +217,7 @@ class TestFromAC_EngineAtomicity:
         before = read_task(task_path)
         assert before.claimed_at is None
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.claim_task("1001")
 
         after = read_task(task_path)
@@ -234,7 +234,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.end_work("1001", note="Work done", outcome="success")
 
         after = read_task(task_path)
@@ -250,7 +250,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.end_work("1001", note="Secret note", outcome="fail")
 
         after = read_task(task_path)
@@ -268,7 +268,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.end_work("1001", note="Archiving", outcome="success")
 
         assert task_path.exists(), "task file must not be moved to archive/ on emit failure"
@@ -289,7 +289,7 @@ class TestFromAC_EngineAtomicity:
         before = read_task(task_path)
         assert before.claimed_at is not None
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.release_task("1001")
 
         after = read_task(task_path)
@@ -374,7 +374,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.edit_task("1001", title="Mutated Title", append_body="injected note")
 
         after = read_task(task_path)
@@ -392,7 +392,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.move_task("1001", "in-progress")
 
         after = read_task(task_path)
@@ -410,7 +410,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.claim_task("1001")
 
         after = read_task(task_path)
@@ -429,7 +429,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.release_task("1001")
 
         after = read_task(task_path)
@@ -448,7 +448,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.end_work("1001", note="Work done", outcome="success")
 
         after = read_task(task_path)
@@ -513,7 +513,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.move_task("1001", "archived")
 
         # File must be back in tasks/ (already covered by existing test; verified again for context)
@@ -534,7 +534,7 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
             engine.end_work("1001", note="Archive note", outcome="success")
 
         # File must be back in tasks/ (already covered by existing test; verified again for context)
