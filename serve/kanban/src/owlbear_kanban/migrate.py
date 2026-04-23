@@ -289,9 +289,11 @@ def _is_config_migrated(raw: dict) -> bool:
     """Return True if config.yml is already in the new schema."""
     missing_new = _NEW_CONFIG_KEYS - set(raw.keys())
     has_legacy = bool(_LEGACY_CONFIG_KEYS & set(raw.keys()))
-    # New schema: statuses must be list of strings
+    # New schema: statuses must be list[str] (including empty list).
     statuses = raw.get("statuses")
-    if isinstance(statuses, list) and statuses and isinstance(statuses[0], dict):
+    if not isinstance(statuses, list):
+        return False
+    if not all(isinstance(item, str) for item in statuses):
         return False
     return not missing_new and not has_legacy
 
