@@ -164,20 +164,28 @@ class TaskSummary(BaseModel):
     tags: list[str] = Field(default_factory=list)
     blocked: bool = False
     block_reason: str | None = None
+    claimed_at: str | None = None
     claimed: bool = False
+    archival_reason: str | None = None
+    archival_refs: list[int | str] = Field(default_factory=list)
+    dep_status: str | None = None
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
     def _coerce_claimed(cls, data: object) -> object:
-        """Derive boolean claimed from claimed_by or claimed_at."""
+        """Derive boolean claimed from claimed_at only.
+
+        Brief-B projections drop claimed_by and compute claimed from the
+        presence of claimed_at.
+        """
         if isinstance(data, dict):
             data = dict(data)
-            if "claimed_by" in data:
-                data["claimed"] = data.pop("claimed_by") is not None
-            elif "claimed_at" in data and "claimed" not in data:
-                data["claimed"] = data["claimed_at"] is not None
+            data.pop("claimed_by", None)
+            claimed_at = data.get("claimed_at")
+            if "claimed" not in data:
+                data["claimed"] = claimed_at is not None
         return data
 
     def __getitem__(self, key: str) -> object:
@@ -245,36 +253,99 @@ class RepairOutcome(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Engine projections — Brief B
+# ---------------------------------------------------------------------------
+
+
+class TaskFull(TaskSummary):
+    """Full task projection returned by show/update operations."""
+
+    created: str
+    updated: str
+    body: str | None = None
+
+
+class DispatchEntry(BaseModel):
+    """Dispatch projection for pick_tasks wave assignment."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int
+    status: str
+    priority: str
+    title: str
+    tags: list[str] = Field(default_factory=list)
+    agent: str
+
+
+class Wave(BaseModel):
+    """One dispatch wave with zero-based index and selected tasks."""
+
+    index: int
+    tasks: list[DispatchEntry] = Field(default_factory=list)
+
+
+class ListTasksResponse(BaseModel):
+    """Envelope for list_tasks results."""
+
+    tasks: list[TaskSummary]
+    guidance: list[str]
+    missing_ids: list[int] | None = None
+
+
+class ShowTaskResponse(TaskFull):
+    """Envelope for show_task results with section-miss diagnostics."""
+
+    missing_sections: list[str] | None = None
+    guidance: list[str]
+
+
+class PickTasksResponse(BaseModel):
+    """Envelope for pick_tasks results."""
+
+    waves: list[Wave] = Field(default_factory=list)
+    guidance: list[str]
+
+
+class SingleTaskResponse(TaskFull):
+    """Envelope for single-task mutation/read responses."""
+
+    guidance: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
 # Exception types
 # ---------------------------------------------------------------------------
 
 
-class ConcurrencyError(Exception):
+class KanbanError(Exception):
+    """Base exception for kanban engine domain errors."""
+
+    def __init__(self, code: str, user_message: str) -> None:
+        super().__init__(user_message)
+        self.code = code
+        self.user_message = user_message
+
+
+class ValidationError(KanbanError):
+    """Raised when tool input or mutation intent is invalid."""
+
+
+class NotFoundError(KanbanError):
+    """Raised when an addressed task or section does not exist."""
+
+
+class ConcurrencyError(KanbanError):
     """Raised by write_task_if_unchanged when the on-disk version is newer."""
 
-    def __init__(self, code: str, user_message: str) -> None:
-        super().__init__(user_message)
-        self.code = code
-        self.user_message = user_message
 
-
-class ConfigError(Exception):
+class ConfigError(KanbanError):
     """Raised when board configuration contains an invalid value."""
 
-    def __init__(self, code: str, user_message: str) -> None:
-        super().__init__(user_message)
-        self.code = code
-        self.user_message = user_message
 
-
-class MigrationRequiredError(Exception):
+class MigrationRequiredError(KanbanError):
     """The board requires migration before it can be used.
 
     Raised by ``KanbanEngine.__init__`` when any active task file contains
     the legacy ``claimed_by`` field (Brief C §1.5, AC-C47).
     """
-
-    def __init__(self, code: str, user_message: str) -> None:
-        super().__init__(user_message)
-        self.code = code
-        self.user_message = user_message
