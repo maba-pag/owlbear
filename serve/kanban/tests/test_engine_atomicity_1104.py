@@ -16,7 +16,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.task_io import read_task
+from owlbear_kanban.storage import read_task
 
 # ---------------------------------------------------------------------------
 # Board / task scaffolding
@@ -503,3 +503,47 @@ class TestFromAC_EngineAtomicity:
         )
         # Task 1002 must NOT be released (its emit failed and was rolled back).
         assert 1002 not in released, "task 1002 must not appear in released list (emit failed)"
+
+    # --- Full snapshot equality: move_task (archive path) ---
+
+    def test_move_task_archive_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """move_task to 'archived': rollback must restore the complete Task model, not just status."""
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="done")
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.move_task("1001", "archived")
+
+        # File must be back in tasks/ (already covered by existing test; verified again for context)
+        assert task_path.exists(), "task file must remain in tasks/ after archive rollback"
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after archive emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    # --- Full snapshot equality: end_work (archive path) ---
+
+    def test_end_work_archive_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """end_work (success from 'done'): rollback must restore the complete Task model."""
+        claimed_at = "2026-04-22T10:00:00+00:00"
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="done", claimed_at=claimed_at)
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.end_work("1001", note="Archive note", outcome="success")
+
+        # File must be back in tasks/ (already covered by existing test; verified again for context)
+        assert task_path.exists(), "task file must remain in tasks/ after archive rollback"
+        archive_contents = list((kanban_dir / "archive").iterdir())
+        assert archive_contents == [], "archive/ must be empty after archive rollback"
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model (body, status, claimed_at, updated, etc.) must be identical "
+            "to pre-mutation snapshot after archive emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
