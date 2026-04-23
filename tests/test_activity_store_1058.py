@@ -311,3 +311,360 @@ class TestFromAC_ActivityEventModel:
             "list_activity_events must skip JSONL lines whose detail violates §1.2 "
             f"(detail=null); got {events}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ActivityStoreFloorSessionBearing — AC-C44a(c) session-state branches
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ActivityStoreFloorSessionBearing:
+    """AC-C44a(c): hard floor applies regardless of cutoff or session state.
+
+    Brief C §7.1: "always retain the last 500 entries by timestamp regardless of
+    cutoff or session state (prevents catastrophic compaction on a small board)."
+
+    The existing floor tests (TestFromAC_ActivityStoreFloorBoundary) isolate the floor
+    path using action="move" (non-session actions).  These tests cover the two remaining
+    branches where session state suppresses the floor for small (<=500) logs:
+
+    1. auto_cutoff=True (before_dt=None) — floor_count incorrectly set to 0.
+    2. open_session_starts non-empty — floor_count incorrectly set to 0.
+    """
+
+    def test_ac_c44a_c_auto_cutoff_session_bearing_small_log_floor_retains_all(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C44a(c): before_dt=None on a small (<=500) fully-closed session log retains all.
+
+        The auto-cutoff resolves to the most recent end_work timestamp.  Entries strictly
+        before that timestamp become compaction candidates.  With N <= 500 total entries
+        the hard floor (min(500, N) == N) must prevent any compaction regardless of the
+        auto_cutoff flag.
+
+        Bug: current code evaluates ``has_session_actions and auto_cutoff`` as True and
+        sets ``floor_count = _HARD_FLOOR if N > _HARD_FLOOR else 0`` = 0 for N <= 500.
+        All entries before the resolved cutoff are removed, violating "regardless of
+        cutoff or session state."
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        n = 50  # well below the 500 floor
+
+        # Build n entries as closed claim/end_work cycles, all in the past.
+        # The last end_work timestamp becomes the auto-resolved cutoff, making all
+        # earlier entries compaction candidates.
+        for i in range(n // 2):
+            claim_ts = (now - timedelta(hours=n - i * 2)).isoformat()
+            close_ts = (now - timedelta(hours=n - i * 2 - 1)).isoformat()
+            append_activity_event(
+                _make_event(ts=claim_ts, task_id=i + 1, action="claim"), kanban_dir
+            )
+            append_activity_event(
+                _make_event(ts=close_ts, task_id=i + 1, action="end_work"), kanban_dir
+            )
+
+        assert len(list_activity_events(kanban_dir)) == n
+
+        # before_dt=None: auto-cutoff resolves to last end_work; 49 earlier entries
+        # become candidates.  Floor (min(500, 50) = 50) must retain all.
+        result = compact_activity_log(kanban_dir)
+
+        assert result.records_compacted == 0, (
+            f"Floor must protect all {n} session entries (<=500) even with auto_cutoff; "
+            f"wrongly compacted {result.records_compacted}"
+        )
+        assert len(list_activity_events(kanban_dir)) == n, (
+            f"All {n} entries must survive; found {len(list_activity_events(kanban_dir))}"
+        )
+
+    def test_ac_c44a_c_open_session_small_log_floor_protects_all_entries(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C44a(c): small (<=500) log with an open session retains all entries via hard floor.
+
+        An open session (unmatched claim) causes open_session_starts to be non-empty.
+        The open-session guard already retains the claim entry; the hard floor
+        (min(500, N) == N) must retain every other entry too, since N <= 500.
+
+        Bug: current code evaluates ``has_session_actions and bool(open_session_starts)``
+        as True and sets ``floor_count = 0`` for N <= 500.  Only the open-session entry
+        survives; all other entries are wrongly compacted.
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        n_move = 80  # non-session entries that rely solely on the floor for protection
+
+        # Non-session "move" entries, all old (before the future cutoff).
+        for i in range(n_move):
+            ts = (now - timedelta(hours=n_move - i)).isoformat()
+            append_activity_event(
+                _make_event(ts=ts, task_id=i % 10, action="move"), kanban_dir
+            )
+
+        # Open session: a claim with no matching end_work.
+        claim_ts = (now - timedelta(minutes=30)).isoformat()
+        append_activity_event(
+            _make_event(ts=claim_ts, task_id=999, action="claim"), kanban_dir
+        )
+
+        total = n_move + 1  # 81 entries, all <= 500
+        assert len(list_activity_events(kanban_dir)) == total
+
+        # Future cutoff makes every entry a compaction candidate except the open-session
+        # claim (protected by open-session guard).  Floor (min(500, 81) = 81) must
+        # protect all 81 entries — records_compacted must be 0.
+        cutoff = now + timedelta(hours=1)
+        result = compact_activity_log(kanban_dir, before_dt=cutoff)
+
+        assert result.records_compacted == 0, (
+            f"Floor must protect all {total} entries (<=500) even with an open session; "
+            f"wrongly compacted {result.records_compacted}"
+        )
+        assert len(list_activity_events(kanban_dir)) == total, (
+            f"All {total} entries must survive; found {len(list_activity_events(kanban_dir))}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ActivityStoreFloorActiveStream — AC-C44a(c) active-stream branch
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ActivityStoreFloorActiveStream:
+    """AC-C44a(c): hard floor applies when before_dt < latest_entry_dt (active-stream).
+
+    Brief C §7.1: "always retain the last 500 entries by timestamp regardless of
+    cutoff or session state (prevents catastrophic compaction on a small board)."
+
+    The existing TestFromAC_ActivityStoreFloorSessionBearing tests avoid the
+    compatibility branch in ``compact_activity_log`` (lines 183-202) because their
+    cutoffs equal or exceed the latest log entry.  This class targets the distinct
+    ``before_dt < latest_entry_dt`` condition, which causes ``floor_count = 0`` and
+    allows compaction below the hard floor for small session-bearing logs.
+
+    Two branches trigger this path:
+    1. ``auto_cutoff=True`` — cutoff resolves to the last closed session's ``end_work``,
+       but the log has newer entries written after that session (active stream).
+    2. ``bool(open_session_starts)=True`` — explicit cutoff older than the latest entry
+       with an open (unmatched) claim in the log.
+    """
+
+    def test_ac_c44a_c_auto_cutoff_active_stream_small_log_floor_retains_all(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C44a(c): auto-cutoff + active-stream entries newer than cutoff + small log.
+
+        When ``before_dt=None``, the cutoff auto-resolves to the last closed session's
+        ``end_work``.  If the log has newer non-session entries written after that session
+        (an active stream), then ``before_dt < latest_entry_dt``.
+
+        For a small log (total ≤ 500) the brief's hard floor ``min(500, N) == N`` must
+        protect ALL entries — records_compacted must be 0.
+
+        Bug: the compatibility branch fires because
+        ``has_session_actions=True, auto_cutoff=True, N<=500, before_dt < latest_entry_dt``
+        → ``floor_count = 0`` → entries before the resolved cutoff are wrongly compacted.
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        # 5 closed claim/end_work pairs — all old.
+        # Auto-cutoff resolves to the last end_work at now-41h.
+        n_pairs = 5
+        for i in range(n_pairs):
+            claim_ts = (now - timedelta(hours=50 - i * 2)).isoformat()
+            end_work_ts = (now - timedelta(hours=49 - i * 2)).isoformat()
+            append_activity_event(
+                _make_event(ts=claim_ts, task_id=i + 1, action="claim"), kanban_dir
+            )
+            append_activity_event(
+                _make_event(ts=end_work_ts, task_id=i + 1, action="end_work"), kanban_dir
+            )
+        # Last end_work at: now - (49 - (n_pairs-1)*2) = now - (49 - 8) = now - 41h.
+
+        # 20 move entries written AFTER the last session closed — the "active stream".
+        # latest_entry_dt = now - 11h > before_dt (now - 41h) → triggers compat branch.
+        n_active = 20
+        for i in range(n_active):
+            ts = (now - timedelta(hours=30 - i)).isoformat()
+            append_activity_event(
+                _make_event(ts=ts, task_id=99, action="move"), kanban_dir
+            )
+
+        total = n_pairs * 2 + n_active  # 30 entries, all <= 500
+        assert len(list_activity_events(kanban_dir)) == total
+
+        # before_dt=None: auto-cutoff resolves to last end_work (now-41h).
+        # 8 earlier claim/end_work entries (first 4 pairs) are compaction candidates.
+        # Floor min(500, 30)==30 must retain all 30; records_compacted must be 0.
+        result = compact_activity_log(kanban_dir)
+
+        assert result.records_compacted == 0, (
+            f"Floor must protect all {total} entries (<=500) when auto_cutoff=True and "
+            f"active-stream entries are newer than the resolved cutoff; "
+            f"wrongly compacted {result.records_compacted}"
+        )
+        assert len(list_activity_events(kanban_dir)) == total, (
+            f"All {total} entries must survive; found {len(list_activity_events(kanban_dir))}"
+        )
+
+    def test_ac_c44a_c_explicit_cutoff_active_stream_open_session_small_log_floor_retains_all(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C44a(c): explicit cutoff < latest_entry_dt + open session + small log.
+
+        When ``before_dt`` is explicitly set to a timestamp older than the most recent
+        log entry and an unmatched claim exists (open session), the brief's hard floor
+        must still protect all entries for small (N ≤ 500) logs.
+
+        This targets the compat-branch condition:
+        ``has_session_actions=True, bool(open_session_starts)=True,
+        len(all_lines)<=500, before_dt < latest_entry_dt`` → ``floor_count = 0``.
+        Without the floor, all 30 entries before the explicit cutoff are wrongly compacted.
+
+        Bug: compat branch fires, setting floor_count=0 → 30 old move entries are
+        removed even though the total log (46 entries) is below the 500 floor threshold.
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        # 30 old move entries — all before the explicit cutoff (compaction candidates).
+        n_old = 30
+        for i in range(n_old):
+            ts = (now - timedelta(hours=60 - i)).isoformat()
+            append_activity_event(
+                _make_event(ts=ts, task_id=i % 5, action="move"), kanban_dir
+            )
+
+        # 1 open claim (no matching end_work) — newer than the cutoff.
+        # open_session_starts becomes non-empty, satisfying the compat branch predicate.
+        claim_ts = (now - timedelta(hours=20)).isoformat()
+        append_activity_event(
+            _make_event(ts=claim_ts, task_id=999, action="claim"), kanban_dir
+        )
+
+        # 15 newer move entries — newer than both the cutoff and the claim.
+        # latest_entry_dt = now-1h; before_dt = now-25h → before_dt < latest_entry_dt.
+        n_new = 15
+        for i in range(n_new):
+            ts = (now - timedelta(hours=15 - i)).isoformat()
+            append_activity_event(
+                _make_event(ts=ts, task_id=i % 5, action="move"), kanban_dir
+            )
+
+        total = n_old + 1 + n_new  # 46 entries, all <= 500
+        assert len(list_activity_events(kanban_dir)) == total
+
+        # Explicit cutoff at now-25h: all 30 old moves are candidates.
+        # Claim (now-20h) and 15 new moves (now-15h to now-1h) are newer than cutoff.
+        # Floor min(500, 46)==46 must retain all 46; records_compacted must be 0.
+        before_dt = now - timedelta(hours=25)
+        result = compact_activity_log(kanban_dir, before_dt=before_dt)
+
+        assert result.records_compacted == 0, (
+            f"Floor must protect all {total} entries (<=500) when "
+            f"before_dt < latest_entry_dt and an open session exists; "
+            f"wrongly compacted {result.records_compacted}"
+        )
+        assert len(list_activity_events(kanban_dir)) == total, (
+            f"All {total} entries must survive; found {len(list_activity_events(kanban_dir))}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ActivityStoreFloorTimestampOrder — AC-C44a-ts
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ActivityStoreFloorTimestampOrder:
+    """AC-C44a-ts: floor retains entries by parsed timestamp value, not by file position.
+
+    Architecture Review (cycle 2): "Floor retention must select entries by parsed
+    timestamp field value, not by file position.  At least one regression test must
+    append entries with non-chronological timestamps (a late-appended entry with a
+    backdated timestamp) and verify the floor retains the 500 entries with the most
+    recent timestamps, not the last 500 appended lines."
+
+    Current implementation: ``parsed[-floor_count:]`` — insertion/append order.
+    When a backdated entry is appended after monotonically-timestamped entries, the
+    position-based floor keeps it (it occupies the last position) and drops an
+    earlier-appended entry that has a more recent timestamp.
+    """
+
+    def test_ac_c44a_ts_backdated_entry_excluded_from_floor_non_monotonic(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C44a-ts: backdated late-appended entry is dropped; more-recent entry retained.
+
+        Setup:
+        - 501 entries with monotonically increasing timestamps (T+1h ... T+501h),
+          task_ids 1-501, action="move".
+        - 1 backdated entry appended last (task_id=9999, timestamp=T-10000h).
+        - Total: 502 entries.  Floor = min(500, 502) = 500.  Records to drop: 2.
+
+        Timestamp-based floor (required):
+          500 most recent by timestamp = task_ids 2-501 (T+2h ... T+501h).
+          Dropped: task_id=1 (T+1h, rank 501) and task_id=9999 (T-10000h, rank 502).
+
+        Position-based floor (current bug):
+          Last 500 appended = positions 3-502 = task_ids 3-501 plus task_id=9999.
+          Dropped: task_ids 1 and 2.
+
+        Proof assertions — both fail with the current position-based floor:
+        1. task_id=9999 NOT in remaining: position-based wrongly retains it at pos 502.
+        2. task_id=2 IN remaining: position-based wrongly drops it at pos 2.
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        backdated_task_id = 9999
+
+        # 501 entries with monotonically increasing timestamps.
+        # Entry i (1-indexed) has timestamp now + i*hours.
+        # task_id=2 → T+2h (500th most recent — retained by timestamp-based floor).
+        # task_id=1 → T+1h (501st most recent — dropped by timestamp-based floor).
+        for i in range(1, 502):
+            ts = (now + timedelta(hours=i)).isoformat()
+            append_activity_event(
+                _make_event(ts=ts, task_id=i, action="move"), kanban_dir
+            )
+
+        # Backdated entry appended last — position 502 (newest by position),
+        # but timestamp T-10000h (oldest by timestamp).
+        backdated_ts = (now - timedelta(hours=10_000)).isoformat()
+        append_activity_event(
+            _make_event(ts=backdated_ts, task_id=backdated_task_id, action="move"),
+            kanban_dir,
+        )
+
+        assert len(list_activity_events(kanban_dir)) == 502
+
+        # Far-future cutoff: all 502 entries become compaction candidates.
+        # Floor min(500, 502)=500 must select by timestamp order, not append position.
+        cutoff = now + timedelta(hours=100_000)
+        result = compact_activity_log(kanban_dir, before_dt=cutoff)
+
+        # Both position-based and timestamp-based approaches drop exactly 2 entries,
+        # but drop different ones — this assertion passes in both cases.
+        assert result.records_compacted == 2
+
+        remaining = list_activity_events(kanban_dir)
+        assert len(remaining) == 500
+
+        remaining_task_ids = {e.task_id for e in remaining}
+
+        # Backdated entry (oldest timestamp) must NOT be in the retained set.
+        # Bug: position-based floor retains it because it was appended last (pos 502).
+        assert backdated_task_id not in remaining_task_ids, (
+            f"task_id={backdated_task_id} (timestamp=T-10000h, position=502) must be "
+            "excluded by timestamp-based floor; position-based floor wrongly retains it."
+        )
+
+        # task_id=2 (timestamp=T+2h) must BE in the retained set.
+        # It is the 500th most recent by timestamp → retained by timestamp-based floor.
+        # Bug: position-based floor drops it because position 2 is outside last 500 of 502.
+        assert 2 in remaining_task_ids, (
+            "task_id=2 (timestamp=T+2h, rank 500 by recency) must be retained; "
+            "position-based floor wrongly drops it."
+        )

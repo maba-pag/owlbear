@@ -931,6 +931,37 @@ class TestFromAC_IdeationCommittedDocIndex:
             f"found {len(found)}: {found}"
         )
 
+    def test_committed_doc_index_ideation_entry_has_no_extra_describes_globs(
+        self,
+    ) -> None:
+        """Boundary (13th-cycle exactness): the committed doc-index ideation entry's
+        describes line contains exactly 6 glob entries when parsed — no extras.
+
+        The prior test only counts how many *required* globs appear in the entry
+        text.  It would still pass if a 7th (or more) glob were silently added.
+        This test parses the actual `describes:` line and counts every entry,
+        failing whenever the count diverges from exactly 6.
+        """
+        entry = self._ideation_entry_text()
+        describes_line = next(
+            (ln for ln in entry.splitlines() if ln.strip().startswith("describes:")),
+            None,
+        )
+        assert describes_line is not None, (
+            "No 'describes:' line found in the committed doc-index ideation entry. "
+            "Regenerate the doc-index with 'uv run doc-index' after updating the diagram."
+        )
+        after_prefix = describes_line.split("describes:", 1)[1].strip()
+        actual_globs = [g.strip() for g in after_prefix.split(",") if g.strip()]
+        assert len(actual_globs) == len(_REQUIRED_DESCRIBES_GLOBS), (
+            f"Committed doc-index ideation entry has {len(actual_globs)} describes "
+            f"glob(s) (parsed from line), expected exactly "
+            f"{len(_REQUIRED_DESCRIBES_GLOBS)}. "
+            f"Actual parsed globs: {actual_globs}. "
+            "Remove any extra globs not in the AC3 required list and regenerate "
+            "the doc-index."
+        )
+
 
 # ===========================================================================
 # TestFromAC_IdeationAbsenceRequirements — AC2 absence requirements (7th-cycle)
