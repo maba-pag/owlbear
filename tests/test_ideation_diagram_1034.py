@@ -1417,6 +1417,50 @@ class TestFromAC_IdeationStructuralAbsenceSx:
             "a dead end is not a connected flow step."
         )
 
+    def test_s10_bridge_element_names_target_agent(
+        self, diagram_data: dict
+    ) -> None:
+        """Content (S10): the bridge element (start of the S4 bridge arrow) must
+        contain 'ideation-mediator' (case-insensitive). Element-scoped check —
+        not a diagram-wide text scan.
+
+        Authority: w-ideation/SKILL.md:149 and w-ideation-discovery/SKILL.md:97-98
+        require the Phase 1 handoff to explicitly name @ideation-mediator as the
+        target agent. A generic 'Research Bridge' label omits that specificity,
+        making the handoff anonymous relative to the authority contract.
+
+        Current artifact: p1_bridge_text says 'Research Bridge' — no 'ideation-mediator'
+        → FAILS until bridge element includes the target agent name.
+        """
+        by_id = _build_by_id(diagram_data)
+        elements = diagram_data.get("elements", [])
+
+        bridge_checks: list[tuple[str, str, str]] = []  # (arrow_id, bridge_id, bridge_text)
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            if not start_id:
+                continue
+            start_text = _resolve_text(by_id, start_id)
+            if re.search(r"bridge|handoff", start_text, re.IGNORECASE):
+                bridge_checks.append((el.get("id", ""), start_id, start_text))
+
+        assert bridge_checks, (
+            "AC2 S10: no bridge/handoff arrow found. "
+            "S4 must pass before S10 can locate the bridge element — "
+            "add a bound arrow from the Research Bridge element to Phase 2 Step 0."
+        )
+
+        for _arr_id, bridge_id, bridge_text in bridge_checks:
+            assert "ideation-mediator" in bridge_text.lower(), (
+                f"AC2 S10: bridge element (id={bridge_id!r}) says {bridge_text!r} "
+                "but must contain 'ideation-mediator'. "
+                "Authority (w-ideation:149, w-ideation-discovery:97-98) requires "
+                "the Phase 1 handoff to explicitly name @ideation-mediator as the "
+                "target agent — e.g., add '→ @ideation-mediator' to the bridge label."
+            )
+
     def test_s8_no_phase1_flow_to_phase2_moment_arrows(
         self, diagram_data: dict
     ) -> None:
@@ -1556,5 +1600,86 @@ class TestFromAC_IdeationPhase2ChainProof:
             f"AC2 S9 hop {hop_id}: no bound arrow from element matching "
             f"[{start_desc}] to element matching [{end_desc}]. "
             f"Phase 2 sequential chain is incomplete — add the missing edge "
+            f"to satisfy the AC2 flow contract."
+        )
+
+
+# ===========================================================================
+# S11 — Phase 1 sequential chain proof (12th-cycle)
+# ===========================================================================
+
+_PHASE1_CHAIN: list[tuple] = [
+    ("s11a", ("phase 1", "discovery"), ("step 0", "setup")),
+    ("s11b", ("step 0", "setup"), (re.compile(r"\bM1\b", re.IGNORECASE),)),
+    ("s11c", (re.compile(r"\bM1\b", re.IGNORECASE),), (re.compile(r"\bM2\b", re.IGNORECASE),)),
+    ("s11d", (re.compile(r"\bM2\b", re.IGNORECASE),), ("early challenge",)),
+    ("s11e", ("early challenge",), ("pragmatist", "denoise")),
+    ("s11f", ("pragmatist", "denoise"), ("bridge",)),
+]
+
+
+class TestFromAC_IdeationPhase1ChainProof:
+    """AC2 structural sub-criterion S11 (12th-cycle Architecture Review).
+
+    The Phase 1 flow (Discovery) must be expressed as a complete chain of bound
+    arrows covering all 6 sequential hops. Each hop is checked by resolving
+    arrow start/end bindings to their semantic text via _resolve_text (follows
+    containerId chains). All 6 arrows already exist in the artifact — these are
+    regression guards.
+
+    S11a: Phase 1 Entry → Phase 1 Step 0      PASS (arr_p1_entry_step0 exists)
+    S11b: Phase 1 Step 0 → M1                 PASS (arr_step0_m1 exists)
+    S11c: M1 → M2                             PASS (arr_m1_m2 exists)
+    S11d: M2 → Early Challenge Lane           PASS (arr_m2_early exists)
+    S11e: Early Challenge → Denoise (prag)    PASS (arr_early_denoise exists)
+    S11f: Denoise → Research Bridge           PASS (arr_denoise_bridge exists)
+
+    Bridge → Phase 2 Step 0 is the final Phase 1 hop and is already covered by S4.
+
+    Lookup disambiguation: 'step 0' + 'setup' targets Phase 1 Step 0
+    ('Step 0\\nSetup & Entry') and excludes Phase 2 Step 0 ('Phase 2 Step 0\\n
+    Mediation\\n...'). M1/M2 regexes use word boundaries to avoid false matches.
+    """
+
+    @pytest.mark.parametrize(
+        ("hop_id", "start_criteria", "end_criteria"),
+        _PHASE1_CHAIN,
+        ids=[h[0] for h in _PHASE1_CHAIN],
+    )
+    def test_s11_phase1_chain_hop(
+        self,
+        diagram_data: dict,
+        hop_id: str,
+        start_criteria: tuple,
+        end_criteria: tuple,
+    ) -> None:
+        """S11: Phase 1 sequential chain — each hop must have at least one bound arrow."""
+        by_id = _build_by_id(diagram_data)
+        for el in diagram_data.get("elements", []):
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            end_id = (el.get("endBinding") or {}).get("elementId")
+            if not start_id or not end_id:
+                continue
+            start_text = _resolve_text(by_id, start_id)
+            end_text = _resolve_text(by_id, end_id)
+            if _text_matches(start_text, start_criteria) and _text_matches(
+                end_text, end_criteria
+            ):
+                return  # Hop satisfied
+
+        start_desc = ", ".join(
+            c.pattern if isinstance(c, re.Pattern) else repr(c)
+            for c in start_criteria
+        )
+        end_desc = ", ".join(
+            c.pattern if isinstance(c, re.Pattern) else repr(c)
+            for c in end_criteria
+        )
+        pytest.fail(
+            f"AC2 S11 hop {hop_id}: no bound arrow from element matching "
+            f"[{start_desc}] to element matching [{end_desc}]. "
+            f"Phase 1 sequential chain is incomplete — add the missing edge "
             f"to satisfy the AC2 flow contract."
         )
