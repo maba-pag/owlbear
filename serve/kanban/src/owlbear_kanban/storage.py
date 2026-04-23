@@ -415,7 +415,11 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
 
 
 def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
-    """Move *task_path* to ``quarantine/``, creating the dir if absent (AC-C28, AC-C29)."""
+    """Move *task_path* to ``quarantine/``, creating the dir if absent (AC-C28, AC-C29).
+
+    Lock files (hidden ``.lock`` files) are skipped: the function returns *task_path*
+    unchanged without moving or creating any quarantine directory entry.
+    """
     if task_path.name.startswith(".") and task_path.name.endswith(".lock"):
         return task_path
 
