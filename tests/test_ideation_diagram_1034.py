@@ -890,3 +890,134 @@ class TestFromAC_IdeationCommittedDocIndex:
             f"Expected {len(_REQUIRED_DESCRIBES_GLOBS)} globs in committed entry, "
             f"found {len(found)}: {found}"
         )
+
+
+# ===========================================================================
+# TestFromAC_IdeationAbsenceRequirements — AC2 absence requirements (7th-cycle)
+# ===========================================================================
+
+
+class TestFromAC_IdeationAbsenceRequirements:
+    """AC2 absence requirements from the 7th-cycle architecture review.
+
+    The 7th-cycle AC added 4 structural absence requirements that guard against
+    the legacy single-agent model surviving under new labels. All 4 tests FAIL
+    against the current 6th-cycle artifact, which still carries:
+      - 'Mediator orchestrates timeline' subtitle text
+      - 'Standalone Critic checks at M1, M2, M4, M5 boundaries' annotation text
+      - 'Step 0 + M1-M6' unified-timeline title framing
+      - O15 embedded as annotation inside M4 instead of as a separate structural step
+    """
+
+    def test_orchestrates_timeline_text_absent(self, diagram_data: dict) -> None:
+        """Absence (AC2 req 1): no element may contain 'orchestrates timeline'.
+
+        The 7th-cycle AC bans this phrasing because the two-phase model has no
+        single orchestrating agent. Ideator is a thin router; discoverer owns
+        Phase 1; mediator owns Phase 2. A subtitle saying 'Mediator orchestrates
+        timeline' contradicts that model.
+
+        Current artifact has: 'Mediator orchestrates timeline' at subtitle_text
+        (share/diagrams/ideation.excalidraw:396).
+        """
+        all_text = _all_element_text(diagram_data)
+        assert "orchestrates timeline" not in all_text, (
+            "Found element containing 'orchestrates timeline'. "
+            "AC2 absence requirement 1: no single agent orchestrates the unified timeline "
+            "in the two-phase model — remove or replace this subtitle."
+        )
+
+    def test_standalone_critic_text_absent(self, diagram_data: dict) -> None:
+        """Absence (AC2 req 1): no element may contain 'Standalone Critic'.
+
+        The 7th-cycle AC bans this phrasing because Critic appears only within
+        the late-domain panel embedded loops and as the O15 validation step at
+        M4. The phrase 'Standalone Critic' implies independent boundary checks
+        at moments (M1, M2, M4, M5), which current authority (h-ideation-panel,
+        w-ideation-mediation) does not include.
+
+        Current artifact has: 'Standalone Critic checks at M1, M2, M4, M5
+        boundaries' at share/diagrams/ideation.excalidraw:1300.
+        """
+        all_text = _all_element_text(diagram_data)
+        assert "standalone critic" not in all_text, (
+            "Found element containing 'Standalone Critic'. "
+            "AC2 absence requirement 1: Critic is structurally connected only within "
+            "the late domain panel and the O15 validation step at M4 — remove this "
+            "boundary-check annotation."
+        )
+
+    def test_unified_m1_m6_timeline_framing_absent(self, diagram_data: dict) -> None:
+        """Absence (AC2 req 4): no element may frame the diagram as a unified M1-M6 timeline.
+
+        The 7th-cycle AC requires the title/subtitle to reflect the two-phase
+        structure, not a single shared moment backbone. 'M1-M6' in any element
+        implies a unified timeline spanning both phases, contradicting the clean
+        phase separation required by the two-phase model.
+
+        Current artifact has: 'OwlBear Ideation Flow (Step 0 + M1-M6)' in the
+        title element at share/diagrams/ideation.excalidraw:366.
+        """
+        all_text = _all_element_text(diagram_data)
+        assert "m1-m6" not in all_text, (
+            "Diagram text contains 'M1-M6' implying a single shared moment backbone. "
+            "AC2 absence requirement 4 requires Phase 1 moments (Step\u00a00, M1, M2) "
+            "and Phase 2 moments (Step\u00a00, M3-M6) to be visually separate "
+            "phase-owned sequences with no unified M1-M6 framing."
+        )
+        assert "m1\u2013m6" not in all_text, (
+            "Diagram text contains 'M1\u2013M6' (en-dash variant) implying a single "
+            "shared moment backbone. AC2 absence requirement 4 requires separate "
+            "phase-owned moment sequences with no unified M1\u2013M6 framing."
+        )
+
+    def test_o15_is_separate_structural_step_with_arrow_from_m4(
+        self, diagram_data: dict
+    ) -> None:
+        """Structural (AC2 Phase 2): O15 Critic validation is a distinct element
+        with a bound arrow from M4.
+
+        The 7th-cycle AC corrects the Phase 2 flow ordering: O15 is a SEPARATE
+        step after M4 decision support (not an annotation embedded in M4 text).
+        The mediator validates each Critic finding at this step before the output
+        affects the user-facing recommendation. The sequence must be:
+        M4 -> O15 element -> M5.
+
+        Current artifact embeds O15 as annotation inside M4:
+        'M4\\nDecision support\\n(O15 Critic validation)' — same element, no arrow.
+        """
+        elements = diagram_data.get("elements", [])
+
+        # Find M4 element
+        m4_elem = _find_elem_by_text(diagram_data, "m4")
+        assert m4_elem is not None, "M4 element not found — cannot verify O15 separation"
+
+        # O15 must be a SEPARATE element from M4
+        o15_elems = [
+            e for e in elements
+            if not e.get("isDeleted")
+            and e.get("type") != "arrow"
+            and "o15" in (e.get("text") or "").lower()
+            and e.get("id") != m4_elem.get("id")
+        ]
+        assert o15_elems, (
+            "O15 Critic validation must be a separate structural element from M4. "
+            "Current diagram embeds O15 as text annotation inside the M4 element "
+            "('M4\\nDecision support\\n(O15 Critic validation)'). "
+            "AC2 requires O15 to be a distinct node so the M4 -> O15 -> M5 "
+            "sequence can be expressed as bound arrows."
+        )
+
+        # M4 must have a bound arrow to the separate O15 element
+        o15_ids = {e["id"] for e in o15_elems if e.get("id")}
+        arrows = [
+            e for e in elements
+            if e.get("type") == "arrow"
+            and (e.get("startBinding") or {}).get("elementId") == m4_elem.get("id")
+            and (e.get("endBinding") or {}).get("elementId") in o15_ids
+        ]
+        assert arrows, (
+            "No bound arrow from M4 to the O15 element found. "
+            "AC2 requires the Phase 2 flow to show M4 -> O15 Critic validation as "
+            "a structural bound-arrow connection, not just an inline text annotation."
+        )
