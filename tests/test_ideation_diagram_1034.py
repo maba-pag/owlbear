@@ -545,15 +545,25 @@ class TestFromAC_IdeationStructuralConnections:
     def test_pragmatist_convergence_connects_to_m4(
         self, diagram_data: dict
     ) -> None:
-        """Structural: an arrow from pragmatist convergence to M4."""
-        prag = _find_elem_by_text(diagram_data, "pragmatist")
-        assert prag is not None, "Pragmatist element not found"
+        """Structural: an arrow from Phase 2 pragmatist convergence to M4.
+
+        Uses phase-disambiguated lookup (pragmatist + converge) to target the
+        Phase 2 convergence node, not the Phase 1 denoise node which also
+        contains 'pragmatist'. Both phases use the same agent role name, so
+        a first-match lookup would be ambiguous after the 9th-cycle label fix.
+        """
+        prag = _find_elem_by_text(diagram_data, "pragmatist", "converge")
+        assert prag is not None, (
+            "Phase 2 pragmatist convergence element not found "
+            "(text must contain both 'pragmatist' AND 'converge'). "
+            "Use 'Pragmatist (mode=converge)' following the h-ideation-panel convention."
+        )
         m4_elem = _find_elem_by_text(diagram_data, "m4")
         assert m4_elem is not None, "M4 element not found"
         arrows = _arrows_between(diagram_data, prag["id"], m4_elem["id"])
         assert len(arrows) >= 1, (
-            "No bound arrow from pragmatist to M4. "
-            "Pragmatist convergence must structurally feed M4."
+            "No bound arrow from Phase 2 pragmatist (mode=converge) to M4. "
+            "Pragmatist convergence must structurally feed M4 in Phase 2."
         )
 
     def test_m5_brief_output_bound_arrow(self, diagram_data: dict) -> None:
@@ -1064,6 +1074,9 @@ _M4_RE = re.compile(r"\bM4\b", re.IGNORECASE)
 _M2_RE = re.compile(r"\bM2\b", re.IGNORECASE)
 _M3_RE = re.compile(r"\bM3\b", re.IGNORECASE)
 _MOMENT_ONLY_RE = re.compile(r"\bM[1-6]\b", re.IGNORECASE)
+# S8 — phase-boundary exclusivity
+_PHASE1_FLOW_RE = re.compile(r"denoise|early challenge", re.IGNORECASE)
+_PHASE2_MOMENT_RE = re.compile(r"\bM[3-6]\b", re.IGNORECASE)
 
 
 class TestFromAC_IdeationStructuralAbsenceSx:
@@ -1272,5 +1285,176 @@ class TestFromAC_IdeationStructuralAbsenceSx:
             "AC2 S5 violation — router target dispatches directly to moment nodes. "
             "Each phase entry element must connect only to its Step 0 gate, "
             "not directly to M1/M4 or other moment nodes. "
+            f"Violations: {violations}"
+        )
+
+    def test_s6_phase1_denoise_label_contains_authority_terms(
+        self, diagram_data: dict
+    ) -> None:
+        """Content (S6a): the Phase 1 denoise element must name 'pragmatist' AND 'denoise'.
+
+        Authority: w-ideation-discovery Step 2 item 6 ("invoke ideation-pragmatist
+        in denoise mode") and h-ideation-panel Early Challenge Lane invocation
+        pattern (ideation-pragmatist → synthesis-idea-panel.md, optional,
+        mode=denoise). A label that only says 'Optional denoise pass' omits the
+        agent and mode, making the diagram inaccurate relative to the authority
+        files it declares in describes.
+
+        Current artifact says 'Optional denoise pass' at p1_denoise_text
+        → FAILS until label includes both 'pragmatist' and 'denoise'.
+        """
+        elements = diagram_data.get("elements", [])
+        denoise_found = False
+        for el in elements:
+            if el.get("type") == "text" and not el.get("isDeleted"):
+                lower = (el.get("text") or "").lower()
+                if "denoise" in lower:
+                    denoise_found = True
+                    assert "pragmatist" in lower, (
+                        f"Denoise element {el['id']!r} says {el['text']!r} but "
+                        f"must also name 'pragmatist' per authority "
+                        f"(w-ideation-discovery Step 2-6, h-ideation-panel invocation pattern). "
+                        f"Expected label like 'Pragmatist (mode=denoise)' — "
+                        f"follow the Phase 2 convention 'Pragmatist (mode=converge)'."
+                    )
+        assert denoise_found, (
+            "No text element contains 'denoise'. "
+            "Phase 1 optional pragmatist denoise step must be labeled with 'denoise'."
+        )
+
+    def test_s6_phase2_step0_label_contains_compound_stop_gate(
+        self, diagram_data: dict
+    ) -> None:
+        """Content (S6b): Phase 2 Step 0 must express BOTH the condition (thin/
+        insufficient/correction) AND the action (stop/stops/halt).
+
+        Authority: w-ideation-mediation Step 0 item 3 — 'If the Phase 1 artifacts
+        are too thin, say so explicitly and stop for correction rather than
+        improvising.' A label saying only 'Reads discovery artifacts' omits
+        this compound gate.
+
+        Current artifact says 'Reads discovery artifacts' at phase2_step0_text
+        → FAILS until label includes both an action term and a condition term.
+        """
+        action_terms = ["stop", "stops", "halt"]
+        condition_terms = ["thin", "insufficient", "correction"]
+        elements = diagram_data.get("elements", [])
+        for el in elements:
+            if el.get("type") == "text" and not el.get("isDeleted"):
+                lower = (el.get("text") or "").lower()
+                if "phase 2" in lower and "step 0" in lower:
+                    has_action = any(t in lower for t in action_terms)
+                    has_condition = any(t in lower for t in condition_terms)
+                    assert has_action, (
+                        f"Phase 2 Step 0 element {el['id']!r} says {el['text']!r} "
+                        f"but must include an action term ({'/'.join(action_terms)}). "
+                        f"Authority (w-ideation-mediation Step 0-3): 'stop for correction "
+                        f"if artifacts are too thin'."
+                    )
+                    assert has_condition, (
+                        f"Phase 2 Step 0 element {el['id']!r} says {el['text']!r} "
+                        f"but must include a condition term ({'/'.join(condition_terms)}). "
+                        f"Authority (w-ideation-mediation Step 0-3): 'stop for correction "
+                        f"if artifacts are too thin'."
+                    )
+                    return
+        pytest.fail(
+            "No text element found whose text contains both 'Phase 2' and 'Step 0'. "
+            "Phase 2 Step 0 gate element is missing from the diagram."
+        )
+
+    def test_s7_phase1_denoise_has_incoming_and_outgoing_arrows(
+        self, diagram_data: dict
+    ) -> None:
+        """Wiring (S7): the Phase 1 denoise element must have BOTH an incoming
+        AND an outgoing bound arrow.
+
+        Authority: w-ideation-discovery Step 2-3 and h-ideation-panel invocation
+        pattern — denoise sits between the early challenge lane output and the
+        research bridge. Even as an optional branch, a flow-step element must be
+        wired on both sides; a floating annotation is not a connected flow step.
+
+        Current artifact: p1_denoise_text exists but has no incoming arrow
+        binding → FAILS until connected from early challenge lane AND toward bridge.
+        """
+        elements = diagram_data.get("elements", [])
+
+        # Find the denoise element and its container (if any)
+        denoise_ids: set[str] = set()
+        for el in elements:
+            if el.get("type") == "text" and not el.get("isDeleted"):
+                lower = (el.get("text") or "").lower()
+                if "pragmatist" in lower and "denoise" in lower:
+                    denoise_ids.add(el["id"])
+                    if el.get("containerId"):
+                        denoise_ids.add(el["containerId"])
+
+        assert denoise_ids, (
+            "No denoise element found whose text contains both 'pragmatist' and 'denoise'. "
+            "S6a must pass before S7 can locate the denoise element."
+        )
+
+        has_incoming = False
+        has_outgoing = False
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            end_id = (el.get("endBinding") or {}).get("elementId")
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            if end_id in denoise_ids:
+                has_incoming = True
+            if start_id in denoise_ids:
+                has_outgoing = True
+
+        assert has_incoming, (
+            f"Denoise element(s) {denoise_ids} have no incoming bound arrows. "
+            "AC2 S7: denoise must be connected from the early challenge lane — "
+            "an incoming arrow from the challenge lane output is required."
+        )
+        assert has_outgoing, (
+            f"Denoise element(s) {denoise_ids} have no outgoing bound arrows. "
+            "AC2 S7: denoise must feed forward toward the research bridge or handoff — "
+            "a dead end is not a connected flow step."
+        )
+
+    def test_s8_no_phase1_flow_to_phase2_moment_arrows(
+        self, diagram_data: dict
+    ) -> None:
+        """Structural-absence (S8): no arrow from a Phase 1 flow element
+        (resolved text matches 'denoise' or 'early challenge') may bind
+        directly to a Phase 2 moment node (M3-M6).
+
+        The research bridge is the ONLY legitimate Phase 1→Phase 2 crossing,
+        and S4 constrains its target to Phase 2 Step 0. Any direct Phase 1
+        flow element → Phase 2 moment arrow creates an unauthorized shortcut
+        that skips the Phase 2 Step 0 stop-if-thin gate, contradicting the
+        clean phase separation required by the current two-phase model.
+
+        Current artifact has arr_denoise_m4 binding p1_denoise_text
+        ('Pragmatist (mode=denoise)\\nOptional denoise pass') → p2_m4_text
+        ('M4\\nDecision Support') — FAILS until that arrow is removed.
+        """
+        by_id = _build_by_id(diagram_data)
+        elements = diagram_data.get("elements", [])
+        violations: list[str] = []
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            end_id = (el.get("endBinding") or {}).get("elementId")
+            if not start_id or not end_id:
+                continue
+            start_text = _resolve_text(by_id, start_id)
+            end_text = _resolve_text(by_id, end_id)
+            if _PHASE1_FLOW_RE.search(start_text) and _PHASE2_MOMENT_RE.search(end_text):
+                violations.append(
+                    f"Arrow {el.get('id')!r}: Phase 1 flow element "
+                    f"{start_text!r} → Phase 2 moment {end_text!r} "
+                    f"(unauthorized cross-phase shortcut)"
+                )
+        assert not violations, (
+            "AC2 S8 violation — non-bridge Phase 1 flow element(s) bind directly "
+            "to Phase 2 moments. Only the research bridge may cross from Phase 1 "
+            "to Phase 2, and S4 constrains its target to Phase 2 Step 0. "
             f"Violations: {violations}"
         )
