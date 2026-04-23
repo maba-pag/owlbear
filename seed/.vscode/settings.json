@@ -55,7 +55,6 @@
     "uv run python": true,
     "uv run ruff": true
   },
-  "chat.tools.terminal.backgroundNotifications": true,
   "chat.tools.terminal.blockDetectedFileWrites": "never",
   "chat.useCustomAgentHooks": true,
   "chat.viewSessions.orientation": "stacked",
@@ -102,6 +101,7 @@
   },
   "github.copilot.nextEditSuggestions.enabled": true,
   "github.copilot.nextEditSuggestions.extendedRange": true,
+  "json.maxItemsComputed": 5000,
   "MS-CST-E.vscode-devskim.rules.enableBestPracticeSeverityRules": true,
   "MS-CST-E.vscode-devskim.rules.enableManualReviewSeverityRules": true,
   "python.analysis.aiCodeActions": {
