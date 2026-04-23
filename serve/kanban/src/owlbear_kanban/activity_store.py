@@ -177,11 +177,16 @@ def compact_activity_log(
             if before_dt is None or entry_dt is None or entry_dt >= before_dt or in_open_session:
                 to_keep.append(entry_line)
 
-        # Hard floor: keep the most recent entries for all compaction modes.
+        # Hard floor: keep the most recent entries by timestamp for all compaction modes.
         floor_count = min(_HARD_FLOOR, len(all_lines))
 
         if floor_count > 0 and len(to_keep) < floor_count:
-            floor_lines = [line for line, _ in parsed[-floor_count:]]
+            min_dt = datetime.min.replace(tzinfo=UTC)
+            parsed_by_ts = sorted(
+                parsed,
+                key=lambda item: _parse_dt(item[1].get("timestamp")) or min_dt,
+            )
+            floor_lines = [line for line, _ in parsed_by_ts[-floor_count:]]
             # Merge: union of to_keep and floor_lines, preserving order
             floor_set = set(floor_lines)
             keep_set = set(to_keep)
