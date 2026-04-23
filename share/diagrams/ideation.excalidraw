@@ -4,16 +4,348 @@
   "source": "owlbear",
   "describes": [
     "share/skills/w-ideation/**",
+    "share/skills/w-ideation-discovery/**",
+    "share/skills/w-ideation-mediation/**",
     "share/skills/h-ideation-panel/**",
     "share/agents/ideator.agent.md",
     "share/agents/ideation-*.agent.md"
   ],
   "elements": [
     {
+      "id": "mode_investigator_text",
+      "type": "text",
+      "x": 500,
+      "y": 240,
+      "width": 180,
+      "height": 20,
+      "angle": 0,
+      "strokeColor": "#e67700",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340013,
+      "versionNonce": 10340014,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "Phase 1 Discovery\nOwner: ideation-discoverer",
+      "originalText": "Phase 1 Discovery\nOwner: ideation-discoverer",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "mode_facilitative_text",
+      "type": "text",
+      "x": 760,
+      "y": 240,
+      "width": 180,
+      "height": 20,
+      "angle": 0,
+      "strokeColor": "#e67700",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340017,
+      "versionNonce": 10340018,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "Phase 2 Mediation\nOwner: ideation-mediator",
+      "originalText": "Phase 2 Mediation\nOwner: ideation-mediator",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "m3_text",
+      "type": "text",
+      "x": 720,
+      "y": 360,
+      "width": 80,
+      "height": 40,
+      "angle": 0,
+      "strokeColor": "#1c7ed6",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340039,
+      "versionNonce": 10340040,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "M3\nLandscape",
+      "originalText": "M3\nLandscape",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "critic_text",
+      "type": "text",
+      "x": 1120,
+      "y": 700,
+      "width": 80,
+      "height": 20,
+      "angle": 0,
+      "strokeColor": "#c92a2a",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340071,
+      "versionNonce": 10340072,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "Critic",
+      "originalText": "Critic",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "m4_text",
+      "type": "text",
+      "x": 920,
+      "y": 360,
+      "width": 100,
+      "height": 40,
+      "angle": 0,
+      "strokeColor": "#1c7ed6",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340041,
+      "versionNonce": 10340042,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "M4\nDecision support\n(O15 Critic validation)",
+      "originalText": "M4\nDecision support\n(O15 Critic validation)",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "m6_text",
+      "type": "text",
+      "x": 1320,
+      "y": 360,
+      "width": 100,
+      "height": 40,
+      "angle": 0,
+      "strokeColor": "#1c7ed6",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340045,
+      "versionNonce": 10340046,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "M6\nPipeline",
+      "originalText": "M6\nPipeline",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "panel_batch_text",
+      "type": "text",
+      "x": 560,
+      "y": 500,
+      "width": 740,
+      "height": 20,
+      "angle": 0,
+      "strokeColor": "#2b8a3e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340049,
+      "versionNonce": 10340050,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "Late domain panel\n(default parallel, conditional sequential)",
+      "originalText": "Late domain panel\n(default parallel, conditional sequential)",
+      "textAlign": "center",
+      "verticalAlign": "top",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "pragmatist_text",
+      "type": "text",
+      "x": 900,
+      "y": 700,
+      "width": 130,
+      "height": 20,
+      "angle": 0,
+      "strokeColor": "#0b7285",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340073,
+      "versionNonce": 10340074,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "Pragmatist synthesis",
+      "originalText": "Pragmatist synthesis",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "id": "handoff_text",
+      "type": "text",
+      "x": 1540,
+      "y": 560,
+      "width": 200,
+      "height": 40,
+      "angle": 0,
+      "strokeColor": "#343a40",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340085,
+      "versionNonce": 10340086,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "Pipeline handoff\nkanban parent task -> planner decomposition",
+      "originalText": "Pipeline handoff\nkanban parent task -> planner decomposition",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
+      "type": "text",
+      "x": 1600,
+      "y": 360,
+      "width": 286,
+      "height": 50,
+      "angle": 0,
+      "strokeColor": "#e67700",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 1776914299,
+      "versionNonce": 1776914399,
+      "isDeleted": false,
+      "fontSize": 20,
+      "fontFamily": 1,
+      "text": "Research bridge to Phase 2\n@ideation-mediator",
+      "originalText": "Research bridge to Phase 2\n@ideation-mediator",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true,
+      "id": "research_bridge_text",
+      "groupIds": [],
+      "boundElements": []
+    },
+    {
+      "id": "mediator_text",
+      "type": "text",
+      "x": 120,
+      "y": 240,
+      "width": 280,
+      "height": 40,
+      "angle": 0,
+      "strokeColor": "#b45f06",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340009,
+      "versionNonce": 10340010,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "fontSize": 16,
+      "fontFamily": 1,
+      "text": "Ideator Router\nRoutes to Phase 1 Discovery or Phase 2 Mediation",
+      "originalText": "Ideator Router\nRoutes to Phase 1 Discovery or Phase 2 Mediation",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true
+    },
+    {
       "id": "title_text",
       "type": "text",
       "x": 100,
-      "y": 40,
+      "y": 100,
       "width": 640,
       "height": 35,
       "angle": 0,
@@ -43,7 +375,7 @@
       "id": "subtitle_text",
       "type": "text",
       "x": 100,
-      "y": 90,
+      "y": 160,
       "width": 760,
       "height": 20,
       "angle": 0,
@@ -73,7 +405,7 @@
       "id": "descriptive_note_text",
       "type": "text",
       "x": 100,
-      "y": 110,
+      "y": 840,
       "width": 720,
       "height": 20,
       "angle": 0,
@@ -103,7 +435,7 @@
       "id": "mediator_rect",
       "type": "rectangle",
       "x": 100,
-      "y": 160,
+      "y": 220,
       "width": 340,
       "height": 80,
       "angle": 0,
@@ -118,46 +450,22 @@
       "versionNonce": 10340008,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_mediator_inv", "type": "arrow" },
-        { "id": "arr_mediator_fac", "type": "arrow" }
+        {
+          "id": "arr_mediator_inv",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_mediator_fac",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
-    },
-    {
-      "id": "mediator_text",
-      "type": "text",
-      "x": 130,
-      "y": 185,
-      "width": 280,
-      "height": 40,
-      "angle": 0,
-      "strokeColor": "#b45f06",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340009,
-      "versionNonce": 10340010,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "Mediator (ideator agent)\nOrchestrator",
-      "originalText": "Mediator (ideator agent)\nOrchestrator",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
     },
     {
       "id": "mode_investigator_rect",
       "type": "rectangle",
       "x": 480,
-      "y": 170,
+      "y": 240,
       "width": 220,
       "height": 60,
       "angle": 0,
@@ -172,46 +480,22 @@
       "versionNonce": 10340012,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_mediator_inv", "type": "arrow" },
-        { "id": "arr_inv_m1", "type": "arrow" }
+        {
+          "id": "arr_mediator_inv",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_inv_m1",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
-    },
-    {
-      "id": "mode_investigator_text",
-      "type": "text",
-      "x": 500,
-      "y": 190,
-      "width": 180,
-      "height": 20,
-      "angle": 0,
-      "strokeColor": "#e67700",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340013,
-      "versionNonce": 10340014,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "Investigator mode (M1-M3)",
-      "originalText": "Investigator mode (M1-M3)",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
     },
     {
       "id": "mode_facilitative_rect",
       "type": "rectangle",
       "x": 740,
-      "y": 170,
+      "y": 240,
       "width": 220,
       "height": 60,
       "angle": 0,
@@ -226,46 +510,22 @@
       "versionNonce": 10340016,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_mediator_fac", "type": "arrow" },
-        { "id": "arr_fac_m4", "type": "arrow" }
+        {
+          "id": "arr_mediator_fac",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_fac_m4",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
-    },
-    {
-      "id": "mode_facilitative_text",
-      "type": "text",
-      "x": 760,
-      "y": 190,
-      "width": 180,
-      "height": 20,
-      "angle": 0,
-      "strokeColor": "#e67700",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340017,
-      "versionNonce": 10340018,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "Facilitative mode (M4-M6)",
-      "originalText": "Facilitative mode (M4-M6)",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
     },
     {
       "id": "step0_rect",
       "type": "rectangle",
       "x": 100,
-      "y": 280,
+      "y": 340,
       "width": 140,
       "height": 80,
       "angle": 0,
@@ -280,7 +540,10 @@
       "versionNonce": 10340020,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_step0_m1", "type": "arrow" }
+        {
+          "id": "arr_step0_m1",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -288,7 +551,7 @@
       "id": "m1_rect",
       "type": "rectangle",
       "x": 300,
-      "y": 280,
+      "y": 340,
       "width": 140,
       "height": 80,
       "angle": 0,
@@ -303,10 +566,22 @@
       "versionNonce": 10340022,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_step0_m1", "type": "arrow" },
-        { "id": "arr_m1_m2", "type": "arrow" },
-        { "id": "arr_inv_m1", "type": "arrow" },
-        { "id": "arr_m1_critic_boundary", "type": "arrow" }
+        {
+          "id": "arr_step0_m1",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m1_m2",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_inv_m1",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m1_critic_boundary",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -314,7 +589,7 @@
       "id": "m2_rect",
       "type": "rectangle",
       "x": 500,
-      "y": 280,
+      "y": 340,
       "width": 140,
       "height": 80,
       "angle": 0,
@@ -329,9 +604,18 @@
       "versionNonce": 10340024,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m1_m2", "type": "arrow" },
-        { "id": "arr_m2_m3", "type": "arrow" },
-        { "id": "arr_m2_critic_boundary", "type": "arrow" }
+        {
+          "id": "arr_m1_m2",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m2_m3",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m2_critic_boundary",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -339,7 +623,7 @@
       "id": "m3_rect",
       "type": "rectangle",
       "x": 700,
-      "y": 280,
+      "y": 340,
       "width": 140,
       "height": 80,
       "angle": 0,
@@ -354,9 +638,18 @@
       "versionNonce": 10340026,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m2_m3", "type": "arrow" },
-        { "id": "arr_m3_m4", "type": "arrow" },
-        { "id": "arr_m3_panel", "type": "arrow" }
+        {
+          "id": "arr_m2_m3",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m3_m4",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m3_panel",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -364,7 +657,7 @@
       "id": "m4_rect",
       "type": "rectangle",
       "x": 900,
-      "y": 280,
+      "y": 340,
       "width": 140,
       "height": 80,
       "angle": 0,
@@ -379,11 +672,26 @@
       "versionNonce": 10340028,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m3_m4", "type": "arrow" },
-        { "id": "arr_m4_m5", "type": "arrow" },
-        { "id": "arr_fac_m4", "type": "arrow" },
-        { "id": "arr_prag_m4", "type": "arrow" },
-        { "id": "arr_m4_critic_boundary", "type": "arrow" }
+        {
+          "id": "arr_m3_m4",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m4_m5",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_fac_m4",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_prag_m4",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m4_critic_boundary",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -391,7 +699,7 @@
       "id": "m5_rect",
       "type": "rectangle",
       "x": 1100,
-      "y": 280,
+      "y": 340,
       "width": 140,
       "height": 80,
       "angle": 0,
@@ -406,10 +714,22 @@
       "versionNonce": 10340030,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m4_m5", "type": "arrow" },
-        { "id": "arr_m5_m6", "type": "arrow" },
-        { "id": "arr_m5_brief", "type": "arrow" },
-        { "id": "arr_m5_critic_boundary", "type": "arrow" }
+        {
+          "id": "arr_m4_m5",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m5_m6",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m5_brief",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m5_critic_boundary",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -417,7 +737,7 @@
       "id": "m6_rect",
       "type": "rectangle",
       "x": 1300,
-      "y": 280,
+      "y": 340,
       "width": 140,
       "height": 80,
       "angle": 0,
@@ -432,16 +752,22 @@
       "versionNonce": 10340032,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m5_m6", "type": "arrow" },
-        { "id": "arr_m6_handoff", "type": "arrow" }
+        {
+          "id": "arr_m5_m6",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m6_handoff",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
     {
       "id": "step0_text",
       "type": "text",
-      "x": 110,
-      "y": 292,
+      "x": 120,
+      "y": 360,
       "width": 120,
       "height": 60,
       "angle": 0,
@@ -471,7 +797,7 @@
       "id": "m1_text",
       "type": "text",
       "x": 320,
-      "y": 305,
+      "y": 360,
       "width": 100,
       "height": 40,
       "angle": 0,
@@ -500,8 +826,8 @@
     {
       "id": "m2_text",
       "type": "text",
-      "x": 510,
-      "y": 295,
+      "x": 520,
+      "y": 360,
       "width": 120,
       "height": 60,
       "angle": 0,
@@ -519,68 +845,8 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "M2\nOutcomes +\nEarly challenge",
-      "originalText": "M2\nOutcomes +\nEarly challenge",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
-    },
-    {
-      "id": "m3_text",
-      "type": "text",
-      "x": 730,
-      "y": 305,
-      "width": 80,
-      "height": 40,
-      "angle": 0,
-      "strokeColor": "#1c7ed6",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340039,
-      "versionNonce": 10340040,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "M3\nLandscape",
-      "originalText": "M3\nLandscape",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
-    },
-    {
-      "id": "m4_text",
-      "type": "text",
-      "x": 920,
-      "y": 305,
-      "width": 100,
-      "height": 40,
-      "angle": 0,
-      "strokeColor": "#1c7ed6",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340041,
-      "versionNonce": 10340042,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "M4\nDecision support",
-      "originalText": "M4\nDecision support",
+      "text": "M2\nOutcomes",
+      "originalText": "M2\nOutcomes",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -590,8 +856,8 @@
     {
       "id": "m5_text",
       "type": "text",
-      "x": 1130,
-      "y": 305,
+      "x": 1120,
+      "y": 360,
       "width": 80,
       "height": 40,
       "angle": 0,
@@ -609,38 +875,8 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "M5\nBrief output",
-      "originalText": "M5\nBrief output",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
-    },
-    {
-      "id": "m6_text",
-      "type": "text",
-      "x": 1320,
-      "y": 305,
-      "width": 100,
-      "height": 40,
-      "angle": 0,
-      "strokeColor": "#1c7ed6",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340045,
-      "versionNonce": 10340046,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "M6\nPipeline handoff",
-      "originalText": "M6\nPipeline handoff",
+      "text": "M5\nDrafting",
+      "originalText": "M5\nDrafting",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -651,7 +887,7 @@
       "id": "panel_batch_rect",
       "type": "rectangle",
       "x": 520,
-      "y": 420,
+      "y": 480,
       "width": 820,
       "height": 320,
       "angle": 0,
@@ -666,45 +902,18 @@
       "versionNonce": 10340048,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m3_panel", "type": "arrow" }
+        {
+          "id": "arr_m3_panel",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
-    },
-    {
-      "id": "panel_batch_text",
-      "type": "text",
-      "x": 560,
-      "y": 440,
-      "width": 740,
-      "height": 20,
-      "angle": 0,
-      "strokeColor": "#2b8a3e",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340049,
-      "versionNonce": 10340050,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "Parallel panel batch between M3 and M4",
-      "originalText": "Parallel panel batch between M3 and M4",
-      "textAlign": "center",
-      "verticalAlign": "top",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
     },
     {
       "id": "architect_rect",
       "type": "rectangle",
       "x": 560,
-      "y": 500,
+      "y": 560,
       "width": 140,
       "height": 70,
       "angle": 0,
@@ -719,8 +928,14 @@
       "versionNonce": 10340052,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_arch_critic_cycle", "type": "arrow" },
-        { "id": "arr_arch_prag", "type": "arrow" }
+        {
+          "id": "arr_arch_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_arch_prag",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -728,7 +943,7 @@
       "id": "modeler_rect",
       "type": "rectangle",
       "x": 760,
-      "y": 500,
+      "y": 560,
       "width": 140,
       "height": 70,
       "angle": 0,
@@ -743,8 +958,14 @@
       "versionNonce": 10340054,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_modeler_critic_cycle", "type": "arrow" },
-        { "id": "arr_modeler_prag", "type": "arrow" }
+        {
+          "id": "arr_modeler_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_modeler_prag",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -752,7 +973,7 @@
       "id": "enduser_rect",
       "type": "rectangle",
       "x": 960,
-      "y": 500,
+      "y": 560,
       "width": 140,
       "height": 70,
       "angle": 0,
@@ -767,8 +988,14 @@
       "versionNonce": 10340056,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_enduser_critic_cycle", "type": "arrow" },
-        { "id": "arr_enduser_prag", "type": "arrow" }
+        {
+          "id": "arr_enduser_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_enduser_prag",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -776,7 +1003,7 @@
       "id": "skeptic_rect",
       "type": "rectangle",
       "x": 1160,
-      "y": 500,
+      "y": 560,
       "width": 140,
       "height": 70,
       "angle": 0,
@@ -791,8 +1018,14 @@
       "versionNonce": 10340058,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_skeptic_critic_cycle", "type": "arrow" },
-        { "id": "arr_skeptic_prag", "type": "arrow" }
+        {
+          "id": "arr_skeptic_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_skeptic_prag",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -800,7 +1033,7 @@
       "id": "critic_rect",
       "type": "rectangle",
       "x": 1100,
-      "y": 620,
+      "y": 680,
       "width": 140,
       "height": 70,
       "angle": 0,
@@ -815,14 +1048,38 @@
       "versionNonce": 10340060,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_arch_critic_cycle", "type": "arrow" },
-        { "id": "arr_modeler_critic_cycle", "type": "arrow" },
-        { "id": "arr_enduser_critic_cycle", "type": "arrow" },
-        { "id": "arr_skeptic_critic_cycle", "type": "arrow" },
-        { "id": "arr_m1_critic_boundary", "type": "arrow" },
-        { "id": "arr_m2_critic_boundary", "type": "arrow" },
-        { "id": "arr_m4_critic_boundary", "type": "arrow" },
-        { "id": "arr_m5_critic_boundary", "type": "arrow" }
+        {
+          "id": "arr_arch_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_modeler_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_enduser_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_skeptic_critic_cycle",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m1_critic_boundary",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m2_critic_boundary",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m4_critic_boundary",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_m5_critic_boundary",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -830,7 +1087,7 @@
       "id": "pragmatist_rect",
       "type": "rectangle",
       "x": 880,
-      "y": 620,
+      "y": 680,
       "width": 180,
       "height": 70,
       "angle": 0,
@@ -845,11 +1102,26 @@
       "versionNonce": 10340062,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_arch_prag", "type": "arrow" },
-        { "id": "arr_modeler_prag", "type": "arrow" },
-        { "id": "arr_enduser_prag", "type": "arrow" },
-        { "id": "arr_skeptic_prag", "type": "arrow" },
-        { "id": "arr_prag_m4", "type": "arrow" }
+        {
+          "id": "arr_arch_prag",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_modeler_prag",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_enduser_prag",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_skeptic_prag",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_prag_m4",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -857,7 +1129,7 @@
       "id": "architect_text",
       "type": "text",
       "x": 580,
-      "y": 525,
+      "y": 580,
       "width": 100,
       "height": 20,
       "angle": 0,
@@ -887,7 +1159,7 @@
       "id": "modeler_text",
       "type": "text",
       "x": 780,
-      "y": 515,
+      "y": 580,
       "width": 100,
       "height": 40,
       "angle": 0,
@@ -905,8 +1177,8 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "Modeler\n(Data)",
-      "originalText": "Modeler\n(Data)",
+      "text": "Data",
+      "originalText": "Data",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -916,8 +1188,8 @@
     {
       "id": "enduser_text",
       "type": "text",
-      "x": 975,
-      "y": 515,
+      "x": 980,
+      "y": 580,
       "width": 110,
       "height": 40,
       "angle": 0,
@@ -947,7 +1219,7 @@
       "id": "skeptic_text",
       "type": "text",
       "x": 1180,
-      "y": 515,
+      "y": 580,
       "width": 100,
       "height": 40,
       "angle": 0,
@@ -965,68 +1237,8 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "Skeptic\n(Security)",
-      "originalText": "Skeptic\n(Security)",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
-    },
-    {
-      "id": "critic_text",
-      "type": "text",
-      "x": 1130,
-      "y": 645,
-      "width": 80,
-      "height": 20,
-      "angle": 0,
-      "strokeColor": "#c92a2a",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340071,
-      "versionNonce": 10340072,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "Critic",
-      "originalText": "Critic",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
-    },
-    {
-      "id": "pragmatist_text",
-      "type": "text",
-      "x": 905,
-      "y": 645,
-      "width": 130,
-      "height": 20,
-      "angle": 0,
-      "strokeColor": "#0b7285",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340073,
-      "versionNonce": 10340074,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "Pragmatist synthesis",
-      "originalText": "Pragmatist synthesis",
+      "text": "Security",
+      "originalText": "Security",
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
@@ -1037,7 +1249,7 @@
       "id": "critic_loop_text",
       "type": "text",
       "x": 680,
-      "y": 710,
+      "y": 760,
       "width": 620,
       "height": 20,
       "angle": 0,
@@ -1067,7 +1279,7 @@
       "id": "boundary_text",
       "type": "text",
       "x": 560,
-      "y": 760,
+      "y": 820,
       "width": 740,
       "height": 20,
       "angle": 0,
@@ -1097,7 +1309,7 @@
       "id": "brief_output_ellipse",
       "type": "ellipse",
       "x": 1080,
-      "y": 180,
+      "y": 240,
       "width": 180,
       "height": 60,
       "angle": 0,
@@ -1112,15 +1324,18 @@
       "versionNonce": 10340080,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m5_brief", "type": "arrow" }
+        {
+          "id": "arr_m5_brief",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
     {
       "id": "brief_output_text",
       "type": "text",
-      "x": 1110,
-      "y": 200,
+      "x": 1120,
+      "y": 260,
       "width": 120,
       "height": 20,
       "angle": 0,
@@ -1150,7 +1365,7 @@
       "id": "handoff_rect",
       "type": "rectangle",
       "x": 1520,
-      "y": 280,
+      "y": 340,
       "width": 240,
       "height": 80,
       "angle": 0,
@@ -1165,45 +1380,18 @@
       "versionNonce": 10340084,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_m6_handoff", "type": "arrow" }
+        {
+          "id": "arr_m6_handoff",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
-    },
-    {
-      "id": "handoff_text",
-      "type": "text",
-      "x": 1540,
-      "y": 300,
-      "width": 200,
-      "height": 40,
-      "angle": 0,
-      "strokeColor": "#343a40",
-      "backgroundColor": "transparent",
-      "fillStyle": "solid",
-      "strokeWidth": 1,
-      "strokeStyle": "solid",
-      "roughness": 0,
-      "opacity": 100,
-      "seed": 10340085,
-      "versionNonce": 10340086,
-      "groupIds": [],
-      "boundElements": [],
-      "isDeleted": false,
-      "fontSize": 16,
-      "fontFamily": 1,
-      "text": "kanban parent task ->\nplanner decomposition",
-      "originalText": "kanban parent task ->\nplanner decomposition",
-      "textAlign": "center",
-      "verticalAlign": "middle",
-      "lineHeight": 1.25,
-      "containerId": null,
-      "autoResize": true
     },
     {
       "id": "footer_text",
       "type": "text",
       "x": 100,
-      "y": 820,
+      "y": 880,
       "width": 400,
       "height": 20,
       "angle": 0,
@@ -1249,7 +1437,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "step0_rect",
@@ -1284,7 +1481,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m1_rect",
@@ -1319,7 +1525,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m2_rect",
@@ -1354,7 +1569,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m3_rect",
@@ -1389,7 +1613,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m4_rect",
@@ -1424,7 +1657,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m5_rect",
@@ -1442,10 +1684,10 @@
     {
       "id": "arr_mediator_inv",
       "type": "arrow",
-      "x": 444,
-      "y": 190,
-      "width": 32,
-      "height": 0,
+      "x": 120.0,
+      "y": 240.0,
+      "width": 380.0,
+      "height": 0.0,
       "angle": 0,
       "strokeColor": "#e67700",
       "backgroundColor": "transparent",
@@ -1459,16 +1701,25 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [32, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          380.0,
+          0.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "mediator_rect",
-        "focus": -0.2,
+        "elementId": "mediator_text",
+        "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "mode_investigator_rect",
-        "focus": -0.3,
+        "elementId": "mode_investigator_text",
+        "focus": 0,
         "gap": 4
       },
       "startArrowhead": null,
@@ -1477,10 +1728,10 @@
     {
       "id": "arr_mediator_fac",
       "type": "arrow",
-      "x": 444,
-      "y": 210,
-      "width": 292,
-      "height": 0,
+      "x": 120.0,
+      "y": 240.0,
+      "width": 640.0,
+      "height": 0.0,
       "angle": 0,
       "strokeColor": "#e67700",
       "backgroundColor": "transparent",
@@ -1494,16 +1745,25 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [292, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          640.0,
+          0.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "mediator_rect",
-        "focus": 0.3,
+        "elementId": "mediator_text",
+        "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "mode_facilitative_rect",
-        "focus": 0.3,
+        "elementId": "mode_facilitative_text",
+        "focus": 0,
         "gap": 4
       },
       "startArrowhead": null,
@@ -1529,7 +1789,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [-220, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -220,
+          42
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "mode_investigator_rect",
@@ -1564,7 +1833,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [120, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          120,
+          42
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "mode_facilitative_rect",
@@ -1582,10 +1860,10 @@
     {
       "id": "arr_m3_panel",
       "type": "arrow",
-      "x": 770,
-      "y": 364,
-      "width": 160,
-      "height": 52,
+      "x": 720.0,
+      "y": 360.0,
+      "width": 160.0,
+      "height": 140.0,
       "angle": 0,
       "strokeColor": "#2b8a3e",
       "backgroundColor": "transparent",
@@ -1599,16 +1877,25 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [160, 52]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -160.0,
+          140.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "m3_rect",
+        "elementId": "m3_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "panel_batch_rect",
-        "focus": -0.6,
+        "elementId": "panel_batch_text",
+        "focus": 0,
         "gap": 4
       },
       "startArrowhead": null,
@@ -1617,10 +1904,10 @@
     {
       "id": "arr_m5_brief",
       "type": "arrow",
-      "x": 1170,
-      "y": 276,
-      "width": 0,
-      "height": 32,
+      "x": 1120.0,
+      "y": 360.0,
+      "width": 0.0,
+      "height": 100.0,
       "angle": 0,
       "strokeColor": "#5f3dc4",
       "backgroundColor": "transparent",
@@ -1634,15 +1921,24 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [0, -32]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0.0,
+          -100.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "m5_rect",
+        "elementId": "m5_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "brief_output_ellipse",
+        "elementId": "brief_output_text",
         "focus": 0,
         "gap": 4
       },
@@ -1652,10 +1948,10 @@
     {
       "id": "arr_m6_handoff",
       "type": "arrow",
-      "x": 1444,
-      "y": 320,
-      "width": 72,
-      "height": 0,
+      "x": 1320,
+      "y": 360,
+      "width": 220,
+      "height": 200,
       "angle": 0,
       "strokeColor": "#495057",
       "backgroundColor": "transparent",
@@ -1669,15 +1965,24 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [72, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          220,
+          200
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "m6_rect",
+        "elementId": "m6_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "handoff_rect",
+        "elementId": "handoff_text",
         "focus": 0,
         "gap": 4
       },
@@ -1687,10 +1992,10 @@
     {
       "id": "arr_arch_critic_cycle",
       "type": "arrow",
-      "x": 630,
-      "y": 574,
-      "width": 540,
-      "height": 42,
+      "x": 580.0,
+      "y": 580.0,
+      "width": 540.0,
+      "height": 120.0,
       "angle": 0,
       "strokeColor": "#c92a2a",
       "backgroundColor": "transparent",
@@ -1704,16 +2009,25 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [540, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          540.0,
+          120.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "architect_rect",
+        "elementId": "architect_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "critic_rect",
-        "focus": -0.4,
+        "elementId": "critic_text",
+        "focus": 0,
         "gap": 4
       },
       "startArrowhead": "arrow",
@@ -1722,10 +2036,10 @@
     {
       "id": "arr_modeler_critic_cycle",
       "type": "arrow",
-      "x": 830,
-      "y": 574,
-      "width": 340,
-      "height": 42,
+      "x": 780.0,
+      "y": 580.0,
+      "width": 340.0,
+      "height": 120.0,
       "angle": 0,
       "strokeColor": "#c92a2a",
       "backgroundColor": "transparent",
@@ -1739,16 +2053,25 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [340, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          340.0,
+          120.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "modeler_rect",
+        "elementId": "modeler_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "critic_rect",
-        "focus": -0.2,
+        "elementId": "critic_text",
+        "focus": 0,
         "gap": 4
       },
       "startArrowhead": "arrow",
@@ -1757,10 +2080,10 @@
     {
       "id": "arr_enduser_critic_cycle",
       "type": "arrow",
-      "x": 1030,
-      "y": 574,
-      "width": 140,
-      "height": 42,
+      "x": 980.0,
+      "y": 580.0,
+      "width": 140.0,
+      "height": 120.0,
       "angle": 0,
       "strokeColor": "#c92a2a",
       "backgroundColor": "transparent",
@@ -1774,15 +2097,24 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [140, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          140.0,
+          120.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "enduser_rect",
+        "elementId": "enduser_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "critic_rect",
+        "elementId": "critic_text",
         "focus": 0,
         "gap": 4
       },
@@ -1792,10 +2124,10 @@
     {
       "id": "arr_skeptic_critic_cycle",
       "type": "arrow",
-      "x": 1230,
-      "y": 574,
-      "width": 60,
-      "height": 42,
+      "x": 1180.0,
+      "y": 580.0,
+      "width": 60.0,
+      "height": 120.0,
       "angle": 0,
       "strokeColor": "#c92a2a",
       "backgroundColor": "transparent",
@@ -1809,16 +2141,25 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [-60, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -60.0,
+          120.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "skeptic_rect",
+        "elementId": "skeptic_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "critic_rect",
-        "focus": 0.3,
+        "elementId": "critic_text",
+        "focus": 0,
         "gap": 4
       },
       "startArrowhead": "arrow",
@@ -1844,7 +2185,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [340, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          340,
+          42
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "architect_rect",
@@ -1879,7 +2229,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [140, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          140,
+          42
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "modeler_rect",
@@ -1914,7 +2273,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [-60, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -60,
+          42
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "enduser_rect",
@@ -1949,7 +2317,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [-260, 42]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -260,
+          42
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "skeptic_rect",
@@ -1967,10 +2344,10 @@
     {
       "id": "arr_prag_m4",
       "type": "arrow",
-      "x": 970,
-      "y": 616,
-      "width": 0,
-      "height": 252,
+      "x": 900.0,
+      "y": 700.0,
+      "width": 20.0,
+      "height": 340.0,
       "angle": 0,
       "strokeColor": "#0b7285",
       "backgroundColor": "transparent",
@@ -1984,15 +2361,24 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [0, -252]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          20.0,
+          -340.0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
-        "elementId": "pragmatist_rect",
+        "elementId": "pragmatist_text",
         "focus": 0,
         "gap": 4
       },
       "endBinding": {
-        "elementId": "m4_rect",
+        "elementId": "m4_text",
         "focus": 0,
         "gap": 4
       },
@@ -2019,7 +2405,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [800, 252]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          800,
+          252
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m1_rect",
@@ -2054,7 +2449,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [600, 252]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          600,
+          252
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m2_rect",
@@ -2089,7 +2493,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [200, 252]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          200,
+          252
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m4_rect",
@@ -2124,7 +2537,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [0, 252]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          252
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "m5_rect",
@@ -2138,6 +2560,184 @@
       },
       "startArrowhead": null,
       "endArrowhead": "arrow"
+    },
+    {
+      "type": "text",
+      "x": 1600,
+      "y": 120,
+      "width": 418,
+      "height": 75,
+      "angle": 0,
+      "strokeColor": "#e67700",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 1776914297,
+      "versionNonce": 1776914397,
+      "isDeleted": false,
+      "fontSize": 20,
+      "fontFamily": 1,
+      "text": "Early challenge lane\nSimplifier + First principles (always)\nOutsider (conditional)",
+      "originalText": "Early challenge lane\nSimplifier + First principles (always)\nOutsider (conditional)",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true,
+      "id": "early_challenge_text",
+      "groupIds": [],
+      "boundElements": []
+    },
+    {
+      "type": "text",
+      "x": 1600,
+      "y": 240,
+      "width": 297,
+      "height": 40,
+      "angle": 0,
+      "strokeColor": "#e67700",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 1776914298,
+      "versionNonce": 1776914398,
+      "isDeleted": false,
+      "fontSize": 20,
+      "fontFamily": 1,
+      "text": "Optional pragmatist denoise",
+      "originalText": "Optional pragmatist denoise",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true,
+      "id": "prag_denoise_text",
+      "groupIds": [],
+      "boundElements": []
+    },
+    {
+      "type": "text",
+      "x": 1600,
+      "y": 480,
+      "width": 517,
+      "height": 50,
+      "angle": 0,
+      "strokeColor": "#e67700",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 1,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 1776914300,
+      "versionNonce": 1776914400,
+      "isDeleted": false,
+      "fontSize": 20,
+      "fontFamily": 1,
+      "text": "Phase 2 Step 0\nreads discovery artifacts; stop if insufficient",
+      "originalText": "Phase 2 Step 0\nreads discovery artifacts; stop if insufficient",
+      "textAlign": "center",
+      "verticalAlign": "middle",
+      "lineHeight": 1.25,
+      "containerId": null,
+      "autoResize": true,
+      "id": "phase2_step0_text",
+      "groupIds": [],
+      "boundElements": []
+    },
+    {
+      "type": "arrow",
+      "x": 520.0,
+      "y": 360.0,
+      "width": 1080.0,
+      "height": 240.0,
+      "angle": 0,
+      "strokeColor": "#1c7ed6",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 1776915370,
+      "versionNonce": 1776916370,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          1080.0,
+          -240.0
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "id": "arr_m2_early_challenge",
+      "startBinding": {
+        "elementId": "m2_text",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "early_challenge_text",
+        "focus": 0,
+        "gap": 4
+      }
+    },
+    {
+      "type": "arrow",
+      "x": 1600.0,
+      "y": 360.0,
+      "width": 840.0,
+      "height": 120.0,
+      "angle": 0,
+      "strokeColor": "#1c7ed6",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 1776915371,
+      "versionNonce": 1776916371,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          -840.0,
+          -120.0
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "id": "arr_bridge_phase2",
+      "startBinding": {
+        "elementId": "research_bridge_text",
+        "focus": 0,
+        "gap": 4
+      },
+      "endBinding": {
+        "elementId": "mode_facilitative_text",
+        "focus": 0,
+        "gap": 4
+      }
     }
   ],
   "appState": {

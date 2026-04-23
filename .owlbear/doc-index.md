@@ -375,7 +375,7 @@
 describes: serve/cockpit/src/**, serve/cockpit/web/src/**
 
 ## share/diagrams/ideation.excalidraw
-describes: share/skills/w-ideation/**, share/skills/h-ideation-panel/**, share/agents/ideator.agent.md, share/agents/ideation-*.agent.md
+describes: share/skills/w-ideation/**, share/skills/w-ideation-discovery/**, share/skills/w-ideation-mediation/**, share/skills/h-ideation-panel/**, share/agents/ideator.agent.md, share/agents/ideation-*.agent.md
 
 ## share/diagrams/kanban.excalidraw
 describes: serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**
