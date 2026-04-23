@@ -18,10 +18,12 @@ from owlbear_kanban.body_parser import parse_body
 if TYPE_CHECKING:
     from owlbear_kanban.models import Section, Task
 
-# CommonMark list item: bullet (- * +) or ordered (1.) at start of line
-_BULLET_RE = re.compile(r"^[ \t]*[-*+] ", re.MULTILINE)
-_ORDERED_RE = re.compile(r"^[ \t]*\d+\. ", re.MULTILINE)
-_FENCE_RE = re.compile(r"^(`{3,}|~{3,})", re.MULTILINE)
+# CommonMark list item: up to 3 leading spaces, then marker + space.
+# Four-space or tab-indented lines are indented code blocks, not lists.
+_MAX_INDENT = 3
+_BULLET_RE = re.compile(r"^ {0,3}[-*+] ", re.MULTILINE)
+_ORDERED_RE = re.compile(r"^ {0,3}\d{1,9}[\.)] ", re.MULTILINE)
+_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})", re.MULTILINE)
 
 
 def _get_sections(task: Task) -> list[Section]:
@@ -92,17 +94,26 @@ def _remove_fenced_blocks(text: str) -> str:
     result: list[str] = []
     in_fence = False
     fence_char = ""
+    fence_len = 0
     for line in text.split("\n"):
+        stripped = line.lstrip(" ")
+        indent = len(line) - len(stripped)
         fence_match = _FENCE_RE.match(line)
         if fence_match and not in_fence:
             in_fence = True
             fence_char = fence_match.group(1)[0]
+            fence_len = len(fence_match.group(1))
             result.append("")  # blank placeholder
         elif in_fence:
-            closing = re.match(rf"^[{re.escape(fence_char)}]{{3,}}\s*$", line)
+            closing = (
+                indent <= _MAX_INDENT
+                and stripped.rstrip() == fence_char * len(stripped.rstrip())
+                and len(stripped.rstrip()) >= fence_len
+            )
             if closing:
                 in_fence = False
                 fence_char = ""
+                fence_len = 0
             result.append("")  # blank placeholder
         else:
             result.append(line)
