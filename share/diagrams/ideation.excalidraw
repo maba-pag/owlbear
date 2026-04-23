@@ -500,7 +500,7 @@
       "textAlign": "center",
       "verticalAlign": "middle",
       "lineHeight": 1.25,
-      "containerId": null,
+      "containerId": "p2_bg_rect",
       "autoResize": true
     },
     {
@@ -1467,6 +1467,53 @@
       "elbowed": false
     },
     {
+      "id": "arr_step0_m3",
+      "type": "arrow",
+      "x": 560,
+      "y": 730,
+      "width": 60,
+      "height": 0,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340191,
+      "versionNonce": 10340192,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "startBinding": {
+        "elementId": "p2_bg_rect",
+        "focus": 0,
+        "gap": 8,
+        "fixedPoint": null
+      },
+      "endBinding": {
+        "elementId": "p2_m3_text",
+        "focus": 0,
+        "gap": 8,
+        "fixedPoint": null
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          60,
+          0
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "elbowed": false
+    },
+    {
       "id": "arr_m3_panel",
       "type": "arrow",
       "x": 680,
@@ -1508,6 +1555,53 @@
         [
           100,
           0
+        ]
+      ],
+      "lastCommittedPoint": null,
+      "elbowed": false
+    },
+    {
+      "id": "arr_panel_prag",
+      "type": "arrow",
+      "x": 730,
+      "y": 850,
+      "width": 0,
+      "height": -40,
+      "angle": 0,
+      "strokeColor": "#1e1e1e",
+      "backgroundColor": "transparent",
+      "fillStyle": "solid",
+      "strokeWidth": 2,
+      "strokeStyle": "solid",
+      "roughness": 0,
+      "opacity": 100,
+      "seed": 10340193,
+      "versionNonce": 10340194,
+      "groupIds": [],
+      "boundElements": [],
+      "isDeleted": false,
+      "startBinding": {
+        "elementId": "p2_panel_text",
+        "focus": 0,
+        "gap": 8,
+        "fixedPoint": null
+      },
+      "endBinding": {
+        "elementId": "p2_pragmatist_text",
+        "focus": 0,
+        "gap": 8,
+        "fixedPoint": null
+      },
+      "startArrowhead": null,
+      "endArrowhead": "arrow",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          -40
         ]
       ],
       "lastCommittedPoint": null,
