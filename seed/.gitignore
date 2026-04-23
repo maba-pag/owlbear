@@ -66,4 +66,6 @@ htmlcov/
 
 # Lock files (transient runtime artifacts)
 .owlbear/kanban/.next_id.lock
+.owlbear/kanban/tasks/.*.lock
+.owlbear/kanban/archive/.*.lock
 .owlbear/kanban/activity.jsonl
