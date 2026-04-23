@@ -398,6 +398,40 @@ class TestFromAC_Sweep:
         assert (kanban_dir / "tasks" / "9999-corrupt.md").exists()
         assert not (kanban_dir / "quarantine").exists()
 
+    def test_ac_c27_sweep_does_not_write_to_parseable_corrupt_file(self, tmp_path: Path) -> None:
+        """AC-C27 (refined): sweep() must NOT write to parseable-but-corrupt files.
+
+        A mode-9 file (invalid priority — parseable but flagged by detect_corruption) with
+        an expired claimed_at must NOT have its claim released by sweep(). The file must
+        remain byte-for-byte unchanged after sweep() completes.
+
+        Current implementation only skips unreadable files (mode 1), so it rewrites
+        parseable corrupt files — this test catches that regression.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        expired_ts = (datetime.now(tz=UTC) - timedelta(hours=3)).isoformat()
+        # Mode 9: invalid priority — YAML parses fine but detect_corruption flags it
+        corrupt_content = (
+            "---\nid: 1001\ntitle: Parseable corrupt\nstatus: in-progress\n"
+            "priority: ultra-mega-important\n"  # not in config — mode 9
+            f'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            f'claimed_at: "{expired_ts}"\narchival_reason: null\narchival_refs: []\n---\n'
+        )
+        corrupt_file = kanban_dir / "tasks" / "1001-parseable-corrupt.md"
+        corrupt_file.write_text(corrupt_content, encoding="utf-8")
+
+        engine = KanbanEngine(kanban_dir)
+        released = engine.sweep()
+
+        assert 1001 not in released, (
+            "sweep() must NOT release claims on parseable-but-corrupt files; "
+            "detect_corruption must gate claim release (AC-C27 refined)"
+        )
+        assert corrupt_file.read_text(encoding="utf-8") == corrupt_content, (
+            "sweep() must NOT modify a parseable-but-corrupt file (AC-C27 refined)"
+        )
+
     def test_ac_c52_sweep_does_not_mutate_body(self, tmp_path: Path) -> None:
         """AC-C52: sweep() only clears claimed_at and advances updated; body unchanged."""
         kanban_dir = _make_new_board(tmp_path)
@@ -688,6 +722,54 @@ class TestFromAC_MigrationGate:
         # Must not raise — empty string claimed_by is already-cleared, not a migration target
         engine = KanbanEngine(kanban_dir)
         assert engine is not None
+
+    def test_ac_c47_claimed_by_quoted_null_raises(self, tmp_path: Path) -> None:
+        """AC-C47 (refined): claimed_by: "null" (quoted string) MUST raise MigrationRequiredError.
+
+        A YAML quoted string "null" is a non-empty string value, NOT a null sentinel.
+        The refined AC-C47 distinguishes unquoted null/~ (treated as cleared) from
+        quoted non-empty strings including "null" and "~" (must trigger migration).
+
+        Current implementation strips surrounding quotes before checking the skip list,
+        so it incorrectly treats claimed_by: "null" as cleared — this test catches that.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-quotednull.md").write_text(
+            "---\nid: 1001\ntitle: quoted null\nstatus: todo\npriority: needed\n"
+            'claimed_by: "null"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "claimed_at: null\narchival_reason: null\narchival_refs: []\n---\n",
+            encoding="utf-8",
+        )
+        # Must raise — claimed_by: "null" is a non-empty quoted string, not a YAML null
+        with pytest.raises(MigrationRequiredError) as exc_info:
+            KanbanEngine(kanban_dir)
+        assert exc_info.value.code == "ERR_MIGRATION_REQUIRED"
+
+    def test_ac_c47_claimed_by_quoted_tilde_raises(self, tmp_path: Path) -> None:
+        """AC-C47 (refined): claimed_by: "~" (quoted string) MUST raise MigrationRequiredError.
+
+        A YAML quoted string "~" is a non-empty string value, NOT the YAML null shorthand.
+        The refined AC-C47 treats only unquoted ~ as null-equivalent; the quoted form
+        is a real (possibly agent-name-like) string and must trigger migration detection.
+
+        Current implementation strips quotes before checking the skip list, so it
+        incorrectly treats claimed_by: "~" as cleared — this test catches that.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        (kanban_dir / "tasks" / "1001-quotedtilde.md").write_text(
+            "---\nid: 1001\ntitle: quoted tilde\nstatus: todo\npriority: needed\n"
+            'claimed_by: "~"\n'
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "claimed_at: null\narchival_reason: null\narchival_refs: []\n---\n",
+            encoding="utf-8",
+        )
+        # Must raise — claimed_by: "~" is a non-empty quoted string, not the YAML null shorthand
+        with pytest.raises(MigrationRequiredError) as exc_info:
+            KanbanEngine(kanban_dir)
+        assert exc_info.value.code == "ERR_MIGRATION_REQUIRED"
 
 
 # ---------------------------------------------------------------------------
