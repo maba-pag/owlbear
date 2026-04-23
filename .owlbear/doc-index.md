@@ -100,6 +100,7 @@
 - ## `Launch / Usage`
 - ### `KanbanEngine methods`
 - ### `Dispatch helper`
+- ## `Migration`
 - ## `Configuration`
 - ## `Dependencies`
 
