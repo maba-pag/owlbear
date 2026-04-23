@@ -17,7 +17,7 @@ from owlbear_kanban.models import Section
 
 __all__ = ["Section", "parse_body", "render_body"]
 
-# ATX heading: 1-6 '#' followed by a space.
+# ATX heading: 1-6 '#' followed by a space
 _ATX_RE = re.compile(r"^(#{1,6}) (.*)$")
 
 # Setext underline: line of only `=` or `-` (3+ chars)
