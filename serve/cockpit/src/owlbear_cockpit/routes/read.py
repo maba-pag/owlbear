@@ -29,11 +29,10 @@ _Cache = Annotated[MtimeScanCache, Depends(get_cache)]
 def get_board(engine: _Engine) -> BoardOut:
     """Return board config: statuses, priorities, and valid_transitions map."""
     config = adapter.board_config(engine)
-    statuses = config.statuses
-    status_names = [s["name"] for s in statuses]
+    status_names = config.status_names
     valid_transitions = {name: sorted(adapter.valid_transitions(engine, name)) for name in status_names}
     return BoardOut(
-        statuses=statuses,
+        statuses=[{"name": s} for s in status_names],
         priorities=config.priorities,
         valid_transitions=valid_transitions,
     )
