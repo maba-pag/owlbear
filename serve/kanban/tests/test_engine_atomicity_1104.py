@@ -364,3 +364,142 @@ class TestFromAC_EngineAtomicity:
         entry = json.loads(log.read_text(encoding="utf-8").strip())
         assert entry["task_id"] == 1001, "only task 1001's event may be in the log"
         assert entry["action"] == "sweep-release"
+
+    # --- Full snapshot equality: edit_task ---
+
+    def test_edit_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """edit_task: rollback must restore the complete Task model, not just selected fields."""
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="todo")
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.edit_task("1001", title="Mutated Title", append_body="injected note")
+
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    # --- Full snapshot equality: move_task (non-archive) ---
+
+    def test_move_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """move_task (non-archive): rollback must restore the complete Task model."""
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="todo")
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.move_task("1001", "in-progress")
+
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    # --- Full snapshot equality: claim_task ---
+
+    def test_claim_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """claim_task: rollback must restore the complete Task model (claimed_at, updated, etc.)."""
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="todo")
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.claim_task("1001")
+
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    # --- Full snapshot equality: release_task ---
+
+    def test_release_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """release_task: rollback must restore the complete Task model (claimed_at, updated, etc.)."""
+        claimed_at = "2026-04-22T10:00:00+00:00"
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.release_task("1001")
+
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    # --- Full snapshot equality: end_work (non-archive) ---
+
+    def test_end_work_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """end_work: rollback must restore the complete Task model (status, body, claimed_at, updated)."""
+        claimed_at = "2026-04-22T10:00:00+00:00"
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.end_work("1001", note="Work done", outcome="success")
+
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    # --- Full snapshot equality: sweep per-task rollback ---
+
+    def test_sweep_second_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """sweep: rolled-back task must have complete model equality with its pre-sweep snapshot."""
+        kanban_dir = _make_board(tmp_path)
+        _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        task2_path = _make_task_file(kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        engine = KanbanEngine(kanban_dir)
+        before2 = read_task(task2_path)
+
+        emit_mock = Mock(side_effect=[None, OSError("disk full")])
+        with patch(_EMIT_PATCH, emit_mock):
+            engine.sweep()
+
+        after2 = read_task(task2_path)
+        assert after2.model_dump() == before2.model_dump(), (
+            "full Task model must be identical to pre-sweep snapshot after per-task emit-failure rollback"
+        )
+
+    # --- Sweep continuation: 3 expired tasks prove the loop continues past 2nd failure ---
+
+    def test_sweep_continues_after_second_emit_failure_third_task_released(
+        self, tmp_path: Path
+    ) -> None:
+        """sweep: after 2nd task emit failure and rollback, 3rd expired task must still be swept."""
+        kanban_dir = _make_board(tmp_path)
+        _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        _make_task_file(kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        task3_path = _make_task_file(kanban_dir, 1003, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        engine = KanbanEngine(kanban_dir)
+
+        # emit call 1 (task 1001) succeeds; call 2 (task 1002) fails; call 3 (task 1003) succeeds.
+        emit_mock = Mock(side_effect=[None, OSError("disk full"), None])
+        with patch(_EMIT_PATCH, emit_mock):
+            released = engine.sweep()
+
+        # Task 1003 must appear in released: proves the loop continued past the 1002 emit failure.
+        assert 1003 in released, (
+            "task 1003 must be swept: loop must continue after 2nd task emit failure"
+        )
+        after3 = read_task(task3_path)
+        assert after3.claimed_at is None, (
+            "task 1003 claimed_at must be cleared: loop continued and processed it"
+        )
+        # Task 1002 must NOT be released (its emit failed and was rolled back).
+        assert 1002 not in released, "task 1002 must not appear in released list (emit failed)"
