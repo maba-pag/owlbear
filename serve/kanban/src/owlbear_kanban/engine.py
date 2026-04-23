@@ -529,7 +529,7 @@ class KanbanEngine:
             priority:  Only return tasks with this priority.  Empty = no filter.
             search:    Case-insensitive substring match on title and body.
             sort:      Field to sort by: id, title, status, priority, created, updated.
-            unclaimed: When True, only tasks with no claimed_by value.
+            unclaimed: When True, only tasks with no claimed_at value (not claimed).
             archived:  When True, read from archive/ instead of tasks_dir.
             limit:     Cap on results (0 = unlimited).
             reverse:   When True, reverse the sort order.
