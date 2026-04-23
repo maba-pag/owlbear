@@ -29,6 +29,9 @@ from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
 from typing import Any
 
+import yaml
+from pydantic import ValidationError
+from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
 from owlbear_kanban.activity_store import (
@@ -57,12 +60,121 @@ from owlbear_kanban.models import (
     Task,
 )
 from owlbear_kanban.storage_io import atomic_write
-from owlbear_kanban.task_io import (
-    _make_yaml,
-    make_task_filename,
-    validate_path_containment,
+
+# YAML timestamp/bool tags used to preserve frontmatter fidelity.
+_TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
+_BOOL_TAG = "tag:yaml.org,2002:bool"
+
+
+class YAML12SafeLoader(yaml.SafeLoader):
+    """PyYAML SafeLoader tuned for task frontmatter parsing."""
+
+
+YAML12SafeLoader.yaml_implicit_resolvers = {
+    k: [(tag, regexp) for tag, regexp in v if tag not in (_TIMESTAMP_TAG, _BOOL_TAG)]
+    for k, v in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+YAML12SafeLoader.add_implicit_resolver(
+    _BOOL_TAG,
+    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
+    list("tTfF"),
 )
-from owlbear_kanban.task_io import read_task as _task_io_read_task
+
+_WINDOWS_RESERVED: frozenset[str] = frozenset(
+    ["con", "prn", "aux", "nul"] + [f"com{i}" for i in range(1, 10)] + [f"lpt{i}" for i in range(1, 10)]
+)
+
+
+def _make_yaml() -> YAML:
+    """Return a round-trip ruamel YAML instance with timestamp resolver disabled."""
+    y = YAML(typ="rt")
+    _ = y.resolver.versioned_resolver
+    for resolver_dict in y.resolver._version_implicit_resolver.values():  # noqa: SLF001
+        for char_key in list(resolver_dict.keys()):
+            resolver_dict[char_key] = [
+                (tag, regexp) for tag, regexp in resolver_dict[char_key] if tag != _TIMESTAMP_TAG
+            ]
+    return y
+
+
+def generate_slug(title: str) -> str:
+    """Return a filesystem-safe slug derived from *title*."""
+    if not title:
+        return ""
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    slug = slug[:80]
+    if slug in _WINDOWS_RESERVED:
+        msg = f"Invalid title: '{slug}' is a Windows reserved filename"
+        raise ValueError(msg)
+    return slug
+
+
+def make_task_filename(task_id: int, title: str) -> str:
+    """Return canonical task filename ``{id}-{slug}.md``."""
+    return f"{task_id}-{generate_slug(title)}.md"
+
+
+def validate_path_containment(tasks_dir: Path, path: Path) -> None:
+    """Raise if *path* is not safely contained within *tasks_dir*."""
+    if "\x00" in str(path):
+        msg = "Path contains null byte"
+        raise ValueError(msg)
+
+    resolved_dir = tasks_dir.resolve()
+    resolved_path = path.resolve()
+
+    if resolved_path == resolved_dir:
+        msg = f"Path must be a file inside tasks_dir, not tasks_dir itself: {path}"
+        raise ValueError(msg)
+
+    try:
+        resolved_path.relative_to(resolved_dir)
+    except ValueError:
+        msg = f"Path is outside tasks_dir '{tasks_dir}': {path}"
+        raise PermissionError(msg) from None
+
+
+def _parse_task_file(path: Path) -> Task:
+    """Parse a markdown task file into a validated Task model."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        content = path.read_text(encoding="cp1252")
+
+    if not content.startswith("---"):
+        msg = f"Task file has no YAML frontmatter (missing opening '---'): {path}"
+        raise ValueError(msg)
+
+    lines = content.split("\n")
+    closing_idx: int | None = None
+    for i, line in enumerate(lines[1:], start=1):
+        if line == "---":
+            closing_idx = i
+            break
+    if closing_idx is None:
+        msg = f"Task file has no closing '---' frontmatter delimiter: {path}"
+        raise ValueError(msg)
+
+    frontmatter_str = "\n".join(lines[1:closing_idx])
+    body = "\n".join(lines[closing_idx + 1 :])
+    data: dict[str, Any] = yaml.load(frontmatter_str, Loader=YAML12SafeLoader) or {}  # noqa: S506
+    data["body"] = body
+    return Task.model_validate(data)
+
+
+def _validation_to_corruption(path: Path, exc: ValidationError) -> CorruptionError:
+    """Map pydantic validation errors to corruption mode codes."""
+    code = "ERR_CORRUPT_TYPE_MISMATCH"
+    for error in exc.errors():
+        if error.get("type") in ("missing", "value_error"):
+            code = "ERR_CORRUPT_MISSING_FIELD"
+            break
+    detail = "required field missing" if code == "ERR_CORRUPT_MISSING_FIELD" else "field type mismatch"
+    return CorruptionError(
+        code=code,
+        user_message=f"{detail} in {path.name}: {exc}",
+        file_path=str(path),
+    )
 
 # ---------------------------------------------------------------------------
 # Canonical frontmatter field order per Brief C §2.3
@@ -197,11 +309,8 @@ def read_task(path: Path) -> Task:
         CorruptionError: ERR_CORRUPT_INVALID_STATUS when status is outside config.
         CorruptionError: ERR_CORRUPT_INVALID_PRIORITY when priority is outside config.
     """
-    import yaml  # noqa: PLC0415
-    from pydantic import ValidationError  # noqa: PLC0415
-
     try:
-        task = _task_io_read_task(path)
+        task = _parse_task_file(path)
     except yaml.YAMLError as exc:
         raise CorruptionError(
             code=ERR_CORRUPT_YAML_PARSE,
@@ -209,20 +318,7 @@ def read_task(path: Path) -> Task:
             file_path=str(path),
         ) from exc
     except ValidationError as exc:
-        # Determine the specific code based on error types
-        for error in exc.errors():
-            if error.get("type") in ("missing", "value_error"):
-                raise CorruptionError(
-                    code="ERR_CORRUPT_MISSING_FIELD",
-                    user_message=f"required field missing in {path.name}: {exc}",
-                    file_path=str(path),
-                ) from exc
-        # Generic type mismatch
-        raise CorruptionError(
-            code="ERR_CORRUPT_TYPE_MISMATCH",
-            user_message=f"field type mismatch in {path.name}: {exc}",
-            file_path=str(path),
-        ) from exc
+        raise _validation_to_corruption(path, exc) from exc
     except ValueError as exc:
         raise CorruptionError(
             code="ERR_CORRUPT_DELIMITERS",
@@ -296,10 +392,11 @@ def write_task(task: Task, kanban_dir: Path) -> Path:
         if key in _TS_FIELDS and isinstance(val, str):
             val = _normalize_timestamp(val)
         ordered[key] = val
-    # Vendor extras
+    # Vendor extras (AC-C15 applies to all timestamp-looking values).
     for key, val in data.items():
         if key not in _CANONICAL_FIELD_SET and key != "claimed_by":
-            ordered[key] = val
+            normalized_val = _normalize_timestamp(val) if isinstance(val, str) else val
+            ordered[key] = normalized_val
 
     stream = io.StringIO()
     _make_yaml().dump(ordered, stream)
@@ -419,9 +516,14 @@ def move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
 
     Lock files (hidden ``.lock`` files) are skipped: the function returns *task_path*
     unchanged without moving or creating any quarantine directory entry.
+
+    Raises:
+        PermissionError: when *task_path* is outside *kanban_dir*.
     """
     if task_path.name.startswith(".") and task_path.name.endswith(".lock"):
         return task_path
+
+    validate_path_containment(kanban_dir, task_path)
 
     quarantine_dir = kanban_dir / "quarantine"
     quarantine_dir.mkdir(parents=True, exist_ok=True)
@@ -471,6 +573,7 @@ __all__ = [
     "list_archive_files",
     "list_task_files",
     "load_config",
+    "make_task_filename",
     "move_to_archive",
     "move_to_quarantine",
     "parse_body",
@@ -478,6 +581,7 @@ __all__ = [
     "render_body",
     "save_config",
     "scan_and_fix",
+    "validate_path_containment",
     "write_task",
     "write_task_if_unchanged",
 ]
