@@ -126,6 +126,36 @@ def _arrows_between(data: dict, start_id: str, end_id: str) -> list[dict]:
     return result
 
 
+def _build_by_id(data: dict) -> dict[str, dict]:
+    """Return a dict mapping element id -> element for all non-deleted elements."""
+    return {e["id"]: e for e in data.get("elements", []) if e.get("id")}
+
+
+def _resolve_text(by_id: dict[str, dict], element_id: str) -> str:
+    """Return display text for an element, following containerId for shapes.
+
+    Arrows bind to container rects, not directly to their contained text
+    elements. This helper resolves the semantic text for any element:
+    - text elements: return el["text"] directly
+    - shape/rect elements: find the first non-deleted text child (containerId == shape.id)
+    - missing or deleted element: return ""
+    """
+    el = by_id.get(element_id)
+    if not el or el.get("isDeleted"):
+        return ""
+    if el.get("type") == "text":
+        return el.get("text") or ""
+    # Shape — find its contained text element
+    for other in by_id.values():
+        if (
+            other.get("containerId") == element_id
+            and other.get("type") == "text"
+            and not other.get("isDeleted")
+        ):
+            return other.get("text") or ""
+    return ""
+
+
 # ===========================================================================
 # TestFromAC_IdeationDiagramFile — AC1 (unchanged)
 # ===========================================================================
@@ -615,7 +645,7 @@ class TestFromAC_IdeationFooterElement:
         """Boundary: footer matches Last verified: YYYY-MM-DD (short-hash) pattern."""
         all_text = _all_element_text(diagram_data)
         assert _FOOTER_RE.search(all_text), (
-            f"Footer does not match pattern {_FOOTER_RE.patternreboot}. "
+            f"Footer does not match pattern {_FOOTER_RE.pattern!r}. "
             f"All diagram text (lowercased, first 400 chars): {all_text[:400]}"
         )
 
@@ -1020,4 +1050,227 @@ class TestFromAC_IdeationAbsenceRequirements:
             "No bound arrow from M4 to the O15 element found. "
             "AC2 requires the Phase 2 flow to show M4 -> O15 Critic validation as "
             "a structural bound-arrow connection, not just an inline text annotation."
+        )
+
+
+# ===========================================================================
+# TestFromAC_IdeationStructuralAbsenceSx — AC2 S2-S5 (8th-cycle)
+# Arrow-binding graph checks that cannot be satisfied by relabeling.
+# All 4 tests FAIL against the current artifact (legacy structural skeleton).
+# ===========================================================================
+
+_MOMENT_RE = re.compile(r"\bM[1-6]\b|\bStep 0\b", re.IGNORECASE)
+_M4_RE = re.compile(r"\bM4\b", re.IGNORECASE)
+_M2_RE = re.compile(r"\bM2\b", re.IGNORECASE)
+_M3_RE = re.compile(r"\bM3\b", re.IGNORECASE)
+_MOMENT_ONLY_RE = re.compile(r"\bM[1-6]\b", re.IGNORECASE)
+
+
+class TestFromAC_IdeationStructuralAbsenceSx:
+    """AC2 structural sub-criteria S2-S5 (8th-cycle Architecture Review).
+
+    Each test resolves arrow bindings to their semantic text via _resolve_text,
+    which follows containerId chains so shape-bound arrows are handled correctly.
+    These tests catch structural defects that text-presence checks cannot find:
+    legacy boundary-Critic arrows, a shared M2-M3 backbone, an incorrectly
+    targeted bridge arrow, and router-to-mode dispatch that bypasses Step 0.
+
+    All 4 tests FAIL against the current artifact:
+      S2 — moment→Critic arrows still exist at ideation.excalidraw:2419,2463,2507,2551
+      S3 — M2→M3 shared backbone still exists at ideation.excalidraw:1539
+      S4 — bridge arrow targets mode_facilitative_text, not Phase 2 Step 0
+      S5 — router→mode→M1/M4 dispatch bypasses Step 0 at ideation.excalidraw:1803,1847
+    """
+
+    def test_s2_no_moment_to_critic_boundary_arrows(
+        self, diagram_data: dict
+    ) -> None:
+        """Structural-absence (S2): no arrow may run from a moment (M1-M6 or
+        Step 0) to a Critic element, except M4→O15 (the O15 validation step).
+
+        Legacy boundary-Critic arrows (M1/M2/M4/M5 → critic_rect) violate the
+        current authority (h-ideation-panel, w-ideation-mediation): Critic
+        appears only in the embedded late-panel loops and the O15 step, not as
+        a standalone boundary check triggered directly by moments.
+        """
+        by_id = _build_by_id(diagram_data)
+        elements = diagram_data.get("elements", [])
+        violations: list[str] = []
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            end_id = (el.get("endBinding") or {}).get("elementId")
+            if not start_id or not end_id:
+                continue
+            start_text = _resolve_text(by_id, start_id)
+            end_text = _resolve_text(by_id, end_id)
+            if _MOMENT_RE.search(start_text) and "critic" in end_text.lower():
+                if "o15" in end_text.lower():
+                    # Only M4 → O15 permitted
+                    if not _M4_RE.search(start_text):
+                        violations.append(
+                            f"Arrow {el.get('id')}: non-M4 moment "
+                            f"'{start_text}' → O15 '{end_text}'"
+                        )
+                else:
+                    violations.append(
+                        f"Arrow {el.get('id')}: moment '{start_text}' "
+                        f"→ Critic '{end_text}' (legacy boundary-Critic arrow)"
+                    )
+        assert not violations, (
+            "AC2 S2 violation — moment→Critic boundary arrows found. "
+            "Critic must appear only inside late-panel embedded loops and O15. "
+            f"Violations: {violations}"
+        )
+
+    def test_s3_no_shared_m2_to_m3_backbone_arrow(
+        self, diagram_data: dict
+    ) -> None:
+        """Structural-absence (S3): no arrow may have resolved start text matching
+        M2 AND resolved end text matching M3.
+
+        Phase 1 ends at M2 (via early challenge and bridge); Phase 2 starts at
+        its own Step 0 then M3. A direct M2→M3 arrow creates a shared moment
+        backbone across both phases, contradicting the two-phase clean separation
+        required by the current authority (w-ideation, w-ideation-discovery).
+        """
+        by_id = _build_by_id(diagram_data)
+        elements = diagram_data.get("elements", [])
+        violations: list[str] = []
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            end_id = (el.get("endBinding") or {}).get("elementId")
+            if not start_id or not end_id:
+                continue
+            start_text = _resolve_text(by_id, start_id)
+            end_text = _resolve_text(by_id, end_id)
+            if _M2_RE.search(start_text) and _M3_RE.search(end_text):
+                violations.append(
+                    f"Arrow {el.get('id')}: M2 '{start_text}' → M3 '{end_text}' "
+                    "(creates shared backbone — Phase 1 and Phase 2 must be "
+                    "separate sequences connected only through the research bridge)"
+                )
+        assert not violations, (
+            "AC2 S3 violation — shared moment backbone M2→M3 arrow found. "
+            f"Violations: {violations}"
+        )
+
+    def test_s4_bridge_arrow_targets_phase2_step0(
+        self, diagram_data: dict
+    ) -> None:
+        """Structural (S4): exactly one bridge/handoff outgoing arrow must exist,
+        and its endBinding must resolve to text containing 'Phase 2' AND 'Step 0'.
+
+        The bridge element is the Phase 1 → Phase 2 handoff node. Its outgoing
+        arrow must land on the Phase 2 Step 0 gate element. If it lands on a
+        legacy intermediary (e.g. mode_facilitative_text), the two phases are
+        not cleanly separated and the Phase 2 Step 0 stop-if-thin gate is bypassed.
+        """
+        by_id = _build_by_id(diagram_data)
+        elements = diagram_data.get("elements", [])
+        bridge_arrows: list[dict] = []
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            if not start_id:
+                continue
+            start_text = _resolve_text(by_id, start_id)
+            if re.search(r"bridge|handoff", start_text, re.IGNORECASE):
+                bridge_arrows.append(el)
+
+        assert len(bridge_arrows) == 1, (
+            f"AC2 S4: expected exactly 1 bridge/handoff outgoing arrow, "
+            f"found {len(bridge_arrows)}. "
+            "The Phase 1→Phase 2 handoff must be expressed as a single bound arrow "
+            "from the bridge/handoff element to Phase 2 Step 0."
+        )
+
+        arr = bridge_arrows[0]
+        end_id = (arr.get("endBinding") or {}).get("elementId")
+        end_text = _resolve_text(by_id, end_id or "")
+        assert "phase 2" in end_text.lower(), (
+            f"AC2 S4: bridge arrow (id={arr.get('id')}) targets '{end_text}' "
+            "which does not contain 'Phase 2'. Bridge must land on the Phase 2 "
+            "Step 0 gate element, not a legacy intermediary node."
+        )
+        assert "step 0" in end_text.lower(), (
+            f"AC2 S4: bridge arrow (id={arr.get('id')}) targets '{end_text}' "
+            "which does not contain 'Step 0'. Bridge must land on the Phase 2 "
+            "Step 0 gate element (reads discovery artifacts; stops if thin)."
+        )
+
+    def test_s5_router_targets_do_not_dispatch_directly_to_moments(  # noqa: C901, PLR0912
+        self, diagram_data: dict
+    ) -> None:
+        """Structural-absence (S5): no element that is a direct arrow target of
+        the router may itself have an outgoing arrow to a moment (M1-M6).
+
+        The router (ideator) dispatches to Phase 1 and Phase 2 entry elements.
+        Those entry elements must connect only to their own Step 0 gates, not
+        directly to moment nodes. Legacy intermediary dispatch (router → mode node
+        → M1 or M4) bypasses the Phase Step 0 gates and preserves the obsolete
+        single-agent model structure even if labels are updated.
+        """
+        by_id = _build_by_id(diagram_data)
+        elements = diagram_data.get("elements", [])
+
+        # Find the router container element(s)
+        router_ids: set[str] = set()
+        for el in elements:
+            if el.get("type") == "text" and not el.get("isDeleted"):
+                txt = (el.get("text") or "").lower()
+                if "ideator" in txt or "router" in txt:
+                    router_ids.add(el["id"])
+                    if el.get("containerId"):
+                        router_ids.add(el["containerId"])
+
+        assert router_ids, (
+            "AC2 S5: router element not found (no element with 'ideator' or 'router' text). "
+            "Cannot verify phase-dispatch integrity."
+        )
+
+        # Find all elements that are direct arrow targets from the router
+        router_targets: set[str] = set()
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            if start_id in router_ids:
+                end_id = (el.get("endBinding") or {}).get("elementId")
+                if end_id:
+                    router_targets.add(end_id)
+
+        assert router_targets, (
+            "AC2 S5: router has no outgoing arrows to phase entry elements. "
+            "Router must dispatch to Phase 1 and Phase 2 regions."
+        )
+
+        # Check that no router target dispatches directly to a moment
+        violations: list[str] = []
+        for el in elements:
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            if start_id not in router_targets:
+                continue
+            end_id = (el.get("endBinding") or {}).get("elementId")
+            if not end_id:
+                continue
+            end_text = _resolve_text(by_id, end_id)
+            if _MOMENT_ONLY_RE.search(end_text):
+                target_text = _resolve_text(by_id, start_id)
+                violations.append(
+                    f"Router target '{target_text}' (id={start_id}) "
+                    f"dispatches directly to moment '{end_text}' "
+                    f"via arrow {el.get('id')} — bypasses Step 0 gate"
+                )
+        assert not violations, (
+            "AC2 S5 violation — router target dispatches directly to moment nodes. "
+            "Each phase entry element must connect only to its Step 0 gate, "
+            "not directly to M1/M4 or other moment nodes. "
+            f"Violations: {violations}"
         )
