@@ -1,6 +1,6 @@
 # owlbear-mcp-memory — Memory MCP Server
 
-MCP server that provides agent institutional memory via a SQLite-backed store. Agents record learnings, retrieve relevant knowledge, and curate entries through an approval workflow. Registered in VS Code's MCP configuration as `owlbearMemory`.
+MCP server that provides agent institutional memory via a SQLite-backed store. Agents record learnings, retrieve relevant knowledge, and curate entries through an approval workflow. Registered in VS Code's MCP configuration as `owlbear-memory`.
 
 → Parent: [README.md](../../README.md)
 

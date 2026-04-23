@@ -27,6 +27,11 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `list_bookmarks` | List bookmarks, optionally filtered by tag or minimum score |
 | `update_bookmark_tags` | Update tags on an existing bookmark |
 | `import_scope` | Import a project-local knowledge snapshot into the global KB |
+| `export_scope` | Export all knowledge rows for one scope to a portable SQLite file |
+| `sync_from_global` | Import the global knowledge DB into local scope `global` |
+| `sync_to_global` | Export local scope `global` rows to the global knowledge DB |
+| `refresh_source` | Re-ingest a registered source by source ID |
+| `consolidate_knowledge` | Synthesize cross-document insights from unconsolidated chunks |
 
 ## Configuration
 
