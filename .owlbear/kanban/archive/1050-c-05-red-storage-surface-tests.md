@@ -1,10 +1,10 @@
 ---
 id: 1050
 title: 'C-05: RED — storage surface tests'
-status: in-progress
+status: archived
 priority: critical
 created: 2026-04-21T10:42:50.277750+00:00
-updated: 2026-04-22T06:29:21.010684+00:00
+updated: 2026-04-22T22:34:25.266837+00:00
 tags:
 - phase:storage
 - brief:c
@@ -1274,3 +1274,384 @@ All 9 ACs for #1050 PASS per the reviewer's own compliance table (cycle 7):
 - Reviewer guidance added to task body: cross-task RED-phase failures in related-surface runs are informational (Pass 2), not gate criteria.
 - 74 tests passing in task-scoped run, ruff clean, storage.py 96% coverage (above 90% gate).
 - No new tests written, no existing tests modified.
+[[2026-04-22]]
+## Builder Notes
+- Files changed: `serve/kanban/src/owlbear_kanban/corruption.py`
+- Implementation: restored AC-C16 mode-3 code contract for non-archive `claimed_by` corruption in `detect_corruption()` by returning `ERR_CORRUPT_MISSING_FIELD` (detail unchanged: `forbidden field claimed_by present`).
+- Why: task-local `TestFromAC_*` failures showed a code mismatch (`ERR_CORRUPT_FORBIDDEN_FIELD` vs expected `ERR_CORRUPT_MISSING_FIELD`), which also caused the AC-C30 AR body assertion failure.
+- RED evidence (quality-runner, scoped): 82 passed, 2 failed, 0 skipped on `serve/kanban/tests/test_storage_1050.py` + `serve/kanban/tests/test_engine_storage.py`; failing tests:
+  - `TestFromAC_CorruptionDetection::test_detect_corruption_claimed_by_in_tasks_dir`
+  - `TestFromAC_QuarantineRepair::test_repair_storage_ar_body_has_code_path_detail_fields`
+- GREEN evidence (quality-runner, scoped): 84 passed, 0 failed, 0 skipped on `serve/kanban/tests/test_storage_1050.py` + `serve/kanban/tests/test_engine_storage.py`; ruff clean.
+- Durable related-surface check (quality-runner): 95 passed, 0 failed, 0 skipped on `serve/kanban/tests/test_storage_1050.py` + `serve/kanban/tests/test_engine_storage.py` + `serve/kanban/tests/test_storage.py`; ruff clean.
+- Coverage: `owlbear_kanban.storage` 95% (>= 90% gate).
+- Reflection:
+  - The regression came from error-code drift, not behavior drift; fixing the canonical code restored two AC paths at once.
+  - A single-branch patch was sufficient; no interface or test changes were needed.
+  - Running both scoped and durable quality-runner passes prevented false-green closure.
+  - Kept `TestFromAC_*` untouched as required.
+[[2026-04-22]]
+## Review Evidence
+
+### Test Results
+- quality-runner task-local: 52 passed, 0 failed, 0 skipped on `serve/kanban/tests/test_storage_1050.py`
+- quality-runner related-surface: 94 passed, 1 failed across `serve/kanban/tests/test_storage_1050.py`, `serve/kanban/tests/test_engine_storage.py`, and `serve/kanban/tests/test_storage.py`
+- Related-surface failure: `serve/kanban/tests/test_engine_storage.py::TestFromAC_ParseDuration::test_ac_c50_config_load_calls_parse_duration_not_only_regex`
+- Gating decision: the related-surface failure was not counted against #1050. It belongs to task #1053, which is still `in-progress` with tag `tdd:red`, and its task body still records AC-C50 as the active RED case.
+
+### Lint
+- quality-runner task-local ruff: clean on `serve/kanban/src/owlbear_kanban/storage.py`, `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/corruption.py`, and `serve/kanban/tests/test_storage_1050.py`
+
+### Coverage
+- `owlbear_kanban.storage`: 95% in the task-local scoped run
+
+### Pass 1 — CRITICAL
+
+#### Test-Writer AC Coverage
+
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC-C13 | `test_written_frontmatter_fields_in_canonical_order` (`serve/kanban/tests/test_storage_1050.py:192`), `test_vendor_extra_fields_appear_after_canonical_fields` (`serve/kanban/tests/test_storage_1050.py:206`) | Yes | COVERED |
+| AC-C14 | `test_task_model_accepts_vendor_extra_fields` (`serve/kanban/tests/test_storage_1050.py:234`), `test_vendor_extra_fields_survive_write_read_round_trip` (`serve/kanban/tests/test_storage_1050.py:249`) | Yes | COVERED |
+| AC-C15 | `test_all_timestamp_fields_end_with_utc_offset` (`serve/kanban/tests/test_storage_1050.py:271`), `test_naive_timestamps_stored_with_utc_offset` (`serve/kanban/tests/test_storage_1050.py:289`), `test_normalize_timestamp_z_suffix_is_normalized_to_explicit_utc` (`serve/kanban/tests/test_storage_1050.py:913`) | No. A canonical timestamp with a non-UTC offset still violates the AC while the suite stays green: `_normalize_timestamp()` returns offset-bearing values unchanged at `serve/kanban/src/owlbear_kanban/storage.py:162-165`, and `test_normalize_timestamp_already_has_tz` (`serve/kanban/tests/test_storage_1050.py:907-911`) explicitly blesses that non-UTC behavior. | MISSING |
+| AC-C16 | `test_detect_corruption_claimed_by_in_tasks_dir` (`serve/kanban/tests/test_storage_1050.py:323`), `test_detect_corruption_claimed_by_detail_exact_string` (`serve/kanban/tests/test_storage_1050.py:334`), `test_detect_corruption_archive_file_with_claimed_by_returns_none` (`serve/kanban/tests/test_storage_1050.py:358`) | Yes | COVERED |
+| AC-C28 | `test_move_to_quarantine_creates_dir_when_absent` (`serve/kanban/tests/test_storage_1050.py:380`), `test_move_to_quarantine_no_error_when_dir_already_exists` (`serve/kanban/tests/test_storage_1050.py:390`) | Yes | COVERED |
+| AC-C29 | `test_move_to_quarantine_returns_quarantine_subpath` (`serve/kanban/tests/test_storage_1050.py:399`), `test_move_to_quarantine_file_exists_at_returned_path` (`serve/kanban/tests/test_storage_1050.py:410`), `test_move_to_quarantine_source_file_removed` (`serve/kanban/tests/test_storage_1050.py:421`), `test_move_to_quarantine_preserves_file_content` (`serve/kanban/tests/test_storage_1050.py:430`) | Yes | COVERED |
+| AC-C30 | `test_repair_storage_ar_task_has_type_user_action_tag` (`serve/kanban/tests/test_storage_1050.py:450`), `test_repair_storage_ar_body_contains_quarantined_file_section` (`serve/kanban/tests/test_storage_1050.py:469`), `test_repair_storage_ar_body_has_code_path_detail_fields` (`serve/kanban/tests/test_storage_1050.py:489`) | Yes | COVERED |
+| AC-C48 | `test_archive_file_with_claimed_by_reads_without_exception` (`serve/kanban/tests/test_storage_1050.py:521`), `test_archive_claimed_by_stripped_from_returned_task` (`serve/kanban/tests/test_storage_1050.py:531`), `test_archive_claimed_by_does_not_raise_corruption_error` (`serve/kanban/tests/test_storage_1050.py:541`), `test_engine_init_with_archive_claimed_by_no_migration_error` (`serve/kanban/tests/test_storage_1050.py:554`), `test_archive_vendor_fields_preserved_when_claimed_by_stripped` (`serve/kanban/tests/test_storage_1050.py:584`) | Yes | COVERED |
+| AC-REGR | `test_claimed_task_remains_in_list_tasks_same_engine` (`serve/kanban/tests/test_storage_1050.py:992`), `test_claimed_task_remains_in_list_tasks_after_cache_miss` (`serve/kanban/tests/test_storage_1050.py:1004`), `test_start_work_then_list_tasks_includes_task` (`serve/kanban/tests/test_storage_1050.py:1025`) | Yes | COVERED |
+
+#### Security Review
+- No task-local security issue found in the reviewed storage, corruption, list, or repair paths.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| Task-scoped `TestFromAC_*` suite in `serve/kanban/tests/test_storage_1050.py` | No weakening observed in the current task state. Builder changes stayed outside the `TestFromAC_*` classes. | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | AC-C16, AC-C30, AC-C48, and AC-REGR assert exact code, detail, path, and visibility outcomes. |
+| Negative/error-path coverage | ADEQUATE | claimed_by corruption, archive exemption, quarantine, and claim-list regression paths are covered directly. |
+| Manual mutation reasoning | WEAK | A canonical timestamp with a non-UTC offset would still be written as non-UTC because `_normalize_timestamp()` preserves existing offsets at `serve/kanban/src/owlbear_kanban/storage.py:162-165`. The task-local suite does not fail on that mutation and the helper test at `serve/kanban/tests/test_storage_1050.py:907-911` encodes the wrong expectation. |
+| Test independence | STRONG | The task-local suite uses isolated `tmp_path` boards throughout. |
+| Descriptive test names | STRONG | The names map cleanly to each AC and regression clause. |
+
+#### Data Safety
+- No FAIL-level task-local data-safety issue counted for this gate.
+
+#### Implementation-Aware Gaps
+- AC-C15 is still not satisfied for offset-bearing canonical timestamps. The task AC says timestamps written are ISO-8601 UTC with explicit `+00:00`, and the Brief C source text is explicit: `paper-c.md:483` requires `datetime.fromisoformat(...).astimezone(timezone.utc).isoformat()`, while `decisions.md:230` says non-UTC offsets such as `+02:00` must be converted to UTC.
+- Current implementation in `serve/kanban/src/owlbear_kanban/storage.py:154-166` only normalises naive timestamps and `Z`; it returns any other timezone-bearing value unchanged.
+- The current task-local tests prove naive and `Z` handling only. They do not cover a canonical field written with a non-UTC offset, and the helper test at `serve/kanban/tests/test_storage_1050.py:907-911` asserts the opposite of the AC.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 8 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- The broad related-surface run exposed one failing AC-C50 test in `serve/kanban/tests/test_engine_storage.py:691`, but that test belongs to task #1053, which is still `in-progress` with `tdd:red`; it is informational only for #1050.
+- Code-reader also flagged the lack of containment validation in `move_to_quarantine()` (`serve/kanban/src/owlbear_kanban/storage.py:413-418`) versus the guarded write path (`serve/kanban/src/owlbear_kanban/storage.py:290`). I did not gate on that here because the latest architecture review for #1050 explicitly narrowed that hardening concern out of task scope.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC-C13 | Canonical fields are emitted in ordered frontmatter in `serve/kanban/src/owlbear_kanban/storage.py:281-299`. | `TestFromAC_Frontmatter` | PASS |
+| AC-C14 | `Task` still allows extra fields, and round-trip preservation is covered in the task-local suite. | `TestFromAC_Frontmatter` | PASS |
+| AC-C15 | `serve/kanban/src/owlbear_kanban/storage.py:162-165` returns non-UTC offsets unchanged, which conflicts with Brief C `paper-c.md:483` and `decisions.md:230`. | `TestFromAC_Frontmatter` + `TestBuilderDiscovered` | FAIL |
+| AC-C16 | `detect_corruption()` returns `ERR_CORRUPT_MISSING_FIELD` with detail `forbidden field claimed_by present` for `tasks/`, and archive files remain exempt. | `TestFromAC_CorruptionDetection` | PASS |
+| AC-C28 | `move_to_quarantine()` creates `quarantine/` if absent. | `TestFromAC_Quarantine` | PASS |
+| AC-C29 | `move_to_quarantine()` returns `quarantine/{original-filename}` and the task-local move tests pass. | `TestFromAC_Quarantine` | PASS |
+| AC-C30 | `repair_storage()` writes AR body code/path/detail values and tag `type:user-action`, with exact-value assertions in the task-local suite. | `TestFromAC_QuarantineRepair` | PASS |
+| AC-C48 | Archive reads strip `claimed_by`, engine init on a new-schema board does not raise for archive-only `claimed_by`, and archived list summaries stay unclaimed. | `TestFromAC_ArchiveExemption` | PASS |
+| AC-REGR | `list_tasks()` now keeps actively-claimed tasks visible, including same-engine, cache-miss, and `start_work()` paths. | `TestFromAC_ClaimListRegression` | PASS |
+
+### Deductions
+- AC-C15 implementation/spec mismatch on non-UTC offsets: -0.14
+- AC-C15 task-local coverage gap plus contradictory helper assertion: -0.12
+- This task already has 7 prior `## Review Evidence` sections, so the 3rd+ review-fail loop-breaker routing applies: -0.04
+
+### Confidence: 0.70
+### Verdict: FAIL
+### Action: reject to `backlog`
+
+### Required fixes
+1. Builder: change `serve/kanban/src/owlbear_kanban/storage.py:_normalize_timestamp()` so canonical timestamp fields with any non-UTC offset are converted to UTC `+00:00`, not returned unchanged. The Brief C source text already specifies the intended conversion (`datetime.fromisoformat(...).astimezone(timezone.utc).isoformat()`).
+2. Test-writer: replace the current helper expectation in `serve/kanban/tests/test_storage_1050.py:907-911` and add task-scoped `write_task()` coverage for a canonical timestamp field written with `+02:00`, asserting the persisted frontmatter is converted to the correct UTC `+00:00` time.
+3. Keep the broad AC-C50 failure out of #1050 gating. That test belongs to #1053 and is still an expected RED/in-progress surface.
+
+### Post-task Reflection
+- A second scoped quality-runner pass was necessary to separate #1050 from an unrelated RED-phase failure in `test_engine_storage.py`.
+- The remaining blocker is a single contract gap in AC-C15, not the earlier claim-list or archive-exemption regressions.
+- The brief text resolved the ambiguity: this task requires UTC conversion for non-UTC offsets, not only suffix normalization for naive or `Z` timestamps.
+- Task-local tests were green, but the helper-level `+02:00` expectation created a false-green hole large enough to invalidate the gate.
+[[2026-04-22]]
+## Architecture Review (cycle 6)
+
+### Assessment
+
+The reviewer's cycle-8 finding is valid this time. AC-C15 requires "ISO-8601 UTC with explicit `+00:00`" and Brief C §5.3 (paper-c.md:483) explicitly specifies full UTC conversion: `datetime.fromisoformat` → `astimezone(timezone.utc)` → `isoformat()`. The current `_normalize_timestamp()` at storage.py:162-165 returns non-UTC offsets unchanged, violating the AC for canonical timestamp fields. The test at test_storage_1050.py:907-911 (`test_normalize_timestamp_already_has_tz`) encodes the wrong expectation.
+
+This is distinct from the vendor extras scope inflation rejected in cycle 4 — that exclusion was correct because Brief C §5.3 names only `created`, `updated`, `claimed_at`. The current gap is about non-UTC offsets IN those canonical fields.
+
+### AC-C15 Implementation Guidance
+
+**Builder fix (storage.py:_normalize_timestamp):**
+```python
+if tz:
+    if tz == "Z":
+        return f"{base}{frac}+00:00"
+    # Convert non-UTC offsets to UTC per Brief C §5.3
+    from datetime import datetime, timezone
+    dt = datetime.fromisoformat(ts.strip())
+    return dt.astimezone(timezone.utc).isoformat()
+return f"{base}{frac}+00:00"
+```
+
+**Test-writer fix (test_storage_1050.py):**
+1. Fix `TestBuilderDiscovered.test_normalize_timestamp_already_has_tz` — change expectation: `_normalize_timestamp("2026-04-20T10:00:00+02:00")` must return `"2026-04-20T08:00:00+00:00"` (UTC-converted), not the input unchanged.
+2. Add a `TestFromAC_Frontmatter` test: `write_task()` with a canonical field set to `+02:00`, read back and assert the persisted value is the correct UTC equivalent ending with `+00:00`.
+
+### Scope Boundary (retained from cycles 1-5)
+
+- **Coverage gate:** 90% applies to `owlbear_kanban.storage` only (currently 95-96%). Engine whole-module coverage is informational.
+- **AC-C15 field scope:** Canonical TS fields only (`created`, `updated`, `claimed_at`). Vendor extras pass through unchanged per AC-C14.
+- **AC-C30 values:** Current assertions (ERR_CORRUPT_MISSING_FIELD, quarantine path, quarantined-to detail) match the implementation contract. Do not re-apply the wrong refinement from cycle 1.
+- **AC-C48 constructor:** New-schema board config (no `version` field) exercises the live migration gate. This is correct.
+- **Cross-task isolation:** RED-phase test failures from other tasks (e.g. #1053 AC-C50 in `test_engine_storage.py`) are informational (Pass 2), not gate criteria.
+- **Quarantine containment:** Not in any AC. KISS/YAGNI applies — the function is board-internal only.
+
+### All AC Compliance (post-fix expected state)
+
+| AC | Status | Notes |
+|----|--------|-------|
+| AC-C13 | PASS | Canonical field order verified |
+| AC-C14 | PASS | Vendor extras survive round-trip |
+| AC-C15 | PASS after fix | Non-UTC offsets converted to UTC; Z-suffix and naive already covered |
+| AC-C16 | PASS | Mode-3 detection + archive exemption |
+| AC-C28 | PASS | quarantine/ dir created |
+| AC-C29 | PASS | quarantine/{original-filename} path |
+| AC-C30 | PASS | AR tag + body section + value assertions |
+| AC-C48 | PASS | Archive claimed_by stripped, new-schema gate live |
+| AC-REGR | PASS | Claimed tasks visible in list_tasks |
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Storage surface + narrow fixes |
+| Interface clarity | PASS | All ACs clarified across 6 arch cycles |
+| Dependency correctness | PASS | No unresolved dependencies |
+| Module layering | PASS | storage.py wraps task_io; engine.py consumes storage |
+| TDD compliance | PASS | tdd:red tag, full RED/GREEN cycles |
+| KISS/YAGNI | PASS | No speculative features |
+| Premise challenge | PASS | Storage surface is Brief C deliverable |
+| Pattern consistency | PASS | Follows existing patterns |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | kanban domain only |
+
+### Challenge Results
+- Challenger: SKIPPED (REFINE verdict — optional per w-arch-review Step 2.5)
+
+### Verdict: REFINE → approve
+### Action Taken: Accepted the reviewer's AC-C15 non-UTC offset finding as valid. Provided specific builder and test-writer fix guidance with the exact implementation from Brief C §5.3. Retained all scope boundaries from cycles 1-5 to prevent further scope inflation. Advanced to todo.
+[[2026-04-22]]
+## Test-Writer Notes
+- Retry cycle: strengthened AC-C15 non-UTC offset coverage per architect directive (cycle-6 loop-breaker)
+- Test file: serve/kanban/tests/test_storage_1050.py
+
+### Changes
+1. **Fixed `TestBuilderDiscovered.test_normalize_timestamp_already_has_tz`** — replaced wrong expectation (`ts == ts`) with correct AC-C15 contract: `_normalize_timestamp("2026-04-20T10:00:00+02:00")` must return `"2026-04-20T08:00:00+00:00"` (UTC-converted per Brief C §5.3).
+2. **Added `TestFromAC_Frontmatter.test_non_utc_offset_timestamps_are_converted_to_utc`** — calls `write_task()` with canonical fields set to `+02:00`, reads back and asserts:
+   - All timestamp lines end with `+00:00`
+   - `created` value is `2026-04-20T08:00:00+00:00` (not the original `10:00+02:00`)
+   - `updated` value is `2026-04-20T10:00:00+00:00` (not the original `12:00+02:00`)
+- All other `TestFromAC_*` and `TestBuilderDiscovered` classes preserved unchanged
+- AC-C30 value assertions preserved unchanged
+- AC-C48 new-schema constructor test preserved unchanged
+- AC-REGR regression tests preserved unchanged
+
+### AC Coverage
+| AC | Tests | Status |
+|----|-------|--------|
+| AC-C13 | `test_written_frontmatter_fields_in_canonical_order`, `test_vendor_extra_fields_appear_after_canonical_fields` | COVERED |
+| AC-C14 | `test_task_model_accepts_vendor_extra_fields`, `test_vendor_extra_fields_survive_write_read_round_trip` | COVERED |
+| AC-C15 | `test_all_timestamp_fields_end_with_utc_offset`, `test_naive_timestamps_stored_with_utc_offset`, `test_non_utc_offset_timestamps_are_converted_to_utc` (NEW — +02:00 → UTC), `TestBuilderDiscovered.test_normalize_timestamp_already_has_tz` (FIXED — +02:00 → UTC) | COVERED (naive, Z, non-UTC) |
+| AC-C16 | `test_detect_corruption_claimed_by_in_tasks_dir`, `test_detect_corruption_claimed_by_detail_exact_string`, `test_detect_corruption_clean_task_returns_none`, `test_detect_corruption_archive_file_with_claimed_by_returns_none` | COVERED |
+| AC-C28 | `test_move_to_quarantine_creates_dir_when_absent`, `test_move_to_quarantine_no_error_when_dir_already_exists` | COVERED |
+| AC-C29 | `test_move_to_quarantine_returns_quarantine_subpath`, `test_move_to_quarantine_file_exists_at_returned_path`, `test_move_to_quarantine_source_file_removed`, `test_move_to_quarantine_preserves_file_content` | COVERED |
+| AC-C30 | `test_repair_storage_ar_task_has_type_user_action_tag`, `test_repair_storage_ar_body_contains_quarantined_file_section`, `test_repair_storage_ar_body_has_code_path_detail_fields` (ERR_CORRUPT_MISSING_FIELD, quarantine path, quarantined-to detail) | COVERED (values) |
+| AC-C48 | `test_archive_file_with_claimed_by_reads_without_exception`, `test_archive_claimed_by_stripped_from_returned_task`, `test_archive_claimed_by_does_not_raise_corruption_error`, `test_engine_init_with_archive_claimed_by_no_migration_error` (new-schema board), `test_archive_vendor_fields_preserved_when_claimed_by_stripped` | COVERED |
+| AC-REGR | `test_claimed_task_remains_in_list_tasks_same_engine`, `test_claimed_task_remains_in_list_tasks_after_cache_miss`, `test_start_work_then_list_tasks_includes_task` | COVERED |
+
+- quality-runner (scoped): 53 tests — 2 FAIL (new AC-C15 non-UTC tests), 51 PASS
+- ruff: clean
+- Commit: a327d3fd
+[[2026-04-22]]
+## Builder Notes
+- Files changed: `serve/kanban/src/owlbear_kanban/storage.py`.
+- Implementation: updated `_normalize_timestamp()` to convert canonical timestamp fields with non-UTC offsets (for example `+02:00`) into explicit UTC `+00:00` using `datetime.fromisoformat(...).astimezone(UTC).isoformat()`. Existing naive and `Z` handling was preserved.
+- Scope: surgical, storage-only fix; no `TestFromAC_*` classes changed.
+
+### Verification
+- RED check (pre-fix, scoped): `serve/kanban/tests/test_storage_1050.py` -> 2 failed, 51 passed
+  - `TestFromAC_Frontmatter::test_non_utc_offset_timestamps_are_converted_to_utc`
+  - `TestBuilderDiscovered::test_normalize_timestamp_already_has_tz`
+- GREEN checks (post-fix, scoped):
+  - `serve/kanban/tests/test_storage_1050.py` -> 53 passed, 0 failed
+  - `serve/kanban/tests/test_engine_storage.py` -> 32 passed, 0 failed
+  - Combined scoped run -> 85 passed, 0 failed
+- Coverage (scoped): `owlbear_kanban.storage` 96% (>= 90% gate)
+- Lint (scoped): ruff clean on `serve/kanban/src/owlbear_kanban/storage.py`, `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/corruption.py`, `serve/kanban/tests/test_storage_1050.py`, `serve/kanban/tests/test_engine_storage.py`.
+
+### Commit
+- `03b5b826` — `fix: convert offset timestamps to UTC (#1050, builder)`
+
+### Reflection
+- The failing surface was isolated to one normalization branch, so a minimal implementation change resolved both AC-C15 failures.
+- Running RED before code changes prevented speculative edits and confirmed exact failure mode.
+- A follow-up scoped run including `test_engine_storage.py` ensured no regression on the related engine-storage integration surface.
+- Lint-guided cleanup (`datetime.UTC`) kept the patch compliant without expanding scope.
+[[2026-04-22]]
+## Review Evidence
+
+### Test Results
+- quality-runner task-local: 53 passed, 0 failed, 0 skipped on [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py)
+- quality-runner related-surface: 96 passed, 0 failed, 0 skipped on [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py), [serve/kanban/tests/test_engine_storage.py](serve/kanban/tests/test_engine_storage.py), and [serve/kanban/tests/test_storage.py](serve/kanban/tests/test_storage.py)
+
+### Lint
+- quality-runner scoped ruff: clean on [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py), [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py), [serve/kanban/src/owlbear_kanban/corruption.py](serve/kanban/src/owlbear_kanban/corruption.py), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py), [serve/kanban/tests/test_engine_storage.py](serve/kanban/tests/test_engine_storage.py), and [serve/kanban/tests/test_storage.py](serve/kanban/tests/test_storage.py)
+
+### Coverage
+- `owlbear_kanban.storage`: 96%
+- Gate application: per the task-body architecture refinements, the 90% coverage bar applies to the storage surface for this task. The storage surface clears that bar.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+
+| AC Line | Evidence | Verdict |
+|---------|----------|---------|
+| AC-C13 | Canonical field order and omission of `claimed_by` are implemented in [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py#L258), [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py#L287), and verified by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L192) and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L206) | COVERED |
+| AC-C14 | Vendor extra fields are exercised by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L234) and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L249) | COVERED |
+| AC-C15 | Timestamp normalization is implemented in [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py#L155) and applied in [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py#L296); naive, `Z`, and non-UTC offsets are covered by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L271), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L289), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L314), and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L941) | COVERED |
+| AC-C16 | Mode-3 detection and exact detail are asserted in [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L357), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L368), and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L377), matching [serve/kanban/src/owlbear_kanban/corruption.py](serve/kanban/src/owlbear_kanban/corruption.py#L236) | COVERED |
+| AC-C28 | Quarantine directory creation is verified by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L414) against [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py#L408) | COVERED |
+| AC-C29 | Quarantine destination path and move semantics are verified by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L433), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L443), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L455), and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L464) against [serve/kanban/src/owlbear_kanban/storage.py](serve/kanban/src/owlbear_kanban/storage.py#L408) | COVERED |
+| AC-C30 | AR tag/section/value assertions are enforced by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L483), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L502), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L523), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L542), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L543), and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L544), matching [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py#L1148), [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py#L1152), and [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py#L1156) | COVERED |
+| AC-C48 | Archive read, strip, no-corruption, and new-schema init paths are covered by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L555), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L565), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L575), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L588), and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L618) | COVERED |
+| AC-REGR | Claimed-task visibility is covered by [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L1006), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L1036), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L1057), and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L1069), matching the list exemption in [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py#L520) | COVERED |
+
+#### Security Review
+- No task-scope issues found. The reviewed storage, corruption, and repair paths are board-local file operations only and the independent related-surface run stayed green.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| Task-scoped `TestFromAC_*` cases in [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py) | No builder weakening observed in the current task state | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | Exact-value checks for AC-C16, AC-C30, AC-C48, and AC-REGR in [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L377), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L542), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L543), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L544), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L613), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L1036), [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L1057), and [serve/kanban/tests/test_storage_1050.py](serve/kanban/tests/test_storage_1050.py#L1069) |
+| Negative/error-path coverage | ADEQUATE | Corruption, archive exemption, quarantine, and claim/list regression paths are directly exercised in the task-local suite |
+| Manual mutation reasoning | ADEQUATE | The latest AC-C15 tests would fail on naive, `Z`, and non-UTC offset regressions; AC-C30 and AC-REGR would fail on weaker AR-body or list-visibility behavior |
+| Test independence | STRONG | Temp-board isolation throughout the task-local suite |
+| Descriptive test names | STRONG | Names map directly to the AC clauses and the added regression |
+
+#### Data Safety
+- No blocking data-safety issue in the current 1050 scope.
+
+#### Implementation-Aware Gaps
+- No significant untested path remains inside the current 1050 AC surface. The broader engine/task I/O transition is later Brief C work and is not re-gated here.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 9 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- [serve/kanban/tests/test_storage.py](serve/kanban/tests/test_storage.py#L256) still contains weaker legacy durable assertions than the task-local 1050 suite. I did not gate on that because the stronger 1050-specific coverage above now exercises the live AC-C30 and AC-C48 behavior directly, and the related-surface quality-runner run was fully green.
+- Broader engine/storage write-path unification remains tracked in later Brief C work; the current task’s bound ACs and AC-REGR are satisfied by the present implementation and tests.
+
+### Deductions
+- None
+
+### Verdict
+- Confidence: 0.95
+- PASS
+- Action: advance to docs
+[[2026-04-22]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/kanban/README.md` was missing `repair_storage()` from the KanbanEngine methods table. Added row: `\| \`repair_storage()\` \| Quarantine corrupt task files and create action-required tasks \|` |
+| 2 | Module docstrings | Yes | N/A (verified) | `storage.py` module-level docstring accurate (lists public API). All public functions have docstrings. `engine.repair_storage()` has docstring. `corruption.py` `detect_corruption()`, `attempt_repair()`, `scan_and_fix()` all have docstrings. No changes needed. |
+| 3 | External attribution | No | N/A | No external repos, articles, or docs used per task body. |
+| 4 | Research doc | No | N/A | No research doc for this task. |
+| 5 | Diagram maintenance | Yes | N/A (already current) | `share/diagrams/kanban.excalidraw` and `share/diagrams/mcp-topology.excalidraw` both describe `serve/kanban/src/**`. Both footers already read `Last verified: 2026-04-22 (b992e4be)` — updated by an earlier doc-writer pass today. No further update needed. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted by this task. |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/storage.py` | IN (docstrings) | Verified — docstrings accurate |
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN (docstrings) | Verified — `repair_storage()` docstring accurate |
+| `serve/kanban/src/owlbear_kanban/corruption.py` | IN (docstrings) | Verified — all public function docstrings accurate |
+| `serve/kanban/tests/test_storage_1050.py` | OUT | Test file — not in scope |
+| `serve/kanban/tests/test_engine_storage.py` | OUT | Test file — not in scope |
+| `serve/kanban/README.md` | IN (prose) | Updated — added `repair_storage()` row |
+
+### Files Updated
+
+- `serve/kanban/README.md` — added `repair_storage()` to KanbanEngine methods table (commit `3775cdd3`)
+
+### Child Tasks Created
+
+- None
+
+### Scratch Files Cleaned
+
+- None (no `.owlbear/scratch/1050-*` files existed)
+[[2026-04-22]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-C13 | storage.py canonical field order + tests at test_storage_1050.py:192, :206 pass | PASS |
+| AC-C14 | Task extra="allow" at models.py:121, round-trip tests at :234, :249 pass | PASS |
+| AC-C15 | _normalize_timestamp handles naive, Z, non-UTC offsets (storage.py:155-170); tests at :271, :289, :314, :941 pass | PASS |
+| AC-C16 | detect_corruption mode-3 + archive exemption in corruption.py:231-236; tests at :357, :368, :377 pass | PASS |
+| AC-C28 | move_to_quarantine creates quarantine/ dir (storage.py:408); tests at :414, :390 pass | PASS |
+| AC-C29 | quarantine/{original-filename} path + file semantics; tests at :433-464 pass | PASS |
+| AC-C30 | AR tag type:user-action + body section + value assertions (ERR_CORRUPT_MISSING_FIELD, quarantine path, detail); tests at :483, :502, :523, :542-544 pass | PASS |
+| AC-C48 | Archive claimed_by stripped (storage.py:248), new-schema migration gate live, archived list summaries unclaimed; tests at :555-618 pass | PASS |
+| AC-REGR | list_tasks exempts mode-3 claimed_by from skip (engine.py:520); tests at :1006, :1036, :1057 pass | PASS |
+
+### Test Results
+- pytest (full suite): 1253 passed, 106 failed, 4 skipped — 0 failures in task scope; all 106 in unrelated modules (1084, 940, 1015, cockpit, sessions)
+- pytest (task-local): 53 passed, 0 failed
+- ruff: 5 W292 violations in files outside task scope; task files clean
+
+### Architect Quality: 3/5
+Original ACs had notable gaps: AC-C30 vagueness (required 3 refinements), AC-C15 scope ambiguity (vendor extras vs canonical fields — resolved cycle 4-6), AC-C48 migration gate omission. These gaps directly caused the 9-review, 6-architect-review loop. Architect corrected well through iterations but initial quality was insufficient.
+
+### Deduction Breakdown
+- AC quality score ≤ 3: −0.03
+- Lint violations: none in scope → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+- All 9 AC lines have specific evidence → no deduction
+- Reviewer evidence section present and detailed → no deduction
+
+### Confidence: 0.97
+### Action: archive

@@ -1,10 +1,10 @@
 ---
 id: 1098
 title: Engine create_task crash-safety test (AC-C51-engine)
-status: research
+status: archived
 priority: important
 created: 2026-04-22T01:03:22.924347+00:00
-updated: 2026-04-22T01:34:19.763780+00:00
+updated: 2026-04-22T22:40:49.980569+00:00
 tags: []
 parent:
 depends_on: []

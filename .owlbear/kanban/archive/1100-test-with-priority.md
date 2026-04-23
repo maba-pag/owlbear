@@ -1,10 +1,10 @@
 ---
 id: 1100
 title: test-with-priority
-status: research
+status: archived
 priority: needed
 created: 2026-04-22T01:04:19.296856+00:00
-updated: 2026-04-22T01:59:24.549456+00:00
+updated: 2026-04-22T22:40:49.050719+00:00
 tags: []
 parent:
 depends_on: []

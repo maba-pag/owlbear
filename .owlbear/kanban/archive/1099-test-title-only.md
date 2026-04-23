@@ -1,10 +1,10 @@
 ---
 id: 1099
 title: test-title-only
-status: research
+status: archived
 priority: important
 created: 2026-04-22T01:03:53.295251+00:00
-updated: 2026-04-22T01:33:51.815861+00:00
+updated: 2026-04-22T22:40:48.338854+00:00
 tags: []
 parent:
 depends_on: []

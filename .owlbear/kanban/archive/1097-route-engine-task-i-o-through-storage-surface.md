@@ -1,15 +1,16 @@
 ---
 id: 1097
 title: Route engine task I/O through storage surface
-status: backlog
+status: archived
 priority: important
 created: 2026-04-22T00:34:33.730255+00:00
-updated: 2026-04-22T06:21:50.508607+00:00
+updated: 2026-04-22T22:40:46.316765+00:00
 tags: []
 parent:
 depends_on: []
-blocked: false
-block_reason:
+blocked: true
+block_reason: PIPELINE LOOP — 5 research + 4 architecture REJECT cycles, all 
+  identical. Task subsumed by Brief C chain. Orchestrator must archive.
 claimed_by:
 claimed_at:
 archival_reason:
@@ -213,3 +214,25 @@ Covering tasks verified at `todo`, unclaimed, ACs intact (2026-04-22):
 - Decision requests: none
 
 **Orchestrator: ARCHIVE THIS TASK. Do NOT re-dispatch to architect. Loop-detection Tier 3 reached — 5 identical passes confirm zero scope gap.**
+[[2026-04-22]]
+## Architecture Review (5th pass — LOOP BLOCK)
+
+### Loop-Detection Tier 3 Invoked
+
+This task has completed **5 research passes and 4 architecture REJECTs**, every one reaching the identical conclusion: #1097 is fully subsumed by Brief C tasks C-14 (#1059), C-17 (#1062), C-18 (#1063), C-19 (#1064). Zero scope gaps found in any pass.
+
+Per operational fundamentals loop-detection policy — Tier 3 (3+ attempts) → stop, write what failed, hand off — a 5th REJECT would perpetuate an infinite research↔backlog loop. Blocking instead to force orchestrator intervention.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| KISS/YAGNI | FAIL | Duplicates scope already decomposed across C-14/C-17/C-18/C-19 |
+| Premise challenge | FAIL | Work fully covered by existing Brief C tasks — no unique scope exists |
+
+All other criteria N/A — task has no unique scope.
+
+### Challenge Results
+Challenger invocation skipped for non-APPROVE verdicts per w-arch-review Step 2.5.
+
+### Verdict: BLOCK (loop-breaker — not a 5th REJECT)
+### Action Required: Orchestrator must **archive** this task. The scope is fully covered by #1059, #1062, #1063, #1064. Re-dispatching to research or architect will produce the same result for a 6th time.

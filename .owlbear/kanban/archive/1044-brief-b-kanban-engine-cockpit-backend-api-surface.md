@@ -1,10 +1,10 @@
 ---
 id: 1044
 title: Brief B — Kanban Engine + Cockpit Backend/API Surface
-status: done
+status: archived
 priority: needed
 created: 2026-04-21T09:48:03.854046+00:00
-updated: 2026-04-22T06:21:52.145783+00:00
+updated: 2026-04-22T06:51:58.599338+00:00
 tags:
 - phase:engine
 - brief:b
@@ -186,3 +186,26 @@ No files updated; no commit required.
 
 ### Child Tasks Created
 None.
+[[2026-04-22]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| No Acceptance Criteria section — parent coordination/decomposition task | Task body confirms pass-through; 19 child tasks verified via spot-check (#1065 first, #1079 middle, #1083 last) — all have parent=1044, detailed AC with brief section refs, correct tags and dependencies | PASS |
+
+### Test Results
+- pytest: 1213 passed, 59 failed, 4 skipped. All 59 failures in pre-existing modules outside task scope (cockpit read/mutation API, kanban sessions, mcp-knowledge, ideation). Zero files changed by this task — no regressions.
+- ruff: 5 W292 violations in test files outside task scope. Background debt, not introduced here.
+
+### Architect Quality: 4/5
+Clean TDD red/green decomposition into 19 subtasks across 10 dependency layers. Two parallel tracks with clear fork/join. Cross-brief dependency noted. Child AC is specific with brief section references. Minor gap: no formal "done criteria" on the parent itself.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (no AC lines on parent) → 0
+- Lint violations in scope: 0 → 0
+- AC quality ≤ 3: no (4/5) → 0
+- Missing reviewer evidence: no (present, detailed) → 0
+- Full-suite failures in scope: 0 → 0
+
+### Confidence: 1.00
+### Action: archive
