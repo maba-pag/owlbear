@@ -19,18 +19,18 @@ jobs:
     name: Upgrade & Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           ref: dev
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
 
       - name: Set up Python
         run: uv python install
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
         with:
           node-version-file: serve/cockpit/web/.nvmrc
 
@@ -68,7 +68,7 @@ jobs:
 
       - name: Create PR (tests passed)
         if: steps.diff.outputs.changed == 'true' && steps.pytest.outcome == 'success' && steps.vitest.outcome == 'success'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.11
         with:
           branch: chore/dep-upgrade
           base: dev
@@ -86,7 +86,7 @@ jobs:
 
       - name: Create issue (tests failed)
         if: steps.diff.outputs.changed == 'true' && (steps.pytest.outcome == 'failure' || steps.vitest.outcome == 'failure')
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.11
         with:
           branch: chore/dep-upgrade-failing
           base: dev
