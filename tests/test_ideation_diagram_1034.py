@@ -1458,3 +1458,103 @@ class TestFromAC_IdeationStructuralAbsenceSx:
             "to Phase 2, and S4 constrains its target to Phase 2 Step 0. "
             f"Violations: {violations}"
         )
+
+
+# ===========================================================================
+# S9 — Phase 2 sequential chain proof (11th-cycle)
+# ===========================================================================
+
+_PHASE2_CHAIN: list[tuple] = [
+    ("s9a", ("step 0", "phase 2"), (re.compile(r"\bM3\b", re.IGNORECASE),)),
+    ("s9b", ("domain", "panel"), ("pragmatist", "converge")),
+    ("s9c", (re.compile(r"\bM3\b", re.IGNORECASE),), ("domain", "panel")),
+    ("s9d", ("pragmatist", "converge"), (re.compile(r"\bM4\b", re.IGNORECASE),)),
+    ("s9e", (re.compile(r"\bM4\b", re.IGNORECASE),), ("o15",)),
+    ("s9f", ("o15",), (re.compile(r"\bM5\b", re.IGNORECASE),)),
+    ("s9g", (re.compile(r"\bM5\b", re.IGNORECASE),), (re.compile(r"\bM6\b", re.IGNORECASE),)),
+    ("s9h", (re.compile(r"\bM6\b", re.IGNORECASE),), ("handoff",)),
+]
+
+
+def _text_matches(text: str, criteria: tuple) -> bool:
+    """Return True if text satisfies ALL criteria.
+
+    Each criterion is a plain string (case-insensitive substring) or a compiled
+    regex (re.search applied to the original-case text).
+    """
+    lower = text.lower()
+    for c in criteria:
+        if isinstance(c, re.Pattern):
+            if not c.search(text):
+                return False
+        elif c not in lower:
+            return False
+    return True
+
+
+# ===========================================================================
+
+
+class TestFromAC_IdeationPhase2ChainProof:
+    """AC2 structural sub-criterion S9 (11th-cycle Architecture Review).
+
+    The Phase 2 flow described in AC2 must be expressed as a complete chain of
+    bound arrows covering all 8 sequential hops. Each hop is checked by
+    resolving arrow start/end bindings to their semantic text via
+    _resolve_text (follows containerId chains).
+
+    S9a and S9b are artifact defects (missing edges) -- FAIL against current
+    artifact. S9c-S9h are regression guards on edges that already exist.
+
+    S9a: Phase 2 Step 0 -> M3               FAIL (arr_step0_m3 missing)
+    S9b: late domain panel -> pragmatist(converge)  FAIL (arr_panel_prag missing)
+    S9c: M3 -> late domain panel            PASS (arr_m3_panel exists)
+    S9d: pragmatist(converge) -> M4         PASS (arr_prag_m4 exists)
+    S9e: M4 -> O15                          PASS (arr_m4_o15 exists)
+    S9f: O15 -> M5                          PASS (arr_o15_m5 exists)
+    S9g: M5 -> M6                           PASS (arr_m5_m6 exists)
+    S9h: M6 -> handoff/planner              PASS (arr_m6_handoff exists)
+    """
+
+    @pytest.mark.parametrize(
+        ("hop_id", "start_criteria", "end_criteria"),
+        _PHASE2_CHAIN,
+        ids=[h[0] for h in _PHASE2_CHAIN],
+    )
+    def test_s9_phase2_chain_hop(
+        self,
+        diagram_data: dict,
+        hop_id: str,
+        start_criteria: tuple,
+        end_criteria: tuple,
+    ) -> None:
+        """S9: Phase 2 sequential chain — each hop must have at least one bound arrow."""
+        by_id = _build_by_id(diagram_data)
+        for el in diagram_data.get("elements", []):
+            if el.get("type") != "arrow" or el.get("isDeleted"):
+                continue
+            start_id = (el.get("startBinding") or {}).get("elementId")
+            end_id = (el.get("endBinding") or {}).get("elementId")
+            if not start_id or not end_id:
+                continue
+            start_text = _resolve_text(by_id, start_id)
+            end_text = _resolve_text(by_id, end_id)
+            if _text_matches(start_text, start_criteria) and _text_matches(
+                end_text, end_criteria
+            ):
+                return  # Hop satisfied
+
+        start_desc = ", ".join(
+            c.pattern if isinstance(c, re.Pattern) else repr(c)
+            for c in start_criteria
+        )
+        end_desc = ", ".join(
+            c.pattern if isinstance(c, re.Pattern) else repr(c)
+            for c in end_criteria
+        )
+        pytest.fail(
+            f"AC2 S9 hop {hop_id}: no bound arrow from element matching "
+            f"[{start_desc}] to element matching [{end_desc}]. "
+            f"Phase 2 sequential chain is incomplete — add the missing edge "
+            f"to satisfy the AC2 flow contract."
+        )
