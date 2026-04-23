@@ -56,6 +56,27 @@ from owlbear_kanban import pick_dispatchable
 dispatchable = pick_dispatchable(tasks)   # returns list[TaskSummary]
 ```
 
+## Migration
+
+To migrate an existing board from the legacy schema to the Brief-C canonical schema:
+
+```bash
+uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all] [--kanban-dir PATH]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--lane tasks` | Migrate only active task files (`tasks/`) |
+| `--lane archive` | Migrate only archive files (`archive/`) |
+| `--lane config` | Migrate only `config.yml` |
+| `--lane all` | Run all three lanes (default) |
+| `--dry-run` | Report what would change without writing any files |
+| `--kanban-dir PATH` | Path to the kanban directory (default: auto-detect `.owlbear/kanban/`) |
+
+Exit code 0 when no files failed; exit code 1 otherwise. Each failed file is reported on stderr as `FAIL {path}: {reason}`.
+
+After `--lane config` runs, `agent_map`, `agent_types`, and `agent_compatibility` are empty stubs that must be populated before starting the engine.
+
 ## Configuration
 
 Board directory is passed to the `KanbanEngine` constructor. No environment variables.
