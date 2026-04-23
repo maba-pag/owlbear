@@ -115,7 +115,7 @@ def list_activity_events(  # noqa: C901, PLR0912, PLR0913
     return events
 
 
-def compact_activity_log(  # noqa: C901
+def compact_activity_log(
     kanban_dir: Path,
     before_dt: datetime | None = None,
 ) -> ActivityCompactionResult:
@@ -177,29 +177,8 @@ def compact_activity_log(  # noqa: C901
             if before_dt is None or entry_dt is None or entry_dt >= before_dt or in_open_session:
                 to_keep.append(entry_line)
 
-        # Hard floor: keep last N rows by default.
+        # Hard floor: keep the most recent entries for all compaction modes.
         floor_count = min(_HARD_FLOOR, len(all_lines))
-
-        # Preserve legacy small-log session compaction only when the resolved/explicit
-        # cutoff is older than the latest entry in the stream (active-stream scenario).
-        session_actions = {"claim", "end_work", "release", "sweep-release"}
-        has_session_actions = any(
-            isinstance(entry_data, dict) and entry_data.get("action") in session_actions
-            for _entry_line, entry_data in parsed
-        )
-        latest_entry_dt = max(
-            (_parse_dt(entry_data.get("timestamp")) for _entry_line, entry_data in parsed),
-            default=None,
-        )
-        if (
-            has_session_actions
-            and (auto_cutoff or bool(open_session_starts))
-            and len(all_lines) <= _HARD_FLOOR
-            and before_dt is not None
-            and latest_entry_dt is not None
-            and before_dt < latest_entry_dt
-        ):
-            floor_count = 0
 
         if floor_count > 0 and len(to_keep) < floor_count:
             floor_lines = [line for line, _ in parsed[-floor_count:]]
