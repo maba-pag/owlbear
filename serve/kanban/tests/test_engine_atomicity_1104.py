@@ -547,3 +547,79 @@ class TestFromAC_EngineAtomicity:
             "to pre-mutation snapshot after archive emit-failure rollback"
         )
         _assert_no_activity_written(kanban_dir)
+
+    # --- end_work block/reject outcome rollback (AC addendum, loop-breaker 3) ---
+
+    def test_end_work_block_emit_failure_rollback(self, tmp_path: Path) -> None:
+        """end_work (block): OSError from emit must propagate; blocked/block_reason/body/claimed_at must be rolled back."""
+        claimed_at = "2026-04-22T10:00:00+00:00"
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+        assert before.blocked is False
+        assert before.block_reason is None
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+            engine.end_work("1001", note="Blocked on dependency", outcome="block", block_reason="waiting for user")
+
+        after = read_task(task_path)
+        assert after.blocked is False, "blocked must be rolled back to False on emit failure"
+        assert after.block_reason is None, "block_reason must be rolled back to None on emit failure"
+        assert after.status == before.status, "status must be unchanged on emit failure"
+        assert after.body == before.body, "body must be rolled back (note not appended)"
+        assert after.claimed_at == before.claimed_at, "claimed_at must be restored on emit failure"
+        _assert_no_activity_written(kanban_dir)
+
+    def test_end_work_reject_emit_failure_rollback(self, tmp_path: Path) -> None:
+        """end_work (reject): OSError from emit must propagate; status/body/claimed_at must be rolled back."""
+        claimed_at = "2026-04-22T10:00:00+00:00"
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="research")
+
+        after = read_task(task_path)
+        assert after.status == before.status, "status must not change to 'research' on emit failure"
+        assert after.body == before.body, "body must be rolled back (note not appended)"
+        assert after.claimed_at == before.claimed_at, "claimed_at must be restored on emit failure"
+        _assert_no_activity_written(kanban_dir)
+
+    # --- Full snapshot equality: end_work block/reject outcome ---
+
+    def test_end_work_block_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """end_work (block): rollback must restore the complete Task model (blocked, block_reason, body, claimed_at, etc.)."""
+        claimed_at = "2026-04-22T10:00:00+00:00"
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+            engine.end_work("1001", note="Blocked on dependency", outcome="block", block_reason="waiting for user")
+
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after block emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
+
+    def test_end_work_reject_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+        """end_work (reject): rollback must restore the complete Task model (status, body, claimed_at, etc.)."""
+        claimed_at = "2026-04-22T10:00:00+00:00"
+        kanban_dir = _make_board(tmp_path)
+        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        engine = KanbanEngine(kanban_dir)
+        before = read_task(task_path)
+
+        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="research")
+
+        after = read_task(task_path)
+        assert after.model_dump() == before.model_dump(), (
+            "full Task model must be identical to pre-mutation snapshot after reject emit-failure rollback"
+        )
+        _assert_no_activity_written(kanban_dir)
