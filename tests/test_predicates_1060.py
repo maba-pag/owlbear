@@ -3,20 +3,22 @@
 Task: #1060 (Brief C #1043) — paper-c.md §6, §6.1
 AC:   C39, C40, C41
 
-These tests target CommonMark parsing precision gaps in the existing
-regex-based ``_has_list_outside_fences`` helper:
+These tests target CommonMark parsing precision gaps that require
+``markdown-it-py`` AST parsing (AC-C40/C41 refined by arch review cycle 5).
 
-* AC-C40 uses AST node terminology (``bullet_list``, ``ordered_list``).
-  The ')' delimiter is a valid CommonMark ordered-list marker that the
-  current ``\\d+\\.`` regex does not recognise.
-* AC-C40 requires CommonMark parsing semantics: 4-space-indented and
-  tab-indented lines are indented code blocks per CommonMark, NOT
-  bullet_list or ordered_list nodes — even though the current regex
-  matches them via ``^[ \\t]*[-*+] ``.
+Earlier tests (rounds 1-4) fixed specific regex edge cases.  The
+remaining substrate contract requires that the implementation uses
+``markdown-it-py`` and checks for ``bullet_list_open`` /
+``ordered_list_open`` tokens — not a hand-rolled regex.  Three cases
+prove this:
 
-AC-C39 and AC-C41 are already verified by #1051 tests
-(``serve/kanban/tests/test_predicates.py``); the "All RED tests from
-C-06 (#1051) pass" AC item requires no additional failing tests here.
+* CommonMark thematic breaks (``* * *``, ``- - -``) emit ``hr`` tokens;
+  no regex matching ``^[-*+] `` can distinguish them from list items.
+* A list inside a blockquote (``> - item``) emits ``bullet_list_open``
+  inside a ``blockquote_open`` in the flat token stream; a line-start
+  regex anchored at ``^ {0,3}`` cannot match the ``>`` prefix.
+
+AC-C39 is verified by #1051 tests (``serve/kanban/tests/test_predicates.py``).
 """
 
 from __future__ import annotations
@@ -206,4 +208,52 @@ class TestFromAC_PredicateCommonMarkSubstrate:
         """
         content = "   ```\n- inside fence (excluded)\n   ```\n- real list item after close\n"
         task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is True
+
+    # ------------------------------------------------------------------
+    # Substrate rejection: cases that prove markdown-it-py is required
+    # (AC-C41 refined: regex-based list detection is prohibited)
+    # ------------------------------------------------------------------
+
+    def test_ac_c41_substrate_thematic_break_asterisks_is_not_list(self) -> None:
+        """AC-C41 substrate: '* * *' is a CommonMark thematic break, not a list.
+
+        CommonMark spec §4.1: three or more matching *, -, or _ characters
+        (each optionally followed by spaces/tabs) form a thematic break.
+        ``markdown-it-py`` emits an ``hr`` token — no ``bullet_list_open``.
+
+        A regex matching ``^[-*+] `` at column 0 returns True for ``* * *``
+        because ``* `` appears at the start; AST parsing returns False.
+        This proves the implementation substrate must be ``markdown-it-py``.
+        """
+        task = _make_task([_make_section("Steps", 2, "* * *\n")])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c41_substrate_thematic_break_dashes_is_not_list(self) -> None:
+        """AC-C41 substrate: '- - -' is a CommonMark thematic break, not a list.
+
+        CommonMark spec §4.1: ``- - -`` (three dashes separated by spaces)
+        is a thematic break, not a bullet list item.  ``markdown-it-py``
+        emits ``hr``, not ``bullet_list_open``.
+
+        A regex matching ``^[-*+] `` at column 0 returns True for ``- - -``
+        because ``- `` appears at the start; AST parsing returns False.
+        This proves the implementation substrate must be ``markdown-it-py``.
+        """
+        task = _make_task([_make_section("Steps", 2, "- - -\n")])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c41_substrate_list_in_blockquote_is_detected(self) -> None:
+        """AC-C41 substrate: a list inside a blockquote emits bullet_list_open.
+
+        CommonMark spec §5.1: a blockquote can contain a bullet list.
+        ``markdown-it-py`` emits ``blockquote_open`` then ``bullet_list_open``
+        in the flat token stream, so the predicate must return True.
+
+        A line-start regex anchored at ``^ {0,3}[-*+] `` does not match
+        ``> - item`` because ``>`` is not a space; regex returns False.
+        AST parsing returns True, proving the substrate must be
+        ``markdown-it-py``.
+        """
+        task = _make_task([_make_section("Steps", 2, "> - item inside blockquote\n")])
         assert require_list_in_section(task, "Steps") is True
