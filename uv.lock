@@ -1516,9 +1516,9 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "lxml", specifier = ">=4.9.4" },
+    { name = "lxml", specifier = ">=6.1.0" },
     { name = "playwright", specifier = ">=1.58.0" },
-    { name = "trafilatura", specifier = ">=1.12.2" },
+    { name = "trafilatura", specifier = ">=2.0.0" },
 ]
 
 [[package]]
@@ -1599,8 +1599,8 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'copilot'", specifier = ">=0.28.1" },
     { name = "httpx", marker = "extra == 'full'", specifier = ">=0.28.1" },
     { name = "httpx", marker = "extra == 'intake'", specifier = ">=0.28.1" },
-    { name = "openai", marker = "extra == 'full'", specifier = ">=1.109.1" },
-    { name = "openai", marker = "extra == 'llm'", specifier = ">=1.109.1" },
+    { name = "openai", marker = "extra == 'full'", specifier = ">=2.32.0" },
+    { name = "openai", marker = "extra == 'llm'", specifier = ">=2.32.0" },
     { name = "pydantic", specifier = ">=2.13.3" },
     { name = "qdrant-client", marker = "extra == 'full'", specifier = ">=1.17.1" },
     { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.17.1" },
