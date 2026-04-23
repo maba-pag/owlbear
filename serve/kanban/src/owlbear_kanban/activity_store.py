@@ -86,12 +86,11 @@ def list_activity_events(  # noqa: C901, PLR0912, PLR0913
             continue
         if not isinstance(data, dict):
             continue
-        # Minimum required fields — source and detail are optional for backward compat
-        if not all(k in data for k in ("timestamp", "action")):
+        # Accept only canonical activity rows.
+        if not all(k in data for k in ("timestamp", "action", "source", "detail")):
             continue
-        # Provide defaults for fields absent in old-format events
-        data.setdefault("source", "")
-        data.setdefault("detail", None)
+        if not isinstance(data.get("detail"), str):
+            continue
 
         if task_id is not None and data.get("task_id") != task_id:
             continue
@@ -116,7 +115,7 @@ def list_activity_events(  # noqa: C901, PLR0912, PLR0913
     return events
 
 
-def compact_activity_log(
+def compact_activity_log(  # noqa: C901
     kanban_dir: Path,
     before_dt: datetime | None = None,
 ) -> ActivityCompactionResult:
@@ -177,10 +176,21 @@ def compact_activity_log(
             if before_dt is None or entry_dt is None or entry_dt >= before_dt or in_open_session:
                 to_keep.append(entry_line)
 
-        # Hard floor: always keep last _HARD_FLOOR entries (only matters when total > floor)
-        if len(all_lines) > _HARD_FLOOR and len(to_keep) < _HARD_FLOOR:
-            # Take the last _HARD_FLOOR lines from the full set
-            floor_lines = [line for line, _ in parsed[-_HARD_FLOOR:]]
+        # Hard floor: for non-session streams, protect small boards from full wipe.
+        # For session streams, preserve legacy behavior where closed cycles can compact
+        # on small logs (floor applies only once total rows exceed _HARD_FLOOR).
+        session_actions = {"claim", "end_work", "release", "sweep-release"}
+        has_session_actions = any(
+            isinstance(entry_data, dict) and entry_data.get("action") in session_actions
+            for _entry_line, entry_data in parsed
+        )
+        if has_session_actions:
+            floor_count = _HARD_FLOOR if len(all_lines) > _HARD_FLOOR else 0
+        else:
+            floor_count = min(_HARD_FLOOR, len(all_lines))
+
+        if floor_count > 0 and len(to_keep) < floor_count:
+            floor_lines = [line for line, _ in parsed[-floor_count:]]
             # Merge: union of to_keep and floor_lines, preserving order
             floor_set = set(floor_lines)
             keep_set = set(to_keep)

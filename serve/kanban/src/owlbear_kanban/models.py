@@ -209,7 +209,7 @@ class ActivityEvent(BaseModel):
     task_id: int | None = None
     action: str
     source: str
-    detail: str | None = None
+    detail: str
     # Optional: status of the task at time of claim event
     task_status_at_start: str | None = None
 
