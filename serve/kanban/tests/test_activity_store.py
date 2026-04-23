@@ -259,45 +259,81 @@ class TestFromAC_ActivityCompaction:
     def test_ac_c44a_a_before_dt_none_resolves_to_latest_closed_session(
         self, tmp_path: Path
     ) -> None:
-        """AC-C44a (a): before_dt=None uses most-recently-closed session ended_at as cutoff."""
-        kanban_dir = _make_board(tmp_path)
-        now = datetime.now(tz=UTC)
+        """AC-C44a (a): before_dt=None uses most-recently-closed session ended_at as cutoff.
 
-        # Old closed session
-        old_ts = (now - timedelta(hours=3)).isoformat()
-        append_activity_event(_make_event(action="claim", ts=old_ts, task_id=1), kanban_dir)
-        close_ts = (now - timedelta(hours=2)).isoformat()
-        append_activity_event(
-            _make_event(action="end_work", ts=close_ts, task_id=1, source="agent", detail="success: done"),
-            kanban_dir,
-        )
-        # Recent entries (after cutoff)
-        for i in range(3):
-            recent_ts = (now - timedelta(minutes=30 - i * 5)).isoformat()
-            append_activity_event(_make_event(ts=recent_ts, task_id=2), kanban_dir)
-
-        result = compact_activity_log(kanban_dir, before_dt=None)
-        assert isinstance(result, ActivityCompactionResult)
-        # Before > after (something was compacted)
-        assert result.before_bytes > result.after_bytes
-
-    def test_ac_c44a_a_resolves_to_most_recent_close_not_oldest(self, tmp_path: Path) -> None:
-        """AC-C44a(a): before_dt=None resolves to the MOST RECENTLY closed session timestamp.
-
-        Two closed sessions exist. Verifies the cutoff is the newer one, not the older,
-        by checking which event survives compaction. An event between the two close timestamps
-        must be removed (proves newer cutoff), whereas it would be retained if the older
-        cutoff was erroneously selected.
+        Uses >500 entries so the hard floor is active and the compat branch
+        (``len(all_lines) <= _HARD_FLOOR``) never suppresses it.  The closed session
+        (task 1) occupies the two oldest positions, both outside the last-500 floor
+        window.  500 filler entries fill the floor window.  The old claim (strictly
+        before the auto-resolved cutoff) is the only entry removed, proving
+        ``before_dt=None`` resolved to the session's ``end_work`` timestamp.
         """
         kanban_dir = _make_board(tmp_path)
         now = datetime.now(tz=UTC)
 
-        older_close_dt = now - timedelta(hours=4)
-        newer_close_dt = now - timedelta(hours=2)
-
-        # Older closed session
+        # Closed session for task 1 — positions 1-2, both outside the last-500 window.
+        old_claim_ts = (now - timedelta(hours=601)).isoformat()
         append_activity_event(
-            _make_event(action="claim", ts=(now - timedelta(hours=6)).isoformat(), task_id=1),
+            _make_event(action="claim", ts=old_claim_ts, task_id=1), kanban_dir
+        )
+        old_close_ts = (now - timedelta(hours=600)).isoformat()
+        append_activity_event(
+            _make_event(
+                action="end_work", ts=old_close_ts, task_id=1,
+                source="agent", detail="success: done",
+            ),
+            kanban_dir,
+        )
+
+        # 500 filler entries after the session — fills the floor window (positions 3-502).
+        # All timestamps are newer than old_close_ts so they survive both floor and
+        # session/cutoff logic.
+        for i in range(500):
+            ts = (now - timedelta(hours=599 - i)).isoformat()
+            append_activity_event(
+                _make_event(action="edit", ts=ts, task_id=2), kanban_dir
+            )
+
+        # Total: 502 entries. Last 500 = filler[0..499] (positions 3-502).
+        result = compact_activity_log(kanban_dir, before_dt=None)
+        remaining = list_activity_events(kanban_dir)
+
+        assert isinstance(result, ActivityCompactionResult)
+
+        # Auto-cutoff = old_close_ts (the only closed session's end_work).
+        # old_claim (before cutoff, outside floor) must be compacted.
+        assert not any(
+            e.task_id == 1 and e.action == "claim" for e in remaining
+        ), "Old claim before the closed-session cutoff must be compacted"
+
+        # Session close (AT cutoff, outside floor window) retained by session/cutoff logic —
+        # proves the resolved cutoff was <= old_close_ts.
+        assert any(
+            e.task_id == 1 and e.action == "end_work" for e in remaining
+        ), "Session close event must be retained — proves before_dt=None resolved to this session's end"
+
+        # Exactly one record compacted (old_claim only).
+        assert result.records_compacted == 1, (
+            f"Exactly 1 record (old claim) should be compacted; got {result.records_compacted}"
+        )
+
+    def test_ac_c44a_a_resolves_to_most_recent_close_not_oldest(self, tmp_path: Path) -> None:
+        """AC-C44a(a): before_dt=None resolves to the MOST RECENTLY closed session timestamp.
+
+        Uses >500 entries so the hard floor is active.  Both closed sessions and the
+        between_edit entry occupy positions 1-4, all outside the last-500 floor window.
+        500 entries fill the floor window.  If the older (wrong) cutoff were used,
+        between_edit would survive; the correct (newer) cutoff removes it.
+        """
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+
+        older_close_dt = now - timedelta(hours=604)
+        newer_close_dt = now - timedelta(hours=602)
+
+        # Older closed session (task 1) — position 1-2, outside floor window.
+        append_activity_event(
+            _make_event(action="claim", ts=(now - timedelta(hours=606)).isoformat(), task_id=1),
             kanban_dir,
         )
         append_activity_event(
@@ -305,25 +341,34 @@ class TestFromAC_ActivityCompaction:
             kanban_dir,
         )
 
-        # Event BETWEEN the two close timestamps — removed only if newer cutoff is used
-        between_ts = (now - timedelta(hours=3)).isoformat()
+        # Event BETWEEN the two close timestamps — position 3, outside floor window.
+        # Removed only if the newer cutoff is used.
+        between_ts = (now - timedelta(hours=603)).isoformat()
         append_activity_event(
             _make_event(action="edit", ts=between_ts, task_id=2),
             kanban_dir,
         )
 
-        # Newer closed session
+        # Newer closed session end_work (task 2) — position 4, outside floor window.
+        # AT the newer cutoff → retained by session/cutoff logic (ts >= cutoff).
         append_activity_event(
             _make_event(action="end_work", ts=newer_close_dt.isoformat(), task_id=2),
             kanban_dir,
         )
 
-        # Event after newer close — must always be retained
+        # 499 filler entries + 1 after-entry — positions 5-504, fills the floor window.
+        # All are newer than newer_close_dt so they survive both floor and cutoff logic.
+        for i in range(499):
+            ts = (now - timedelta(hours=601 - i)).isoformat()
+            append_activity_event(
+                _make_event(action="edit", ts=ts, task_id=3), kanban_dir
+            )
         append_activity_event(
             _make_event(action="edit", ts=(now - timedelta(hours=1)).isoformat(), task_id=3),
             kanban_dir,
         )
 
+        # Total: 504 entries. Last 500 = filler + after-entry (positions 5-504).
         compact_activity_log(kanban_dir, before_dt=None)
         remaining = list_activity_events(kanban_dir)
 
@@ -366,16 +411,19 @@ class TestFromAC_ActivityCompaction:
     ) -> None:
         """AC-C44a(b): compaction removes closed-cycle entries for a task that was later re-claimed.
 
-        A task claimed, then closed/released, then re-claimed: only the current open cycle
-        must survive compaction. The old closed cycle's entries are eligible for removal.
+        Uses >500 entries so the hard floor is active.  The old closed cycle (first_claim
+        + first_close) occupies positions 1-2, both outside the last-500 floor window.
+        499 filler entries + second_claim fill the floor window.  first_claim and
+        first_close are removed by cutoff logic (not floor); second_claim is retained by
+        the open-session guard.
         Reference domain path: test_list_sessions.py:444-459.
         """
         kanban_dir = _make_board(tmp_path)
         now = datetime.now(tz=UTC)
 
-        # First (closed) claim cycle for task 7
-        first_claim_ts = (now - timedelta(hours=6)).isoformat()
-        first_close_ts = (now - timedelta(hours=5)).isoformat()
+        # First (closed) claim cycle for task 7 — positions 1-2, outside floor window.
+        first_claim_ts = (now - timedelta(hours=506)).isoformat()
+        first_close_ts = (now - timedelta(hours=505)).isoformat()
         append_activity_event(
             _make_event(action="claim", ts=first_claim_ts, task_id=7), kanban_dir
         )
@@ -383,29 +431,37 @@ class TestFromAC_ActivityCompaction:
             _make_event(action="end_work", ts=first_close_ts, task_id=7), kanban_dir
         )
 
-        # Second (open) claim cycle for the same task 7
+        # 499 filler entries — fills the floor window (positions 3-501).
+        for i in range(499):
+            ts = (now - timedelta(hours=504 - i)).isoformat()
+            append_activity_event(
+                _make_event(action="move", ts=ts, task_id=i % 6 + 1), kanban_dir
+            )
+
+        # Second (open) claim cycle for task 7 — inside floor window (position 502).
         second_claim_ts = (now - timedelta(minutes=30)).isoformat()
         append_activity_event(
             _make_event(action="claim", ts=second_claim_ts, task_id=7), kanban_dir
         )
 
-        # Compact with cutoff that makes the first cycle eligible for removal
+        # Total: 502 entries. Last 500 = filler + second_claim (positions 3-502).
+        # Compact with explicit cutoff that makes first_claim and first_close eligible.
         cutoff = now - timedelta(hours=4)
         compact_activity_log(kanban_dir, before_dt=cutoff)
 
         remaining = list_activity_events(kanban_dir, task_id=7)
 
-        # Old closed-cycle claim must be gone (closed cycle, before cutoff)
+        # Old closed-cycle claim must be gone (outside floor, before cutoff).
         assert not any(
             e.action == "claim" and e.timestamp == first_claim_ts for e in remaining
         ), "Old closed-cycle claim must be compacted"
 
-        # Old closed-cycle close/end_work must also be gone — entire closed cycle eligible
+        # Old closed-cycle close/end_work must also be gone — entire closed cycle eligible.
         assert not any(
             e.action == "end_work" and e.timestamp == first_close_ts for e in remaining
         ), "Old closed-cycle end_work must also be compacted — not just the claim row"
 
-        # Current open-cycle claim must be retained (open session always kept)
+        # Current open-cycle claim must be retained (open session always kept).
         assert any(
             e.action == "claim" and e.timestamp == second_claim_ts for e in remaining
         ), "Current open-cycle claim must always be retained"
@@ -517,6 +573,26 @@ class TestFromAC_ActivityCompaction:
 
 class TestBuilderDiscovered:
     """Builder-discovered tests for activity_store edge cases."""
+
+    def test_compact_activity_log_floor_applies_to_small_session_logs(self, tmp_path: Path) -> None:
+        """Small session-bearing logs retain all rows when cutoff would compact everything."""
+        kanban_dir = _make_board(tmp_path)
+        now = datetime.now(tz=UTC)
+        n = 120
+
+        for i in range(n):
+            ts = (now - timedelta(minutes=n - i)).isoformat()
+            append_activity_event(
+                _make_event(ts=ts, task_id=i % 10, action="end_work"),
+                kanban_dir,
+            )
+
+        # Future cutoff makes every row a compaction candidate; only hard floor protects.
+        cutoff = now + timedelta(hours=1)
+        result = compact_activity_log(kanban_dir, before_dt=cutoff)
+
+        assert result.records_compacted == 0
+        assert len(list_activity_events(kanban_dir)) == n
 
     def test_list_activity_events_skips_malformed_rows(self, tmp_path: Path) -> None:
         """Malformed JSONL rows are ignored and valid rows are still returned."""
