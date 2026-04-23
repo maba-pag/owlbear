@@ -68,7 +68,7 @@ jobs:
 
       - name: Create PR (tests passed)
         if: steps.diff.outputs.changed == 'true' && steps.pytest.outcome == 'success' && steps.vitest.outcome == 'success'
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: chore/dep-upgrade
           base: dev
@@ -86,7 +86,7 @@ jobs:
 
       - name: Create issue (tests failed)
         if: steps.diff.outputs.changed == 'true' && (steps.pytest.outcome == 'failure' || steps.vitest.outcome == 'failure')
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: chore/dep-upgrade-failing
           base: dev
