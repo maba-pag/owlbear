@@ -372,6 +372,9 @@ class KanbanEngine:
                 for line in lines[1:closing]:
                     if line.startswith("claimed_by:"):
                         val = line.split(":", 1)[1].strip()
+                        quote = val[:1]
+                        if quote in {'"', "'"} and val.endswith(quote):
+                            val = val.removeprefix(quote).removesuffix(quote).strip()
                         if val and val.lower() not in ("null", "~", ""):
                             raise MigrationRequiredError(
                                 code="ERR_MIGRATION_REQUIRED",
