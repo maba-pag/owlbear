@@ -542,6 +542,64 @@ class TestFromAC_Sweep:
             "only claimed_at and updated are permitted to change (AC-C52)"
         )
 
+    def test_ac_c52_sweep_with_cleared_legacy_claimed_by(self, tmp_path: Path) -> None:
+        """AC-C52: sweep() on a file with cleared legacy 'claimed_by: null' + expired claim.
+
+        AC-C47 (refined) now allows 'claimed_by: null' in tasks/ files as an already-cleared
+        value. This regression guard ensures that sweep() still releases the expired claim
+        on such files and applies expected normalization:
+          - body preserved exactly
+          - claimed_at cleared (null / absent)
+          - updated advanced
+          - claimed_by absent in written frontmatter (schema normalization via write_task)
+
+        The implementation sets record.claimed_by = None in sweep() and write_task strips
+        the field entirely — this is expected behaviour, not mutation beyond the AC.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        original_updated = "2026-04-21T10:00:00+00:00"
+        expired_ts = (datetime.now(tz=UTC) - timedelta(hours=3)).isoformat()
+        original_body = "\n## Notes\n\nLegacy claimed_by null body — must survive sweep unchanged.\n"
+        task_content = (
+            "---\nid: 1001\ntitle: Legacy CB null test\nstatus: in-progress\npriority: needed\n"
+            f'created: "{original_updated}"\nupdated: "{original_updated}"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            f'claimed_at: "{expired_ts}"\nclaimed_by: null\narchival_reason: null\narchival_refs: []\n---\n'
+            + original_body
+        )
+        task_file = kanban_dir / "tasks" / "1001-legacy-cb.md"
+        task_file.write_text(task_content, encoding="utf-8")
+
+        before = datetime.now(tz=UTC)
+        engine = KanbanEngine(kanban_dir)
+        released = engine.sweep()
+
+        # Claim released
+        assert 1001 in released, "sweep() must release the expired claim on a claimed_by:null file"
+
+        # Model-level checks (claimed_at, updated)
+        updated_task = engine.show_task(1001)
+        assert updated_task.claimed_at is None, "sweep() must clear claimed_at (AC-C52)"
+        updated_dt = datetime.fromisoformat(updated_task.updated)
+        if updated_dt.tzinfo is None:
+            updated_dt = updated_dt.replace(tzinfo=UTC)
+        assert updated_dt >= before, "sweep() must advance updated timestamp (AC-C52)"
+
+        # Raw-file checks (claimed_by absent)
+        written_content = task_file.read_text(encoding="utf-8")
+        fm_section = written_content.split("---", 2)[1]
+
+        # claimed_by absent from written frontmatter (expected schema normalization)
+        assert "claimed_by" not in fm_section, (
+            "write_task must strip claimed_by from disk; schema normalization applies to all "
+            "write paths including sweep (AC-C52 refined)"
+        )
+
+        # body preserved exactly (use model API — same pattern as test_ac_c52_sweep_preserves_body_exactly)
+        assert updated_task.body == original_body, (
+            "sweep() must not mutate the task body; only claim fields and updated may change (AC-C52)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_RepairStorage — AC-C24, AC-C25, AC-C26
