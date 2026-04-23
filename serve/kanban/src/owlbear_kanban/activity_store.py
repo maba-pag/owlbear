@@ -161,7 +161,8 @@ def compact_activity_log(  # noqa: C901
                 parsed.append((line, {}))
 
         # Resolve cutoff: use before_dt or ended_at of last closed session
-        if before_dt is None:
+        auto_cutoff = before_dt is None
+        if auto_cutoff:
             before_dt = _find_last_closed_session_dt(parsed)
 
         # Identify currently open claim cycles by their starting row index.
@@ -176,18 +177,29 @@ def compact_activity_log(  # noqa: C901
             if before_dt is None or entry_dt is None or entry_dt >= before_dt or in_open_session:
                 to_keep.append(entry_line)
 
-        # Hard floor: for non-session streams, protect small boards from full wipe.
-        # For session streams, preserve legacy behavior where closed cycles can compact
-        # on small logs (floor applies only once total rows exceed _HARD_FLOOR).
+        # Hard floor: keep last N rows by default.
+        floor_count = min(_HARD_FLOOR, len(all_lines))
+
+        # Preserve legacy small-log session compaction only when the resolved/explicit
+        # cutoff is older than the latest entry in the stream (active-stream scenario).
         session_actions = {"claim", "end_work", "release", "sweep-release"}
         has_session_actions = any(
             isinstance(entry_data, dict) and entry_data.get("action") in session_actions
             for _entry_line, entry_data in parsed
         )
-        if has_session_actions:
-            floor_count = _HARD_FLOOR if len(all_lines) > _HARD_FLOOR else 0
-        else:
-            floor_count = min(_HARD_FLOOR, len(all_lines))
+        latest_entry_dt = max(
+            (_parse_dt(entry_data.get("timestamp")) for _entry_line, entry_data in parsed),
+            default=None,
+        )
+        if (
+            has_session_actions
+            and (auto_cutoff or bool(open_session_starts))
+            and len(all_lines) <= _HARD_FLOOR
+            and before_dt is not None
+            and latest_entry_dt is not None
+            and before_dt < latest_entry_dt
+        ):
+            floor_count = 0
 
         if floor_count > 0 and len(to_keep) < floor_count:
             floor_lines = [line for line, _ in parsed[-floor_count:]]
