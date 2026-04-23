@@ -144,3 +144,47 @@ class TestFromAC_PredicateCommonMarkSubstrate:
             [_make_section("Steps", 2, "    1. item inside indented code block\n")]
         )
         assert require_list_in_section(task, "Steps") is False
+
+    # ------------------------------------------------------------------
+    # Edge: fence variants — indented fences and longer opening lengths
+    # ------------------------------------------------------------------
+
+    def test_ac_c40_three_space_indented_fence_excludes_content(self) -> None:
+        """AC-C40: 3-space-indented fences are valid CommonMark fences; content is excluded.
+
+        CommonMark spec §4.5: a fenced code block may be indented up to 3
+        spaces.  '   ```' is therefore a valid fence opener and its content
+        must not be treated as a list.  The current ``_FENCE_RE`` is anchored
+        at column 0 only and does not recognise a 3-space-indented opener, so
+        the list-like line inside the fence leaks into list detection and the
+        predicate incorrectly returns True.
+        """
+        content = "   ```\n- fake inside 3-space-indented fence\n   ```\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_four_backtick_fence_not_closed_by_three_backtick(self) -> None:
+        """AC-C40: a 4-backtick fence opener must only close with 4+ backticks.
+
+        CommonMark spec §4.5: the closing fence must consist of at least as
+        many backticks as the opening fence.  A ``` line does not close a
+        ```` fence.  The current ``_remove_fenced_blocks`` stores only the
+        fence character (not length) and therefore closes a ```` opener on
+        any ``` line, leaking the subsequent content into list detection and
+        producing a spurious True result.
+        """
+        content = "````\n- hidden inside 4-backtick fence\n```\n- still inside fence (not leaked)\n````\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_four_tilde_fence_not_closed_by_three_tilde(self) -> None:
+        """AC-C40: a 4-tilde fence opener must only close with 4+ tildes.
+
+        CommonMark spec §4.5: same minimum-length rule applies to tilde
+        fences.  The current ``_remove_fenced_blocks`` prematurely closes a
+        ~~~~ opener on a ~~~ line, causing list items after the premature
+        close to leak into detection.
+        """
+        content = "~~~~\n- hidden inside 4-tilde fence\n~~~\n- still inside fence (not leaked)\n~~~~\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is False
