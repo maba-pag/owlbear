@@ -46,7 +46,7 @@ from owlbear_kanban.models import (
     Task,
     TaskSummary,
 )
-from owlbear_kanban.task_io import (
+from owlbear_kanban.storage import (
     make_task_filename,
     read_task,
     validate_path_containment,
@@ -461,6 +461,48 @@ class KanbanEngine:
             raise ValueError(msg)
         return valid_statuses - {status}
 
+    @staticmethod
+    def _dep_effect_from_archival_reason(reason: str | None) -> str:
+        """Map archival reason to dependency effect category.
+
+        Returns ``ok``, ``redirect``, or ``blocked``.
+        """
+        if reason in {"dropped", "wontfix"}:
+            return "blocked"
+        if reason in {"deprecated", "duplicate"}:
+            return "redirect"
+        return "ok"
+
+    def _compute_dep_status(
+        self,
+        task: Task,
+        *,
+        active_ids: set[int],
+        archived_reasons: dict[int, str | None],
+    ) -> str | None:
+        """Compute dep_status from dependency IDs and archive metadata.
+
+        Precedence follows Brief B: blocked > redirect > ok.
+        """
+        deps = task.depends_on or []
+        if not deps:
+            return None
+
+        status = "ok"
+        for dep_id in deps:
+            if dep_id in active_ids:
+                continue
+            if dep_id not in archived_reasons:
+                return "blocked"
+
+            dep_effect = self._dep_effect_from_archival_reason(archived_reasons[dep_id])
+            if dep_effect == "blocked":
+                return "blocked"
+            if dep_effect == "redirect":
+                status = "redirect"
+
+        return status
+
     # ------------------------------------------------------------------
     # Read operations
     # ------------------------------------------------------------------
@@ -502,12 +544,22 @@ class KanbanEngine:
 
         tasks: list[Task] = []
         archive_ids: set[int] = set()
+        archived_reasons: dict[int, str | None] = {}
         if not archived and self._archive_dir.exists():
             for archive_path in self._archive_dir.glob("*.md"):
                 archive_stem = archive_path.stem
                 archive_head = archive_stem.split("-", 1)[0]
                 if archive_head.isdigit():
-                    archive_ids.add(int(archive_head))
+                    archive_id = int(archive_head)
+                    archive_ids.add(archive_id)
+                    try:
+                        archive_task = read_task(archive_path)
+                    except (FileNotFoundError, ValueError, KeyError):
+                        archived_reasons[archive_id] = None
+                    except Exception:  # noqa: BLE001
+                        archived_reasons[archive_id] = None
+                    else:
+                        archived_reasons[archive_id] = archive_task.archival_reason
         seen: set[str] = set()
         try:
             scan_iter = os.scandir(source_dir)
@@ -589,7 +641,7 @@ class KanbanEngine:
         if blocked is not None:
             tasks = [t for t in tasks if t.blocked is blocked]
         if unclaimed:
-            tasks = [t for t in tasks if t.claimed_by is None]
+            tasks = [t for t in tasks if t.claimed_at is None]
         if search:
             needle = search.lower()
             tasks = [t for t in tasks if needle in t.title.lower() or needle in t.body.lower()]
@@ -617,7 +669,20 @@ class KanbanEngine:
         if limit > 0:
             tasks = tasks[:limit]
 
-        return [TaskSummary.model_validate(t.model_dump()) for t in tasks]
+        if archived:
+            return [TaskSummary.model_validate(t.model_dump()) for t in tasks]
+
+        active_ids = {task.id for task in tasks}
+        summaries: list[TaskSummary] = []
+        for task in tasks:
+            projected = task.model_dump()
+            projected["dep_status"] = self._compute_dep_status(
+                task,
+                active_ids=active_ids,
+                archived_reasons=archived_reasons,
+            )
+            summaries.append(TaskSummary.model_validate(projected))
+        return summaries
 
     def show_task(self, task_id: str) -> Task:
         """Return the :class:`Task` for a single task by its string ID.
@@ -722,7 +787,7 @@ class KanbanEngine:
         filename = make_task_filename(task_id, title)
         task_path = self._tasks_dir / filename
         validate_path_containment(self._tasks_dir, task_path)
-        write_task(task_path, record)
+        write_task(record, self._kanban_dir)
         self._config = load_config(self._kanban_dir)
 
         self._tasks_dir = self._kanban_dir / self._config.tasks_dir
@@ -828,13 +893,13 @@ class KanbanEngine:
 
         record.updated = datetime.now(tz=UTC).isoformat()
 
-        write_task(task_path, record)
+        write_task(record, self._kanban_dir)
 
         try:
             self._emit_event("edit", record.id, "task edited")
         except OSError:
             with contextlib.suppress(Exception):
-                write_task(task_path, original)
+                write_task(original, self._kanban_dir)
             raise
         self._revision += 1
         return record
@@ -871,13 +936,13 @@ class KanbanEngine:
             self._archive_dir.mkdir(parents=True, exist_ok=True)
             record.status = "archived"
             record.updated = datetime.now(tz=UTC).isoformat()
-            write_task(task_path, record)
+            write_task(record, self._kanban_dir)
             _move_file(task_path, dest)
             archived = True
         else:
             record.status = status
             record.updated = datetime.now(tz=UTC).isoformat()
-            write_task(task_path, record)
+            write_task(record, self._kanban_dir)
 
         try:
             self._emit_event("move", record.id, f"{old_status} -> {record.status}")
@@ -885,7 +950,7 @@ class KanbanEngine:
             with contextlib.suppress(Exception):
                 if archived and dest.exists():
                     _move_file(dest, task_path)
-                write_task(task_path, original)
+                write_task(original, self._kanban_dir)
             raise
         self._revision += 1
         return record
@@ -916,18 +981,18 @@ class KanbanEngine:
 
         effective_now = now if now is not None else datetime.now(tz=UTC)
 
-        if record.claimed_by is not None and record.claimed_by != self._agent_name:
+        if record.claimed_at is not None:
             # Reject unless the existing claim has expired.
             timeout = self._parse_claim_timeout()
             claimed_at_dt = datetime.fromisoformat(record.claimed_at)  # type: ignore[arg-type]
             if effective_now < claimed_at_dt + timeout:
-                msg = f"Task {task_id!r} is already claimed by {record.claimed_by!r}"
+                msg = f"Task {task_id!r} is already claimed"
                 raise ValueError(msg)
 
         record.claimed_by = self._agent_name
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
-        write_task(task_path, record)
+        write_task(record, self._kanban_dir)
         try:
             self._emit_event(
                 "claim",
@@ -938,7 +1003,7 @@ class KanbanEngine:
             )
         except OSError:
             with contextlib.suppress(Exception):
-                write_task(task_path, original)
+                write_task(original, self._kanban_dir)
             raise
         self._revision += 1
         return record
@@ -964,12 +1029,12 @@ class KanbanEngine:
         record.claimed_by = None
         record.claimed_at = None
         record.updated = datetime.now(tz=UTC).isoformat()
-        write_task(task_path, record)
+        write_task(record, self._kanban_dir)
         try:
             self._emit_event("release", record.id, f"released by {self._agent_name}")
         except OSError:
             with contextlib.suppress(Exception):
-                write_task(task_path, original)
+                write_task(original, self._kanban_dir)
             raise
         self._revision += 1
         return record
@@ -1094,7 +1159,7 @@ class KanbanEngine:
         record.updated = datetime.now(tz=UTC).isoformat()
 
         # --- Single write ---
-        write_task(task_path, record)
+        write_task(record, self._kanban_dir)
 
         # --- Archive move (only after successful write) ---
         dest = self._archive_dir / task_path.name
@@ -1115,7 +1180,7 @@ class KanbanEngine:
             with contextlib.suppress(Exception):
                 if needs_archive and dest.exists():
                     _move_file(dest, task_path)
-                write_task(task_path, original)
+                write_task(original, self._kanban_dir)
             raise
 
         self._revision += 1
@@ -1163,12 +1228,12 @@ class KanbanEngine:
                     record.claimed_at = None
                     record.claimed_by = None
                     record.updated = datetime.now(tz=UTC).isoformat()
-                    write_task(path, record)
+                    write_task(record, self._kanban_dir)
                     try:
                         self._emit_event("sweep-release", record.id, "expired claim released")
                     except OSError:
                         with contextlib.suppress(Exception):
-                            write_task(path, original)
+                            write_task(original, self._kanban_dir)
                         continue
                     released.append(record.id)
 

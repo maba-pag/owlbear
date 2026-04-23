@@ -150,9 +150,9 @@ class TaskSummary(BaseModel):
     """Lightweight task summary for list operations.
 
     Excludes ``body``, ``created``, and ``updated`` from the full Task schema.
-    Both ``claimed_by`` and ``claimed_at`` are coerced to a boolean ``claimed``
-    field. Dict-style read access (``summary["field"]``) is supported for MCP
-    serialisation consumers.
+    ``claimed`` is derived from ``claimed_at`` and ``dep_status`` is a
+    read-time projection from dependency state. Dict-style read access
+    (``summary["field"]``) is supported for MCP serialisation consumers.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -167,7 +167,7 @@ class TaskSummary(BaseModel):
     claimed_at: str | None = None
     claimed: bool = False
     archival_reason: str | None = None
-    archival_refs: list[int | str] = Field(default_factory=list)
+    archival_refs: list[int] = Field(default_factory=list)
     dep_status: str | None = None
     parent: int | None = None
     depends_on: list[int] = Field(default_factory=list)
@@ -184,8 +184,7 @@ class TaskSummary(BaseModel):
             data = dict(data)
             data.pop("claimed_by", None)
             claimed_at = data.get("claimed_at")
-            if "claimed" not in data:
-                data["claimed"] = claimed_at is not None
+            data["claimed"] = claimed_at is not None
         return data
 
     def __getitem__(self, key: str) -> object:
@@ -318,10 +317,58 @@ class SingleTaskResponse(TaskFull):
 # ---------------------------------------------------------------------------
 
 
+KANBAN_ERROR_CODES: frozenset[str] = frozenset(
+    {
+        "ERR_NOT_CLAIMED",
+        "ERR_BLOCK_REASON_REQUIRED",
+        "ERR_NO_OP",
+        "ERR_BODY_EXCLUSIVE",
+        "ERR_IDS_EXCLUSIVE",
+        "ERR_SECTION_EMPTY",
+        "ERR_INVALID_STATUS",
+        "ERR_INVALID_PRIORITY",
+        "ERR_INVALID_WAVE_PARAM",
+        "ERR_PARENT_NOT_FOUND",
+        "ERR_DEP_NOT_FOUND",
+        "ERR_ARCHIVAL_REASON_INVALID",
+        "ERR_ARCHIVAL_REASON_REQUIRED",
+        "ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+        "ERR_ARCHIVAL_REFS_REQUIRED",
+        "ERR_ARCHIVAL_REFS_FORBIDDEN",
+        "ERR_ARCHIVAL_REF_MISSING",
+        "ERR_ARCHIVAL_REF_SELF",
+        "ERR_ARCHIVAL_REF_CYCLE",
+        "ERR_COMPLETED_REQUIRES_DONE",
+        "ERR_INVALID_OUTCOME",
+        "ERR_REJECT_REQUIRES_MOVE_TO",
+        "ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
+        "ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS",
+        "ERR_MOVE_TO_FORBIDDEN_ON_RELEASE",
+        "ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS",
+        "ERR_PREDICATE_FAILED",
+        "ERR_ENTRY_STATUS_INVALID",
+        "ERR_INVALID_CLAIM_TIMEOUT",
+        "ERR_TERMINAL_STATUS_INVALID",
+        "ERR_MIGRATION_REQUIRED",
+        "ERR_ALREADY_CLAIMED",
+        "ERR_ARCHIVED_NOT_CLAIMABLE",
+        "ERR_BLOCKED_NOT_CLAIMABLE",
+        "ERR_BODY_TOO_LARGE",
+        "ERR_STALE",
+        "ERR_NOT_FOUND",
+    }
+)
+
+_TEST_ONLY_ERROR_CODES: frozenset[str] = frozenset({"ERR_TEST", "ERR_X"})
+
+
 class KanbanError(Exception):
     """Base exception for kanban engine domain errors."""
 
     def __init__(self, code: str, user_message: str) -> None:
+        if code not in KANBAN_ERROR_CODES and code not in _TEST_ONLY_ERROR_CODES:
+            msg = f"Unknown error code: {code!r}"
+            raise ValueError(msg)
         super().__init__(user_message)
         self.code = code
         self.user_message = user_message
