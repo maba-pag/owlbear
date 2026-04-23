@@ -46,6 +46,8 @@ def load_config(kanban_dir: Path) -> BoardConfig:
 
     Raises:
         FileNotFoundError: when ``config.yml`` is absent from *kanban_dir*.
+        ConfigError: when ``claim_timeout`` is present but cannot be parsed
+            as a valid duration string (AC-C50).
     """
     config_path = kanban_dir / "config.yml"
     if not config_path.exists():
@@ -55,7 +57,9 @@ def load_config(kanban_dir: Path) -> BoardConfig:
     with config_path.open("r", encoding="utf-8") as fh:
         raw = y.load(fh)
 
-    return BoardConfig.model_validate(_to_plain(raw))
+    config = BoardConfig.model_validate(_to_plain(raw))
+    _validate_claim_timeout(config)
+    return config
 
 
 def _validate_claim_timeout(config: BoardConfig) -> None:

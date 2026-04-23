@@ -238,7 +238,9 @@ def write_task(path: Path, record: Task) -> None:
         <markdown body>
 
     Any extra fields stored on the record (e.g. ``class``, ``started``)
-    are written into the frontmatter so they survive round-trips.
+    are written into the frontmatter so they survive round-trips.  The
+    deprecated ``claimed_by`` field is always stripped from the output
+    regardless of its value on *record* (schema migration contract, AC-C52).
 
     Args:
         path:   Destination path (created or overwritten).
