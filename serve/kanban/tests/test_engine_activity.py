@@ -480,6 +480,12 @@ class TestFromAC_ListSessions:
         sessions = engine.list_sessions(filter="all")
         matching = [s for s in sessions if s.task_id == 1001]
         assert matching, "Sweep-released session must appear in list_sessions(filter='all')"
+        assert matching[0].state == "expired", (
+            f"Sweep-released session must have state='expired', got {matching[0].state!r}"
+        )
+        assert matching[0].outcome == "expired", (
+            f"Sweep-released session must have outcome='expired', got {matching[0].outcome!r}"
+        )
 
     def test_ac_c43_unknown_filter_raises_value_error(self, tmp_path: Path) -> None:
         """AC-C43: unsupported filter name raises ValueError (not silently returns all)."""
