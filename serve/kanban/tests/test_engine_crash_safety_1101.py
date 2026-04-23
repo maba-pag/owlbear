@@ -98,16 +98,14 @@ class TestFromAC_EngineCrashSafety:
         # Patch write_task in engine's namespace so the first call raises OSError
         calls: list[int] = []
 
-        import owlbear_kanban.task_io as _task_io  # noqa: PLC0415
+        from owlbear_kanban.storage import write_task as _real_write_task  # noqa: PLC0415
 
-        real_write_task = _task_io.write_task
-
-        def _crash_on_first(path: Path, record: object) -> None:
+        def _crash_on_first(task: object, kanban_dir: Path) -> None:
             calls.append(1)
             if len(calls) == 1:
                 msg = "simulated disk failure during task write"
                 raise OSError(msg)
-            real_write_task(path, record)
+            _real_write_task(task, kanban_dir)
 
         with (
             patch("owlbear_kanban.engine.write_task", side_effect=_crash_on_first),
@@ -153,15 +151,14 @@ class TestFromAC_EngineCrashSafety:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
 
-        import owlbear_kanban.task_io as _task_io  # noqa: PLC0415
+        from owlbear_kanban.storage import write_task as _real_write_task  # noqa: PLC0415
 
-        real_write_task = _task_io.write_task
         config_next_id_at_write: list[int] = []
 
-        def _spy_write_task(path: Path, record: object) -> None:
+        def _spy_write_task(task: object, kanban_dir: Path) -> None:
             # Capture config state AT the moment write_task is called
             config_next_id_at_write.append(load_config(kanban_dir).next_id)
-            real_write_task(path, record)
+            _real_write_task(task, kanban_dir)
 
         with patch("owlbear_kanban.engine.write_task", side_effect=_spy_write_task):
             engine.create_task("spy-subject")

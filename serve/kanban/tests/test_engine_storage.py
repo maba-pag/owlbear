@@ -240,6 +240,44 @@ class TestFromAC_ListTasksCorruption:
         assert 1001 in task_ids
         assert 1002 not in task_ids, "mode-3 file (missing required field) must be silently skipped"
 
+    def test_ac_c19_list_tasks_skips_mode3b_claimed_by_on_legacy_schema(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C19 mode-3b: list_tasks silently skips files with forbidden claimed_by on legacy-schema boards.
+
+        Mode-3 has two sub-variants:
+        (a) missing required field — covered by test_ac_c19_list_tasks_skips_mode3_missing_required_field
+        (b) forbidden claimed_by present on legacy-schema boards — this test
+
+        Legacy-schema boards (version: 10) bypass the AC-C47 migration gate so
+        KanbanEngine can be instantiated. list_tasks() must silently skip a tasks/
+        file whose frontmatter contains a non-null claimed_by — no exception raised,
+        task absent from results. Exercises engine.py:580-583 carve-out →
+        read_task() re-detection → CorruptionError catch path.
+        """
+        kanban_dir = _make_board(tmp_path)  # legacy schema (version: 10) — bypasses migration gate
+        (kanban_dir / "tasks" / "1001-good.md").write_text(
+            _VALID_TASK.format(task_id=1001), encoding="utf-8"
+        )
+        # Mode-3b: all required fields present PLUS forbidden claimed_by: some-agent
+        (kanban_dir / "tasks" / "1002-claimed.md").write_text(
+            "---\nid: 1002\ntitle: legacy claimed task\nstatus: todo\npriority: needed\n"
+            "claimed_by: some-agent\n"
+            'created: "2026-04-21T10:00:00+00:00"\nupdated: "2026-04-21T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "claimed_at: null\narchival_reason: null\narchival_refs: []\n---\n\nBody.\n",
+            encoding="utf-8",
+        )
+
+        engine = KanbanEngine(kanban_dir)
+        tasks = engine.list_tasks()  # must not raise
+
+        task_ids = [t.id for t in tasks]
+        assert 1001 in task_ids
+        assert 1002 not in task_ids, (
+            "mode-3b file (forbidden claimed_by on legacy-schema board) must be silently skipped"
+        )
+
     def test_ac_c19_list_tasks_skips_mode4_type_mismatch_id_string(self, tmp_path: Path) -> None:
         """AC-C19: list_tasks silently skips mode-4 files (ERR_CORRUPT_TYPE_MISMATCH — id is string)."""
         kanban_dir = _make_new_board(tmp_path)

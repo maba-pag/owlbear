@@ -412,19 +412,18 @@ class TestFromAC_ListSessions:
         engine.start_work(1001)
         engine.end_work(1001, outcome="success", note="done")
 
-        read_calls: list[str] = []
-        original_open = open
+        md_reads: list[str] = []
+        original_read_text = Path.read_text
 
-        def spy_open(path: object, *args: object, **kwargs: object) -> object:
-            p = str(path)
-            if p.endswith(".md"):
-                read_calls.append(p)
-            return original_open(path, *args, **kwargs)  # type: ignore[call-overload]
+        def spy_read_text(self_path: Path, *args: object, **kwargs: object) -> str:
+            if str(self_path).endswith(".md"):
+                md_reads.append(str(self_path))
+            return original_read_text(self_path, *args, **kwargs)
 
-        with patch("builtins.open", side_effect=spy_open):
+        with patch.object(Path, "read_text", spy_read_text):
             engine.list_sessions(filter="all")
 
-        assert read_calls == [], f"list_sessions read task .md files: {read_calls}"
+        assert md_reads == [], f"list_sessions read task .md files via Path.read_text: {md_reads}"
 
     def test_ac_c43_task_status_at_start_captured_from_activity_event(
         self, tmp_path: Path
@@ -448,6 +447,44 @@ class TestFromAC_ListSessions:
         engine = KanbanEngine(kanban_dir)
         sessions = engine.list_sessions(filter="all")
         assert sessions == []
+
+    def test_ac_c43_legacy_format_events_accepted_by_session_derivation(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C43: old-format actor-keyed events (no source) still derive sessions."""
+        kanban_dir = _make_board(tmp_path)
+        _make_task_file(kanban_dir, 1001, "todo")
+
+        old_claim = {
+            "timestamp": "2026-04-22T10:00:00+00:00",
+            "action": "claim",
+            "task_id": 1001,
+            "detail": "claimed by agent",
+            "actor": "test-agent",
+        }
+        old_end_work = {
+            "timestamp": "2026-04-22T10:05:00+00:00",
+            "action": "end_work",
+            "task_id": 1001,
+            "detail": "success: todo -> done",
+            "actor": "test-agent",
+        }
+        activity_file = kanban_dir / "activity.jsonl"
+        activity_file.write_text(
+            json.dumps(old_claim) + "\n" + json.dumps(old_end_work) + "\n",
+            encoding="utf-8",
+        )
+
+        engine = KanbanEngine(kanban_dir)
+        sessions = engine.list_sessions(filter="all")
+
+        assert len(sessions) == 1, (
+            f"Old-format events must produce exactly 1 session, got {len(sessions)}"
+        )
+        assert sessions[0].task_id == 1001
+        assert sessions[0].state == "completed", (
+            f"Expected state='completed' from old-format success entry, got {sessions[0].state!r}"
+        )
 
     def test_ac_c43_session_record_state_values_match_spec(self, tmp_path: Path) -> None:
         """AC-C43: SessionRecord.state is one of the 7 allowed values from §7.2."""

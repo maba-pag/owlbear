@@ -17,7 +17,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from owlbear_kanban.task_io import read_task
+from owlbear_kanban.storage import read_task
 
 if TYPE_CHECKING:
     from owlbear_kanban.engine import KanbanEngine
@@ -81,7 +81,7 @@ _TERMINAL_STATUSES = frozenset({"archived"})
 def _claim_is_active(task: Task, timeout: timedelta) -> bool:
     """Return True if the task's claim has not expired."""
     if not task.claimed_at:
-        return True  # no timestamp — treat as active defensively
+        return False
     claimed_dt = datetime.fromisoformat(task.claimed_at)
     if claimed_dt.tzinfo is None:
         claimed_dt = claimed_dt.replace(tzinfo=UTC)
@@ -178,7 +178,7 @@ def pick_dispatchable(engine: KanbanEngine, *, limit: int = 25, tag: str = "") -
             continue
         if not _passes_dependency_gate(task, active_ids):
             continue
-        if task.claimed_by is not None and _claim_is_active(task, claim_timeout):
+        if _claim_is_active(task, claim_timeout):
             continue
         if tag and tag not in (task.tags or []):
             continue

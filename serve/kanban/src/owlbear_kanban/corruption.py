@@ -386,10 +386,32 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
         fm_id = fm.get("id")
         if not isinstance(fm_id, int):
             return _quarantine()
-        from owlbear_kanban.task_io import make_task_filename  # noqa: PLC0415
+        from owlbear_kanban.storage import make_task_filename, move_to_quarantine  # noqa: PLC0415
         title = fm.get("title", "task")
         new_name = make_task_filename(fm_id, title)
         new_path = path.parent / new_name
+        if new_path.exists():
+            kanban_dir = path.parent.parent
+            try:
+                quarantine_path = move_to_quarantine(path, kanban_dir)
+                return RepairOutcome(
+                    task_id=task_id,
+                    file_path=str(path),
+                    code=code_name,
+                    action="quarantined",
+                    detail=(
+                        f"rename collision on {new_path.name}; "
+                        f"quarantined to {quarantine_path}"
+                    ),
+                )
+            except Exception as exc:  # noqa: BLE001
+                return RepairOutcome(
+                    task_id=task_id,
+                    file_path=str(path),
+                    code=code_name,
+                    action="failed",
+                    detail=f"rename collision quarantine failed: {exc}",
+                )
         try:
             path.replace(new_path)
             return RepairOutcome(

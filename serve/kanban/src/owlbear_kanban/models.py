@@ -359,14 +359,11 @@ KANBAN_ERROR_CODES: frozenset[str] = frozenset(
     }
 )
 
-_TEST_ONLY_ERROR_CODES: frozenset[str] = frozenset({"ERR_TEST", "ERR_X"})
-
-
 class KanbanError(Exception):
     """Base exception for kanban engine domain errors."""
 
     def __init__(self, code: str, user_message: str) -> None:
-        if code not in KANBAN_ERROR_CODES and code not in _TEST_ONLY_ERROR_CODES:
+        if code not in KANBAN_ERROR_CODES:
             msg = f"Unknown error code: {code!r}"
             raise ValueError(msg)
         super().__init__(user_message)

@@ -10,8 +10,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
-
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
     detect_corruption,
     load_config,
@@ -236,8 +234,8 @@ class TestFromAC_ClaimedByDetection:
     def test_ac_c48_archive_with_claimed_by_no_migration_required_error(
         self, tmp_path: Path
     ) -> None:
-        """AC-C48: archive file with claimed_by does NOT trigger MigrationRequiredError."""
-        from owlbear_kanban.engine import MigrationRequiredError  # NEW exception  # noqa: PLC0415
+        """AC-C48: KanbanEngine init does NOT raise MigrationRequiredError when claimed_by is only in archive/."""
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
         (kanban_dir / "archive" / "1001-old.md").write_text(
@@ -248,15 +246,9 @@ class TestFromAC_ClaimedByDetection:
             encoding="utf-8",
         )
 
-        # Engine instantiation must succeed (no tasks/ files have claimed_by)
-        from owlbear_kanban import KanbanEngine  # noqa: PLC0415, F401
-
-        with pytest.raises(MigrationRequiredError):
-            # This proves MigrationRequiredError is the NEW exception type
-            raise MigrationRequiredError(
-                code="ERR_MIGRATION_REQUIRED",
-                user_message="test — confirming exception shape",
-            )
+        # Engine instantiation must succeed — archive claimed_by must not trigger migration gate
+        engine = KanbanEngine(kanban_dir)
+        assert engine is not None
 
 
 # ---------------------------------------------------------------------------
