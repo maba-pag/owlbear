@@ -663,18 +663,55 @@ class TestFromAC_RepairStorage:
         # File still in quarantine
         assert (kanban_dir / "quarantine" / "1001-corrupt.md").exists()
 
-    def test_ac_c26_duplicate_location_resolved_archive_wins(self, tmp_path: Path) -> None:
-        """AC-C26: ERR_CORRUPT_DUPLICATE_LOCATION → archive file wins; tasks/ file removed."""
+    def test_ac_c25_original_tasks_file_absent_after_ar_creation_fails(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C25: after AR creation fails, the original tasks/ file is NOT restored.
+
+        Divergent from test_ac_c25_repair_records_failed_when_ar_creation_fails:
+        this test directly asserts the tasks/ path is absent, not only that the
+        quarantine copy exists. An implementation that moves the file back from
+        quarantine on AR failure would fail this assertion.
+        """
         kanban_dir = _make_new_board(tmp_path)
-        task_content = _VALID_TASK.format(task_id=1001)
-        (kanban_dir / "tasks" / "1001-active.md").write_text(task_content, encoding="utf-8")
-        (kanban_dir / "archive" / "1001-active.md").write_text(task_content, encoding="utf-8")
+        tasks_path = kanban_dir / "tasks" / "1001-corrupt.md"
+        tasks_path.write_text(_CORRUPT_TASK, encoding="utf-8")
+
+        def raise_on_create(_self_engine: KanbanEngine, *_args: object, **_kwargs: object) -> object:
+            msg = "simulated AR creation failure"
+            raise RuntimeError(msg)
+
+        with patch.object(KanbanEngine, "create_task", side_effect=raise_on_create):
+            engine = KanbanEngine(kanban_dir)
+            engine.repair_storage()
+
+        # Original tasks/ path must be absent — file must not be restored after AR failure.
+        assert not tasks_path.exists(), (
+            "tasks/1001-corrupt.md must remain absent after failed AR creation (AC-C25)"
+        )
+
+    def test_ac_c26_duplicate_location_resolved_archive_wins(self, tmp_path: Path) -> None:
+        """AC-C26: ERR_CORRUPT_DUPLICATE_LOCATION → archive file wins; tasks/ file removed.
+
+        Uses DIVERGENT content so an implementation that clobbers the archive with the
+        tasks/ copy (or vice-versa) is detected by the content assertion.
+        """
+        kanban_dir = _make_new_board(tmp_path)
+        # Archive copy has "Archive body" — tasks/ copy has "Tasks body".
+        # The two differ so we can assert archive content is preserved verbatim.
+        archive_content = _VALID_TASK.format(task_id=1001).replace("Content.", "Archive body.")
+        tasks_content = _VALID_TASK.format(task_id=1001).replace("Content.", "Tasks body.")
+        assert archive_content != tasks_content  # guard: fixtures must differ
+
+        (kanban_dir / "archive" / "1001-active.md").write_text(archive_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-active.md").write_text(tasks_content, encoding="utf-8")
 
         engine = KanbanEngine(kanban_dir)
         engine.repair_storage()
 
-        # Archive file survives
+        # Archive file survives with its original content intact
         assert (kanban_dir / "archive" / "1001-active.md").exists()
+        assert (kanban_dir / "archive" / "1001-active.md").read_text(encoding="utf-8") == archive_content
         # tasks/ file gone (moved to quarantine or removed)
         assert not (kanban_dir / "tasks" / "1001-active.md").exists()
 
