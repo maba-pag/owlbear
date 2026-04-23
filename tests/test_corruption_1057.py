@@ -1,7 +1,7 @@
 """C-12: GREEN — corruption detection & auto-fix failing tests (revised after arch review).
 
 Task: #1057 (Brief C #1043) — paper-c.md §4
-AC:   C17, C18, C21, C22, CLEANUP
+AC:   CLEANUP-EXPORTS, EXACT-SET, REG
 
 Architecture review (2026-04-22) corrected the original AC:
   - 'forbidden-field' and 'orphan-archive-ref' are NOT Brief §4.1 modes.
@@ -13,7 +13,8 @@ Architecture review (2026-04-22) corrected the original AC:
 
 C-03 tests (serve/kanban/tests/test_corruption.py) cover:
   - AC-C17: positive detection for all 9 modes (modes 1-9)
-  - AC-C18: detect_corruption and read_task raise CorruptionError for each mode
+  - AC-C18: read_task raises CorruptionError(code=...) for every single-file detectable mode
+    (modes 1, 3-9); modes 2 and 7 are board-level, covered by scan_and_fix / list_tasks
   - AC-C21: CorruptionError subclass shape (code, user_message, file_path)
   - AC-C22: auto-fix matrix per (mode, field, default) triple including claimed_by
     quarantine via ERR_CORRUPT_MISSING_FIELD + detail="forbidden field claimed_by present"
