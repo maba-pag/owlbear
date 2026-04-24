@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from unittest.mock import patch
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import _compute_duration
@@ -308,6 +309,23 @@ class TestFromAC_EngineListTasksArchived:
         # claimed_at is set → TaskSummary.claimed=True; engine cleared claimed_by
         # to None for archived tasks (coverage target: line 558 in list_tasks)
         assert result[0].claimed is True
+
+    def test_archived_task_without_claimed_at_shows_claimed_false(
+        self, tmp_path: Path
+    ) -> None:
+        """Archived task with no claimed_at must report claimed=False.
+
+        Regression guard: TaskSummary derives `claimed` from `claimed_at` only;
+        removing the in-memory `task.claimed_by = None` mutation (list_tasks line
+        for archived tasks) must not affect this — the projection handles it.
+        This test proves both branches of the claimed projection for archived tasks.
+        """
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, claimed_at="null", subdir="archive")
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.list_tasks(archived=True)
+        assert len(result) == 1
+        assert result[0].claimed is False
 
 
 # ---------------------------------------------------------------------------
@@ -619,6 +637,32 @@ class TestFromAC_EngineEndWorkValidation:
                 "1", note="reject", outcome="reject", move_to="nonexistent-status"
             )
 
+    def test_end_work_block_outcome_marks_task_blocked(
+        self, tmp_path: Path
+    ) -> None:
+        """AC: end_work block outcome sets blocked=True and records block_reason."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.end_work(
+            "1",
+            note="blocking this task",
+            outcome="block",
+            block_reason="dependency missing",
+        )
+        assert result.blocked is True
+        assert result.block_reason == "dependency missing"
+
+    def test_end_work_fail_outcome_preserves_task_status(
+        self, tmp_path: Path
+    ) -> None:
+        """AC: end_work fail outcome leaves the task status unchanged."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="in-progress")
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.end_work("1", note="attempt failed", outcome="fail")
+        assert result.status == "in-progress"
+
 
 # ---------------------------------------------------------------------------
 # claim_task — blocked guard and already-claimed guard
@@ -678,6 +722,42 @@ class TestFromAC_EngineEditTaskMutationPaths:
         task = engine.edit_task("1", append_body="My note content", timestamp=True)
         assert re.search(r"\[\[20\d{2}-\d{2}-\d{2}\]\]", task.body)
         assert "My note content" in task.body
+
+
+# ---------------------------------------------------------------------------
+# edit_task — rollback path when activity log emit raises OSError
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EngineEditTaskRollback:
+    """AC: edit_task() rollback path (engine.py:899-901) — when _emit_event raises
+    OSError, write_task(original) is called to restore the on-disk state."""
+
+    def test_edit_task_oserror_on_emit_restores_original_task(
+        self, tmp_path: Path
+    ) -> None:
+        """If activity log emit fails after edit_task write, original is restored."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, title="Original Title")
+        engine = KanbanEngine(board, activity_log=False)
+        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.edit_task("1", title="New Title")
+        # Rollback must have restored original title to disk
+        restored = read_task(board / "tasks" / "1-task.md")
+        assert restored.title == "Original Title"
+
+    def test_edit_task_oserror_on_emit_original_body_preserved(
+        self, tmp_path: Path
+    ) -> None:
+        """Rollback also restores original body when body was appended."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, body="original body content")
+        engine = KanbanEngine(board, activity_log=False)
+        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.edit_task("1", append_body="extra appended text")
+        restored = read_task(board / "tasks" / "1-task.md")
+        assert "extra appended text" not in restored.body
+        assert "original body content" in restored.body
 
 
 # ---------------------------------------------------------------------------
@@ -812,6 +892,54 @@ class TestFromAC_EngineReadLogEntriesErrors:
         # Valid entry parsed; blank lines skipped
         assert isinstance(result, list)
 
+    def test_invalid_json_line_skipped_valid_entry_still_parsed(
+        self, tmp_path: Path
+    ) -> None:
+        """Invalid JSON line is skipped; the following valid claim entry is parsed."""
+        import json as _json
+
+        board = _make_board(tmp_path)
+        log = board / "activity.jsonl"
+        valid = _json.dumps(
+            {
+                "action": "claim",
+                "task_id": 1,
+                "detail": "x",
+                "timestamp": "2026-04-23T10:00:00+00:00",
+                "task_status_at_start": "todo",
+            }
+        )
+        log.write_text("not-valid-json\n" + valid + "\n", encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=True)
+        result = engine.list_sessions(filter="all")
+        # Exactly one session from the one valid claim entry
+        assert len(result) == 1
+        assert result[0].task_id == 1
+
+    def test_blank_lines_skipped_valid_entry_still_parsed(
+        self, tmp_path: Path
+    ) -> None:
+        """Blank lines surrounding the valid claim entry are skipped gracefully."""
+        import json as _json
+
+        board = _make_board(tmp_path)
+        log = board / "activity.jsonl"
+        valid = _json.dumps(
+            {
+                "action": "claim",
+                "task_id": 1,
+                "detail": "x",
+                "timestamp": "2026-04-23T10:00:00+00:00",
+                "task_status_at_start": "todo",
+            }
+        )
+        log.write_text("\n\n" + valid + "\n\n", encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=True)
+        result = engine.list_sessions(filter="all")
+        # Exactly one session from the one valid claim entry
+        assert len(result) == 1
+        assert result[0].task_id == 1
+
 
 # ---------------------------------------------------------------------------
 # _derive_sessions — non-integer task_id skip
@@ -841,3 +969,59 @@ class TestFromAC_EngineDeriveSessionsNonIntTaskId:
         engine = KanbanEngine(board, activity_log=True)
         result = engine.list_sessions(filter="all")
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# end_work — rollback path when activity log emit raises OSError
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EngineEndWorkRollback:
+    """AC: end_work() rollback path (engine.py:1204-1208) — when _emit_event raises
+    OSError, write_task(original) restores the on-disk state; for archive outcomes
+    the file is also moved back from archive/ to tasks/."""
+
+    def test_end_work_oserror_on_emit_restores_original_task(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-archive outcome: original task body restored when emit fails."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, body="original body")
+        engine = KanbanEngine(board, activity_log=False)
+        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.end_work("1", note="end-work note", outcome="fail")
+        # Rollback restores the original body
+        restored = read_task(board / "tasks" / "1-task.md")
+        assert "end-work note" not in restored.body
+        assert "original body" in restored.body
+
+    def test_end_work_archive_oserror_on_emit_moves_file_back(
+        self, tmp_path: Path
+    ) -> None:
+        """Archive outcome: after successful file move, emit failure moves file back."""
+        board = _make_board(tmp_path)
+        # 'done' is the last status → end_work(success) archives the task
+        _write_task(board, task_id=1, status="done", body="done body")
+        engine = KanbanEngine(board, activity_log=False)
+        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.end_work("1", note="archiving note", outcome="success")
+        # Task file must be back in tasks/ (not stranded in archive/)
+        task_file = board / "tasks" / "1-task.md"
+        assert task_file.exists(), "task file not restored to tasks/ after rollback"
+        # And content must match the original (pre-mutation)
+        restored = read_task(task_file)
+        assert "archiving note" not in restored.body
+        assert "done body" in restored.body
+
+    def test_end_work_archive_oserror_archive_file_removed_after_rollback(
+        self, tmp_path: Path
+    ) -> None:
+        """After rollback of an archive outcome, archive/ must not retain the file."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="done")
+        engine = KanbanEngine(board, activity_log=False)
+        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+            engine.end_work("1", note="archiving note", outcome="success")
+        # archive/ file must have been moved back (not left in archive/)
+        archive_file = board / "archive" / "1-task.md"
+        assert not archive_file.exists(), "archive file was not moved back during rollback"
