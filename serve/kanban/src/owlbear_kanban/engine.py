@@ -621,8 +621,6 @@ class KanbanEngine:
                         if isinstance(_exc, _CorruptionError):
                             continue
                         continue
-                    if archived:
-                        task.claimed_by = None
                     cache[entry.name] = (mtime_ns, task)
                     if not archived and task.id in archive_ids:
                         # AC-C19 mode 7: if an archive copy exists, skip tasks/ copy.
@@ -875,7 +873,9 @@ class KanbanEngine:
             ValueError: ``status`` or ``priority`` is not a valid configured value.
         """
         if status is not None:
-            valid_statuses = {s["name"] for s in self._config.statuses}
+            valid_statuses = set(self._config.statuses)
+            if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
+                valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
             if status not in valid_statuses:
                 msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
@@ -999,7 +999,7 @@ class KanbanEngine:
                      Defaults to ``datetime.now(UTC)``.
 
         Returns:
-            Updated :class:`Task` with ``claimed_by`` and ``claimed_at`` set.
+            Updated :class:`Task` with ``claimed_at`` set.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
@@ -1024,7 +1024,6 @@ class KanbanEngine:
                 msg = f"Task {task_id!r} is already claimed"
                 raise ValueError(msg)
 
-        record.claimed_by = self._agent_name
         record.claimed_at = effective_now.isoformat()
         record.updated = effective_now.isoformat()
         write_task(record, self._kanban_dir)
@@ -1044,7 +1043,7 @@ class KanbanEngine:
         return record
 
     def release_task(self, task_id: str) -> Task:
-        """Release the claim on a task, clearing ``claimed_by`` and ``claimed_at``.
+        """Release the claim on a task, clearing ``claimed_at``.
 
         This operation is a no-op if the task is not currently claimed.
 
@@ -1061,7 +1060,6 @@ class KanbanEngine:
         record = read_task(task_path)
         original = record.model_copy(deep=True)
 
-        record.claimed_by = None
         record.claimed_at = None
         record.updated = datetime.now(tz=UTC).isoformat()
         write_task(record, self._kanban_dir)
@@ -1187,7 +1185,6 @@ class KanbanEngine:
         record.body = record.body + "\n" + f"[[{date_str}]]\n" + note
 
         # --- Release claim ---
-        record.claimed_by = None
         record.claimed_at = None
 
         # --- Apply outcome-specific mutations ---
@@ -1263,7 +1260,6 @@ class KanbanEngine:
                     original = record.model_copy(deep=True)
                     # Clear claimed_at and update timestamp
                     record.claimed_at = None
-                    record.claimed_by = None
                     record.updated = datetime.now(tz=UTC).isoformat()
                     write_task(record, self._kanban_dir)
                     try:

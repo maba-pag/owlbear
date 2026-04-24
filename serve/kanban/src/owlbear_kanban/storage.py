@@ -357,7 +357,6 @@ def read_task(path: Path) -> Task:
             file_path=str(path),
         )
 
-    task.claimed_by = None
     return task
 
 

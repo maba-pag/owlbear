@@ -156,13 +156,21 @@ class Task(BaseModel):
     blocked: bool = False
     block_reason: str | None = None
 
-    # Claim fields — Brief C uses claimed_at only; claimed_by kept for legacy read
-    claimed_by: str | None = None
+    # Claim field — Brief C uses claimed_at only
     claimed_at: str | None = None
 
     # Archive fields added in Brief C
     archival_reason: str | None = None
-    archival_refs: list[str] = Field(default_factory=list)
+    archival_refs: list[int] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_projection_only_fields(cls, data: object) -> object:
+        """Remove projection-only fields that must never be stored on Task."""
+        if isinstance(data, dict):
+            data = dict(data)
+            data.pop("dep_status", None)
+        return data
 
 
 class TaskSummary(BaseModel):
