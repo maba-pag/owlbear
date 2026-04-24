@@ -71,6 +71,19 @@ claim_timeout: 1h
 next_id: 1
 archive_dir: archive
 activity_log: false
+agent_map:
+  research: researcher
+  backlog: architect
+  todo: test-writer
+  in-progress: builder
+  review: reviewer
+  docs: doc-writer
+  done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
 """
 
 
@@ -162,12 +175,13 @@ class TestFromAC_CreateTaskAdapter:
     async def test_create_task_forwards_title(
         self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
     ) -> None:
-        """title must be forwarded as the first positional arg to AgentView.create_task."""
+        """Adapter must forward title to AgentView.create_task (positional or keyword)."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         ctx = _make_mcp_ctx(app_ctx)
         await create_task(ctx, title="My Feature")
-        args, kwargs = mock_av.create_task.call_args
-        assert args[0] == "My Feature" or kwargs.get("title") == "My Feature", (
+        call = mock_av.create_task.call_args
+        title_val = call.args[0] if call.args else call.kwargs.get("title")
+        assert title_val == "My Feature", (
             "title not forwarded to AgentView.create_task"
         )
 

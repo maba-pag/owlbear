@@ -68,6 +68,19 @@ claim_timeout: 1h
 next_id: 1
 archive_dir: archive
 activity_log: false
+agent_map:
+  research: researcher
+  backlog: architect
+  todo: test-writer
+  in-progress: builder
+  review: reviewer
+  docs: doc-writer
+  done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
 """
 
 
@@ -262,9 +275,9 @@ class TestFromAC_ListTasksAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         await list_tasks(ctx, ids=ids)
 
-        assert ids in str(mock_av.list_tasks.call_args) or str(ids) in str(
-            mock_av.list_tasks.call_args
-        ), "ids=[1,2,3] must be forwarded to AgentView.list_tasks"
+        assert str(ids) in str(mock_av.list_tasks.call_args), (
+            "ids=[1,2,3] must be forwarded to AgentView.list_tasks"
+        )
 
     @pytest.mark.asyncio
     async def test_list_tasks_envelope_returned_unmodified(
