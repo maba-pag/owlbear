@@ -153,6 +153,7 @@ def _collect_task_sessions(
     """Append SessionRecord entries for one task's event list into *sessions*."""
     open_claim_ts: str | None = None
     open_claim_task_status: str | None = None
+    open_claim_agent: str | None = None
     last_activity_ts: str | None = None
 
     for event in events:
@@ -170,15 +171,18 @@ def _collect_task_sessions(
                     SessionRecord(
                         task_id=task_id,
                         task_status_at_start=open_claim_task_status,
+                        agent=open_claim_agent,
                         state=_state_from_age(ref_ts, timeout, now),
                         started_at=open_claim_ts,
                         ended_at=None,
                         outcome=None,
+                        duration=None,
                         duration_s=None,
                     )
                 )
             open_claim_ts = ts
             open_claim_task_status = event.get("task_status_at_start")
+            open_claim_agent = detail
             last_activity_ts = ts
         elif action in _CLOSE_ACTIONS:
             if open_claim_ts is None:
@@ -192,19 +196,23 @@ def _collect_task_sessions(
             else:
                 state = _classify_end_work_state(detail)
                 outcome = _classify_end_work_outcome(detail)
+            duration = _compute_duration(open_claim_ts, ts)
             sessions.append(
                 SessionRecord(
                     task_id=task_id,
                     task_status_at_start=open_claim_task_status,
+                    agent=open_claim_agent,
                     state=state,
                     started_at=open_claim_ts,
                     ended_at=ts,
                     outcome=outcome,
-                    duration_s=_compute_duration(open_claim_ts, ts),
+                    duration=duration,
+                    duration_s=duration,
                 )
             )
             open_claim_ts = None
             open_claim_task_status = None
+            open_claim_agent = None
             last_activity_ts = None
         elif open_claim_ts is not None:
             last_activity_ts = ts
@@ -215,10 +223,12 @@ def _collect_task_sessions(
             SessionRecord(
                 task_id=task_id,
                 task_status_at_start=open_claim_task_status,
+                agent=open_claim_agent,
                 state=_state_from_age(ref_ts, timeout, now),
                 started_at=open_claim_ts,
                 ended_at=None,
                 outcome=None,
+                duration=None,
                 duration_s=None,
             )
         )
@@ -233,21 +243,21 @@ _SESSION_FILTER_STATES: dict[str, frozenset[str]] = {
 }
 
 
-def _validate_session_filter(filter: str) -> None:  # noqa: A002
+def _validate_session_filter(session_filter: str) -> None:
     """Validate the list_sessions filter name."""
-    if filter == "all" or filter in _SESSION_FILTER_STATES:
+    if session_filter == "all" or session_filter in _SESSION_FILTER_STATES:
         return
-    msg = f"Unsupported session filter: {filter}"
+    msg = f"Unsupported session filter: {session_filter}"
     raise ValueError(msg)
 
 
 def _apply_session_filter(
-    sessions: list[SessionRecord], filter: str
-) -> list[SessionRecord]:  # noqa: A002
+    sessions: list[SessionRecord], session_filter: str
+) -> list[SessionRecord]:
     """Return *sessions* filtered by *filter* name."""
-    if filter == "all":
+    if session_filter == "all":
         return sessions
-    allowed = _SESSION_FILTER_STATES[filter]
+    allowed = _SESSION_FILTER_STATES[session_filter]
     return [s for s in sessions if s.state in allowed]
 
 
@@ -606,9 +616,7 @@ class KanbanEngine:
                         continue
                     except Exception as _exc:  # noqa: BLE001
                         # Silently skip other parse errors (CorruptionError modes 1, 3-9)
-                        from owlbear_kanban.corruption import (
-                            CorruptionError as _CorruptionError,
-                        )  # noqa: PLC0415
+                        from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
 
                         if isinstance(_exc, _CorruptionError):
                             continue
@@ -635,9 +643,7 @@ class KanbanEngine:
             for task in tasks:
                 if task.id in id_seen:
                     from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID  # noqa: PLC0415
-                    from owlbear_kanban.corruption import (
-                        CorruptionError as _CorruptionError,
-                    )  # noqa: PLC0415
+                    from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
 
                     raise _CorruptionError(
                         code=ERR_CORRUPT_DUPLICATE_ID,
