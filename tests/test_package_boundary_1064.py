@@ -295,6 +295,40 @@ class TestFromAC_KanbanInternalBoundary:
             "this bypass path in the durable boundary suite."
         )
 
+    def test_durable_suite_detects_from_owlbear_kanban_import_storage(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C45a (v3): durable helper must catch ``from owlbear_kanban import storage``.
+
+        The alias import form ``from owlbear_kanban import storage`` is a valid
+        Python spelling that violates the AC-C45a boundary for non-engine source
+        files.  The task-scoped helper ``_find_storage_imports`` already detects
+        it (``tests/test_package_boundary_1064.py:67``), but the durable helper
+        ``_find_kanban_storage_import_violations`` in ``tests/test_package_boundary.py``
+        only checks ``module == "owlbear_kanban.storage"`` in the ``ast.ImportFrom``
+        branch (line ~136-138), missing this alias form.
+        """
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "engine.py").write_text("", encoding="utf-8")
+        (kanban_src / "__init__.py").write_text("", encoding="utf-8")
+        (kanban_src / "bad.py").write_text(
+            "from owlbear_kanban import storage\n", encoding="utf-8"
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper _find_kanban_storage_import_violations must detect "
+            "'from owlbear_kanban import storage' (alias import form) in non-engine "
+            "source files.  Fix: add "
+            "`or (module == 'owlbear_kanban' and any(a.name == 'storage' for a in node.names))` "
+            "to the ast.ImportFrom branch at tests/test_package_boundary.py:~136-138."
+        )
+        assert any("bad.py" in v for v in violations), (
+            "The violation entry must identify bad.py as the offending file."
+        )
+
 
 # ---------------------------------------------------------------------------
 # 4th AC — no task_io import anywhere in the codebase
