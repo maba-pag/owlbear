@@ -290,3 +290,4 @@ class TestFromAC_GoldenScenarioFixtures:
         assert "Human review was applied" in readme
         assert "## Recommendation" in synthesis
         assert "## Proposal" in brief
+
