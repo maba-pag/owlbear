@@ -545,9 +545,9 @@ class TestFromAC_LaneAlgorithms:
         assert "wave_size: 4" in content, (
             "wave_size must be set to 4 (constant)"
         )
-        # AC-C33 (C4): priorities list must be preserved from legacy config
-        assert "- someday" in content, "priorities must be preserved from legacy config"
-        assert "- critical" in content, "priorities list must include all legacy values"
+        # AC-C33 (C4): priorities list must be preserved from legacy config (all 5 values)
+        for p in ("someday", "nice-to-have", "important", "needed", "critical"):
+            assert f"- {p}" in content, f"priorities must include '{p}' from legacy config"
 
     def test_ac_c35_tasks_idempotency_check_skips_modern_task(
         self, tmp_path: Path
