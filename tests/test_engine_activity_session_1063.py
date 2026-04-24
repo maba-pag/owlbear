@@ -32,62 +32,65 @@ from owlbear_kanban import KanbanEngine
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
 statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
+  - research
+  - backlog
+  - todo
+  - in-progress
+  - review
+  - docs
+  - done
 priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
+  - someday
+  - nice-to-have
+  - important
+  - needed
+  - critical
+entry_status: research
+wave_size: 4
+agent_map:
+  research: []
+  backlog: []
+  todo: []
+  in-progress: []
+  review: []
+  docs: []
+  done: []
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: [research, docs]
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
 claim_timeout: 1h
 next_id: 1
-archive_dir: archive
-activity_log: true
 """
 
 _TASK_TEMPLATE = """\
 ---
 id: {task_id}
-title: "Task {task_id}"
+title: Task {task_id}
 status: {status}
 priority: important
-created: 2026-04-21T10:00:00.000000+00:00
-updated: 2026-04-21T10:00:00.000000+00:00
+created: "2026-04-21T10:00:00+00:00"
+updated: "2026-04-21T10:00:00+00:00"
 tags: []
-parent:
+parent: null
 depends_on: []
 blocked: false
-block_reason:
-claimed_by:
-claimed_at:
+block_reason: null
+claimed_at: null
+archival_reason: null
+archival_refs: []
 ---
 Task body.
 """
 
 
-def _make_board(base_dir: Path, *, activity_log: bool = True) -> Path:
+def _make_board(base_dir: Path) -> Path:
     """Create a minimal board. Returns kanban_dir."""
     kanban_dir = base_dir / "board"
     kanban_dir.mkdir(parents=True, exist_ok=True)
-    cfg = _CONFIG_YAML.replace(
-        "activity_log: true",
-        f"activity_log: {'true' if activity_log else 'false'}",
-    )
-    (kanban_dir / "config.yml").write_text(cfg, encoding="utf-8")
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
     (kanban_dir / "tasks").mkdir(exist_ok=True)
     (kanban_dir / "archive").mkdir(exist_ok=True)
     return kanban_dir
@@ -132,8 +135,8 @@ def board(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def engine(board: Path) -> KanbanEngine:
-    """KanbanEngine with activity_log=True, agent_name='builder-agent', warm cache."""
-    eng = KanbanEngine(board, agent_name="builder-agent", activity_log=True)
+    """KanbanEngine with activity_log=True; agent_name is session-generated."""
+    eng = KanbanEngine(board, activity_log=True)
     eng.list_tasks()  # populate id→filename cache
     return eng
 
@@ -186,12 +189,14 @@ class TestFromAC_SessionAgentField:
         engine.claim_task("1")
         engine.end_work("1", note="done", outcome="success")
 
+        expected_agent = engine.agent_name
+
         # Verify the claim event detail IS the agent name (AC-C42)
         events = _read_activity(board)
         claim_events = [e for e in events if e.get("action") == "claim" and e.get("task_id") == 1]
         assert claim_events, "Expected a claim event for task 1"
-        assert claim_events[-1].get("detail") == "builder-agent", (
-            f"claim event detail must equal engine agent_name; "
+        assert claim_events[-1].get("detail") == expected_agent, (
+            f"claim event detail must equal engine agent_name {expected_agent!r}; "
             f"got {claim_events[-1].get('detail')!r}"
         )
 
@@ -199,8 +204,8 @@ class TestFromAC_SessionAgentField:
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert task_sessions, "Expected session for task 1"
-        assert task_sessions[-1].agent == "builder-agent", (  # type: ignore[attr-defined]
-            f"session.agent must equal the claim event detail 'builder-agent'; "
+        assert task_sessions[-1].agent == expected_agent, (  # type: ignore[attr-defined]
+            f"session.agent must equal the claim event detail {expected_agent!r}; "
             f"got {task_sessions[-1].agent!r}"  # type: ignore[attr-defined]
         )
 
@@ -231,30 +236,33 @@ class TestFromAC_SessionAgentField:
 
     def test_agent_for_released_session(self, engine: KanbanEngine) -> None:
         """Released session exposes the correct agent name."""
+        expected_agent = engine.agent_name
         engine.claim_task("3")
         engine.release_task("3")
         sessions = engine.list_sessions(filter="released")
         task_sessions = [s for s in sessions if s.task_id == 3]
         assert task_sessions, "Expected released session for task 3"
-        assert task_sessions[-1].agent == "builder-agent"  # type: ignore[attr-defined]
+        assert task_sessions[-1].agent == expected_agent  # type: ignore[attr-defined]
 
     def test_agent_for_blocked_session(self, engine: KanbanEngine) -> None:
         """Blocked session (end_work outcome=block) exposes the correct agent name."""
+        expected_agent = engine.agent_name
         engine.claim_task("1")
         engine.end_work("1", note="blocked", outcome="block", block_reason="dep missing")
         sessions = engine.list_sessions(filter="blocked-or-rejected")
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert task_sessions, "Expected blocked session for task 1"
-        assert task_sessions[-1].agent == "builder-agent"  # type: ignore[attr-defined]
+        assert task_sessions[-1].agent == expected_agent  # type: ignore[attr-defined]
 
     def test_agent_for_rejected_session(self, engine: KanbanEngine) -> None:
         """Rejected session (end_work outcome=reject) exposes the correct agent name."""
+        expected_agent = engine.agent_name
         engine.claim_task("1")
         engine.end_work("1", note="moved back", outcome="reject", move_to="research")
         sessions = engine.list_sessions(filter="blocked-or-rejected")
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert task_sessions, "Expected rejected session for task 1"
-        assert task_sessions[-1].agent == "builder-agent"  # type: ignore[attr-defined]
+        assert task_sessions[-1].agent == expected_agent  # type: ignore[attr-defined]
 
     def test_reclaim_second_session_has_correct_agent(
         self, engine: KanbanEngine
@@ -263,8 +271,9 @@ class TestFromAC_SessionAgentField:
         engine.claim_task("1")
         engine.release_task("1")
 
-        eng2 = KanbanEngine(engine._kanban_dir, agent_name="second-agent", activity_log=True)
+        eng2 = KanbanEngine(engine._kanban_dir, activity_log=True)
         eng2.list_tasks()
+        agent_name_2 = eng2.agent_name
         eng2.claim_task("1")
 
         sessions = engine.list_sessions(filter="all")
@@ -273,8 +282,8 @@ class TestFromAC_SessionAgentField:
             key=lambda s: s.started_at,
         )
         assert len(task_sessions) >= 2, "Expected two distinct sessions for task 1"
-        # Second session must carry the second agent name
-        assert task_sessions[-1].agent == "second-agent"  # type: ignore[attr-defined]
+        # Second session must carry the second agent's name
+        assert task_sessions[-1].agent == agent_name_2  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
