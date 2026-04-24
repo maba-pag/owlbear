@@ -81,7 +81,9 @@ YAML12SafeLoader.add_implicit_resolver(
 )
 
 _WINDOWS_RESERVED: frozenset[str] = frozenset(
-    ["con", "prn", "aux", "nul"] + [f"com{i}" for i in range(1, 10)] + [f"lpt{i}" for i in range(1, 10)]
+    ["con", "prn", "aux", "nul"]
+    + [f"com{i}" for i in range(1, 10)]
+    + [f"lpt{i}" for i in range(1, 10)]
 )
 
 
@@ -92,7 +94,9 @@ def _make_yaml() -> YAML:
     for resolver_dict in y.resolver._version_implicit_resolver.values():  # noqa: SLF001
         for char_key in list(resolver_dict.keys()):
             resolver_dict[char_key] = [
-                (tag, regexp) for tag, regexp in resolver_dict[char_key] if tag != _TIMESTAMP_TAG
+                (tag, regexp)
+                for tag, regexp in resolver_dict[char_key]
+                if tag != _TIMESTAMP_TAG
             ]
     return y
 
@@ -169,12 +173,17 @@ def _validation_to_corruption(path: Path, exc: ValidationError) -> CorruptionErr
         if error.get("type") in ("missing", "value_error"):
             code = "ERR_CORRUPT_MISSING_FIELD"
             break
-    detail = "required field missing" if code == "ERR_CORRUPT_MISSING_FIELD" else "field type mismatch"
+    detail = (
+        "required field missing"
+        if code == "ERR_CORRUPT_MISSING_FIELD"
+        else "field type mismatch"
+    )
     return CorruptionError(
         code=code,
         user_message=f"{detail} in {path.name}: {exc}",
         file_path=str(path),
     )
+
 
 # ---------------------------------------------------------------------------
 # Canonical frontmatter field order per Brief C §2.3
@@ -223,6 +232,7 @@ def load_config(kanban_dir: Path) -> BoardConfig:
     """
     from owlbear_kanban.config_loader import _validate_claim_timeout  # noqa: PLC0415
     from owlbear_kanban.config_loader import load_config as _load  # noqa: PLC0415
+
     config = _load(kanban_dir)
     _validate_claim_timeout(config)
     return config
@@ -460,7 +470,8 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
     if not tasks_dir.exists():
         return []
     return sorted(
-        p for p in tasks_dir.iterdir()
+        p
+        for p in tasks_dir.iterdir()
         if p.is_file()
         and p.suffix == ".md"
         and not p.name.startswith(".tmp-")
@@ -475,7 +486,8 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
     if not archive_dir.exists():
         return []
     return sorted(
-        p for p in archive_dir.iterdir()
+        p
+        for p in archive_dir.iterdir()
         if p.is_file()
         and p.suffix == ".md"
         and not p.name.startswith(".tmp-")
@@ -585,5 +597,3 @@ __all__ = [
     "write_task",
     "write_task_if_unchanged",
 ]
-
-

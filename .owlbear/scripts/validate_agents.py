@@ -24,7 +24,9 @@ _MANAGE_TODO_LIST = "manage_todo_list"
 # Canonical VS Code built-in toolset prefixes.
 # Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
 # Update this set when VS Code adds new toolsets.
-KNOWN_TOOLSETS: frozenset[str] = frozenset({"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"})
+KNOWN_TOOLSETS: frozenset[str] = frozenset(
+    {"agent", "browser", "edit", "execute", "read", "search", "web", "vscode"}
+)
 
 # Standalone tool names not under any toolset prefix.
 # Source: VS Code Copilot cheat sheet 2026-03-25 + docs/research/stale-tool-names.md
@@ -33,11 +35,15 @@ KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection"}
 
 # MCP server names whose tools may appear as 'server/tool_name' or 'server/*'.
 # Update this set when a new MCP server is added to the workspace.
-KNOWN_MCP_SERVERS: frozenset[str] = frozenset({"owlbear-kanban", "owlbear-memory", "ddgs", "microsoft"})
+KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
+    {"owlbear-kanban", "owlbear-memory", "ddgs", "microsoft"}
+)
 
 # Tool names that already produce specific ban errors — skip in unknown-tool check
 # to avoid double-reporting the same tool with two different error messages.
-_BANNED_TOOL_NAMES: frozenset[str] = frozenset({"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"})
+_BANNED_TOOL_NAMES: frozenset[str] = frozenset(
+    {"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"}
+)
 
 
 def _frontmatter_lines(content: str) -> list[str]:
@@ -128,14 +134,20 @@ def validate_agent(agent_file: Path) -> list[str]:
     if _RESOLVE_URI in content:
         errors.append(f"{agent_file}: contains '{_RESOLVE_URI}'")
     if _MANAGE_TODO_LIST in content:
-        errors.append(f"{agent_file}: contains 'manage_todo_list' — tool is disabled for subagents")
+        errors.append(
+            f"{agent_file}: contains 'manage_todo_list' — tool is disabled for subagents"
+        )
 
     # tools: line checks — word-boundary checks for banned tool names
     tools = _tools_text(_frontmatter_lines(content))
     if tools and _TODOS_RE.search(tools):
-        errors.append(f"{agent_file}: tools: contains 'todos' — tool is disabled for subagents")
+        errors.append(
+            f"{agent_file}: tools: contains 'todos' — tool is disabled for subagents"
+        )
     if tools and _BARE_TODO_RE.search(tools):
-        errors.append(f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents")
+        errors.append(
+            f"{agent_file}: tools: contains bare 'todo' — tool is disabled for subagents"
+        )
 
     # Unknown-tool check — runs after ban checks so banned tools are not double-reported
     errors.extend(_check_unknown_tools(_frontmatter_lines(content), agent_file))

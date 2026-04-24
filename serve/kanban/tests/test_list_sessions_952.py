@@ -95,7 +95,11 @@ def _write_task(kanban_dir: Path, task_id: int, status: str = "todo") -> None:
 
 def _last_end_work_detail(log_path: Path) -> str:
     """Return the detail field of the last end_work entry in the activity log."""
-    entries = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     end_work_entries = [e for e in entries if e.get("action") == "end_work"]
     assert end_work_entries, "No end_work entry found in activity log"
     return end_work_entries[-1]["detail"]
@@ -143,18 +147,26 @@ class TestFromAC_EndWorkDetailPrefix:
         engine.end_work("1", note="done", outcome="success")
 
         detail = _last_end_work_detail(log_path)
-        assert detail.startswith("success:"), f"Expected detail to start with 'success:' but got: {detail!r}"
+        assert detail.startswith("success:"), (
+            f"Expected detail to start with 'success:' but got: {detail!r}"
+        )
 
-    def test_end_work_success_detail_exact_format(self, board: Path, engine: KanbanEngine, log_path: Path) -> None:
+    def test_end_work_success_detail_exact_format(
+        self, board: Path, engine: KanbanEngine, log_path: Path
+    ) -> None:
         """end_work(success) detail is exactly 'success: {old} -> {new}'."""
         _write_task(board, 2, status="todo")
         engine.start_work("2")
         engine.end_work("2", note="done", outcome="success")
 
         detail = _last_end_work_detail(log_path)
-        assert detail == "success: todo -> in-progress", f"Expected 'success: todo -> in-progress' but got: {detail!r}"
+        assert detail == "success: todo -> in-progress", (
+            f"Expected 'success: todo -> in-progress' but got: {detail!r}"
+        )
 
-    def test_end_work_success_from_non_todo_status(self, board: Path, engine: KanbanEngine, log_path: Path) -> None:
+    def test_end_work_success_from_non_todo_status(
+        self, board: Path, engine: KanbanEngine, log_path: Path
+    ) -> None:
         """end_work(success) reflects the actual old status in the prefix."""
         _write_task(board, 3, status="in-progress")
         engine.start_work("3")
@@ -167,23 +179,31 @@ class TestFromAC_EndWorkDetailPrefix:
 
     # ------------------------------------------------------------------ AC2: reject prefix
 
-    def test_end_work_reject_detail_has_reject_prefix(self, board: Path, engine: KanbanEngine, log_path: Path) -> None:
+    def test_end_work_reject_detail_has_reject_prefix(
+        self, board: Path, engine: KanbanEngine, log_path: Path
+    ) -> None:
         """end_work(reject) writes a detail string that starts with 'reject:'."""
         _write_task(board, 4, status="todo")
         engine.start_work("4")
         engine.end_work("4", note="rejected", outcome="reject", move_to="research")
 
         detail = _last_end_work_detail(log_path)
-        assert detail.startswith("reject:"), f"Expected detail to start with 'reject:' but got: {detail!r}"
+        assert detail.startswith("reject:"), (
+            f"Expected detail to start with 'reject:' but got: {detail!r}"
+        )
 
-    def test_end_work_reject_detail_exact_format(self, board: Path, engine: KanbanEngine, log_path: Path) -> None:
+    def test_end_work_reject_detail_exact_format(
+        self, board: Path, engine: KanbanEngine, log_path: Path
+    ) -> None:
         """end_work(reject) detail is exactly 'reject: {old} -> {target}'."""
         _write_task(board, 5, status="todo")
         engine.start_work("5")
         engine.end_work("5", note="rejected", outcome="reject", move_to="research")
 
         detail = _last_end_work_detail(log_path)
-        assert detail == "reject: todo -> research", f"Expected 'reject: todo -> research' but got: {detail!r}"
+        assert detail == "reject: todo -> research", (
+            f"Expected 'reject: todo -> research' but got: {detail!r}"
+        )
 
     def test_end_work_reject_detail_reflects_explicit_move_to(
         self, board: Path, engine: KanbanEngine, log_path: Path
@@ -200,7 +220,9 @@ class TestFromAC_EndWorkDetailPrefix:
 
     # ------------------------------------------------------------------ AC5: integration success → completed-pass
 
-    def test_integration_end_work_success_classifies_as_completed_pass(self, board: Path, engine: KanbanEngine) -> None:
+    def test_integration_end_work_success_classifies_as_completed_pass(
+        self, board: Path, engine: KanbanEngine
+    ) -> None:
         """Integration: start_work → end_work(success) → list_sessions returns completed-pass."""
         _write_task(board, 7, status="todo")
         engine.start_work("7")
@@ -287,4 +309,6 @@ class TestFromAC_EndWorkDetailPrefix:
         )
 
         detail = _last_end_work_detail(log_path)
-        assert detail == "blocked: external dependency", f"Expected 'blocked: external dependency' but got: {detail!r}"
+        assert detail == "blocked: external dependency", (
+            f"Expected 'blocked: external dependency' but got: {detail!r}"
+        )

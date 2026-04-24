@@ -29,20 +29,49 @@ from owlbear_kanban.storage_io import atomic_write
 # ---------------------------------------------------------------------------
 
 _CANONICAL_FIELDS = [
-    "id", "title", "status", "priority", "created", "updated",
-    "tags", "parent", "depends_on", "blocked", "block_reason",
-    "claimed_at", "archival_reason", "archival_refs",
+    "id",
+    "title",
+    "status",
+    "priority",
+    "created",
+    "updated",
+    "tags",
+    "parent",
+    "depends_on",
+    "blocked",
+    "block_reason",
+    "claimed_at",
+    "archival_reason",
+    "archival_refs",
 ]
 
 # New config required keys
-_NEW_CONFIG_KEYS = frozenset({
-    "statuses", "priorities", "entry_status", "wave_size",
-    "agent_map", "agent_types", "agent_compatibility", "non_impl_tags",
-    "archival_reasons", "status_predicates", "claim_timeout", "next_id",
-})
-_LEGACY_CONFIG_KEYS = frozenset({
-    "board", "version", "tasks_dir", "archive_dir", "defaults", "activity_log",
-})
+_NEW_CONFIG_KEYS = frozenset(
+    {
+        "statuses",
+        "priorities",
+        "entry_status",
+        "wave_size",
+        "agent_map",
+        "agent_types",
+        "agent_compatibility",
+        "non_impl_tags",
+        "archival_reasons",
+        "status_predicates",
+        "claim_timeout",
+        "next_id",
+    }
+)
+_LEGACY_CONFIG_KEYS = frozenset(
+    {
+        "board",
+        "version",
+        "tasks_dir",
+        "archive_dir",
+        "defaults",
+        "activity_log",
+    }
+)
 
 _TS_FIELDS = frozenset({"created", "updated", "claimed_at"})
 _REQUIRED_TASK_TS_FIELDS = frozenset({"created", "updated"})
@@ -115,7 +144,10 @@ def _is_archive_reason_valid(value: object) -> bool:
 
 def _is_archive_refs_valid(value: object) -> bool:
     return isinstance(value, list) and all(
-        (isinstance(item, str) or (isinstance(item, int) and not isinstance(item, bool)))
+        (
+            isinstance(item, str)
+            or (isinstance(item, int) and not isinstance(item, bool))
+        )
         for item in value
     )
 
@@ -164,7 +196,7 @@ def _migrate_task_file(  # noqa: C901, PLR0911, PLR0912
         return "failed", "no closing ---"
 
     fm_text = "\n".join(lines[1:closing])
-    body_text = "\n".join(lines[closing + 1:])
+    body_text = "\n".join(lines[closing + 1 :])
 
     try:
         y_safe = _make_yaml_safe()
@@ -244,7 +276,7 @@ def _migrate_archive_file(  # noqa: C901, PLR0911, PLR0912
         return "failed", "no closing ---"
 
     fm_text = "\n".join(lines[1:closing])
-    body_text = "\n".join(lines[closing + 1:])
+    body_text = "\n".join(lines[closing + 1 :])
 
     try:
         y_safe = _make_yaml_safe()
@@ -357,6 +389,7 @@ def _migrate_config(  # noqa: C901, PLR0911
     for k, v in plain_raw.items():
         if hasattr(v, "items") or isinstance(v, list):
             import contextlib  # noqa: PLC0415
+
             with contextlib.suppress(Exception):
                 plain_raw[k] = _to_plain(v)
 
@@ -372,7 +405,9 @@ def _migrate_config(  # noqa: C901, PLR0911
     # Statuses: [{name: ...}] → [...]
     raw_statuses = plain_raw.get("statuses", [])
     if raw_statuses and isinstance(raw_statuses[0], dict):
-        new_cfg["statuses"] = [s.get("name", str(s)) for s in raw_statuses if isinstance(s, dict)]
+        new_cfg["statuses"] = [
+            s.get("name", str(s)) for s in raw_statuses if isinstance(s, dict)
+        ]
     elif isinstance(raw_statuses, list):
         new_cfg["statuses"] = [s for s in raw_statuses if isinstance(s, str)]
     else:
@@ -384,16 +419,31 @@ def _migrate_config(  # noqa: C901, PLR0911
 
     # entry_status from defaults.status or first status
     defaults = plain_raw.get("defaults", {})
-    new_cfg["entry_status"] = defaults.get("status", new_cfg["statuses"][0] if new_cfg["statuses"] else "research")
+    new_cfg["entry_status"] = defaults.get(
+        "status", new_cfg["statuses"][0] if new_cfg["statuses"] else "research"
+    )
     new_cfg["wave_size"] = 4
     new_cfg["agent_map"] = {}
     new_cfg["agent_types"] = {}
     new_cfg["agent_compatibility"] = {}
     new_cfg["non_impl_tags"] = [
-        "research", "docs", "type:config", "type:docs", "test",
-        "type:test", "agent", "quality", "type:user-action",
+        "research",
+        "docs",
+        "type:config",
+        "type:docs",
+        "test",
+        "type:test",
+        "agent",
+        "quality",
+        "type:user-action",
     ]
-    new_cfg["archival_reasons"] = ["completed", "deprecated", "dropped", "duplicate", "wontfix"]
+    new_cfg["archival_reasons"] = [
+        "completed",
+        "deprecated",
+        "dropped",
+        "duplicate",
+        "wontfix",
+    ]
     new_cfg["status_predicates"] = {}
 
     y_rt2 = _make_yaml_rt()
@@ -436,7 +486,9 @@ def _run_lane(  # noqa: C901
     counts = {"scanned": 0, "migrated": 0, "already": 0, "failed": 0}
     manual_actions: list[str] = []
     crash_after_env = os.environ.get("KANBAN_MIGRATE_CRASH_AFTER")
-    crash_after = int(crash_after_env) if crash_after_env and crash_after_env.isdigit() else None
+    crash_after = (
+        int(crash_after_env) if crash_after_env and crash_after_env.isdigit() else None
+    )
     successful_writes = 0
 
     def _process_files(files: list[Path], migrate_fn: Any) -> None:  # noqa: ANN401
@@ -458,13 +510,17 @@ def _run_lane(  # noqa: C901
     if lane in ("tasks", "all"):
         tasks_dir = kanban_dir / "tasks"
         if tasks_dir.exists():
-            files = sorted(p for p in tasks_dir.glob("*.md") if not p.name.startswith(".tmp-"))
+            files = sorted(
+                p for p in tasks_dir.glob("*.md") if not p.name.startswith(".tmp-")
+            )
             _process_files(files, _migrate_task_file)
 
     if lane in ("archive", "all"):
         archive_dir = kanban_dir / "archive"
         if archive_dir.exists():
-            files = sorted(p for p in archive_dir.glob("*.md") if not p.name.startswith(".tmp-"))
+            files = sorted(
+                p for p in archive_dir.glob("*.md") if not p.name.startswith(".tmp-")
+            )
             _process_files(files, _migrate_archive_file)
 
     if lane in ("config", "all"):
@@ -473,7 +529,11 @@ def _run_lane(  # noqa: C901
         counts[result] += 1  # type: ignore[literal-required]
         if result == "failed":
             sys.stderr.write(f"FAIL {kanban_dir / 'config.yml'}: {reason}\n")
-        if result in {"migrated", "already"} and not dry_run and _config_requires_manual_action(kanban_dir):
+        if (
+            result in {"migrated", "already"}
+            and not dry_run
+            and _config_requires_manual_action(kanban_dir)
+        ):
             manual_actions.append(
                 "config: populate agent_map, agent_types, and "
                 "agent_compatibility, then create type:user-action task(s) "

@@ -84,7 +84,9 @@ class DocumentStore:
 
     # ── Chunks ────────────────────────────────────────────────────────────
 
-    def store_chunks(self, document_id: str, chunks: list[Chunk], *, scope: str = "global") -> list[str]:
+    def store_chunks(
+        self, document_id: str, chunks: list[Chunk], *, scope: str = "global"
+    ) -> list[str]:
         """Insert chunk rows for *document_id* and return their IDs.
 
         Args:
@@ -223,7 +225,9 @@ class DocumentStore:
         entity_count = 0
         edge_count = 0
         for i, result in enumerate(results):
-            assigned_chunk_id = chunk_ids[i] if chunk_ids and i < len(chunk_ids) else None
+            assigned_chunk_id = (
+                chunk_ids[i] if chunk_ids and i < len(chunk_ids) else None
+            )
             for entity in result.entities:  # type: ignore[union-attr]
                 stamped = entity.model_copy(
                     update={
@@ -251,14 +255,20 @@ class DocumentStore:
             document_id: The document to delete.
         """
         # Delete entities and their edges for this document
-        entity_rows = self._conn.execute("SELECT id FROM entities WHERE document_id = ?", (document_id,)).fetchall()
+        entity_rows = self._conn.execute(
+            "SELECT id FROM entities WHERE document_id = ?", (document_id,)
+        ).fetchall()
         for (eid,) in entity_rows:
-            self._conn.execute("DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid))
+            self._conn.execute(
+                "DELETE FROM edges WHERE source_id = ? OR target_id = ?", (eid, eid)
+            )
         self._conn.execute("DELETE FROM entities WHERE document_id = ?", (document_id,))
         # Delete chunks
         self._conn.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
         # Delete document status
-        self._conn.execute("DELETE FROM document_status WHERE document_id = ?", (document_id,))
+        self._conn.execute(
+            "DELETE FROM document_status WHERE document_id = ?", (document_id,)
+        )
         # Delete document
         self._conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
         self._conn.commit()
@@ -272,7 +282,9 @@ class DocumentStore:
         Args:
             source_id: The knowledge source ID to delete.
         """
-        doc_rows = self._conn.execute("SELECT id FROM documents WHERE source_id = ?", (source_id,)).fetchall()
+        doc_rows = self._conn.execute(
+            "SELECT id FROM documents WHERE source_id = ?", (source_id,)
+        ).fetchall()
         for (doc_id,) in doc_rows:
             self.delete_document_data(doc_id)
         self._conn.execute("DELETE FROM source_pages WHERE source_id = ?", (source_id,))
@@ -290,13 +302,19 @@ class DocumentStore:
         scope: str = "global",
     ) -> None:
         """Insert or update the document_status row for *document_id*."""
-        self._status.set_status(document_id, status, source=source, error=error, scope=scope)
+        self._status.set_status(
+            document_id, status, source=source, error=error, scope=scope
+        )
 
-    def find_status_by_source(self, source: str, scope: str = "global") -> DocumentStatus | None:
+    def find_status_by_source(
+        self, source: str, scope: str = "global"
+    ) -> DocumentStatus | None:
         """Look up a previously-ingested document by source URI."""
         return self._status.find_status_by_source(source, scope)
 
-    def check_content_changed(self, source: str, content: str, scope: str = "global") -> tuple[bool, str | None]:
+    def check_content_changed(
+        self, source: str, content: str, scope: str = "global"
+    ) -> tuple[bool, str | None]:
         """Check whether *content* differs from the previously-ingested version.
 
         Returns:

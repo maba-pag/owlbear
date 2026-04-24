@@ -43,7 +43,13 @@ def _is_blocked_ip(ip_str: str) -> bool:
         check = addr.ipv4_mapped
     else:
         check = addr
-    return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
+    return (
+        check.is_loopback
+        or check.is_private
+        or check.is_link_local
+        or check.is_reserved
+        or check.is_unspecified
+    )
 
 
 async def _check_ssrf(url: str) -> None:
@@ -145,7 +151,9 @@ async def app_lifespan(server: FastMCP) -> AsyncGenerator[AppContext, None]:
         fetcher = None
 
     try:
-        yield AppContext(allowlist=allowlist, launcher=launcher, page=page, fetcher=fetcher)
+        yield AppContext(
+            allowlist=allowlist, launcher=launcher, page=page, fetcher=fetcher
+        )
     finally:
         if page is not None:
             await page.close()
@@ -158,7 +166,11 @@ _MSG_NO_PAGE = "No browser session"
 _mcp = FastMCP("owlbear-mcp-browser", lifespan=app_lifespan)
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+@_mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=True, destructiveHint=False
+    )
+)
 async def navigate(ctx: Context, url: str) -> str:
     """Navigate the browser to *url*."""
     app_ctx = ctx.request_context.lifespan_context
@@ -194,7 +206,11 @@ async def navigate(ctx: Context, url: str) -> str:
     return url  # Raw MagicMock or context without explicit page — allowlist passed
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
+@_mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=False, destructiveHint=False
+    )
+)
 async def click(ctx: Context, selector: str) -> str:
     """Click the element identified by *selector*."""
     app_ctx = ctx.request_context.lifespan_context
@@ -206,7 +222,12 @@ async def click(ctx: Context, selector: str) -> str:
     return selector
 
 
-@_mcp.tool(name="type", annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=False))
+@_mcp.tool(
+    name="type",
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=False, destructiveHint=False
+    ),
+)
 async def type_input(ctx: Context, selector: str, text: str) -> str:
     """Type *text* into the element identified by *selector*."""
     app_ctx = ctx.request_context.lifespan_context
@@ -218,7 +239,11 @@ async def type_input(ctx: Context, selector: str, text: str) -> str:
     return f"{selector}:{text}"
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True, destructiveHint=False))
+@_mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=True, destructiveHint=False
+    )
+)
 async def select(ctx: Context, selector: str, value: str) -> str:
     """Select *value* in the element identified by *selector*."""
     app_ctx = ctx.request_context.lifespan_context
@@ -230,7 +255,11 @@ async def select(ctx: Context, selector: str, value: str) -> str:
     return f"{selector}:{value}"
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+@_mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True, idempotentHint=True, destructiveHint=False
+    )
+)
 async def read_text(ctx: Context) -> str:
     """Read the visible text content of the current page.
 
@@ -244,7 +273,11 @@ async def read_text(ctx: Context) -> str:
     return getattr(app_ctx, "last_content", "")
 
 
-@_mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True, destructiveHint=False))
+@_mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=True, idempotentHint=True, destructiveHint=False
+    )
+)
 async def snapshot(ctx: Context) -> str:
     """Take an accessibility snapshot of the current page as Markdown.
 

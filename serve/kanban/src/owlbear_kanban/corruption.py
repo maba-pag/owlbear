@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 # The 9 ERR_CORRUPT_* codes (Brief C §4.1)
 # ---------------------------------------------------------------------------
 
+
 def _normalize_code(code: str | type[object]) -> str:
     """Return the canonical string code name from str/class input."""
     if isinstance(code, str):
@@ -31,6 +32,7 @@ def _normalize_code(code: str | type[object]) -> str:
     if isinstance(code, type):
         return code.__name__
     return str(code)
+
 
 # Required frontmatter fields
 _REQUIRED_FIELDS = ("id", "title", "status", "priority", "created", "updated")
@@ -85,10 +87,16 @@ ERR_CORRUPT_DUPLICATE_ID = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_ID"
 ERR_CORRUPT_MISSING_FIELD = _make_corruption_code_type("ERR_CORRUPT_MISSING_FIELD")
 ERR_CORRUPT_TYPE_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_TYPE_MISMATCH")
 ERR_CORRUPT_YAML_PARSE = _make_corruption_code_type("ERR_CORRUPT_YAML_PARSE")
-ERR_CORRUPT_ID_FILENAME_MISMATCH = _make_corruption_code_type("ERR_CORRUPT_ID_FILENAME_MISMATCH")
-ERR_CORRUPT_DUPLICATE_LOCATION = _make_corruption_code_type("ERR_CORRUPT_DUPLICATE_LOCATION")
+ERR_CORRUPT_ID_FILENAME_MISMATCH = _make_corruption_code_type(
+    "ERR_CORRUPT_ID_FILENAME_MISMATCH"
+)
+ERR_CORRUPT_DUPLICATE_LOCATION = _make_corruption_code_type(
+    "ERR_CORRUPT_DUPLICATE_LOCATION"
+)
 ERR_CORRUPT_INVALID_STATUS = _make_corruption_code_type("ERR_CORRUPT_INVALID_STATUS")
-ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type("ERR_CORRUPT_INVALID_PRIORITY")
+ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type(
+    "ERR_CORRUPT_INVALID_PRIORITY"
+)
 
 
 def _make_yaml() -> YAML:
@@ -322,6 +330,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
     def _quarantine() -> RepairOutcome:
         from owlbear_kanban.storage import move_to_quarantine  # noqa: PLC0415
+
         kanban_dir = path.parent.parent
         try:
             quarantine_path = move_to_quarantine(path, kanban_dir)
@@ -387,6 +396,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
         if not isinstance(fm_id, int):
             return _quarantine()
         from owlbear_kanban.storage import make_task_filename, move_to_quarantine  # noqa: PLC0415
+
         title = fm.get("title", "task")
         new_name = make_task_filename(fm_id, title)
         new_path = path.parent / new_name
@@ -554,12 +564,12 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
 
     if tasks_dir.exists():
         task_files = [
-            p for p in sorted(tasks_dir.glob("*.md"))
-            if not p.name.startswith(".tmp-")
+            p for p in sorted(tasks_dir.glob("*.md")) if not p.name.startswith(".tmp-")
         ]
     if archive_dir.exists():
         archive_files = [
-            p for p in sorted(archive_dir.glob("*.md"))
+            p
+            for p in sorted(archive_dir.glob("*.md"))
             if not p.name.startswith(".tmp-")
         ]
 
@@ -587,23 +597,28 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
                 # This will raise from list_tasks; we log as quarantined
                 for p in paths:
                     from owlbear_kanban.storage import move_to_quarantine  # noqa: PLC0415
+
                     try:
                         qp = move_to_quarantine(p, kanban_dir)
-                        outcomes.append(RepairOutcome(
-                            task_id=fid,
-                            file_path=str(p),
-                            code=ERR_CORRUPT_DUPLICATE_ID.__name__,
-                            action="quarantined",
-                            detail=f"duplicate ID {fid} quarantined to {qp}",
-                        ))
+                        outcomes.append(
+                            RepairOutcome(
+                                task_id=fid,
+                                file_path=str(p),
+                                code=ERR_CORRUPT_DUPLICATE_ID.__name__,
+                                action="quarantined",
+                                detail=f"duplicate ID {fid} quarantined to {qp}",
+                            )
+                        )
                     except Exception as exc:  # noqa: BLE001
-                        outcomes.append(RepairOutcome(
-                            task_id=fid,
-                            file_path=str(p),
-                            code=ERR_CORRUPT_DUPLICATE_ID.__name__,
-                            action="failed",
-                            detail=str(exc),
-                        ))
+                        outcomes.append(
+                            RepairOutcome(
+                                task_id=fid,
+                                file_path=str(p),
+                                code=ERR_CORRUPT_DUPLICATE_ID.__name__,
+                                action="failed",
+                                detail=str(exc),
+                            )
+                        )
 
     # Scan remaining files (skip already quarantined IDs)
     for p in task_files + archive_files:

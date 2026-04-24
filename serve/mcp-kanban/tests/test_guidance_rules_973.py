@@ -71,19 +71,25 @@ class TestFromAC_CollectGuidanceNewAPI:
         after = _task(blocked=True)
         result = collect_guidance("edit_task", None, after)
         assert len(result) > 0, "Expected guidance for edit_task with blocked=True"
-        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        assert "Decision Request" in result[0], (
+            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        )
 
     def test_edit_task_blocked_false_returns_empty(self) -> None:
         """edit_task with after.blocked=False → empty guidance."""
         after = _task(blocked=False)
         result = collect_guidance("edit_task", None, after)
-        assert result == [], f"Expected [] for edit_task with blocked=False, got {result!r}"
+        assert result == [], (
+            f"Expected [] for edit_task with blocked=False, got {result!r}"
+        )
 
     def test_edit_task_blocked_true_with_block_user_tag_returns_empty(self) -> None:
         """edit_task with blocked=True but block:user tag present → empty (user-driven block)."""
         after = _task(blocked=True, tags=["block:user"])
         result = collect_guidance("edit_task", None, after)
-        assert result == [], f"Expected [] for edit_task with block:user tag, got {result!r}"
+        assert result == [], (
+            f"Expected [] for edit_task with block:user tag, got {result!r}"
+        )
 
     def test_edit_task_before_none_works(self) -> None:
         """collect_guidance accepts before=None without error for edit_task."""
@@ -99,13 +105,17 @@ class TestFromAC_CollectGuidanceNewAPI:
         after = _task()
         result = collect_guidance("end_work", None, after, outcome="block")
         assert len(result) > 0, "Expected guidance for end_work with outcome=block"
-        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        assert "Decision Request" in result[0], (
+            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        )
 
     def test_end_work_outcome_block_with_block_user_tag_returns_empty(self) -> None:
         """end_work outcome='block' with block:user tag → empty (user-driven block)."""
         after = _task(tags=["block:user"])
         result = collect_guidance("end_work", None, after, outcome="block")
-        assert result == [], f"Expected [] for end_work/block with block:user tag, got {result!r}"
+        assert result == [], (
+            f"Expected [] for end_work/block with block:user tag, got {result!r}"
+        )
 
     def test_end_work_outcome_fail_returns_empty(self) -> None:
         """end_work with outcome='fail' → empty guidance."""
@@ -143,21 +153,27 @@ class TestFromAC_CollectGuidanceNewAPI:
         before = _task(status="research")
         after = _task(status="todo")  # 2 slots: research→backlog→todo
         result = collect_guidance("move", before, after, status_names=STATUSES)
-        assert len(result) > 0, f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
+        assert len(result) > 0, (
+            f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
+        )
 
     def test_move_status_names_one_slot_returns_empty(self) -> None:
         """move with status_names kwarg and 1 slot forward → empty guidance."""
         before = _task(status="research")
         after = _task(status="backlog")  # 1 slot
         result = collect_guidance("move", before, after, status_names=STATUSES)
-        assert result == [], f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
+        assert result == [], (
+            f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
+        )
 
     def test_move_status_names_backward_returns_empty(self) -> None:
         """move with status_names kwarg and backward move → empty guidance."""
         before = _task(status="todo")
         after = _task(status="backlog")  # backward
         result = collect_guidance("move", before, after, status_names=STATUSES)
-        assert result == [], f"Expected [] for backward move (todo→backlog), got {result!r}"
+        assert result == [], (
+            f"Expected [] for backward move (todo→backlog), got {result!r}"
+        )
 
     def test_move_skip_guidance_contains_from_to_status(self) -> None:
         """Forward-skip guidance message references both source and target status."""
@@ -165,8 +181,12 @@ class TestFromAC_CollectGuidanceNewAPI:
         after = _task(status="todo")
         result = collect_guidance("move", before, after, status_names=STATUSES)
         assert len(result) > 0
-        assert "research" in result[0], f"Expected source status in message, got {result[0]!r}"
-        assert "todo" in result[0], f"Expected target status in message, got {result[0]!r}"
+        assert "research" in result[0], (
+            f"Expected source status in message, got {result[0]!r}"
+        )
+        assert "todo" in result[0], (
+            f"Expected target status in message, got {result[0]!r}"
+        )
 
     def test_move_before_none_returns_empty(self) -> None:
         """move with before=None → empty guidance (can't compute delta)."""

@@ -182,7 +182,9 @@ async def dispatch_entry(
     )
 
     if audit_log is not None:
-        _try_audit(audit_log.log_dispatch, dispatch_event, session_id, context="log_dispatch")
+        _try_audit(
+            audit_log.log_dispatch, dispatch_event, session_id, context="log_dispatch"
+        )
 
     t_start = time.monotonic()
     try:
@@ -269,7 +271,9 @@ async def _dispatch_sequential(  # noqa: PLR0913
     rate_limited = False
     for entry in wave.entries:
         try:
-            ok = await dispatch_entry(entry, client, audit_log=audit_log, cycle_id=cycle_id)
+            ok = await dispatch_entry(
+                entry, client, audit_log=audit_log, cycle_id=cycle_id
+            )
         except Exception as exc:  # noqa: BLE001
             rl = _apply_wave_result(entry, exc, successes, failures, state)
         else:
@@ -293,14 +297,19 @@ async def _dispatch_parallel(  # noqa: PLR0913
 ) -> bool:
     """Dispatch all wave entries concurrently via asyncio.gather."""
     results = await asyncio.gather(
-        *[dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id) for e in wave.entries],
+        *[
+            dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id)
+            for e in wave.entries
+        ],
         return_exceptions=True,
     )
     rate_limited = False
     retry_entries: list[DispatchEntry] = []
     for entry, result in zip(wave.entries, results, strict=True):
         # Bare Exception (not a subclass) is a transient unknown crash — retry once.
-        is_bare_exception = isinstance(result, BaseException) and type(result) is Exception
+        is_bare_exception = (
+            isinstance(result, BaseException) and type(result) is Exception
+        )
         if is_bare_exception and not _is_rate_limit(result):
             retry_entries.append(entry)
             continue
@@ -310,7 +319,10 @@ async def _dispatch_parallel(  # noqa: PLR0913
 
     if retry_entries:
         retry_results = await asyncio.gather(
-            *[dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id) for e in retry_entries],
+            *[
+                dispatch_entry(e, client, audit_log=audit_log, cycle_id=cycle_id)
+                for e in retry_entries
+            ],
             return_exceptions=True,
         )
         for entry, result in zip(retry_entries, retry_results, strict=True):
@@ -346,14 +358,28 @@ async def dispatch_wave(
 
     if state.sequential_remaining > 0:
         rate_limited = await _dispatch_sequential(
-            wave, client, state, successes, failures, audit_log=audit_log, cycle_id=cycle_id
+            wave,
+            client,
+            state,
+            successes,
+            failures,
+            audit_log=audit_log,
+            cycle_id=cycle_id,
         )
     else:
         rate_limited = await _dispatch_parallel(
-            wave, client, state, successes, failures, audit_log=audit_log, cycle_id=cycle_id
+            wave,
+            client,
+            state,
+            successes,
+            failures,
+            audit_log=audit_log,
+            cycle_id=cycle_id,
         )
 
-    return CycleResult(successes=successes, failures=failures, rate_limited=rate_limited)
+    return CycleResult(
+        successes=successes, failures=failures, rate_limited=rate_limited
+    )
 
 
 async def run_loop(  # noqa: PLR0913
@@ -379,7 +405,9 @@ async def run_loop(  # noqa: PLR0913
 
     while True:
         state.cycle += 1
-        tasks = await read_board(kanban_bin=kanban_bin, kanban_dir=kanban_dir, scope=scope)
+        tasks = await read_board(
+            kanban_bin=kanban_bin, kanban_dir=kanban_dir, scope=scope
+        )
         filtered_tasks = [t for t in tasks if t.id not in state.crash_failures]
         plan = select_tasks(filtered_tasks)
 
@@ -404,7 +432,9 @@ async def run_loop(  # noqa: PLR0913
                     entry.agent,
                     wave_num,
                 )
-            result = await dispatch_wave(wave, client, state, audit_log=audit_log, cycle_id=cycle_id)
+            result = await dispatch_wave(
+                wave, client, state, audit_log=audit_log, cycle_id=cycle_id
+            )
             cycle_failures |= set(result.failures)
 
         _logger.debug(

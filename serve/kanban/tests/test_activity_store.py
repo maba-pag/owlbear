@@ -82,21 +82,32 @@ class TestFromAC_ActivityAppendQuery:
         assert record["action"] == "claim"
         assert record["source"] == "agent"
 
-    def test_ac_c42_append_multiple_events_each_on_own_line(self, tmp_path: Path) -> None:
+    def test_ac_c42_append_multiple_events_each_on_own_line(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C42: multiple appends produce one JSON record per line (JSONL)."""
         kanban_dir = _make_board(tmp_path)
         for action in ("claim", "edit", "end_work"):
             append_activity_event(_make_event(action=action), kanban_dir)
 
-        lines = (kanban_dir / "activity.jsonl").read_text(encoding="utf-8").strip().splitlines()
+        lines = (
+            (kanban_dir / "activity.jsonl")
+            .read_text(encoding="utf-8")
+            .strip()
+            .splitlines()
+        )
         assert len(lines) == 3
         actions = [json.loads(line)["action"] for line in lines]
         assert actions == ["claim", "edit", "end_work"]
 
-    def test_ac_c42_event_fields_match_activity_event_schema(self, tmp_path: Path) -> None:
+    def test_ac_c42_event_fields_match_activity_event_schema(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C42: written JSONL line contains all ActivityEvent fields."""
         kanban_dir = _make_board(tmp_path)
-        event = _make_event(task_id=42, action="move", source="cockpit", detail="todo→in-progress")
+        event = _make_event(
+            task_id=42, action="move", source="cockpit", detail="todo→in-progress"
+        )
         append_activity_event(event, kanban_dir)
 
         line = (kanban_dir / "activity.jsonl").read_text(encoding="utf-8").strip()
@@ -146,8 +157,12 @@ class TestFromAC_ActivityAppendQuery:
         past = (now - timedelta(hours=2)).isoformat()
         future = (now + timedelta(seconds=5)).isoformat()
 
-        append_activity_event(_make_event(ts=(now - timedelta(hours=3)).isoformat()), kanban_dir)
-        append_activity_event(_make_event(ts=(now - timedelta(hours=1)).isoformat()), kanban_dir)
+        append_activity_event(
+            _make_event(ts=(now - timedelta(hours=3)).isoformat()), kanban_dir
+        )
+        append_activity_event(
+            _make_event(ts=(now - timedelta(hours=1)).isoformat()), kanban_dir
+        )
         append_activity_event(_make_event(ts=future), kanban_dir)
 
         result = list_activity_events(kanban_dir, since=past)
@@ -193,7 +208,9 @@ class TestFromAC_ActivityAppendQuery:
 
         assert read_calls == [], f"Unexpectedly read .md files: {read_calls}"
 
-    def test_ac_c42_frontmatter_exclusion_via_path_read_text(self, tmp_path: Path) -> None:
+    def test_ac_c42_frontmatter_exclusion_via_path_read_text(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C42: list_activity_events never reads .md files via Path.read_text or Path.open.
 
         Complements test_ac_c42_does_not_scan_task_frontmatter by also patching
@@ -229,7 +246,9 @@ class TestFromAC_ActivityAppendQuery:
         ):
             list_activity_events(kanban_dir, task_id=1001)
 
-        assert md_read_calls == [], f"Unexpectedly read .md files via Path: {md_read_calls}"
+        assert md_read_calls == [], (
+            f"Unexpectedly read .md files via Path: {md_read_calls}"
+        )
 
     def test_ac_c44_no_session_jsonl_file_on_disk(self, tmp_path: Path) -> None:
         """AC-C44: no session table on disk — only activity.jsonl."""
@@ -279,8 +298,11 @@ class TestFromAC_ActivityCompaction:
         old_close_ts = (now - timedelta(hours=600)).isoformat()
         append_activity_event(
             _make_event(
-                action="end_work", ts=old_close_ts, task_id=1,
-                source="agent", detail="success: done",
+                action="end_work",
+                ts=old_close_ts,
+                task_id=1,
+                source="agent",
+                detail="success: done",
             ),
             kanban_dir,
         )
@@ -302,22 +324,24 @@ class TestFromAC_ActivityCompaction:
 
         # Auto-cutoff = old_close_ts (the only closed session's end_work).
         # old_claim (before cutoff, outside floor) must be compacted.
-        assert not any(
-            e.task_id == 1 and e.action == "claim" for e in remaining
-        ), "Old claim before the closed-session cutoff must be compacted"
+        assert not any(e.task_id == 1 and e.action == "claim" for e in remaining), (
+            "Old claim before the closed-session cutoff must be compacted"
+        )
 
         # Session close (AT cutoff, outside floor window) retained by session/cutoff logic —
         # proves the resolved cutoff was <= old_close_ts.
-        assert any(
-            e.task_id == 1 and e.action == "end_work" for e in remaining
-        ), "Session close event must be retained — proves before_dt=None resolved to this session's end"
+        assert any(e.task_id == 1 and e.action == "end_work" for e in remaining), (
+            "Session close event must be retained — proves before_dt=None resolved to this session's end"
+        )
 
         # Exactly one record compacted (old_claim only).
         assert result.records_compacted == 1, (
             f"Exactly 1 record (old claim) should be compacted; got {result.records_compacted}"
         )
 
-    def test_ac_c44a_a_resolves_to_most_recent_close_not_oldest(self, tmp_path: Path) -> None:
+    def test_ac_c44a_a_resolves_to_most_recent_close_not_oldest(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C44a(a): before_dt=None resolves to the MOST RECENTLY closed session timestamp.
 
         Uses >500 entries so the hard floor is active.  Both closed sessions and the
@@ -333,7 +357,9 @@ class TestFromAC_ActivityCompaction:
 
         # Older closed session (task 1) — position 1-2, outside floor window.
         append_activity_event(
-            _make_event(action="claim", ts=(now - timedelta(hours=606)).isoformat(), task_id=1),
+            _make_event(
+                action="claim", ts=(now - timedelta(hours=606)).isoformat(), task_id=1
+            ),
             kanban_dir,
         )
         append_activity_event(
@@ -364,7 +390,9 @@ class TestFromAC_ActivityCompaction:
                 _make_event(action="edit", ts=ts, task_id=3), kanban_dir
             )
         append_activity_event(
-            _make_event(action="edit", ts=(now - timedelta(hours=1)).isoformat(), task_id=3),
+            _make_event(
+                action="edit", ts=(now - timedelta(hours=1)).isoformat(), task_id=3
+            ),
             kanban_dir,
         )
 
@@ -373,17 +401,19 @@ class TestFromAC_ActivityCompaction:
         remaining = list_activity_events(kanban_dir)
 
         # The edit event between the two close timestamps must be gone (newer cutoff applied)
-        assert not any(
-            e.task_id == 2 and e.action == "edit" for e in remaining
-        ), "Edit between older and newer close must be removed — proves newer cutoff was used"
+        assert not any(e.task_id == 2 and e.action == "edit" for e in remaining), (
+            "Edit between older and newer close must be removed — proves newer cutoff was used"
+        )
 
         # The newer close event itself must be retained (proves cutoff <= newer_close_dt)
-        assert any(
-            e.task_id == 2 and e.action == "end_work" for e in remaining
-        ), "Newer close event (task_id=2, end_work) must be retained — proves cutoff <= newer close timestamp"
+        assert any(e.task_id == 2 and e.action == "end_work" for e in remaining), (
+            "Newer close event (task_id=2, end_work) must be retained — proves cutoff <= newer close timestamp"
+        )
 
         # Event after newer close must be present
-        assert any(e.task_id == 3 for e in remaining), "Event after newer close must be retained"
+        assert any(e.task_id == 3 for e in remaining), (
+            "Event after newer close must be retained"
+        )
 
     def test_ac_c44a_b_open_sessions_always_retained(self, tmp_path: Path) -> None:
         """AC-C44a (b): entries in open sessions (no matching end event) always retained."""
@@ -535,9 +565,13 @@ class TestFromAC_ActivityCompaction:
         now = datetime.now(tz=UTC)
         old_ts = (now - timedelta(hours=3)).isoformat()
         recent_ts = (now - timedelta(minutes=10)).isoformat()
-        append_activity_event(_make_event(ts=old_ts, task_id=1, action="claim"), kanban_dir)
         append_activity_event(
-            _make_event(ts=(now - timedelta(hours=2)).isoformat(), task_id=1, action="end_work"),
+            _make_event(ts=old_ts, task_id=1, action="claim"), kanban_dir
+        )
+        append_activity_event(
+            _make_event(
+                ts=(now - timedelta(hours=2)).isoformat(), task_id=1, action="end_work"
+            ),
             kanban_dir,
         )
         append_activity_event(_make_event(ts=recent_ts, task_id=2), kanban_dir)
@@ -574,7 +608,9 @@ class TestFromAC_ActivityCompaction:
 class TestBuilderDiscovered:
     """Builder-discovered tests for activity_store edge cases."""
 
-    def test_compact_activity_log_floor_applies_to_small_session_logs(self, tmp_path: Path) -> None:
+    def test_compact_activity_log_floor_applies_to_small_session_logs(
+        self, tmp_path: Path
+    ) -> None:
         """Small session-bearing logs retain all rows when cutoff would compact everything."""
         kanban_dir = _make_board(tmp_path)
         now = datetime.now(tz=UTC)
@@ -614,7 +650,9 @@ class TestBuilderDiscovered:
         assert len(result) == 1
         assert result[0].task_id == 77
 
-    def test_compact_activity_log_missing_file_returns_zeroes(self, tmp_path: Path) -> None:
+    def test_compact_activity_log_missing_file_returns_zeroes(
+        self, tmp_path: Path
+    ) -> None:
         """Compaction on a missing activity.jsonl returns zero-byte/zero-record result."""
         kanban_dir = _make_board(tmp_path)
 
@@ -657,7 +695,9 @@ class TestBuilderDiscovered:
         # Write 600 old events
         for i in range(600):
             ts = (now - timedelta(hours=600 - i)).isoformat()
-            append_activity_event(_make_event(ts=ts, task_id=i % 10, action="edit"), kanban_dir)
+            append_activity_event(
+                _make_event(ts=ts, task_id=i % 10, action="edit"), kanban_dir
+            )
         # Compact with a cutoff newer than all entries so floor logic is required.
         cutoff = now + timedelta(hours=1)
         result = compact_activity_log(kanban_dir, before_dt=cutoff)

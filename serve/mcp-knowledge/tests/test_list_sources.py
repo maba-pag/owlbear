@@ -174,7 +174,9 @@ class TestFromAC_ListSourcesStructuredReturn:
     async def test_each_dict_has_name_source_type_scope_keys(self) -> None:
         """Each dict in the returned list has 'name', 'source_type', and 'scope' keys."""
         store = MagicMock()
-        store.list_all.return_value = [_make_source(name="n", source_type="url_list", scope="work")]
+        store.list_all.return_value = [
+            _make_source(name="n", source_type="url_list", scope="work")
+        ]
         ctx = _make_ctx(source_store=store)
 
         result = await list_sources(ctx)
@@ -188,7 +190,9 @@ class TestFromAC_ListSourcesStructuredReturn:
     async def test_dict_values_match_source_fields(self) -> None:
         """name, source_type, scope values come from the source object fields."""
         store = MagicMock()
-        store.list_all.return_value = [_make_source(name="my-src", source_type="file_glob", scope="work")]
+        store.list_all.return_value = [
+            _make_source(name="my-src", source_type="file_glob", scope="work")
+        ]
         ctx = _make_ctx(source_store=store)
 
         result = await list_sources(ctx)

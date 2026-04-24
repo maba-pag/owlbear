@@ -108,7 +108,9 @@ class TestFromAC_AtomicWrite:
         assert target.read_text(encoding="utf-8") == content
         assert len(tmp_paths_seen) == 1
         tmp_used = tmp_paths_seen[0]
-        assert tmp_used.name.startswith(".tmp-"), f"Expected .tmp-* name, got {tmp_used.name}"
+        assert tmp_used.name.startswith(".tmp-"), (
+            f"Expected .tmp-* name, got {tmp_used.name}"
+        )
         assert tmp_used.parent == target.parent, (
             f"tmp file must be a sibling of target; got {tmp_used.parent} vs {target.parent}"
         )
@@ -137,12 +139,17 @@ class TestFromAC_AtomicWrite:
             fsync_calls.append(fd)
             original_fsync(fd)
 
-        with patch("os.open", side_effect=spy_open), patch("os.fsync", side_effect=spy_fsync):
+        with (
+            patch("os.open", side_effect=spy_open),
+            patch("os.fsync", side_effect=spy_fsync),
+        ):
             atomic_write(target, "data\n")
 
         # At least 2 fsyncs: file fd + parent-directory fd (O_DIRECTORY platforms)
         assert len(fsync_calls) >= 2, f"Expected >=2 fsyncs, got {len(fsync_calls)}"
-        assert len(dir_fds) >= 1, "Expected os.open call for parent directory (dir-fsync)"
+        assert len(dir_fds) >= 1, (
+            "Expected os.open call for parent directory (dir-fsync)"
+        )
         assert any(fd in set(dir_fds) for fd in fsync_calls), (
             f"No fsync on parent-dir fd; fsynced: {fsync_calls}, parent-dir fds: {dir_fds}"
         )
@@ -198,7 +205,10 @@ class TestFromAC_AtomicWrite:
         original = "original content\n"
         target.write_text(original, encoding="utf-8")
 
-        with patch("os.replace", side_effect=OSError("simulated replace failure")), pytest.raises(OSError, match="simulated replace failure"):
+        with (
+            patch("os.replace", side_effect=OSError("simulated replace failure")),
+            pytest.raises(OSError, match="simulated replace failure"),
+        ):
             atomic_write(target, "new content\n")
 
         tmp_leftovers = list(tmp_path.glob(".tmp-*"))
@@ -232,7 +242,9 @@ class TestFromAC_AtomicWrite:
         """AC-C3: list_task_files never returns .tmp-* entries."""
         kanban_dir = _make_board(tmp_path)
         tasks_dir = kanban_dir / "tasks"
-        (tasks_dir / "1001-real.md").write_text("---\nid: 1001\n---\n", encoding="utf-8")
+        (tasks_dir / "1001-real.md").write_text(
+            "---\nid: 1001\n---\n", encoding="utf-8"
+        )
         (tasks_dir / ".tmp-abc123.md").write_text("partial\n", encoding="utf-8")
 
         result = list_task_files(kanban_dir)
@@ -250,7 +262,9 @@ class TestFromAC_AtomicWrite:
 class TestFromAC_IDAllocation:
     """AC-C4, AC-C4a, AC-C4b, AC-C51: ID allocation and CAS contract."""
 
-    def test_ac_c4_50_concurrent_threads_yield_distinct_ids(self, tmp_path: Path) -> None:
+    def test_ac_c4_50_concurrent_threads_yield_distinct_ids(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C4: 50 threads x 1 allocation -> 50 distinct IDs, no duplicates."""
         kanban_dir = _make_board(tmp_path)
         results: list[int] = []
@@ -276,12 +290,16 @@ class TestFromAC_IDAllocation:
         assert len(results) == 50
         assert len(set(results)) == 50, f"Duplicate IDs found: {sorted(results)}"
 
-    def test_ac_c4_next_id_lock_file_exists_after_allocation(self, tmp_path: Path) -> None:
+    def test_ac_c4_next_id_lock_file_exists_after_allocation(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C4: allocate_next_id uses kanban_dir/.next_id.lock — file exists after call."""
         kanban_dir = _make_board(tmp_path)
         expected_lock = kanban_dir / ".next_id.lock"
 
-        assert not expected_lock.exists(), "Lock file must not exist before first allocation"
+        assert not expected_lock.exists(), (
+            "Lock file must not exist before first allocation"
+        )
 
         allocate_next_id(kanban_dir)
 
@@ -303,7 +321,9 @@ class TestFromAC_IDAllocation:
         lock = threading.Lock()
 
         def attempt() -> None:
-            updated_task = task.model_copy(update={"updated": "2026-04-21T11:00:00+00:00"})
+            updated_task = task.model_copy(
+                update={"updated": "2026-04-21T11:00:00+00:00"}
+            )
             try:
                 write_task_if_unchanged(updated_task, expected_updated, kanban_dir)
                 with lock:
@@ -336,7 +356,9 @@ class TestFromAC_IDAllocation:
         write_task(task, kanban_dir)
         expected_updated = task.updated
         new_updated = "2026-04-21T12:00:00+00:00"
-        updated_task = task.model_copy(update={"updated": new_updated, "title": "Updated"})
+        updated_task = task.model_copy(
+            update={"updated": new_updated, "title": "Updated"}
+        )
 
         successes: list[int] = []
         lock = threading.Lock()
@@ -358,6 +380,7 @@ class TestFromAC_IDAllocation:
         assert len(successes) == 1
         # The task file on disk must be readable and carry the updated title
         from owlbear_kanban.storage import read_task
+
         task_files = list_task_files(kanban_dir)
         assert len(task_files) >= 1
         written = read_task(task_files[0])
@@ -367,7 +390,9 @@ class TestFromAC_IDAllocation:
         """AC-C4b: tasks/.<id>.lock files are NOT returned by list_task_files."""
         kanban_dir = _make_board(tmp_path)
         tasks_dir = kanban_dir / "tasks"
-        (tasks_dir / "1001-real.md").write_text("---\nid: 1001\n---\n", encoding="utf-8")
+        (tasks_dir / "1001-real.md").write_text(
+            "---\nid: 1001\n---\n", encoding="utf-8"
+        )
         (tasks_dir / ".1001.lock").write_text("", encoding="utf-8")
 
         result = list_task_files(kanban_dir)
@@ -399,7 +424,9 @@ class TestFromAC_IDAllocation:
         tasks_dir = kanban_dir / "tasks"
         expected_lock = tasks_dir / ".1001.lock"
 
-        assert not expected_lock.exists(), "Lock file must not exist before first write_task_if_unchanged"
+        assert not expected_lock.exists(), (
+            "Lock file must not exist before first write_task_if_unchanged"
+        )
 
         updated = task.model_copy(update={"updated": "2026-04-21T12:00:00+00:00"})
         write_task_if_unchanged(updated, task.updated, kanban_dir)
@@ -409,7 +436,9 @@ class TestFromAC_IDAllocation:
             "per-task lock must be at tasks/.<id>.lock"
         )
 
-    def test_ac_c51_crash_between_save_config_and_write_task(self, tmp_path: Path) -> None:
+    def test_ac_c51_crash_between_save_config_and_write_task(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C51: crash after save_config burns ID N; next allocation is N+1; config ends at N+2."""
         kanban_dir = _make_board(tmp_path)
         original_next_id = load_config(kanban_dir).next_id

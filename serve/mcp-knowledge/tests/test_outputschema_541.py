@@ -231,7 +231,9 @@ class TestFromAC_StatsOutputSchema:
         schema = _get_output_schema("get_stats")
         assert schema is not None
         props = schema.get("properties", {}).get("result", {}).get("properties", {})
-        assert "documents" in props, "get_stats result schema missing 'documents' property"
+        assert "documents" in props, (
+            "get_stats result schema missing 'documents' property"
+        )
         assert props["documents"].get("type") == "integer", (
             f"get_stats.documents type expected 'integer', got: {props['documents'].get('type')!r}"
         )
@@ -241,7 +243,9 @@ class TestFromAC_StatsOutputSchema:
         schema = _get_output_schema("get_stats")
         assert schema is not None
         props = schema.get("properties", {}).get("result", {}).get("properties", {})
-        assert "entities" in props, "get_stats result schema missing 'entities' property"
+        assert "entities" in props, (
+            "get_stats result schema missing 'entities' property"
+        )
         assert props["entities"].get("type") == "integer", (
             f"get_stats.entities type expected 'integer', got: {props['entities'].get('type')!r}"
         )

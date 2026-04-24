@@ -144,9 +144,7 @@ class TestFromAC_PipelineStagesAndAgents:
     """AC2: all 8 stages, 7 stage-transition agents, planner/orchestrator auxiliary."""
 
     @pytest.mark.parametrize("stage", _REQUIRED_STAGES)
-    def test_pipeline_stage_label_present(
-        self, diagram_data: dict, stage: str
-    ) -> None:
+    def test_pipeline_stage_label_present(self, diagram_data: dict, stage: str) -> None:
         """Happy: each of the 8 pipeline stage names appears as text in the diagram."""
         all_text = _all_element_text(diagram_data)
         assert stage in all_text, f"Stage '{stage}' not found in diagram text"
@@ -159,9 +157,7 @@ class TestFromAC_PipelineStagesAndAgents:
         all_text = _all_element_text(diagram_data)
         assert agent in all_text, f"Agent '{agent}' not found in diagram text"
 
-    def test_planner_appears_as_auxiliary_annotation(
-        self, diagram_data: dict
-    ) -> None:
+    def test_planner_appears_as_auxiliary_annotation(self, diagram_data: dict) -> None:
         """Edge: 'planner' appears in the diagram as auxiliary sub-dispatch annotation."""
         all_text = _all_element_text(diagram_data)
         assert "planner" in all_text, (
@@ -251,18 +247,14 @@ class TestFromAC_DescribesField:
 class TestFromAC_FooterElement:
     """AC4: footer text element with 'Last verified: YYYY-MM-DD (commit-hash)' format."""
 
-    def test_footer_element_contains_last_verified(
-        self, diagram_data: dict
-    ) -> None:
+    def test_footer_element_contains_last_verified(self, diagram_data: dict) -> None:
         """Happy: at least one diagram element contains the text 'Last verified:'."""
         all_text = _all_element_text(diagram_data)
         assert "last verified:" in all_text, (
             "No element contains 'Last verified:' — footer element missing"
         )
 
-    def test_footer_text_matches_date_hash_pattern(
-        self, diagram_data: dict
-    ) -> None:
+    def test_footer_text_matches_date_hash_pattern(self, diagram_data: dict) -> None:
         """Boundary: footer text matches 'Last verified: YYYY-MM-DD (short-hash)' pattern."""
         all_text = _all_element_text(diagram_data)
         assert _FOOTER_RE.search(all_text), (
@@ -288,9 +280,7 @@ class TestFromAC_ExcalidrawConventions:
         duplicates = {eid for eid in ids if ids.count(eid) > 1}
         assert not duplicates, f"Duplicate element IDs found: {duplicates}"
 
-    def test_text_elements_font_size_at_least_16(
-        self, diagram_data: dict
-    ) -> None:
+    def test_text_elements_font_size_at_least_16(self, diagram_data: dict) -> None:
         """Boundary: no text element has fontSize < 16px (per h-excalidraw-diagram)."""
         elements = diagram_data.get("elements", [])
         violators = [
@@ -300,24 +290,22 @@ class TestFromAC_ExcalidrawConventions:
             and isinstance(e.get("fontSize"), (int, float))
             and e["fontSize"] < 16
         ]
-        assert not violators, (
-            f"Text elements with fontSize < 16px: {violators}"
-        )
+        assert not violators, f"Text elements with fontSize < 16px: {violators}"
 
     def test_arrow_elements_have_bindings(self, diagram_data: dict) -> None:
         """Boundary: arrow elements must have at least one binding (start or end)
         to connect stages — floating arrows violate diagram conventions."""
         elements = diagram_data.get("elements", [])
         arrows = [e for e in elements if e.get("type") == "arrow"]
-        assert len(arrows) > 0, "Diagram has no arrow elements — stages must be connected"
+        assert len(arrows) > 0, (
+            "Diagram has no arrow elements — stages must be connected"
+        )
         floating = [
             e.get("id", f"idx:{i}")
             for i, e in enumerate(arrows)
             if not e.get("startBinding") and not e.get("endBinding")
         ]
-        assert not floating, (
-            f"Arrow elements with no bindings (floating): {floating}"
-        )
+        assert not floating, f"Arrow elements with no bindings (floating): {floating}"
 
 
 # ===========================================================================
@@ -328,9 +316,7 @@ class TestFromAC_ExcalidrawConventions:
 class TestFromAC_DocIndexIntegration:
     """AC7: uv run doc-index includes a describes entry for pipeline.excalidraw."""
 
-    def test_doc_index_entry_includes_describes_line(
-        self, tmp_path: Path
-    ) -> None:
+    def test_doc_index_entry_includes_describes_line(self, tmp_path: Path) -> None:
         """Happy: generate_index on a tree containing pipeline.excalidraw emits
         a 'describes:' line in the entry for that file."""
         dest = tmp_path / "share" / "diagrams" / "pipeline.excalidraw"
@@ -353,9 +339,7 @@ class TestFromAC_DocIndexIntegration:
             "No 'describes:' line in pipeline.excalidraw doc-index entry"
         )
 
-    def test_doc_index_entry_includes_all_required_globs(
-        self, tmp_path: Path
-    ) -> None:
+    def test_doc_index_entry_includes_all_required_globs(self, tmp_path: Path) -> None:
         """Happy: all 3 required globs appear in the pipeline.excalidraw doc-index entry."""
         dest = tmp_path / "share" / "diagrams" / "pipeline.excalidraw"
         dest.parent.mkdir(parents=True)

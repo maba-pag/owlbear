@@ -163,7 +163,9 @@ class TestFromAC_EngineCrashSafety:
         with patch("owlbear_kanban.engine.write_task", side_effect=_spy_write_task):
             engine.create_task("spy-subject")
 
-        assert len(config_next_id_at_write) == 1, "write_task must be called exactly once"
+        assert len(config_next_id_at_write) == 1, (
+            "write_task must be called exactly once"
+        )
         observed_next_id = config_next_id_at_write[0]
         assert observed_next_id == 1002, (
             f"config.next_id must be 1002 when write_task executes "
@@ -176,7 +178,9 @@ class TestFromAC_EngineCrashSafety:
     #         inline config.next_id read/write.
     # ------------------------------------------------------------------
 
-    def test_ac2_create_task_routes_through_allocate_next_id(self, tmp_path: Path) -> None:
+    def test_ac2_create_task_routes_through_allocate_next_id(
+        self, tmp_path: Path
+    ) -> None:
         """AC-2: allocate_next_id is called exactly once per create_task invocation.
 
         Patches owlbear_kanban.storage.allocate_next_id with a wrapping spy.

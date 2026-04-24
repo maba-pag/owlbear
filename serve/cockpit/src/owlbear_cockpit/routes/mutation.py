@@ -85,7 +85,9 @@ def move_task(task_id: int, req: MoveRequest, engine: _Engine) -> TaskDetailOut:
     try:
         task = engine.show_task(str(task_id))
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found"
+        ) from None
 
     transitions = adapter.valid_transitions(engine, task.status)
     if req.status not in transitions:
@@ -186,7 +188,9 @@ def edit_task(task_id: int, req: EditRequest, engine: _Engine) -> TaskDetailOut:
     try:
         task = engine.show_task(str(task_id))
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found"
+        ) from None
 
     if req.updated != str(task.updated):
         raise HTTPException(
@@ -210,10 +214,14 @@ def release_task(task_id: int, engine: _Engine) -> TaskDetailOut:
     try:
         task = engine.show_task(str(task_id))
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found") from None
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found"
+        ) from None
 
     if not task.claimed_by:
-        raise HTTPException(status_code=409, detail=f"Task {task_id} is not currently claimed")
+        raise HTTPException(
+            status_code=409, detail=f"Task {task_id} is not currently claimed"
+        )
 
     updated_task = engine.release_task(str(task_id))
     return _task_to_detail(updated_task)

@@ -98,33 +98,51 @@ class TestFromAC_EditTaskGuidanceIntegration:
         """edit_task(block=...) → guidance contains DR-required message."""
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, task_id="1", block="waiting on infra")
-        assert len(result.guidance) > 0, f"Expected non-empty guidance on block, got guidance={result.guidance!r}"
+        assert len(result.guidance) > 0, (
+            f"Expected non-empty guidance on block, got guidance={result.guidance!r}"
+        )
         assert "Decision Request" in result.guidance[0], (
             f"Expected 'Decision Request' in guidance, got {result.guidance[0]!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_block_removes_block_user_tag_if_present(self, app_ctx: AppContext) -> None:
+    async def test_block_removes_block_user_tag_if_present(
+        self, app_ctx: AppContext
+    ) -> None:
         """edit_task(block=...) on task with block:user → block:user tag removed."""
         # Setup: add block:user tag first
         app_ctx.engine.edit_task("1", add_tags=["block:user"])
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, task_id="1", block="agent re-blocking")
-        assert "block:user" not in result.tags, f"Expected block:user removed after MCP block, tags={result.tags!r}"
+        assert "block:user" not in result.tags, (
+            f"Expected block:user removed after MCP block, tags={result.tags!r}"
+        )
 
     @pytest.mark.asyncio
-    async def test_unblock_no_dr_guidance_and_removes_block_user_tag(self, app_ctx: AppContext) -> None:
+    async def test_unblock_no_dr_guidance_and_removes_block_user_tag(
+        self, app_ctx: AppContext
+    ) -> None:
         """edit_task(unblock=True) → no block guidance, block:user removed."""
         # Setup: block the task with block:user
-        app_ctx.engine.edit_task("1", blocked=True, block_reason="dependency", add_tags=["block:user"])
+        app_ctx.engine.edit_task(
+            "1", blocked=True, block_reason="dependency", add_tags=["block:user"]
+        )
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, task_id="1", unblock=True)
-        assert result.guidance == [], f"Expected empty guidance on unblock, got {result.guidance!r}"
-        assert "block:user" not in result.tags, f"Expected block:user removed on unblock, tags={result.tags!r}"
+        assert result.guidance == [], (
+            f"Expected empty guidance on unblock, got {result.guidance!r}"
+        )
+        assert "block:user" not in result.tags, (
+            f"Expected block:user removed on unblock, tags={result.tags!r}"
+        )
 
     @pytest.mark.asyncio
-    async def test_non_block_edit_returns_empty_guidance(self, app_ctx: AppContext) -> None:
+    async def test_non_block_edit_returns_empty_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
         """Non-blocking edit (title change) → empty guidance."""
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, task_id="1", title="New title")
-        assert result.guidance == [], f"Expected empty guidance for title change, got {result.guidance!r}"
+        assert result.guidance == [], (
+            f"Expected empty guidance for title change, got {result.guidance!r}"
+        )

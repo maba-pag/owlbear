@@ -111,23 +111,37 @@ class TestFromAC_GuidanceSuppressContract:
     """
 
     @pytest.mark.asyncio
-    async def test_edit_task_guidance_exception_suppressed(self, app_ctx_edit: AppContext) -> None:
+    async def test_edit_task_guidance_exception_suppressed(
+        self, app_ctx_edit: AppContext
+    ) -> None:
         """collect_guidance raising in edit_task → task still returned, guidance=[]."""
         ctx = _make_ctx(app_ctx_edit)
-        with patch("owlbear_mcp_kanban.server.collect_guidance", side_effect=RuntimeError("boom")):
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance",
+            side_effect=RuntimeError("boom"),
+        ):
             result = await edit_task(ctx, task_id="1", title="Safe title")
-        assert result.id is not None, "Expected valid KanbanTask returned despite guidance failure"
+        assert result.id is not None, (
+            "Expected valid KanbanTask returned despite guidance failure"
+        )
         assert result.guidance == [], (
             f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
-    async def test_end_work_guidance_exception_suppressed(self, app_ctx_end: AppContext) -> None:
+    async def test_end_work_guidance_exception_suppressed(
+        self, app_ctx_end: AppContext
+    ) -> None:
         """collect_guidance raising in end_work → task still returned, guidance=[]."""
         ctx = _make_ctx(app_ctx_end)
-        with patch("owlbear_mcp_kanban.server.collect_guidance", side_effect=RuntimeError("boom")):
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance",
+            side_effect=RuntimeError("boom"),
+        ):
             result = await end_work(ctx, task_id="1", note="done", outcome="success")
-        assert result.id is not None, "Expected valid KanbanTask returned despite guidance failure"
+        assert result.id is not None, (
+            "Expected valid KanbanTask returned despite guidance failure"
+        )
         assert result.guidance == [], (
             f"Expected empty guidance when collect_guidance raises, got {result.guidance!r}"
         )
@@ -151,7 +165,9 @@ class TestFromAC_GuidanceCallWiring:
     ) -> None:
         """edit_task invokes collect_guidance("edit_task", None, task)."""
         ctx = _make_ctx(app_ctx_edit)
-        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
+        ) as mock_cg:
             await edit_task(ctx, task_id="1", title="Verify wiring")
         mock_cg.assert_called_once_with("edit_task", None, ANY)
 
@@ -161,7 +177,9 @@ class TestFromAC_GuidanceCallWiring:
     ) -> None:
         """end_work(success) invokes collect_guidance("end_work", None, task, outcome="success")."""
         ctx = _make_ctx(app_ctx_end)
-        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
+        ) as mock_cg:
             await end_work(ctx, task_id="1", note="all done", outcome="success")
         mock_cg.assert_called_once_with("end_work", None, ANY, outcome="success")
 
@@ -171,7 +189,9 @@ class TestFromAC_GuidanceCallWiring:
     ) -> None:
         """end_work(fail) invokes collect_guidance("end_work", None, task, outcome="fail")."""
         ctx = _make_ctx(app_ctx_end)
-        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=[]) as mock_cg:
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
+        ) as mock_cg:
             await end_work(ctx, task_id="1", note="failed", outcome="fail")
         mock_cg.assert_called_once_with("end_work", None, ANY, outcome="fail")
 
