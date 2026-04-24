@@ -517,6 +517,67 @@ class TestFromAC_DepStatus:
             f"No deps → dep_status must be None but got {task.dep_status!r}"
         )
 
+    def test_dep_status_blocked_beats_redirect_with_mixed_deps(
+        self, tmp_path: Path
+    ) -> None:
+        """Task with two deps: one archived/dropped (→blocked), one archived/duplicate (→redirect).
+
+        §3.3 precedence: blocked > redirect → result must be 'blocked'.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]")
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="DepDropped",
+            status="archived",
+            archival_reason="dropped",
+            subdir="archive",
+        )
+        _write_task(
+            kanban_dir,
+            task_id=3,
+            title="DepDuplicate",
+            status="archived",
+            archival_reason="duplicate",
+            subdir="archive",
+        )
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks(status="todo")
+        task_a = next((t for t in resp.tasks if t.id == 1), None)
+        assert task_a is not None
+        assert task_a.dep_status == "blocked", (
+            f"Mixed deps (dropped+duplicate); §3.3 blocked > redirect → "
+            f"expected 'blocked' but got {task_a.dep_status!r}"
+        )
+
+    def test_dep_status_redirect_beats_ok_with_mixed_deps(
+        self, tmp_path: Path
+    ) -> None:
+        """Task with two deps: one archived/duplicate (→redirect), one active (→ok).
+
+        §3.3 precedence: redirect > ok → result must be 'redirect'.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]")
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="DepDuplicate",
+            status="archived",
+            archival_reason="duplicate",
+            subdir="archive",
+        )
+        _write_task(kanban_dir, task_id=3, title="DepActive", status="research")
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks(status="todo")
+        task_a = next((t for t in resp.tasks if t.id == 1), None)
+        assert task_a is not None
+        assert task_a.dep_status == "redirect", (
+            f"Mixed deps (duplicate+active); §3.3 redirect > ok → "
+            f"expected 'redirect' but got {task_a.dep_status!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC1 — archival_refs field + warm-cache archive transition (retry gaps)
