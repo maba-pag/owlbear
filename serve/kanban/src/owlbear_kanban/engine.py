@@ -813,8 +813,14 @@ class KanbanEngine:
             except FileNotFoundError:
                 self._task_cache.pop(filename, None)
                 del self._id_to_filename[int_id]
-                msg = f"Task {task_id!r} not found in {self._tasks_dir}"
-                raise FileNotFoundError(msg) from None
+                archive_path = self._archive_dir / filename
+                if archive_path.exists():
+                    archived_task = read_task(archive_path)
+                    self._task_cache[filename] = (
+                        archive_path.stat().st_mtime_ns,
+                        archived_task,
+                    )
+                    return archived_task
             if (
                 filename in self._task_cache
                 and self._task_cache[filename][0] == mtime_ns
@@ -889,7 +895,7 @@ class KanbanEngine:
         record = Task(
             id=task_id,
             title=title,
-            status=status or config.defaults.status,
+            status=status or config.entry_status,
             priority=priority or config.defaults.priority,
             created=now,
             updated=now,
@@ -1051,6 +1057,8 @@ class KanbanEngine:
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(record, self._kanban_dir)
             _move_file(task_path, dest)
+            self._task_cache.pop(task_path.name, None)
+            self._id_to_filename.pop(record.id, None)
             archived = True
         else:
             record.status = status
@@ -1525,6 +1533,7 @@ class KanbanEngine:
 class AgentView:
     """Minimal role-scoped wrapper for agent-facing engine use."""
 
+    _MAX_BODY_BYTES = 500 * 1024
     _BODY_SIZE_WARNING = "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
     _BLOCK_AR_HINT = (
         "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request for this block via the"
@@ -1571,6 +1580,50 @@ class AgentView:
             code="ERR_NOT_FOUND",
             user_message=f"Task '{task_id}' not found",
         )
+
+    def _task_exists(self, task_id: int) -> bool:
+        try:
+            self.engine.show_task(str(task_id))
+        except FileNotFoundError:
+            return False
+        return True
+
+    @staticmethod
+    def _required_sections_passes(body: str, sections: list[str]) -> bool:
+        if not sections:
+            return True
+        present = {
+            part.heading.strip().casefold()
+            for part in parse_body(body)
+            if part.heading is not None and part.heading.strip()
+        }
+        return all(section.strip().casefold() in present for section in sections)
+
+    @classmethod
+    def _validate_body_size(cls, body: str) -> None:
+        if len(body.encode("utf-8")) > cls._MAX_BODY_BYTES:
+            raise ValidationError(
+                code="ERR_BODY_TOO_LARGE",
+                user_message="Task body exceeds 500 KB",
+            )
+
+    def _has_archival_cycle(self, root_task_id: int, refs: list[int]) -> bool:
+        def visits_root(task_id: int, seen: set[int]) -> bool:
+            if task_id in seen:
+                return False
+            seen.add(task_id)
+            try:
+                task = self.engine.show_task(str(task_id))
+            except FileNotFoundError:
+                return False
+            for dep_id in task.archival_refs:
+                if dep_id == root_task_id:
+                    return True
+                if visits_root(dep_id, seen):
+                    return True
+            return False
+
+        return any(visits_root(ref_id, set()) for ref_id in refs)
 
     def list_tasks(  # noqa: PLR0913
         self,
@@ -1750,10 +1803,45 @@ class AgentView:
                 code="ERR_INVALID_STATUS",
                 user_message="title must not be empty",
             )
+        self._validate_body_size(body)
+
+        if parent is not None and not self._task_exists(parent):
+            raise ValidationError(
+                code="ERR_PARENT_NOT_FOUND",
+                user_message=f"Parent task '{parent}' not found",
+            )
+
+        dep_ids = depends_on or []
+        missing_dep = next(
+            (dep_id for dep_id in dep_ids if not self._task_exists(dep_id)),
+            None,
+        )
+        if missing_dep is not None:
+            raise ValidationError(
+                code="ERR_DEP_NOT_FOUND",
+                user_message=f"Dependency task '{missing_dep}' not found",
+            )
+
+        config = self.engine.board_config()
+        entry_status = config.entry_status
+        predicate_spec = config.status_predicates.get(entry_status)
+        if (
+            isinstance(predicate_spec, dict)
+            and predicate_spec.get("type") == "required_sections"
+        ):
+            sections = predicate_spec.get("sections")
+            required = [str(section) for section in sections] if isinstance(sections, list) else []
+            if not self._required_sections_passes(body, required):
+                raise ValidationError(
+                    code="ERR_PREDICATE_FAILED",
+                    user_message=f"Task body does not satisfy predicate for status '{entry_status}'",
+                )
+
         try:
             task = self.engine.create_task(
                 title=title,
                 body=body,
+                status=entry_status,
                 priority=priority,
                 tags=tags,
                 parent=parent,
@@ -1767,7 +1855,7 @@ class AgentView:
             guidance.append(self._BODY_SIZE_WARNING)
         return self._to_single_response(task, guidance)
 
-    def edit_task(  # noqa: C901, PLR0912, PLR0913
+    def edit_task(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         task_id: int,
         *,
@@ -1780,19 +1868,117 @@ class AgentView:
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
         remove_tag: list[str] | None = None,
-        block_reason: str = "",
+        block_reason: str | None = None,
         archival_reason: str = "",
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
-        _ = (archival_reason, archival_refs)
+        try:
+            existing = self.engine.show_task(str(task_id))
+        except FileNotFoundError as exc:
+            raise self._wrap_not_found(task_id) from exc
+
+        config = self.engine.board_config()
+        body_set = bool(body)
+        append_set = bool(append_body)
+        archival_reason_set = bool(archival_reason)
+        archival_refs_set = archival_refs is not None
+
+        if body_set and append_set:
+            raise ValidationError(
+                code="ERR_BODY_EXCLUSIVE",
+                user_message="body and append_body cannot both be set",
+            )
+
+        if body_set:
+            self._validate_body_size(body)
+
+        if parent > 0 and not self._task_exists(parent):
+            raise ValidationError(
+                code="ERR_PARENT_NOT_FOUND",
+                user_message=f"Parent task '{parent}' not found",
+            )
+
+        for dep_id in add_dep or []:
+            if not self._task_exists(dep_id):
+                raise ValidationError(
+                    code="ERR_DEP_NOT_FOUND",
+                    user_message=f"Dependency task '{dep_id}' not found",
+                )
+
+        if append_set:
+            prefix = ""
+            if timestamp:
+                prefix = f"{datetime.now(tz=UTC).replace(microsecond=0).isoformat()}\n"
+            current_body = existing.body if isinstance(existing.body, str) else ""
+            resulting = current_body + "\n" + prefix + append_body
+            self._validate_body_size(resulting)
+
+        if archival_reason_set or archival_refs_set:
+            if existing.status != "archived":
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                    user_message="archival fields are only allowed on archived tasks",
+                )
+
+            effective_reason = (
+                archival_reason if archival_reason_set else (existing.archival_reason or "")
+            )
+            effective_refs = archival_refs if archival_refs_set else list(existing.archival_refs)
+
+            if archival_reason_set and effective_reason not in config.archival_reasons:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REASON_INVALID",
+                    user_message=(
+                        "archival_reason must be one of "
+                        f"{sorted(config.archival_reasons)}"
+                    ),
+                )
+
+            if effective_reason in {"deprecated", "duplicate"} and not effective_refs:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REFS_REQUIRED",
+                    user_message=f"archival_refs required for archival_reason='{effective_reason}'",
+                )
+
+            if effective_reason in {"completed", "dropped", "wontfix"} and effective_refs:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REFS_FORBIDDEN",
+                    user_message=f"archival_refs forbidden for archival_reason='{effective_reason}'",
+                )
+
+            if effective_reason == "completed" and existing.status != config.terminal_status:
+                raise ValidationError(
+                    code="ERR_COMPLETED_REQUIRES_DONE",
+                    user_message="archival_reason='completed' requires terminal status",
+                )
+
+            for ref_id in effective_refs:
+                if ref_id == task_id:
+                    raise ValidationError(
+                        code="ERR_ARCHIVAL_REF_SELF",
+                        user_message="archival_refs cannot include the task itself",
+                    )
+                if not self._task_exists(ref_id):
+                    raise ValidationError(
+                        code="ERR_ARCHIVAL_REF_MISSING",
+                        user_message=f"archival reference task '{ref_id}' not found",
+                    )
+
+            if self._has_archival_cycle(task_id, effective_refs):
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REF_CYCLE",
+                    user_message="archival_refs would introduce a cycle",
+                )
 
         kwargs: dict[str, object] = {}
         if body:
             kwargs["body"] = body
-        if append_body:
-            kwargs["append_body"] = append_body
-        if timestamp:
-            kwargs["timestamp"] = True
+        if append_set:
+            append_text = append_body
+            if timestamp:
+                stamp = datetime.now(tz=UTC).replace(microsecond=0).isoformat()
+                append_text = f"{stamp}\n{append_text}"
+            kwargs["append_body"] = append_text
         if priority:
             kwargs["priority"] = priority
         if parent > 0:
@@ -1805,14 +1991,22 @@ class AgentView:
             kwargs["add_tags"] = add_tag
         if remove_tag is not None:
             kwargs["remove_tags"] = remove_tag
-        if block_reason:
-            kwargs["blocked"] = True
-            kwargs["block_reason"] = block_reason
+        if block_reason is not None:
+            if block_reason:
+                kwargs["blocked"] = True
+                kwargs["block_reason"] = block_reason
+            else:
+                kwargs["blocked"] = False
+                kwargs["block_reason"] = None
+
+        if not kwargs and not archival_reason_set and not archival_refs_set:
+            raise ValidationError(
+                code="ERR_NO_OP",
+                user_message="No changes requested",
+            )
 
         try:
             task = self.engine.edit_task(str(task_id), **kwargs)
-        except FileNotFoundError as exc:
-            raise self._wrap_not_found(task_id) from exc
         except ValueError as exc:
             raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
 
