@@ -971,3 +971,107 @@ class TestFromAC_AC13Exact:
 
         with pytest.raises(ValidationError):
             EditTaskParams(id=1, tags="foo,bar")  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndWorkStringFieldContracts
+# Retry strengthening (#1085): positive construction + strict-mode annotation
+# proofs for EndWorkParams string fields per Brief A §5.8 wire contract.
+# move_to, note, block_reason, archival_reason — typed str | None.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndWorkStringFieldContracts:
+    """Brief A §5.8 wire contract: EndWorkParams string fields accept str and store correctly."""
+
+    def test_end_work_move_to_accepts_string_value(self) -> None:
+        """EndWorkParams.move_to accepts a str value and stores it (§5.8 annotation proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, outcome="reject", move_to="backlog")
+        assert p.move_to == "backlog"
+        assert isinstance(p.move_to, str)
+
+    def test_end_work_note_accepts_string_value(self) -> None:
+        """EndWorkParams.note accepts a str value and stores it (§5.8 annotation proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, note="Task completed with no issues.")
+        assert p.note == "Task completed with no issues."
+        assert isinstance(p.note, str)
+
+    def test_end_work_block_reason_accepts_string_value(self) -> None:
+        """EndWorkParams.block_reason accepts a str value and stores it (§5.8 annotation proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, outcome="block", block_reason="Waiting for dependency resolution.")
+        assert p.block_reason == "Waiting for dependency resolution."
+        assert isinstance(p.block_reason, str)
+
+    def test_end_work_archival_reason_accepts_string_value(self) -> None:
+        """EndWorkParams.archival_reason accepts a str value and stores it (§5.8 annotation proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, outcome="reject", move_to="archived", archival_reason="Superseded by #999.")
+        assert p.archival_reason == "Superseded by #999."
+        assert isinstance(p.archival_reason, str)
+
+    def test_end_work_move_to_strict_mode_accepts_str(self) -> None:
+        """move_to annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams.model_validate({"id": 1, "outcome": "reject", "move_to": "todo"}, strict=True)
+        assert p.move_to == "todo"
+
+    def test_end_work_note_strict_mode_accepts_str(self) -> None:
+        """note annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams.model_validate({"id": 1, "note": "some note"}, strict=True)
+        assert p.note == "some note"
+
+    def test_end_work_block_reason_strict_mode_accepts_str(self) -> None:
+        """block_reason annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams.model_validate(
+            {"id": 1, "outcome": "block", "block_reason": "blocked because"}, strict=True
+        )
+        assert p.block_reason == "blocked because"
+
+    def test_end_work_archival_reason_strict_mode_accepts_str(self) -> None:
+        """archival_reason annotation is str | None: strict mode accepts str (annotation shape proof)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams.model_validate(
+            {"id": 1, "outcome": "reject", "move_to": "archived", "archival_reason": "done"}, strict=True
+        )
+        assert p.archival_reason == "done"
+
+    def test_end_work_move_to_strict_mode_rejects_int(self) -> None:
+        """move_to annotation is str | None: strict mode rejects int (annotation drift guard)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        with pytest.raises(ValidationError):
+            EndWorkParams.model_validate({"id": 1, "move_to": 42}, strict=True)
+
+    def test_end_work_note_strict_mode_rejects_int(self) -> None:
+        """note annotation is str | None: strict mode rejects int (annotation drift guard)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        with pytest.raises(ValidationError):
+            EndWorkParams.model_validate({"id": 1, "note": 42}, strict=True)
+
+    def test_end_work_block_reason_strict_mode_rejects_int(self) -> None:
+        """block_reason annotation is str | None: strict mode rejects int (annotation drift guard)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        with pytest.raises(ValidationError):
+            EndWorkParams.model_validate({"id": 1, "block_reason": 42}, strict=True)
+
+    def test_end_work_archival_reason_strict_mode_rejects_int(self) -> None:
+        """archival_reason annotation is str | None: strict mode rejects int (annotation drift guard)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        with pytest.raises(ValidationError):
+            EndWorkParams.model_validate({"id": 1, "archival_reason": 42}, strict=True)
