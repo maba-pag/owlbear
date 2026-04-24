@@ -154,7 +154,9 @@ class TestFromAC_EngineEmitsActivityEvents:
         task_content = _VALID_TASK.format(task_id=1001, status="in-progress").replace(
             "claimed_at: null", f'claimed_at: "{expired_ts}"'
         )
-        (kanban_dir / "tasks" / "1001-expired.md").write_text(task_content, encoding="utf-8")
+        (kanban_dir / "tasks" / "1001-expired.md").write_text(
+            task_content, encoding="utf-8"
+        )
 
         engine = KanbanEngine(kanban_dir)
         released = engine.sweep()
@@ -272,7 +274,9 @@ class TestFromAC_ListSessions:
         assert s.duration_s is not None, "duration_s must be set for a closed session"
         assert s.duration_s >= 0, "duration_s must be non-negative"
 
-    def test_ac_c43_session_state_completed_on_success_end_work(self, tmp_path: Path) -> None:
+    def test_ac_c43_session_state_completed_on_success_end_work(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C43: closed session (success end_work) has state='completed', outcome='success'."""
         kanban_dir = _make_board(tmp_path)
         _make_task_file(kanban_dir, 1001, "todo")
@@ -287,7 +291,9 @@ class TestFromAC_ListSessions:
         assert completed[0].state == "completed"
         assert completed[0].outcome == "success"
 
-    def test_ac_c43_session_state_blocked_on_block_end_work(self, tmp_path: Path) -> None:
+    def test_ac_c43_session_state_blocked_on_block_end_work(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C43: end_work(outcome='block') produces state='blocked'."""
         kanban_dir = _make_board(tmp_path)
         _make_task_file(kanban_dir, 1001, "todo")
@@ -301,7 +307,9 @@ class TestFromAC_ListSessions:
         assert blocked
         assert blocked[0].state == "blocked"
 
-    def test_ac_c43_session_state_rejected_on_reject_end_work(self, tmp_path: Path) -> None:
+    def test_ac_c43_session_state_rejected_on_reject_end_work(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C43: end_work(outcome='reject') produces state='rejected'."""
         kanban_dir = _make_board(tmp_path)
         _make_task_file(kanban_dir, 1001, "todo")
@@ -329,7 +337,9 @@ class TestFromAC_ListSessions:
         assert released
         assert released[0].state == "released"
 
-    def test_ac_c43_filter_active_returns_running_and_stuck(self, tmp_path: Path) -> None:
+    def test_ac_c43_filter_active_returns_running_and_stuck(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C43: filter='active' returns only running + stuck sessions."""
         kanban_dir = _make_board(tmp_path)
         _make_task_file(kanban_dir, 1001, "todo")
@@ -423,7 +433,9 @@ class TestFromAC_ListSessions:
         with patch.object(Path, "read_text", spy_read_text):
             engine.list_sessions(filter="all")
 
-        assert md_reads == [], f"list_sessions read task .md files via Path.read_text: {md_reads}"
+        assert md_reads == [], (
+            f"list_sessions read task .md files via Path.read_text: {md_reads}"
+        )
 
     def test_ac_c43_task_status_at_start_captured_from_activity_event(
         self, tmp_path: Path
@@ -486,9 +498,19 @@ class TestFromAC_ListSessions:
             f"Expected state='completed' from old-format success entry, got {sessions[0].state!r}"
         )
 
-    def test_ac_c43_session_record_state_values_match_spec(self, tmp_path: Path) -> None:
+    def test_ac_c43_session_record_state_values_match_spec(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C43: SessionRecord.state is one of the 7 allowed values from §7.2."""
-        _allowed = {"running", "stuck", "completed", "blocked", "rejected", "released", "expired"}
+        _allowed = {
+            "running",
+            "stuck",
+            "completed",
+            "blocked",
+            "rejected",
+            "released",
+            "expired",
+        }
         kanban_dir = _make_board(tmp_path)
         _make_task_file(kanban_dir, 1001, "todo")
 
@@ -500,7 +522,9 @@ class TestFromAC_ListSessions:
         for s in sessions:
             assert s.state in _allowed, f"Invalid state: {s.state}"
 
-    def test_ac_c43_sweep_released_session_visible_in_all_filter(self, tmp_path: Path) -> None:
+    def test_ac_c43_sweep_released_session_visible_in_all_filter(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C43 / §7.2: session closed by sweep-release appears in list_sessions(filter='all')."""
         kanban_dir = _make_board(tmp_path)
         _make_task_file(kanban_dir, 1001, "todo")
@@ -516,7 +540,9 @@ class TestFromAC_ListSessions:
         # The sweep-closed session must be visible in list_sessions — currently silently dropped
         sessions = engine.list_sessions(filter="all")
         matching = [s for s in sessions if s.task_id == 1001]
-        assert matching, "Sweep-released session must appear in list_sessions(filter='all')"
+        assert matching, (
+            "Sweep-released session must appear in list_sessions(filter='all')"
+        )
         assert matching[0].state == "expired", (
             f"Sweep-released session must have state='expired', got {matching[0].state!r}"
         )
@@ -552,7 +578,9 @@ class TestFromAC_ListSessions:
             f"got {matching[0].state!r}"
         )
 
-    def test_ac_c43_stuck_session_included_in_active_filter(self, tmp_path: Path) -> None:
+    def test_ac_c43_stuck_session_included_in_active_filter(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C43: filter='active' returns stuck sessions as well as running ones.
 
         Proves that the active-filter frozenset includes 'stuck' and that a

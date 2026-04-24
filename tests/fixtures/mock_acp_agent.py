@@ -69,7 +69,15 @@ class KanbanMockAgent:
             check=False,
         )
         subprocess.run(  # noqa: ASYNC221
-            [kanban_bin, "--dir", kanban_dir, "edit", task_id, "-a", "Mock agent processed"],
+            [
+                kanban_bin,
+                "--dir",
+                kanban_dir,
+                "edit",
+                task_id,
+                "-a",
+                "Mock agent processed",
+            ],
             check=False,
         )
         subprocess.run(  # noqa: ASYNC221

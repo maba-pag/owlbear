@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from owlbear_kanban import KanbanEngine
 
-__all__ = ["board_config", "list_sessions", "list_tasks", "show_task", "valid_transitions"]
+__all__ = [
+    "board_config",
+    "list_sessions",
+    "list_tasks",
+    "show_task",
+    "valid_transitions",
+]
 
 
 def list_tasks(engine: KanbanEngine, **kwargs: Any) -> Any:  # noqa: ANN401

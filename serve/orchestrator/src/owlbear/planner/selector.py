@@ -90,6 +90,8 @@ def select_tasks(
         else:
             agent = STATUS_AGENT_MAP.get(task.status, "architect")
         target = _TARGET_STATUS.get(task.status, task.status)
-        entries.append(DispatchEntry(task_id=task.id, agent=agent, target_status=target))
+        entries.append(
+            DispatchEntry(task_id=task.id, agent=agent, target_status=target)
+        )
 
     return DispatchPlan(entries=entries)

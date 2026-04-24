@@ -14,7 +14,9 @@ _DR_REQUIRED_MSG = (
     "⚠️ ACTION REQUIRED: Create a Decision Request for this block via the scribe agent"
     " (see w-decision-routing). Blocks without a DR are invisible to the pipeline."
 )
-_COMMIT_REMINDER_MSG = "Reminder: verify your changes are committed and pushed before this task advances."
+_COMMIT_REMINDER_MSG = (
+    "Reminder: verify your changes are committed and pushed before this task advances."
+)
 
 
 def collect_guidance(

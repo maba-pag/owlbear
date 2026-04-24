@@ -65,7 +65,9 @@ class TestFromAC_EOFUnclosedFence:
 class TestFromAC_TabIndentedCode:
     """AC-2: tab-indented heading-like lines remain plain content."""
 
-    def test_ac2_tab_indented_heading_like_line_is_not_section_and_is_verbatim(self) -> None:
+    def test_ac2_tab_indented_heading_like_line_is_not_section_and_is_verbatim(
+        self,
+    ) -> None:
         """Tab-indented heading-like lines must remain content with tab preserved."""
         md = "## Real\n\n\t## Heading-like\n\tline two\n\nafter\n"
 

@@ -192,7 +192,11 @@ async def create_task(  # noqa: PLR0913
     """Create a new kanban task."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     tags_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
-    deps_list = [int(d.strip()) for d in depends_on.split(",") if d.strip()] if depends_on else []
+    deps_list = (
+        [int(d.strip()) for d in depends_on.split(",") if d.strip()]
+        if depends_on
+        else []
+    )
     try:
         record = app_ctx.engine.create_task(
             title,
@@ -225,7 +229,9 @@ async def move_task(ctx: Context, task_id: StrId, status: str) -> KanbanTask:
     result = _record_to_task(record)
     with contextlib.suppress(Exception):
         status_names = [s["name"] for s in app_ctx.engine.board_config().statuses]
-        result.guidance = collect_guidance("move", before=pre_task, after=result, status_names=status_names)
+        result.guidance = collect_guidance(
+            "move", before=pre_task, after=result, status_names=status_names
+        )
     return result
 
 
@@ -365,14 +371,25 @@ async def pick_tasks(ctx: Context, *, limit: int = 25, tag: str = "") -> dict:
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
     tasks = pick_dispatchable(app_ctx.engine, limit=limit, tag=tag)
-    return {"dispatch": [{"task_id": int(t.id), "status": str(t.status)} for t in tasks]}
+    return {
+        "dispatch": [{"task_id": int(t.id), "status": str(t.status)} for t in tasks]
+    }
 
 
 # Override outputSchema for tools that return KanbanTask. This ensures the
 # advertised schema matches what structuredContent actually contains.
 _kanbantask_schema = KanbanTask.model_json_schema()
-for _tool_name in ("show_task", "move_task", "edit_task", "create_task", "start_work", "end_work"):
-    _tool_obj = next(t for t in mcp._tool_manager._tools.values() if t.name == _tool_name)  # noqa: SLF001
+for _tool_name in (
+    "show_task",
+    "move_task",
+    "edit_task",
+    "create_task",
+    "start_work",
+    "end_work",
+):
+    _tool_obj = next(
+        t for t in mcp._tool_manager._tools.values() if t.name == _tool_name
+    )  # noqa: SLF001
     _tool_obj.fn_metadata.output_schema = _kanbantask_schema
 
 
@@ -405,7 +422,9 @@ _patch_params(
         "priority": {"enum": _PRIORITIES},
         "search": {"description": "Full-text search in titles and bodies"},
         "sort": {"enum": _SORT_FIELDS},
-        "blocked": {"description": "true = only blocked, false = only unblocked, null = all"},
+        "blocked": {
+            "description": "true = only blocked, false = only unblocked, null = all"
+        },
     },
 )
 
@@ -438,10 +457,16 @@ _patch_params(
         "append_body": {"description": "Append to body (preserves existing content)"},
         "status": {"enum": _STATUSES},
         "timestamp": {"description": "Prepend [[date]] timestamp to appended body"},
-        "add_dep": {"description": "Add dependency task IDs (comma-separated, e.g. '601,602')"},
-        "remove_dep": {"description": "Remove dependency task IDs (comma-separated, e.g. '601,602')"},
+        "add_dep": {
+            "description": "Add dependency task IDs (comma-separated, e.g. '601,602')"
+        },
+        "remove_dep": {
+            "description": "Remove dependency task IDs (comma-separated, e.g. '601,602')"
+        },
         "parent": {"description": "Parent task ID for subtask hierarchy"},
-        "depends_on": {"description": "Not supported on edit. Use add_dep / remove_dep instead."},
+        "depends_on": {
+            "description": "Not supported on edit. Use add_dep / remove_dep instead."
+        },
     },
 )
 
@@ -453,6 +478,9 @@ _patch_params(
             "description": "success = advance, fail = stay, block = mark blocked, reject = move back",
         },
         "block_reason": {"description": "Required when outcome=block"},
-        "move_to": {"enum": _STATUSES, "description": "Target status when outcome=reject"},
+        "move_to": {
+            "enum": _STATUSES,
+            "description": "Target status when outcome=reject",
+        },
     },
 )

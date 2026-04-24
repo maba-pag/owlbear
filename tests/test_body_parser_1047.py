@@ -55,9 +55,9 @@ class TestFromAC_BodyParserEdgeCases:
             "## Real Section\n\n"
             "`````\n"
             "## inside-long-fence\n"
-            "```\n"        # 3-backtick must NOT close the 5-backtick fence
+            "```\n"  # 3-backtick must NOT close the 5-backtick fence
             "## still-inside\n"
-            "`````\n"      # 5-backtick is the legitimate close
+            "`````\n"  # 5-backtick is the legitimate close
             "\nafter fence\n"
         )
         sections = parse_body(md)
@@ -73,9 +73,9 @@ class TestFromAC_BodyParserEdgeCases:
             "## Real Section\n\n"
             "~~~~~\n"
             "## inside-long-tilde-fence\n"
-            "~~~\n"        # 3-tilde must NOT close the 5-tilde fence
+            "~~~\n"  # 3-tilde must NOT close the 5-tilde fence
             "## still-inside-tilde\n"
-            "~~~~~\n"      # 5-tilde is the legitimate close
+            "~~~~~\n"  # 5-tilde is the legitimate close
             "\nafter fence\n"
         )
         sections = parse_body(md)
@@ -86,7 +86,9 @@ class TestFromAC_BodyParserEdgeCases:
 class TestBuilderDiscovered:
     """Precision assertions added from reviewer feedback on weak checks."""
 
-    def test_ac_c5_roundtrip_preserves_fenced_and_indented_content_verbatim(self) -> None:
+    def test_ac_c5_roundtrip_preserves_fenced_and_indented_content_verbatim(
+        self,
+    ) -> None:
         """AC-C5: fenced and indented code content survives round-trip byte-exactly."""
         md = (
             "## Section\n\n"
@@ -114,14 +116,7 @@ class TestBuilderDiscovered:
 
     def test_ac_c10_three_backtick_fence_accepts_five_backtick_close(self) -> None:
         """AC-C10: longer closing backtick fence closes a shorter opening fence."""
-        md = (
-            "## Real\n\n"
-            "```\n"
-            "## inside\n"
-            "`````\n"
-            "## After\n\n"
-            "outside\n"
-        )
+        md = "## Real\n\n```\n## inside\n`````\n## After\n\noutside\n"
 
         sections = parse_body(md)
         headings = [s.heading for s in sections if s.heading]
@@ -130,14 +125,7 @@ class TestBuilderDiscovered:
 
     def test_ac_c10_three_tilde_fence_accepts_five_tilde_close(self) -> None:
         """AC-C10: longer closing tilde fence closes a shorter opening fence."""
-        md = (
-            "## Real\n\n"
-            "~~~\n"
-            "## inside-tilde\n"
-            "~~~~~\n"
-            "## After Tilde\n\n"
-            "outside\n"
-        )
+        md = "## Real\n\n~~~\n## inside-tilde\n~~~~~\n## After Tilde\n\noutside\n"
 
         sections = parse_body(md)
         headings = [s.heading for s in sections if s.heading]

@@ -30,7 +30,9 @@ def get_board(engine: _Engine) -> BoardOut:
     """Return board config: statuses, priorities, and valid_transitions map."""
     config = adapter.board_config(engine)
     status_names = config.status_names
-    valid_transitions = {name: sorted(adapter.valid_transitions(engine, name)) for name in status_names}
+    valid_transitions = {
+        name: sorted(adapter.valid_transitions(engine, name)) for name in status_names
+    }
     return BoardOut(
         statuses=[{"name": s} for s in status_names],
         priorities=config.priorities,
@@ -90,7 +92,9 @@ def get_task(task_id: str, engine: _Engine) -> TaskDetailOut:
     try:
         task = adapter.show_task(engine, task_id)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Task {task_id!r} not found") from None
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id!r} not found"
+        ) from None
     return TaskDetailOut(
         id=task.id,
         title=task.title,

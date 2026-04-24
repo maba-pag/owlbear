@@ -103,7 +103,9 @@ async def request_device_code() -> dict[str, Any]:
         )
         resp.raise_for_status()
         data = resp.json()
-    print(f"Open https://github.com/login/device and enter code: {data.get('user_code')}")  # noqa: T201
+    print(
+        f"Open https://github.com/login/device and enter code: {data.get('user_code')}"
+    )  # noqa: T201
     return data
 
 
