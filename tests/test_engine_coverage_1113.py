@@ -164,7 +164,8 @@ class TestFromAC_EngineEditTaskFieldMutations:
         _write_task(board, task_id=1, tags='["alpha"]')
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", add_tags=["beta"])
-        assert set(result.tags) == {"alpha", "beta"}
+        # sorted list equality proves membership AND that "beta" appears exactly once
+        assert sorted(result.tags) == ["alpha", "beta"]
 
     def test_add_tags_dedup_is_idempotent(self, tmp_path: Path) -> None:
         """Adding a tag that already exists must not duplicate it."""
@@ -187,7 +188,8 @@ class TestFromAC_EngineEditTaskFieldMutations:
         _write_task(board, task_id=1, depends_on="[2]")
         engine = KanbanEngine(board, activity_log=False)
         result = engine.edit_task("1", add_deps=[3])
-        assert set(result.depends_on) == {2, 3}
+        # sorted list equality proves membership AND that 3 appears exactly once
+        assert sorted(result.depends_on) == [2, 3]
 
     def test_add_deps_dedup_is_idempotent(self, tmp_path: Path) -> None:
         """Adding a dep that already exists must not duplicate it."""
@@ -335,3 +337,28 @@ class TestFromAC_EngineProperties:
         # Engine's next board_config() call must still return unmodified agent_map
         assert "INJECTED_KEY" not in engine.board_config().agent_map
         assert engine.board_config().agent_map == original_agent_map
+
+    def test_board_config_deep_copy_existing_nested_list_is_isolated(self, tmp_path: Path) -> None:
+        """Mutating a pre-existing nested list value inside agent_map on the returned copy
+        must not affect engine state — proves model_copy(deep=True) isolates existing
+        nested mutable values, not just top-level containers or newly-inserted keys.
+
+        A shallow copy would alias the same list object, causing this test to fail.
+        """
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+
+        # Fixture sets agent_map["research"] = [] (an existing nested list)
+        config_copy = engine.board_config()
+        assert "research" in config_copy.agent_map, "fixture sanity: research key required"
+        original_list = list(config_copy.agent_map["research"])  # snapshot before mutation
+
+        # Mutate the existing nested list in the returned copy
+        config_copy.agent_map["research"].append("INJECTED_AGENT")
+
+        # A shallow copy would share the same list reference, leaking the mutation
+        fresh = engine.board_config()
+        assert fresh.agent_map["research"] == original_list, (
+            "Mutating an existing nested list in the returned copy leaked into engine state "
+            "(shallow-copy regression: pre-existing nested list was aliased, not deep-copied)"
+        )
