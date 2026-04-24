@@ -372,8 +372,8 @@ class TestFromAC_LaneAlgorithms:
         content = task_file.read_text(encoding="utf-8")
         assert "claimed_by" not in content
 
-    def test_ac_c33_tasks_lane_adds_archival_fields(self, tmp_path: Path) -> None:
-        """AC-C33: tasks lane adds archival_reason: null and archival_refs: [] if absent."""
+    def test_ac_c33_tasks_lane_adds_all_defaults_with_exact_values(self, tmp_path: Path) -> None:
+        """AC-C33 (T4): tasks lane injects ALL _ACTIVE_TASK_DEFAULTS with exact values when absent."""
         kanban_dir = _make_legacy_board(tmp_path)
         task_content = (
             "---\nid: 1001\ntitle: t\nstatus: todo\npriority: needed\n"
@@ -385,8 +385,23 @@ class TestFromAC_LaneAlgorithms:
         _run_migrate(kanban_dir, lane="tasks")
         content = task_file.read_text(encoding="utf-8")
 
-        assert "archival_reason:" in content
-        assert "archival_refs:" in content
+        # None values may render as bare 'key:\n' or explicit 'key: null\n' depending on ruamel.yaml
+        assert "archival_reason: null\n" in content or "archival_reason:\n" in content, (
+            "archival_reason must be null after migration"
+        )
+        assert "archival_refs: []" in content, "archival_refs must be [] after migration"
+        assert "tags: []" in content, "tags must be [] after migration"
+        assert "parent: null\n" in content or "parent:\n" in content, (
+            "parent must be null after migration"
+        )
+        assert "depends_on: []" in content, "depends_on must be [] after migration"
+        assert "blocked: false" in content, "blocked must be false after migration"
+        assert "block_reason: null\n" in content or "block_reason:\n" in content, (
+            "block_reason must be null after migration"
+        )
+        assert "claimed_at: null\n" in content or "claimed_at:\n" in content, (
+            "claimed_at must be null after migration"
+        )
 
     def test_ac_c33_tasks_lane_normalises_timestamps_to_utc(
         self, tmp_path: Path
@@ -404,7 +419,77 @@ class TestFromAC_LaneAlgorithms:
         _run_migrate(kanban_dir, lane="tasks")
         content = task_file.read_text(encoding="utf-8")
 
-        assert "+00:00" in content
+        lines = content.splitlines()
+        created_lines = [line for line in lines if line.strip().startswith("created:")]
+        updated_lines = [line for line in lines if line.strip().startswith("updated:")]
+        assert created_lines, "created field missing after migration"
+        assert updated_lines, "updated field missing after migration"
+        assert "+00:00" in created_lines[0], f"created not normalised to +00:00: {created_lines[0]}"
+        assert "+00:00" in updated_lines[0], f"updated not normalised to +00:00: {updated_lines[0]}"
+
+    def test_ac_c33_tasks_lane_normalises_nonnull_claimed_at(self, tmp_path: Path) -> None:
+        """AC-C33 (T3): tasks lane normalises non-null claimed_at timestamps to +00:00."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        # claimed_at present but naive (no tz offset)
+        task_content = (
+            "---\n"
+            "id: 1001\n"
+            "title: t\n"
+            "status: todo\n"
+            "priority: needed\n"
+            'created: "2026-01-15T08:00:00+00:00"\n'
+            'updated: "2026-01-15T08:00:00+00:00"\n'
+            'claimed_at: "2026-01-20T10:00:00"\n'
+            "---\n"
+        )
+        task_file = kanban_dir / "tasks" / "1001-t.md"
+        task_file.write_text(task_content, encoding="utf-8")
+
+        _run_migrate(kanban_dir, lane="tasks")
+        content = task_file.read_text(encoding="utf-8")
+
+        lines = content.splitlines()
+        claimed_at_lines = [line for line in lines if line.strip().startswith("claimed_at:")]
+        assert claimed_at_lines, "claimed_at field missing after migration"
+        assert "+00:00" in claimed_at_lines[0], (
+            f"claimed_at not normalised to +00:00: {claimed_at_lines[0]}"
+        )
+        assert "null" not in claimed_at_lines[0], (
+            "claimed_at must be normalised (preserved), not set to null"
+        )
+
+    def test_ac_c33_tasks_lane_preserves_existing_nonnull_values(self, tmp_path: Path) -> None:
+        """AC-C33 (T5): tasks lane preserves existing non-default field values unchanged."""
+        kanban_dir = _make_legacy_board(tmp_path)
+        # tags: [bug] and parent: 42 exist; archival_reason/archival_refs absent
+        task_content = (
+            "---\n"
+            "id: 1001\n"
+            "title: t\n"
+            "status: todo\n"
+            "priority: needed\n"
+            'created: "2026-01-15T08:00:00+00:00"\n'
+            'updated: "2026-01-15T08:00:00+00:00"\n'
+            "tags:\n"
+            "- bug\n"
+            "parent: 42\n"
+            "---\n"
+        )
+        task_file = kanban_dir / "tasks" / "1001-t.md"
+        task_file.write_text(task_content, encoding="utf-8")
+
+        _run_migrate(kanban_dir, lane="tasks")
+        content = task_file.read_text(encoding="utf-8")
+
+        assert "- bug" in content, "existing tags value must be preserved"
+        assert "parent: 42" in content, "existing parent value must be preserved"
+        # None values may render as bare 'key:\n' or explicit 'key: null\n'
+        assert "archival_reason: null\n" in content or "archival_reason:\n" in content, (
+            "missing archival_reason must be added with default value null"
+        )
+        assert "archival_refs: []" in content, (
+            "missing archival_refs must be added with default value []"
+        )
 
     def test_ac_c33_config_lane_converts_statuses_to_list_of_strings(
         self, tmp_path: Path
@@ -447,6 +532,20 @@ class TestFromAC_LaneAlgorithms:
         ):
             assert new_field in content, f"New required field '{new_field}' missing"
 
+        # AC-C33 (C4): assert exact derived and preserved values
+        assert "entry_status: research" in content, (
+            "entry_status must be derived from legacy defaults.status: research"
+        )
+        assert "claim_timeout: 1h" in content, (
+            "claim_timeout: 1h must be preserved from legacy config"
+        )
+        assert "next_id: 1001" in content, (
+            "next_id: 1001 must be preserved from legacy config"
+        )
+        assert "wave_size: 4" in content, (
+            "wave_size must be set to 4 (constant)"
+        )
+
     def test_ac_c35_tasks_idempotency_check_skips_modern_task(
         self, tmp_path: Path
     ) -> None:
@@ -480,7 +579,7 @@ class TestFromAC_LaneAlgorithms:
         _run_migrate(kanban_dir, lane="archive")
         content = arc_file.read_text(encoding="utf-8")
 
-        assert "archival_refs:" in content
+        assert "archival_refs: []" in content
 
     def test_ac_c35_archive_idempotency_check_skips_modern_archive(
         self, tmp_path: Path
@@ -921,9 +1020,11 @@ class TestFromAC_ArchiveLaneAlgorithmsStrict:
 
         _run_migrate(kanban_dir, lane="archive")
         written = arc_file.read_text(encoding="utf-8")
-        # Body text after closing --- must be preserved
+        # Body text after closing --- must be preserved verbatim (exact equality)
         after_fm = written.split("---\n", 2)[-1]
-        assert "Original body content with *markdown*." in after_fm
+        assert after_fm == body, (
+            f"archive body must be preserved verbatim after migration; got: {after_fm!r}"
+        )
 
     def test_ac_c33_config_lane_warning_mentions_readme(self, tmp_path: Path) -> None:
         """AC-C33: config lane emits warning line mentioning serve/kanban/README.md."""
