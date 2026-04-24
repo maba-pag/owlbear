@@ -127,6 +127,23 @@ class TestFromAC_SharedWorkflowContract:
                     f"Decision template missing from {path}: {needle}"
                 )
 
+    def test_decision_entry_template_has_full_field_set(self) -> None:
+        targets = [
+            ".owlbear/briefs/README.md",
+            "share/skills/w-ideation-discovery/SKILL.md",
+            "share/skills/w-ideation-mediation/SKILL.md",
+        ]
+        for path in targets:
+            text = _read(path)
+            for needle in [
+                "**Options considered:**",
+                "**Chosen:**",
+                "**Source inputs (when relevant):**",
+            ]:
+                assert needle in text, (
+                    f"Decision template missing field in {path}: {needle}"
+                )
+
 
 class TestFromAC_AgentContracts:
     """Agent prompts keep narrow file contracts and avoid model-string coupling."""
@@ -290,4 +307,112 @@ class TestFromAC_GoldenScenarioFixtures:
         assert "Human review was applied" in readme
         assert "## Recommendation" in synthesis
         assert "## Proposal" in brief
+
+    def test_golden_scenario_readme_names_class_labels(self) -> None:
+        text = _read(f"{self._ROOT}/README.md")
+        for label in [
+            "net-new work",
+            "existing-feature/refactor",
+            "overscoped request",
+        ]:
+            assert label in text, (
+                f"Golden-scenario README missing class label: {label}"
+            )
+
+    def test_overscoped_scenario_has_conditional_denoise_artifact(self) -> None:
+        path = f"{self._ROOT}/03-overscoped-request/synthesis-idea-panel.md"
+        assert (_REPO_ROOT / path).exists(), (
+            f"Missing conditional-denoise artifact for overscoped scenario: {path}"
+        )
+        text = _read(path)
+        for marker in ["## Distinct Claims", "## Divergences"]:
+            assert marker in text, (
+                f"synthesis-idea-panel.md missing structural section: {marker}"
+            )
+
+    def test_overscoped_scenario_has_phase_two_outputs(self) -> None:
+        synthesis = _read(f"{self._ROOT}/03-overscoped-request/synthesis.md")
+        brief = _read(f"{self._ROOT}/03-overscoped-request/brief.md")
+        assert "## Recommendation" in synthesis, (
+            "03-overscoped-request/synthesis.md missing ## Recommendation"
+        )
+        assert "## Proposal" in brief, (
+            "03-overscoped-request/brief.md missing ## Proposal"
+        )
+
+    def test_scenario_briefs_carry_runtime_disclaimer(self) -> None:
+        scenarios = [
+            "02-existing-feature-refactor",
+            "03-overscoped-request",
+        ]
+        for scenario in scenarios:
+            text = _read(f"{self._ROOT}/{scenario}/brief.md")
+            assert "main-consuming" in text, (
+                f"{scenario}/brief.md missing runtime-validation disclaimer"
+            )
+
+
+class TestFromAC_IdeatorRouterContract:
+    """Ideator must be a compatibility router, not a workflow performer."""
+
+    def test_ideator_does_not_run_workflow_itself(self) -> None:
+        text = _read("share/agents/ideator.agent.md")
+        assert "Do not run the full ideation workflow yourself." in text, (
+            "Ideator is missing the explicit non-performer rule — "
+            "it must not claim to run discovery or mediation directly"
+        )
+
+    def test_ideator_routes_new_work_to_discoverer(self) -> None:
+        text = _read("share/agents/ideator.agent.md")
+        assert "Route new or unclear work to `@ideation-discoverer`." in text, (
+            "Ideator missing explicit routing rule: new/unclear work → @ideation-discoverer"
+        )
+
+    def test_ideator_routes_post_discovery_to_mediator(self) -> None:
+        text = _read("share/agents/ideator.agent.md")
+        assert "Route post-discovery work to `@ideation-mediator`." in text, (
+            "Ideator missing explicit routing rule: post-discovery work → @ideation-mediator"
+        )
+
+    def test_ideator_has_disable_model_invocation(self) -> None:
+        text = _read("share/agents/ideator.agent.md")
+        assert "disable-model-invocation: true" in text, (
+            "Ideator must set disable-model-invocation: true — "
+            "a router must not invoke a model to perform ideation itself"
+        )
+
+
+class TestFromAC_EarlyChallengeLane:
+    """Early challenge lane selection, critic exclusion, and bounded-output rules."""
+
+    def test_early_lane_always_invokes_simplifier_and_firstprinciples(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert (
+            "Always invoke `ideation-simplifier` and `ideation-firstprinciples`"
+            in text
+        ), (
+            "Panel handbook missing the default-roster 'always invoke' rule for "
+            "simplifier and firstprinciples"
+        )
+
+    def test_outsider_is_conditional_not_default(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert (
+            "Invoke `ideation-outsider` only when the discovery agent sees "
+            "tunnel vision" in text
+        ), (
+            "Panel handbook missing the conditional-outsider selection rule"
+        )
+
+    def test_critic_excluded_from_default_early_lane(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert "Do not use `ideation-critic` as the default early challenger." in text, (
+            "Panel handbook missing the explicit critic-exclusion rule for the early lane"
+        )
+
+    def test_early_challenger_outputs_are_bounded(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert "Outputs must be short and bounded." in text, (
+            "Panel handbook missing the bounded-output rule for early challengers"
+        )
 
