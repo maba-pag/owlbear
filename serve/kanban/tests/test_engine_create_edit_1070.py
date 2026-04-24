@@ -218,6 +218,18 @@ class TestFromAC_CreateTask:
             view.create_task(title="X", body=boundary)
         assert exc_info.value.code == "ERR_BODY_TOO_LARGE"
 
+    def test_create_task_body_over_100kb_returns_guidance_warning(
+        self, tmp_path: Path
+    ) -> None:
+        """D47-WARN-CREATE: create_task with body > 100 KB → succeeds and response
+        guidance list contains the body-size warning. Hard cap (500 KB) not exceeded."""
+        view, _ = _make_view(tmp_path)
+        large_body = "x" * (101 * 1024)
+        result = view.create_task(title="X", body=large_body)
+        assert any("body" in g.lower() for g in result.guidance), (
+            f"Expected body-size guidance warning for >100 KB body, got: {result.guidance!r}"
+        )
+
     def test_create_task_predicate_failed_on_entry_status_raises_predicate_failed(
         self, tmp_path: Path
     ) -> None:
@@ -296,6 +308,31 @@ class TestFromAC_EditTaskValidation:
             view.edit_task(1, append_body="y" * (200 * 1024))  # 400+200=600 KB
         assert exc_info.value.code == "ERR_BODY_TOO_LARGE"
 
+    def test_edit_task_body_replace_over_100kb_returns_guidance_warning(
+        self, tmp_path: Path
+    ) -> None:
+        """D47-WARN-EDIT-REPLACE: edit_task with replacement body > 100 KB → succeeds
+        and response guidance list contains the body-size warning. Hard cap not exceeded."""
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=1)
+        large_body = "x" * (101 * 1024)
+        result = view.edit_task(1, body=large_body)
+        assert any("body" in g.lower() for g in result.guidance), (
+            f"Expected body-size guidance warning for >100 KB replacement body, got: {result.guidance!r}"
+        )
+
+    def test_edit_task_append_total_over_100kb_returns_guidance_warning(
+        self, tmp_path: Path
+    ) -> None:
+        """D47-WARN-EDIT-APPEND: append_body where post-append total > 100 KB → succeeds
+        and response guidance list contains the body-size warning. Hard cap not exceeded."""
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=1, body="x" * (80 * 1024))
+        result = view.edit_task(1, append_body="y" * (30 * 1024))  # 80+30=110 KB total
+        assert any("body" in g.lower() for g in result.guidance), (
+            f"Expected body-size guidance warning for post-append total >100 KB, got: {result.guidance!r}"
+        )
+
     def test_empty_block_reason_clears_blocked_and_block_reason(
         self, tmp_path: Path
     ) -> None:
@@ -314,20 +351,52 @@ class TestFromAC_EditTaskValidation:
         assert result.blocked is False
         assert result.block_reason is None
 
+    def test_set_nonempty_block_reason_sets_blocked_true(
+        self, tmp_path: Path
+    ) -> None:
+        """D53-SET: edit_task with non-empty block_reason on an unblocked task →
+        blocked=True, block_reason set to the provided string."""
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=1, blocked="false", block_reason="null")
+        result = view.edit_task(1, block_reason="dependency missing")
+        assert result.blocked is True
+        assert result.block_reason == "dependency missing"
+
+    def test_omit_block_reason_on_blocked_task_preserves_state(
+        self, tmp_path: Path
+    ) -> None:
+        """D53-OMIT: edit_task that omits block_reason while changing another field →
+        blocked and block_reason remain unchanged on a previously blocked task."""
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            blocked="true",
+            block_reason='"dependency missing"',
+        )
+        result = view.edit_task(1, priority="critical")
+        assert result.blocked is True
+        assert result.block_reason == "dependency missing"
+
     def test_append_body_timestamp_uses_iso_datetime_with_offset(
         self, tmp_path: Path
     ) -> None:
-        """AC30+D14: timestamp=True prepends ISO 8601 datetime with explicit ±HH:MM or Z offset.
+        """AC30-TIGHT: timestamp=True prepends full ISO 8601 datetime with explicit ±HH:MM
+        suffix, immediately followed by the appended note text.
 
-        Current impl prepends [[YYYY-MM-DD]] which lacks the time component and offset.
+        Contract: body after append contains '<YYYY-MM-DDTHH:MM:SS±HH:MM>\nNote.'
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1, body="Base.")
         result = view.edit_task(1, append_body="Note.", timestamp=True)
         body: str = result.body or ""
-        # Expect full ISO 8601 with offset: YYYY-MM-DDTHH:MM:SS[+00:00 or Z]
-        assert re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+Z]", body), (
-            f"Expected ISO 8601 datetime with explicit offset in body, got: {body!r}"
+        # Strict: full ±HH:MM offset form AND timestamp immediately precedes the note.
+        iso_with_prepend = re.compile(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}\nNote\."
+        )
+        assert iso_with_prepend.search(body) is not None, (
+            f"Expected full ISO 8601 timestamp with ±HH:MM immediately before '\\nNote.' "
+            f"in body, got: {body!r}"
         )
 
 
