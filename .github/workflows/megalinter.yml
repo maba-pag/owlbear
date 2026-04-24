@@ -62,7 +62,8 @@ jobs:
 
       - name: Create pull request with applied fixes
         id: fix_pr
-        if: ${{ inputs.fix && inputs.fix_mode == 'pull_request' && steps.megalinter.outputs.has_updated_sources == '1' }}
+        if: >-
+          ${{ inputs.fix && inputs.fix_mode == 'pull_request' && steps.megalinter.outputs.has_updated_sources == '1' }}
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
