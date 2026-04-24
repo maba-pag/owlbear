@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
+  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-kanban/edit_task', 'owlbear-memory/*']
 agents: [scribe, fix-attempt, quality-runner]
 hooks:
   SessionStart:
@@ -52,6 +52,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 | Done | in-progress → review | All tests pass, ruff clean, coverage ≥ 90% |
 | Reject (test assumption) | in-progress → todo | TestFromAC assumes wrong interface, test-writer rewrites |
 | Reject (AC wrong) | in-progress → backlog | AC describes wrong interface, architect fixes AC |
+| Escalate | in-progress → in-progress | Gate structurally unreachable — create prereq task(s), `edit_task(add_dep=...)`, `end_work(outcome="fail")` (see §5 Escalation Routing in `r-pipeline-protocol`) |
 
 </pipeline_position>
 

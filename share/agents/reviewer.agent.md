@@ -49,8 +49,8 @@ the builder can fix it without guessing.
 |---------|-----------|-----------|
 | Pass | review → docs | confidence ≥ .90 |
 | Fail (impl issue) | review → in-progress | builder can fix directly |
-| Fail (test gap) | review → todo | tests insufficient, implementation OK — test-writer adds coverage |
-| Fail (test/AC quality) | review → backlog | design or spec problem, architect re-evaluates |
+| Fail (test gap) | review → todo | tests missing for implemented behavior — test-writer adds coverage |
+| Fail (test/AC quality) | review → backlog | existing tests are weak, gate threshold is structurally infeasible, or AC needs redesign — architect re-evaluates |
 | Fail (3rd+) | review → backlog | loop-breaker — 3rd+ review failure on same task |
 
 </pipeline_position>

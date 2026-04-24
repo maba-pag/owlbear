@@ -188,18 +188,23 @@ See `h-mcp-memory` for full tool reference.
 
 ## 5. Escalation
 
-### Blocking Convention
+### Escalation Routing
 
 Routine gate rejections (reviewer FAIL, doc-writer reject) use simple status movement and claim release — **no blocking**. The task re-enters the pipeline automatically on the next dispatch cycle.
 
-When an agent cannot proceed (missing dependencies, infeasible AC, vague scope) or discovers the AC requires physical user action (manual testing, GUI verification, credential setup, deployment), it calls the **scribe** to create a DR or action request. Do not pass through hoping a downstream agent will handle it. The scribe creates the file; the calling agent then calls `end_work(outcome="block", block_reason="DR pending: {filename}")` to release its claim and append its reasoning to the task body.
+When an agent cannot proceed, route by cause:
 
-The kanban `block` action is reserved for:
+| Cause | Action | Resolution |
+|-------|--------|------------|
+| Prerequisite work needed | Create task(s), `edit_task(add_dep="{new_id}")`, `end_work(outcome="fail")` | Self-resolving — `pick_tasks` dep gate holds until deps archive |
+| Infeasible / wrong AC | `end_work(outcome="reject", move_to="backlog")` with note to architect | Self-resolving — architect fixes AC |
+| Vague scope | `end_work(outcome="reject", move_to="research")` with note | Self-resolving — researcher/architect refines |
+| Design trade-off (T2) | Advisory DR via scribe, then `end_work(outcome="reject", move_to="backlog")` | Auto-resolving — DR expires in 5 days (see Decision Tiers) |
+| Arch / breaking change (T3) | Mandatory DR via scribe, then `end_work(outcome="block", block_reason="DR pending: {file}")` | **Blocks** — user must respond (see Decision Tiers) |
+| User action required | AR via scribe, then `end_work(outcome="block", block_reason="AR pending: {file}")` | **Blocks** — user must act |
+| Stale task (orchestrator triage) | `edit_task(block="reason")` / `edit_task(unblock=True)` | **Blocks** — orchestrator decision |
 
-- Stale tasks — blocked for triage by orchestrator
-- Tasks with pending DRs — blocked until user responds
-
-Blocking and unblocking outside the standard lifecycle (e.g., orchestrator triage) uses `edit_task(block="reason")` / `edit_task(unblock=True)` (see `h-mcp-kanban`).
+**Block is reserved for T3 decisions, user-action tasks, and orchestrator triage.** Do not block when a reject or dependency gate would suffice. Do not pass through hoping a downstream agent will handle it.
 
 #### DR Required on Agent Block
 

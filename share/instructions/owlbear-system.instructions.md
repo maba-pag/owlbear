@@ -63,13 +63,11 @@ Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), res
 
 Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
-GitHub-hosted Copilot Memory is disabled to preserve local-first operation.
-
 ## 5. Operational Fundamentals
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands.
-- **Loop detection.** Tier 1: same call twice — change approach. Tier 2: two different approaches failed — consider skipping. Tier 3: 3+ attempts — stop, write what failed, hand off.
-- **Terminal.** `uv run` for all Python tools. Chain with `;` (never `&&` — PowerShell 5.1).
+- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop, write what failed, escalate per §5 Escalation Routing in `r-pipeline-protocol`.
+- **Terminal.** `uv run` for all Python tools.
 - **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
 - **Commits.** Follow `r-project-standards` for format, types, and git discipline.
