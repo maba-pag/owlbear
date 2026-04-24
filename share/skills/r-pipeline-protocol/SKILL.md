@@ -26,11 +26,13 @@ The kanban board is shared — multiple agents work on it simultaneously.
 - You may read any task and create follow-up tasks freely. Never move, edit, claim, or release tasks that aren't yours.
 - Leave a handoff note in the task body before parking a task unfinished.
 
-For claiming command syntax, see the `h-mcp-kanban` skill (`start_work` tool: atomic claim + show).
+For claiming command syntax, see the `h-mcp-kanban` skill (`start_work` tool: atomic claim + show). `start_work` returns the full task body — no separate `show_task` needed.
+
+**If `start_work` fails, stop.** A `ToolError` from `start_work` means the task is blocked, already claimed, or missing. Do not fall through to `show_task` — report the error in your response and exit without further work on that task.
 
 ### Knowledge Pre-flight
 
-Before starting work, load accumulated learnings from the memory server:
+After claiming the task, load accumulated learnings from the memory server:
 
 1. Call `get_knowledge(agent_id=<agent_name>, limit=20, min_confidence=0.7)` — where `agent_name` is the `name:` field from your `.agent.md` frontmatter.
 2. Apply returned entries as context — patterns, pitfalls, workarounds, and behavioral norms from past agents.
@@ -40,14 +42,12 @@ See `h-mcp-memory` for full tool reference.
 
 ### Resolved Decision Pre-flight
 
-Before starting work, check whether the task was previously blocked by a decision or action request:
+After claiming the task, check whether it was previously blocked by a decision or action request:
 
 1. Check the task body for `## Decision Resolved` or `## Action Completed` sections. If present, the user's chosen option and notes are binding constraints.
 2. If no summary in the body, call the **scribe** agent in query mode to check for existing DRs.
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
 4. Never write to `.owlbear/decisions/` directly — always use the **scribe** agent.
-
-To read the full task body and check for decision sections, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
 
 ### Entry-Gate Agents
 
