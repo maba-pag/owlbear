@@ -229,6 +229,33 @@ class TestFromAC_EngineEditTaskFieldMutations:
         assert "Appended text." in str(result.body)
         assert "[[" not in str(result.body)
 
+    def test_append_body_preserves_original_body_in_order(self, tmp_path: Path) -> None:
+        """append_body must use append semantics (not overwrite): original body must
+        appear before the new text in the final body string."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, body="OriginalContent.")
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.edit_task("1", append_body="NewContent.")
+        body = str(result.body)
+        assert "OriginalContent." in body, "original body was lost (overwrite regression)"
+        assert "NewContent." in body
+        assert body.index("OriginalContent.") < body.index("NewContent."), (
+            "original body must appear before appended text"
+        )
+
+    def test_append_body_preserves_original_body(self, tmp_path: Path) -> None:
+        """append_body must append to, not overwrite, the existing body."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, body="Original body text.")
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.edit_task("1", append_body="Appended text.")
+        # Original body is preserved — a pure overwrite would lose it
+        assert str(result.body).startswith("Original body text.")
+        # Appended text is present
+        assert "Appended text." in str(result.body)
+        # Appended text comes AFTER original body (not before or instead of it)
+        assert str(result.body).index("Original body text.") < str(result.body).index("Appended text.")
+
 
 # ---------------------------------------------------------------------------
 # Engine properties
@@ -251,6 +278,18 @@ class TestFromAC_EngineProperties:
         engine = KanbanEngine(board, activity_log=False)
         assert engine.agent_name == engine.agent_name
 
+    def test_agent_name_is_stable_across_many_calls(self, tmp_path: Path) -> None:
+        """agent_name is sampled 10 times to rule out collision-based false greens
+        from a recompute-per-call regression.  With ~10 000 name combinations,
+        P(10 independent collisions) < 1e-36 — deterministically reliable."""
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        first = engine.agent_name
+        subsequent = [engine.agent_name for _ in range(9)]
+        assert all(name == first for name in subsequent), (
+            f"agent_name changed across calls: {[first, *subsequent]}"
+        )
+
     def test_board_config_returns_deep_copy(self, tmp_path: Path) -> None:
         """Mutating the returned BoardConfig must not affect engine internal state."""
         board = _make_board(tmp_path)
@@ -262,3 +301,37 @@ class TestFromAC_EngineProperties:
 
         # Engine's next board_config() call must still return unmodified statuses
         assert engine.board_config().statuses == original_statuses
+
+    def test_board_config_deep_copy_covers_nested_dicts(self, tmp_path: Path) -> None:
+        """Mutating nested mutable fields (agent_map, agent_types) of the returned
+        BoardConfig must not affect engine state — proving model_copy(deep=True)
+        covers all mutable nesting levels, not just the top-level list."""
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        original_agent_map_keys = set(engine.board_config().agent_map.keys())
+        original_agent_types_keys = set(engine.board_config().agent_types.keys())
+
+        config_copy = engine.board_config()
+        config_copy.agent_map["INJECTED"] = ["injected-agent"]
+        config_copy.agent_types["INJECTED"] = "injected-type"
+
+        next_config = engine.board_config()
+        assert set(next_config.agent_map.keys()) == original_agent_map_keys, (
+            "agent_map mutation leaked into engine state (shallow-copy regression)"
+        )
+        assert set(next_config.agent_types.keys()) == original_agent_types_keys, (
+            "agent_types mutation leaked into engine state (shallow-copy regression)"
+        )
+
+    def test_board_config_deep_copy_covers_nested_agent_map(self, tmp_path: Path) -> None:
+        """Mutating a nested dict in the returned config must not affect engine state."""
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        original_agent_map = engine.board_config().agent_map.copy()
+
+        config_copy = engine.board_config()
+        config_copy.agent_map["INJECTED_KEY"] = ["injected_value"]
+
+        # Engine's next board_config() call must still return unmodified agent_map
+        assert "INJECTED_KEY" not in engine.board_config().agent_map
+        assert engine.board_config().agent_map == original_agent_map
