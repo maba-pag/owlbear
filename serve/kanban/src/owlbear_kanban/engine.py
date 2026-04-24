@@ -112,7 +112,7 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
             ),
         )
 
-    terminal_status = getattr(config, "terminal_status", statuses[-1])
+    terminal_status = config.terminal_status
     if terminal_status not in statuses or terminal_status != statuses[-1]:
         raise ConfigError(
             code="ERR_TERMINAL_STATUS_INVALID",
@@ -121,12 +121,14 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
             ),
         )
 
-    missing_statuses = [status for status in statuses if status not in config.agent_map]
-    if missing_statuses:
-        raise ConfigError(
-            code="ERR_INVALID_STATUS",
-            user_message=f"agent_map missing status entries: {missing_statuses}",
-        )
+    # Allow empty agent_map (default); only validate if explicitly configured
+    if config.agent_map:
+        missing_statuses = [status for status in statuses if status not in config.agent_map]
+        if missing_statuses:
+            raise ConfigError(
+                code="ERR_INVALID_STATUS",
+                user_message=f"agent_map missing status entries: {missing_statuses}",
+            )
 
     # Validate timeout format eagerly at engine init.
     _parse_duration(config.claim_timeout)
@@ -365,7 +367,7 @@ def _exclusive_file_lock(lock_path: Path) -> Generator[None, None, None]:
     The lock is always released, including on exception paths.
     """
     with lock_path.open("a+b") as fh:
-        if sys.platform == "win32":
+        if sys.platform == "win32":  # pragma: no cover
             import msvcrt  # noqa: PLC0415
 
             fh.seek(0)
@@ -393,6 +395,9 @@ class KanbanEngine:
 
     Args:
         kanban_dir:    Root directory of the kanban board.
+        agent_name:    Fixed agent identity for this instance.  Generated as
+                       ``{adjective}-{noun}`` from the ``agent_names`` pool if
+                       omitted; stable across all calls on the same instance.
         activity_log:  When ``True``, append entries to ``activity.jsonl`` on
                        every mutation.  When ``None`` (default), reads from
                        ``config.yml`` ``activity_log`` field.
@@ -402,6 +407,7 @@ class KanbanEngine:
         self,
         kanban_dir: Path,
         *,
+        agent_name: str | None = None,
         activity_log: bool | None = None,
     ) -> None:
         self._kanban_dir = kanban_dir
@@ -409,9 +415,11 @@ class KanbanEngine:
         _validate_engine_config(self._config)
         self._tasks_dir = kanban_dir / self._config.tasks_dir
         self._archive_dir = kanban_dir / self._config.archive_dir
-        # fmt: off
-        self._agent_name: str = f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
-        # fmt: on
+        self._agent_name: str = (
+            agent_name
+            if agent_name is not None
+            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+        )
         effective_activity_log = (
             activity_log if activity_log is not None else self._config.activity_log
         )
@@ -422,6 +430,8 @@ class KanbanEngine:
         self._task_cache: dict[str, tuple[int, Task]] = {}
         self._archive_cache: dict[str, tuple[int, Task]] = {}
         self._id_to_filename: dict[int, str] = {}
+        self._agent_view = AgentView(self)
+        self._cockpit_view = CockpitView(self)
 
         # AC-C47: migration gate — new-schema boards only (no 'version' field)
         # Legacy boards used claimed_by; new-schema boards must not have it.
@@ -491,9 +501,6 @@ class KanbanEngine:
 
     def _status_rank(self) -> dict[str, int]:
         statuses = self._config.statuses
-        # Support both list[str] (new schema) and list[dict] (legacy schema)
-        if statuses and isinstance(statuses[0], dict):
-            return {s["name"]: i for i, s in enumerate(statuses)}
         return {s: i for i, s in enumerate(statuses)}
 
     # ------------------------------------------------------------------
@@ -507,6 +514,14 @@ class KanbanEngine:
         (including nested lists and dicts) does not affect engine state.
         """
         return self._config.model_copy(deep=True)
+
+    def agent_view(self) -> AgentView:
+        """Return the cached agent-facing view facade."""
+        return self._agent_view
+
+    def cockpit_view(self) -> CockpitView:
+        """Return the cached cockpit-facing view facade."""
+        return self._cockpit_view
 
     def refresh_config(self) -> None:
         """Reload config from disk and update all derived state.
@@ -538,9 +553,6 @@ class KanbanEngine:
             ValueError: *status* is not a configured status.
         """
         valid_statuses = set(self._config.statuses)
-        # Also support legacy list-of-dicts schema
-        if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
-            valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[union-attr]
         if status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
@@ -937,8 +949,6 @@ class KanbanEngine:
         """
         if status is not None:
             valid_statuses = set(self._config.statuses)
-            if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
-                valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
             if status not in valid_statuses:
                 msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
@@ -1017,8 +1027,6 @@ class KanbanEngine:
             ValueError:        ``status`` is not valid and is not ``"archived"``.
         """
         valid_statuses = set(self._config.statuses)
-        if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
-            valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
         if status != "archived" and status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
@@ -1168,12 +1176,7 @@ class KanbanEngine:
         Returns ``True`` when the task should be moved to the archive directory.
         """
         if outcome == "success":
-            raw_statuses = self._config.statuses
-            statuses = (
-                [s["name"] for s in raw_statuses]  # type: ignore[index]
-                if raw_statuses and isinstance(raw_statuses[0], dict)
-                else list(raw_statuses)
-            )
+            statuses = list(self._config.statuses)
             current_idx = (
                 statuses.index(record.status) if record.status in statuses else -1
             )
@@ -1232,8 +1235,6 @@ class KanbanEngine:
 
         if outcome == "reject":
             valid_statuses = set(self._config.statuses)
-            if valid_statuses and isinstance(next(iter(valid_statuses)), dict):
-                valid_statuses = {s["name"] for s in self._config.statuses}  # type: ignore[index]
             if move_to not in valid_statuses:
                 msg = f"Invalid move_to status {move_to!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
@@ -1520,9 +1521,57 @@ class AgentView:
     def __init__(self, engine: KanbanEngine) -> None:
         self.engine = engine
 
+    def list_tasks(self) -> None:
+        raise NotImplementedError
+
+    def show_task(self, task_id: int) -> None:
+        _ = task_id
+        raise NotImplementedError
+
+    def pick_tasks(self) -> None:
+        raise NotImplementedError
+
+    def create_task(self, title: str) -> None:
+        _ = title
+        raise NotImplementedError
+
+    def edit_task(self, task_id: int) -> None:
+        _ = task_id
+        raise NotImplementedError
+
+    def start_work(self, task_id: int) -> None:
+        _ = task_id
+        raise NotImplementedError
+
+    def end_work(self, task_id: int, *, outcome: str, note: str) -> None:
+        _ = (task_id, outcome, note)
+        raise NotImplementedError
+
 
 class CockpitView:
     """Minimal role-scoped wrapper for cockpit-facing engine use."""
 
     def __init__(self, engine: KanbanEngine) -> None:
         self.engine = engine
+
+    def list_tasks(self) -> None:
+        raise NotImplementedError
+
+    def show_task(self, task_id: int) -> None:
+        _ = task_id
+        raise NotImplementedError
+
+    def edit_task(self, task_id: int) -> None:
+        _ = task_id
+        raise NotImplementedError
+
+    def move_task(self, task_id: int, status: str) -> None:
+        _ = (task_id, status)
+        raise NotImplementedError
+
+    def release_task(self, task_id: int) -> None:
+        _ = task_id
+        raise NotImplementedError
+
+    def board_config(self) -> None:
+        raise NotImplementedError

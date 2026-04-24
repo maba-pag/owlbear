@@ -1,10 +1,10 @@
 ---
 id: 1062
 title: 'C-17: GREEN — engine storage integration'
-status: docs
+status: archived
 priority: needed
 created: 2026-04-21T10:44:12.250703+00:00
-updated: 2026-04-23T23:02:36.186203+00:00
+updated: 2026-04-24T02:52:55.553428+00:00
 tags:
 - phase:storage
 - brief:c
@@ -776,3 +776,69 @@ This is the 5th review cycle. Prior cycles fixed AC-C26 (divergent fixtures, cyc
 ### Verdict: PASS
 ### Action
 Advance to `docs`. Independent quality evidence is clean, all refined AC lines are covered by the current task-owned suite, and the remaining issues are informational comment drift rather than implementation or test-quality defects.
+[[2026-04-24]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Builder: "Files changed: none" in all cycles (pre-implemented pass-through). No behavioral change. `serve/kanban/README.md` already lists `sweep()` and `repair_storage()` accurately — no update needed. |
+| 2 | Module docstrings | No | N/A | No production source files changed by this task; builder notes all cycles report "Files changed: none". |
+| 3 | External attribution | No | N/A | No external patterns cited in task body or builder/test-writer notes. |
+| 4 | Research doc | No | N/A | No research slug mentioned in task body. |
+| 5 | Diagram maintenance (describes match) | No | N/A | `kanban.excalidraw` describes `serve/kanban/src/**` — matches scope, but no files in that glob were changed in this task. Only `serve/kanban/tests/test_engine_storage.py` was changed (test file, not in `src/**`). No footer update required. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/tests/test_engine_storage.py` | OUT (test file) | N/A |
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN (docstrings) | N/A — not changed by this task |
+| `serve/kanban/src/owlbear_kanban/corruption.py` | IN (docstrings) | N/A — not changed by this task |
+| `serve/kanban/src/owlbear_kanban/config_loader.py` | IN (docstrings) | N/A — not changed by this task |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1062-*` files found)
+[[2026-04-24]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-C19 | TestFromAC_ListTasksCorruption: mode-3a at test_engine_storage.py:231, mode-3b at :254; 41/41 pass | PASS |
+| AC-C20 | test_ac_c20 at :169; exact ERR_CORRUPT_DUPLICATE_ID asserted | PASS |
+| AC-C23 | test_ac_c23_* at :359,368,387; list[int] type + exact released-ID set | PASS |
+| AC-C24 | test_ac_c24 at :650; spy proves quarantine exists before AR creation | PASS |
+| AC-C25 | test_ac_c25_* at :683,704; action="failed" + quarantine retention + original-path absence | PASS |
+| AC-C26 | test_ac_c26 at :731; divergent fixtures + exact archive-content equality | PASS |
+| AC-C27 | test_ac_c27_* at :419,439; corrupt files untouched during sweep | PASS |
+| AC-C47 | TestFromAC_MigrationGate at :765-903; raise/no-raise branches + exact ERR_MIGRATION_REQUIRED | PASS |
+| AC-C49 | test_ac_c49_* at :916-937; concrete timedelta values + ERR_INVALID_CLAIM_TIMEOUT | PASS |
+| AC-C50 | test_ac_c50_* at :946-988; real config_loader.load_config path exercised | PASS |
+| AC-C52 | test_ac_c52_* at :523-705; body exact preservation, claimed_at clearing, updated advancement (refined AC separates write_task normalization) | PASS |
+| AC-C54 | TestFromAC_ARCreationSignature at :997-1064; body=str + status omitted from kwargs | PASS |
+| All RED tests from C-08 pass | quality-runner scoped: 41 passed, 0 failed | PASS |
+
+### Test Results
+- pytest (full suite): 1592 passed, 95 failed, 4 skipped. All 95 failures outside task scope (MCP models, sessions, YAML loader, cockpit, knowledge schema).
+- pytest (task-scoped): 41 passed, 0 failed, 0 skipped.
+- ruff: 17 workspace-wide; 3 in engine.py are pre-existing (builder: "Files changed: none" across all cycles). Task test file clean.
+
+### Architect Quality: 3/5
+Original AC-C19 ambiguous on mode-3 sub-variants; AC-C52 ambiguous on sweep-vs-serializer semantics. Both required architectural refinement across 5 review cycles. Refinements were appropriate but should have been caught at original AC authoring time.
+
+### Deduction Breakdown
+- AC quality ≤ 3: -.03
+- Lint violations (task scope): none (engine.py violations pre-existing, not task-introduced)
+- Missing AC evidence: none
+- Missing reviewer evidence: none (detailed 5-cycle PASS at 0.93)
+- Full-suite failures in task scope: none
+
+### Confidence: .97
+### Action: archive

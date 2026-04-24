@@ -99,17 +99,8 @@ ERR_CORRUPT_INVALID_PRIORITY = _make_corruption_code_type(
 )
 
 
-def _make_yaml() -> YAML:
-    """Return a round-trip YAML instance with timestamp resolution off."""
-    y = YAML(typ="rt")
-    _ts_tag = "tag:yaml.org,2002:timestamp"
-    for char_key in list(y.resolver.yaml_implicit_resolvers.keys()):
-        y.resolver.yaml_implicit_resolvers[char_key] = [
-            (tag, regexp)
-            for tag, regexp in y.resolver.yaml_implicit_resolvers[char_key]
-            if tag != _ts_tag
-        ]
-    return y
+# _make_yaml removed — dead code; callers use YAML(typ="safe") directly
+# or the shared make_yaml from yaml_rt.
 
 
 def _read_frontmatter(path: Path) -> tuple[str, dict, str]:
@@ -509,7 +500,9 @@ def _write_repaired(
 ) -> RepairOutcome:
     """Serialise the repaired frontmatter back to *path* atomically."""
     try:
-        y = YAML(typ="rt")
+        from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
+
+        y = make_yaml()
         cm = CommentedMap(fm)
         stream = io.StringIO()
         y.dump(cm, stream)

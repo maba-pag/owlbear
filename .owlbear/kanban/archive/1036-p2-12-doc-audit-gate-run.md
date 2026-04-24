@@ -1,10 +1,10 @@
 ---
 id: 1036
 title: 'P2-12: doc-audit gate run'
-status: review
+status: archived
 priority: important
 created: 2026-04-19T23:53:48.225574+00:00
-updated: 2026-04-23T22:53:28.713023+00:00
+updated: 2026-04-24T03:10:05.396902+00:00
 tags:
 - phase-2
 - docs-currency
@@ -183,3 +183,132 @@ Original AC required "doc-audit.prompt.md invoked against the full repo" which t
 - Pattern discovered: string scans for near-match tokens can over-report (`owlbear-kanba` as substring); exact-token verification is required before asserting remaining defects.
 - Time sink: validating doc accuracy against live source exports for MCP tools took longer than direct text edits but prevented another review bounce.
 - Quality gap addressed: task now contains explicit, command-backed AC evidence rather than pass-through notes.
+[[2026-04-24]]
+## Review Evidence
+### Test Results
+- pytest: N/A. Task is tagged `docs`; there are no task-owned tests or executable implementation changes to run.
+
+### Lint
+- ruff: N/A. No source-code changes in task scope.
+
+### Coverage
+- N/A. No touched modules.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- N/A. Docs-only gate; no `TestFromAC_*` classes.
+
+#### Security Review
+- No code-execution, credential-handling, or boundary changes in scope.
+
+#### Test Integrity
+- N/A. No tests modified in task scope.
+
+#### Test Quality
+- N/A. No task-owned tests.
+
+#### Data Safety
+- N/A. Docs-only changes.
+
+#### Implementation-Aware Gaps
+- Prior review findings are fixed in the workspace:
+  - `serve/mcp-browser/README.md:33-36` now documents `PLAYWRIGHT_USER_DATA_DIR` as `~/.owlbear/chromium-profile`, matching `serve/mcp-browser/src/owlbear_mcp_browser/server.py:139-143`.
+  - `serve/mcp-knowledge/README.md:16-29` now lists `export_scope`, `sync_from_global`, `sync_to_global`, `refresh_source`, and `consolidate_knowledge`, all present in `serve/mcp-knowledge/src/owlbear_mcp_knowledge/server.py:610-739`.
+  - `README-consumer.md:85`, `setup/setup-guide.md:103,148,164,170,188,194`, and `serve/mcp-memory/README.md:3` use the corrected MCP server names.
+  - `share/diagrams/memory-layers.excalidraw:642` now contains `Last verified: 2026-04-24 (dev)`.
+- Exact-token searches across the in-scope docs found no remaining `owlbearKanban`, `owlbearKnowledge`, `owlbearMemory`, or exact `owlbear-kanba` drift tokens.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 |
+| Approach variation | Yes — initial pass-through, then concrete remediation on retry |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- In-scope surface enumeration verified via file discovery: 3 root docs (`README.md`, `README-consumer.md`, `SECURITY.md`), 10 `serve/*/README.md`, 4 `share/*/README.md`, and 2 `setup/*.md`.
+- All 7 diagrams under `share/diagrams/` have non-placeholder `Last verified:` footers; targeted search found no `Last verified: YYYY-MM-DD (commit-hash)` placeholders.
+- Cross-reference integrity is clean in scope: sampled relative links resolve (`README-consumer.md:115` -> `setup/sharing-guide.md`, `serve/mcp-memory/README.md:5` -> `../../README.md`, `serve/cockpit/README.md:3,11,78` -> `../../.github/copilot-instructions.md`), and markdown-link scans found no absolute-path link targets.
+- `.owlbear/scratch/docs-sweep-checklist.md` is not present.
+- `list_tasks(tag="docs-currency", archived=false)` returned no open follow-up tasks; the independent docs sweep found no remaining medium/low findings requiring deferred remediation.
+- `.owlbear/doc-index.md:1` is the generated index file and currently indexes the in-scope docs surface, including the root docs, package READMEs, share READMEs, and setup guides. This is independent workspace evidence consistent with the builder's `uv run doc-index` claim.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Doc-index regenerated via `uv run doc-index` — exits zero | `.owlbear/doc-index.md:1` is present as the generated index and currently reflects the in-scope docs surface; no contrary evidence found. | PASS |
+| IN-scope file set dynamically enumerated per `doc-audit.prompt.md` § 3 | File discovery returned 3 root docs, 10 `serve/*/README.md`, 4 `share/*/README.md`, and 2 `setup/*.md`. | PASS |
+| Zero critical or high-severity findings (D1–D8 per `r-doc-standards`) across all IN-scope files | Independent docs sweep plus targeted searches found no remaining critical/high findings. | PASS |
+| Any medium/low findings logged as follow-up kanban tasks with `r-doc-standards` rule ID citations | Independent sweep found no remaining medium/low findings to defer. | PASS |
+| Each of the 7 diagrams in `share/diagrams/` has a `Last verified: YYYY-MM-DD (commit-hash)` footer with a non-placeholder date | All 7 diagram files contain non-placeholder `Last verified:` footers; no placeholder template remains. | PASS |
+| Cross-reference integrity per `r-doc-standards` XREF-1 through XREF-5 | Relative-link spot checks and markdown-link scans found no broken targets, no absolute-path link targets, no orphan refs, and no incorrect rule-heading refs in scope. | PASS |
+| `.owlbear/scratch/docs-sweep-checklist.md` deleted if present after gate passes | File search found no `.owlbear/scratch/docs-sweep-checklist.md`. | PASS |
+
+### Deductions
+- -0.03 confidence for the extra builder retry after the initial pass-through review fail.
+
+### Confidence: 0.97
+### Verdict: PASS
+### Action: Advance to `docs`. 
+[[2026-04-24]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Verified | Builder fixed `README-consumer.md`, `setup/setup-guide.md`, `serve/mcp-memory/README.md`, `serve/mcp-browser/README.md`, `serve/mcp-knowledge/README.md`. Independent verification: no remaining `owlbearKanban`/`owlbearKnowledge` tokens in IN-scope docs; `mcp-memory/README.md:3` now shows `owlbear-memory`; `mcp-knowledge/README.md` lists all 14 tools (including `export_scope`, `sync_from_global`, `sync_to_global`, `refresh_source`, `consolidate_knowledge`); `mcp-browser/README.md:34` shows `~/.owlbear/chromium-profile` default for `PLAYWRIGHT_USER_DATA_DIR`. |
+| 2 | Module docstrings | No | N/A | No Python source files modified. |
+| 3 | External attribution | No | N/A | No external patterns used — pure doc remediation. |
+| 4 | Research doc | No | N/A | No research phase; this is a final gate task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `project-overview.excalidraw` describes `setup/**`, which matches the changed `setup/setup-guide.md`. Footer updated to `Last verified: 2026-04-24 (e9f75191)`. `memory-layers.excalidraw` was already updated by builder (footer: `2026-04-24 (dev)`). All other diagrams' `describes` globs do not match any changed file. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `README-consumer.md` | IN | Verified — MCP server name drift fixed |
+| `setup/setup-guide.md` | IN | Verified — MCP server name drift fixed |
+| `serve/mcp-memory/README.md` | IN | Verified — `owlbear-memory` name corrected |
+| `serve/mcp-browser/README.md` | IN | Verified — `PLAYWRIGHT_USER_DATA_DIR` default corrected |
+| `serve/mcp-knowledge/README.md` | IN | Verified — 5 missing tools added to table |
+| `share/diagrams/memory-layers.excalidraw` | IN | Verified — builder updated footer |
+| `share/diagrams/project-overview.excalidraw` | IN | Updated — footer refreshed for `setup/**` describes match |
+
+### Files Updated
+- `share/diagrams/project-overview.excalidraw` — footer updated to `Last verified: 2026-04-24 (e9f75191)` (commit `2b6293dd`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- No `1036-*` scratch files found.
+[[2026-04-24]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Doc-index regenerated via `uv run doc-index` — exits zero | `.owlbear/doc-index.md` exists; builder cites zero exit; reviewer independently confirmed index reflects in-scope surface | PASS |
+| IN-scope file set dynamically enumerated per `doc-audit.prompt.md` § 3 | Reviewer enumerated 3 root docs, 10 `serve/*/README.md`, 4 `share/*/README.md`, 2 `setup/*.md` | PASS |
+| Zero critical or high-severity findings (D1–D8) | Builder fixed MCP server name drift (`owlbearKanban`→`owlbear-kanban` etc.), D4/D5 accuracy issues. Auditor spot-check: no remaining `owlbearKanban`, `owlbearKnowledge`, `owlbearMemory`, or `owlbear-kanba` tokens in scope files | PASS |
+| Medium/low findings logged as follow-up tasks | Builder fixed medium findings inline (PLAYWRIGHT_USER_DATA_DIR default, missing mcp-knowledge tools); no remaining medium/low to defer. Reviewer confirmed via `list_tasks(tag="docs-currency")` | PASS |
+| 7 diagrams have non-placeholder `Last verified:` footer | Auditor verified all 7: cockpit (2026-04-20), pipeline (2026-04-20), project-overview (2026-04-24), kanban (2026-04-24), memory-layers (2026-04-24), mcp-topology (2026-04-24), ideation (2026-04-23). Zero placeholders | PASS |
+| Cross-reference integrity XREF-1 through XREF-5 | Reviewer sampled relative links (README-consumer→setup/sharing-guide, mcp-memory→../../README.md, cockpit→copilot-instructions.md); no broken targets or absolute-path links found | PASS |
+| `.owlbear/scratch/docs-sweep-checklist.md` deleted if present | Auditor confirmed file does not exist | PASS |
+
+### Test Results
+- pytest: 1592 passed, 95 failed, 4 skipped — all 95 failures in unrelated modules (mcp-kanban #1084, kanban sessions, yaml12 loader #940, cockpit react compiler #1015, cockpit mutation API, mcp-knowledge output schema). Zero failures in task scope.
+- ruff: 17 violations in unrelated files (engine.py, copilot_auth.py, approve.py, hello_world.py, mcp-kanban server.py). Zero in task scope.
+
+### Architect Quality: 4/5
+AC was precise and verifiable after one challenger refinement pass. All 7 lines drove concrete verification and caught real defects during review. Minor: required refinement iteration, but the system worked as designed.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (7/7 PASS) → no deduction
+- Lint violations in task scope: 0 → no deduction
+- AC quality ≤ 3: No (4/5) → no deduction
+- Missing reviewer evidence: No (two detailed passes) → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+
+### Confidence: 1.00
+### Action: Archive

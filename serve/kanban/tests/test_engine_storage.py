@@ -70,8 +70,16 @@ priorities:
   - needed
   - critical
 entry_status: research
+terminal_status: done
 wave_size: 4
-agent_map: {}
+agent_map:
+  research: researcher
+  backlog: architect
+  todo: builder
+  in-progress: builder
+  review: reviewer
+  docs: doc-writer
+  done: auditor
 agent_types: {}
 agent_compatibility: {}
 non_impl_tags: [research, docs]

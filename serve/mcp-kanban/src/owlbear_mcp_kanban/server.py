@@ -388,8 +388,8 @@ for _tool_name in (
     "end_work",
 ):
     _tool_obj = next(
-        t for t in mcp._tool_manager._tools.values() if t.name == _tool_name
-    )  # noqa: SLF001
+        t for t in mcp._tool_manager._tools.values() if t.name == _tool_name  # noqa: SLF001
+    )
     _tool_obj.fn_metadata.output_schema = _kanbantask_schema
 
 

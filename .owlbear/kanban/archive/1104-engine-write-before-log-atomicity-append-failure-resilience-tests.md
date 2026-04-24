@@ -1,10 +1,10 @@
 ---
 id: 1104
 title: 'Engine write-before-log atomicity: append-failure resilience tests'
-status: done
+status: archived
 priority: important
 created: 2026-04-22T20:16:05.719721+00:00
-updated: 2026-04-23T22:53:35.259792+00:00
+updated: 2026-04-24T02:35:45.529073+00:00
 tags:
 - phase:engine
 - brief:b
@@ -1083,3 +1083,39 @@ Advance to docs. The current workspace state satisfies the final refined AC, the
 - .owlbear/scratch/qr-1104-pytest.txt
 - .owlbear/scratch/quality-1104-pytest.txt
 - .owlbear/scratch/quality-runner-1104.txt
+[[2026-04-24]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test file exists (24 tests) | quality-runner: 24 passed, 0 failed | PASS |
+| Inject OSError on emit for all 6 mutators | Reviewer cycle 6 mapped all 6 mutators + sweep to specific test lines | PASS |
+| Full model equality (pre-mutation snapshot match) | 10 `model_dump()` equality tests (6 direct + 2 archive + 2 block/reject); spot-checked at test:370-400 | PASS |
+| Original emit exception identity preserved | 16 `pytest.raises(OSError, match="disk full")` assertions per loop-breaker 2 addendum | PASS |
+| Archive-path rollback keeps file in tasks/ | Archive tests at test:203,274,520,543 | PASS |
+| sweep per-task rollback + continuation | 3-task continuation test at test:593-618 proves loop continues past failure | PASS |
+| Activity log integrity | `_assert_no_activity_written` + `_assert_all_valid_json` helpers | PASS |
+| Mutators capture pre-mutation snapshot | engine.py:853,930,976,1027,1145,1226 call model_copy(deep=True); spot-checked at engine.py:883 | PASS |
+| Rollback rewrites original task on emit failure | engine.py:929-932 (edit_task pattern); consistent across all 6 mutators | PASS |
+| Archive paths undo _move_file before rollback | engine.py:981-982 (move_task), engine.py:1182-1183 (end_work) | PASS |
+| Original exception re-raised after rollback | bare `raise` in all handlers; proven by match="disk full" tests | PASS |
+| end_work block/reject branches covered | Tests at test:553,574,593,610 per loop-breaker 3 addendum | PASS |
+
+### Test Results
+- pytest (task-scoped): 24 passed, 0 failed
+- pytest (full suite): 1582 passed, 95 failed (pre-existing, none in task scope)
+- ruff (task-owned files): clean per 6 consecutive reviewer scoped runs; broader violations (A002 at engine.py:245 in _apply_session_filter, RUF100, PLC0415) are pre-existing outside rollback paths
+
+### Architect Quality: 4/5
+Clear design decision (rollback over propagate/log-ahead), specific refined AC per mutator type, challenger engaged 3 times with substantive pushback. Minor gaps (block/reject branches, exception identity) were real but resolved mechanically through loop-breaker refinement rather than redesign.
+
+### Deduction Breakdown
+- AC lines: 12/12 with specific evidence → no deduction
+- Lint: task-owned files clean → no deduction
+- AC quality: 4/5 → no deduction
+- Reviewer evidence: present, detailed, 6 cycles, final PASS (.93) → no deduction
+- Full-suite failures in task scope: none → no deduction
+- Informational: rollback-I/O double-failure accepted as architectural debt in failure-mode map; module coverage uplift tracked in #1110
+
+### Confidence: .98
+### Action: archive

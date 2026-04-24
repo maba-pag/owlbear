@@ -16,6 +16,8 @@ microsecond precision drift on round-trips.
 
 from __future__ import annotations
 
+import re
+from datetime import timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -30,6 +32,92 @@ NotFoundError = _errors.NotFoundError
 ConcurrencyError = _errors.ConcurrencyError
 ConfigError = _errors.ConfigError
 MigrationRequiredError = _errors.MigrationRequiredError
+
+
+_DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
+
+
+def _parse_claim_timeout(value: str) -> timedelta:
+    """Parse claim_timeout strings like 1h, 30m, 2d, 30s."""
+    m = _DURATION_RE.match(value.strip())
+    if not m or not any(m.groups()):
+        raise ConfigError(
+            code="ERR_INVALID_CLAIM_TIMEOUT",
+            user_message=(
+                f"Invalid claim_timeout format: {value!r} - expected e.g. "
+                "'1h', '30m', '2h30m', '30s', '2d'"
+            ),
+        )
+    days = int(m.group(1) or 0)
+    hours = int(m.group(2) or 0)
+    minutes = int(m.group(3) or 0)
+    seconds = int(m.group(4) or 0)
+    return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+
+
+def _validate_status_and_priority(statuses: list[str], priorities: list[str]) -> None:
+    if not statuses:
+        raise ConfigError(
+            code="ERR_INVALID_STATUS",
+            user_message="config.statuses must contain at least one status",
+        )
+    if not priorities:
+        raise ConfigError(
+            code="ERR_INVALID_PRIORITY",
+            user_message="config.priorities must contain at least one priority",
+        )
+
+
+def _validate_entry_and_terminal(
+    statuses: list[str], entry_status: str, terminal_status: str
+) -> None:
+    if entry_status not in statuses:
+        raise ConfigError(
+            code="ERR_ENTRY_STATUS_INVALID",
+            user_message=f"entry_status {entry_status!r} must be one of statuses: {statuses}",
+        )
+    if terminal_status not in statuses or terminal_status != statuses[-1]:
+        raise ConfigError(
+            code="ERR_TERMINAL_STATUS_INVALID",
+            user_message=(
+                f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
+            ),
+        )
+
+
+def _validate_agent_map(statuses: list[str], agent_map: dict[str, Any]) -> None:
+    # Allow empty agent_map (default); only validate if explicitly configured
+    if not agent_map:
+        return
+    missing_statuses = [status for status in statuses if status not in agent_map]
+    if missing_statuses:
+        raise ConfigError(
+            code="ERR_INVALID_STATUS",
+            user_message=f"agent_map missing status entries: {missing_statuses}",
+        )
+
+
+def _validate_agent_compatibility(compatibility: dict[str, Any]) -> None:
+    compatibility_sets: dict[str, set[str]] = {}
+    for agent, peers in compatibility.items():
+        if not isinstance(peers, list):
+            raise ConfigError(
+                code="ERR_INVALID_STATUS",
+                user_message=f"agent_compatibility[{agent!r}] must be a list[str]",
+            )
+        compatibility_sets[agent] = {str(peer) for peer in peers}
+
+    for agent, peers in compatibility_sets.items():
+        for peer in peers:
+            reverse = compatibility_sets.get(peer)
+            if reverse is None or agent not in reverse:
+                raise ConfigError(
+                    code="ERR_INVALID_STATUS",
+                    user_message=(
+                        "agent_compatibility must be symmetric: "
+                        f"{agent!r} -> {peer!r} requires {peer!r} -> {agent!r}"
+                    ),
+                )
 
 
 class BoardInfo(BaseModel):
@@ -72,19 +160,22 @@ class BoardConfig(BaseModel):
 
     # New schema fields
     entry_status: str = "research"
+    terminal_status: str = "done"
     wave_size: int = 4
     agent_map: dict[str, Any] = Field(default_factory=dict)
     agent_types: dict[str, Any] = Field(default_factory=dict)
     agent_compatibility: dict[str, Any] = Field(default_factory=dict)
     non_impl_tags: list[str] = Field(default_factory=list)
-    archival_reasons: list[str] = Field(
-        default_factory=lambda: [
-            "completed",
-            "deprecated",
-            "dropped",
-            "duplicate",
-            "wontfix",
-        ]
+    archival_reasons: frozenset[str] = Field(
+        default_factory=lambda: frozenset(
+            {
+                "completed",
+                "deprecated",
+                "dropped",
+                "duplicate",
+                "wontfix",
+            }
+        )
     )
     status_predicates: dict[str, Any] = Field(default_factory=dict)
 
@@ -124,6 +215,19 @@ class BoardConfig(BaseModel):
         """Return statuses as a list of plain strings."""
         return self.statuses
 
+    @model_validator(mode="after")
+    def _validate_semantics(self) -> BoardConfig:
+        """Validate semantic invariants required by engine and direct model usage."""
+        _validate_status_and_priority(self.statuses, self.priorities)
+        _validate_entry_and_terminal(
+            self.statuses, self.entry_status, self.terminal_status
+        )
+        _validate_agent_map(self.statuses, self.agent_map)
+        _parse_claim_timeout(self.claim_timeout)
+        _validate_agent_compatibility(self.agent_compatibility)
+
+        return self
+
 
 class Task(BaseModel):
     """Schema for a kanban task file — frontmatter fields plus markdown body.
@@ -158,6 +262,8 @@ class Task(BaseModel):
 
     # Claim field — Brief C uses claimed_at only
     claimed_at: str | None = None
+    # Backward-compatible in-memory alias; never persisted to disk.
+    claimed_by: str | None = Field(default=None, exclude=True)
 
     # Archive fields added in Brief C
     archival_reason: str | None = None

@@ -1,54 +1,69 @@
 [
   {
-    "cycle": "2026-04-24 periodic",
-    "summary": "3 inbox entries processed. MCP channel unavailable in session (owlbearMemory tools not registered). 2 promoted, 1 kept (MEDIUM). 1 duplicate discarded (absorbed into existing)."
-  },
-  {
-    "entry_id": "1034-auditor.md",
-    "content_preview": "AC for diagram tasks not grounded in authority files — 13 review cycles. Machine-readable artifact AC must",
+    "entry_id": "59b8aa0f-79b6-4119-83a4-63756039dbc7",
+    "content_preview": "When implementing state machines from JSONL event logs, test ALL reachable transition paths...",
     "recommendation": "approve",
-    "reason": "HIGH — 3 actionable, non-obvious findings about architect AC quality for diagram tasks. No overlap with existing. Promoted to review-ac-architect-authority-grounding.md."
-  },
-  {
-    "entry_id": "1061-reviewer.md",
-    "content_preview": "Second review can shift from impl-fail to test-gap-fail; re-check brief authority; subprocess coverage gaps need explicit assertions",
-    "recommendation": "keep",
-    "reason": "MEDIUM — actionable reviewer routing pattern (implementation-fail vs test-gap-fail, todo routing rule), single occurrence, keep for next cycle."
-  },
-  {
-    "entry_id": "1062-reviewer.md",
-    "content_preview": "Anchor review verdicts to latest refinement; distinguish behavioral vs branch-specific proof; literal AC governs",
-    "recommendation": "approve",
-    "reason": "MIXED — bullet (a) exact duplicate of review-latest-refinement-authority.md (discarded); bullets (b)+(c) HIGH/MEDIUM, promoted to review-ac-text-governs-test-drift.md."
-  },
-  {
-    "entry_id": "e236a333-4813-4094-8253-2a4a50c4aac3",
-    "content_preview": "Web-fetch SSRF prevention recipe (CWE-918): (1) resolve hostname via asyncio.to_thread(socke",
-    "recommendation": "approve",
-    "reason": "Already approved. HIGH signal SSRF prevention recipe — concrete, actionable, security-critical, non-obvious."
-  },
-  {
-    "entry_id": "d380dd83-c1e2-47ee-9ed3-58ad92c54660",
-    "content_preview": "PyYAML SafeLoader silently coerces YAML 1.1 boolean aliases: yes/no/on/off/y/n become Python ",
-    "recommendation": "approve",
-    "reason": "Already approved. HIGH signal YAML coercion footgun — specific fix, non-obvious, real bug in kanban task files."
-  },
-  {
-    "entry_id": "32880b2b-01a1-4a87-bc0d-1e64ef185430",
-    "content_preview": "Testing mtime-based cache eviction: patching only the downstream function is insufficient — if",
-    "recommendation": "approve",
-    "reason": "Already approved. HIGH signal test-writer pattern — concrete recipe for cache-eviction test reliability."
+    "reason": "Already approved — no action; high-signal finding about JSONL state machine path coverage."
   },
   {
     "entry_id": "d46997f6-6972-4498-9be0-0de7a2a6df6c",
-    "content_preview": "Python 3.11+ changed ipaddress.ip_address.is_private to return True for ALL non-globally-routa",
+    "content_preview": "Python 3.11+ changed ipaddress.ip_address.is_private to return True for ALL non-globally-routable...",
     "recommendation": "approve",
-    "reason": "Already approved. HIGH signal Python 3.11 behavioral change — saved a REJECT; specific workaround (use 93.184.216.34)."
+    "reason": "Already approved — no action; specific Python 3.11+ is_private behaviour, confirmed actionable."
   },
   {
-    "entry_id": "59b8aa0f-79b6-4119-83a4-63756039dbc7",
-    "content_preview": "When implementing state machines from JSONL event logs, test ALL reachable transition paths —",
+    "entry_id": "e236a333-4813-4094-8253-2a4a50c4aac3",
+    "content_preview": "Web-fetch SSRF prevention recipe (CWE-918): resolve hostname via asyncio.to_thread(socket.getaddrinfo)...",
     "recommendation": "approve",
-    "reason": "Already approved. HIGH signal test coverage pattern — enumerate all state-transition paths explicitly."
+    "reason": "Already approved — no action; authoritative SSRF recipe with implementation reference."
+  },
+  {
+    "entry_id": "d380dd83-c1e2-47ee-9ed3-58ad92c54660",
+    "content_preview": "PyYAML SafeLoader silently coerces YAML 1.1 boolean aliases: yes/no/on/off/y/n become Python True/False...",
+    "recommendation": "approve",
+    "reason": "Already approved — no action; specific PyYAML pitfall with concrete fix pattern."
+  },
+  {
+    "entry_id": "32880b2b-01a1-4a87-bc0d-1e64ef185430",
+    "content_preview": "Testing mtime-based cache eviction: patching only the downstream function is insufficient...",
+    "recommendation": "approve",
+    "reason": "Already approved — no action; mtime cache test pattern, actionable and non-obvious."
+  },
+  {
+    "entry_id": "task-1063:contradictory-contracts",
+    "content_preview": "Contract-enforcement tests should avoid mixing must-raise and must-return-task on identical inputs",
+    "recommendation": "approve",
+    "reason": "HIGH — new, non-obvious, recurring (9 retries). Promoted to /memories/repo/review-contradictory-test-contracts.md."
+  },
+  {
+    "entry_id": "task-1113:deep-copy-nested-mutation",
+    "content_preview": "Deep-copy ACs need nested-mutable mutation, not just top-level list mutation",
+    "recommendation": "reject",
+    "reason": "DUPLICATE — already captured in /memories/repo/review-deep-copy-random-stability-proof.md."
+  },
+  {
+    "entry_id": "task-1113:scoped-coverage-gate",
+    "content_preview": "For narrow coverage-slice tasks, gate on AC proof not broader-suite debt",
+    "recommendation": "reject",
+    "reason": "DUPLICATE — already captured in /memories/repo/review-module-coverage-scoped-runs.md."
+  },
+  {
+    "entry_id": "task-1113:set-equality-dedup",
+    "content_preview": "Set equality is a false-green for dedup ACs because it hides multiplicity",
+    "recommendation": "reject",
+    "reason": "LOW — too implementation-specific to the dedup test pattern; not broadly actionable."
+  },
+  {
+    "entry_id": "task-1118:builder-on-test-only-task",
+    "content_preview": "Builder dispatched on test-only refactor instead of test-writer; role/task mismatch",
+    "recommendation": "keep",
+    "reason": "MEDIUM — single occurrence routing issue; keep for next cycle to confirm recurrence before promoting."
+  },
+  {
+    "entry_id": "task-1068:stale-external-proof",
+    "content_preview": "Task-owned suite can be green while cited external proof (stale fixture) blocks builder",
+    "recommendation": "keep",
+    "reason": "MEDIUM — partially covered by review-module-coverage-scoped-runs; single occurrence, keep for next cycle."
   }
 ]
+

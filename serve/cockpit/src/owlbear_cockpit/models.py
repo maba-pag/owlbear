@@ -39,10 +39,11 @@ class TaskDetailOut(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _coerce_claimed(cls, data: object) -> object:
-        """Derive claimed bool from claimed_by field."""
-        if isinstance(data, dict) and "claimed_by" in data:
+        """Derive claimed bool from claimed_at field."""
+        if isinstance(data, dict):
             data = dict(data)
-            data["claimed"] = data["claimed_by"] is not None
+            claimed_at = data.get("claimed_at")
+            data["claimed"] = claimed_at is not None
         return data
 
 

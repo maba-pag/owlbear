@@ -12,29 +12,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 from owlbear_kanban.models import BoardConfig
-
-_TIMESTAMP_TAG = "tag:yaml.org,2002:timestamp"
-
-
-def _make_yaml() -> YAML:
-    """Return a ruamel.yaml YAML instance (round-trip) with timestamp resolver off."""
-    y = YAML(typ="rt")
-    # Build an instance-level copy of the implicit-resolver table that omits
-    # the timestamp tag. Setting the attribute on the *instance* shadows the
-    # class-level dict; no global side effects.
-    y.resolver.yaml_implicit_resolvers = {
-        char: [(tag, regexp) for tag, regexp in pairs if tag != _TIMESTAMP_TAG]
-        for char, pairs in y.resolver.yaml_implicit_resolvers.items()
-    }
-    return y
-
+from owlbear_kanban.yaml_rt import make_yaml as _make_yaml
 
 # ---------------------------------------------------------------------------
 # Public API

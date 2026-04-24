@@ -1,10 +1,10 @@
 ---
 id: 1065
 title: 'B-01: RED — models + errors tests'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21T10:47:39.046535+00:00
-updated: 2026-04-24T02:26:44.237596+00:00
+updated: 2026-04-24T02:30:20.665517+00:00
 tags:
 - phase:engine
 - brief:b
@@ -15,8 +15,8 @@ depends_on:
 - 1059
 blocked: false
 block_reason:
-claimed_by: jade-cliff
-claimed_at: 2026-04-24T02:26:44.237596+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -763,3 +763,31 @@ Action: advance to docs.
 
 ### Scratch Files Cleaned
 - None (no `1065-*` scratch files existed)
+[[2026-04-24]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| TaskSummary §2.1 fields incl. computed claimed, dep_status | `_coerce_claimed` validator at models.py#L177-L187; contradictory-input proofs at test_engine_models.py#L156,L161; dep_status field at models.py#L171 | PASS |
+| TaskFull extends TaskSummary + created/updated/body | `issubclass(TaskFull, TaskSummary)` proof at test_engine_models.py#L247; TaskFull at models.py#L259 | PASS |
+| DispatchEntry has agent field per §2.3+D24 | models.py#L267-L278; tests at test_engine_models.py#L289 | PASS |
+| Wave has index:int + tasks:list[DispatchEntry] | models.py#L280-L284; tests at test_engine_models.py#L334 | PASS |
+| Response envelopes (4 types) | models.py#L287-L312; tests at test_engine_models.py#L371 | PASS |
+| AC16: No file field in projections | No file field declared in any projection model; tests at test_engine_models.py#L172 | PASS |
+| AC17: No claimed_by; claimed_at+claimed present | claimed_by excluded by validator; tests at test_engine_models.py#L193 | PASS |
+| KanbanError code+user_message per §3.6+D57 | Base class at models.py#L362-L371; tests at test_engine_models.py#L454 | PASS |
+| Error code catalogue all ERR_* | KANBAN_ERROR_CODES frozenset at models.py#L320; strict guard rejects unknown codes; negative test at test_engine_models.py#L543 | PASS |
+| All tests fail (RED phase) | Original RED evidence in task body (ImportError at collection) | PASS |
+
+### Test Results
+- pytest: 124 passed, 0 failed (quality-runner full mode)
+- ruff: clean
+
+### Architect Quality: 3/5
+Original AC lines were insufficiently specific about computed-field override semantics ("computed claimed" did not specify contradictory-input behavior), inheritance proof requirements ("extends" did not distinguish subclass from field-superset), and error catalogue enforcement (no mention of test-only whitelist prohibition). Required 2 architect loop-breaker interventions across 4+ review cycles to make AC testable. The interventions themselves were well-targeted and surgical.
+
+### Deduction Breakdown
+- AC quality ≤ 3: -0.03
+
+### Confidence: 0.97
+### Action: archive

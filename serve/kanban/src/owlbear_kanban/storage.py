@@ -27,12 +27,14 @@ import io
 import re
 from datetime import UTC, datetime
 from pathlib import Path  # noqa: TC003
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 from pydantic import ValidationError
-from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
+
+if TYPE_CHECKING:
+    from ruamel.yaml import YAML
 
 from owlbear_kanban.activity_store import (
     append_activity_event,
@@ -89,16 +91,9 @@ _WINDOWS_RESERVED: frozenset[str] = frozenset(
 
 def _make_yaml() -> YAML:
     """Return a round-trip ruamel YAML instance with timestamp resolver disabled."""
-    y = YAML(typ="rt")
-    _ = y.resolver.versioned_resolver
-    for resolver_dict in y.resolver._version_implicit_resolver.values():  # noqa: SLF001
-        for char_key in list(resolver_dict.keys()):
-            resolver_dict[char_key] = [
-                (tag, regexp)
-                for tag, regexp in resolver_dict[char_key]
-                if tag != _TIMESTAMP_TAG
-            ]
-    return y
+    from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
+
+    return make_yaml()
 
 
 def generate_slug(title: str) -> str:
@@ -247,22 +242,19 @@ def save_config(config: BoardConfig, kanban_dir: Path) -> None:
         config:     :class:`BoardConfig` to write.
         kanban_dir: Root directory of the kanban board.
     """
-    from ruamel.yaml import YAML  # noqa: PLC0415
+    from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     config_path = kanban_dir / "config.yml"
     data = config.model_dump()
     # Remove legacy-only output noise
     for legacy_key in ("board", "version", "defaults", "activity_log"):
         data.pop(legacy_key, None)
+    
+    # Convert frozenset to list for YAML serialization (archival_reasons)
+    if "archival_reasons" in data and isinstance(data["archival_reasons"], frozenset):
+        data["archival_reasons"] = sorted(data["archival_reasons"])
 
-    y = YAML(typ="rt")
-    _ts_tag = "tag:yaml.org,2002:timestamp"
-    for char_key in list(y.resolver.yaml_implicit_resolvers.keys()):
-        y.resolver.yaml_implicit_resolvers[char_key] = [
-            (tag, regexp)
-            for tag, regexp in y.resolver.yaml_implicit_resolvers[char_key]
-            if tag != _ts_tag
-        ]
+    y = make_yaml(explicit_start=True)
     cm = CommentedMap(data)
     stream = io.StringIO()
     y.dump(cm, stream)

@@ -312,3 +312,133 @@ class TestFromAC_CockpitViewMethodStubs:
         view = CockpitView(_make_engine(tmp_path))
         with pytest.raises(NotImplementedError):
             view.board_config()
+
+
+# ---------------------------------------------------------------------------
+# Role-view accessors on KanbanEngine (engine.agent_view / engine.cockpit_view)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RoleViewAccessors:
+    """AC: AgentView and CockpitView constructed at init and accessible via engine accessors."""
+
+    def test_engine_agent_view_returns_agent_view_instance(self, tmp_path: Path) -> None:
+        """engine.agent_view() must return an AgentView instance."""
+        engine = _make_engine(tmp_path)
+        view = engine.agent_view()
+        assert isinstance(view, AgentView), (
+            f"engine.agent_view() must return AgentView, got {type(view).__name__}"
+        )
+
+    def test_engine_cockpit_view_returns_cockpit_view_instance(self, tmp_path: Path) -> None:
+        """engine.cockpit_view() must return a CockpitView instance."""
+        engine = _make_engine(tmp_path)
+        view = engine.cockpit_view()
+        assert isinstance(view, CockpitView), (
+            f"engine.cockpit_view() must return CockpitView, got {type(view).__name__}"
+        )
+
+    def test_engine_agent_view_same_instance_across_calls(self, tmp_path: Path) -> None:
+        """engine.agent_view() must return the same cached instance on repeated calls."""
+        engine = _make_engine(tmp_path)
+        assert engine.agent_view() is engine.agent_view(), (
+            "engine.agent_view() must return the same cached AgentView instance"
+        )
+
+    def test_engine_cockpit_view_same_instance_across_calls(self, tmp_path: Path) -> None:
+        """engine.cockpit_view() must return the same cached instance on repeated calls."""
+        engine = _make_engine(tmp_path)
+        assert engine.cockpit_view() is engine.cockpit_view(), (
+            "engine.cockpit_view() must return the same cached CockpitView instance"
+        )
+
+    def test_engine_agent_view_has_engine_reference(self, tmp_path: Path) -> None:
+        """AgentView returned by engine.agent_view() must hold a reference to the engine."""
+        engine = _make_engine(tmp_path)
+        view = engine.agent_view()
+        assert view.engine is engine, (
+            "AgentView.engine must reference the engine that constructed it"
+        )
+
+    def test_engine_cockpit_view_has_engine_reference(self, tmp_path: Path) -> None:
+        """CockpitView returned by engine.cockpit_view() must hold a reference to the engine."""
+        engine = _make_engine(tmp_path)
+        view = engine.cockpit_view()
+        assert view.engine is engine, (
+            "CockpitView.engine must reference the engine that constructed it"
+        )
+
+
+# ---------------------------------------------------------------------------
+# BoardConfig direct model validation (model-level semantic invariants — D29, D24, D63)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BoardConfigDirectValidation:
+    """AC: BoardConfig is Pydantic model with all fields validated at init.
+
+    Tests that semantic invariants are enforced when constructing BoardConfig
+    directly (not via engine or YAML load), verifying the model_validator path.
+    """
+
+    def test_boardconfig_entry_status_not_in_statuses_raises(self) -> None:
+        """Direct BoardConfig() with entry_status not in statuses → ConfigError."""
+        from owlbear_kanban.models import ConfigError
+
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig(
+                statuses=["research", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "done": "d"},
+                entry_status="missing",
+            )
+        assert "ERR_ENTRY_STATUS_INVALID" in exc_info.value.code
+
+    def test_boardconfig_terminal_status_not_last_raises(self) -> None:
+        """Direct BoardConfig() with terminal_status != statuses[-1] → ConfigError."""
+        from owlbear_kanban.models import ConfigError
+
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig(
+                statuses=["research", "todo", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "todo": "b", "done": "d"},
+                terminal_status="todo",  # not last
+            )
+        assert "ERR_TERMINAL_STATUS_INVALID" in exc_info.value.code
+
+    def test_boardconfig_incomplete_agent_map_raises(self) -> None:
+        """Direct BoardConfig() with agent_map missing a status → ConfigError (D24)."""
+        from owlbear_kanban.models import ConfigError
+
+        with pytest.raises(ConfigError):
+            BoardConfig(
+                statuses=["research", "backlog", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "done": "d"},  # "backlog" missing
+            )
+
+    def test_boardconfig_invalid_claim_timeout_raises(self) -> None:
+        """Direct BoardConfig() with unparseable claim_timeout → ConfigError (D29)."""
+        from owlbear_kanban.models import ConfigError
+
+        with pytest.raises(ConfigError) as exc_info:
+            BoardConfig(
+                statuses=["research", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "done": "d"},
+                claim_timeout="bad_format",
+            )
+        assert "ERR_INVALID_CLAIM_TIMEOUT" in exc_info.value.code
+
+    def test_boardconfig_asymmetric_agent_compatibility_raises(self) -> None:
+        """Direct BoardConfig() with non-symmetric agent_compatibility → ConfigError (D63)."""
+        from owlbear_kanban.models import ConfigError
+
+        with pytest.raises(ConfigError):
+            BoardConfig(
+                statuses=["research", "done"],
+                priorities=["needed"],
+                agent_map={"research": "r", "done": "d"},
+                agent_compatibility={"builder": ["reviewer"]},  # reviewer not reciprocating
+            )

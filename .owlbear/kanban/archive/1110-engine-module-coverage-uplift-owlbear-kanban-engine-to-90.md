@@ -1,10 +1,10 @@
 ---
 id: 1110
 title: 'Engine module coverage uplift: owlbear_kanban.engine to 90%+'
-status: todo
+status: archived
 priority: nice-to-have
 created: 2026-04-23T16:03:23.771419+00:00
-updated: 2026-04-23T23:20:57.974329+00:00
+updated: 2026-04-24T03:45:50.279769+00:00
 tags:
 - scope:kanban
 - phase:engine
@@ -271,3 +271,162 @@ All prior Step 2 criteria remain PASS. AC5 v3 gates on the engine test suite (`t
 ### Verdict: FAIL
 ### Action
 - Reject to `todo`. Implementation is acceptable; test-writer needs to strengthen AC3 proof in `serve/kanban/tests/test_engine_coverage_1110.py`.
+[[2026-04-24]]
+## Test-Writer Notes
+- Test file: serve/kanban/tests/test_engine_coverage_1110.py
+- Retry cycle (4th test-writer pass): addressed reviewer AC3 proof gaps.
+- Existing 49 tests preserved unmodified (all pass).
+- New tests added (10 total):
+  - **TestFromAC_EngineListTasksArchived** (+1): `test_archived_task_without_claimed_at_shows_claimed_false` — proves both `claimed=True` and `claimed=False` branches for archived tasks; reviewer's `claimed_by` mutation is confirmed non-observable via the external API (TaskSummary drops `claimed_by`), so the complementary branch test is the strongest contract-level proof possible.
+  - **TestFromAC_EngineEndWorkValidation** (+2): `test_end_work_block_outcome_marks_task_blocked` (proves `_apply_outcome` block branch), `test_end_work_fail_outcome_preserves_task_status` (proves fail branch).
+  - **TestFromAC_EngineEditTaskRollback** (new class, 2 tests): direct rollback proof — patches `_emit_event` to raise OSError, asserts original title and original body are restored on disk (engine.py lines 899-901).
+  - **TestFromAC_EngineEndWorkRollback** (new class, 3 tests): direct rollback proof — non-archive (original body restored), archive-success (file moved back to tasks/), archive-success variant (archive/ file absent after rollback) — covers engine.py lines 1204-1208.
+  - **TestFromAC_EngineReadLogEntriesErrors** (+2): `test_invalid_json_line_skipped_valid_entry_still_parsed` and `test_blank_lines_skipped_valid_entry_still_parsed` — assert `len(result) == 1` and `result[0].task_id == 1` (stronger than prior `isinstance(result, list)` assertions).
+- Total: 59 tests, all PASS (coverage-uplift retry — same pass-through exception as prior cycles).
+- ruff: clean.
+- Commit: e9f75191
+[[2026-04-24]]
+## Builder Notes
+- Implementation: no source-code changes required in builder phase; this cycle is verification-only for test-writer coverage uplift.
+- Files changed: none.
+- AC5 gate (quality-runner): `serve/kanban/tests/test_engine_coverage_1110.py` + `serve/kanban/tests/test_engine_*.py` passed (279 passed, 0 failed, 0 skipped); ruff clean on task test file.
+- Broad measurement (AC1/AC4 scope): `serve/kanban/tests`, `serve/mcp-kanban/tests`, `tests/test_cockpit_read_api.py`, `tests/test_cockpit_read_api_930.py`, `tests/test_cockpit_mutation_api.py`, `tests/test_cockpit_launch.py` -> 921 passed, 85 failed, 0 skipped, 0 errors.
+- Coverage evidence: `serve/kanban/src/owlbear_kanban/engine.py` 93% statement coverage (689 stmts, 51 miss), meeting AC target >= 90%.
+- Failure distribution in broad run is background debt outside task-local scope (top files: `serve/mcp-kanban/tests/test_mcp_models_1084.py`, `serve/kanban/tests/test_yaml12_loader_940.py`, `serve/kanban/tests/test_list_sessions.py`, `tests/test_cockpit_mutation_api.py`, `tests/test_cockpit_read_api.py`).
+- Reflection:
+  - Problem faced: broad quality-runner measurement was interrupted/inconsistent on first attempt.
+  - Workaround applied: confirmed task-gate with quality-runner, then executed deterministic broad measurement command for stable coverage evidence.
+  - Pattern discovered: for coverage-uplift tasks, pair scoped gate proof with broad-scope contextual measurement to avoid false negatives from unrelated suites.
+  - Time sink: interruption handling and evidence extraction from large test output.
+  - Quality gap: unrelated suite failures persist in MCP/cockpit domains but do not block this AC set.
+[[2026-04-24]]
+## Review Evidence
+### Test Results
+- Quality-Runner AC5 gate: 279 passed, 0 failed, 0 skipped across `serve/kanban/tests/test_engine_coverage_1110.py` plus `serve/kanban/tests/test_engine_*.py`; `ruff` clean on `serve/kanban/tests/test_engine_coverage_1110.py`.
+- The latest builder AC1/AC4 measurement at `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:293-294` omitted `tests/test_engine_activity_session_1063.py`, even though that top-level suite directly instantiates `KanbanEngine` at `tests/test_engine_activity_session_1063.py:21`, `:128`, and `:130`.
+- Reviewer reran the corrected full scope: `serve/kanban/tests/`, `serve/mcp-kanban/tests/`, `tests/test_cockpit_read_api.py`, `tests/test_cockpit_read_api_930.py`, `tests/test_cockpit_mutation_api.py`, `tests/test_cockpit_launch.py`, and `tests/test_engine_activity_session_1063.py`. Result: 969 passed, 85 failed, 0 skipped. The 85 failures remain background suite debt outside AC5-v3.
+- Reviewer reconstructed the pre-task baseline by running the same corrected scope without `serve/kanban/tests/test_engine_coverage_1110.py`. Result: 910 passed, 85 failed, 0 skipped.
+
+### Lint
+- `ruff` clean on `serve/kanban/tests/test_engine_coverage_1110.py`.
+
+### Coverage
+- Corrected full-scope baseline for `owlbear_kanban.engine`: 84% (689 stmts, 109 miss). This supersedes the earlier 86% note at `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:81`, which was recorded from an incomplete top-level scope.
+- Corrected full-scope final for `owlbear_kanban.engine`: 93% (689 stmts, 51 miss), satisfying AC4.
+- Corrected uncovered lines from the final full-scope report: `142, 273-276, 289-297, 405, 423, 470, 472-473, 482-486, 503-516, 569-572, 603-604, 606, 615, 626, 872-875, 891, 907, 952, 1168, 1246`.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC | Evidence | Status |
+|----|----------|--------|
+| AC1 `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:157` | Corrected full-scope baseline rerun includes `tests/test_engine_activity_session_1063.py:21,128,130`; engine baseline is 84% | PASS |
+| AC2 `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:158` | Corrected full-scope uncovered lines listed above; task body already retains prior gap summary at `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:83` | PASS |
+| AC3 `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:159` | Direct AC-scoped tests at `serve/kanban/tests/test_engine_coverage_1110.py:313`, `:640`, `:656`, `:736`, `:749`, `:895`, `:919`, `:984`, `:998`, and `:1016` exercise the added archived projection branch, end_work validation branches, edit_task rollback, malformed-log continuation, and end_work rollback | PASS |
+| AC4 `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:160` | Corrected full-scope final measurement is 93% | PASS |
+| AC5 `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:161` | Quality-Runner engine gate: 279 passed, 0 failed, 0 skipped; `ruff` clean on the task file | PASS |
+
+#### Security Review
+- No issues in the task-owned test file.
+
+#### Test Integrity
+| Artifact | Observation | Assessment |
+|----------|-------------|------------|
+| `serve/kanban/tests/test_engine_coverage_1110.py` | Latest builder note says `Files changed: none` at `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:290`; current artifact still contains the original `TestFromAC_*` coverage suite plus the retry additions | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | The stronger continuation tests at `serve/kanban/tests/test_engine_coverage_1110.py:895` and `:919` now carry malformed-log proof. Redundant weaker helpers remain at `:835`, `:854`, and `:875`, but they are no longer the sole contract evidence. |
+| Negative/error-path coverage | STRONG | Validation and rollback paths are covered at `serve/kanban/tests/test_engine_coverage_1110.py:640`, `:656`, `:736`, `:749`, `:984`, `:998`, and `:1016`. |
+| Manual mutation reasoning | ADEQUATE | Removing rollback restoration would fail the edit/end_work rollback tests at `serve/kanban/tests/test_engine_coverage_1110.py:736`, `:749`, `:984`, `:998`, and `:1016`. Removing malformed-line continuation would fail `:895` and `:919`. The archived `claimed_by` clear at `serve/kanban/src/owlbear_kanban/engine.py:617` remains only indirectly provable because `TaskSummary` drops `claimed_by` and derives `claimed` from `claimed_at` at `serve/kanban/src/owlbear_kanban/models.py:204-206`. |
+| Test independence | STRONG | Isolated `tmp_path` boards are used throughout the file. |
+| Descriptive names | STRONG | Test names clearly map to the targeted branch or failure mode. |
+
+#### Data Safety
+- No issues.
+
+#### Implementation-Aware Gaps
+- No significant untested path remains in the AC-prioritised set.
+- The archived-path `claimed_by` clear at `serve/kanban/src/owlbear_kanban/engine.py:617` is not directly observable through the public summary model because archived summaries return `TaskSummary` and `TaskSummary` drops `claimed_by` at `serve/kanban/src/owlbear_kanban/models.py:204-206`. I am treating that as informational rather than missing AC proof.
+- Broad-suite failures are not charged to AC5 after the architect's operative narrowing at `.owlbear/kanban/tasks/1110-engine-module-coverage-uplift-owlbear-kanban-engine-to-90.md:157-161`.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 4 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 - INFORMATIONAL
+- Upstream AC1/AC4 evidence was incomplete until review: the broad measurement omitted `tests/test_engine_activity_session_1063.py`, so reviewer verification had to correct the scope before gating.
+- Redundant weak helper assertions remain at `serve/kanban/tests/test_engine_coverage_1110.py:835`, `:854`, and `:875`, but the stronger paired tests make the suite adequate.
+
+### Deductions
+- -0.03 upstream measurement-scope omission required a reviewer rerun with the corrected top-level test list.
+- -0.02 redundant weak helper assertions remain in the task-owned file, even though stronger companion tests now carry the proof.
+- -0.02 archived `claimed_by` clear is only indirectly observable through the public projection model.
+
+### Confidence: 0.91
+### Verdict: PASS
+### Action
+- Advance to docs.
+
+### Reflection
+- Problem faced: the latest builder measurement did not include every top-level `tests/` suite that exercises `owlbear_kanban.engine`.
+- Workaround applied: reran the corrected full scope and reconstructed the baseline by excluding only the task-owned coverage file.
+- Pattern discovered: top-level `tests/` can contain direct engine suites outside the obvious cockpit files; enumerate them explicitly during review.
+- Time sink: reconciling the corrected baseline/final percentages after the late scope correction.
+- Quality gap: redundant weak helper assertions remain in the task-owned test file, but they no longer control the AC proof.
+[[2026-04-24]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Task adds only test coverage; no behavior, API, CLI, config, or structure change. No IN-scope prose doc references test internals. |
+| 2 | Module docstrings | No | N/A | No production Python modules created or modified (`Files changed: none` in all builder notes). Only `serve/kanban/tests/test_engine_coverage_1110.py` was added. |
+| 3 | External attribution | No | N/A | Test coverage uplift; no external patterns or sources cited. |
+| 4 | Research doc | No | N/A | No research phase document produced for this task. |
+| 5 | Diagram maintenance (describes match) | No | N/A | `kanban.excalidraw` describes `serve/kanban/src/**` — changed file is in `serve/kanban/tests/`, no glob match. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/tests/test_engine_coverage_1110.py` | OUT | N/A — test file, not in IN-scope list |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (`.owlbear/scratch/1110-*` search returned empty)
+
+No docs impact. All checklist items N/A with evidence. Advancing to done.
+[[2026-04-24]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Baseline measurement (full scope) | Quality-Runner full suite: engine 93%; task body records baseline 86%→84% (corrected by reviewer) | PASS |
+| AC2: Gap analysis recorded | Task body lists uncovered line ranges at multiple cycle points; reviewer corrected final uncovered lines | PASS |
+| AC3: Tests for uncovered codepaths | Spot-checked: `TestFromAC_EngineEditTaskRollback` (lines 735-760, patches `_emit_event`, asserts restore), `TestFromAC_EngineEndWorkRollback` (lines 984-1035, 3 tests covering non-archive/archive/cleanup), strengthened malformed-log tests (lines 900-940, assert `len(result)==1` and `task_id==1`). Reviewer PASS after retry cycle confirmed rollback/validation gaps filled. | PASS |
+| AC4: Final coverage ≥ 90% | Quality-Runner: `owlbear_kanban.engine` 93% | PASS |
+| AC5: Engine test suite green | Quality-Runner full suite: 84 failures all in non-engine files; reviewer scoped gate: 279 passed, 0 failed | PASS |
+
+### Test Results
+- Full suite: 1652 passed, 84 failed, 4 skipped — failures are pre-existing background debt (mcp-kanban models, yaml12 loader, cockpit, mcp-memory). No task-scope failures.
+- Lint: 11 violations, all outside task scope. `test_engine_coverage_1110.py` clean.
+
+### Architect Quality
+- Score: 3/5 — AC5 regression gate required three narrowing iterations (full suite → kanban domain suites → engine test suite), causing two extra pipeline round-trips. Final AC was precise and testable. Self-corrected but slowly.
+
+### Deductions
+- -0.03 AC quality score ≤ 3 (three architect cycles on AC5 scope)
+
+### Confidence: 0.97
+### Action: Archive

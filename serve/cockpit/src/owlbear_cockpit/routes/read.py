@@ -108,6 +108,7 @@ def get_task(task_id: str, engine: _Engine) -> TaskDetailOut:
         block_reason=task.block_reason,
         parent=task.parent,
         depends_on=task.depends_on,
+        claimed_at=task.claimed_at,
         claimed_by=task.claimed_by,
     )
 
