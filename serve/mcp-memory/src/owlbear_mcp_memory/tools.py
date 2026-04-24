@@ -66,7 +66,9 @@ async def get_knowledge(
         scope_where = "(scope_agent IS NULL OR scope_agent = ?) AND (scope_project IS NULL OR scope_project = ?)"
         scope_params.append(project_name)
     else:
-        scope_where = "(scope_agent IS NULL OR scope_agent = ?) AND scope_project IS NULL"
+        scope_where = (
+            "(scope_agent IS NULL OR scope_agent = ?) AND scope_project IS NULL"
+        )
 
     # --- Extra conditions ---
     extra_conditions: list[str] = ["approval_state != 'deleted'"]
@@ -233,7 +235,11 @@ WHERE {where}
     return results or "[]"
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=False, destructiveHint=True))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, idempotentHint=False, destructiveHint=True
+    )
+)
 async def set_approval_state(
     ctx: Context,
     entry_id: str,
@@ -250,7 +256,9 @@ async def set_approval_state(
     conn = app_ctx.conn
 
     def _get_state() -> str | None:
-        r = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
+        r = conn.execute(
+            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
+        ).fetchone()
         return r[0] if r is not None else None
 
     current_state = await asyncio.to_thread(_get_state)
@@ -290,7 +298,9 @@ async def mark_for_deletion(ctx: Context, entry_id: str) -> str:
     conn = app_ctx.conn
 
     def _get_state() -> str | None:
-        r = conn.execute("SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)).fetchone()
+        r = conn.execute(
+            "SELECT approval_state FROM memory_entries WHERE id = ?", (entry_id,)
+        ).fetchone()
         return r[0] if r is not None else None
 
     state = await asyncio.to_thread(_get_state)

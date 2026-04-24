@@ -266,7 +266,9 @@ class TestFromAC_HttpxContentFetcherSSRF:
         """DNS resolution failure must raise ValueError; httpx never called."""
         fetcher = HttpxContentFetcher()
         with (
-            patch("socket.getaddrinfo", side_effect=OSError("Name or service not known")),
+            patch(
+                "socket.getaddrinfo", side_effect=OSError("Name or service not known")
+            ),
             patch("httpx.AsyncClient") as mock_cls,
             pytest.raises(ValueError),
         ):
@@ -278,7 +280,9 @@ class TestFromAC_HttpxContentFetcherSSRF:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_dns_rebinding_hostname_resolving_to_private_ip_is_blocked(self) -> None:
+    async def test_dns_rebinding_hostname_resolving_to_private_ip_is_blocked(
+        self,
+    ) -> None:
         """A public-looking hostname whose DNS resolves to a private IP must raise ValueError.
 
         This is the core DNS-rebinding scenario: the attacker controls DNS and
@@ -361,7 +365,9 @@ class TestFromAC_HttpxContentFetcherSSRF:
             await fetcher.fetch("http://example.com/page")
         assert mock_get.called
         headers = mock_get.call_args.kwargs.get("headers", {})
-        assert headers.get("Host") == "example.com", f"Expected Host: example.com, got headers={headers!r}"
+        assert headers.get("Host") == "example.com", (
+            f"Expected Host: example.com, got headers={headers!r}"
+        )
 
     # ------------------------------------------------------------------
     # DNS resolution happens before HTTP  (happy / security)
@@ -377,7 +383,9 @@ class TestFromAC_HttpxContentFetcherSSRF:
         fetcher = HttpxContentFetcher()
         mock_client = _make_mock_client("hello world")
         with (
-            patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns,
+            patch(
+                "socket.getaddrinfo", return_value=_addr4("93.184.216.34")
+            ) as mock_dns,
             patch("httpx.AsyncClient", return_value=mock_client),
         ):
             result = await fetcher.fetch("http://example.com/")

@@ -128,7 +128,9 @@ def _assert_all_valid_json(kanban_dir: Path, expected_count: int) -> None:
         if log.exists()
         else []
     )
-    assert len(lines) == expected_count, f"Expected {expected_count} lines, got {len(lines)}"
+    assert len(lines) == expected_count, (
+        f"Expected {expected_count} lines, got {len(lines)}"
+    )
     for ln in lines:
         json.loads(ln)  # raises JSONDecodeError if malformed
 
@@ -150,7 +152,10 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.edit_task("1001", title="Mutated Title")
 
         after = read_task(task_path)
@@ -165,7 +170,10 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.edit_task("1001", append_body="injected note")
 
         after = read_task(task_path)
@@ -181,30 +189,46 @@ class TestFromAC_EngineAtomicity:
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.move_task("1001", "in-progress")
 
         after = read_task(task_path)
-        assert after.status == before.status, "status must be rolled back on emit failure"
+        assert after.status == before.status, (
+            "status must be rolled back on emit failure"
+        )
         _assert_no_activity_written(kanban_dir)
 
     # --- move_task (archive path) --------------------------------------------
 
-    def test_move_task_archive_emit_failure_file_stays_in_tasks(self, tmp_path: Path) -> None:
+    def test_move_task_archive_emit_failure_file_stays_in_tasks(
+        self, tmp_path: Path
+    ) -> None:
         """move_task to 'archived': OSError must propagate; file must NOT move to archive/."""
         kanban_dir = _make_board(tmp_path)
         task_path = _make_task_file(kanban_dir, 1001, status="done")
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.move_task("1001", "archived")
 
-        assert task_path.exists(), "task file must not be moved to archive/ on emit failure"
+        assert task_path.exists(), (
+            "task file must not be moved to archive/ on emit failure"
+        )
         archive_contents = list((kanban_dir / "archive").iterdir())
-        assert archive_contents == [], "archive/ must be empty after failed archive move"
+        assert archive_contents == [], (
+            "archive/ must be empty after failed archive move"
+        )
         after = read_task(task_path)
-        assert after.status == before.status, "status must be rolled back (not 'archived')"
+        assert after.status == before.status, (
+            "status must be rolled back (not 'archived')"
+        )
         _assert_no_activity_written(kanban_dir)
 
     # --- claim_task ----------------------------------------------------------
@@ -217,11 +241,16 @@ class TestFromAC_EngineAtomicity:
         before = read_task(task_path)
         assert before.claimed_at is None
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.claim_task("1001")
 
         after = read_task(task_path)
-        assert after.claimed_at is None, "claimed_at must be null after rolled-back claim"
+        assert after.claimed_at is None, (
+            "claimed_at must be null after rolled-back claim"
+        )
         _assert_no_activity_written(kanban_dir)
 
     # --- end_work (non-archive) ----------------------------------------------
@@ -230,11 +259,16 @@ class TestFromAC_EngineAtomicity:
         """end_work (success, non-archive): OSError must propagate; status must not advance."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.end_work("1001", note="Work done", outcome="success")
 
         after = read_task(task_path)
@@ -246,11 +280,16 @@ class TestFromAC_EngineAtomicity:
         """end_work: OSError must propagate; note must not be appended to body."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.end_work("1001", note="Secret note", outcome="fail")
 
         after = read_task(task_path)
@@ -260,22 +299,35 @@ class TestFromAC_EngineAtomicity:
 
     # --- end_work (archive path) ---------------------------------------------
 
-    def test_end_work_archive_emit_failure_file_stays_in_tasks(self, tmp_path: Path) -> None:
+    def test_end_work_archive_emit_failure_file_stays_in_tasks(
+        self, tmp_path: Path
+    ) -> None:
         """end_work (success from 'done'): OSError must propagate; file must NOT move to archive/."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="done", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="done", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.end_work("1001", note="Archiving", outcome="success")
 
-        assert task_path.exists(), "task file must not be moved to archive/ on emit failure"
+        assert task_path.exists(), (
+            "task file must not be moved to archive/ on emit failure"
+        )
         archive_contents = list((kanban_dir / "archive").iterdir())
-        assert archive_contents == [], "archive/ must be empty after failed archive end_work"
+        assert archive_contents == [], (
+            "archive/ must be empty after failed archive end_work"
+        )
         after = read_task(task_path)
-        assert after.status == before.status, "status must be rolled back (not 'archived')"
+        assert after.status == before.status, (
+            "status must be rolled back (not 'archived')"
+        )
         _assert_no_activity_written(kanban_dir)
 
     # --- release_task --------------------------------------------------------
@@ -284,12 +336,17 @@ class TestFromAC_EngineAtomicity:
         """release_task: OSError must propagate; claimed_at must be restored."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
         assert before.claimed_at is not None
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.release_task("1001")
 
         after = read_task(task_path)
@@ -300,14 +357,20 @@ class TestFromAC_EngineAtomicity:
 
     # --- sweep (partial per-task rollback) -----------------------------------
 
-    def test_sweep_second_task_emit_failure_per_task_rollback(self, tmp_path: Path) -> None:
+    def test_sweep_second_task_emit_failure_per_task_rollback(
+        self, tmp_path: Path
+    ) -> None:
         """sweep: emit failure on 2nd task must roll back that task; loop must continue."""
         kanban_dir = _make_board(tmp_path)
 
         # Task 1001 and 1002 both have expired claims.
         # Task 1003: fresh, no expired claim — visited by loop but not swept.
-        task1_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
-        task2_path = _make_task_file(kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        task1_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
+        task2_path = _make_task_file(
+            kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
         _make_task_file(kanban_dir, 1003, status="todo")
         engine = KanbanEngine(kanban_dir)
         before2 = read_task(task2_path)
@@ -332,13 +395,21 @@ class TestFromAC_EngineAtomicity:
 
         # Loop continued: task 1003 was visited (no crash, fresh task unmodified).
         task3_path = kanban_dir / "tasks" / "1003-task.md"
-        assert task3_path.exists(), "task 1003 must be unaffected (loop continued past error)"
+        assert task3_path.exists(), (
+            "task 1003 must be unaffected (loop continued past error)"
+        )
 
-    def test_sweep_second_task_emit_failure_activity_log_integrity(self, tmp_path: Path) -> None:
+    def test_sweep_second_task_emit_failure_activity_log_integrity(
+        self, tmp_path: Path
+    ) -> None:
         """sweep: activity.jsonl must contain only complete, valid JSON lines after partial failure."""
         kanban_dir = _make_board(tmp_path)
-        _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
-        _make_task_file(kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
+        _make_task_file(
+            kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
         engine = KanbanEngine(kanban_dir)
 
         # Let the real append_activity_event run for task 1001 only;
@@ -367,14 +438,19 @@ class TestFromAC_EngineAtomicity:
 
     # --- Full snapshot equality: edit_task ---
 
-    def test_edit_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_edit_task_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """edit_task: rollback must restore the complete Task model, not just selected fields."""
         kanban_dir = _make_board(tmp_path)
         task_path = _make_task_file(kanban_dir, 1001, status="todo")
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.edit_task("1001", title="Mutated Title", append_body="injected note")
 
         after = read_task(task_path)
@@ -385,14 +461,19 @@ class TestFromAC_EngineAtomicity:
 
     # --- Full snapshot equality: move_task (non-archive) ---
 
-    def test_move_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_move_task_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """move_task (non-archive): rollback must restore the complete Task model."""
         kanban_dir = _make_board(tmp_path)
         task_path = _make_task_file(kanban_dir, 1001, status="todo")
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.move_task("1001", "in-progress")
 
         after = read_task(task_path)
@@ -403,14 +484,19 @@ class TestFromAC_EngineAtomicity:
 
     # --- Full snapshot equality: claim_task ---
 
-    def test_claim_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_claim_task_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """claim_task: rollback must restore the complete Task model (claimed_at, updated, etc.)."""
         kanban_dir = _make_board(tmp_path)
         task_path = _make_task_file(kanban_dir, 1001, status="todo")
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.claim_task("1001")
 
         after = read_task(task_path)
@@ -421,15 +507,22 @@ class TestFromAC_EngineAtomicity:
 
     # --- Full snapshot equality: release_task ---
 
-    def test_release_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_release_task_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """release_task: rollback must restore the complete Task model (claimed_at, updated, etc.)."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.release_task("1001")
 
         after = read_task(task_path)
@@ -444,11 +537,16 @@ class TestFromAC_EngineAtomicity:
         """end_work: rollback must restore the complete Task model (status, body, claimed_at, updated)."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.end_work("1001", note="Work done", outcome="success")
 
         after = read_task(task_path)
@@ -459,11 +557,17 @@ class TestFromAC_EngineAtomicity:
 
     # --- Full snapshot equality: sweep per-task rollback ---
 
-    def test_sweep_second_task_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_sweep_second_task_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """sweep: rolled-back task must have complete model equality with its pre-sweep snapshot."""
         kanban_dir = _make_board(tmp_path)
-        _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
-        task2_path = _make_task_file(kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
+        task2_path = _make_task_file(
+            kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
         engine = KanbanEngine(kanban_dir)
         before2 = read_task(task2_path)
 
@@ -483,9 +587,15 @@ class TestFromAC_EngineAtomicity:
     ) -> None:
         """sweep: after 2nd task emit failure and rollback, 3rd expired task must still be swept."""
         kanban_dir = _make_board(tmp_path)
-        _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
-        _make_task_file(kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
-        task3_path = _make_task_file(kanban_dir, 1003, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT)
+        _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
+        _make_task_file(
+            kanban_dir, 1002, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
+        task3_path = _make_task_file(
+            kanban_dir, 1003, status="in-progress", claimed_at=_EXPIRED_CLAIMED_AT
+        )
         engine = KanbanEngine(kanban_dir)
 
         # emit call 1 (task 1001) succeeds; call 2 (task 1002) fails; call 3 (task 1003) succeeds.
@@ -502,22 +612,31 @@ class TestFromAC_EngineAtomicity:
             "task 1003 claimed_at must be cleared: loop continued and processed it"
         )
         # Task 1002 must NOT be released (its emit failed and was rolled back).
-        assert 1002 not in released, "task 1002 must not appear in released list (emit failed)"
+        assert 1002 not in released, (
+            "task 1002 must not appear in released list (emit failed)"
+        )
 
     # --- Full snapshot equality: move_task (archive path) ---
 
-    def test_move_task_archive_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_move_task_archive_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """move_task to 'archived': rollback must restore the complete Task model, not just status."""
         kanban_dir = _make_board(tmp_path)
         task_path = _make_task_file(kanban_dir, 1001, status="done")
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.move_task("1001", "archived")
 
         # File must be back in tasks/ (already covered by existing test; verified again for context)
-        assert task_path.exists(), "task file must remain in tasks/ after archive rollback"
+        assert task_path.exists(), (
+            "task file must remain in tasks/ after archive rollback"
+        )
         after = read_task(task_path)
         assert after.model_dump() == before.model_dump(), (
             "full Task model must be identical to pre-mutation snapshot after archive emit-failure rollback"
@@ -526,19 +645,28 @@ class TestFromAC_EngineAtomicity:
 
     # --- Full snapshot equality: end_work (archive path) ---
 
-    def test_end_work_archive_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_end_work_archive_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """end_work (success from 'done'): rollback must restore the complete Task model."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="done", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="done", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
             engine.end_work("1001", note="Archive note", outcome="success")
 
         # File must be back in tasks/ (already covered by existing test; verified again for context)
-        assert task_path.exists(), "task file must remain in tasks/ after archive rollback"
+        assert task_path.exists(), (
+            "task file must remain in tasks/ after archive rollback"
+        )
         archive_contents = list((kanban_dir / "archive").iterdir())
         assert archive_contents == [], "archive/ must be empty after archive rollback"
         after = read_task(task_path)
@@ -554,52 +682,91 @@ class TestFromAC_EngineAtomicity:
         """end_work (block): OSError from emit must propagate; blocked/block_reason/body/claimed_at must be rolled back."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
         assert before.blocked is False
         assert before.block_reason is None
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
-            engine.end_work("1001", note="Blocked on dependency", outcome="block", block_reason="waiting for user")
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            engine.end_work(
+                "1001",
+                note="Blocked on dependency",
+                outcome="block",
+                block_reason="waiting for user",
+            )
 
         after = read_task(task_path)
-        assert after.blocked is False, "blocked must be rolled back to False on emit failure"
-        assert after.block_reason is None, "block_reason must be rolled back to None on emit failure"
+        assert after.blocked is False, (
+            "blocked must be rolled back to False on emit failure"
+        )
+        assert after.block_reason is None, (
+            "block_reason must be rolled back to None on emit failure"
+        )
         assert after.status == before.status, "status must be unchanged on emit failure"
         assert after.body == before.body, "body must be rolled back (note not appended)"
-        assert after.claimed_at == before.claimed_at, "claimed_at must be restored on emit failure"
+        assert after.claimed_at == before.claimed_at, (
+            "claimed_at must be restored on emit failure"
+        )
         _assert_no_activity_written(kanban_dir)
 
     def test_end_work_reject_emit_failure_rollback(self, tmp_path: Path) -> None:
         """end_work (reject): OSError from emit must propagate; status/body/claimed_at must be rolled back."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
-            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="research")
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            engine.end_work(
+                "1001", note="Rejected back", outcome="reject", move_to="research"
+            )
 
         after = read_task(task_path)
-        assert after.status == before.status, "status must not change to 'research' on emit failure"
+        assert after.status == before.status, (
+            "status must not change to 'research' on emit failure"
+        )
         assert after.body == before.body, "body must be rolled back (note not appended)"
-        assert after.claimed_at == before.claimed_at, "claimed_at must be restored on emit failure"
+        assert after.claimed_at == before.claimed_at, (
+            "claimed_at must be restored on emit failure"
+        )
         _assert_no_activity_written(kanban_dir)
 
     # --- Full snapshot equality: end_work block/reject outcome ---
 
-    def test_end_work_block_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_end_work_block_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """end_work (block): rollback must restore the complete Task model (blocked, block_reason, body, claimed_at, etc.)."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
-            engine.end_work("1001", note="Blocked on dependency", outcome="block", block_reason="waiting for user")
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            engine.end_work(
+                "1001",
+                note="Blocked on dependency",
+                outcome="block",
+                block_reason="waiting for user",
+            )
 
         after = read_task(task_path)
         assert after.model_dump() == before.model_dump(), (
@@ -607,16 +774,25 @@ class TestFromAC_EngineAtomicity:
         )
         _assert_no_activity_written(kanban_dir)
 
-    def test_end_work_reject_emit_failure_full_snapshot_equality(self, tmp_path: Path) -> None:
+    def test_end_work_reject_emit_failure_full_snapshot_equality(
+        self, tmp_path: Path
+    ) -> None:
         """end_work (reject): rollback must restore the complete Task model (status, body, claimed_at, etc.)."""
         claimed_at = "2026-04-22T10:00:00+00:00"
         kanban_dir = _make_board(tmp_path)
-        task_path = _make_task_file(kanban_dir, 1001, status="in-progress", claimed_at=claimed_at)
+        task_path = _make_task_file(
+            kanban_dir, 1001, status="in-progress", claimed_at=claimed_at
+        )
         engine = KanbanEngine(kanban_dir)
         before = read_task(task_path)
 
-        with patch(_EMIT_PATCH, side_effect=OSError("disk full")), pytest.raises(OSError, match="disk full"):
-            engine.end_work("1001", note="Rejected back", outcome="reject", move_to="research")
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            engine.end_work(
+                "1001", note="Rejected back", outcome="reject", move_to="research"
+            )
 
         after = read_task(task_path)
         assert after.model_dump() == before.model_dump(), (

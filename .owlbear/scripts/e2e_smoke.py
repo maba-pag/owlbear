@@ -85,7 +85,9 @@ def _check_prerequisites() -> None:
         sys.exit(2)
 
 
-def _run_kanban(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+def _run_kanban(
+    args: list[str], *, check: bool = True
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         [str(_KANBAN_BIN), *args],
         capture_output=True,

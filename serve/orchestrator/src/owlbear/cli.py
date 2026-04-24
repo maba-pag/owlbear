@@ -81,7 +81,9 @@ def dispatch(task_id: int) -> None:
 @app.command()
 def run(
     *,
-    run_all: Annotated[bool, typer.Option("--all", help="Loop until board is empty.")] = False,
+    run_all: Annotated[
+        bool, typer.Option("--all", help="Loop until board is empty.")
+    ] = False,
 ) -> None:
     """Dispatch the top-priority task; use --all to loop until the board is empty."""
     _check_copilot()

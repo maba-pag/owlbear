@@ -51,7 +51,9 @@ def mock_lifespan_deps():
         patch("owlbear_mcp_knowledge.server.BgeM3EmbeddingProvider"),
         patch("owlbear_mcp_knowledge.server.KnowledgeQueryService"),
         patch("owlbear_mcp_knowledge.server.GraphAugmentedRetriever"),
-        patch("owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()),
+        patch(
+            "owlbear_mcp_knowledge.server.make_evaluate_fn", return_value=AsyncMock()
+        ),
     ):
         yield
 
@@ -66,34 +68,49 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
     """app_lifespan conditionally creates LLMExtractor based on import availability and env vars."""
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_created_when_owlbear_api_key_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_llm_extractor_created_when_owlbear_api_key_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """LLMExtractor is instantiated when OWLBEAR_LLM_API_KEY is set. (AC1)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-owlbear-test")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()):
                 pass
         mock_llm_cls.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_created_when_openai_api_key_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_llm_extractor_created_when_openai_api_key_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """LLMExtractor is created when OPENAI_API_KEY is set as fallback (AC2 — hybrid env)"""
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-fallback")
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()):
                 pass
         mock_llm_cls.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_default_model_gpt4o_mini(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_llm_extractor_receives_default_model_gpt4o_mini(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """LLMExtractor receives model='gpt-4o-mini' when OWLBEAR_LLM_MODEL is absent. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.delenv("OWLBEAR_LLM_MODEL", raising=False)
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()):
                 pass
         mock_llm_cls.assert_called_once()
@@ -101,12 +118,17 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         assert kwargs.get("model") == "gpt-4o-mini", "Default model must be gpt-4o-mini"
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_custom_model_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_llm_extractor_receives_custom_model_from_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """LLMExtractor receives the model name from OWLBEAR_LLM_MODEL. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.setenv("OWLBEAR_LLM_MODEL", "gpt-4-turbo")
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()):
                 pass
         mock_llm_cls.assert_called_once()
@@ -114,13 +136,18 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         assert kwargs.get("model") == "gpt-4-turbo"
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_owlbear_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_llm_extractor_receives_owlbear_base_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """OWLBEAR_LLM_BASE_URL is forwarded to LLMExtractor. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.setenv("OWLBEAR_LLM_BASE_URL", "https://custom.example.com/v1")
         monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()):
                 pass
         mock_llm_cls.assert_called_once()
@@ -128,13 +155,18 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         assert kwargs.get("base_url") == "https://custom.example.com/v1"
 
     @pytest.mark.asyncio
-    async def test_llm_extractor_receives_openai_base_url_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_llm_extractor_receives_openai_base_url_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Falls back to OPENAI_BASE_URL when OWLBEAR_LLM_BASE_URL is absent. (AC2)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         monkeypatch.delenv("OWLBEAR_LLM_BASE_URL", raising=False)
         monkeypatch.setenv("OPENAI_BASE_URL", "https://proxy.example.com/v1")
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()):
                 pass
         mock_llm_cls.assert_called_once()
@@ -179,7 +211,10 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
         mock_entity_cls = MagicMock(name="EntityExtractorCls")
         with (
-            patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}),
+            patch.dict(
+                sys.modules,
+                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+            ),
             patch("owlbear_mcp_knowledge.server.EntityExtractor", mock_entity_cls),
             patch(
                 "owlbear_knowledge.copilot_auth.get_copilot_token",
@@ -202,7 +237,10 @@ class TestFromAC_LLMExtractorConditionalInstantiation:
         mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=mock_llm_instance)
         mock_entity_cls = MagicMock(name="EntityExtractorCls")
         with (
-            patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}),
+            patch.dict(
+                sys.modules,
+                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+            ),
             patch("owlbear_mcp_knowledge.server.EntityExtractor", mock_entity_cls),
         ):
             async with app_lifespan(MagicMock()):
@@ -226,7 +264,10 @@ class TestFromAC_GraphBuilderWiring:
         """AppContext.intra_doc_builder is not None when LLMExtractor is wired in. (AC4)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()) as ctx:
                 assert ctx.intra_doc_builder is not None  # noqa: S101
 
@@ -242,14 +283,19 @@ class TestFromAC_GraphBuilderWiring:
                 assert ctx.intra_doc_builder is not None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_intra_doc_builder_receives_extractor_kwarg(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_intra_doc_builder_receives_extractor_kwarg(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """IntraDocGraphBuilder(extractor=<llm_instance>) when LLMExtractor available. (AC4)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         mock_llm_instance = MagicMock(name="LLMExtractorInstance")
         mock_llm_cls = MagicMock(name="LLMExtractorCls", return_value=mock_llm_instance)
         mock_intra_cls = MagicMock(name="IntraDocGraphBuilderCls")
         with (
-            patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}),
+            patch.dict(
+                sys.modules,
+                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+            ),
             # AttributeError until builder imports IntraDocGraphBuilder into server.py (RED)
             patch("owlbear_mcp_knowledge.server.IntraDocGraphBuilder", mock_intra_cls),
         ):
@@ -257,7 +303,9 @@ class TestFromAC_GraphBuilderWiring:
                 pass
         mock_intra_cls.assert_called_once()
         _, kwargs = mock_intra_cls.call_args
-        assert "extractor" in kwargs, "IntraDocGraphBuilder must receive extractor= kwarg"
+        assert "extractor" in kwargs, (
+            "IntraDocGraphBuilder must receive extractor= kwarg"
+        )
         assert kwargs["extractor"] is mock_llm_instance
 
     @pytest.mark.asyncio
@@ -272,7 +320,9 @@ class TestFromAC_GraphBuilderWiring:
                 assert ctx.inter_doc_builder is None  # noqa: S101
 
     @pytest.mark.asyncio
-    async def test_inter_doc_builder_instantiated_with_extractor_vs_gs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_inter_doc_builder_instantiated_with_extractor_vs_gs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """InterDocGraphBuilder(extractor, vs, gs) when extractor available. (AC5)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         mock_llm_instance = MagicMock(name="LLMExtractorInstance")
@@ -281,8 +331,13 @@ class TestFromAC_GraphBuilderWiring:
         mock_vs = MagicMock(name="VectorStore")
         mock_gs = MagicMock(name="GraphStore")
         with (
-            patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}),
-            patch("owlbear_mcp_knowledge.server.QdrantVectorStore", return_value=mock_vs),
+            patch.dict(
+                sys.modules,
+                {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+            ),
+            patch(
+                "owlbear_mcp_knowledge.server.QdrantVectorStore", return_value=mock_vs
+            ),
             patch("owlbear_mcp_knowledge.server.GraphStore", return_value=mock_gs),
             # AttributeError until builder imports InterDocGraphBuilder into server.py (RED)
             patch("owlbear_mcp_knowledge.server.InterDocGraphBuilder", mock_inter_cls),
@@ -291,7 +346,9 @@ class TestFromAC_GraphBuilderWiring:
                 pass
         mock_inter_cls.assert_called_once()
         args, _ = mock_inter_cls.call_args
-        assert args[0] is mock_llm_instance, "First positional arg must be the extractor"
+        assert args[0] is mock_llm_instance, (
+            "First positional arg must be the extractor"
+        )
         assert args[1] is mock_vs, "Second positional arg must be vector_store"
         assert args[2] is mock_gs, "Third positional arg must be graph_store"
 
@@ -306,13 +363,17 @@ class TestFromAC_AppContextFields:
     """AppContext exposes structured_extractor, intra_doc_builder, inter_doc_builder."""
 
     @pytest.mark.asyncio
-    async def test_app_context_has_structured_extractor_field(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_app_context_has_structured_extractor_field(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """AppContext.structured_extractor exists (is None when no openai key). (AC6)"""
         monkeypatch.delenv("OWLBEAR_LLM_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": None}):
             async with app_lifespan(MagicMock()) as ctx:
-                _ = ctx.structured_extractor  # AttributeError until builder adds the field
+                _ = (
+                    ctx.structured_extractor
+                )  # AttributeError until builder adds the field
 
     @pytest.mark.asyncio
     async def test_app_context_all_three_builder_fields_present_with_extractor(
@@ -321,7 +382,10 @@ class TestFromAC_AppContextFields:
         """structured_extractor, intra_doc_builder, inter_doc_builder all present. (AC6)"""
         monkeypatch.setenv("OWLBEAR_LLM_API_KEY", "sk-test")
         mock_llm_cls = MagicMock(name="LLMExtractorCls")
-        with patch.dict(sys.modules, {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)}):
+        with patch.dict(
+            sys.modules,
+            {"owlbear_knowledge.llm_extractor": _make_llm_mod(mock_llm_cls)},
+        ):
             async with app_lifespan(MagicMock()) as ctx:
                 # All three fields must be accessible — AttributeError until builder adds them
                 assert ctx.structured_extractor is not None  # noqa: S101

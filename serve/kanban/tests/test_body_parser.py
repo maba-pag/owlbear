@@ -8,7 +8,10 @@ All tests FAIL (RED phase — body_parser not yet implemented).
 from __future__ import annotations
 
 
-from owlbear_kanban.body_parser import parse_body, render_body  # NEW module — ImportError in RED
+from owlbear_kanban.body_parser import (
+    parse_body,
+    render_body,
+)  # NEW module — ImportError in RED
 from owlbear_kanban.storage import Section  # NEW type — ImportError in RED
 
 
@@ -168,10 +171,7 @@ class TestFromAC_BodyParserRoundTrip:
 
     def test_ac_c12_inter_section_blank_lines_preserved(self) -> None:
         """AC-C12: blank lines between sections survive the round-trip."""
-        md = (
-            "## Section A\n\nContent A.\n\n\n"
-            "## Section B\n\nContent B.\n"
-        )
+        md = "## Section A\n\nContent A.\n\n\n## Section B\n\nContent B.\n"
         sections = parse_body(md)
         rendered = render_body(sections)
         # The double blank between sections must survive
