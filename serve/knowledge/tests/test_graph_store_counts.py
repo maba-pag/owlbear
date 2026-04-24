@@ -115,29 +115,39 @@ class TestFromAC_GraphStoreGetCounts:
         assert isinstance(entity_count, int)
         assert isinstance(edge_count, int)
 
-    def test_get_counts_empty_db_returns_all_zeros(self, empty_graph: GraphStore) -> None:
+    def test_get_counts_empty_db_returns_all_zeros(
+        self, empty_graph: GraphStore
+    ) -> None:
         """Empty database: get_counts() returns (0, 0, 0)."""
         doc_count, entity_count, edge_count = empty_graph.get_counts()
         assert doc_count == 0
         assert entity_count == 0
         assert edge_count == 0
 
-    def test_get_counts_reflects_inserted_documents(self, populated_graph: GraphStore) -> None:
+    def test_get_counts_reflects_inserted_documents(
+        self, populated_graph: GraphStore
+    ) -> None:
         """doc_count matches the number of documents inserted."""
         doc_count, _, _ = populated_graph.get_counts()
         assert doc_count == 2
 
-    def test_get_counts_reflects_inserted_entities(self, populated_graph: GraphStore) -> None:
+    def test_get_counts_reflects_inserted_entities(
+        self, populated_graph: GraphStore
+    ) -> None:
         """entity_count matches the number of entities inserted."""
         _, entity_count, _ = populated_graph.get_counts()
         assert entity_count == 3
 
-    def test_get_counts_reflects_inserted_edges(self, populated_graph: GraphStore) -> None:
+    def test_get_counts_reflects_inserted_edges(
+        self, populated_graph: GraphStore
+    ) -> None:
         """edge_count matches the number of edges inserted."""
         _, _, edge_count = populated_graph.get_counts()
         assert edge_count == 2
 
-    def test_get_counts_order_is_doc_entity_edge(self, populated_graph: GraphStore) -> None:
+    def test_get_counts_order_is_doc_entity_edge(
+        self, populated_graph: GraphStore
+    ) -> None:
         """Tuple order is (doc_count, entity_count, edge_count) — not reversed."""
         doc_count, entity_count, edge_count = populated_graph.get_counts()
         # With 2 docs, 3 entities, 2 edges — the unique value is entity_count=3
@@ -145,7 +155,9 @@ class TestFromAC_GraphStoreGetCounts:
         assert doc_count == 2
         assert edge_count == 2
 
-    def test_get_counts_takes_no_filter_parameters(self, empty_graph: GraphStore) -> None:
+    def test_get_counts_takes_no_filter_parameters(
+        self, empty_graph: GraphStore
+    ) -> None:
         """get_counts() is O(1) — accepts no filter parameters (no entity_type, scope, etc)."""
         sig = inspect.signature(empty_graph.get_counts)
         non_self_params = [p for p in sig.parameters.values() if p.name != "self"]

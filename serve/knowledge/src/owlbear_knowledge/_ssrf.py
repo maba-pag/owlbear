@@ -26,7 +26,13 @@ def _is_blocked_ip(ip_str: str) -> bool:
         check = addr.ipv4_mapped
     else:
         check = addr
-    return check.is_loopback or check.is_private or check.is_link_local or check.is_reserved or check.is_unspecified
+    return (
+        check.is_loopback
+        or check.is_private
+        or check.is_link_local
+        or check.is_reserved
+        or check.is_unspecified
+    )
 
 
 async def safe_async_fetch(url: str) -> str:
@@ -53,7 +59,9 @@ async def safe_async_fetch(url: str) -> str:
     port = parsed.port or (443 if scheme == "https" else 80)
 
     try:
-        addrs = await asyncio.to_thread(socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC)
+        addrs = await asyncio.to_thread(
+            socket.getaddrinfo, hostname, port, 0, socket.AF_UNSPEC
+        )
     except OSError as exc:
         msg = f"DNS resolution failed for {hostname!r}: {exc}"
         raise ValueError(msg) from exc
@@ -68,9 +76,22 @@ async def safe_async_fetch(url: str) -> str:
 
     # Rewrite request URL to the resolved IP to prevent DNS-rebinding TOCTOU.
     first_ip = ipaddress.ip_address(addrs[0][4][0])
-    ip_host = f"[{first_ip}]" if isinstance(first_ip, ipaddress.IPv6Address) else str(first_ip)
+    ip_host = (
+        f"[{first_ip}]"
+        if isinstance(first_ip, ipaddress.IPv6Address)
+        else str(first_ip)
+    )
     netloc = f"{ip_host}:{parsed.port}" if parsed.port else ip_host
-    ip_url = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+    ip_url = urlunparse(
+        (
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
 
     async with httpx.AsyncClient(follow_redirects=False, timeout=30) as client:
         resp = await client.get(ip_url, headers={"Host": hostname})

@@ -92,7 +92,9 @@ def _build_inter_prompt(pairs: list[tuple[Entity, Entity]], scope: str) -> str:
     for a, b in pairs:
         a_desc = f" — {a.description}" if a.description else ""
         b_desc = f" — {b.description}" if b.description else ""
-        pair_lines.append(f"  ({a.name} [{a.entity_type.value}]{a_desc}, {b.name} [{b.entity_type.value}]{b_desc})")
+        pair_lines.append(
+            f"  ({a.name} [{a.entity_type.value}]{a_desc}, {b.name} [{b.entity_type.value}]{b_desc})"
+        )
     pairs_str = "\n".join(pair_lines)
     return f"scope: {scope}\nEntity pairs:\n{pairs_str}"
 
@@ -161,7 +163,11 @@ class InterDocGraphBuilder:
             doc = self._graph_store.get_document(doc_id)
             doc_to_source[doc_id] = doc.source_id if doc is not None else None
         return {
-            entity.id: (None if entity.document_id is None else doc_to_source.get(entity.document_id))
+            entity.id: (
+                None
+                if entity.document_id is None
+                else doc_to_source.get(entity.document_id)
+            )
             for entity in entities
         }
 
@@ -216,7 +222,9 @@ class InterDocGraphBuilder:
             source_by_entity = {}
 
         canonical = self._canonical_candidates(entities, existing_pairs)
-        seen: set[tuple[str, str]] = {(min(a.id, b.id), max(a.id, b.id)) for a, b in canonical}
+        seen: set[tuple[str, str]] = {
+            (min(a.id, b.id), max(a.id, b.id)) for a, b in canonical
+        }
 
         cross_source: list[tuple[Entity, Entity]] = []
         same_source: list[tuple[Entity, Entity]] = []
@@ -268,7 +276,9 @@ class InterDocGraphBuilder:
 
         entity_by_id: dict[str, Entity] = {e.id: e for e in entities}
         source_by_entity = self._build_source_map(entities)
-        candidate_pairs = self._collect_candidates(entities, entity_by_id, existing_pairs, source_by_entity)
+        candidate_pairs = self._collect_candidates(
+            entities, entity_by_id, existing_pairs, source_by_entity
+        )
 
         if not candidate_pairs:
             return GraphBuildResult()
@@ -281,5 +291,7 @@ class InterDocGraphBuilder:
             result = await self._extractor.extract(prompt)
             all_edges.extend(result.edges)
 
-        stamped = [_stamp_inter_edge(e, entity_by_id, source_by_entity) for e in all_edges]
+        stamped = [
+            _stamp_inter_edge(e, entity_by_id, source_by_entity) for e in all_edges
+        ]
         return GraphBuildResult(edges=stamped, edges_added=len(stamped))

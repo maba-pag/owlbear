@@ -60,10 +60,16 @@ class AuditLog:
             events = [e for e in events if e.agent == agent]
 
         if outcome is not None:
-            events = [e for e in events if isinstance(e, CompletionEvent) and e.outcome == outcome]
+            events = [
+                e
+                for e in events
+                if isinstance(e, CompletionEvent) and e.outcome == outcome
+            ]
 
         if cycle_id is not None:
-            events = [e for e in events if hasattr(e, "cycle_id") and e.cycle_id == cycle_id]
+            events = [
+                e for e in events if hasattr(e, "cycle_id") and e.cycle_id == cycle_id
+            ]
 
         if date_range is not None:
             start_dt = _parse_ts(date_range[0])

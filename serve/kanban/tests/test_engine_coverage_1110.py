@@ -353,7 +353,9 @@ class TestFromAC_EngineSweep:
         assert 1 in released
         assert read_task(board / "tasks" / "1-task.md").claimed_at is None
 
-    def test_sweep_silently_skips_unparseable_corrupt_file(self, tmp_path: Path) -> None:
+    def test_sweep_silently_skips_unparseable_corrupt_file(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         (board / "tasks" / "99-corrupt.md").write_text(
             "this is not valid yaml frontmatter at all", encoding="utf-8"
@@ -362,7 +364,9 @@ class TestFromAC_EngineSweep:
         released = engine.sweep()
         assert 99 not in released
 
-    def test_sweep_skips_task_with_invalid_claimed_at_format(self, tmp_path: Path) -> None:
+    def test_sweep_skips_task_with_invalid_claimed_at_format(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, claimed_at='"not-a-valid-datetime"')
         engine = KanbanEngine(board, activity_log=False)
@@ -387,13 +391,13 @@ class TestFromAC_EngineSweep:
         # so detect_corruption flags it as corrupt during sweep.
         task_path = board / "tasks" / "1-task.md"
         task_path.write_text(
-            '---\nclaimed_by: agent-old\nid: 1\ntitle: T\nstatus: todo'
+            "---\nclaimed_by: agent-old\nid: 1\ntitle: T\nstatus: todo"
             '\npriority: needed\ncreated: "2026-01-01T00:00:00+00:00"'
             '\nupdated: "2026-01-01T00:00:00+00:00"\ntags: []'
-            '\nparent: null\ndepends_on: []\nblocked: false'
-            '\nblock_reason: null'
-            f'\nclaimed_at: {_EPOCH_CLAIMED_AT}'
-            '\narchival_reason: null\narchival_refs: []\n---\nBody\n',
+            "\nparent: null\ndepends_on: []\nblocked: false"
+            "\nblock_reason: null"
+            f"\nclaimed_at: {_EPOCH_CLAIMED_AT}"
+            "\narchival_reason: null\narchival_refs: []\n---\nBody\n",
             encoding="utf-8",
         )
         released = engine.sweep()
@@ -411,7 +415,7 @@ class TestFromAC_EngineComputeDuration:
 
     def test_tz_naive_claim_ts_normalised_to_utc(self) -> None:
         result = _compute_duration(
-            "2026-04-23T10:00:00",        # tz-naive
+            "2026-04-23T10:00:00",  # tz-naive
             "2026-04-23T11:00:00+00:00",  # tz-aware
         )
         assert result == 3600.0
@@ -419,7 +423,7 @@ class TestFromAC_EngineComputeDuration:
     def test_tz_naive_close_ts_normalised_to_utc(self) -> None:
         result = _compute_duration(
             "2026-04-23T10:00:00+00:00",  # tz-aware
-            "2026-04-23T11:00:00",        # tz-naive
+            "2026-04-23T11:00:00",  # tz-naive
         )
         assert result == 3600.0
 
@@ -470,7 +474,9 @@ class TestFromAC_EngineListSessionsSpecialActions:
         assert sessions[0].state == "released"
         assert sessions[0].outcome == "released"
 
-    def test_sweep_release_action_produces_expired_session(self, tmp_path: Path) -> None:
+    def test_sweep_release_action_produces_expired_session(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         self._write_log(
             board,
@@ -558,9 +564,7 @@ class TestFromAC_EngineInitMigrationGateEdgeCases:
         engine = KanbanEngine(board, activity_log=False)
         assert engine is not None
 
-    def test_frontmatter_without_closing_fence_is_skipped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_frontmatter_without_closing_fence_is_skipped(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         (board / "tasks" / "1-nofence.md").write_text(
             "---\nclaimed_by: someone\n# no closing ---\n", encoding="utf-8"

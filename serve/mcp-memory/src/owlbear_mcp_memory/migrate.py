@@ -172,7 +172,9 @@ def _split_into_sections(
                 content = "\n".join(current_lines).strip()
                 if content:
                     src = f"migration:{filename}#{_slugify(current_heading)}"
-                    entries.append(_make_established_entry(content, src, created_at, now))
+                    entries.append(
+                        _make_established_entry(content, src, created_at, now)
+                    )
             elif pre_content_lines:
                 pre = [ln for ln in pre_content_lines if not ln.startswith("# ")]
                 content = "\n".join(pre).strip()
@@ -220,7 +222,9 @@ def _parse_established_file(filepath: Path, now: str) -> list[dict[str, object]]
         content = "\n".join(content_lines).strip()
         if not content:
             return []
-        return [_make_established_entry(content, f"migration:{filename}", created_at, now)]
+        return [
+            _make_established_entry(content, f"migration:{filename}", created_at, now)
+        ]
 
     return _split_into_sections(lines, filename, created_at, now)
 
@@ -322,7 +326,9 @@ def main(argv: list[str] | None = None) -> int:
         conn.execute(_DDL)
         # Pre-load existing sources so all entries from the same inbox file are
         # inserted on the first run (same source) but skipped on subsequent runs.
-        existing: set[str] = {r[0] for r in conn.execute("SELECT source FROM memory_entries").fetchall()}
+        existing: set[str] = {
+            r[0] for r in conn.execute("SELECT source FROM memory_entries").fetchall()
+        }
         inserted = 0
         skipped = 0
         for entry in all_entries:

@@ -60,7 +60,9 @@ class TestFromAC_SharedWorkflowContract:
             "structured context header",
             "anchor-recall",
         ]:
-            assert needle in text, f"w-ideation missing interaction-contract text: {needle}"
+            assert needle in text, (
+                f"w-ideation missing interaction-contract text: {needle}"
+            )
 
     def test_w_ideation_documents_validation_disciplines(self) -> None:
         text = _read("share/skills/w-ideation/SKILL.md")
@@ -75,7 +77,9 @@ class TestFromAC_SharedWorkflowContract:
         ]:
             assert needle in text, f"w-ideation missing validation discipline: {needle}"
 
-    def test_discovery_skill_keeps_freeform_discovery_and_explicit_handoff(self) -> None:
+    def test_discovery_skill_keeps_freeform_discovery_and_explicit_handoff(
+        self,
+    ) -> None:
         text = _read("share/skills/w-ideation-discovery/SKILL.md")
         for needle in [
             "## Interaction Modes",
@@ -86,7 +90,9 @@ class TestFromAC_SharedWorkflowContract:
             "@ideation-mediator",
             "existing-feature/refactor",
         ]:
-            assert needle in text, f"Discovery skill missing required contract text: {needle}"
+            assert needle in text, (
+                f"Discovery skill missing required contract text: {needle}"
+            )
 
     def test_mediation_skill_keeps_o15_disclosure_and_decision_shape(self) -> None:
         text = _read("share/skills/w-ideation-mediation/SKILL.md")
@@ -98,7 +104,9 @@ class TestFromAC_SharedWorkflowContract:
             "concrete specifics",
             "inline verbatim evidence",
         ]:
-            assert needle in text, f"Mediation skill missing required contract text: {needle}"
+            assert needle in text, (
+                f"Mediation skill missing required contract text: {needle}"
+            )
 
     def test_decision_entry_template_is_visible_in_workflow_surface(self) -> None:
         targets = [
@@ -115,7 +123,9 @@ class TestFromAC_SharedWorkflowContract:
                 "**Decision to make:** ...",
                 "**Rejected:**",
             ]:
-                assert needle in text, f"Decision template missing from {path}: {needle}"
+                assert needle in text, (
+                    f"Decision template missing from {path}: {needle}"
+                )
 
 
 class TestFromAC_AgentContracts:
@@ -156,12 +166,18 @@ class TestFromAC_AgentContracts:
             text = _read(path)
             if "context.md" not in text or "decisions.md" not in text:
                 missing.append(path)
-        assert not missing, f"Ideation contract missing context/decisions references: {missing}"
+        assert not missing, (
+            f"Ideation contract missing context/decisions references: {missing}"
+        )
 
     def test_critic_keeps_narrow_context_only_contract(self) -> None:
         text = _read("share/agents/ideation-critic.agent.md")
-        assert "context.md" in text, "Critic must keep the context.md engagement snapshot contract"
-        assert "decisions.md" not in text, "Critic contract should stay narrow and avoid decisions.md"
+        assert "context.md" in text, (
+            "Critic must keep the context.md engagement snapshot contract"
+        )
+        assert "decisions.md" not in text, (
+            "Critic contract should stay narrow and avoid decisions.md"
+        )
 
     def test_no_working_log_or_checkpoint_contract_reappears(self) -> None:
         ideation_files = [
@@ -184,7 +200,9 @@ class TestFromAC_AgentContracts:
             text = _read(path)
             if "working-log.md" in text or "checkpoint" in text:
                 offenders.append(path)
-        assert not offenders, f"Deprecated ideation contract terms reappeared: {offenders}"
+        assert not offenders, (
+            f"Deprecated ideation contract terms reappeared: {offenders}"
+        )
 
 
 class TestFromAC_BlackboardDocs:
@@ -203,7 +221,9 @@ class TestFromAC_BlackboardDocs:
             "Rejected",
             "@ideation-mediator",
         ]:
-            assert needle in text, f"Brief blackboard docs missing required content: {needle}"
+            assert needle in text, (
+                f"Brief blackboard docs missing required content: {needle}"
+            )
 
 
 class TestFromAC_GoldenScenarioFixtures:
@@ -242,9 +262,14 @@ class TestFromAC_GoldenScenarioFixtures:
         net_new = _read(f"{self._ROOT}/01-net-new-work/decisions.md")
         refactor = _read(f"{self._ROOT}/02-existing-feature-refactor/decisions.md")
         assert "@ideation-mediator" in net_new
-        assert "context.md, `decisions.md`, and `research-notes.md`".replace("`", "") not in net_new
+        assert (
+            "context.md, `decisions.md`, and `research-notes.md`".replace("`", "")
+            not in net_new
+        )
         for needle in ["net-new", "existing-feature/refactor"]:
-            assert needle in (net_new + refactor), f"Project type missing from golden scenarios: {needle}"
+            assert needle in (net_new + refactor), (
+                f"Project type missing from golden scenarios: {needle}"
+            )
 
     def test_overscoped_scenario_records_scope_reduction_and_o15(self) -> None:
         decisions = _read(f"{self._ROOT}/03-overscoped-request/decisions.md")
@@ -254,7 +279,9 @@ class TestFromAC_GoldenScenarioFixtures:
             "Minor findings (grouped):",
             "Nonsense findings:",
         ]:
-            assert needle in decisions, f"Overscoped scenario missing required evidence: {needle}"
+            assert needle in decisions, (
+                f"Overscoped scenario missing required evidence: {needle}"
+            )
 
     def test_end_to_end_scenario_has_human_review_and_phase_two_outputs(self) -> None:
         readme = _read(f"{self._ROOT}/README.md")

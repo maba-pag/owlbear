@@ -37,7 +37,10 @@ def append_activity_event(event: ActivityEvent, kanban_dir: Path) -> None:
     """
     activity_path = kanban_dir / _ACTIVITY_FILE
     line = json.dumps(event.model_dump()) + "\n"
-    with _exclusive_activity_lock(kanban_dir), activity_path.open("a", encoding="utf-8") as fh:
+    with (
+        _exclusive_activity_lock(kanban_dir),
+        activity_path.open("a", encoding="utf-8") as fh,
+    ):
         fh.write(line)
 
 
@@ -139,7 +142,9 @@ def compact_activity_log(
     activity_path = kanban_dir / _ACTIVITY_FILE
     with _exclusive_activity_lock(kanban_dir):
         if not activity_path.exists():
-            return ActivityCompactionResult(before_bytes=0, after_bytes=0, records_compacted=0)
+            return ActivityCompactionResult(
+                before_bytes=0, after_bytes=0, records_compacted=0
+            )
 
         before_bytes = activity_path.stat().st_size
         text = activity_path.read_text(encoding="utf-8")
@@ -172,9 +177,16 @@ def compact_activity_log(
         to_keep: list[str] = []
         for index, (entry_line, entry_data) in enumerate(parsed):
             entry_dt = _parse_dt(entry_data.get("timestamp"))
-            in_open_session = _entry_in_open_session(index, entry_data, open_session_starts)
+            in_open_session = _entry_in_open_session(
+                index, entry_data, open_session_starts
+            )
 
-            if before_dt is None or entry_dt is None or entry_dt >= before_dt or in_open_session:
+            if (
+                before_dt is None
+                or entry_dt is None
+                or entry_dt >= before_dt
+                or in_open_session
+            ):
                 to_keep.append(entry_line)
 
         # Hard floor: keep the most recent entries by timestamp for all compaction modes.
@@ -190,7 +202,9 @@ def compact_activity_log(
             # Merge: union of to_keep and floor_lines, preserving order
             floor_set = set(floor_lines)
             keep_set = set(to_keep)
-            to_keep_final = [line for line, _ in parsed if line in keep_set or line in floor_set]
+            to_keep_final = [
+                line for line, _ in parsed if line in keep_set or line in floor_set
+            ]
         else:
             to_keep_final = to_keep
 
@@ -257,7 +271,9 @@ def _find_last_closed_session_dt(parsed: list[tuple[str, dict]]) -> datetime | N
     return last_close_dt
 
 
-def _find_open_session_starts(parsed: list[tuple[str, dict]]) -> dict[int | None, list[int]]:
+def _find_open_session_starts(
+    parsed: list[tuple[str, dict]],
+) -> dict[int | None, list[int]]:
     """Return unmatched claim start indices grouped by task ID."""
     _close_actions = frozenset({"end_work", "release", "sweep-release"})
     open_starts: dict[int | None, list[int]] = {}

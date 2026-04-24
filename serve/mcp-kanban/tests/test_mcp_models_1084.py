@@ -239,7 +239,6 @@ class TestFromAC_NoFileInProjections:
         assert "file" not in DispatchEntry.model_fields
 
 
-
 # ---------------------------------------------------------------------------
 # TestFromAC_ClaimFieldContracts
 # AC17: No claimed_by in projections; claimed_at + claimed present
@@ -305,7 +304,9 @@ class TestFromAC_EngineSummaryProjectionFields:
         """dep_status is None when depends_on is empty (D38)."""
         from owlbear_kanban.models import TaskSummary
 
-        s = TaskSummary(id=1, title="T", status="todo", priority="needed", depends_on=[])
+        s = TaskSummary(
+            id=1, title="T", status="todo", priority="needed", depends_on=[]
+        )
         assert s.dep_status is None
 
 

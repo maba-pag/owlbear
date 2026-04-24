@@ -196,7 +196,9 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE document_status ADD COLUMN content_hash TEXT")
     with contextlib.suppress(sqlite3.OperationalError):
         conn.execute("ALTER TABLE entities ADD COLUMN document_id TEXT")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_document_status_source ON document_status(source)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_document_status_source ON document_status(source)"
+    )
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (4, datetime.now(tz=UTC).isoformat()),
@@ -216,8 +218,12 @@ def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
 def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     """Migrate a v5 database to v6 — adds knowledge_sources table."""
     conn.execute(_CREATE_KNOWLEDGE_SOURCES)
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
+    )
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
         (6, datetime.now(tz=UTC).isoformat()),
@@ -227,7 +233,9 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
 def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
     """Migrate a v6 database to v7 — adds bookmarks table."""
     conn.execute(_CREATE_BOOKMARKS)
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
     conn.execute(
         "UPDATE schema_version SET version = ?, applied_at = ?",
@@ -251,7 +259,9 @@ def _migrate_v7_to_v8(conn: sqlite3.Connection) -> None:
 def _migrate_v8_to_v9(conn: sqlite3.Connection) -> None:
     """Migrate a v8 database to v9 — adds source_pages table and source_id FK on documents."""
     conn.execute(_CREATE_SOURCE_PAGES)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)"
+    )
     with contextlib.suppress(sqlite3.OperationalError):
         conn.execute("ALTER TABLE documents ADD COLUMN source_id TEXT")
     conn.execute(
@@ -325,10 +335,18 @@ def init_db(conn: sqlite3.Connection) -> None:
     for table in _SCOPE_TABLES:
         conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_scope ON {table}(scope)")
 
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)")
-    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_source_pages_source_id ON source_pages(source_id)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_sources_name_scope ON knowledge_sources(name, scope)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_sources_scope ON knowledge_sources(scope)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_url_scope ON bookmarks(url, scope)"
+    )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_bookmarks_scope ON bookmarks(scope)")
 
     conn.commit()

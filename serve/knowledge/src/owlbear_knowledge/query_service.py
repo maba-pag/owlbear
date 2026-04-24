@@ -65,7 +65,9 @@ class KnowledgeQueryService:
         self._threshold = similarity_threshold
         self._retriever = retriever
 
-    def _search_chunks(self, prompt: str, top_k: int, *, scopes: list[str] | None = None) -> list[tuple[str, float]]:
+    def _search_chunks(
+        self, prompt: str, top_k: int, *, scopes: list[str] | None = None
+    ) -> list[tuple[str, float]]:
         """Return (chunk_id, score) pairs for *prompt*, delegating to the retriever when set."""
         effective_scopes = scopes if scopes is not None else self._scopes
         if self._retriever is not None:
@@ -105,7 +107,9 @@ class KnowledgeQueryService:
             if not raw:
                 return []
 
-            filtered = [(doc_id, score) for doc_id, score in raw if score >= self._threshold][:top_k]
+            filtered = [
+                (doc_id, score) for doc_id, score in raw if score >= self._threshold
+            ][:top_k]
 
             structured: list[StructuredSearchResult] = []
             for raw_id, score in filtered:
@@ -127,7 +131,9 @@ class KnowledgeQueryService:
                     )
                 )
         except Exception:  # noqa: BLE001
-            logger.warning("Knowledge query failed for prompt: %s", prompt[:100], exc_info=True)
+            logger.warning(
+                "Knowledge query failed for prompt: %s", prompt[:100], exc_info=True
+            )
             return []
         else:
             return structured
@@ -170,7 +176,9 @@ class KnowledgeQueryService:
             if len(words) > max_tokens:
                 output = " ".join(words[:max_tokens])
         except Exception:  # noqa: BLE001
-            logger.warning("query_for_context failed for prompt: %s", prompt[:100], exc_info=True)
+            logger.warning(
+                "query_for_context failed for prompt: %s", prompt[:100], exc_info=True
+            )
             return None
         else:
             return output

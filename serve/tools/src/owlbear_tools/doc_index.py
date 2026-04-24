@@ -28,13 +28,15 @@ _EXCLUDED_PATHS: frozenset[Path] = frozenset(
     ]
 )
 
-_EXCLUDED_NAMES: frozenset[str] = frozenset({
-    "node_modules",
-    ".git",
-    ".venv",
-    "dist",
-    "build",
-})
+_EXCLUDED_NAMES: frozenset[str] = frozenset(
+    {
+        "node_modules",
+        ".git",
+        ".venv",
+        "dist",
+        "build",
+    }
+)
 
 _DOC_SUFFIXES: frozenset[str] = frozenset({".md", ".excalidraw"})
 
@@ -214,7 +216,9 @@ def parse_index(text: str) -> list[DocEntry]:
 
 def main() -> None:
     """CLI entry point: regenerate the doc index for a workspace root."""
-    parser = argparse.ArgumentParser(description="Generate or update the OwlBear doc index.")
+    parser = argparse.ArgumentParser(
+        description="Generate or update the OwlBear doc index."
+    )
     parser.add_argument("root", nargs="?", default=".", help="Workspace root directory")
     parser.add_argument(
         "--output",

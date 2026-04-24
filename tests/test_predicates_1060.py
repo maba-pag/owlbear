@@ -85,9 +85,7 @@ class TestFromAC_PredicateCommonMarkSubstrate:
         Boundary: CommonMark allows 1-9 digits before the list delimiter.
         The ')' delimiter path must be handled regardless of digit count.
         """
-        task = _make_task(
-            [_make_section("Items", 2, "99) First\n100) Second\n")]
-        )
+        task = _make_task([_make_section("Items", 2, "99) First\n100) Second\n")])
         # Note: 100 is 3 digits — still within CommonMark 1-9 digit limit.
         # Main failure driver is ')' delimiter not matching current regex.
         assert require_list_in_section(task, "Items") is True
@@ -191,7 +189,9 @@ class TestFromAC_PredicateCommonMarkSubstrate:
         task = _make_task([_make_section("Steps", 2, content)])
         assert require_list_in_section(task, "Steps") is False
 
-    def test_ac_c40_three_space_indented_fence_close_resumes_list_detection(self) -> None:
+    def test_ac_c40_three_space_indented_fence_close_resumes_list_detection(
+        self,
+    ) -> None:
         """AC-C40: list detection resumes after a valid 3-space-indented fence closes.
 
         CommonMark spec §4.5: both opener and closer may be indented up to 3
@@ -206,7 +206,9 @@ class TestFromAC_PredicateCommonMarkSubstrate:
         indent, so the fence is stripped and the post-fence list item is
         detected.
         """
-        content = "   ```\n- inside fence (excluded)\n   ```\n- real list item after close\n"
+        content = (
+            "   ```\n- inside fence (excluded)\n   ```\n- real list item after close\n"
+        )
         task = _make_task([_make_section("Steps", 2, content)])
         assert require_list_in_section(task, "Steps") is True
 

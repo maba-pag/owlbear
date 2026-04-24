@@ -129,7 +129,9 @@ def _print_table(entries: list[dict], recommendations: dict[str, str] | None) ->
         print(header)  # noqa: T201
         print("-" * len(header))  # noqa: T201
     else:
-        header = f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}"
+        header = (
+            f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}"
+        )
         print(header)  # noqa: T201
         print("-" * len(header))  # noqa: T201
     for i, entry in enumerate(entries, 1):
@@ -165,7 +167,9 @@ async def _async_run_interactive(client: object) -> tuple[bool, int, int, int]:
         )
         while True:
             try:
-                choice = input("Approve (a), Reject (r), Skip (s/Enter)? ").strip().lower()  # noqa: ASYNC250
+                choice = (
+                    input("Approve (a), Reject (r), Skip (s/Enter)? ").strip().lower()
+                )  # noqa: ASYNC250
             except EOFError:
                 choice = ""
             if choice in ("a", "r", "s", ""):
@@ -250,7 +254,9 @@ async def _async_main(argv: list[str] | None = None) -> int:
 
     async with create_connected_server_and_client_session(server) as client:
         if args.interactive:
-            had_error, approved, rejected, skipped = await _async_run_interactive(client)
+            had_error, approved, rejected, skipped = await _async_run_interactive(
+                client
+            )
             print(  # noqa: T201
                 f"\nDone: {approved} approved, {rejected} rejected, {skipped} skipped"
             )

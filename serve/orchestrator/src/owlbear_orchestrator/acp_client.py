@@ -10,7 +10,12 @@ from acp.exceptions import RequestError
 
 if TYPE_CHECKING:
     from acp.client.connection import ClientSideConnection
-    from acp.schema import ContentBlock, InitializeResponse, NewSessionResponse, PromptResponse
+    from acp.schema import (
+        ContentBlock,
+        InitializeResponse,
+        NewSessionResponse,
+        PromptResponse,
+    )
 
 
 class ErrorCategory(StrEnum):
@@ -112,32 +117,50 @@ class AcpClient:
     async def initialize(self, protocol_version: int) -> InitializeResponse:
         """Call conn.initialize() with a 30 s timeout, forwarding protocol_version to the SDK."""
         try:
-            return await asyncio.wait_for(self._conn.initialize(protocol_version=protocol_version), timeout=30)
+            return await asyncio.wait_for(
+                self._conn.initialize(protocol_version=protocol_version), timeout=30
+            )
         except RequestError as exc:
             category = _classify_request_error(exc)
             if self._error_logger is not None:
-                self._error_logger.log_error(category=category, method="initialize", message=str(exc))
+                self._error_logger.log_error(
+                    category=category, method="initialize", message=str(exc)
+                )
             raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             if self._error_logger is not None:
-                self._error_logger.log_error(category=ErrorCategory.TRANSIENT, method="initialize", message=str(exc))
+                self._error_logger.log_error(
+                    category=ErrorCategory.TRANSIENT,
+                    method="initialize",
+                    message=str(exc),
+                )
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
-    async def new_session(self, cwd: str, mcp_servers: list | None = None) -> NewSessionResponse:
+    async def new_session(
+        self, cwd: str, mcp_servers: list | None = None
+    ) -> NewSessionResponse:
         """Call conn.new_session() with a 15 s timeout, forwarding cwd and mcp_servers."""
         call_kwargs: dict[str, Any] = {"cwd": cwd}
         if mcp_servers is not None:
             call_kwargs["mcp_servers"] = mcp_servers
         try:
-            return await asyncio.wait_for(self._conn.new_session(**call_kwargs), timeout=15)
+            return await asyncio.wait_for(
+                self._conn.new_session(**call_kwargs), timeout=15
+            )
         except RequestError as exc:
             category = _classify_request_error(exc)
             if self._error_logger is not None:
-                self._error_logger.log_error(category=category, method="new_session", message=str(exc))
+                self._error_logger.log_error(
+                    category=category, method="new_session", message=str(exc)
+                )
             raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             if self._error_logger is not None:
-                self._error_logger.log_error(category=ErrorCategory.TRANSIENT, method="new_session", message=str(exc))
+                self._error_logger.log_error(
+                    category=ErrorCategory.TRANSIENT,
+                    method="new_session",
+                    message=str(exc),
+                )
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc
 
     async def prompt(
@@ -164,9 +187,13 @@ class AcpClient:
         except RequestError as exc:
             category = _classify_request_error(exc)
             if self._error_logger is not None:
-                self._error_logger.log_error(category=category, method="prompt", message=str(exc))
+                self._error_logger.log_error(
+                    category=category, method="prompt", message=str(exc)
+                )
             raise AcpClientError(str(exc), category=category) from exc
         except (BrokenPipeError, ConnectionError) as exc:
             if self._error_logger is not None:
-                self._error_logger.log_error(category=ErrorCategory.TRANSIENT, method="prompt", message=str(exc))
+                self._error_logger.log_error(
+                    category=ErrorCategory.TRANSIENT, method="prompt", message=str(exc)
+                )
             raise AcpClientError(str(exc), category=ErrorCategory.TRANSIENT) from exc

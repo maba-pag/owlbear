@@ -479,7 +479,8 @@ class TestFromAC_ActivityStoreFloorActiveStream:
                 _make_event(ts=claim_ts, task_id=i + 1, action="claim"), kanban_dir
             )
             append_activity_event(
-                _make_event(ts=end_work_ts, task_id=i + 1, action="end_work"), kanban_dir
+                _make_event(ts=end_work_ts, task_id=i + 1, action="end_work"),
+                kanban_dir,
             )
         # Last end_work at: now - (49 - (n_pairs-1)*2) = now - (49 - 8) = now - 41h.
 
