@@ -132,8 +132,13 @@ def _find_kanban_storage_import_violations(  # noqa: C901, PLR0912
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                if module == "owlbear_kanban.storage" or module.startswith(
-                    "owlbear_kanban.storage."
+                if (
+                    module == "owlbear_kanban.storage"
+                    or module.startswith("owlbear_kanban.storage.")
+                    or (
+                        module == "owlbear_kanban"
+                        and any(alias.name == "storage" for alias in node.names)
+                    )
                 ):
                     violations.append(f"{py_file.name}:{node.lineno}")
             elif isinstance(node, ast.Import):
