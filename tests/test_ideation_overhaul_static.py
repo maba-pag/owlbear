@@ -25,6 +25,29 @@ def _read(relative_path: str) -> str:
     return (_REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def _ideation_agent_files() -> list[Path]:
+    """Return all ideation-*.agent.md files via glob with a min-count guard."""
+    files = sorted(_REPO_ROOT.glob("share/agents/ideation-*.agent.md"))
+    assert len(files) >= 11, f"Expected >= 11 ideation agent files, got {len(files)}"
+    return files
+
+
+def _ideation_surface_files() -> list[Path]:
+    """Return the full ideation surface: agents + ideator + skills + briefs README."""
+    agents = sorted(_REPO_ROOT.glob("share/agents/ideation-*.agent.md"))
+    files = [
+        *agents,
+        _REPO_ROOT / "share/agents/ideator.agent.md",
+        _REPO_ROOT / "share/skills/w-ideation/SKILL.md",
+        _REPO_ROOT / "share/skills/w-ideation-discovery/SKILL.md",
+        _REPO_ROOT / "share/skills/w-ideation-mediation/SKILL.md",
+        _REPO_ROOT / "share/skills/h-ideation-panel/SKILL.md",
+        _REPO_ROOT / ".owlbear/briefs/README.md",
+    ]
+    assert len(files) >= 17, f"Expected >= 17 ideation surface files, got {len(files)}"
+    return files
+
+
 class TestFromAC_IdeationFilesExist:
     """Static existence checks for the ideation phase split and early challengers."""
 
@@ -42,6 +65,10 @@ class TestFromAC_IdeationFilesExist:
             "share/agents/ideation-outsider.agent.md",
             "share/agents/ideation-pragmatist.agent.md",
             "share/agents/ideation-critic.agent.md",
+            "share/agents/ideation-architect.agent.md",
+            "share/agents/ideation-data.agent.md",
+            "share/agents/ideation-enduser.agent.md",
+            "share/agents/ideation-security.agent.md",
         ]
         missing = [path for path in required if not (_REPO_ROOT / path).exists()]
         assert not missing, f"Missing ideation-overhaul files: {missing}"
@@ -149,20 +176,10 @@ class TestFromAC_AgentContracts:
     """Agent prompts keep narrow file contracts and avoid model-string coupling."""
 
     def test_role_files_do_not_use_model_field_as_contract(self) -> None:
-        role_files = [
-            "share/agents/ideation-discoverer.agent.md",
-            "share/agents/ideation-mediator.agent.md",
-            "share/agents/ideation-firstprinciples.agent.md",
-            "share/agents/ideation-simplifier.agent.md",
-            "share/agents/ideation-outsider.agent.md",
-            "share/agents/ideation-pragmatist.agent.md",
-            "share/agents/ideation-critic.agent.md",
-        ]
         offenders = []
-        for path in role_files:
-            text = _read(path)
-            if "model:" in text:
-                offenders.append(path)
+        for path in _ideation_agent_files():
+            if "model:" in path.read_text(encoding="utf-8"):
+                offenders.append(str(path.relative_to(_REPO_ROOT)))
         assert not offenders, f"Model-string contracts still present: {offenders}"
 
     def test_ideation_surfaces_keep_context_and_decisions_contract(self) -> None:
@@ -197,62 +214,13 @@ class TestFromAC_AgentContracts:
         )
 
     def test_no_working_log_or_checkpoint_contract_reappears(self) -> None:
-        ideation_files = [
-            "share/skills/w-ideation/SKILL.md",
-            "share/skills/w-ideation-discovery/SKILL.md",
-            "share/skills/w-ideation-mediation/SKILL.md",
-            "share/skills/h-ideation-panel/SKILL.md",
-            "share/agents/ideator.agent.md",
-            "share/agents/ideation-discoverer.agent.md",
-            "share/agents/ideation-mediator.agent.md",
-            "share/agents/ideation-pragmatist.agent.md",
-            "share/agents/ideation-critic.agent.md",
-            "share/agents/ideation-firstprinciples.agent.md",
-            "share/agents/ideation-simplifier.agent.md",
-            "share/agents/ideation-outsider.agent.md",
-            ".owlbear/briefs/README.md",
-        ]
         offenders = []
-        for path in ideation_files:
-            text = _read(path)
+        for path in _ideation_surface_files():
+            text = path.read_text(encoding="utf-8").lower()
             if "working-log.md" in text or "checkpoint" in text:
-                offenders.append(path)
+                offenders.append(str(path.relative_to(_REPO_ROOT)))
         assert not offenders, (
             f"Deprecated ideation contract terms reappeared: {offenders}"
-        )
-
-    def test_late_panelist_files_do_not_use_model_field_as_contract(self) -> None:
-        """AC 1 coverage for the four late-domain panelists omitted from role_files scan."""
-        panelist_files = [
-            "share/agents/ideation-architect.agent.md",
-            "share/agents/ideation-data.agent.md",
-            "share/agents/ideation-enduser.agent.md",
-            "share/agents/ideation-security.agent.md",
-        ]
-        offenders = []
-        for path in panelist_files:
-            text = _read(path)
-            if "model:" in text:
-                offenders.append(path)
-        assert not offenders, (
-            f"Model-string contracts present in late panelist files: {offenders}"
-        )
-
-    def test_late_panelist_files_have_no_working_log_or_checkpoint(self) -> None:
-        """AC 5 coverage for the four late-domain panelists omitted from forbidden-term scan."""
-        panelist_files = [
-            "share/agents/ideation-architect.agent.md",
-            "share/agents/ideation-data.agent.md",
-            "share/agents/ideation-enduser.agent.md",
-            "share/agents/ideation-security.agent.md",
-        ]
-        offenders = []
-        for path in panelist_files:
-            text = _read(path)
-            if "working-log.md" in text or "checkpoint" in text:
-                offenders.append(path)
-        assert not offenders, (
-            f"Deprecated contract terms reappeared in late panelist files: {offenders}"
         )
 
 
