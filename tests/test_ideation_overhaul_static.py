@@ -221,6 +221,40 @@ class TestFromAC_AgentContracts:
             f"Deprecated ideation contract terms reappeared: {offenders}"
         )
 
+    def test_late_panelist_files_do_not_use_model_field_as_contract(self) -> None:
+        """AC 1 coverage for the four late-domain panelists omitted from role_files scan."""
+        panelist_files = [
+            "share/agents/ideation-architect.agent.md",
+            "share/agents/ideation-data.agent.md",
+            "share/agents/ideation-enduser.agent.md",
+            "share/agents/ideation-security.agent.md",
+        ]
+        offenders = []
+        for path in panelist_files:
+            text = _read(path)
+            if "model:" in text:
+                offenders.append(path)
+        assert not offenders, (
+            f"Model-string contracts present in late panelist files: {offenders}"
+        )
+
+    def test_late_panelist_files_have_no_working_log_or_checkpoint(self) -> None:
+        """AC 5 coverage for the four late-domain panelists omitted from forbidden-term scan."""
+        panelist_files = [
+            "share/agents/ideation-architect.agent.md",
+            "share/agents/ideation-data.agent.md",
+            "share/agents/ideation-enduser.agent.md",
+            "share/agents/ideation-security.agent.md",
+        ]
+        offenders = []
+        for path in panelist_files:
+            text = _read(path)
+            if "working-log.md" in text or "checkpoint" in text:
+                offenders.append(path)
+        assert not offenders, (
+            f"Deprecated contract terms reappeared in late panelist files: {offenders}"
+        )
+
 
 class TestFromAC_BlackboardDocs:
     """Blackboard docs preserve the multi-file contract and handoff artifacts."""
