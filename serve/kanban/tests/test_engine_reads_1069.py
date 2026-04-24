@@ -667,8 +667,7 @@ class TestFromAC_ShowTaskSectionLookup:
         view = _make_view(kanban_dir)
         view.engine.list_tasks()
         resp = view.show_task(13, section="nonexistent")
-        assert resp.missing_sections is not None
-        assert "nonexistent" in resp.missing_sections
+        assert resp.missing_sections == ["nonexistent"]
 
     def test_empty_section_raises_err_section_empty(self, tmp_path: Path) -> None:
         """Empty string section → ValidationError(ERR_SECTION_EMPTY)."""
@@ -742,6 +741,6 @@ class TestFromAC_ShowTaskSectionGuidance:
         view.engine.list_tasks()
         resp = view.show_task(20, section="Goals")
         assert resp.guidance, "guidance must be non-empty for multiple section matches"
-        assert any("occurrences" in g for g in resp.guidance), (
-            f"guidance must include occurrence count; got {resp.guidance!r}"
+        assert any("2 occurrences" in g for g in resp.guidance), (
+            f"guidance must include numeric occurrence count; got {resp.guidance!r}"
         )
