@@ -43,7 +43,7 @@ The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goe
 
 ## Work Sessions Model
 
-`GET /api/sessions` returns derived `WorkSession` objects built from `activity.jsonl` at read time — there is no separate sessions store.
+`GET /api/sessions` returns derived `SessionRecord` objects built from `activity.jsonl` at read time — there is no separate sessions store.
 
 ### Derived states
 
@@ -51,12 +51,11 @@ The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goe
 |-------|---------------------|
 | `running` | Open claim; last activity within `claim_timeout` |
 | `stuck` | Open claim; last activity exceeds `claim_timeout` |
-| `completed-pass` | `end_work` with `detail` starting `"success:"` |
-| `completed-rejected` | `end_work` with `detail` starting `"reject:"` |
-| `completed-fail` | Any other `end_work` outcome |
+| `completed` | `end_work` with `detail` starting `"success:"` |
+| `rejected` | `end_work` with `detail` starting `"reject:"` |
+| `blocked` | Any other `end_work` outcome |
 | `released` | `release` action in the log |
-
-> `sweep-release` resets the internal claim state but does **not** produce a `WorkSession` entry. Only a user-initiated `release` produces a `"released"` session.
+| `expired` | `sweep-release` action in the log (expired claim auto-released) |
 
 ### Filter vocabulary
 
@@ -64,7 +63,8 @@ The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goe
 |-------------|-----------------|
 | `active` | `running`, `stuck` |
 | `all` | all states |
-| `failed-or-rejected` | `completed-fail`, `completed-rejected` |
+| `blocked-or-rejected` | `blocked`, `rejected` |
+| `failed-or-rejected` | `blocked`, `rejected` (legacy alias for `blocked-or-rejected`) |
 | `released` | `released` |
 
 Usage: `GET /api/sessions?filter=active`
