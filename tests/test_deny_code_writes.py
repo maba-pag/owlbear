@@ -16,7 +16,7 @@ _TARGET_PATTERNS = (
     "test_activity_store*.py",
     "test_corruption*.py",
 )
-_WRITE_METHODS = {"write_text", "write_bytes", "touch", "mkdir"}
+_WRITE_METHODS = {"write_text", "write_bytes", "touch", "mkdir", "rmdir", "unlink"}
 
 
 def _target_files() -> list[Path]:
@@ -39,7 +39,11 @@ def _name_is_tmp_root(name: str) -> bool:
     }
 
 
-def _is_safe_path_expr(node: ast.AST, safe_names: set[str]) -> bool:  # noqa: C901, PLR0911, PLR0912
+def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
+    node: ast.AST,
+    safe_names: set[str],
+    tmp_aliases: set[str] | None = None,
+) -> bool:
     if isinstance(node, ast.Name):
         return node.id in safe_names
 
@@ -48,7 +52,12 @@ def _is_safe_path_expr(node: ast.AST, safe_names: set[str]) -> bool:  # noqa: C9
         return not value.startswith(("/", "~"))
 
     if isinstance(node, ast.JoinedStr):
-        return True
+        first_literal = ""
+        for item in node.values:
+            if isinstance(item, ast.Constant) and isinstance(item.value, str):
+                first_literal = item.value
+                break
+        return not first_literal.startswith(("/", "~"))
 
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
         return _is_safe_path_expr(node.left, safe_names) and _is_safe_path_expr(
@@ -59,12 +68,13 @@ def _is_safe_path_expr(node: ast.AST, safe_names: set[str]) -> bool:  # noqa: C9
         if node.attr in {"home", "cwd", "root"}:
             return False
         if node.attr == "parent":
-            if isinstance(node.value, ast.Name) and node.value.id == "tmp_path":
+            parent_unsafe_names = safe_names if tmp_aliases is None else tmp_aliases
+            if isinstance(node.value, ast.Name) and node.value.id in parent_unsafe_names:
                 return False
-            return _is_safe_path_expr(node.value, safe_names)
+            return _is_safe_path_expr(node.value, safe_names, tmp_aliases)
         if node.attr == "parents":
             return False
-        return _is_safe_path_expr(node.value, safe_names)
+        return _is_safe_path_expr(node.value, safe_names, tmp_aliases)
 
     if isinstance(node, ast.Subscript):
         # Covers patterns like tmp_path.parents[0].
@@ -72,17 +82,48 @@ def _is_safe_path_expr(node: ast.AST, safe_names: set[str]) -> bool:  # noqa: C9
 
     if isinstance(node, ast.Call):
         if isinstance(node.func, ast.Name) and node.func.id == "Path" and node.args:
-            return _is_safe_path_expr(node.args[0], safe_names)
+            return _is_safe_path_expr(node.args[0], safe_names, tmp_aliases)
         if isinstance(node.func, ast.Attribute) and node.func.attr in {
             "joinpath",
             "resolve",
             "absolute",
         }:
-            if not _is_safe_path_expr(node.func.value, safe_names):
+            if not _is_safe_path_expr(node.func.value, safe_names, tmp_aliases):
                 return False
-            return all(_is_safe_path_expr(arg, safe_names) for arg in node.args)
+            return all(
+                _is_safe_path_expr(arg, safe_names, tmp_aliases) for arg in node.args
+            )
 
     return False
+
+
+def _collect_tmp_aliases(tree: ast.AST) -> set[str]:
+    """Collect direct aliases of tmp_path to block parent-escape patterns."""
+    aliases = {"tmp_path"}
+    changed = True
+    while changed:
+        changed = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and len(node.targets) == 1:
+                target = node.targets[0]
+                if (
+                    isinstance(target, ast.Name)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id in aliases
+                    and target.id not in aliases
+                ):
+                    aliases.add(target.id)
+                    changed = True
+            elif (
+                isinstance(node, ast.AnnAssign)
+                and isinstance(node.target, ast.Name)
+                and isinstance(node.value, ast.Name)
+                and node.value.id in aliases
+                and node.target.id not in aliases
+            ):
+                aliases.add(node.target.id)
+                changed = True
+    return aliases
 
 
 def _collect_safe_names(tree: ast.AST) -> set[str]:  # noqa: C901
@@ -146,6 +187,7 @@ class TestDenyCodeWrites:
             source = path.read_text(encoding="utf-8")
             tree = ast.parse(source, filename=str(path))
             safe_names = _collect_safe_names(tree)
+            tmp_aliases = _collect_tmp_aliases(tree)
 
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Call):
@@ -157,7 +199,7 @@ class TestDenyCodeWrites:
                     continue
 
                 target_src = ast.get_source_segment(source, target) or "<expr>"
-                if not _is_safe_path_expr(target, safe_names):
+                if not _is_safe_path_expr(target, safe_names, tmp_aliases):
                     rel = path.relative_to(_REPO_ROOT)
                     violations.append(
                         f"{rel}:{node.lineno} -> not tmp_path-derived: {target_src}"
@@ -228,4 +270,68 @@ class TestFromAC_DenyWritesEnforcement:
             "is derived from tmp_path.  The current implementation recurses to "
             "_is_safe_path_expr(base) → True, making base.parent appear safe. "
             "Any .parent access on a safe (tmp-derived) name must be rejected."
+        )
+
+    def test_extract_write_target_detects_rmdir_calls(self) -> None:
+        """AC-C46 (refined): _extract_write_target must flag .rmdir() method calls.
+
+        The refined AC-C46 adds ``rmdir`` to the enforced write-method set
+        (it appears in ``test_storage_1050.py:939,966``).  The current
+        implementation only checks ``{"write_text", "write_bytes", "touch",
+        "mkdir"}`` in ``_WRITE_METHODS``, so ``.rmdir()`` calls return ``None``
+        from ``_extract_write_target`` and are not guarded.
+        """
+        source = "some_path.rmdir()"
+        tree = ast.parse(source, mode="eval")
+        call_node = tree.body
+        assert isinstance(call_node, ast.Call)
+        result = _extract_write_target(call_node)
+        assert result is not None, (
+            "_extract_write_target must detect .rmdir() as a write target.  "
+            "Refined AC-C46 adds rmdir to the enforced write-method set, but "
+            "_WRITE_METHODS = " + repr(_WRITE_METHODS) + " does not include it, "
+            "leaving storage-test rmdir() calls unguarded."
+        )
+
+    def test_extract_write_target_detects_unlink_calls(self) -> None:
+        """AC-C46 (refined): _extract_write_target must flag .unlink() method calls.
+
+        The refined AC-C46 adds ``unlink`` to the enforced write-method set.
+        The current ``_WRITE_METHODS`` set does not include it, so storage tests
+        that call ``.unlink()`` on non-``tmp_path`` paths escape the guard.
+        """
+        source = "some_path.unlink()"
+        tree = ast.parse(source, mode="eval")
+        call_node = tree.body
+        assert isinstance(call_node, ast.Call)
+        result = _extract_write_target(call_node)
+        assert result is not None, (
+            "_extract_write_target must detect .unlink() as a write target.  "
+            "Refined AC-C46 adds unlink to the enforced write-method set, but "
+            "_WRITE_METHODS = " + repr(_WRITE_METHODS) + " does not include it, "
+            "leaving storage-test unlink() calls unguarded."
+        )
+
+    def test_is_safe_path_expr_rejects_relative_parent_hop(self) -> None:
+        """AC-C46 (v2 refined): ``_is_safe_path_expr`` must reject ``../`` relative
+        path traversal, not only absolute (``/``) and home (``~``) prefixes.
+
+        A string constant ``"../escape.txt"`` starts with ``".."`` and resolves
+        outside any ``tmp_path`` subtree when joined.  The current implementation
+        only checks ``startswith(("/", "~"))`` at line 52, so ``"../escape.txt"``
+        is treated as safe and would not be flagged as a write-target violation.
+
+        Per architect v2 refined AC-C46: add ``".."`` to the prefix tuple so
+        direct parent-traversal escapes are rejected.
+        """
+        source = '"../escape.txt"'
+        tree = ast.parse(source, mode="eval")
+        const_node = tree.body
+        assert isinstance(const_node, ast.Constant)
+        result = _is_safe_path_expr(const_node, {"tmp_path"})
+        assert not result, (
+            '"../escape.txt" starts with ".." and escapes the tmp_path subtree; '
+            "_is_safe_path_expr must return False for it.  "
+            'Add ".." to the startswith tuple at line 52 of test_deny_code_writes.py '
+            "to enforce the architect v2 refined AC-C46 relative-parent-hop rule."
         )
