@@ -20,13 +20,14 @@ All tests FAIL (RED phase).
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import ShowTaskResponse, ValidationError
+from owlbear_kanban.models import NotFoundError, ShowTaskResponse, ValidationError
 
 # ---------------------------------------------------------------------------
 # Board and task helpers
@@ -456,4 +457,291 @@ class TestFromAC_DepStatus:
         assert task_a.dep_status == "ok", (
             f"Dep B is active (research); §3.3 requires dep_status='ok' "
             f"but got {task_a.dep_status!r}"
+        )
+
+    def test_dep_status_blocked_when_dep_archived_dropped(
+        self, tmp_path: Path
+    ) -> None:
+        """dep_status='blocked' when dep is archived with reason 'dropped' (§3.3)."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2]")
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="B",
+            status="archived",
+            archival_reason="dropped",
+            subdir="archive",
+        )
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks(status="todo")
+        task_a = next((t for t in resp.tasks if t.id == 1), None)
+        assert task_a is not None, "Task A must appear in todo result"
+        assert task_a.dep_status == "blocked", (
+            f"Dep B archived with 'dropped'; §3.3 requires dep_status='blocked' "
+            f"but got {task_a.dep_status!r}"
+        )
+
+    def test_dep_status_redirect_when_dep_archived_duplicate(
+        self, tmp_path: Path
+    ) -> None:
+        """dep_status='redirect' when dep is archived with reason 'duplicate' (§3.3)."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2]")
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="B",
+            status="archived",
+            archival_reason="duplicate",
+            subdir="archive",
+        )
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks(status="todo")
+        task_a = next((t for t in resp.tasks if t.id == 1), None)
+        assert task_a is not None, "Task A must appear in todo result"
+        assert task_a.dep_status == "redirect", (
+            f"Dep B archived with 'duplicate'; §3.3 requires dep_status='redirect' "
+            f"but got {task_a.dep_status!r}"
+        )
+
+    def test_dep_status_none_when_task_has_no_deps(self, tmp_path: Path) -> None:
+        """dep_status=None when task has no dependencies (§3.3)."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="NoDeps", status="todo")
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks(status="todo")
+        task = next((t for t in resp.tasks if t.id == 1), None)
+        assert task is not None
+        assert task.dep_status is None, (
+            f"No deps → dep_status must be None but got {task.dep_status!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC1 — archival_refs field + warm-cache archive transition (retry gaps)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ShowTaskArchivedFields:
+    """AC1 retry: archival_refs field asserted; warm-cache-move scenario covered."""
+
+    def test_show_archived_task_archival_refs_is_list(self, tmp_path: Path) -> None:
+        """AC1: archival_refs is present as a list on the returned response."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=7,
+            title="Archived",
+            status="archived",
+            archival_reason="completed",
+            subdir="archive",
+        )
+        view = _make_view(kanban_dir)
+        resp = view.show_task(7)
+        assert isinstance(resp.archival_refs, list)
+        assert resp.archival_refs == []
+
+    def test_show_archived_task_after_warm_cache_move(self, tmp_path: Path) -> None:
+        """AC1: show_task succeeds when active-cached task file is moved to archive.
+
+        Scenario: engine warms _id_to_filename with task in tasks/, then the
+        file is moved to archive/ externally. show_task must not raise and must
+        return the archived task (stale active-path cache invalidated correctly).
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=7,
+            title="Will Be Archived",
+            status="todo",
+            subdir="tasks",
+        )
+        view = _make_view(kanban_dir)
+        view.list_tasks()  # warm _id_to_filename + _task_cache for task 7
+
+        src = kanban_dir / "tasks" / "7-task.md"
+        dst = kanban_dir / "archive" / "7-task.md"
+        shutil.move(str(src), str(dst))
+
+        resp = view.show_task(7)
+        assert resp.id == 7
+
+
+# ---------------------------------------------------------------------------
+# AC3 — exact cardinality and exact missing_ids equality (retry gaps)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListTasksIdsExact:
+    """AC3 retry: exact task count and exact missing_ids equality."""
+
+    def test_ids_result_count_is_exactly_two(self, tmp_path: Path) -> None:
+        """AC3: ids=[active, archived, missing] → exactly 2 tasks returned."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Active")
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="Archived",
+            status="archived",
+            archival_reason="completed",
+            subdir="archive",
+        )
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks(ids=[1, 2, 999])
+        assert len(resp.tasks) == 2, (
+            f"Expected exactly 2 tasks (active + archived), got {len(resp.tasks)}"
+        )
+
+    def test_ids_missing_ids_exact_equality(self, tmp_path: Path) -> None:
+        """AC3: missing_ids is exactly [999] — no extra ids, correct value."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Active")
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="Archived",
+            status="archived",
+            archival_reason="completed",
+            subdir="archive",
+        )
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks(ids=[1, 2, 999])
+        assert resp.missing_ids == [999], (
+            f"missing_ids must be exactly [999], got {resp.missing_ids!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC10/11/12 section lookup + validation errors (retry gaps)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ShowTaskSectionLookup:
+    """AC10: case-insensitive section. AC11: missing section. ERR_SECTION_EMPTY.
+    ERR_NOT_FOUND. AC12: guidance occurrence count (added to existing test class
+    below via direct assertion here for orthogonality).
+    """
+
+    def test_case_insensitive_section_lookup_returns_content(
+        self, tmp_path: Path
+    ) -> None:
+        """AC10: section='GOALS' matches '## Goals' heading (case-insensitive)."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=11,
+            title="CaseTest",
+            body="## Goals\nSome goal text.\n",
+        )
+        view = _make_view(kanban_dir)
+        view.engine.list_tasks()  # warm index
+        resp = view.show_task(11, section="GOALS")
+        assert resp.body is not None, "Case-insensitive match must return body content"
+        assert "Some goal text." in resp.body
+
+    def test_missing_section_body_is_none(self, tmp_path: Path) -> None:
+        """AC11: section not found → body=None."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=12,
+            title="MissSection",
+            body="## Goals\nContent.\n",
+        )
+        view = _make_view(kanban_dir)
+        view.engine.list_tasks()
+        resp = view.show_task(12, section="nonexistent")
+        assert resp.body is None, "Missing section must return body=None"
+
+    def test_missing_section_populates_missing_sections(self, tmp_path: Path) -> None:
+        """AC11: section not found → missing_sections=[section_name]."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=13,
+            title="MissSection2",
+            body="## Goals\nContent.\n",
+        )
+        view = _make_view(kanban_dir)
+        view.engine.list_tasks()
+        resp = view.show_task(13, section="nonexistent")
+        assert resp.missing_sections is not None
+        assert "nonexistent" in resp.missing_sections
+
+    def test_empty_section_raises_err_section_empty(self, tmp_path: Path) -> None:
+        """Empty string section → ValidationError(ERR_SECTION_EMPTY)."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=14, title="EmptySection")
+        view = _make_view(kanban_dir)
+        view.engine.list_tasks()
+        with pytest.raises(ValidationError) as exc_info:
+            view.show_task(14, section="")
+        assert exc_info.value.code == "ERR_SECTION_EMPTY"
+
+    def test_not_found_id_raises_err_not_found(self, tmp_path: Path) -> None:
+        """Non-existent task id → NotFoundError(ERR_NOT_FOUND)."""
+        kanban_dir = _make_board(tmp_path)
+        view = _make_view(kanban_dir)
+        with pytest.raises(NotFoundError) as exc_info:
+            view.show_task(99999)
+        assert exc_info.value.code == "ERR_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# Default exclusion of archived (retry gap)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListTasksDefaultExclusion:
+    """Default list_tasks() must exclude archived tasks."""
+
+    def test_default_list_excludes_archived_task(self, tmp_path: Path) -> None:
+        """Bare list_tasks() must not return archived tasks."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Active", status="todo")
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            title="Archived",
+            status="archived",
+            archival_reason="completed",
+            subdir="archive",
+        )
+        view = _make_view(kanban_dir)
+        resp = view.list_tasks()
+        ids = [t.id for t in resp.tasks]
+        assert 2 not in ids, "Archived task must not appear in default list_tasks()"
+        assert 1 in ids, "Active task must appear in default list_tasks()"
+
+
+# ---------------------------------------------------------------------------
+# AC12 guidance occurrence count (added test alongside existing section-concat)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ShowTaskSectionGuidance:
+    """AC12: multiple section matches → guidance includes occurrence count."""
+
+    def test_multiple_section_matches_guidance_has_occurrence_count(
+        self, tmp_path: Path
+    ) -> None:
+        """AC12: guidance must mention occurrence count when >1 sections matched."""
+        kanban_dir = _make_board(tmp_path)
+        body = (
+            "## Goals\n"
+            "First goal.\n\n"
+            "## Notes\n"
+            "A note.\n\n"
+            "## Goals\n"
+            "Second goal.\n"
+        )
+        _write_task(kanban_dir, task_id=20, title="GuidanceTest", body=body)
+        view = _make_view(kanban_dir)
+        view.engine.list_tasks()
+        resp = view.show_task(20, section="Goals")
+        assert resp.guidance, "guidance must be non-empty for multiple section matches"
+        assert any("occurrences" in g for g in resp.guidance), (
+            f"guidance must include occurrence count; got {resp.guidance!r}"
         )
