@@ -181,6 +181,23 @@ class TestFromAC_ClaimTimeoutFormat:
         kanban_dir = _make_board(tmp_path, config)
         KanbanEngine(kanban_dir)  # must not raise
 
+    def test_claim_timeout_unknown_unit_raises_config_error(self, tmp_path: Path) -> None:
+        # "30x" has an unrecognised unit — must raise ERR_INVALID_CLAIM_TIMEOUT
+        config = _BASE_CONFIG.replace("claim_timeout: 1h", "claim_timeout: 30x")
+        kanban_dir = _make_board(tmp_path, config)
+        with pytest.raises(ConfigError) as exc_info:
+            KanbanEngine(kanban_dir)
+        assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
+
+    def test_claim_timeout_bare_number_raises_config_error(self, tmp_path: Path) -> None:
+        # "30" (quoted string, no unit) is ambiguous and must raise ERR_INVALID_CLAIM_TIMEOUT.
+        # Use a quoted YAML value so Pydantic receives a string and _parse_duration does the check.
+        config = _BASE_CONFIG.replace("claim_timeout: 1h", 'claim_timeout: "30"')
+        kanban_dir = _make_board(tmp_path, config)
+        with pytest.raises(ConfigError) as exc_info:
+            KanbanEngine(kanban_dir)
+        assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
+
 
 # ---------------------------------------------------------------------------
 # D63 — agent_compatibility must be symmetric
@@ -247,3 +264,14 @@ class TestFromAC_NoAgentNameParam:
     def test_constructor_signature_excludes_agent_name(self) -> None:
         sig = inspect.signature(KanbanEngine.__init__)
         assert "agent_name" not in sig.parameters
+
+    def test_constructor_rejects_agent_name_kwarg_at_runtime(self, tmp_path: Path) -> None:
+        """Passing agent_name at runtime must raise TypeError per D33 behavioral contract.
+
+        D33 states the constructor no longer accepts agent_name.  A hidden **kwargs
+        path that silently absorbs the argument violates that contract even when it
+        is absent from the explicit parameter list.
+        """
+        kanban_dir = _make_board(tmp_path)
+        with pytest.raises(TypeError):
+            KanbanEngine(kanban_dir, agent_name="some-agent")
