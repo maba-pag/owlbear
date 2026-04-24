@@ -41,7 +41,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 
 - **Follow the `w-orchestration` skill** for the plan-dispatch-verify loop, wave assembly, and rate-limit fallback.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and agent-signal mapping.
-- **Never interpret pipeline-agent output.** A pipeline agent (builder, reviewer, etc.) either returned (success) or crashed (error). You do not parse their Channel A signals for routing decisions. After the scribe returns in resolve mode, read `.owlbear/decisions/resolve-summary.json` via `readFile` for structured dispatch data (see w-orchestration Step 1).
+- **Channel A signals.** Use agent return values for tool-health detection only (`TOOL_UNAVAILABLE` marker). Do not parse them for task routing — re-plan routing from board state via `pick_tasks` each cycle. After the scribe returns in resolve mode, read `.owlbear/decisions/resolve-summary.json` via `readFile` for structured dispatch data (see w-orchestration Step 1).
 - **ONE task per subagent dispatch.** Never batch multiple tasks into a single subagent call.
 - **Never stop early.** There is no "good stopping point" you may choose. Keep cycling until `pick_tasks` returns an empty list or the user intervenes — those are the only valid stop conditions.
 

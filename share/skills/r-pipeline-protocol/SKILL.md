@@ -67,9 +67,11 @@ Researcher, architect, and planner must reject invalid task inputs immediately:
 
 All pipeline agents (test-writer, builder, reviewer, auditor) **must** delegate test, lint, and coverage execution to the `quality-runner` subagent. Direct `pytest` / `ruff` invocation in agent terminals is prohibited — it bypasses the canonical evidence pipeline and produces non-comparable reports across agents.
 
-If `quality-runner` is unavailable (not in the calling agent's `agents:` array, or subagent dispatch fails), the agent **blocks the task** via `end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run {tests|lint|coverage} independently")`. Never improvise with direct shell commands.
-
 Exception: the `quality-runner` agent itself runs the underlying tools — that's its job.
+
+### Tool Availability
+
+When a required tool or subagent is unavailable or fails to dispatch, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs. The orchestrator reads this marker and will verify and halt if the problem is systemic.
 
 ### Defense-in-Depth
 

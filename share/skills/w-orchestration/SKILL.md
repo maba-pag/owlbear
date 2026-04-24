@@ -13,7 +13,7 @@ Plan-dispatch-loop cycle for the orchestrator. The orchestrator maintains minima
 The orchestrator maintains constant-size context:
 
 - **No board state.** `pick_tasks` reads the board each cycle via MCP tool call; no board state held in context between cycles.
-- **No signal interpretation.** Pipeline subagents return a Channel A diagnostic line. Only check: did the agent return normally or crash? After scribe returns, read `resolve-summary.json` for structured dispatch data (see Step 1).
+- **No signal interpretation.** Pipeline subagents return a Channel A diagnostic line. Use return values for tool-health detection only (`TOOL_UNAVAILABLE` marker — see Tool-Failure Verification below). Do not parse them for task routing. After scribe returns, read `resolve-summary.json` for structured dispatch data (see Step 1).
 - **No retry tracking state — except:** `stale_retried` (task IDs dispatched with retry_hint), `last_dispatched` (dict[int, str] — task_id → status from previous pick_tasks result, max 20 entries), `sequential_remaining` (rate-limit sequential counter), `needs_info_dispatches` (list of {task_id, agent} pairs from scribe `resolve-summary.json`, cleared each cycle).
 - **Prior cycle results discarded.** Each cycle starts fresh with scope filter, crash IDs, and `stale_retried`.
 - **Brief context:** The ideator's parent task body may contain a Brief artifact (Problem, Outcomes, Approach, Scope, Investment Tier). This context is available to pipeline agents via parent task lookup (`show_task(parent_id)`) — the orchestrator does not use Brief context directly.
@@ -24,7 +24,7 @@ See `r-pipeline-protocol` → Communication for Channel A/B spec.
 
 **pick_tasks output:** Array of task objects (id, status, priority, title, tags). Empty array = nothing dispatchable, stop.
 
-**Pipeline subagent output:** Channel A diagnostic line. Do NOT parse for routing. Only check: normal return vs crash. After scribe returns, read `resolve-summary.json` for structured dispatch data (see Step 1).
+**Pipeline subagent output:** Channel A diagnostic line. Use for tool-health detection only (`TOOL_UNAVAILABLE` marker). Do not parse for routing. After scribe returns, read `resolve-summary.json` for structured dispatch data (see Step 1).
 
 ## Step 1 — Resolve Pending Decision Requests
 
@@ -151,6 +151,14 @@ runSubagent("memory-curator", "Curate: Periodic curation", "Curation")
 1. Check for rate-limit errors first (message contains "rate-limited", "rate_limited", or "rate limits"). Follow rate-limit sequential fallback.
 2. For non-rate-limit errors: retry once.
 3. If it errors again: record as failure.
+
+### Tool-Failure Verification
+
+When an agent's return contains `TOOL_UNAVAILABLE`, the agent could not reach a required tool or subagent (see `r-pipeline-protocol` → Tool Availability). This may be transient (one-off dispatch glitch) or systemic (VS Code extension degraded).
+
+1. Re-dispatch the same agent on the same task immediately.
+2. If the retry also returns `TOOL_UNAVAILABLE`: halt orchestration — "Tool availability degraded: {agent} cannot reach {tool_name}. Restart VS Code or check extension status."
+3. If the retry succeeds: tools recovered. Continue the loop normally.
 
 ### Rate-Limit Sequential Fallback
 
