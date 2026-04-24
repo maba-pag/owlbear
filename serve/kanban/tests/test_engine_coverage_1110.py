@@ -53,7 +53,14 @@ priorities:
   - critical
 entry_status: research
 wave_size: 4
-agent_map: {}
+agent_map:
+  research: []
+  backlog: []
+  todo: []
+  in-progress: []
+  review: []
+  docs: []
+  done: []
 agent_types: {}
 agent_compatibility: {}
 non_impl_tags: [research, docs]
@@ -684,16 +691,16 @@ class TestFromAC_EngineClaimTaskGuards:
     ) -> None:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, claimed_at=_active_claimed_at())
-        engine = KanbanEngine(board, agent_name="agent-new", activity_log=False)
+        engine = KanbanEngine(board, activity_log=False)
         with pytest.raises(ValueError, match="already claimed"):
             engine.claim_task("1")
 
     def test_claim_task_expired_claim_is_overridable(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, claimed_at=_EPOCH_CLAIMED_AT)
-        engine = KanbanEngine(board, agent_name="agent-new", activity_log=False)
+        engine = KanbanEngine(board, activity_log=False)
         task = engine.claim_task("1")
-        assert task.claimed_by == "agent-new"
+        assert task.claimed_by == engine.agent_name
 
 
 # ---------------------------------------------------------------------------

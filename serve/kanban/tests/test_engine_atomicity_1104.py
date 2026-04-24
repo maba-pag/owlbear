@@ -39,7 +39,14 @@ priorities:
   - critical
 entry_status: research
 wave_size: 4
-agent_map: {}
+agent_map:
+  research: []
+  backlog: []
+  todo: []
+  in-progress: []
+  review: []
+  docs: []
+  done: []
 agent_types: {}
 agent_compatibility: {}
 non_impl_tags: [research, docs]
