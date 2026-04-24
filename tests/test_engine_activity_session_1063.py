@@ -454,23 +454,17 @@ class TestFromAC_EndWorkBlockReasonRequired:
             engine.end_work("1", note="blocked by dependency", outcome="block")
             # No block_reason supplied — must raise ValueError per docstring
 
-    def test_end_work_block_without_block_reason_produces_empty_block_reason_on_task(
+    def test_end_work_block_with_explicit_empty_block_reason_raises_value_error(
         self, engine: KanbanEngine
     ) -> None:
-        """end_work(outcome='block') without block_reason stores empty string — contract violation.
+        """end_work(outcome='block', block_reason='') must also raise ValueError.
 
-        AC-C42: the documented contract states block_reason is 'Required when
-        outcome is block; stored on the task.' An empty block_reason stored on
-        the task violates this requirement. This test demonstrates the gap:
-        the engine does not raise, and the resulting task has an empty string
-        block_reason rather than a meaningful reason.
+        Boundary test: an explicit empty-string block_reason is equivalent to no
+        block_reason. The documented ValueError contract covers both the default
+        (omitted, test above) and the explicit-empty-string path.
+        The implementation does not validate this — it silently accepts
+        block_reason="" and stores it — so this test FAILS (DID NOT RAISE).
         """
         engine.claim_task("2")
-        # The call does NOT raise (implementation gap from test above).
-        # We verify the consequence: block_reason is empty, violating the contract.
-        task = engine.end_work("2", note="blocked by dep", outcome="block")
-        assert task.block_reason, (
-            f"end_work(outcome='block') without block_reason must store a non-empty "
-            f"block_reason on the task; got block_reason={task.block_reason!r}. "
-            f"The docstring states block_reason is 'Required when outcome is block'."
-        )
+        with pytest.raises(ValueError, match="block_reason"):
+            engine.end_work("2", note="blocked by dep", outcome="block", block_reason="")
