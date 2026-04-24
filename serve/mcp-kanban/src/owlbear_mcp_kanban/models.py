@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 
 class MCPParamsBase(BaseModel):
@@ -19,6 +19,8 @@ class ListTasksParams(MCPParamsBase):
     status: str | None = None
     tag: str | None = None
     priority: str | None = None
+    archival_reason: str | None = None
+    parent: int | None = None
     search: str | None = None
     sort: str | None = None
     unclaimed: bool | None = None
@@ -37,8 +39,15 @@ class ListTasksParams(MCPParamsBase):
             self.status is not None
             or self.tag is not None
             or self.priority is not None
+            or self.archival_reason is not None
+            or self.parent is not None
             or self.search is not None
+            or self.sort is not None
             or self.unclaimed is not None
+            or self.archived is not None
+            or self.limit is not None
+            or self.reverse is not None
+            or self.blocked is not None
         ):
             msg = "ids cannot be combined with other filter parameters"
             raise ValueError(msg)
@@ -48,15 +57,20 @@ class ListTasksParams(MCPParamsBase):
 class ShowTaskParams(MCPParamsBase):
     """Input schema for show_task."""
 
-    task_id: int
+    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
     section: str | None = None
+
+    @property
+    def task_id(self) -> int:
+        """Backward-compatible alias for legacy callers."""
+        return self.id
 
 
 class PickTasksParams(MCPParamsBase):
     """Input schema for pick_tasks."""
 
-    limit: int = 25
-    tag: str = ""
+    wave_size: int | None = None
+    max_waves: int = 3
 
 
 class CreateTaskParams(MCPParamsBase):
@@ -64,51 +78,55 @@ class CreateTaskParams(MCPParamsBase):
 
     title: str
     body: str = ""
-    depends_on: str = ""
-    parent: int = 0
-    priority: str = ""
-    tags: str = ""
+    priority: str = "needed"
+    tags: list[str] | None = None
+    parent: int | None = None
+    depends_on: list[int] | None = None
 
 
 class EditTaskParams(MCPParamsBase):
     """Input schema for edit_task."""
 
-    task_id: int
-    body: str = ""
-    block: str = ""
-    unblock: bool = False
-    add_tag: str = ""
-    remove_tag: str = ""
-    priority: str = ""
-    append_body: str = ""
+    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
+    body: str | None = None
+    append_body: str | None = None
     timestamp: bool = False
-    add_dep: str = ""
-    remove_dep: str = ""
-    parent: int = 0
-    title: str = ""
+    priority: str | None = None
+    parent: int | None = None
+    add_dep: list[int] | None = None
+    remove_dep: list[int] | None = None
+    add_tag: list[str] | None = None
+    remove_tag: list[str] | None = None
+    block_reason: str | None = None
+    archival_reason: str | None = None
+    archival_refs: list[int] | None = None
 
 
 class MoveTaskParams(MCPParamsBase):
     """Input schema for move_task."""
 
-    task_id: int
+    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
     status: str
+    archival_reason: str | None = None
+    archival_refs: list[int] | None = None
 
 
 class StartWorkParams(MCPParamsBase):
     """Input schema for start_work."""
 
-    task_id: int
+    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
 
 
 class EndWorkParams(MCPParamsBase):
     """Input schema for end_work."""
 
-    task_id: int
-    note: str
-    outcome: Literal["success", "fail", "block", "reject"] = "success"
-    block_reason: str = ""
-    move_to: str = "research"
+    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
+    outcome: Literal["success", "reject", "release", "block"] = "success"
+    move_to: str | None = None
+    note: str | None = None
+    archival_reason: str | None = None
+    archival_refs: list[int] | None = None
+    block_reason: str | None = None
 
 
 class KanbanTask(BaseModel):
@@ -135,7 +153,6 @@ class KanbanTask(BaseModel):
     blocked: bool = False
     block_reason: str | None = None
     body: str | None = None
-    file: str | None = None
 
     @model_validator(mode="before")
     @classmethod
