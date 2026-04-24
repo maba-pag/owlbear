@@ -429,6 +429,27 @@ class TestFromAC_IdeatorRouterContract:
                 f"Ideator <critical_rules> mediator-route clause missing artifact: {artifact}"
             )
 
+    def test_ideator_mediator_route_artifacts_in_route_bullet(self) -> None:
+        # Clause-bound proof: artifact names must be in the specific mediator-route
+        # bullet, not merely somewhere in the <critical_rules> block. Relocating the
+        # artifact list to a sibling bullet within the block would pass the block-scoped
+        # test above but would still violate AC 1 — this test catches that mutation.
+        text = _read("share/agents/ideator.agent.md")
+        critical_rules = text.split("<critical_rules>")[1].split("</critical_rules>")[0]
+        route_marker = "Route post-discovery work to `@ideation-mediator`"
+        assert route_marker in critical_rules, (
+            "ideator.agent.md <critical_rules> missing the mediator-route bullet"
+        )
+        # Extract only the text of this bullet (up to the next bullet or end of block).
+        after_marker = critical_rules.split(route_marker)[1]
+        route_bullet_body = after_marker.split("\n-")[0]
+        for artifact in ["context.md", "decisions.md", "research-notes.md"]:
+            assert artifact in route_bullet_body, (
+                f"Mediator-route bullet missing artifact `{artifact}` — "
+                "the handoff gate clause must name all three artifacts inline, "
+                "not in a sibling bullet within <critical_rules>"
+            )
+
     def test_ideator_names_artifact_paths_explicitly(self) -> None:
         text = _read("share/agents/ideator.agent.md")
         assert "Name the artifact paths explicitly" in text, (
