@@ -253,6 +253,27 @@ class TestFromAC_ListTasksIdsExclusivity:
         with pytest.raises(ValidationError):
             ListTasksParams(ids=[1], unclaimed=True)
 
+    def test_list_tasks_ids_with_archival_reason_raises(self) -> None:
+        """ids combined with archival_reason raises ValidationError (AC15)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        with pytest.raises(ValidationError):
+            ListTasksParams(ids=[1], archival_reason="deprecated")
+
+    def test_list_tasks_ids_with_parent_raises(self) -> None:
+        """ids combined with parent raises ValidationError (AC15)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        with pytest.raises(ValidationError):
+            ListTasksParams(ids=[1], parent=42)
+
+    def test_list_tasks_ids_with_blocked_raises(self) -> None:
+        """ids combined with blocked raises ValidationError (AC15)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        with pytest.raises(ValidationError):
+            ListTasksParams(ids=[1], blocked=True)
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ListTasksSchemaContract
@@ -304,6 +325,7 @@ class TestFromAC_ListTasksSchemaContract:
 
         p = ListTasksParams(ids=[1, 2], sort="priority")
         assert p.ids == [1, 2]
+        assert p.sort == "priority"
 
     def test_list_tasks_ids_allows_limit(self) -> None:
         """ids combined with limit (display modifier) is valid — not a filter (refined AC AC15)."""
@@ -311,6 +333,7 @@ class TestFromAC_ListTasksSchemaContract:
 
         p = ListTasksParams(ids=[1, 2], limit=5)
         assert p.ids == [1, 2]
+        assert p.limit == 5  # noqa: PLR2004
 
     def test_list_tasks_ids_allows_reverse(self) -> None:
         """ids combined with reverse (display modifier) is valid — not a filter (refined AC AC15)."""
@@ -318,6 +341,7 @@ class TestFromAC_ListTasksSchemaContract:
 
         p = ListTasksParams(ids=[1, 2], reverse=True)
         assert p.ids == [1, 2]
+        assert p.reverse is True
 
 
 # ---------------------------------------------------------------------------
@@ -341,6 +365,12 @@ class TestFromAC_NoFileInProjections:
 
         assert "file" not in DispatchEntry.model_fields
 
+    def test_task_summary_no_file_field(self) -> None:
+        """TaskSummary.model_fields does not contain file (AC16 — refined)."""
+        from owlbear_kanban.models import TaskSummary
+
+        assert "file" not in TaskSummary.model_fields
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ClaimFieldContracts
@@ -362,6 +392,18 @@ class TestFromAC_ClaimFieldContracts:
         from owlbear_kanban.models import TaskFull
 
         assert "claimed_by" not in TaskFull.model_fields
+
+    def test_task_summary_has_claimed_field(self) -> None:
+        """TaskSummary.model_fields contains claimed (AC17 — refined)."""
+        from owlbear_kanban.models import TaskSummary
+
+        assert "claimed" in TaskSummary.model_fields
+
+    def test_task_summary_no_claimed_by_field(self) -> None:
+        """TaskSummary.model_fields does not contain claimed_by (AC17 — refined)."""
+        from owlbear_kanban.models import TaskSummary
+
+        assert "claimed_by" not in TaskSummary.model_fields
 
 
 # ---------------------------------------------------------------------------
@@ -546,3 +588,386 @@ class TestFromAC_ResponseEnvelopes:
         from owlbear_kanban.models import SingleTaskResponse
 
         assert "guidance" in SingleTaskResponse.model_fields
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_PickTasksContract
+# Refined AC §5.3: PickTasksParams field shape, types, defaults
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PickTasksContract:
+    """Refined AC §5.3: PickTasksParams has wave_size and max_waves with correct defaults."""
+
+    def test_pick_tasks_has_wave_size_field(self) -> None:
+        """PickTasksParams has wave_size field (refined AC §5.3)."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        assert "wave_size" in PickTasksParams.model_fields
+
+    def test_pick_tasks_wave_size_defaults_none(self) -> None:
+        """PickTasksParams.wave_size defaults to None (refined AC §5.3)."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        p = PickTasksParams()
+        assert p.wave_size is None
+
+    def test_pick_tasks_has_max_waves_field(self) -> None:
+        """PickTasksParams has max_waves field (refined AC §5.3)."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        assert "max_waves" in PickTasksParams.model_fields
+
+    def test_pick_tasks_max_waves_defaults_three(self) -> None:
+        """PickTasksParams.max_waves defaults to 3 (refined AC §5.3)."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        p = PickTasksParams()
+        assert p.max_waves == 3  # noqa: PLR2004
+
+    def test_pick_tasks_accepts_explicit_wave_size(self) -> None:
+        """PickTasksParams accepts explicit wave_size (refined AC §5.3)."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        p = PickTasksParams(wave_size=5)
+        assert p.wave_size == 5  # noqa: PLR2004
+
+    def test_pick_tasks_accepts_explicit_max_waves(self) -> None:
+        """PickTasksParams accepts explicit max_waves (refined AC §5.3)."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        p = PickTasksParams(max_waves=2)
+        assert p.max_waves == 2  # noqa: PLR2004
+
+    def test_pick_tasks_rejects_legacy_limit_and_tag(self) -> None:
+        """PickTasksParams rejects legacy limit and tag fields (extra=forbid; refined AC §5.3)."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        with pytest.raises(ValidationError):
+            PickTasksParams(limit=10, tag="backlog")  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_CreateTaskContract
+# Refined AC §5.4: CreateTaskParams field shapes, types, defaults
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CreateTaskContract:
+    """Refined AC §5.4: CreateTaskParams body, priority, tags, depends_on, parent defaults."""
+
+    def test_create_task_body_defaults_empty(self) -> None:
+        """CreateTaskParams.body defaults to empty string (refined AC §5.4)."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        p = CreateTaskParams(title="T")
+        assert p.body == ""
+
+    def test_create_task_priority_defaults_needed(self) -> None:
+        """CreateTaskParams.priority defaults to 'needed' (refined AC §5.4)."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        p = CreateTaskParams(title="T")
+        assert p.priority == "needed"
+
+    def test_create_task_tags_defaults_none(self) -> None:
+        """CreateTaskParams.tags defaults to None (refined AC §5.4)."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        p = CreateTaskParams(title="T")
+        assert p.tags is None
+
+    def test_create_task_tags_accepts_list_of_str(self) -> None:
+        """CreateTaskParams.tags accepts list[str] (refined AC §5.4)."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        p = CreateTaskParams(title="T", tags=["foo", "bar"])
+        assert p.tags == ["foo", "bar"]
+
+    def test_create_task_depends_on_defaults_none(self) -> None:
+        """CreateTaskParams.depends_on defaults to None (refined AC §5.4)."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        p = CreateTaskParams(title="T")
+        assert p.depends_on is None
+
+    def test_create_task_depends_on_accepts_list_of_int(self) -> None:
+        """CreateTaskParams.depends_on accepts list[int] (refined AC §5.4)."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        p = CreateTaskParams(title="T", depends_on=[10, 20])
+        assert p.depends_on == [10, 20]  # noqa: PLR2004
+
+    def test_create_task_parent_defaults_none(self) -> None:
+        """CreateTaskParams.parent defaults to None (refined AC §5.4)."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        p = CreateTaskParams(title="T")
+        assert p.parent is None
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndWorkParamsContract
+# Refined AC §5.8: EndWorkParams outcome literals, archival/block fields
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndWorkParamsContract:
+    """Refined AC §5.8: EndWorkParams outcome set includes 'release', archival/block fields present."""
+
+    def test_end_work_outcome_accepts_success(self) -> None:
+        """EndWorkParams accepts outcome='success' (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, outcome="success")
+        assert p.outcome == "success"
+
+    def test_end_work_outcome_accepts_release(self) -> None:
+        """EndWorkParams accepts outcome='release' (refined AC §5.8 — literal must include release)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, outcome="release")
+        assert p.outcome == "release"
+
+    def test_end_work_outcome_accepts_reject(self) -> None:
+        """EndWorkParams accepts outcome='reject' (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, outcome="reject")
+        assert p.outcome == "reject"
+
+    def test_end_work_outcome_accepts_block(self) -> None:
+        """EndWorkParams accepts outcome='block' (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, outcome="block")
+        assert p.outcome == "block"
+
+    def test_end_work_outcome_rejects_invalid_literal(self) -> None:
+        """EndWorkParams rejects invalid outcome literals (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        with pytest.raises(ValidationError):
+            EndWorkParams(id=1, outcome="fail")  # type: ignore[arg-type]
+
+    def test_end_work_has_archival_reason_field(self) -> None:
+        """EndWorkParams has archival_reason field (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        assert "archival_reason" in EndWorkParams.model_fields
+
+    def test_end_work_has_archival_refs_field(self) -> None:
+        """EndWorkParams has archival_refs field (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        assert "archival_refs" in EndWorkParams.model_fields
+
+    def test_end_work_archival_refs_accepts_list_of_int(self) -> None:
+        """EndWorkParams.archival_refs accepts list[int] (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1, archival_refs=[42, 99])
+        assert p.archival_refs == [42, 99]  # noqa: PLR2004
+
+    def test_end_work_has_block_reason_field(self) -> None:
+        """EndWorkParams has block_reason field (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        assert "block_reason" in EndWorkParams.model_fields
+
+    def test_end_work_has_move_to_field(self) -> None:
+        """EndWorkParams has move_to field (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        assert "move_to" in EndWorkParams.model_fields
+
+    def test_end_work_note_defaults_none(self) -> None:
+        """EndWorkParams.note defaults to None — not required (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        p = EndWorkParams(id=1)
+        assert p.note is None
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_MoveTaskContract
+# Refined AC §5.6: MoveTaskParams id, status, archival fields
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MoveTaskContract:
+    """Refined AC §5.6: MoveTaskParams field coverage including archival fields."""
+
+    def test_move_task_has_status_field(self) -> None:
+        """MoveTaskParams has status field (refined AC §5.6)."""
+        from owlbear_mcp_kanban.models import MoveTaskParams
+
+        assert "status" in MoveTaskParams.model_fields
+
+    def test_move_task_valid_minimal(self) -> None:
+        """MoveTaskParams accepts id and status; archival fields optional."""
+        from owlbear_mcp_kanban.models import MoveTaskParams
+
+        p = MoveTaskParams(id=1, status="done")
+        assert p.id == 1  # noqa: PLR2004
+        assert p.status == "done"
+        assert p.archival_reason is None
+        assert p.archival_refs is None
+
+    def test_move_task_has_archival_reason(self) -> None:
+        """MoveTaskParams has optional archival_reason field (refined AC §5.6)."""
+        from owlbear_mcp_kanban.models import MoveTaskParams
+
+        assert "archival_reason" in MoveTaskParams.model_fields
+
+    def test_move_task_has_archival_refs(self) -> None:
+        """MoveTaskParams has optional archival_refs field (refined AC §5.6)."""
+        from owlbear_mcp_kanban.models import MoveTaskParams
+
+        assert "archival_refs" in MoveTaskParams.model_fields
+
+    def test_move_task_archival_refs_accepts_list_of_int(self) -> None:
+        """MoveTaskParams.archival_refs accepts list[int] (refined AC §5.6)."""
+        from owlbear_mcp_kanban.models import MoveTaskParams
+
+        p = MoveTaskParams(id=1, status="archived", archival_refs=[10, 20])
+        assert p.archival_refs == [10, 20]  # noqa: PLR2004
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ExactFieldSets
+# Loop-breaker closure (arch-review 2026-04-24): exact model_fields key-set
+# assertions for all 8 *Params models — proves no missing AND no extra fields.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ExactFieldSets:
+    """Exact model_fields key-set for all 8 MCP param schemas (loop-breaker closure)."""
+
+    def test_list_tasks_params_exact_fields(self) -> None:
+        """ListTasksParams has exactly the Brief A §5.1 field set — no more, no less."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        assert set(ListTasksParams.model_fields.keys()) == {
+            "status",
+            "tag",
+            "priority",
+            "archival_reason",
+            "parent",
+            "search",
+            "sort",
+            "unclaimed",
+            "limit",
+            "reverse",
+            "blocked",
+            "ids",
+        }
+
+    def test_show_task_params_exact_fields(self) -> None:
+        """ShowTaskParams has exactly the Brief A §5.2 field set: id and section."""
+        from owlbear_mcp_kanban.models import ShowTaskParams
+
+        assert set(ShowTaskParams.model_fields.keys()) == {"id", "section"}
+
+    def test_pick_tasks_params_exact_fields(self) -> None:
+        """PickTasksParams has exactly the Brief A §5.3 field set: wave_size and max_waves."""
+        from owlbear_mcp_kanban.models import PickTasksParams
+
+        assert set(PickTasksParams.model_fields.keys()) == {"wave_size", "max_waves"}
+
+    def test_create_task_params_exact_fields(self) -> None:
+        """CreateTaskParams has exactly the Brief A §5.4 field set."""
+        from owlbear_mcp_kanban.models import CreateTaskParams
+
+        assert set(CreateTaskParams.model_fields.keys()) == {
+            "title",
+            "body",
+            "priority",
+            "tags",
+            "parent",
+            "depends_on",
+        }
+
+    def test_edit_task_params_exact_fields(self) -> None:
+        """EditTaskParams has exactly the Brief A §5.5 field set — no status, no task_id."""
+        from owlbear_mcp_kanban.models import EditTaskParams
+
+        assert set(EditTaskParams.model_fields.keys()) == {
+            "id",
+            "body",
+            "append_body",
+            "timestamp",
+            "priority",
+            "parent",
+            "add_dep",
+            "remove_dep",
+            "add_tag",
+            "remove_tag",
+            "block_reason",
+            "archival_reason",
+            "archival_refs",
+        }
+
+    def test_move_task_params_exact_fields(self) -> None:
+        """MoveTaskParams has exactly the Brief A §5.6 field set."""
+        from owlbear_mcp_kanban.models import MoveTaskParams
+
+        assert set(MoveTaskParams.model_fields.keys()) == {
+            "id",
+            "status",
+            "archival_reason",
+            "archival_refs",
+        }
+
+    def test_start_work_params_exact_fields(self) -> None:
+        """StartWorkParams has exactly the Brief A §5.7 field set: id only."""
+        from owlbear_mcp_kanban.models import StartWorkParams
+
+        assert set(StartWorkParams.model_fields.keys()) == {"id"}
+
+    def test_end_work_params_exact_fields(self) -> None:
+        """EndWorkParams has exactly the Brief A §5.8 field set."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        assert set(EndWorkParams.model_fields.keys()) == {
+            "id",
+            "outcome",
+            "move_to",
+            "note",
+            "archival_reason",
+            "archival_refs",
+            "block_reason",
+        }
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_AC13Exact
+# Loop-breaker closure (arch-review 2026-04-24): AC13 tests narrowed to
+# pytest.raises(ValidationError) only — extra="forbid" always raises
+# ValidationError, never TypeError.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AC13Exact:
+    """AC13 proof using only ValidationError — schema-layer rejection via extra=forbid."""
+
+    def test_edit_task_status_raises_validation_error_not_type_error(self) -> None:
+        """EditTaskParams(status=...) raises ValidationError specifically (AC13 exact)."""
+        from owlbear_mcp_kanban.models import EditTaskParams
+
+        with pytest.raises(ValidationError):
+            EditTaskParams(id=1, status="todo")  # type: ignore[call-arg]
+
+    def test_edit_task_depends_on_raises_validation_error_not_type_error(self) -> None:
+        """EditTaskParams(depends_on=...) raises ValidationError specifically (AC13 exact)."""
+        from owlbear_mcp_kanban.models import EditTaskParams
+
+        with pytest.raises(ValidationError):
+            EditTaskParams(id=1, depends_on="5")  # type: ignore[call-arg]
+
+    def test_edit_task_tags_raises_validation_error_not_type_error(self) -> None:
+        """EditTaskParams(tags=...) raises ValidationError specifically (AC13 exact)."""
+        from owlbear_mcp_kanban.models import EditTaskParams
+
+        with pytest.raises(ValidationError):
+            EditTaskParams(id=1, tags="foo,bar")  # type: ignore[call-arg]
