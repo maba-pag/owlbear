@@ -4,7 +4,7 @@ title: 'B-01: RED — models + errors tests'
 status: done
 priority: needed
 created: 2026-04-21T10:47:39.046535+00:00
-updated: 2026-04-23T22:51:35.258371+00:00
+updated: 2026-04-24T02:26:44.237596+00:00
 tags:
 - phase:engine
 - brief:b
@@ -15,8 +15,8 @@ depends_on:
 - 1059
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: jade-cliff
+claimed_at: 2026-04-24T02:26:44.237596+00:00
 archival_reason:
 archival_refs: []
 ---
