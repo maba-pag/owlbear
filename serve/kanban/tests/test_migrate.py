@@ -1461,6 +1461,20 @@ class TestFromAC_ManualActionSummaryStrict:
         assert "FAIL" in result.stderr
         assert "manual-action required" in result.stderr
         assert "MANUAL ACTION SUMMARY:" in result.stderr
+        summary_items = [
+            line
+            for line in result.stderr.splitlines()
+            if line.strip().startswith("- archive:")
+        ]
+        assert len(summary_items) >= 1, (
+            "expected at least one '- archive:' summary-item line in stderr"
+        )
+        assert "0001-bad.md" in summary_items[0], (
+            f"summary-item line must contain archive file path: {summary_items}"
+        )
+        assert "invalid archival_reason" in summary_items[0], (
+            f"summary-item line must contain failure reason text: {summary_items}"
+        )
 
     def test_ac_c38a_archive_invalid_reason_emits_manual_action_summary_header(
         self, tmp_path: Path
@@ -1544,6 +1558,17 @@ class TestFromAC_ManualActionSummaryStrict:
             "archive with invalid archival_refs must feed into MANUAL ACTION SUMMARY: on stderr "
             "via _run_lane manual_actions list at migrate.py:450-451"
         )
-        assert (
-            str(arc_file) in result.stderr or "0001-invalid-refs.md" in result.stderr
-        ), "MANUAL ACTION SUMMARY must include the archive file path"
+        summary_items = [
+            line
+            for line in result.stderr.splitlines()
+            if line.strip().startswith("- archive:")
+        ]
+        assert len(summary_items) >= 1, (
+            "expected at least one '- archive:' summary-item line in stderr"
+        )
+        assert "0001-invalid-refs.md" in summary_items[0], (
+            f"summary-item line must contain archive file path: {summary_items}"
+        )
+        assert "invalid archival_refs" in summary_items[0], (
+            f"summary-item line must contain failure reason text: {summary_items}"
+        )
