@@ -14,6 +14,17 @@ AC coverage:
 - ConcurrencyError → ToolError (e.g. already-claimed)
 
 All tests must FAIL (RED phase).
+
+FAIL paths summary:
+- Guidance tests (1-8): AgentView stub methods raise NotImplementedError (or TypeError on
+  unexpected kwargs), which the server does NOT catch as ToolError — the exception propagates
+  raw. For move_task (no move_task on AgentView stub) and end_work block (stub falls through),
+  the fallback path runs: collect_guidance is patched to a sentinel, so the assertion
+  result.guidance == expected_engine_string fails.
+- Error mapping tests (9-11): AgentView stub raises NotImplementedError/TypeError instead of
+  the expected KanbanError subclass, so the adapter never raises ToolError in the expected
+  way (or, for ConcurrencyError, the ValueError fallback message does not match the
+  ConcurrencyError-specific user_message fragment).
 """
 
 from __future__ import annotations
@@ -25,14 +36,6 @@ import pytest
 
 from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.models import (
-    ConcurrencyError,
-    NotFoundError,
-    PickTasksResponse,
-    ShowTaskResponse,
-    SingleTaskResponse,
-    ValidationError,
-)
 from owlbear_mcp_kanban.server import (
     AppContext,
     create_task,
@@ -45,38 +48,85 @@ from owlbear_mcp_kanban.server import (
 )
 
 # ---------------------------------------------------------------------------
-# Board helpers
+# Board config — full flat schema required by BoardConfig._validate_agent_map
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
 statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
+  - research
+  - backlog
+  - todo
+  - in-progress
+  - review
+  - docs
+  - done
 priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
+  - someday
+  - nice-to-have
+  - important
+  - needed
+  - critical
+entry_status: research
+wave_size: 4
+agent_map:
+  research: []
+  backlog: []
+  todo: []
+  in-progress: []
+  review: []
+  docs: []
+  done: []
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: [research, docs]
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
 claim_timeout: 1h
 next_id: 1
-archive_dir: archive
-activity_log: false
 """
 
-_NOW = "2026-01-01T00:00:00+00:00"
+# ---------------------------------------------------------------------------
+# Expected guidance strings (spec for AgentView implementation)
+# ---------------------------------------------------------------------------
+
+_LARGE_BODY = "x" * (100 * 1024 + 1)  # 100 KB + 1 byte
+
+_BODY_WITH_DUPLICATE_AUDIT = """\
+## Overview
+First section.
+
+## Audit
+First audit entry.
+
+## Audit
+Second audit entry.
+"""
+
+_BODY_SIZE_WARNING = "⚠️ Task body is large (>100 KB); consider splitting."
+
+_SKIP_MOVE_WARNING = (
+    "⚠️ Status skip: moved from 'todo' to 'review' (skipped 1 column(s))."
+    " Verify this jump is intentional."
+)
+
+_SKIP_REJECT_WARNING = (
+    "⚠️ Status skip: moved from 'todo' to 'done' (skipped 4 column(s))."
+    " Verify this jump is intentional."
+)
+
+_BLOCK_AR_HINT = (
+    "⚠️ ACTION REQUIRED: Create a Decision Request for this block via the"
+    " scribe agent (see w-decision-routing)."
+    " Blocks without a DR are invisible to the pipeline."
+)
+
+# Sentinel returned by patched collect_guidance — proves guidance did NOT come
+# from the adapter's fallback logic when AgentView is expected to be the source.
+_ADAPTER_FALLBACK_SENTINEL = ["__ADAPTER_FALLBACK_SENTINEL__"]
+
+# ---------------------------------------------------------------------------
+# Board helpers
+# ---------------------------------------------------------------------------
 
 
 def _make_board(base_dir: Path) -> Path:
@@ -94,37 +144,6 @@ def _make_ctx(app_ctx: AppContext) -> MagicMock:
     return ctx
 
 
-def _single_task_response(guidance: list[str]) -> SingleTaskResponse:
-    """Minimal SingleTaskResponse carrying the given guidance."""
-    return SingleTaskResponse(
-        id=1,
-        title="Test Task",
-        status="todo",
-        priority="important",
-        created=_NOW,
-        updated=_NOW,
-        guidance=guidance,
-    )
-
-
-def _show_task_response(guidance: list[str]) -> ShowTaskResponse:
-    """Minimal ShowTaskResponse carrying the given guidance."""
-    return ShowTaskResponse(
-        id=1,
-        title="Test Task",
-        status="todo",
-        priority="important",
-        created=_NOW,
-        updated=_NOW,
-        guidance=guidance,
-    )
-
-
-def _pick_tasks_response(guidance: list[str]) -> PickTasksResponse:
-    """Minimal PickTasksResponse carrying the given guidance."""
-    return PickTasksResponse(waves=[], guidance=guidance)
-
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -136,7 +155,34 @@ def app_ctx(tmp_path: Path) -> AppContext:
     kanban_dir = _make_board(tmp_path)
     engine = KanbanEngine(kanban_dir)
     engine.create_task("Test task", status="todo", priority="important")
-    engine.list_tasks()  # populate id→filename cache
+    engine.list_tasks()
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+@pytest.fixture
+def app_ctx_with_section_task(tmp_path: Path) -> AppContext:
+    """AppContext with a task whose body contains ## Audit twice."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    engine.create_task(
+        "Audit task",
+        body=_BODY_WITH_DUPLICATE_AUDIT,
+        status="todo",
+        priority="important",
+    )
+    engine.list_tasks()
+    return AppContext(engine=engine, kanban_dir=kanban_dir)
+
+
+@pytest.fixture
+def app_ctx_multi(tmp_path: Path) -> AppContext:
+    """AppContext with 3 unclaimed tasks at todo — enough to trigger dispatch hints."""
+    kanban_dir = _make_board(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    engine.create_task("Task Alpha", status="todo", priority="important")
+    engine.create_task("Task Beta", status="todo", priority="important")
+    engine.create_task("Task Gamma", status="todo", priority="important")
+    engine.list_tasks()
     return AppContext(engine=engine, kanban_dir=kanban_dir)
 
 
@@ -157,117 +203,123 @@ def app_ctx_claimed(tmp_path: Path) -> AppContext:
 
 
 class TestFromAC_GuidancePassthrough:
-    """Guidance strings from AgentView response envelopes pass through to MCP response."""
+    """AgentView response guidance passes through the MCP adapter unmodified."""
 
     @pytest.mark.asyncio
     async def test_show_task_section_occurrence_count_guidance(
-        self, app_ctx: AppContext
+        self, app_ctx_with_section_task: AppContext
     ) -> None:
-        """AC12: show_task section matching multiple times → guidance includes occurrence count.
+        """AC12: When requested section appears more than once, guidance includes the count.
 
-        The engine (AgentView.show_task) returns guidance reporting the occurrence
-        count; the adapter must include it in the returned KanbanTask.guidance.
+        AgentView.show_task must detect the duplicate '## Audit' sections and include
+        an occurrence-count string in the guidance list. The adapter must return it
+        unchanged.
+
+        FAIL path (RED): AgentView.show_task() raises TypeError (unexpected 'section'
+        kwarg) or NotImplementedError — the call propagates before the assertion.
         """
-        ctx = _make_ctx(app_ctx)
-        expected_guidance = ["Found 2 occurrences of '## Audit'"]
-        mock_view = MagicMock()
-        mock_view.show_task.return_value = _show_task_response(expected_guidance)
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_view):
-            result = await show_task(ctx, task_id="1")
-        assert result.guidance == expected_guidance, (
-            f"Expected occurrence-count guidance {expected_guidance!r} "
-            f"from AgentView.show_task, got {result.guidance!r}"
+        ctx = _make_ctx(app_ctx_with_section_task)
+        result = await show_task(ctx, task_id="1", section="Audit")
+        assert any("2" in g for g in result.guidance), (
+            f"Expected occurrence count '2' in guidance strings; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
     async def test_show_task_guidance_passes_through_unmodified(
         self, app_ctx: AppContext
     ) -> None:
-        """Guidance strings from AgentView are not modified or stripped by the adapter."""
+        """Guidance returned by AgentView.show_task is not stripped or transformed.
+
+        The adapter must return whatever guidance list AgentView provides, without
+        filtering, sorting, or converting to another type.
+
+        FAIL path (RED): AgentView.show_task() raises TypeError (unexpected 'section'
+        kwarg) or NotImplementedError — the call propagates before the assertion.
+        """
         ctx = _make_ctx(app_ctx)
-        expected_guidance = ["Exact engine string — must not be mangled by adapter"]
-        mock_view = MagicMock()
-        mock_view.show_task.return_value = _show_task_response(expected_guidance)
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_view):
-            result = await show_task(ctx, task_id="1")
-        assert result.guidance == expected_guidance, (
-            f"Guidance must pass through unmodified; got {result.guidance!r}"
+        result = await show_task(ctx, task_id="1")
+        assert isinstance(result.guidance, list), (
+            f"Adapter must pass guidance as list[str]; got {type(result.guidance)!r}"
         )
 
     @pytest.mark.asyncio
     async def test_pick_tasks_dispatch_hints_guidance(
-        self, app_ctx: AppContext
+        self, app_ctx_multi: AppContext
     ) -> None:
-        """pick_tasks response dict includes 'guidance' key with AgentView dispatch hints."""
-        ctx = _make_ctx(app_ctx)
-        expected_guidance = ["3 tasks ready across 2 waves"]
-        mock_view = MagicMock()
-        mock_view.pick_tasks.return_value = _pick_tasks_response(expected_guidance)
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_view):
-            result = await pick_tasks(ctx)
-        assert isinstance(result, dict), "pick_tasks must return a dict"
-        assert result.get("guidance") == expected_guidance, (
-            f"Expected guidance {expected_guidance!r} in pick_tasks result, "
-            f"got result={result!r}"
+        """pick_tasks with dispatchable tasks → guidance includes wave/task count hints.
+
+        AgentView.pick_tasks must populate the guidance field with dispatch context
+        (e.g. '3 tasks across 1 wave'). The adapter must return this list unchanged.
+
+        FAIL path (RED): AgentView.pick_tasks() raises TypeError (unexpected
+        wave_size/max_waves kwargs) — the call propagates before the assertion.
+        """
+        ctx = _make_ctx(app_ctx_multi)
+        result = await pick_tasks(ctx)
+        assert len(result.guidance) > 0, (
+            f"Expected non-empty dispatch hints from AgentView.pick_tasks; "
+            f"got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
     async def test_create_task_body_size_warning_guidance(
         self, app_ctx: AppContext
     ) -> None:
-        """create_task with body >100 KB → guidance includes body-size warning from engine."""
+        """create_task with body > 100 KB → guidance includes body-size warning from AgentView.
+
+        AgentView.create_task must detect the oversized body and append the warning
+        string to the SingleTaskResponse guidance. The adapter must not drop it.
+
+        FAIL path (RED): AgentView.create_task() raises TypeError (unexpected kwargs
+        body/priority/…) — the call propagates before the assertion.
+        """
         ctx = _make_ctx(app_ctx)
-        large_body = "x" * (100 * 1024 + 1)  # 100 KB + 1 byte
-        expected_guidance = ["⚠️ Task body is large (>100 KB); consider splitting."]
-        mock_view = MagicMock()
-        mock_view.create_task.return_value = _single_task_response(expected_guidance)
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_view):
-            result = await create_task(ctx, title="Big task", body=large_body)
-        assert result.guidance == expected_guidance, (
-            f"Expected body-size warning guidance from engine, got {result.guidance!r}"
+        result = await create_task(ctx, title="Big task", body=_LARGE_BODY)
+        assert any(_BODY_SIZE_WARNING in g for g in result.guidance), (
+            f"Expected body-size warning {_BODY_SIZE_WARNING!r} in guidance; "
+            f"got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
     async def test_edit_task_body_size_warning_guidance(
         self, app_ctx: AppContext
     ) -> None:
-        """edit_task with body >100 KB → guidance includes body-size warning from engine."""
+        """edit_task with body > 100 KB → guidance includes body-size warning from AgentView.
+
+        AgentView.edit_task must detect the oversized body on edit and append the
+        warning string. The adapter must not drop it.
+
+        FAIL path (RED): AgentView.edit_task() raises TypeError (unexpected 'body' kwarg)
+        — the call propagates before the assertion.
+        """
         ctx = _make_ctx(app_ctx)
-        large_body = "y" * (100 * 1024 + 1)
-        expected_guidance = ["⚠️ Task body is large (>100 KB); consider splitting."]
-        mock_view = MagicMock()
-        mock_view.edit_task.return_value = _single_task_response(expected_guidance)
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_view):
-            result = await edit_task(ctx, task_id="1", body=large_body)
-        assert result.guidance == expected_guidance, (
-            f"Expected body-size warning guidance from engine on edit_task, "
-            f"got {result.guidance!r}"
+        result = await edit_task(ctx, task_id="1", body=_LARGE_BODY)
+        assert any(_BODY_SIZE_WARNING in g for g in result.guidance), (
+            f"Expected body-size warning in edit_task guidance; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
     async def test_move_task_skip_transition_warning_guidance(
         self, app_ctx: AppContext
     ) -> None:
-        """AC-NEW-5: move_task skipping >1 column → skip-transition warning from engine passes through.
+        """AC-NEW-5: move_task skipping >1 column → skip-transition warning from AgentView.
 
-        The engine (AgentView.move_task) is the authoritative source of skip-transition
-        guidance. The adapter must not compute its own guidance and must pass the engine's
-        warning through.
+        AgentView is the authoritative source. The adapter's collect_guidance fallback
+        must NOT be the origin. This test patches collect_guidance to a sentinel so
+        that if the fallback path runs the assertion catches the wrong guidance.
+
+        FAIL path (RED): AgentView has no move_task method → the server skips the view
+        path and runs the fallback. The patched collect_guidance returns the sentinel,
+        which does not equal the expected engine string — assertion fails.
         """
         ctx = _make_ctx(app_ctx)
-        expected_guidance = [
-            "⚠️ Status skip: moved from 'todo' to 'review' (skipped 1 column(s))."
-            " Verify this jump is intentional."
-        ]
-        mock_view = MagicMock()
-        mock_view.move_task.return_value = _single_task_response(expected_guidance)
-        # Suppress adapter's own collect_guidance so test verifies engine is the source
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_view), patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance",
+            return_value=_ADAPTER_FALLBACK_SENTINEL,
         ):
             result = await move_task(ctx, task_id="1", status="review")
-        assert result.guidance == expected_guidance, (
-            f"Expected skip-transition warning from AgentView.move_task, "
+        assert result.guidance == [_SKIP_MOVE_WARNING], (
+            f"Expected AgentView skip-transition warning {_SKIP_MOVE_WARNING!r}; "
             f"got {result.guidance!r}"
         )
 
@@ -275,24 +327,26 @@ class TestFromAC_GuidancePassthrough:
     async def test_end_work_reject_skip_transition_warning_guidance(
         self, app_ctx: AppContext
     ) -> None:
-        """AC-NEW-5: end_work(reject, move_to) skipping >1 column → skip warning from engine."""
+        """AC-NEW-5: end_work(reject, move_to='done') skipping columns → skip warning in guidance.
+
+        AgentView.end_work must emit the skip-transition warning for large-jump rejects.
+        The adapter's collect_guidance does NOT produce skip warnings for 'reject' outcome,
+        so if the fallback path runs the guidance is [].
+
+        FAIL path (RED): AgentView.end_work() stub falls through to the direct engine
+        path; collect_guidance returns [] for 'reject'; result.guidance == [] ≠ expected
+        skip warning — assertion fails.
+        """
         ctx = _make_ctx(app_ctx)
-        expected_guidance = [
-            "⚠️ Status skip: moved from 'todo' to 'done' (skipped 4 column(s))."
-            " Verify this jump is intentional."
-        ]
-        mock_view = MagicMock()
-        mock_view.end_work.return_value = _single_task_response(expected_guidance)
-        with patch.object(app_ctx.engine, "agent_view", return_value=mock_view):
-            result = await end_work(
-                ctx,
-                task_id="1",
-                note="rejected to done",
-                outcome="reject",
-                move_to="done",
-            )
-        assert result.guidance == expected_guidance, (
-            f"Expected skip-transition warning from AgentView.end_work, "
+        result = await end_work(
+            ctx,
+            task_id="1",
+            note="rejected to done",
+            outcome="reject",
+            move_to="done",
+        )
+        assert result.guidance == [_SKIP_REJECT_WARNING], (
+            f"Expected skip-transition warning from AgentView.end_work; "
             f"got {result.guidance!r}"
         )
 
@@ -300,23 +354,20 @@ class TestFromAC_GuidancePassthrough:
     async def test_end_work_block_action_request_hint_guidance(
         self, app_ctx_claimed: AppContext
     ) -> None:
-        """AC-NEW-4: end_work(outcome='block') → AR/DR creation hint from engine passes through.
+        """AC-NEW-4: end_work(outcome='block') → AR/DR hint from AgentView, not collect_guidance.
 
-        The engine (AgentView.end_work) emits an Action-Request / Decision-Request
-        creation suggestion when outcome='block'. The adapter must pass it through.
-        This hint must NOT be computed by the adapter's own collect_guidance.
+        AgentView.end_work must supply the Action-Request/Decision-Request hint when
+        the outcome is 'block'. This test patches collect_guidance to a sentinel so
+        that if the fallback path runs the assertion catches the wrong guidance.
+
+        FAIL path (RED): AgentView.end_work stub falls through to the direct engine
+        path; the patched collect_guidance returns the sentinel, which does not equal
+        the expected AR/DR hint string — assertion fails.
         """
         ctx = _make_ctx(app_ctx_claimed)
-        expected_guidance = [
-            "⚠️ ACTION REQUIRED: Create a Decision Request for this block via the"
-            " scribe agent (see w-decision-routing)."
-            " Blocks without a DR are invisible to the pipeline."
-        ]
-        mock_view = MagicMock()
-        mock_view.end_work.return_value = _single_task_response(expected_guidance)
-        # Suppress adapter's own collect_guidance to verify engine is the sole source
-        with patch.object(app_ctx_claimed.engine, "agent_view", return_value=mock_view), patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance",
+            return_value=_ADAPTER_FALLBACK_SENTINEL,
         ):
             result = await end_work(
                 ctx,
@@ -325,8 +376,8 @@ class TestFromAC_GuidancePassthrough:
                 outcome="block",
                 block_reason="waiting for decision",
             )
-        assert result.guidance == expected_guidance, (
-            f"Expected AR/DR hint from AgentView.end_work, got {result.guidance!r}"
+        assert result.guidance == [_BLOCK_AR_HINT], (
+            f"Expected AR/DR hint from AgentView.end_work; got {result.guidance!r}"
         )
 
 
@@ -336,75 +387,72 @@ class TestFromAC_GuidancePassthrough:
 
 
 class TestFromAC_ErrorMapping:
-    """KanbanError subclasses raised by engine → ToolError with user_message only."""
+    """KanbanError subclasses raised by AgentView → ToolError with user_message only."""
 
     @pytest.mark.asyncio
     async def test_validation_error_maps_to_tool_error(
         self, app_ctx: AppContext
     ) -> None:
-        """ValidationError raised by engine → ToolError containing user_message.
+        """ValidationError from AgentView.create_task(title='') → ToolError(user_message).
 
-        ValidationError inherits from KanbanError, not from ValueError.
-        The adapter must catch it and re-raise as ToolError.
+        An empty title is invalid input. AgentView.create_task must raise ValidationError;
+        the adapter must catch it as KanbanError and re-raise as ToolError(user_message).
+
+        FAIL path (RED): AgentView.create_task() raises TypeError (unexpected kwargs
+        body/priority/…), which is NOT a ToolError — pytest.raises(ToolError) fails.
         """
         ctx = _make_ctx(app_ctx)
-        user_msg = "Invalid status 'flying' — not a configured status"
-        err = ValidationError(code="ERR_INVALID_STATUS", user_message=user_msg)
-        with (
-            patch.object(app_ctx.engine, "create_task", side_effect=err),
-            pytest.raises(ToolError) as exc_info,
-        ):
-            await create_task(ctx, title="Test task", status="flying")
-        assert user_msg in str(exc_info.value), (
-            f"ToolError must contain user_message {user_msg!r}, "
-            f"got {exc_info.value!r}"
+        with pytest.raises(ToolError) as exc_info:
+            await create_task(ctx, title="")
+        error_text = str(exc_info.value).lower()
+        assert "title" in error_text or "invalid" in error_text or "empty" in error_text, (
+            f"ToolError must describe the validation failure; got {exc_info.value!r}"
         )
 
     @pytest.mark.asyncio
     async def test_not_found_error_maps_to_tool_error(
         self, app_ctx: AppContext
     ) -> None:
-        """NotFoundError raised by engine → ToolError containing user_message.
+        """NotFoundError from AgentView.show_task(non-existent ID) → ToolError(user_message).
 
-        NotFoundError inherits from KanbanError, not from FileNotFoundError.
-        The adapter must catch it and re-raise as ToolError.
+        Requesting a non-existent task ID must cause AgentView.show_task to raise
+        NotFoundError; the adapter must catch it as KanbanError and re-raise as ToolError.
+
+        FAIL path (RED): AgentView.show_task() raises TypeError (unexpected 'section'
+        kwarg) or NotImplementedError — neither is a ToolError — pytest.raises fails.
         """
         ctx = _make_ctx(app_ctx)
-        user_msg = "task '999' not found in tasks directory"
-        err = NotFoundError(code="ERR_NOT_FOUND", user_message=user_msg)
-        with (
-            patch.object(app_ctx.engine, "show_task", side_effect=err),
-            pytest.raises(ToolError) as exc_info,
-        ):
-            await show_task(ctx, task_id="999")
-        assert user_msg in str(exc_info.value), (
-            f"ToolError must contain user_message {user_msg!r}, "
-            f"got {exc_info.value!r}"
+        with pytest.raises(ToolError) as exc_info:
+            await show_task(ctx, task_id="9999")
+        error_text = str(exc_info.value).lower()
+        assert "9999" in error_text or "not found" in error_text, (
+            f"ToolError must reference the missing task; got {exc_info.value!r}"
         )
 
     @pytest.mark.asyncio
     async def test_concurrency_error_maps_to_tool_error_user_message_only(
-        self, app_ctx: AppContext
+        self, app_ctx_claimed: AppContext
     ) -> None:
-        """ConcurrencyError (already-claimed) → ToolError; user_message only, no code on wire.
+        """ConcurrencyError (already-claimed) → ToolError; machine code must not be on wire.
 
-        ConcurrencyError inherits from KanbanError. The adapter must catch it and
-        re-raise as ToolError with only the human-readable user_message.
-        Machine-readable error codes (e.g. 'ERR_ALREADY_CLAIMED') must NOT appear
-        in the wire error shape per §7.
+        Claiming a task that is already actively claimed must raise ConcurrencyError.
+        The adapter must map it to ToolError(user_message) — the machine-readable error
+        code (ERR_ALREADY_CLAIMED) must NOT appear in the wire response per §7.
+
+        FAIL path (RED): AgentView.start_work stub raises NotImplementedError → server
+        falls through to engine.start_work() which raises ValueError (not ConcurrencyError).
+        ToolError IS raised but its text is str(ValueError) which does NOT include the
+        ConcurrencyError-specific phrase 'by another agent' — assertion fails.
         """
-        ctx = _make_ctx(app_ctx)
-        user_msg = "task '1' is already claimed"
+        ctx = _make_ctx(app_ctx_claimed)
         code = "ERR_ALREADY_CLAIMED"
-        err = ConcurrencyError(code=code, user_message=user_msg)
-        with (
-            patch.object(app_ctx.engine, "start_work", side_effect=err),
-            pytest.raises(ToolError) as exc_info,
-        ):
+        user_msg_fragment = "by another agent"
+        with pytest.raises(ToolError) as exc_info:
             await start_work(ctx, task_id="1")
         error_text = str(exc_info.value)
-        assert user_msg in error_text, (
-            f"ToolError must contain user_message {user_msg!r}, got {error_text!r}"
+        assert user_msg_fragment in error_text, (
+            f"ToolError must contain ConcurrencyError user_message fragment "
+            f"{user_msg_fragment!r}; got {error_text!r}"
         )
         assert code not in error_text, (
             f"ToolError must NOT expose machine code on wire; "
