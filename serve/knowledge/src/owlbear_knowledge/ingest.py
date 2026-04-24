@@ -120,7 +120,9 @@ class IngestPipeline:
                 *(self._extractor.extract(chunk.text) for chunk in chunks),
                 return_exceptions=True,
             )
-            valid_extractions = [r for r in extraction_results if not isinstance(r, BaseException)]
+            valid_extractions = [
+                r for r in extraction_results if not isinstance(r, BaseException)
+            ]
             entity_count, edge_count = self._docs.store_extractions(valid_extractions)  # type: ignore[union-attr]
 
         except Exception:  # catch-all for unexpected ingest failures
@@ -186,7 +188,11 @@ class IngestPipeline:
                     status="cancelled",
                 )
 
-            content_for_hash = content_cleaner(intake.content) if content_cleaner is not None else intake.content
+            content_for_hash = (
+                content_cleaner(intake.content)
+                if content_cleaner is not None
+                else intake.content
+            )
             changed, existing_id = self._docs.check_content_changed(  # type: ignore[union-attr]
                 intake.source, content_for_hash, scope
             )
@@ -200,7 +206,9 @@ class IngestPipeline:
                 )
 
             _meta: dict[str, object] = dict(intake.metadata)
-            chunks = await asyncio.to_thread(self._chunker.chunk, intake.content, metadata=_meta)
+            chunks = await asyncio.to_thread(
+                self._chunker.chunk, intake.content, metadata=_meta
+            )
             chunk_count = len(chunks)
 
             if existing_id is not None:
@@ -233,7 +241,9 @@ class IngestPipeline:
 
             extract_coros = [
                 self._extractor.extract(
-                    wrap_untrusted_content(c.text, source_url=str(intake.source)) if _should_wrap else c.text
+                    wrap_untrusted_content(c.text, source_url=str(intake.source))
+                    if _should_wrap
+                    else c.text
                 )
                 for c in chunks
             ]
@@ -243,8 +253,12 @@ class IngestPipeline:
                 chunk_ids,
                 chunk_texts,  # type: ignore[union-attr]
             )
-            all_results = await asyncio.gather(embed_coro, *extract_coros, return_exceptions=True)
-            extraction_results = [r for r in all_results[1:] if not isinstance(r, BaseException)]
+            all_results = await asyncio.gather(
+                embed_coro, *extract_coros, return_exceptions=True
+            )
+            extraction_results = [
+                r for r in all_results[1:] if not isinstance(r, BaseException)
+            ]
             entity_count, edge_count = self._docs.store_extractions(  # type: ignore[union-attr]
                 extraction_results,
                 scope=scope,

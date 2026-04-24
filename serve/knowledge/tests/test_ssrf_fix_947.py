@@ -256,7 +256,9 @@ class TestFromAC_ReadUrlSSRF:
     @pytest.mark.asyncio
     async def test_blocked_ip_valueerror_has_descriptive_message(self) -> None:
         """The ValueError for a blocked URL must carry a human-readable message."""
-        with pytest.raises(ValueError, match=r"(?i)(block|ssrf|private|loopback|forbidden|not allow)"):
+        with pytest.raises(
+            ValueError, match=r"(?i)(block|ssrf|private|loopback|forbidden|not allow)"
+        ):
             await read_url("http://192.168.99.1/secret")
 
     # ------------------------------------------------------------------
@@ -267,7 +269,9 @@ class TestFromAC_ReadUrlSSRF:
     async def test_dns_failure_raises_valueerror(self) -> None:
         """Unresolvable hostname raises ValueError — not silently returns None/content."""
         with (
-            patch("socket.getaddrinfo", side_effect=OSError("Name or service not known")),
+            patch(
+                "socket.getaddrinfo", side_effect=OSError("Name or service not known")
+            ),
             patch("httpx.AsyncClient") as mock_cls,
             pytest.raises(ValueError),
         ):
@@ -346,9 +350,13 @@ class TestFromAC_ReadUrlSSRF:
             await read_url("http://example.com/")
         assert mock_get.called
         headers = mock_get.call_args.kwargs.get("headers", {})
-        assert "Host" in headers or "host" in headers, f"Expected 'Host' header in httpx call, got headers={headers!r}"
+        assert "Host" in headers or "host" in headers, (
+            f"Expected 'Host' header in httpx call, got headers={headers!r}"
+        )
         host_value = headers.get("Host") or headers.get("host")
-        assert host_value == "example.com", f"Host header should be 'example.com', got {host_value!r}"
+        assert host_value == "example.com", (
+            f"Host header should be 'example.com', got {host_value!r}"
+        )
 
     # ------------------------------------------------------------------
     # AC5: follow_redirects=False
@@ -389,7 +397,9 @@ class TestFromAC_ReadUrlSSRF:
 
         mock_client = _make_mock_client("public page content")
         with (
-            patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")) as mock_dns,
+            patch(
+                "socket.getaddrinfo", return_value=_addr4("93.184.216.34")
+            ) as mock_dns,
             patch("httpx.AsyncClient", return_value=mock_client),
         ):
             result = await read_url("http://example.com/")
@@ -426,14 +436,18 @@ class TestFromAC_SsrfUtility:
         import importlib
 
         mod = importlib.import_module("owlbear_knowledge._ssrf")
-        assert callable(getattr(mod, "_is_blocked_ip", None)), "_ssrf._is_blocked_ip is missing or not callable"
+        assert callable(getattr(mod, "_is_blocked_ip", None)), (
+            "_ssrf._is_blocked_ip is missing or not callable"
+        )
 
     def test_safe_async_fetch_is_exported(self) -> None:
         """safe_async_fetch must be a callable exported from owlbear_knowledge._ssrf."""
         import importlib
 
         mod = importlib.import_module("owlbear_knowledge._ssrf")
-        assert callable(getattr(mod, "safe_async_fetch", None)), "_ssrf.safe_async_fetch is missing or not callable"
+        assert callable(getattr(mod, "safe_async_fetch", None)), (
+            "_ssrf.safe_async_fetch is missing or not callable"
+        )
 
     def test_is_blocked_ip_blocks_loopback_127_0_0_1(self) -> None:
         """_is_blocked_ip('127.0.0.1') must return True."""

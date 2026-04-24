@@ -33,8 +33,8 @@ ALLOWED_IMPORTS: dict[str, set[str]] = {
     "owlbear_mcp_kanban": {"owlbear_kanban"},
     "owlbear_mcp_knowledge": {"owlbear_knowledge"},
     "owlbear_mcp_memory": set(),
-    "owlbear": {"owlbear_orchestrator"},        # co-packaged in orchestrator wheel
-    "owlbear_orchestrator": {"owlbear"},        # co-packaged in orchestrator wheel
+    "owlbear": {"owlbear_orchestrator"},  # co-packaged in orchestrator wheel
+    "owlbear_orchestrator": {"owlbear"},  # co-packaged in orchestrator wheel
     "owlbear_tools": set(),
 }
 
@@ -76,12 +76,26 @@ def _scan_file(
         if isinstance(node, ast.ImportFrom):
             imported = _owlbear_root(node.module)
             if imported and imported != namespace and imported not in allowed:
-                violations.append((namespace, str(py_file.relative_to(src_dir)), imported, node.lineno))
+                violations.append(
+                    (
+                        namespace,
+                        str(py_file.relative_to(src_dir)),
+                        imported,
+                        node.lineno,
+                    )
+                )
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 imported = _owlbear_root(alias.name)
                 if imported and imported != namespace and imported not in allowed:
-                    violations.append((namespace, str(py_file.relative_to(src_dir)), imported, node.lineno))
+                    violations.append(
+                        (
+                            namespace,
+                            str(py_file.relative_to(src_dir)),
+                            imported,
+                            node.lineno,
+                        )
+                    )
     return violations
 
 
@@ -172,7 +186,9 @@ class TestFromAC_CrossImportEnforcement:
                 f" (not in ALLOWED_IMPORTS[{ns!r}])"
                 for ns, relfile, imported, lineno in violations
             ]
-            pytest.fail("Undeclared cross-namespace imports found:\n" + "\n".join(lines))
+            pytest.fail(
+                "Undeclared cross-namespace imports found:\n" + "\n".join(lines)
+            )
 
     def test_scan_detects_synthetic_from_import_violation(self, tmp_path: Path) -> None:
         """AC#3: scanner catches a synthetic 'from X import Y' boundary violation."""
@@ -192,9 +208,7 @@ class TestFromAC_CrossImportEnforcement:
         """AC#3: scanner catches a synthetic bare 'import X' boundary violation."""
         fake_src = tmp_path / "fake_pkg" / "src" / "owlbear_tools"
         fake_src.mkdir(parents=True)
-        (fake_src / "bad.py").write_text(
-            "import owlbear_kanban\n", encoding="utf-8"
-        )
+        (fake_src / "bad.py").write_text("import owlbear_kanban\n", encoding="utf-8")
         violations = _collect_violations(tmp_path)
         assert len(violations) >= 1
         assert any(

@@ -67,7 +67,13 @@ class BoardConfig(BaseModel):
     agent_compatibility: dict[str, Any] = Field(default_factory=dict)
     non_impl_tags: list[str] = Field(default_factory=list)
     archival_reasons: list[str] = Field(
-        default_factory=lambda: ["completed", "deprecated", "dropped", "duplicate", "wontfix"]
+        default_factory=lambda: [
+            "completed",
+            "deprecated",
+            "dropped",
+            "duplicate",
+            "wontfix",
+        ]
     )
     status_predicates: dict[str, Any] = Field(default_factory=dict)
 
@@ -128,7 +134,9 @@ class Task(BaseModel):
     created: str
     updated: str
     # body can be str (raw markdown) or list[Section] (pre-parsed, Brief C in-memory)
-    body: str | list = Field(default="")  # list[Section] when constructed with parsed sections
+    body: str | list = Field(
+        default=""
+    )  # list[Section] when constructed with parsed sections
 
     # Standard optional fields
     tags: list[str] = Field(default_factory=list)
@@ -358,6 +366,7 @@ KANBAN_ERROR_CODES: frozenset[str] = frozenset(
         "ERR_NOT_FOUND",
     }
 )
+
 
 class KanbanError(Exception):
     """Base exception for kanban engine domain errors."""

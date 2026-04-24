@@ -177,9 +177,7 @@ class TestFromAC_CockpitLaunch:
 
         assert exc_info.value.code != 0
 
-    def test_run_exits_on_port_zero(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_exits_on_port_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Port 0 is below the valid range (1-65535) and causes sys.exit."""
         monkeypatch.setenv("COCKPIT_PORT", "0")
         monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
@@ -191,9 +189,7 @@ class TestFromAC_CockpitLaunch:
 
         assert exc_info.value.code != 0
 
-    def test_run_exits_on_port_above_max(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_run_exits_on_port_above_max(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Port 65536 is above the valid range (1-65535) and causes sys.exit."""
         monkeypatch.setenv("COCKPIT_PORT", "65536")
         monkeypatch.setenv("COCKPIT_NO_OPEN", "1")
@@ -254,7 +250,8 @@ class TestFromAC_CockpitLaunch:
 
         assert callable(run)  # run() must exist
         static_routes = [
-            r for r in _m.app.routes
+            r
+            for r in _m.app.routes
             if hasattr(r, "app") and isinstance(r.app, StaticFiles)
         ]
         assert static_routes == [], (
@@ -278,7 +275,8 @@ class TestFromAC_CockpitLaunch:
         from starlette.staticfiles import StaticFiles  # noqa: PLC0415
 
         static_routes = [
-            r for r in app.routes
+            r
+            for r in app.routes
             if hasattr(r, "app") and isinstance(r.app, StaticFiles)
         ]
         assert len(static_routes) >= 1
@@ -325,7 +323,9 @@ class TestFromAC_CockpitLaunch:
 
         # Simulate Timer firing immediately so we can verify the callback.
         class _ImmediateTimer:
-            def __init__(self, _delay: float, fn: object, *_args: object, **_kwargs: object) -> None:
+            def __init__(
+                self, _delay: float, fn: object, *_args: object, **_kwargs: object
+            ) -> None:
                 self._fn = fn
 
             def start(self) -> None:
@@ -375,7 +375,9 @@ class TestFromAC_CockpitLaunch:
         monkeypatch.delenv("COCKPIT_NO_OPEN", raising=False)
 
         class _ImmediateTimer:
-            def __init__(self, _delay: float, fn: object, *_args: object, **_kwargs: object) -> None:
+            def __init__(
+                self, _delay: float, fn: object, *_args: object, **_kwargs: object
+            ) -> None:
                 self._fn = fn
 
             def start(self) -> None:

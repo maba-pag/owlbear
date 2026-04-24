@@ -229,7 +229,9 @@ class TestFromAC_QuarantineLockHygiene:
             "Lock file must NOT be moved into quarantine/ — move_to_quarantine must no-op it"
         )
 
-    def test_ac_c4b2_quarantine_dir_not_created_for_lock_file(self, tmp_path: Path) -> None:
+    def test_ac_c4b2_quarantine_dir_not_created_for_lock_file(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C4b2: quarantine/ directory must not be created when the input is a lock file."""
         kanban_dir = _make_board(tmp_path)
         tasks_dir = kanban_dir / "tasks"

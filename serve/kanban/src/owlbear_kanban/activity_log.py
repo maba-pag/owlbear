@@ -10,7 +10,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def log_activity(log_path: Path, action: str, task_id: int, detail: str, *, actor: str = "engine") -> None:
+def log_activity(
+    log_path: Path, action: str, task_id: int, detail: str, *, actor: str = "engine"
+) -> None:
     """Append one JSON log entry to *log_path*.
 
     Creates the file if it does not already exist.

@@ -98,7 +98,9 @@ def main(args: list[str] | None = None) -> int:
         0 on success, 1 when any assertion fails, 2 for argument parse errors.
     """
     parser = argparse.ArgumentParser(description="OwlBear search quality benchmark")
-    parser.add_argument("--db-path", required=True, help="Path to the knowledge DB directory")
+    parser.add_argument(
+        "--db-path", required=True, help="Path to the knowledge DB directory"
+    )
     parsed = parser.parse_args(args)
 
     return run_benchmark(Path(parsed.db_path))

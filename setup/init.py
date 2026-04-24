@@ -84,7 +84,9 @@ def _merge_settings(owlbear: dict, existing: dict) -> dict:
     all_keys = set(owlbear) | set(existing)
     merged: dict = {}
     for key in all_keys:
-        is_dict_key = key in _DICT_MERGE_KEYS or (key.startswith("[") and key.endswith("]"))
+        is_dict_key = key in _DICT_MERGE_KEYS or (
+            key.startswith("[") and key.endswith("]")
+        )
         if is_dict_key:
             owlbear_inner = owlbear.get(key, {})
             user_inner = existing.get(key, {})
@@ -394,8 +396,12 @@ def init(
 if __name__ == "__main__":  # pragma: no cover
     import argparse
 
-    parser = argparse.ArgumentParser(description="Initialise an OwlBear workspace in the current directory.")
-    parser.add_argument("--name", default=None, help="Project name (default: directory name)")
+    parser = argparse.ArgumentParser(
+        description="Initialise an OwlBear workspace in the current directory."
+    )
+    parser.add_argument(
+        "--name", default=None, help="Project name (default: directory name)"
+    )
     parser.add_argument(
         "--replace-hooks",
         action="store_true",

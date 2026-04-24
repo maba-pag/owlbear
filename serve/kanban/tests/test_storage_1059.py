@@ -172,7 +172,9 @@ class TestFromAC_CorruptionRedirected:
 class TestFromAC_QuarantineContainment:
     """move_to_quarantine must call validate_path_containment and reject paths outside kanban_dir."""
 
-    def test_move_to_quarantine_rejects_path_outside_kanban_dir(self, tmp_path: Path) -> None:
+    def test_move_to_quarantine_rejects_path_outside_kanban_dir(
+        self, tmp_path: Path
+    ) -> None:
         """PermissionError raised when task_path resolves outside kanban_dir."""
         from owlbear_kanban.storage import move_to_quarantine
 
@@ -184,7 +186,9 @@ class TestFromAC_QuarantineContainment:
         with pytest.raises(PermissionError):
             move_to_quarantine(outside_file, kanban_dir)
 
-    def test_move_to_quarantine_rejects_sibling_directory_path(self, tmp_path: Path) -> None:
+    def test_move_to_quarantine_rejects_sibling_directory_path(
+        self, tmp_path: Path
+    ) -> None:
         """PermissionError raised when task_path is in a sibling directory of kanban_dir."""
         from owlbear_kanban.storage import move_to_quarantine
 
@@ -302,7 +306,11 @@ class TestFromAC_VendorExtraTimestamps:
         frontmatter = content[4:closing_idx]
 
         released_at_line = next(
-            (line for line in frontmatter.splitlines() if line.startswith("released_at:")),
+            (
+                line
+                for line in frontmatter.splitlines()
+                if line.startswith("released_at:")
+            ),
             None,
         )
         assert released_at_line is not None, (
@@ -338,7 +346,11 @@ class TestFromAC_VendorExtraTimestamps:
         frontmatter = content[4:closing_idx]
 
         synced_at_line = next(
-            (line for line in frontmatter.splitlines() if line.startswith("synced_at:")),
+            (
+                line
+                for line in frontmatter.splitlines()
+                if line.startswith("synced_at:")
+            ),
             None,
         )
         assert synced_at_line is not None, (
@@ -376,7 +388,11 @@ class TestFromAC_VendorExtraTimestamps:
         frontmatter = content[4:closing_idx]
 
         ext_ref_line = next(
-            (line for line in frontmatter.splitlines() if line.startswith("external_ref:")),
+            (
+                line
+                for line in frontmatter.splitlines()
+                if line.startswith("external_ref:")
+            ),
             None,
         )
         assert ext_ref_line is not None, (

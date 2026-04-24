@@ -181,14 +181,18 @@ class TestFromAC_WebReadSSRF:
             try:
                 result = await _web_read("http://10.10.10.10/secret")
             except Exception as exc:  # noqa: BLE001
-                pytest.fail(f"_web_read raised {exc!r} for blocked IP instead of returning None")
+                pytest.fail(
+                    f"_web_read raised {exc!r} for blocked IP instead of returning None"
+                )
         assert result is None
 
     @pytest.mark.asyncio
     async def test_dns_resolution_failure_returns_none_httpx_not_called(self) -> None:
         """DNS failure (socket.gaierror) returns None; httpx.AsyncClient never instantiated."""
         with (
-            patch("socket.getaddrinfo", side_effect=OSError("Name or service not known")),
+            patch(
+                "socket.getaddrinfo", side_effect=OSError("Name or service not known")
+            ),
             patch("httpx.AsyncClient") as mock_cls,
         ):
             result = await _web_read("http://nonexistent.invalid/")
@@ -200,7 +204,9 @@ class TestFromAC_WebReadSSRF:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_dns_rebinding_hostname_resolving_to_private_ip_is_blocked(self) -> None:
+    async def test_dns_rebinding_hostname_resolving_to_private_ip_is_blocked(
+        self,
+    ) -> None:
         """A public-looking hostname whose DNS resolves to a private IP must be blocked.
 
         This is the core DNS-rebinding scenario: the attacker controls DNS and
@@ -217,7 +223,9 @@ class TestFromAC_WebReadSSRF:
         mock_cls.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_dns_rebinding_httpx_receives_resolved_ip_not_original_hostname(self) -> None:
+    async def test_dns_rebinding_httpx_receives_resolved_ip_not_original_hostname(
+        self,
+    ) -> None:
         """After safe DNS resolution httpx must connect to the resolved IP directly.
 
         Passing the original hostname URL to httpx lets httpx re-resolve the
@@ -293,7 +301,9 @@ class TestFromAC_WebReadSSRF:
         import httpx
 
         mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(side_effect=httpx.ConnectError("connection refused"))
+        mock_client.__aenter__ = AsyncMock(
+            side_effect=httpx.ConnectError("connection refused")
+        )
         mock_client.__aexit__ = AsyncMock(return_value=False)
         with (
             patch("socket.getaddrinfo", return_value=_addr4("93.184.216.34")),
@@ -302,5 +312,7 @@ class TestFromAC_WebReadSSRF:
             try:
                 result = await _web_read("http://example.com/page")
             except Exception as exc:  # noqa: BLE001
-                pytest.fail(f"_web_read raised {exc!r} on httpx error instead of returning None")
+                pytest.fail(
+                    f"_web_read raised {exc!r} on httpx error instead of returning None"
+                )
         assert result is None

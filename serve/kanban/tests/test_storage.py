@@ -51,9 +51,20 @@ next_id: 1001
 """
 
 _CANONICAL_FRONTMATTER_KEYS = [
-    "id", "title", "status", "priority", "created", "updated",
-    "tags", "parent", "depends_on", "blocked", "block_reason",
-    "claimed_at", "archival_reason", "archival_refs",
+    "id",
+    "title",
+    "status",
+    "priority",
+    "created",
+    "updated",
+    "tags",
+    "parent",
+    "depends_on",
+    "blocked",
+    "block_reason",
+    "claimed_at",
+    "archival_reason",
+    "archival_refs",
 ]
 
 
@@ -113,7 +124,9 @@ class TestFromAC_Frontmatter:
                     f"Key '{expected_key}' appears before '{prev_key}' — wrong order"
                 )
 
-    def test_ac_c14_task_model_extra_allow_vendor_fields_survive(self, tmp_path: Path) -> None:
+    def test_ac_c14_task_model_extra_allow_vendor_fields_survive(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C14: Task model has extra='allow' — vendor fields survive round-trip."""
         kanban_dir = _make_board(tmp_path)
         # Write a task file with vendor fields (class, started, completed — legacy archive shape)
@@ -159,7 +172,9 @@ content
 
         # Both created and updated must end with +00:00
         for field in ("created", "updated"):
-            matching = [line for line in content.splitlines() if line.startswith(f"{field}:")]
+            matching = [
+                line for line in content.splitlines() if line.startswith(f"{field}:")
+            ]
             assert matching, f"Field '{field}' not found in frontmatter"
             assert "+00:00" in matching[0], (
                 f"Field '{field}' is not UTC+00:00: {matching[0]}"
@@ -181,7 +196,9 @@ content
         path = write_task(task, kanban_dir)
         content = path.read_text(encoding="utf-8")
 
-        matching = [line for line in content.splitlines() if line.startswith("claimed_at:")]
+        matching = [
+            line for line in content.splitlines() if line.startswith("claimed_at:")
+        ]
         assert matching
         assert "+00:00" in matching[0]
 
@@ -194,7 +211,9 @@ content
 class TestFromAC_ClaimedByDetection:
     """AC-C16, AC-C48: claimed_by in tasks/ is corruption; in archive/ silently stripped."""
 
-    def test_ac_c16_tasks_file_with_claimed_by_reports_mode3(self, tmp_path: Path) -> None:
+    def test_ac_c16_tasks_file_with_claimed_by_reports_mode3(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C16: detect_corruption on tasks/ file with claimed_by → ERR_CORRUPT_MISSING_FIELD, mode 3."""
         kanban_dir = _make_board(tmp_path)
         bad_file = kanban_dir / "tasks" / "1001-legacy.md"
@@ -281,10 +300,12 @@ class TestFromAC_Quarantine:
         kanban_dir = _make_board(tmp_path)
         original_name = "1001-corrupt.md"
         task_file = kanban_dir / "tasks" / original_name
-        task_file.write_text("---\nid: 1001\ntitle: c\nstatus: todo\npriority: needed\n"
-                              'created: "2026-04-21T10:00:00+00:00"\n'
-                              'updated: "2026-04-21T10:00:00+00:00"\n---\n',
-                              encoding="utf-8")
+        task_file.write_text(
+            "---\nid: 1001\ntitle: c\nstatus: todo\npriority: needed\n"
+            'created: "2026-04-21T10:00:00+00:00"\n'
+            'updated: "2026-04-21T10:00:00+00:00"\n---\n',
+            encoding="utf-8",
+        )
 
         quarantined_path = move_to_quarantine(task_file, kanban_dir)
 
@@ -311,7 +332,9 @@ class TestFromAC_Quarantine:
         ar_tasks = [t for t in all_tasks if "type:user-action" in (t.tags or [])]
         assert ar_tasks, "Expected an AR task with type:user-action tag"
 
-    def test_ac_c30_ar_task_body_has_quarantined_file_section(self, tmp_path: Path) -> None:
+    def test_ac_c30_ar_task_body_has_quarantined_file_section(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C30: AR task body contains '## Quarantined file' section with code, path, detail."""
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 

@@ -28,7 +28,9 @@ class HelloWorldClient(Client):
     def on_connect(self, _conn: Any) -> None:  # noqa: ANN401
         pass
 
-    async def session_update(self, _session_id: str, update: Any, **_kwargs: object) -> None:  # noqa: ANN401
+    async def session_update(
+        self, _session_id: str, update: Any, **_kwargs: object
+    ) -> None:  # noqa: ANN401
         if isinstance(update, AgentMessageChunk) and update.content.type == "text":
             print(update.content.text, end="", flush=True)
 
@@ -69,7 +71,9 @@ class HelloWorldClient(Client):
         pass
 
 
-async def _shutdown(proc: asyncio.subprocess.Process, conn: ClientSideConnection) -> None:
+async def _shutdown(
+    proc: asyncio.subprocess.Process, conn: ClientSideConnection
+) -> None:
     """Close the ACP connection and terminate the subprocess gracefully."""
     with contextlib.suppress(Exception):
         await conn.close()

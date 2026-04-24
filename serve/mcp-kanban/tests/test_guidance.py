@@ -74,7 +74,9 @@ class TestFromAC_KanbanTaskGuidanceField:
         """guidance is the first key in model_dump() output (declaration-order)."""
         task = _task()
         keys = list(task.model_dump().keys())
-        assert keys[0] == "guidance", f"Expected 'guidance' as first serialization key, got {keys[0]!r}"
+        assert keys[0] == "guidance", (
+            f"Expected 'guidance' as first serialization key, got {keys[0]!r}"
+        )
 
     def test_model_validate_from_engine_dict_without_guidance_gives_empty_list(
         self,
@@ -110,8 +112,12 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["scope:foo"])
         result = collect_guidance("edit_block", before, after)  # type: ignore[misc]
-        assert len(result) > 0, "Expected non-empty guidance for edit_block without block:user"
-        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        assert len(result) > 0, (
+            "Expected non-empty guidance for edit_block without block:user"
+        )
+        assert "Decision Request" in result[0], (
+            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        )
 
     def test_end_work_block_without_block_user_tag_returns_dr_message(self) -> None:
         """end_work_block without 'block:user' tag → non-empty list, first item contains 'Decision Request'."""
@@ -119,8 +125,12 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["scope:bar"])
         result = collect_guidance("end_work_block", before, after)  # type: ignore[misc]
-        assert len(result) > 0, "Expected non-empty guidance for end_work_block without block:user"
-        assert "Decision Request" in result[0], f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        assert len(result) > 0, (
+            "Expected non-empty guidance for end_work_block without block:user"
+        )
+        assert "Decision Request" in result[0], (
+            f"Expected 'Decision Request' in first guidance item, got {result[0]!r}"
+        )
 
     # -- edit_block / end_work_block: block:user tag skips DR -------------------
 
@@ -130,7 +140,9 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["block:user"])
         result = collect_guidance("edit_block", before, after)  # type: ignore[misc]
-        assert result == [], f"Expected [] for edit_block with block:user, got {result!r}"
+        assert result == [], (
+            f"Expected [] for edit_block with block:user, got {result!r}"
+        )
 
     def test_end_work_block_with_block_user_tag_returns_empty(self) -> None:
         """end_work_block with 'block:user' tag → returns []."""
@@ -138,7 +150,9 @@ class TestFromAC_CollectGuidance:
         before = _task()
         after = _task(tags=["block:user"])
         result = collect_guidance("end_work_block", before, after)  # type: ignore[misc]
-        assert result == [], f"Expected [] for end_work_block with block:user, got {result!r}"
+        assert result == [], (
+            f"Expected [] for end_work_block with block:user, got {result!r}"
+        )
 
     # -- move: forward skip >1 slot -------------------------------------------
 
@@ -148,7 +162,9 @@ class TestFromAC_CollectGuidance:
         before = _task(status="research")
         after = _task(status="todo")  # 2 slots ahead: research→backlog→todo
         result = collect_guidance("move", before, after, statuses=STATUSES)  # type: ignore[misc]
-        assert len(result) > 0, f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
+        assert len(result) > 0, (
+            f"Expected guidance for >1-slot forward move (research→todo), got {result!r}"
+        )
 
     # -- move: boundary — exactly 1 slot ahead --------------------------------
 
@@ -158,7 +174,9 @@ class TestFromAC_CollectGuidance:
         before = _task(status="research")
         after = _task(status="backlog")  # 1 slot ahead
         result = collect_guidance("move", before, after, statuses=STATUSES)  # type: ignore[misc]
-        assert result == [], f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
+        assert result == [], (
+            f"Expected [] for 1-slot forward move (research→backlog), got {result!r}"
+        )
 
     # -- move: backward -------------------------------------------------------
 
@@ -168,7 +186,9 @@ class TestFromAC_CollectGuidance:
         before = _task(status="todo")
         after = _task(status="backlog")  # backward
         result = collect_guidance("move", before, after, statuses=STATUSES)  # type: ignore[misc]
-        assert result == [], f"Expected [] for backward move (todo→backlog), got {result!r}"
+        assert result == [], (
+            f"Expected [] for backward move (todo→backlog), got {result!r}"
+        )
 
     # -- end_work_success: commit message -------------------------------------
 
@@ -192,4 +212,3 @@ class TestFromAC_CollectGuidance:
         after = _task()
         result = collect_guidance("unknown_op", before, after)  # type: ignore[misc]
         assert result == [], f"Expected [] for unknown operation, got {result!r}"
-
