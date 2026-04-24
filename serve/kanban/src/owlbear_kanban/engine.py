@@ -57,11 +57,11 @@ from owlbear_kanban.storage import (
 # Module-level duration parser (AC-C49)
 # ---------------------------------------------------------------------------
 
-_DURATION_RE = re.compile(r"^(?:(\d+)h)?(?:(\d+)m)?$")
+_DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
 
 
 def _parse_duration(s: str) -> timedelta:
-    """Parse a duration string like ``'1h'``, ``'30m'``, ``'2h30m'``.
+    """Parse a duration string like ``'1h'``, ``'30m'``, ``'2h30m'``, ``'30s'``, ``'2d'``.
 
     Args:
         s: Duration string.
@@ -73,14 +73,84 @@ def _parse_duration(s: str) -> timedelta:
         ConfigError: code='ERR_INVALID_CLAIM_TIMEOUT' when format is invalid.
     """
     m = _DURATION_RE.match(s.strip())
-    if not m or not (m.group(1) or m.group(2)):
+    if not m or not any(m.groups()):
         raise ConfigError(
             code="ERR_INVALID_CLAIM_TIMEOUT",
-            user_message=f"Invalid claim_timeout format: {s!r} — expected e.g. '1h', '30m', '2h30m'",
+            user_message=(
+                f"Invalid claim_timeout format: {s!r} — expected e.g. "
+                "'1h', '30m', '2h30m', '30s', '2d'"
+            ),
         )
-    hours = int(m.group(1) or 0)
-    minutes = int(m.group(2) or 0)
-    return timedelta(hours=hours, minutes=minutes)
+    days = int(m.group(1) or 0)
+    hours = int(m.group(2) or 0)
+    minutes = int(m.group(3) or 0)
+    seconds = int(m.group(4) or 0)
+    return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+
+
+def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
+    """Validate engine-specific config invariants required at engine init."""
+    statuses = config.statuses
+    priorities = config.priorities
+
+    if not statuses:
+        raise ConfigError(
+            code="ERR_INVALID_STATUS",
+            user_message="config.statuses must contain at least one status",
+        )
+    if not priorities:
+        raise ConfigError(
+            code="ERR_INVALID_PRIORITY",
+            user_message="config.priorities must contain at least one priority",
+        )
+
+    if config.entry_status not in statuses:
+        raise ConfigError(
+            code="ERR_ENTRY_STATUS_INVALID",
+            user_message=(
+                f"entry_status {config.entry_status!r} must be one of statuses: {statuses}"
+            ),
+        )
+
+    terminal_status = getattr(config, "terminal_status", statuses[-1])
+    if terminal_status not in statuses or terminal_status != statuses[-1]:
+        raise ConfigError(
+            code="ERR_TERMINAL_STATUS_INVALID",
+            user_message=(
+                f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
+            ),
+        )
+
+    missing_statuses = [status for status in statuses if status not in config.agent_map]
+    if missing_statuses:
+        raise ConfigError(
+            code="ERR_INVALID_STATUS",
+            user_message=f"agent_map missing status entries: {missing_statuses}",
+        )
+
+    # Validate timeout format eagerly at engine init.
+    _parse_duration(config.claim_timeout)
+
+    compatibility_sets: dict[str, set[str]] = {}
+    for agent, peers in config.agent_compatibility.items():
+        if not isinstance(peers, list):
+            raise ConfigError(
+                code="ERR_INVALID_STATUS",
+                user_message=f"agent_compatibility[{agent!r}] must be a list[str]",
+            )
+        compatibility_sets[agent] = {str(peer) for peer in peers}
+
+    for agent, peers in compatibility_sets.items():
+        for peer in peers:
+            reverse = compatibility_sets.get(peer)
+            if reverse is None or agent not in reverse:
+                raise ConfigError(
+                    code="ERR_INVALID_STATUS",
+                    user_message=(
+                        "agent_compatibility must be symmetric: "
+                        f"{agent!r} -> {peer!r} requires {peer!r} -> {agent!r}"
+                    ),
+                )
 
 
 if TYPE_CHECKING:
@@ -323,9 +393,6 @@ class KanbanEngine:
 
     Args:
         kanban_dir:    Root directory of the kanban board.
-        agent_name:    Fixed agent identity for this instance.  Generated as
-                       ``{adjective}-{noun}`` from the ``agent_names`` pool if
-                       omitted; stable across all calls on the same instance.
         activity_log:  When ``True``, append entries to ``activity.jsonl`` on
                        every mutation.  When ``None`` (default), reads from
                        ``config.yml`` ``activity_log`` field.
@@ -335,19 +402,15 @@ class KanbanEngine:
         self,
         kanban_dir: Path,
         *,
-        agent_name: str | None = None,
         activity_log: bool | None = None,
     ) -> None:
         self._kanban_dir = kanban_dir
         self._config: BoardConfig = load_config(kanban_dir)
+        _validate_engine_config(self._config)
         self._tasks_dir = kanban_dir / self._config.tasks_dir
         self._archive_dir = kanban_dir / self._config.archive_dir
         # fmt: off
-        self._agent_name: str = (
-            agent_name
-            if agent_name is not None
-            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
-        )
+        self._agent_name: str = f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         # fmt: on
         effective_activity_log = (
             activity_log if activity_log is not None else self._config.activity_log
@@ -1025,6 +1088,7 @@ class KanbanEngine:
                 raise ValueError(msg)
 
         record.claimed_at = effective_now.isoformat()
+        record.claimed_by = self._agent_name
         record.updated = effective_now.isoformat()
         write_task(record, self._kanban_dir)
         try:
@@ -1061,6 +1125,7 @@ class KanbanEngine:
         original = record.model_copy(deep=True)
 
         record.claimed_at = None
+        record.claimed_by = None
         record.updated = datetime.now(tz=UTC).isoformat()
         write_task(record, self._kanban_dir)
         try:
@@ -1160,7 +1225,6 @@ class KanbanEngine:
             by the underlying state machine.  For the full set of reachable
             statuses from a given state, see :meth:`valid_transitions`.
         """
-        # block_reason is optional — use note as fallback
         valid_outcomes = {"success", "fail", "block", "reject"}
         if outcome not in valid_outcomes:
             msg = f"Unknown outcome: {outcome!r}"
@@ -1448,3 +1512,17 @@ class KanbanEngine:
             msg = f"Task {task_id!r} not found in {search_dir}"
             raise FileNotFoundError(msg)
         return matches[0]
+
+
+class AgentView:
+    """Minimal role-scoped wrapper for agent-facing engine use."""
+
+    def __init__(self, engine: KanbanEngine) -> None:
+        self.engine = engine
+
+
+class CockpitView:
+    """Minimal role-scoped wrapper for cockpit-facing engine use."""
+
+    def __init__(self, engine: KanbanEngine) -> None:
+        self.engine = engine
