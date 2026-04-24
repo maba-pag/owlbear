@@ -121,14 +121,12 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
             ),
         )
 
-    # Allow empty agent_map (default); only validate if explicitly configured
-    if config.agent_map:
-        missing_statuses = [status for status in statuses if status not in config.agent_map]
-        if missing_statuses:
-            raise ConfigError(
-                code="ERR_INVALID_STATUS",
-                user_message=f"agent_map missing status entries: {missing_statuses}",
-            )
+    missing_statuses = [status for status in statuses if status not in config.agent_map]
+    if missing_statuses:
+        raise ConfigError(
+            code="ERR_INVALID_STATUS",
+            user_message=f"agent_map missing status entries: {missing_statuses}",
+        )
 
     # Validate timeout format eagerly at engine init.
     _parse_duration(config.claim_timeout)
@@ -395,9 +393,6 @@ class KanbanEngine:
 
     Args:
         kanban_dir:    Root directory of the kanban board.
-        agent_name:    Fixed agent identity for this instance.  Generated as
-                       ``{adjective}-{noun}`` from the ``agent_names`` pool if
-                       omitted; stable across all calls on the same instance.
         activity_log:  When ``True``, append entries to ``activity.jsonl`` on
                        every mutation.  When ``None`` (default), reads from
                        ``config.yml`` ``activity_log`` field.
@@ -407,7 +402,6 @@ class KanbanEngine:
         self,
         kanban_dir: Path,
         *,
-        agent_name: str | None = None,
         activity_log: bool | None = None,
     ) -> None:
         self._kanban_dir = kanban_dir
@@ -415,11 +409,7 @@ class KanbanEngine:
         _validate_engine_config(self._config)
         self._tasks_dir = kanban_dir / self._config.tasks_dir
         self._archive_dir = kanban_dir / self._config.archive_dir
-        self._agent_name: str = (
-            agent_name
-            if agent_name is not None
-            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
-        )
+        self._agent_name: str = f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
         effective_activity_log = (
             activity_log if activity_log is not None else self._config.activity_log
         )

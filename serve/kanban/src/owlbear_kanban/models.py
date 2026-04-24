@@ -86,9 +86,6 @@ def _validate_entry_and_terminal(
 
 
 def _validate_agent_map(statuses: list[str], agent_map: dict[str, Any]) -> None:
-    # Allow empty agent_map (default); only validate if explicitly configured
-    if not agent_map:
-        return
     missing_statuses = [status for status in statuses if status not in agent_map]
     if missing_statuses:
         raise ConfigError(
