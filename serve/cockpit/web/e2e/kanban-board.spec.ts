@@ -222,7 +222,8 @@ test.describe('TestFromAC_KanbanBoardDnDDensityScroll', () => {
 
     expect(
       colMaxHeightPx,
-      `column max-height (${colMaxHeightPx}px) must be < viewport height (${viewport!.height}px) to account for shell chrome`,
+      `column max-height (${colMaxHeightPx}px) must be < viewport height` +
+        ` (${viewport!.height}px) to account for shell chrome`,
     ).toBeLessThan(viewport!.height)
   })
 })

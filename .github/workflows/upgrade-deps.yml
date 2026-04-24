@@ -3,7 +3,7 @@ name: Dependency Upgrade
 
 "on":
   schedule:
-    - cron: "0 6 1 * *" # 1st of each month at 06:00 UTC
+    - cron: "0 6 1 * *"  # 1st of each month at 06:00 UTC
   workflow_dispatch: {}
 
 concurrency:
@@ -67,7 +67,10 @@ jobs:
           fi
 
       - name: Create PR (tests passed)
-        if: steps.diff.outputs.changed == 'true' && steps.pytest.outcome == 'success' && steps.vitest.outcome == 'success'
+        if: >-
+          steps.diff.outputs.changed == 'true' &&
+          steps.pytest.outcome == 'success' &&
+          steps.vitest.outcome == 'success'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.11
         with:
           branch: chore/dep-upgrade
@@ -85,7 +88,9 @@ jobs:
           delete-branch: true
 
       - name: Create issue (tests failed)
-        if: steps.diff.outputs.changed == 'true' && (steps.pytest.outcome == 'failure' || steps.vitest.outcome == 'failure')
+        if: >-
+          steps.diff.outputs.changed == 'true' &&
+          (steps.pytest.outcome == 'failure' || steps.vitest.outcome == 'failure')
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.11
         with:
           branch: chore/dep-upgrade-failing
@@ -99,7 +104,8 @@ jobs:
             | Python (pytest) | ${{ steps.pytest.outcome }} |
             | Frontend (vitest) | ${{ steps.vitest.outcome }} |
 
-            Review the test output in the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            Review the test output in the
+            [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
           labels: dependencies
           commit-message: "chore(deps): monthly dependency upgrade (failing)"
           delete-branch: true

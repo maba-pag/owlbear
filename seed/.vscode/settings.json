@@ -1,51 +1,26 @@
 {
-  "[chatagent]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[instructions]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[json]": {
-    "editor.defaultFormatter": "vscode.json-language-features",
-    "editor.formatOnSave": false
-  },
-  "[jsonc]": {
-    "editor.defaultFormatter": "vscode.json-language-features"
-  },
-  "[markdown]": {
-    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
-  },
-  "[toml]": {
-    "editor.defaultFormatter": "tamasfe.even-better-toml"
-  },
-  "[xml]": {
-    "editor.defaultFormatter": "redhat.vscode-xml"
-  },
-  "[yaml]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
   "accessibility.chat.showCheckmarks": true,
   "chat.agent.maxRequests": 99999,
   "chat.agentFilesLocations": {
-    "{{owlbear_path}}/share/agents": true,
-    ".owlbear/agents": true
+    ".owlbear/agents": true,
+    "{{owlbear_path}}/share/agents": true
   },
   "chat.agentSkillsLocations": {
-    "{{owlbear_path}}/share/skills": true,
-    ".owlbear/skills": true
+    ".owlbear/skills": true,
+    "{{owlbear_path}}/share/skills": true
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
   "chat.instructionsFilesLocations": {
-    "{{owlbear_path}}/share/instructions": true,
-    ".owlbear/instructions": true
+    ".owlbear/instructions": true,
+    "{{owlbear_path}}/share/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
   "chat.promptFilesLocations": {
-    "{{owlbear_path}}/share/prompts": true,
-    ".owlbear/prompts": true
+    ".owlbear/prompts": true,
+    "{{owlbear_path}}/share/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.terminal.autoApprove": {
@@ -59,7 +34,6 @@
   "chat.useCustomAgentHooks": true,
   "chat.viewSessions.orientation": "stacked",
   "diffEditor.hideUnchangedRegions.enabled": false,
-  "editor.defaultFormatter": "charliermarsh.ruff",
   "editor.formatOnPaste": false,
   "editor.formatOnSave": false,
   "editor.links": false,
