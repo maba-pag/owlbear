@@ -81,6 +81,8 @@ task = start_work(task_id="480")
 end_work(task_id="480", note="## Builder Notes\n- Files changed: ...\n\n12 tests passed, ruff clean", outcome="success")
 ```
 
+> **Anti-pattern:** Do NOT call `show_task` before `start_work`. `start_work` already returns the full task body — a preceding `show_task` is a redundant read. Use `show_task` only for secondary lookups (dependencies, parent briefs, re-reads).
+
 Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended to the task body with a timestamp, then the task advances and the claim is released — all atomically.
 
 For the section header to use per agent, see `agent-common.instructions.md` — `## Per-Agent Section Mapping`.
