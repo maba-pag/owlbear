@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class MCPParamsBase(BaseModel):
@@ -23,10 +23,9 @@ class ListTasksParams(MCPParamsBase):
     parent: int | None = None
     search: str | None = None
     sort: str | None = None
-    unclaimed: bool | None = None
-    archived: bool | None = None
-    limit: int | None = None
-    reverse: bool | None = None
+    unclaimed: bool = False
+    limit: int = 0
+    reverse: bool = False
     blocked: bool | None = None
     ids: list[int] | None = None
 
@@ -42,11 +41,7 @@ class ListTasksParams(MCPParamsBase):
             or self.archival_reason is not None
             or self.parent is not None
             or self.search is not None
-            or self.sort is not None
-            or self.unclaimed is not None
-            or self.archived is not None
-            or self.limit is not None
-            or self.reverse is not None
+            or self.unclaimed
             or self.blocked is not None
         ):
             msg = "ids cannot be combined with other filter parameters"
@@ -57,13 +52,8 @@ class ListTasksParams(MCPParamsBase):
 class ShowTaskParams(MCPParamsBase):
     """Input schema for show_task."""
 
-    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
+    id: int
     section: str | None = None
-
-    @property
-    def task_id(self) -> int:
-        """Backward-compatible alias for legacy callers."""
-        return self.id
 
 
 class PickTasksParams(MCPParamsBase):
@@ -87,7 +77,7 @@ class CreateTaskParams(MCPParamsBase):
 class EditTaskParams(MCPParamsBase):
     """Input schema for edit_task."""
 
-    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
+    id: int
     body: str | None = None
     append_body: str | None = None
     timestamp: bool = False
@@ -105,7 +95,7 @@ class EditTaskParams(MCPParamsBase):
 class MoveTaskParams(MCPParamsBase):
     """Input schema for move_task."""
 
-    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
+    id: int
     status: str
     archival_reason: str | None = None
     archival_refs: list[int] | None = None
@@ -114,13 +104,13 @@ class MoveTaskParams(MCPParamsBase):
 class StartWorkParams(MCPParamsBase):
     """Input schema for start_work."""
 
-    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
+    id: int
 
 
 class EndWorkParams(MCPParamsBase):
     """Input schema for end_work."""
 
-    id: int = Field(validation_alias=AliasChoices("id", "task_id"))
+    id: int
     outcome: Literal["success", "reject", "release", "block"] = "success"
     move_to: str | None = None
     note: str | None = None
