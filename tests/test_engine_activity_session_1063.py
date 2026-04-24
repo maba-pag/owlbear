@@ -403,3 +403,74 @@ class TestFromAC_WorkSessionExport:
         for s in sessions:
             assert hasattr(s, "agent"), "Every session in active filter must have agent field"
             assert s.agent is not None, "Running session agent must not be None"  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndWorkBlockReasonRequired — AC-C42 end_work contract
+#
+# AC-C42: end_work is one of the engine methods that emits ActivityEvent
+# entries. Its documented contract states:
+#
+#   block_reason: Required when outcome is 'block'; stored on the task.
+#   Raises: ValueError: outcome is 'block' but block_reason is empty,
+#           or outcome/move_to is invalid.
+#
+# The implementation comment says "block_reason is optional — use note as
+# fallback" but the public docstring documents it as required and guarantees
+# a ValueError for empty block_reason on 'block' outcome. These tests
+# enforce the documented public contract.
+#
+# Both tests FAIL against the current implementation:
+#   - test 1: no ValueError is raised when block_reason is omitted.
+#   - test 2: the resulting task has an empty string block_reason (""),
+#             violating the "required" contract.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndWorkBlockReasonRequired:
+    """AC-C42: end_work(outcome='block') must require a non-empty block_reason.
+
+    The public docstring of end_work() documents:
+        block_reason: Required when outcome is 'block'; stored on the task.
+        Raises: ValueError: outcome is 'block' but block_reason is empty.
+
+    The implementation currently treats block_reason as optional (comment:
+    "block_reason is optional — use note as fallback"). These tests enforce
+    the documented public contract against the implementation.
+    """
+
+    def test_end_work_block_without_block_reason_raises_value_error(
+        self, engine: KanbanEngine
+    ) -> None:
+        """end_work(outcome='block') with no block_reason must raise ValueError.
+
+        AC-C42: end_work is a documented AC-C42 method. Its docstring states:
+        'Raises: ValueError: outcome is block but block_reason is empty.'
+        The implementation does not validate this — it silently writes an
+        empty block_reason to the task file instead of raising.
+        """
+        engine.claim_task("1")
+        with pytest.raises(ValueError, match="block_reason"):
+            engine.end_work("1", note="blocked by dependency", outcome="block")
+            # No block_reason supplied — must raise ValueError per docstring
+
+    def test_end_work_block_without_block_reason_produces_empty_block_reason_on_task(
+        self, engine: KanbanEngine
+    ) -> None:
+        """end_work(outcome='block') without block_reason stores empty string — contract violation.
+
+        AC-C42: the documented contract states block_reason is 'Required when
+        outcome is block; stored on the task.' An empty block_reason stored on
+        the task violates this requirement. This test demonstrates the gap:
+        the engine does not raise, and the resulting task has an empty string
+        block_reason rather than a meaningful reason.
+        """
+        engine.claim_task("2")
+        # The call does NOT raise (implementation gap from test above).
+        # We verify the consequence: block_reason is empty, violating the contract.
+        task = engine.end_work("2", note="blocked by dep", outcome="block")
+        assert task.block_reason, (
+            f"end_work(outcome='block') without block_reason must store a non-empty "
+            f"block_reason on the task; got block_reason={task.block_reason!r}. "
+            f"The docstring states block_reason is 'Required when outcome is block'."
+        )
