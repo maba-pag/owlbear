@@ -79,11 +79,11 @@ class TestFromAC_MCPInputSchemas:
             ShowTaskParams()  # type: ignore[call-arg]
 
     def test_show_task_params_valid(self) -> None:
-        """ShowTaskParams accepts task_id; section is optional."""
+        """ShowTaskParams accepts canonical id; section is optional."""
         from owlbear_mcp_kanban.models import ShowTaskParams
 
-        p = ShowTaskParams(task_id=42)
-        assert p.task_id == 42  # noqa: PLR2004
+        p = ShowTaskParams(id=42)
+        assert p.id == 42  # noqa: PLR2004
         assert p.section is None
 
     def test_create_task_params_requires_title(self) -> None:
@@ -99,26 +99,26 @@ class TestFromAC_MCPInputSchemas:
 
         assert "status" not in CreateTaskParams.model_fields
 
-    def test_end_work_params_requires_task_id_note_outcome(self) -> None:
-        """EndWorkParams requires task_id and note; outcome defaults to 'success'."""
+    def test_end_work_params_requires_id(self) -> None:
+        """EndWorkParams requires id; note is optional, outcome defaults to 'success'."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
         with pytest.raises(ValidationError):
             EndWorkParams()  # type: ignore[call-arg]
 
     def test_end_work_params_valid_minimal(self) -> None:
-        """EndWorkParams valid with task_id + note; outcome defaults."""
+        """EndWorkParams valid with canonical id only; note optional, outcome defaults."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
-        p = EndWorkParams(task_id=1, note="Done.")
+        p = EndWorkParams(id=1)
         assert p.outcome == "success"
 
-    def test_move_task_params_requires_task_id_and_status(self) -> None:
-        """MoveTaskParams requires task_id and status."""
+    def test_move_task_params_requires_id_and_status(self) -> None:
+        """MoveTaskParams requires canonical id and status."""
         from owlbear_mcp_kanban.models import MoveTaskParams
 
         with pytest.raises(ValidationError):
-            MoveTaskParams(task_id=1)  # missing status
+            MoveTaskParams(id=1)  # missing status
 
     def test_start_work_params_requires_task_id(self) -> None:
         """StartWorkParams requires task_id."""
@@ -126,6 +126,43 @@ class TestFromAC_MCPInputSchemas:
 
         with pytest.raises(ValidationError):
             StartWorkParams()  # type: ignore[call-arg]
+
+    # --- Canonical id: task_id alias must be REJECTED (refined AC §5) ---
+
+    def test_show_task_params_rejects_task_id(self) -> None:
+        """ShowTaskParams must reject legacy task_id — canonical field is id (refined AC §5.2)."""
+        from owlbear_mcp_kanban.models import ShowTaskParams
+
+        with pytest.raises(ValidationError):
+            ShowTaskParams(task_id=42)  # type: ignore[call-arg]
+
+    def test_edit_task_params_rejects_task_id(self) -> None:
+        """EditTaskParams must reject legacy task_id — canonical field is id (refined AC §5.5)."""
+        from owlbear_mcp_kanban.models import EditTaskParams
+
+        with pytest.raises(ValidationError):
+            EditTaskParams(task_id=1)  # type: ignore[call-arg]
+
+    def test_move_task_params_rejects_task_id(self) -> None:
+        """MoveTaskParams must reject legacy task_id — canonical field is id (refined AC §5.6)."""
+        from owlbear_mcp_kanban.models import MoveTaskParams
+
+        with pytest.raises(ValidationError):
+            MoveTaskParams(task_id=1, status="todo")  # type: ignore[call-arg]
+
+    def test_start_work_params_rejects_task_id(self) -> None:
+        """StartWorkParams must reject legacy task_id — canonical field is id (refined AC §5.7)."""
+        from owlbear_mcp_kanban.models import StartWorkParams
+
+        with pytest.raises(ValidationError):
+            StartWorkParams(task_id=1)  # type: ignore[call-arg]
+
+    def test_end_work_params_rejects_task_id(self) -> None:
+        """EndWorkParams must reject legacy task_id — canonical field is id (refined AC §5.8)."""
+        from owlbear_mcp_kanban.models import EndWorkParams
+
+        with pytest.raises(ValidationError):
+            EndWorkParams(task_id=1)  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +179,7 @@ class TestFromAC_EditTaskNoStatusParam:
         from owlbear_mcp_kanban.models import EditTaskParams
 
         with pytest.raises((ValidationError, TypeError)):
-            EditTaskParams(task_id=1, status="todo")  # type: ignore[call-arg]
+            EditTaskParams(id=1, status="todo")  # type: ignore[call-arg]
 
     def test_edit_task_params_no_status_in_model_fields(self) -> None:
         """status is not declared in EditTaskParams.model_fields (AC13)."""
@@ -155,14 +192,14 @@ class TestFromAC_EditTaskNoStatusParam:
         from owlbear_mcp_kanban.models import EditTaskParams
 
         with pytest.raises((ValidationError, TypeError)):
-            EditTaskParams(task_id=1, depends_on="5")  # type: ignore[call-arg]
+            EditTaskParams(id=1, depends_on="5")  # type: ignore[call-arg]
 
     def test_edit_task_params_rejects_tags_field(self) -> None:
         """EditTaskParams rejects legacy tags (use add_tag/remove_tag)."""
         from owlbear_mcp_kanban.models import EditTaskParams
 
         with pytest.raises((ValidationError, TypeError)):
-            EditTaskParams(task_id=1, tags="foo,bar")  # type: ignore[call-arg]
+            EditTaskParams(id=1, tags="foo,bar")  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +252,72 @@ class TestFromAC_ListTasksIdsExclusivity:
 
         with pytest.raises(ValidationError):
             ListTasksParams(ids=[1], unclaimed=True)
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_ListTasksSchemaContract
+# Refined AC §5.1: field shape, defaults, no archived, ids + display-modifier compat
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListTasksSchemaContract:
+    """Refined AC §5.1: ListTasksParams field contract — no archived, correct defaults,
+    ids exclusivity limited to filter params (display modifiers are allowed)."""
+
+    def test_list_tasks_no_archived_field(self) -> None:
+        """ListTasksParams must NOT have an archived field (Brief A uses status='archived')."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        assert "archived" not in ListTasksParams.model_fields
+
+    def test_list_tasks_rejects_archived_kwarg(self) -> None:
+        """Passing archived=True to ListTasksParams raises ValidationError (extra=forbid)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        with pytest.raises(ValidationError):
+            ListTasksParams(archived=True)  # type: ignore[call-arg]
+
+    def test_list_tasks_unclaimed_defaults_false(self) -> None:
+        """ListTasksParams.unclaimed defaults to False (refined AC §5.1)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        p = ListTasksParams()
+        assert p.unclaimed is False
+
+    def test_list_tasks_limit_defaults_zero(self) -> None:
+        """ListTasksParams.limit defaults to 0 (refined AC §5.1)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        p = ListTasksParams()
+        assert p.limit == 0
+
+    def test_list_tasks_reverse_defaults_false(self) -> None:
+        """ListTasksParams.reverse defaults to False (refined AC §5.1)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        p = ListTasksParams()
+        assert p.reverse is False
+
+    def test_list_tasks_ids_allows_sort(self) -> None:
+        """ids combined with sort (display modifier) is valid — not a filter (refined AC AC15)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        p = ListTasksParams(ids=[1, 2], sort="priority")
+        assert p.ids == [1, 2]
+
+    def test_list_tasks_ids_allows_limit(self) -> None:
+        """ids combined with limit (display modifier) is valid — not a filter (refined AC AC15)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        p = ListTasksParams(ids=[1, 2], limit=5)
+        assert p.ids == [1, 2]
+
+    def test_list_tasks_ids_allows_reverse(self) -> None:
+        """ids combined with reverse (display modifier) is valid — not a filter (refined AC AC15)."""
+        from owlbear_mcp_kanban.models import ListTasksParams
+
+        p = ListTasksParams(ids=[1, 2], reverse=True)
+        assert p.ids == [1, 2]
 
 
 # ---------------------------------------------------------------------------
