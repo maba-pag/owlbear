@@ -1199,6 +1199,59 @@ class TestFromAC_IdempotencyEdgeCases:
             "per _is_archive_refs_valid boolean check at migrate.py:116"
         )
 
+    def test_ac_c35_task_misordered_canonical_fields_is_migrated_not_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C35 (branch matrix): task with all canonical fields in non-canonical order is migrated.
+
+        §5.3 step 2 condition 5 requires canonical field order as an idempotency condition.
+        _is_task_migrated() calls _has_canonical_order() — a task with `title` before `id`
+        must be re-migrated (Migrated: 1), NOT skipped (Already: 1).
+        After migration, the output file must have `id` before `title` (canonical order restored).
+        """
+        # All canonical fields present with correct values, but `title` precedes `id` — wrong order.
+        task_content = (
+            "---\n"
+            "title: misordered task\n"
+            "id: 1001\n"
+            "status: todo\n"
+            "priority: needed\n"
+            'created: "2026-01-15T08:00:00+00:00"\n'
+            'updated: "2026-01-15T08:00:00+00:00"\n'
+            "tags: []\n"
+            "parent: null\n"
+            "depends_on: []\n"
+            "blocked: false\n"
+            "block_reason: null\n"
+            "claimed_at: null\n"
+            "archival_reason: null\n"
+            "archival_refs: []\n"
+            "---\n\n## Notes\n\nContent.\n"
+        )
+        kanban_dir = _make_modern_board(tmp_path)
+        task_file = kanban_dir / "tasks" / "1001-misordered.md"
+        task_file.write_text(task_content, encoding="utf-8")
+
+        result = _run_migrate(kanban_dir, lane="tasks")
+
+        assert result.returncode == 0, (
+            "task with misordered canonical fields must exit 0 (no failure)"
+        )
+        assert (
+            "Migrated: 1" in result.stdout or "Migrated:         1" in result.stdout
+        ), (
+            "task with non-canonical field order was incorrectly treated as already-migrated "
+            "(_is_task_migrated must require _has_canonical_order to return True)"
+        )
+        # After migration the file must open with id before title (canonical order restored)
+        migrated_text = task_file.read_text(encoding="utf-8")
+        id_pos = migrated_text.find("\nid:")
+        title_pos = migrated_text.find("\ntitle:")
+        assert id_pos < title_pos, (
+            "after migration, 'id' must appear before 'title' in the frontmatter "
+            "(canonical order must be restored by _migrate_task_file)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_DryRunStrict — AC-C36 (stricter, retry-cycle)
