@@ -1,10 +1,10 @@
 # skills/
 
-31 skill definitions in the default VS Code discovery location (`share/skills/{name}/SKILL.md`).
+34 skill definitions in the default VS Code discovery location (`share/skills/{name}/SKILL.md`).
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 13 | Workflow — step-by-step procedures |
+| `w-` | 16 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
 | `h-` | 14 | Handbook — domain knowledge |
 
