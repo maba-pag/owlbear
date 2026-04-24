@@ -42,6 +42,8 @@ engine.release_task(42)
 | `start_work(task_id)` | Claim and advance to `in-progress` |
 | `end_work(task_id, …)` | Append outcome note and advance or reject |
 | `board_config()` | Defensive copy of the current `BoardConfig` |
+| `agent_view()` | Return the cached `AgentView` facade for agent-facing operations |
+| `cockpit_view()` | Return the cached `CockpitView` facade for cockpit-facing operations |
 | `valid_transitions(status)` | Set of all statuses except the given one |
 | `refresh_config()` | Reload config from disk |
 | `sweep()` | Release stale claims exceeding `claim_timeout` |
