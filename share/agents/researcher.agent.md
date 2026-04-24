@@ -5,7 +5,7 @@ argument-hint: "Research: {topic_or-question}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web, 'microsoft/markitdown/*', 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*', 'ddgs/search_text', 'ddgs/extract_content']
+  [vscode/memory, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web, ddgs/extract_content, ddgs/search_text, 'microsoft/markitdown/*', owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/end_work, owlbear-kanban/list_tasks, owlbear-kanban/show_task, owlbear-kanban/start_work]
 agents: [Explore, challenger, scribe]
 hooks:
   PreToolUse:

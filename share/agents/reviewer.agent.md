@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/end_work, owlbear-kanban/list_tasks, owlbear-kanban/show_task, owlbear-kanban/start_work]
 agents: [code-reader, scribe, quality-runner]
 hooks:
   PreToolUse:

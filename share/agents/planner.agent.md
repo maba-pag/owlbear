@@ -5,7 +5,7 @@ argument-hint: "Plan: {description}  |  Plan and create: #{id} — {description}
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
+  [vscode/memory, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/end_work, owlbear-kanban/list_tasks, owlbear-kanban/move_task, owlbear-kanban/show_task, owlbear-kanban/start_work]
 agents: []
 ---
 

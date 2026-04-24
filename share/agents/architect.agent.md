@@ -5,7 +5,7 @@ argument-hint: "Architect Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*']
+  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/end_work, owlbear-kanban/list_tasks, owlbear-kanban/show_task, owlbear-kanban/start_work]
 agents: [challenger, scribe, planner]
 hooks:
   PreToolUse:

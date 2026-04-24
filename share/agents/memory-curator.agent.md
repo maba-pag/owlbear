@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: [Claude Sonnet 4.6 (copilot), GPT-5.4 (copilot)]
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+  [vscode/memory, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/end_work, owlbear-kanban/list_tasks, owlbear-kanban/show_task, owlbear-kanban/start_work]
 agents: [scribe]
 ---
 

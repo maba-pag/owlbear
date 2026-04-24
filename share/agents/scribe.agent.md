@@ -5,7 +5,7 @@ argument-hint: "Scribe: task_id={task_id}, mode={check-or-create|resolve|query},
 user-invocable: false
 disable-model-invocation: true
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
-tools: [read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, execute/runInTerminal, execute/getTerminalOutput, edit/createFile, edit/editFiles, vscode/memory, 'owlbear-kanban/show_task', 'owlbear-kanban/edit_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+tools: [vscode/memory, execute/getTerminalOutput, execute/runInTerminal, read/readFile, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/list_tasks, owlbear-kanban/show_task]
 agents: []
 ---
 

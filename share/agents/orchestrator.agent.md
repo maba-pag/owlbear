@@ -4,7 +4,7 @@ description: "Dispatch loop — plan, dispatch agents, re-plan from fresh board 
 argument-hint: "Orchestrate: {scope_or-filter — e.g., 'phase-2', 'all todos', 'tag:parser'}"
 user-invocable: true
 disable-model-invocation: true
-tools: [vscode/memory, read/readFile, agent, 'owlbear-kanban/pick_tasks', 'owlbear-kanban/list_tasks', 'owlbear-kanban/show_task', 'owlbear-memory/*']
+tools: [vscode/memory, read/readFile, agent, owlbear-kanban/list_tasks, owlbear-kanban/pick_tasks, owlbear-kanban/show_task]
 agents:
   - planner
   - scribe
