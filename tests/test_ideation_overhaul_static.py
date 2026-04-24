@@ -415,6 +415,26 @@ class TestFromAC_IdeatorRouterContract:
             "a router must not invoke a model to perform ideation itself"
         )
 
+    def test_ideator_mediator_route_names_three_artifacts(self) -> None:
+        text = _read("share/agents/ideator.agent.md")
+        for artifact in ["context.md", "decisions.md", "research-notes.md"]:
+            assert artifact in text, (
+                f"Ideator mediator-route condition missing artifact reference: {artifact}"
+            )
+
+    def test_ideator_names_artifact_paths_explicitly(self) -> None:
+        text = _read("share/agents/ideator.agent.md")
+        assert "Name the artifact paths explicitly" in text, (
+            "Ideator missing explicit rule to name artifact paths — "
+            "router must tell users where handoff artifacts live"
+        )
+
+    def test_ideator_askquestions_every_turn(self) -> None:
+        text = _read("share/agents/ideator.agent.md")
+        assert "askQuestions ends every user-facing turn" in text, (
+            "Ideator missing interaction contract: askQuestions must end every user-facing turn"
+        )
+
 
 class TestFromAC_EarlyChallengeLane:
     """Early challenge lane selection, critic exclusion, and bounded-output rules."""
@@ -448,5 +468,42 @@ class TestFromAC_EarlyChallengeLane:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
         assert "Outputs must be short and bounded." in text, (
             "Panel handbook missing the bounded-output rule for early challengers"
+        )
+
+    def test_discovery_always_invokes_simplifier_and_firstprinciples(self) -> None:
+        text = _read("share/skills/w-ideation-discovery/SKILL.md")
+        assert "always: `ideation-simplifier`" in text, (
+            "Discovery skill missing mandatory simplifier invocation in early challenge lane"
+        )
+        assert "always: `ideation-firstprinciples`" in text, (
+            "Discovery skill missing mandatory firstprinciples invocation in early challenge lane"
+        )
+
+    def test_discovery_outsider_is_conditional(self) -> None:
+        text = _read("share/skills/w-ideation-discovery/SKILL.md")
+        assert "conditional: `ideation-outsider`" in text, (
+            "Discovery skill must mark outsider invocation as conditional, not mandatory"
+        )
+
+    def test_discovery_early_challenger_output_bounded(self) -> None:
+        text = _read("share/skills/w-ideation-discovery/SKILL.md")
+        assert "Keep early challenger output bounded" in text, (
+            "Discovery skill missing scope-limit rule for early challenger output — "
+            "challenger lane must be framing/scope-control, not a second design panel"
+        )
+
+
+class TestFromAC_CriticExclusion:
+    """Critic is absent from the discovery phase roster; its exclusion is explicit in the panel handbook."""
+
+    def test_critic_exclusion_dual_surface(self) -> None:
+        # Discovery uses a positive roster (simplifier, firstprinciples, outsider)
+        # that implicitly excludes ideation-critic. The explicit exclusion clause lives
+        # in h-ideation-panel/SKILL.md (covered by test_critic_excluded_from_default_early_lane).
+        text = _read("share/skills/w-ideation-discovery/SKILL.md")
+        assert "ideation-critic" not in text, (
+            "ideation-critic must not appear in w-ideation-discovery/SKILL.md — "
+            "critic is excluded from Phase 1 via positive-roster specification; "
+            "the explicit exclusion clause belongs in h-ideation-panel/SKILL.md"
         )
 
