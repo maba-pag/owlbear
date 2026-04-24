@@ -119,6 +119,98 @@ def _collect_violations(serve_root: Path) -> list[tuple[str, str, str, int]]:
     return violations
 
 
+def _find_kanban_storage_import_violations(  # noqa: C901, PLR0912
+    project_root: Path,
+) -> list[str]:
+    """Return source-file locations that import owlbear_kanban.storage outside engine.py."""
+    kanban_src = project_root / "serve" / "kanban" / "src" / "owlbear_kanban"
+    violations: list[str] = []
+    for py_file in sorted(kanban_src.glob("*.py")):
+        if py_file.name in {"engine.py", "__init__.py"}:
+            continue
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module == "owlbear_kanban.storage" or module.startswith(
+                    "owlbear_kanban.storage."
+                ):
+                    violations.append(f"{py_file.name}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "owlbear_kanban.storage" or alias.name.startswith(
+                        "owlbear_kanban.storage."
+                    ):
+                        violations.append(f"{py_file.name}:{node.lineno}")
+            elif isinstance(node, ast.Call) and node.args:
+                target_module: str | None = None
+                first_arg = node.args[0]
+                if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+                    target_module = first_arg.value
+                is_storage_target = bool(
+                    target_module
+                    and (
+                        target_module == "owlbear_kanban.storage"
+                        or target_module.startswith("owlbear_kanban.storage.")
+                    )
+                )
+                if not is_storage_target:
+                    continue
+                if (
+                    (isinstance(node.func, ast.Name) and node.func.id == "__import__")
+                    or (
+                        isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "import_module"
+                    )
+                ):
+                    violations.append(f"{py_file.name}:{node.lineno}")
+    return violations
+
+
+def _find_task_io_import_violations(project_root: Path) -> list[str]:  # noqa: C901, PLR0912
+    """Return source-file locations that import deleted owlbear_kanban.task_io."""
+    kanban_src = project_root / "serve" / "kanban" / "src" / "owlbear_kanban"
+    violations: list[str] = []
+    for py_file in sorted(kanban_src.glob("*.py")):
+        if py_file.name == "__init__.py":
+            continue
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                if module == "owlbear_kanban.task_io" or module.startswith(
+                    "owlbear_kanban.task_io."
+                ):
+                    violations.append(f"{py_file.name}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "owlbear_kanban.task_io" or alias.name.startswith(
+                        "owlbear_kanban.task_io."
+                    ):
+                        violations.append(f"{py_file.name}:{node.lineno}")
+            elif isinstance(node, ast.Call) and node.args:
+                first_arg = node.args[0]
+                if not (
+                    isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str)
+                ):
+                    continue
+                target_module = first_arg.value
+                is_task_io_target = target_module == "owlbear_kanban.task_io" or target_module.startswith(
+                    "owlbear_kanban.task_io."
+                )
+                if not is_task_io_target:
+                    continue
+                if (
+                    (isinstance(node.func, ast.Name) and node.func.id == "__import__")
+                    or (
+                        isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "import_module"
+                    )
+                ):
+                    violations.append(f"{py_file.name}:{node.lineno}")
+    return violations
+
+
 # ---------------------------------------------------------------------------
 # AC#1, AC#4: ALLOWED_IMPORTS structure and namespace key coverage
 # ---------------------------------------------------------------------------
@@ -252,4 +344,28 @@ class TestFromAC_CrossImportEnforcement:
         assert any(
             ns == "owlbear_tools" and imported == "owlbear_kanban"
             for ns, _relfile, imported, _lineno in violations
+        )
+
+
+class TestFromAC_KanbanInternalBoundary:
+    """Durable AC-C45 guard: only engine.py may import owlbear_kanban.storage."""
+
+    def test_only_engine_may_import_owlbear_kanban_storage(
+        self, project_root: Path
+    ) -> None:
+        violations = _find_kanban_storage_import_violations(project_root)
+        assert not violations, (
+            "Only engine.py may import owlbear_kanban.storage; found violations:\n"
+            + "\n".join(f"  {entry}" for entry in violations)
+        )
+
+
+class TestFromAC_KanbanTaskIoRemoval:
+    """Durable AC-C45b guard: no source file may import deleted task_io."""
+
+    def test_no_source_file_imports_task_io(self, project_root: Path) -> None:
+        violations = _find_task_io_import_violations(project_root)
+        assert not violations, (
+            "owlbear_kanban source files must not import deleted owlbear_kanban.task_io; "
+            "found violations:\n" + "\n".join(f"  {entry}" for entry in violations)
         )

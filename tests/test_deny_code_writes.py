@@ -49,7 +49,7 @@ def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
 
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         value = node.value
-        return not value.startswith(("/", "~"))
+        return not value.startswith(("/", "~", ".."))
 
     if isinstance(node, ast.JoinedStr):
         first_literal = ""
@@ -57,7 +57,7 @@ def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
             if isinstance(item, ast.Constant) and isinstance(item.value, str):
                 first_literal = item.value
                 break
-        return not first_literal.startswith(("/", "~"))
+        return not first_literal.startswith(("/", "~", ".."))
 
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
         return _is_safe_path_expr(node.left, safe_names) and _is_safe_path_expr(
