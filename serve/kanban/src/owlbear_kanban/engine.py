@@ -35,16 +35,29 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from ruamel.yaml import YAML
+from ruamel.yaml.error import YAMLError
+
 from owlbear_kanban import storage
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
+from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.models import (
     BoardConfig,
+    ConcurrencyError,
     ConfigError,
+    DispatchEntry,
+    ListTasksResponse,
     MigrationRequiredError,
+    NotFoundError,
+    PickTasksResponse,
     SessionRecord,
+    ShowTaskResponse,
+    SingleTaskResponse,
     Task,
     TaskSummary,
+    ValidationError,
+    Wave,
 )
 from owlbear_kanban.storage import (
     make_task_filename,
@@ -439,38 +452,36 @@ class KanbanEngine:
                 if "claimed_by:" not in content:
                     continue
                 # Verify it's in the frontmatter (not body)
-                lines = content.split("\n")
-                if not lines[0].startswith("---"):
+                lines = content.splitlines()
+                if not lines or lines[0].strip() != "---":
                     continue
                 closing = None
                 for i, line in enumerate(lines[1:], 1):
-                    if line == "---":
+                    if line.strip() == "---":
                         closing = i
                         break
                 if closing is None:
                     continue
-                for line in lines[1:closing]:
-                    if line.startswith("claimed_by:"):
-                        val = line.split(":", 1)[1].strip()
-                        quote = val[:1]
-                        is_quoted = quote in {'"', "'"} and val.endswith(quote)
-                        is_cleared = (
-                            not val
-                            or val.lower() in ("null", "~")
-                            or (
-                                is_quoted
-                                and not val.removeprefix(quote)
-                                .removesuffix(quote)
-                                .strip()
-                            )
-                        )
-                        if is_cleared:
-                            continue
+                frontmatter_text = "\n".join(lines[1:closing])
+                try:
+                    frontmatter = YAML(typ="safe").load(frontmatter_text) or {}
+                except YAMLError:
+                    continue
 
-                        raise MigrationRequiredError(
-                            code="ERR_MIGRATION_REQUIRED",
-                            user_message="board has legacy claimed_by fields — run: uv run kanban-migrate",
-                        )
+                if not isinstance(frontmatter, dict) or "claimed_by" not in frontmatter:
+                    continue
+
+                claimed_by = frontmatter["claimed_by"]
+                is_cleared = claimed_by is None or (
+                    isinstance(claimed_by, str) and not claimed_by.strip()
+                )
+                if is_cleared:
+                    continue
+
+                raise MigrationRequiredError(
+                    code="ERR_MIGRATION_REQUIRED",
+                    user_message="board has legacy claimed_by fields — run: uv run kanban-migrate",
+                )
 
     @property
     def agent_name(self) -> str:
@@ -722,6 +733,8 @@ class KanbanEngine:
                 )
             )
 
+        all_active_ids = {task.id for task in tasks}
+
         # --- Filters ---
         if status:
             tasks = [t for t in tasks if t.status == status]
@@ -767,13 +780,12 @@ class KanbanEngine:
         if archived:
             return [TaskSummary.model_validate(t.model_dump()) for t in tasks]
 
-        active_ids = {task.id for task in tasks}
         summaries: list[TaskSummary] = []
         for task in tasks:
             projected = task.model_dump()
             projected["dep_status"] = self._compute_dep_status(
                 task,
-                active_ids=active_ids,
+                active_ids=all_active_ids,
                 archived_reasons=archived_reasons,
             )
             summaries.append(TaskSummary.model_validate(projected))
@@ -813,10 +825,15 @@ class KanbanEngine:
             return task
 
         matches = list(self._tasks_dir.glob(f"{task_id}-*.md"))
-        if not matches:
-            msg = f"Task {task_id!r} not found in {self._tasks_dir}"
-            raise FileNotFoundError(msg)
-        return read_task(matches[0])
+        if matches:
+            return read_task(matches[0])
+
+        archive_matches = list(self._archive_dir.glob(f"{task_id}-*.md"))
+        if archive_matches:
+            return read_task(archive_matches[0])
+
+        msg = f"Task {task_id!r} not found in {self._tasks_dir} or {self._archive_dir}"
+        raise FileNotFoundError(msg)
 
     # ------------------------------------------------------------------
     # Write operations
@@ -1508,34 +1525,384 @@ class KanbanEngine:
 class AgentView:
     """Minimal role-scoped wrapper for agent-facing engine use."""
 
+    _BODY_SIZE_WARNING = "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
+    _BLOCK_AR_HINT = (
+        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request for this block via the"
+        " scribe agent (see w-decision-routing)."
+        " Blocks without a DR are invisible to the pipeline."
+    )
+
     def __init__(self, engine: KanbanEngine) -> None:
         self.engine = engine
 
-    def list_tasks(self) -> None:
-        raise NotImplementedError
+    @staticmethod
+    def _to_single_response(task: Task, guidance: list[str] | None = None) -> SingleTaskResponse:
+        payload = task.model_dump()
+        if isinstance(payload.get("body"), list):
+            payload["body"] = None
+        payload["guidance"] = guidance or []
+        return SingleTaskResponse.model_validate(payload)
 
-    def show_task(self, task_id: int) -> None:
-        _ = task_id
-        raise NotImplementedError
+    @staticmethod
+    def _skip_transition_guidance(
+        *,
+        before_status: str,
+        after_status: str,
+        status_names: list[str],
+        include_target_column: bool = False,
+    ) -> list[str]:
+        try:
+            from_idx = status_names.index(before_status)
+            to_idx = status_names.index(after_status)
+        except ValueError:
+            return []
+        delta = to_idx - from_idx
+        if delta <= 1:
+            return []
+        skipped = delta if include_target_column else delta - 1
+        return [
+            "\u26a0\ufe0f Status skip: moved from "
+            f"'{before_status}' to '{after_status}' (skipped {skipped} column(s))."
+            " Verify this jump is intentional."
+        ]
 
-    def pick_tasks(self) -> None:
-        raise NotImplementedError
+    def _wrap_not_found(self, task_id: int) -> NotFoundError:
+        return NotFoundError(
+            code="ERR_NOT_FOUND",
+            user_message=f"Task '{task_id}' not found",
+        )
 
-    def create_task(self, title: str) -> None:
-        _ = title
-        raise NotImplementedError
+    def list_tasks(  # noqa: PLR0913
+        self,
+        *,
+        status: str = "",
+        tag: str = "",
+        priority: str = "",
+        archival_reason: str = "",
+        ids: list[int] | None = None,
+        search: str = "",
+        sort: str = "",
+        unclaimed: bool = False,
+        archived: bool = False,
+        limit: int = 0,
+        reverse: bool = False,
+        blocked: bool | None = None,
+    ) -> ListTasksResponse:
+        config = self.engine.board_config()
 
-    def edit_task(self, task_id: int) -> None:
-        _ = task_id
-        raise NotImplementedError
+        if status and status != "archived" and status not in config.statuses:
+            raise ValidationError(
+                code="ERR_INVALID_STATUS",
+                user_message=f"status must be one of {[*config.statuses, 'archived']}",
+            )
+        if priority and priority not in config.priorities:
+            raise ValidationError(
+                code="ERR_INVALID_PRIORITY",
+                user_message=f"priority must be one of {config.priorities}",
+            )
+        if archival_reason and archival_reason not in config.archival_reasons:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REASON_INVALID",
+                user_message=(
+                    f"archival_reason must be one of {sorted(config.archival_reasons)}"
+                ),
+            )
 
-    def start_work(self, task_id: int) -> None:
-        _ = task_id
-        raise NotImplementedError
+        if ids and (
+            status
+            or tag
+            or priority
+            or search
+            or unclaimed
+            or blocked is not None
+            or archival_reason
+        ):
+            raise ValidationError(
+                code="ERR_IDS_EXCLUSIVE",
+                user_message="ids cannot be combined with other filters",
+            )
 
-    def end_work(self, task_id: int, *, outcome: str, note: str) -> None:
-        _ = (task_id, outcome, note)
-        raise NotImplementedError
+        missing_ids: list[int] | None = None
+        if ids:
+            active_tasks = self.engine.list_tasks(archived=False)
+            archived_tasks = self.engine.list_tasks(archived=True)
+            found_by_id = {task.id: task for task in [*active_tasks, *archived_tasks]}
+            wanted = set(ids)
+            tasks = [task for task_id, task in found_by_id.items() if task_id in wanted]
+            found = {task.id for task in tasks}
+            missing = sorted(wanted - found)
+            missing_ids = missing or None
+        else:
+            read_archived = archived or status == "archived"
+            tasks = self.engine.list_tasks(
+                status=status,
+                tag=tag,
+                priority=priority,
+                search=search,
+                sort=sort,
+                unclaimed=unclaimed,
+                archived=read_archived,
+                limit=limit,
+                reverse=reverse,
+                blocked=blocked,
+            )
+            if archival_reason:
+                tasks = [task for task in tasks if task.archival_reason == archival_reason]
+
+        return ListTasksResponse(tasks=tasks, guidance=[], missing_ids=missing_ids)
+
+    def show_task(self, task_id: int, section: str | None = None) -> ShowTaskResponse:
+        try:
+            task = self.engine.show_task(str(task_id))
+        except FileNotFoundError as exc:
+            raise self._wrap_not_found(task_id) from exc
+
+        payload = task.model_dump()
+        if isinstance(payload.get("body"), list):
+            payload["body"] = None
+
+        guidance: list[str] = []
+        missing_sections: list[str] | None = None
+
+        if section is not None:
+            section_name = section.strip()
+            if not section_name:
+                raise ValidationError(
+                    code="ERR_SECTION_EMPTY",
+                    user_message="section must not be an empty string",
+                )
+
+            body_text = payload.get("body") if isinstance(payload.get("body"), str) else ""
+            matches = [
+                part
+                for part in parse_body(body_text)
+                if part.heading is not None
+                and part.heading.strip().casefold() == section_name.casefold()
+            ]
+            if not matches:
+                payload["body"] = None
+                missing_sections = [section_name]
+            else:
+                payload["body"] = "\n".join(match.content for match in matches)
+                if len(matches) > 1:
+                    guidance.append(
+                        f"Section '{section_name}' matched {len(matches)} occurrences."
+                    )
+
+        payload["guidance"] = guidance
+        payload["missing_sections"] = missing_sections
+        return ShowTaskResponse.model_validate(payload)
+
+    def pick_tasks(self, wave_size: int | None = None, max_waves: int = 3) -> PickTasksResponse:
+        if max_waves < 1:
+            raise ValidationError(
+                code="ERR_INVALID_WAVE_PARAM",
+                user_message="max_waves must be >= 1",
+            )
+        if wave_size is not None and wave_size < 1:
+            raise ValidationError(
+                code="ERR_INVALID_WAVE_PARAM",
+                user_message="wave_size must be >= 1",
+            )
+
+        active = self.engine.list_tasks(archived=False, blocked=False, unclaimed=True)
+        dispatchable = [task for task in active if task.status == "todo"]
+        if not dispatchable:
+            return PickTasksResponse(waves=[], guidance=[])
+
+        effective_wave = wave_size if wave_size is not None else self.engine.board_config().wave_size
+        max_items = effective_wave * max_waves
+        selected = dispatchable[:max_items]
+
+        status_agents = self.engine.board_config().agent_map
+        default_agent = ""
+        waves: list[Wave] = []
+        for wave_index, start in enumerate(range(0, len(selected), effective_wave)):
+            chunk = selected[start : start + effective_wave]
+            entries = [
+                DispatchEntry(
+                    id=task.id,
+                    status=task.status,
+                    priority=task.priority,
+                    title=task.title,
+                    tags=list(task.tags),
+                    agent=(status_agents.get(task.status) or [default_agent])[0],
+                )
+                for task in chunk
+            ]
+            waves.append(Wave(index=wave_index, tasks=entries))
+
+        guidance = [f"Dispatch hints: {len(selected)} task(s) across {len(waves)} wave(s)."]
+        return PickTasksResponse(waves=waves, guidance=guidance)
+
+    def create_task(  # noqa: PLR0913
+        self,
+        *,
+        title: str,
+        body: str = "",
+        priority: str = "",
+        tags: list[str] | None = None,
+        parent: int | None = None,
+        depends_on: list[int] | None = None,
+    ) -> SingleTaskResponse:
+        if not title.strip():
+            raise ValidationError(
+                code="ERR_INVALID_STATUS",
+                user_message="title must not be empty",
+            )
+        try:
+            task = self.engine.create_task(
+                title=title,
+                body=body,
+                priority=priority,
+                tags=tags,
+                parent=parent,
+                depends_on=depends_on,
+            )
+        except ValueError as exc:
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+
+        guidance: list[str] = []
+        if len(body.encode("utf-8")) > 100 * 1024:
+            guidance.append(self._BODY_SIZE_WARNING)
+        return self._to_single_response(task, guidance)
+
+    def edit_task(  # noqa: C901, PLR0912, PLR0913
+        self,
+        task_id: int,
+        *,
+        body: str = "",
+        append_body: str = "",
+        timestamp: bool = False,
+        priority: str = "",
+        parent: int = 0,
+        add_dep: list[int] | None = None,
+        remove_dep: list[int] | None = None,
+        add_tag: list[str] | None = None,
+        remove_tag: list[str] | None = None,
+        block_reason: str = "",
+        archival_reason: str = "",
+        archival_refs: list[int] | None = None,
+    ) -> SingleTaskResponse:
+        _ = (archival_reason, archival_refs)
+
+        kwargs: dict[str, object] = {}
+        if body:
+            kwargs["body"] = body
+        if append_body:
+            kwargs["append_body"] = append_body
+        if timestamp:
+            kwargs["timestamp"] = True
+        if priority:
+            kwargs["priority"] = priority
+        if parent > 0:
+            kwargs["parent"] = parent
+        if add_dep is not None:
+            kwargs["add_deps"] = add_dep
+        if remove_dep is not None:
+            kwargs["remove_deps"] = remove_dep
+        if add_tag is not None:
+            kwargs["add_tags"] = add_tag
+        if remove_tag is not None:
+            kwargs["remove_tags"] = remove_tag
+        if block_reason:
+            kwargs["blocked"] = True
+            kwargs["block_reason"] = block_reason
+
+        try:
+            task = self.engine.edit_task(str(task_id), **kwargs)
+        except FileNotFoundError as exc:
+            raise self._wrap_not_found(task_id) from exc
+        except ValueError as exc:
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+
+        guidance: list[str] = []
+        if len(body.encode("utf-8")) > 100 * 1024:
+            guidance.append(self._BODY_SIZE_WARNING)
+        return self._to_single_response(task, guidance)
+
+    def move_task(
+        self,
+        task_id: int,
+        status: str,
+        *,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
+    ) -> SingleTaskResponse:
+        _ = (archival_reason, archival_refs)
+        try:
+            before = self.engine.show_task(str(task_id))
+            task = self.engine.move_task(str(task_id), status)
+        except FileNotFoundError as exc:
+            raise self._wrap_not_found(task_id) from exc
+        except ValueError as exc:
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+
+        guidance = self._skip_transition_guidance(
+            before_status=before.status,
+            after_status=task.status,
+            status_names=self.engine.board_config().statuses,
+        )
+        return self._to_single_response(task, guidance)
+
+    def start_work(self, task_id: int) -> SingleTaskResponse:
+        try:
+            task = self.engine.start_work(str(task_id))
+        except FileNotFoundError as exc:
+            raise self._wrap_not_found(task_id) from exc
+        except ValueError as exc:
+            msg = str(exc)
+            if "already claimed" in msg:
+                raise ConcurrencyError(
+                    code="ERR_ALREADY_CLAIMED",
+                    user_message=f"Task '{task_id}' is already claimed by another agent",
+                ) from exc
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=msg) from exc
+        return self._to_single_response(task)
+
+    def end_work(  # noqa: PLR0913
+        self,
+        task_id: int,
+        *,
+        outcome: str,
+        note: str,
+        move_to: str | None = None,
+        block_reason: str | None = None,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
+    ) -> SingleTaskResponse:
+        _ = (archival_reason, archival_refs)
+        try:
+            before = self.engine.show_task(str(task_id))
+            task = self.engine.end_work(
+                str(task_id),
+                note=note,
+                outcome=outcome,
+                block_reason=block_reason or "",
+                move_to=move_to or "research",
+            )
+        except FileNotFoundError as exc:
+            raise self._wrap_not_found(task_id) from exc
+        except ValueError as exc:
+            msg = str(exc)
+            if "already claimed" in msg:
+                raise ConcurrencyError(
+                    code="ERR_ALREADY_CLAIMED",
+                    user_message=f"Task '{task_id}' is already claimed by another agent",
+                ) from exc
+            raise ValidationError(code="ERR_INVALID_OUTCOME", user_message=msg) from exc
+
+        guidance: list[str] = []
+        if outcome == "reject":
+            guidance = self._skip_transition_guidance(
+                before_status=before.status,
+                after_status=task.status,
+                status_names=self.engine.board_config().statuses,
+                include_target_column=True,
+            )
+        elif outcome == "block":
+            guidance = [self._BLOCK_AR_HINT]
+        return self._to_single_response(task, guidance)
 
 
 class CockpitView:
