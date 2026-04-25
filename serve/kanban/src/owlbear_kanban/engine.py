@@ -1538,7 +1538,12 @@ class KanbanEngine:
             except ValueError:
                 int_id = None
             if int_id is not None and int_id in self._id_to_filename:
-                return self._tasks_dir / self._id_to_filename[int_id]
+                filename = self._id_to_filename[int_id]
+                candidate = self._tasks_dir / filename
+                if candidate.exists():
+                    return candidate
+                self._task_cache.pop(filename, None)
+                del self._id_to_filename[int_id]
 
         matches = list(search_dir.glob(f"{task_id}-*.md"))
         if matches:
@@ -2057,10 +2062,14 @@ class AgentView:
                 changes_requested = changes_requested or (
                     existing.blocked is not False or existing.block_reason is not None
                 )
-        if archival_reason_set and archival_reason != (existing.archival_reason or ""):
-            changes_requested = True
-        if archival_refs_set and list(archival_refs or []) != list(existing.archival_refs):
-            changes_requested = True
+        if archival_reason_set:
+            changes_requested = changes_requested or (
+                (archival_reason or None) != (existing.archival_reason or None)
+            )
+        if archival_refs_set:
+            changes_requested = changes_requested or (
+                list(archival_refs or []) != list(existing.archival_refs)
+            )
 
         if not changes_requested:
             raise ValidationError(

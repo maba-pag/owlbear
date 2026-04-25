@@ -17,8 +17,6 @@ import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from owlbear_kanban.storage import read_task
-
 if TYPE_CHECKING:
     from owlbear_kanban.engine import KanbanEngine
     from owlbear_kanban.models import Task
@@ -136,7 +134,7 @@ def _passes_dependency_gate(task: Task, active_ids: frozenset[int]) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def pick_dispatchable(
+def pick_dispatchable(  # noqa: C901
     engine: KanbanEngine, *, limit: int = 25, tag: str = ""
 ) -> list[Task]:
     """Return a gate-filtered, sorted list of dispatchable tasks.
@@ -164,10 +162,12 @@ def pick_dispatchable(
     Returns:
         Sorted, capped list of Task instances.
     """
-    tasks: list[Task] = [
-        read_task(path)
-        for path in sorted(engine._tasks_dir.glob("*.md"))  # noqa: SLF001
-    ]
+    tasks: list[Task] = []
+    for path in sorted(engine._tasks_dir.glob("*.md")):  # noqa: SLF001
+        task_id = path.stem.split("-", 1)[0]
+        if not task_id.isdigit():
+            continue
+        tasks.append(engine.show_task(task_id))
 
     active_ids: frozenset[int] = frozenset(t.id for t in tasks if t.id is not None)
     claim_timeout = engine._parse_claim_timeout()  # noqa: SLF001

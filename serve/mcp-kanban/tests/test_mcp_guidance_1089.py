@@ -36,6 +36,8 @@ import pytest
 
 from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.engine import AgentView
+from owlbear_kanban.models import ShowTaskResponse
 from owlbear_mcp_kanban.server import (
     AppContext,
     create_task,
@@ -103,6 +105,8 @@ Second audit entry.
 """
 
 _BODY_SIZE_WARNING = "⚠️ Task body is large (>100 KB); consider splitting."
+_SECTION_OCCURRENCE_MSG = "Section 'Audit' matched 2 occurrences; returning the first section."
+_PICK_DISPATCH_HINT = "Dispatch hints: 3 task(s) across 1 wave(s)."
 
 _SKIP_MOVE_WARNING = (
     "⚠️ Status skip: moved from 'todo' to 'review' (skipped 1 column(s))."
@@ -220,8 +224,9 @@ class TestFromAC_GuidancePassthrough:
         """
         ctx = _make_ctx(app_ctx_with_section_task)
         result = await show_task(ctx, task_id="1", section="Audit")
-        assert any("2" in g for g in result.guidance), (
-            f"Expected occurrence count '2' in guidance strings; got {result.guidance!r}"
+        assert result.guidance == [_SECTION_OCCURRENCE_MSG], (
+            f"Expected exact occurrence-count guidance {[_SECTION_OCCURRENCE_MSG]!r}; "
+            f"got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
@@ -236,10 +241,19 @@ class TestFromAC_GuidancePassthrough:
         FAIL path (RED): AgentView.show_task() raises TypeError (unexpected 'section'
         kwarg) or NotImplementedError — the call propagates before the assertion.
         """
+        sentinel_guidance = ["__sentinel_a__", "__sentinel_b__"]
         ctx = _make_ctx(app_ctx)
-        result = await show_task(ctx, task_id="1")
-        assert isinstance(result.guidance, list), (
-            f"Adapter must pass guidance as list[str]; got {type(result.guidance)!r}"
+        task = app_ctx.engine.show_task("1")
+        payload = task.model_dump()
+        if isinstance(payload.get("body"), list):
+            payload["body"] = None
+        payload["guidance"] = sentinel_guidance
+        payload["missing_sections"] = None
+        sentinel_response = ShowTaskResponse.model_validate(payload)
+        with patch.object(AgentView, "show_task", return_value=sentinel_response):
+            result = await show_task(ctx, task_id="1")
+        assert result.guidance == sentinel_guidance, (
+            f"Adapter must pass guidance through unmodified; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
@@ -256,8 +270,8 @@ class TestFromAC_GuidancePassthrough:
         """
         ctx = _make_ctx(app_ctx_multi)
         result = await pick_tasks(ctx)
-        assert len(result.guidance) > 0, (
-            f"Expected non-empty dispatch hints from AgentView.pick_tasks; "
+        assert result.guidance == [_PICK_DISPATCH_HINT], (
+            f"Expected exact dispatch hint {[_PICK_DISPATCH_HINT]!r}; "
             f"got {result.guidance!r}"
         )
 
@@ -275,8 +289,8 @@ class TestFromAC_GuidancePassthrough:
         """
         ctx = _make_ctx(app_ctx)
         result = await create_task(ctx, title="Big task", body=_LARGE_BODY)
-        assert any(_BODY_SIZE_WARNING in g for g in result.guidance), (
-            f"Expected body-size warning {_BODY_SIZE_WARNING!r} in guidance; "
+        assert result.guidance == [_BODY_SIZE_WARNING], (
+            f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r}; "
             f"got {result.guidance!r}"
         )
 
@@ -294,8 +308,9 @@ class TestFromAC_GuidancePassthrough:
         """
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, task_id="1", body=_LARGE_BODY)
-        assert any(_BODY_SIZE_WARNING in g for g in result.guidance), (
-            f"Expected body-size warning in edit_task guidance; got {result.guidance!r}"
+        assert result.guidance == [_BODY_SIZE_WARNING], (
+            f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r} in edit_task guidance; "
+            f"got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
@@ -404,9 +419,12 @@ class TestFromAC_ErrorMapping:
         ctx = _make_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await create_task(ctx, title="")
-        error_text = str(exc_info.value).lower()
-        assert "title" in error_text or "invalid" in error_text or "empty" in error_text, (
+        error_text = str(exc_info.value)
+        assert "title" in error_text.lower() or "invalid" in error_text.lower() or "empty" in error_text.lower(), (
             f"ToolError must describe the validation failure; got {exc_info.value!r}"
+        )
+        assert not any(word.startswith("ERR_") for word in error_text.split()), (
+            f"ToolError must not expose machine error code on wire; got {error_text!r}"
         )
 
     @pytest.mark.asyncio

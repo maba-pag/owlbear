@@ -249,7 +249,7 @@ def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     # Remove legacy-only output noise
     for legacy_key in ("board", "version", "defaults", "activity_log"):
         data.pop(legacy_key, None)
-    
+
     # Convert frozenset to list for YAML serialization (archival_reasons)
     if "archival_reasons" in data and isinstance(data["archival_reasons"], frozenset):
         data["archival_reasons"] = sorted(data["archival_reasons"])
@@ -352,8 +352,8 @@ def read_task(path: Path) -> Task:
     return task
 
 
-def write_task(task: Task, kanban_dir: Path) -> Path:
-    """Serialise *task* to the ``tasks/`` directory of *kanban_dir*.
+def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) -> Path:
+    """Serialise *task* to *target_dir* (or ``tasks/``) under *kanban_dir*.
 
     Frontmatter fields are written in canonical §2.3 order (AC-C13).
     Timestamps are normalised to explicit UTC ``+00:00`` (AC-C15).
@@ -363,12 +363,13 @@ def write_task(task: Task, kanban_dir: Path) -> Path:
     Args:
         task:       Task to serialise.
         kanban_dir: Root directory of the kanban board.
+        target_dir: Optional destination directory for the task file.
 
     Returns:
         Absolute path of the written file.
     """
     config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
+    tasks_dir = target_dir or (kanban_dir / config.tasks_dir)
 
     # Find existing file with this ID to keep filename stable
     existing = list(tasks_dir.glob(f"{task.id}-*.md"))
@@ -377,6 +378,7 @@ def write_task(task: Task, kanban_dir: Path) -> Path:
     else:
         filename = make_task_filename(task.id, task.title)
         path = tasks_dir / filename
+    validate_path_containment(kanban_dir, tasks_dir)
     validate_path_containment(tasks_dir, path)
 
     data: dict[str, Any] = task.model_dump()

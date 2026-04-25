@@ -28,6 +28,7 @@ import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import (
+    AgentView,
     _apply_session_filter,
     _classify_end_work_outcome,
     _classify_end_work_state,
@@ -38,7 +39,18 @@ from owlbear_kanban.engine import (
     _validate_engine_config,
     _validate_session_filter,
 )
-from owlbear_kanban.models import BoardConfig, ConfigError, SessionRecord
+from owlbear_kanban.models import (
+    BoardConfig,
+    ConfigError,
+    ConcurrencyError,
+    ListTasksResponse,
+    NotFoundError,
+    PickTasksResponse,
+    SessionRecord,
+    ShowTaskResponse,
+    SingleTaskResponse,
+    ValidationError,
+)
 
 # ---------------------------------------------------------------------------
 # Board + task fixtures
@@ -1973,3 +1985,524 @@ class TestFromAC_EngineShowTaskStalePath:
         engine.list_tasks()  # populate id→filename
         result = engine.claim_task("31")
         assert result.claimed_by == engine.agent_name
+
+
+# ---------------------------------------------------------------------------
+# AgentView.list_tasks — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewListTasks:
+    """AC: AgentView.list_tasks returns ListTasksResponse; ids filter narrows results."""
+
+    def test_list_tasks_returns_list_tasks_response(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, title="Alpha")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().list_tasks()
+        assert isinstance(resp, ListTasksResponse)
+        assert any(t.id == 1 for t in resp.tasks)
+
+    def test_list_tasks_ids_filter_returns_only_requested(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, title="Alpha")
+        _write_task(board, task_id=2, title="Beta")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().list_tasks(ids=[1])
+        assert len(resp.tasks) == 1
+        assert resp.tasks[0].id == 1
+
+    def test_list_tasks_ids_filter_reports_missing(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().list_tasks(ids=[1, 99])
+        assert 99 in (resp.missing_ids or [])
+
+
+# ---------------------------------------------------------------------------
+# AgentView.show_task — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewShowTask:
+    """AC: AgentView.show_task returns ShowTaskResponse; section extraction works."""
+
+    def test_show_task_happy(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, title="Zeta")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().show_task(1)
+        assert isinstance(resp, ShowTaskResponse)
+        assert resp.id == 1
+
+    def test_show_task_not_found_raises_not_found_error(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(NotFoundError):
+            engine.agent_view().show_task(999)
+
+    def test_show_task_with_section_returns_section_body(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, body="## Summary\n\nHello section.")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().show_task(1, section="Summary")
+        assert resp.body is not None
+        assert "Hello section" in resp.body
+
+    def test_show_task_section_not_found_sets_missing_sections(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, body="## Summary\n\nHello.")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().show_task(1, section="NonExistent")
+        assert resp.missing_sections == ["NonExistent"]
+
+    def test_show_task_empty_section_raises_validation_error(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError) as exc_info:
+            engine.agent_view().show_task(1, section="  ")
+        assert exc_info.value.code == "ERR_SECTION_EMPTY"
+
+
+# ---------------------------------------------------------------------------
+# AgentView.pick_tasks — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewPickTasks:
+    """AC: AgentView.pick_tasks returns PickTasksResponse; validates params."""
+
+    def test_pick_tasks_empty_board_returns_empty_waves(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks()
+        assert isinstance(resp, PickTasksResponse)
+        assert resp.waves == []
+
+    def test_pick_tasks_todo_tasks_returned_in_waves(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="todo")
+        _write_task(board, task_id=2, status="todo")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks(wave_size=2)
+        assert len(resp.waves) >= 1
+        all_ids = {e.id for wave in resp.waves for e in wave.tasks}
+        assert {1, 2}.issubset(all_ids)
+
+    def test_pick_tasks_invalid_max_waves_raises(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError) as exc_info:
+            engine.agent_view().pick_tasks(max_waves=0)
+        assert exc_info.value.code == "ERR_INVALID_WAVE_PARAM"
+
+    def test_pick_tasks_invalid_wave_size_raises(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError) as exc_info:
+            engine.agent_view().pick_tasks(wave_size=0)
+        assert exc_info.value.code == "ERR_INVALID_WAVE_PARAM"
+
+
+# ---------------------------------------------------------------------------
+# AgentView.create_task — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewCreateTask:
+    """AC: AgentView.create_task returns SingleTaskResponse; invalid inputs raise."""
+
+    def test_create_task_happy(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().create_task(title="New Task", body="Some body")
+        assert isinstance(resp, SingleTaskResponse)
+        assert resp.title == "New Task"
+
+    def test_create_task_empty_title_raises_validation_error(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError):
+            engine.agent_view().create_task(title="   ")
+
+    def test_create_task_invalid_priority_raises_validation_error(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError):
+            engine.agent_view().create_task(title="X", priority="ultra")
+
+
+# ---------------------------------------------------------------------------
+# AgentView.edit_task — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewEditTask:
+    """AC: AgentView.edit_task returns SingleTaskResponse; not found raises."""
+
+    def test_edit_task_happy(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, title="Old")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().edit_task(1, body="Updated body")
+        assert isinstance(resp, SingleTaskResponse)
+
+    def test_edit_task_not_found_raises_not_found_error(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(NotFoundError):
+            engine.agent_view().edit_task(999, body="x")
+
+    def test_edit_task_invalid_priority_raises_validation_error(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError):
+            engine.agent_view().edit_task(1, priority="ultra")
+
+
+# ---------------------------------------------------------------------------
+# AgentView.move_task — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewMoveTask:
+    """AC: AgentView.move_task returns SingleTaskResponse; skip guidance emitted."""
+
+    def test_move_task_adjacent_status(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="todo")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().move_task(1, "in-progress")
+        assert resp.status == "in-progress"
+
+    def test_move_task_multi_column_skip_emits_guidance(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="research")
+        engine = KanbanEngine(board, activity_log=False)
+        # research → in-progress skips backlog and todo
+        resp = engine.agent_view().move_task(1, "in-progress")
+        assert any("skip" in g.lower() for g in resp.guidance)
+
+    def test_move_task_not_found_raises(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(NotFoundError):
+            engine.agent_view().move_task(999, "todo")
+
+    def test_move_task_invalid_status_raises(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError):
+            engine.agent_view().move_task(1, "nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# AgentView.start_work — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewStartWork:
+    """AC: AgentView.start_work claims task; already claimed raises ConcurrencyError."""
+
+    def test_start_work_happy(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().start_work(1)
+        assert isinstance(resp, SingleTaskResponse)
+        assert resp.claimed_at is not None
+
+    def test_start_work_not_found_raises(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(NotFoundError):
+            engine.agent_view().start_work(999)
+
+    def test_start_work_already_claimed_raises_concurrency_error(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        # Write task with a future (unexpired) claim timestamp
+        _write_task(board, task_id=1, claimed_at='"2099-01-01T00:00:00+00:00"')
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ConcurrencyError) as exc_info:
+            engine.agent_view().start_work(1)
+        assert exc_info.value.code == "ERR_ALREADY_CLAIMED"
+
+    def test_start_work_blocked_task_raises_validation_error(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, blocked="true")
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError):
+            engine.agent_view().start_work(1)
+
+
+# ---------------------------------------------------------------------------
+# AgentView.end_work — interface coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewEndWork:
+    """AC: AgentView.end_work applies outcome and returns SingleTaskResponse."""
+
+    def test_end_work_success_advances_status(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="todo")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().end_work(1, outcome="success", note="Done.")
+        assert resp.status == "in-progress"
+
+    def test_end_work_fail_keeps_status(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="todo")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().end_work(1, outcome="fail", note="Failed.")
+        assert resp.status == "todo"
+
+    def test_end_work_block_returns_ar_hint_in_guidance(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="todo")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().end_work(
+            1, outcome="block", note="Blocked.", block_reason="waiting for dep"
+        )
+        assert any("ACTION REQUIRED" in g for g in resp.guidance)
+
+    def test_end_work_reject_with_forward_move_emits_skip_guidance(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, status="research")
+        engine = KanbanEngine(board, activity_log=False)
+        # reject from research to in-progress skips backlog + todo → guidance
+        resp = engine.agent_view().end_work(
+            1, outcome="reject", note="Rejected.", move_to="in-progress"
+        )
+        assert any("skip" in g.lower() for g in resp.guidance)
+
+    def test_end_work_not_found_raises(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(NotFoundError):
+            engine.agent_view().end_work(999, outcome="success", note="x")
+
+
+# ---------------------------------------------------------------------------
+# AgentView._skip_transition_guidance — static method coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SkipTransitionGuidance:
+    """AC: _skip_transition_guidance returns guidance only when columns are skipped."""
+
+    def test_no_guidance_for_adjacent_statuses(self) -> None:
+        statuses = ["research", "backlog", "todo", "in-progress", "done"]
+        result = AgentView._skip_transition_guidance(
+            before_status="research",
+            after_status="backlog",
+            status_names=statuses,
+        )
+        assert result == []
+
+    def test_guidance_returned_for_multi_column_skip(self) -> None:
+        statuses = ["research", "backlog", "todo", "in-progress", "done"]
+        result = AgentView._skip_transition_guidance(
+            before_status="research",
+            after_status="in-progress",
+            status_names=statuses,
+        )
+        assert len(result) == 1
+        assert "skip" in result[0].lower()
+
+    def test_no_guidance_for_unknown_before_status(self) -> None:
+        statuses = ["research", "backlog", "todo"]
+        result = AgentView._skip_transition_guidance(
+            before_status="nonexistent",
+            after_status="todo",
+            status_names=statuses,
+        )
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# dep_status computation paths (list_tasks projection)
+# ---------------------------------------------------------------------------
+
+
+_ARCHIVE_TASK_TMPL = """\
+---
+id: {task_id}
+title: {title}
+status: archived
+priority: needed
+created: "2026-01-01T10:00:00+00:00"
+updated: "2026-01-01T10:00:00+00:00"
+tags: []
+parent: null
+depends_on: []
+blocked: false
+block_reason: null
+claimed_at: null
+archival_reason: {archival_reason}
+archival_refs: []
+---
+"""
+
+
+class TestFromAC_DepStatusPaths:
+    """AC: _compute_dep_status returns correct dep_status based on archived reasons."""
+
+    def test_dep_status_blocked_when_dep_archived_with_dropped(
+        self, tmp_path: Path
+    ) -> None:
+        """Dep archived with 'dropped' reason → dep_status = 'blocked'."""
+        board = _make_board(tmp_path)
+        (board / "archive" / "10-dropped-dep.md").write_text(
+            _ARCHIVE_TASK_TMPL.format(task_id=10, title="Dropped", archival_reason="dropped"),
+            encoding="utf-8",
+        )
+        _write_task(board, task_id=1, depends_on="[10]")
+        engine = KanbanEngine(board, activity_log=False)
+        summaries = engine.list_tasks()
+        t = next(s for s in summaries if s.id == 1)
+        assert t.dep_status == "blocked"
+
+    def test_dep_status_redirect_when_dep_archived_with_duplicate(
+        self, tmp_path: Path
+    ) -> None:
+        """Dep archived with 'duplicate' reason → dep_status = 'redirect'."""
+        board = _make_board(tmp_path)
+        (board / "archive" / "10-dup-dep.md").write_text(
+            _ARCHIVE_TASK_TMPL.format(task_id=10, title="Dup", archival_reason="duplicate"),
+            encoding="utf-8",
+        )
+        _write_task(board, task_id=1, depends_on="[10]")
+        engine = KanbanEngine(board, activity_log=False)
+        summaries = engine.list_tasks()
+        t = next(s for s in summaries if s.id == 1)
+        assert t.dep_status == "redirect"
+
+    def test_dep_status_blocked_when_dep_not_in_active_or_archived(
+        self, tmp_path: Path
+    ) -> None:
+        """Dep missing from both active and archived → dep_status = 'blocked'."""
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, depends_on="[999]")
+        engine = KanbanEngine(board, activity_log=False)
+        summaries = engine.list_tasks()
+        t = next(s for s in summaries if s.id == 1)
+        assert t.dep_status == "blocked"
+
+
+# ---------------------------------------------------------------------------
+# list_tasks sort by created/updated timestamp paths
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SortByTimestampPath:
+    """AC: list_tasks sort='created' and sort='updated' use datetime comparison."""
+
+    def _write_task_with_timestamps(
+        self, board: Path, task_id: int, title: str, created: str, updated: str
+    ) -> None:
+        content = _TASK_TMPL.format(
+            task_id=task_id,
+            title=title,
+            status="todo",
+            priority="needed",
+            tags="[]",
+            blocked="false",
+            block_reason="null",
+            claimed_at="null",
+            depends_on="[]",
+            body="",
+        )
+        content = content.replace(
+            'created: "2026-01-01T10:00:00+00:00"', f'created: "{created}"'
+        ).replace(
+            'updated: "2026-01-01T10:00:00+00:00"', f'updated: "{updated}"'
+        )
+        (board / "tasks" / f"{task_id}-task.md").write_text(content, encoding="utf-8")
+
+    def test_list_tasks_sort_by_created(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        self._write_task_with_timestamps(
+            board, 1, "Early", "2026-01-01T08:00:00+00:00", "2026-01-01T10:00:00+00:00"
+        )
+        self._write_task_with_timestamps(
+            board, 2, "Late", "2026-01-02T10:00:00+00:00", "2026-01-02T10:00:00+00:00"
+        )
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.list_tasks(sort="created")
+        ids = [t.id for t in result]
+        assert ids.index(1) < ids.index(2)
+
+    def test_list_tasks_sort_by_updated(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        self._write_task_with_timestamps(
+            board, 1, "Early", "2026-01-01T10:00:00+00:00", "2026-01-01T08:00:00+00:00"
+        )
+        self._write_task_with_timestamps(
+            board, 2, "Late", "2026-01-01T10:00:00+00:00", "2026-01-02T10:00:00+00:00"
+        )
+        engine = KanbanEngine(board, activity_log=False)
+        result = engine.list_tasks(sort="updated")
+        ids = [t.id for t in result]
+        assert ids.index(1) < ids.index(2)
+
+
+# ---------------------------------------------------------------------------
+# list_sessions — no activity-log path
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListSessionsNoLog:
+    """AC: list_sessions returns empty when activity log is disabled."""
+
+    def test_list_sessions_returns_empty_when_no_activity_log(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        assert engine.list_sessions() == []
+
+    def test_list_sessions_returns_empty_when_log_file_absent(
+        self, tmp_path: Path
+    ) -> None:
+        board = _make_board(tmp_path)
+        # Use a config with activity_log=true but don't create the file
+        engine = KanbanEngine(board, activity_log=True)
+        # activity.jsonl doesn't exist yet → empty list
+        assert engine.list_sessions() == []
+
+
+# ---------------------------------------------------------------------------
+# repair_storage — basic coverage
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RepairStorage:
+    """AC: repair_storage returns empty list on a clean board."""
+
+    def test_repair_storage_clean_board_returns_empty(self, tmp_path: Path) -> None:
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        outcomes = engine.repair_storage()
+        assert outcomes == []

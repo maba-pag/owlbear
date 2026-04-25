@@ -27,9 +27,15 @@ AC coverage (from task #1121):
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
+from owlbear_kanban.storage import read_task, write_task
+
+_EMIT_PATCH = "owlbear_kanban.activity_store.append_activity_event"
 
 # ---------------------------------------------------------------------------
 # Board + task helpers
@@ -426,4 +432,203 @@ class TestFromAC_ArchivedTaskEditPersistence:
         assert result.updated != original_updated, (
             "edit of an archived task must advance the 'updated' timestamp; "
             f"before={original_updated!r}, after={result.updated!r}"
+        )
+
+    def test_edit_archived_updated_timestamp_advances_persisted_to_disk(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-6 (on-disk): re-reading from archive confirms the advanced timestamp was persisted.
+
+        The existing AC-6 test only checks the returned Task object; this test proves
+        the advanced timestamp is also present in the file on disk (archive/).
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="dropped",
+            subdir="archive",
+        )
+        original_task = view.engine.show_task("1")
+        original_updated = original_task.updated
+
+        view.edit_task(1, append_body="Disk proof.")
+
+        reread = view.engine.show_task("1")
+        assert reread.updated != original_updated, (
+            "persisted file in archive/ must have an advanced 'updated' timestamp; "
+            f"before={original_updated!r}, after={reread.updated!r}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC-2 strengthened: archival_refs change to a different value
+    # ------------------------------------------------------------------
+
+    def test_agentview_edit_archived_archival_refs_change_to_different_id_result_updated(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-2 (strict): archival_refs updated from [2] to [3]; result must equal [3] exactly.
+
+        The existing AC-2 test seeds [2] and re-applies [2]; that test passes even if the
+        assignment were removed.  This test starts with refs=[2] and edits to [3] — the result
+        must be exactly [3], not a superset or the old value.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=2, status="done", subdir="tasks")
+        _write_task(kanban_dir, task_id=3, status="done", subdir="tasks")
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="deprecated",
+            archival_refs="[2]",
+            subdir="archive",
+        )
+
+        result = view.edit_task(1, archival_refs=[3])
+
+        assert result.archival_refs == [3], (
+            f"archival_refs must be replaced with [3]; got {result.archival_refs!r}"
+        )
+
+    def test_agentview_edit_archived_archival_refs_change_to_different_id_reread_from_archive(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-2 (strict, on-disk): after changing archival_refs from [2] to [3], re-reading
+        from archive must return [3] exactly — not [2] or a superset.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=2, status="done", subdir="tasks")
+        _write_task(kanban_dir, task_id=3, status="done", subdir="tasks")
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="deprecated",
+            archival_refs="[2]",
+            subdir="archive",
+        )
+
+        view.edit_task(1, archival_refs=[3])
+
+        reread = view.engine.show_task("1")
+        assert reread.archival_refs == [3], (
+            f"re-read archival_refs from archive must be [3]; got {reread.archival_refs!r}"
+        )
+
+    # ------------------------------------------------------------------
+    # AC-8: warm _id_to_filename cache must not bypass archive fallback
+    # ------------------------------------------------------------------
+
+    def test_edit_archived_stale_id_to_filename_cache_falls_back_to_archive(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-8: _find_task_path archive fallback works even when _id_to_filename is warm.
+
+        Scenario:
+          1. Task 1 starts in tasks/ — list_tasks populates _id_to_filename[1].
+          2. The file is moved to archive/ outside the engine (stale cache entry).
+          3. engine.edit_task must still find the task via archive fallback and succeed.
+          4. The edited file must remain in archive/; no duplicate must appear in tasks/.
+
+        This test would fail if _find_task_path returned the stale tasks/ path without
+        checking for archive fallback when the candidate does not exist.
+        """
+        engine, kanban_dir = _make_engine(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="dropped",
+            priority="needed",
+            subdir="tasks",
+        )
+
+        # Warm the _id_to_filename cache.
+        engine.list_tasks()
+        assert 1 in engine._id_to_filename, "pre-condition: cache must contain task 1"
+
+        # Move file to archive/ without going through engine.move_task
+        # (cache remains stale — _id_to_filename[1] still points to tasks/).
+        tasks_file = kanban_dir / "tasks" / "1-task.md"
+        archive_file = kanban_dir / "archive" / "1-task.md"
+        tasks_file.rename(archive_file)
+
+        # edit_task must succeed via archive fallback.
+        result = engine.edit_task("1", priority="critical")
+
+        assert result.priority == "critical", "priority must be updated to 'critical'"
+        assert archive_file.exists(), "edited file must remain in archive/"
+        assert not (kanban_dir / "tasks" / "1-task.md").exists(), (
+            "no duplicate must appear in tasks/ after editing via archive fallback"
+        )
+
+    # ------------------------------------------------------------------
+    # Rollback: archived-task edit must roll back to archive/ on emit failure
+    # ------------------------------------------------------------------
+
+    def test_edit_archived_rollback_on_emit_failure_content_preserved_in_archive(
+        self, tmp_path: Path
+    ) -> None:
+        """Rollback: when _emit_event fails for an archived task, write_task rolls back
+        the original content to archive/ (not tasks/), and the OSError propagates.
+
+        This proves the rollback write_task call uses target_dir=archive/.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="dropped",
+            priority="needed",
+            subdir="archive",
+        )
+        engine = KanbanEngine(kanban_dir, activity_log=True)
+        archive_file = kanban_dir / "archive" / "1-task.md"
+        original_content = archive_file.read_text(encoding="utf-8")
+
+        with (
+            patch(_EMIT_PATCH, side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            engine.edit_task("1", priority="critical")
+
+        rolled_back = read_task(archive_file)
+        assert rolled_back.priority == "needed", (
+            "priority must be rolled back to 'needed' after emit failure"
+        )
+        assert not (kanban_dir / "tasks" / "1-task.md").exists(), (
+            "rollback write must not create a file in tasks/"
+        )
+        _ = original_content  # retained for readability; content already validated via read_task
+
+    # ------------------------------------------------------------------
+    # write_task backwards-compatibility: default target_dir writes to tasks/
+    # ------------------------------------------------------------------
+
+    def test_write_task_default_target_dir_writes_to_tasks(
+        self, tmp_path: Path
+    ) -> None:
+        """Backwards-compat: write_task(task, kanban_dir) without target_dir writes to tasks/.
+
+        The target_dir=None default introduced for archived-edit must not change the
+        behaviour of the 12 unchanged callers in engine.py that omit the parameter.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, status="todo", subdir="tasks")
+        task = read_task(kanban_dir / "tasks" / "1-task.md")
+        task.priority = "critical"
+
+        written_path = write_task(task, kanban_dir)
+
+        assert written_path.parent == kanban_dir / "tasks", (
+            f"write_task without target_dir must write to tasks/; got {written_path.parent}"
+        )
+        assert (kanban_dir / "tasks" / "1-task.md").exists(), (
+            "file must exist in tasks/ after default write"
+        )
+        assert not (kanban_dir / "archive" / "1-task.md").exists(), (
+            "file must not exist in archive/ when target_dir is omitted"
         )

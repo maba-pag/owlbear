@@ -51,6 +51,44 @@ _SAFE_DEFAULTS: dict[str, object] = {
 }
 
 
+def _generate_slug(title: str) -> str:
+    """Return a filesystem-safe slug derived from *title*."""
+    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80]
+
+
+def _make_task_filename(task_id: int, title: str) -> str:
+    """Return canonical task filename ``{id}-{slug}.md``."""
+    return f"{task_id}-{_generate_slug(title)}.md"
+
+
+def _validate_path_containment(root_dir: Path, path: Path) -> None:
+    """Raise if *path* is not safely contained within *root_dir*."""
+    resolved_root = root_dir.resolve()
+    resolved_path = path.resolve()
+    if resolved_path == resolved_root:
+        msg = f"Path must be a file inside root dir, not root dir itself: {path}"
+        raise ValueError(msg)
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError:
+        msg = f"Path is outside root dir '{root_dir}': {path}"
+        raise PermissionError(msg) from None
+
+
+def _move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
+    """Move *task_path* to ``quarantine/`` under *kanban_dir*."""
+    if task_path.name.startswith(".") and task_path.name.endswith(".lock"):
+        return task_path
+
+    _validate_path_containment(kanban_dir, task_path)
+
+    quarantine_dir = kanban_dir / "quarantine"
+    quarantine_dir.mkdir(parents=True, exist_ok=True)
+    dest = quarantine_dir / task_path.name
+    task_path.replace(dest)
+    return dest
+
+
 class CorruptionError(Exception):
     """Raised when storage detects unrepairable on-disk state.
 
@@ -320,11 +358,9 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
     code_name = _normalize_code(code)
 
     def _quarantine() -> RepairOutcome:
-        from owlbear_kanban.storage import move_to_quarantine  # noqa: PLC0415
-
         kanban_dir = path.parent.parent
         try:
-            quarantine_path = move_to_quarantine(path, kanban_dir)
+            quarantine_path = _move_to_quarantine(path, kanban_dir)
             return RepairOutcome(
                 task_id=task_id,
                 file_path=str(path),
@@ -386,15 +422,14 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
         fm_id = fm.get("id")
         if not isinstance(fm_id, int):
             return _quarantine()
-        from owlbear_kanban.storage import make_task_filename, move_to_quarantine  # noqa: PLC0415
 
         title = fm.get("title", "task")
-        new_name = make_task_filename(fm_id, title)
+        new_name = _make_task_filename(fm_id, title)
         new_path = path.parent / new_name
         if new_path.exists():
             kanban_dir = path.parent.parent
             try:
-                quarantine_path = move_to_quarantine(path, kanban_dir)
+                quarantine_path = _move_to_quarantine(path, kanban_dir)
                 return RepairOutcome(
                     task_id=task_id,
                     file_path=str(path),
@@ -589,10 +624,8 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
                 quarantined_ids.add(fid)
                 # This will raise from list_tasks; we log as quarantined
                 for p in paths:
-                    from owlbear_kanban.storage import move_to_quarantine  # noqa: PLC0415
-
                     try:
-                        qp = move_to_quarantine(p, kanban_dir)
+                        qp = _move_to_quarantine(p, kanban_dir)
                         outcomes.append(
                             RepairOutcome(
                                 task_id=fid,

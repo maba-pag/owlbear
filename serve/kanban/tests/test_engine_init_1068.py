@@ -53,6 +53,33 @@ archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
 status_predicates: {}
 """
 
+# Same config but without the entry_status key — should default to "research"
+_BASE_CONFIG_NO_ENTRY_STATUS = """\
+statuses:
+  - research
+  - backlog
+  - todo
+  - done
+priorities:
+  - someday
+  - needed
+  - critical
+claim_timeout: 1h
+next_id: 1
+terminal_status: done
+wave_size: 4
+agent_map:
+  research: researcher
+  backlog: architect
+  todo: builder
+  done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
+"""
+
 # Same config but without the terminal_status key — should default to "done"
 _BASE_CONFIG_NO_TERMINAL_STATUS = """\
 statuses:
@@ -93,6 +120,40 @@ def _make_board(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> Path:
 def _make_engine(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> KanbanEngine:
     kanban_dir = _make_board(base_dir, config_yaml)
     return KanbanEngine(kanban_dir)
+
+
+# ---------------------------------------------------------------------------
+# AC line 3 — entry_status defaults to "research" (omission-path proof)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EntryStatusDefault:
+    """AC: entry_status defaults to 'research' — omission-path proof required.
+
+    These tests prove that when entry_status is absent from the YAML config or
+    from a direct BoardConfig() call, the field resolves to 'research'.
+    Mirrors the terminal_status omission-path pattern in TestFromAC_TerminalStatusField.
+    """
+
+    def test_entry_status_default_is_research_without_yaml_key(self, tmp_path: Path) -> None:
+        """Config YAML without entry_status key → board_config().entry_status == 'research'."""
+        kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_ENTRY_STATUS)
+        engine = KanbanEngine(kanban_dir)
+        cfg = engine.board_config()
+        assert cfg.entry_status == "research", (
+            f"Expected entry_status='research' when key absent from YAML, got {cfg.entry_status!r}"
+        )
+
+    def test_entry_status_default_on_boardconfig_direct_construct(self) -> None:
+        """BoardConfig(statuses=['research',...], ...) without entry_status → .entry_status == 'research'."""
+        cfg = BoardConfig(
+            statuses=["research", "backlog", "done"],
+            priorities=["needed"],
+            agent_map={"research": "r", "backlog": "b", "done": "d"},
+        )
+        assert cfg.entry_status == "research", (
+            f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.entry_status!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -180,75 +241,45 @@ class TestFromAC_ArchivalReasonsFrozenSet:
 
 
 # ---------------------------------------------------------------------------
-# AgentView method stubs (implementations deferred to B-05/B-06)
+# AgentView method stubs (now real implementations from B-05/B-06)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_AgentViewMethodStubs:
-    """AgentView must expose method stubs that raise NotImplementedError."""
+    """AgentView must expose the required agent-facing methods.
+
+    Note: AgentView methods were implemented as part of a later builder pass
+    (B-05/B-06). Tests verify the methods are callable — the 'raises NotImplementedError'
+    stub-phase assertions have been retired since the implementations are live.
+    """
 
     def test_agent_view_has_list_tasks_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "list_tasks", None)), "AgentView.list_tasks missing"
 
-    def test_agent_view_list_tasks_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = AgentView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.list_tasks()
-
     def test_agent_view_has_show_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "show_task", None)), "AgentView.show_task missing"
-
-    def test_agent_view_show_task_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = AgentView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.show_task(1)
 
     def test_agent_view_has_pick_tasks_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "pick_tasks", None)), "AgentView.pick_tasks missing"
 
-    def test_agent_view_pick_tasks_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = AgentView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.pick_tasks()
-
     def test_agent_view_has_create_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "create_task", None)), "AgentView.create_task missing"
-
-    def test_agent_view_create_task_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = AgentView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.create_task("Task title")
 
     def test_agent_view_has_edit_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "edit_task", None)), "AgentView.edit_task missing"
 
-    def test_agent_view_edit_task_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = AgentView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.edit_task(1)
-
     def test_agent_view_has_start_work_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "start_work", None)), "AgentView.start_work missing"
 
-    def test_agent_view_start_work_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = AgentView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.start_work(1)
-
     def test_agent_view_has_end_work_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
         assert callable(getattr(view, "end_work", None)), "AgentView.end_work missing"
-
-    def test_agent_view_end_work_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = AgentView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.end_work(1, outcome="success", note="done")
 
 
 # ---------------------------------------------------------------------------

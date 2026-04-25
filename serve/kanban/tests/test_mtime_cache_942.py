@@ -32,29 +32,38 @@ from owlbear_kanban.models import Task
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
 statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
+- research
+- backlog
+- todo
+- in-progress
+- review
+- docs
+- done
 priorities:
 - someday
 - nice-to-have
 - important
 - needed
 - critical
-defaults:
-  status: research
-  priority: important
 claim_timeout: 1h
 next_id: {next_id}
+entry_status: research
+terminal_status: done
+wave_size: 4
+agent_map:
+    research: researcher
+    backlog: architect
+    todo: builder
+    in-progress: reviewer
+    review: reviewer
+    docs: doc-writer
+    done: auditor
+agent_types: {{}}
+agent_compatibility: {{}}
+non_impl_tags: []
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+tasks_dir: tasks
 archive_dir: archive
 activity_log: false
 """
@@ -115,7 +124,7 @@ def board(tmp_path: Path) -> Path:
 @pytest.fixture
 def engine(board: Path) -> KanbanEngine:
     """KanbanEngine for the board fixture."""
-    return KanbanEngine(board, agent_name="test-agent", activity_log=False)
+    return KanbanEngine(board, activity_log=False)
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +204,7 @@ class TestFromAC_MtimeCache:
     ) -> None:
         """When a file's mtime changes, list_tasks() must re-parse it and update the cache."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # cold call
 
         # Pick one file; record its cached mtime
@@ -226,7 +235,7 @@ class TestFromAC_MtimeCache:
     def test_deleted_file_evicted_from_task_cache(self, board: Path) -> None:
         """Cache entry for a deleted file must be removed on next list_tasks()."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # populate cache
 
         md_files = sorted(tasks_dir.glob("*.md"))
@@ -246,7 +255,7 @@ class TestFromAC_MtimeCache:
     def test_deleted_file_absent_from_results_after_eviction(self, board: Path) -> None:
         """Deleted task must not appear in list_tasks() results."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         cold_ids = {t.id for t in eng.list_tasks()}
 
         md_files = sorted(tasks_dir.glob("*.md"))
@@ -275,7 +284,7 @@ class TestFromAC_MtimeCache:
         """refresh_config() must reset _archive_cache to empty dict."""
         archive_dir = board / "archive"
         _write_task_file(archive_dir, 99)
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks(archived=True)
         assert eng._archive_cache, "pre-condition: archive cache must be populated"
         eng.refresh_config()
@@ -290,7 +299,7 @@ class TestFromAC_MtimeCache:
         """list_tasks(archived=True) must return [] when archive_dir does not exist."""
         archive_dir = board / "archive"
         archive_dir.rmdir()  # remove the directory
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         result = eng.list_tasks(archived=True)
         assert result == []
         # Also verify cache is empty (fails with AttributeError if not implemented)
@@ -300,7 +309,7 @@ class TestFromAC_MtimeCache:
         """list_tasks(archived=True) must not raise any exception when archive_dir missing."""
         archive_dir = board / "archive"
         archive_dir.rmdir()
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         try:
             eng.list_tasks(archived=True)
         except Exception as exc:  # noqa: BLE001
@@ -325,7 +334,7 @@ class TestFromAC_MtimeCache:
 
     def test_revision_increments_after_edit_with_warm_cache(self, board: Path) -> None:
         """revision must increment on edit_task() when cache is warm."""
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         assert hasattr(eng, "_task_cache"), "pre-condition: _task_cache must exist"
         eng.list_tasks()  # warm cache
         before = eng.revision
@@ -379,7 +388,7 @@ class TestFromAC_MtimeCache:
         tasks_dir = board / "tasks"
         (tasks_dir / ".DS_Store").write_bytes(b"\x00junk")
         (tasks_dir / "tmp_abc123.tmp").write_text("temp", encoding="utf-8")
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()
         assert ".DS_Store" not in eng._task_cache, (
             ".DS_Store must be excluded from cache"
@@ -392,7 +401,7 @@ class TestFromAC_MtimeCache:
         """Non-.md files must not produce TaskSummary entries in list_tasks() results."""
         tasks_dir = board / "tasks"
         (tasks_dir / "notes.txt").write_text("not a task", encoding="utf-8")
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         results = eng.list_tasks()
         # All returned summaries must have integer IDs (from valid task files)
         for summary in results:
@@ -415,7 +424,7 @@ class TestFromAC_MtimeCache:
         # (file deleted between scandir and read)
         call_count: dict[str, int] = {"n": 0}
         original_read_task = __import__(
-            "owlbear_kanban.task_io", fromlist=["read_task"]
+            "owlbear_kanban.storage", fromlist=["read_task"]
         ).read_task
 
         def patched_read(path: Path) -> Task:  # type: ignore[return]
@@ -435,7 +444,7 @@ class TestFromAC_MtimeCache:
     ) -> None:
         """If read_task() raises FileNotFoundError for a cached file, evict that cache entry."""
         tasks_dir = board / "tasks"
-        eng = KanbanEngine(board, agent_name="test-agent", activity_log=False)
+        eng = KanbanEngine(board, activity_log=False)
         eng.list_tasks()  # cold call — populate cache
 
         md_files = sorted(tasks_dir.glob("*.md"))
@@ -450,7 +459,7 @@ class TestFromAC_MtimeCache:
         target.write_bytes(target.read_bytes())
 
         original_read_task = __import__(
-            "owlbear_kanban.task_io", fromlist=["read_task"]
+            "owlbear_kanban.storage", fromlist=["read_task"]
         ).read_task
 
         def patched_read(path: Path) -> Task:  # type: ignore[return]
