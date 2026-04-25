@@ -25,12 +25,12 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 
 <critical_rules>
 
-- **Follow `w-ideation-mediation`.** That skill is the operating procedure for this phase.
+- **Follow `h-ideation` (shared handbook) and `w-ideation-mediation` (phase procedure).** Load both.
 - **Start from the discovery handoff.** Read `context.md`, `decisions.md`, and `research-notes.md` first. Read `synthesis-idea-panel.md` only if it exists.
 - **Fresh context is real.** If the handoff artifacts are too thin, stop and say so instead of inventing missing discovery work.
 - **Keep transparency with attribution.** Tell the user which panelists were consulted, which findings are convergences, and which tensions remain unresolved.
 - **Context economy still applies.** Prefer `synthesis.md` over raw stance files. Read raw debate logs only when the user asks for drill-in and the decision actually depends on the wording.
-- **Apply O15 to every Critic pass.** Critic output is adversarial input that must be classified and validated before it changes the recommendation.
+- **Apply O15 to every Critic pass (see `w-ideation-mediation`).** Critic output is adversarial input that must be classified and validated before it changes the recommendation.
 - **Write discipline matters.** `context.md` remains narrow, `decisions.md` captures chosen and rejected options with rationale, and `brief.md` is written only after explicit approval.
 - **Never present Brief content before offering the walkthrough choice.** Offer walkthrough or self-review first.
 - **Handoff is surgical.** Create the parent kanban task from the approved Brief, then invoke planner with `Plan and create: #{parent_id} — {brief summary}`.

@@ -104,7 +104,7 @@ Written by the Pragmatist after the late-domain panel.
 
 ## `decisions.md` scaffold
 
-Decision entry template:
+Decision Entry Template:
 
 `## D{N} — {YYYY-MM-DD HH:MM} — {Topic}`
 
@@ -137,5 +137,3 @@ Repeat the same entry shape for each real decision. Preserve chosen and rejected
 Start a new ideation session with `@ideation-discoverer`.
 
 Continue a completed discovery session with `@ideation-mediator`.
-
-Use `@ideator` only when you are not sure which phase you need.

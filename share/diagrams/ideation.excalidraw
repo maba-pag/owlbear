@@ -3,11 +3,10 @@
   "version": 2,
   "source": "owlbear",
   "describes": [
-    "share/skills/w-ideation/**",
+    "share/skills/h-ideation/**",
     "share/skills/w-ideation-discovery/**",
     "share/skills/w-ideation-mediation/**",
     "share/skills/h-ideation-panel/**",
-    "share/agents/ideator.agent.md",
     "share/agents/ideation-*.agent.md"
   ],
   "elements": [

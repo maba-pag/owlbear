@@ -33,18 +33,17 @@ def _ideation_agent_files() -> list[Path]:
 
 
 def _ideation_surface_files() -> list[Path]:
-    """Return the full ideation surface: agents + ideator + skills + briefs README."""
+    """Return the full ideation surface: agents + skills + briefs README."""
     agents = sorted(_REPO_ROOT.glob("share/agents/ideation-*.agent.md"))
     files = [
         *agents,
-        _REPO_ROOT / "share/agents/ideator.agent.md",
-        _REPO_ROOT / "share/skills/w-ideation/SKILL.md",
+        _REPO_ROOT / "share/skills/h-ideation/SKILL.md",
         _REPO_ROOT / "share/skills/w-ideation-discovery/SKILL.md",
         _REPO_ROOT / "share/skills/w-ideation-mediation/SKILL.md",
         _REPO_ROOT / "share/skills/h-ideation-panel/SKILL.md",
         _REPO_ROOT / ".owlbear/briefs/README.md",
     ]
-    assert len(files) >= 17, f"Expected >= 17 ideation surface files, got {len(files)}"
+    assert len(files) >= 16, f"Expected >= 16 ideation surface files, got {len(files)}"
     return files
 
 
@@ -53,11 +52,11 @@ class TestFromAC_IdeationFilesExist:
 
     def test_phase_split_files_exist(self) -> None:
         required = [
-            "share/skills/w-ideation/SKILL.md",
+            "share/skills/h-ideation/SKILL.md",
             "share/skills/w-ideation-discovery/SKILL.md",
             "share/skills/w-ideation-mediation/SKILL.md",
             "share/skills/h-ideation-panel/SKILL.md",
-            "share/agents/ideator.agent.md",
+
             "share/agents/ideation-discoverer.agent.md",
             "share/agents/ideation-mediator.agent.md",
             "share/agents/ideation-firstprinciples.agent.md",
@@ -78,7 +77,7 @@ class TestFromAC_SharedWorkflowContract:
     """Shared workflow skill exposes the cross-phase rules explicitly."""
 
     def test_w_ideation_documents_interaction_modes(self) -> None:
-        text = _read("share/skills/w-ideation/SKILL.md")
+        text = _read("share/skills/h-ideation/SKILL.md")
         for needle in [
             "## Shared Interaction Contract",
             "### Investigative Turns",
@@ -92,44 +91,57 @@ class TestFromAC_SharedWorkflowContract:
             )
 
     def test_w_ideation_documents_validation_disciplines(self) -> None:
-        text = _read("share/skills/w-ideation/SKILL.md")
+        """Validation disciplines live in their respective phase skills."""
+        discovery = _read("share/skills/w-ideation-discovery/SKILL.md")
+        assert "## Conditional Denoise" in discovery, (
+            "Discovery skill missing Conditional Denoise section"
+        )
+        mediation = _read("share/skills/w-ideation-mediation/SKILL.md")
         for needle in [
-            "### Conditional Denoise",
-            "### Critic Validation (O15)",
+            "## Critic Validation (O15)",
             "nonsense",
             "minor",
             "material",
-            "### Disclosure Ladder",
-            "never hide decision-critical detail behind a file path alone",
+            "## Disclosure Ladder",
+            "Never hide decision-critical detail behind a file reference alone",
         ]:
-            assert needle in text, f"w-ideation missing validation discipline: {needle}"
+            assert needle in mediation, (
+                f"Mediation skill missing validation discipline: {needle}"
+            )
 
     def test_discovery_skill_keeps_freeform_discovery_and_explicit_handoff(
         self,
     ) -> None:
         text = _read("share/skills/w-ideation-discovery/SKILL.md")
         for needle in [
-            "## Interaction Modes",
-            "### Investigative Turns",
-            "Default for M1-M2.",
-            "current phase and moment",
-            "per-option pro, con, risk, and confidence",
+            "freeform",
             "@ideation-mediator",
             "existing-feature/refactor",
         ]:
             assert needle in text, (
                 f"Discovery skill missing required contract text: {needle}"
             )
+        # Interaction turn shapes live in the shared w-ideation handbook
+        shared = _read("share/skills/h-ideation/SKILL.md")
+        for needle in [
+            "### Investigative Turns",
+            "### Synthesis Turns",
+            "### Decision Turns",
+            "structured context header",
+            "anchor-recall",
+        ]:
+            assert needle in shared, (
+                f"Shared handbook missing interaction contract text: {needle}"
+            )
 
     def test_mediation_skill_keeps_o15_disclosure_and_decision_shape(self) -> None:
         text = _read("share/skills/w-ideation-mediation/SKILL.md")
         for needle in [
             "Apply O15 to every Critic pass.",
-            "structured context header and anchor-recall before the option framing",
             "Do not bulk-accept Critic output.",
-            "default summary first",
-            "concrete specifics",
-            "inline verbatim evidence",
+            "Default Summary",
+            "Concrete Specifics",
+            "Inline Verbatim Evidence",
         ]:
             assert needle in text, (
                 f"Mediation skill missing required contract text: {needle}"
@@ -138,13 +150,12 @@ class TestFromAC_SharedWorkflowContract:
     def test_decision_entry_template_is_visible_in_workflow_surface(self) -> None:
         targets = [
             ".owlbear/briefs/README.md",
-            "share/skills/w-ideation-discovery/SKILL.md",
-            "share/skills/w-ideation-mediation/SKILL.md",
+            "share/skills/h-ideation/SKILL.md",
         ]
         for path in targets:
             text = _read(path)
             for needle in [
-                "Decision entry template",
+                "Decision Entry Template",
                 "## D{N} — {YYYY-MM-DD HH:MM} — {Topic}",
                 "**Status quo:** ...",
                 "**Decision to make:** ...",
@@ -157,8 +168,7 @@ class TestFromAC_SharedWorkflowContract:
     def test_decision_entry_template_has_full_field_set(self) -> None:
         targets = [
             ".owlbear/briefs/README.md",
-            "share/skills/w-ideation-discovery/SKILL.md",
-            "share/skills/w-ideation-mediation/SKILL.md",
+            "share/skills/h-ideation/SKILL.md",
         ]
         for path in targets:
             text = _read(path)
@@ -178,9 +188,17 @@ class TestFromAC_AgentContracts:
     def test_role_files_do_not_use_model_field_as_contract(self) -> None:
         offenders = []
         for path in _ideation_agent_files():
+            if path.name == "ideation-critic.agent.md":
+                continue  # critic is intentionally pinned to a specific model
             if "model:" in path.read_text(encoding="utf-8"):
                 offenders.append(str(path.relative_to(_REPO_ROOT)))
         assert not offenders, f"Model-string contracts still present: {offenders}"
+
+    def test_critic_has_pinned_model(self) -> None:
+        text = _read("share/agents/ideation-critic.agent.md")
+        assert "model:" in text, (
+            "Critic must have a pinned model field for adversarial quality"
+        )
 
     def test_ideation_surfaces_keep_context_and_decisions_contract(self) -> None:
         paired_contract_files = [
@@ -223,39 +241,7 @@ class TestFromAC_AgentContracts:
             f"Deprecated ideation contract terms reappeared: {offenders}"
         )
 
-    def test_late_panelist_files_do_not_use_model_field_as_contract(self) -> None:
-        """AC 1 coverage for the four late-domain panelists omitted from role_files scan."""
-        panelist_files = [
-            "share/agents/ideation-architect.agent.md",
-            "share/agents/ideation-data.agent.md",
-            "share/agents/ideation-enduser.agent.md",
-            "share/agents/ideation-security.agent.md",
-        ]
-        offenders = []
-        for path in panelist_files:
-            text = _read(path)
-            if "model:" in text:
-                offenders.append(path)
-        assert not offenders, (
-            f"Model-string contracts present in late panelist files: {offenders}"
-        )
 
-    def test_late_panelist_files_have_no_working_log_or_checkpoint(self) -> None:
-        """AC 5 coverage for the four late-domain panelists omitted from forbidden-term scan."""
-        panelist_files = [
-            "share/agents/ideation-architect.agent.md",
-            "share/agents/ideation-data.agent.md",
-            "share/agents/ideation-enduser.agent.md",
-            "share/agents/ideation-security.agent.md",
-        ]
-        offenders = []
-        for path in panelist_files:
-            text = _read(path)
-            if "working-log.md" in text or "checkpoint" in text:
-                offenders.append(path)
-        assert not offenders, (
-            f"Deprecated contract terms reappeared in late panelist files: {offenders}"
-        )
 
 
 class TestFromAC_BlackboardDocs:
@@ -386,82 +372,6 @@ class TestFromAC_GoldenScenarioFixtures:
             assert "main-consuming" in text, (
                 f"{scenario}/brief.md missing runtime-validation disclaimer"
             )
-
-
-class TestFromAC_IdeatorRouterContract:
-    """Ideator must be a compatibility router, not a workflow performer."""
-
-    def test_ideator_does_not_run_workflow_itself(self) -> None:
-        text = _read("share/agents/ideator.agent.md")
-        assert "Do not run the full ideation workflow yourself." in text, (
-            "Ideator is missing the explicit non-performer rule — "
-            "it must not claim to run discovery or mediation directly"
-        )
-
-    def test_ideator_routes_new_work_to_discoverer(self) -> None:
-        text = _read("share/agents/ideator.agent.md")
-        assert "Route new or unclear work to `@ideation-discoverer`." in text, (
-            "Ideator missing explicit routing rule: new/unclear work → @ideation-discoverer"
-        )
-
-    def test_ideator_routes_post_discovery_to_mediator(self) -> None:
-        text = _read("share/agents/ideator.agent.md")
-        assert "Route post-discovery work to `@ideation-mediator`." in text, (
-            "Ideator missing explicit routing rule: post-discovery work → @ideation-mediator"
-        )
-
-    def test_ideator_has_disable_model_invocation(self) -> None:
-        text = _read("share/agents/ideator.agent.md")
-        assert "disable-model-invocation: true" in text, (
-            "Ideator must set disable-model-invocation: true — "
-            "a router must not invoke a model to perform ideation itself"
-        )
-
-    def test_ideator_mediator_route_names_three_artifacts(self) -> None:
-        # Scope to <critical_rules> only — artifact names also appear in the
-        # Routing Logic section, so a whole-file search would not fail if any
-        # artifact were removed from the handoff gate clause.
-        text = _read("share/agents/ideator.agent.md")
-        assert "<critical_rules>" in text, "ideator.agent.md missing <critical_rules> block"
-        critical_rules = text.split("<critical_rules>")[1].split("</critical_rules>")[0]
-        for artifact in ["context.md", "decisions.md", "research-notes.md"]:
-            assert artifact in critical_rules, (
-                f"Ideator <critical_rules> mediator-route clause missing artifact: {artifact}"
-            )
-
-    def test_ideator_mediator_route_artifacts_in_route_bullet(self) -> None:
-        # Clause-bound proof: artifact names must be in the specific mediator-route
-        # bullet, not merely somewhere in the <critical_rules> block. Relocating the
-        # artifact list to a sibling bullet within the block would pass the block-scoped
-        # test above but would still violate AC 1 — this test catches that mutation.
-        text = _read("share/agents/ideator.agent.md")
-        critical_rules = text.split("<critical_rules>")[1].split("</critical_rules>")[0]
-        route_marker = "Route post-discovery work to `@ideation-mediator`"
-        assert route_marker in critical_rules, (
-            "ideator.agent.md <critical_rules> missing the mediator-route bullet"
-        )
-        # Extract only the text of this bullet (up to the next bullet or end of block).
-        after_marker = critical_rules.split(route_marker)[1]
-        route_bullet_body = after_marker.split("\n-")[0]
-        for artifact in ["context.md", "decisions.md", "research-notes.md"]:
-            assert artifact in route_bullet_body, (
-                f"Mediator-route bullet missing artifact `{artifact}` — "
-                "the handoff gate clause must name all three artifacts inline, "
-                "not in a sibling bullet within <critical_rules>"
-            )
-
-    def test_ideator_names_artifact_paths_explicitly(self) -> None:
-        text = _read("share/agents/ideator.agent.md")
-        assert "Name the artifact paths explicitly" in text, (
-            "Ideator missing explicit rule to name artifact paths — "
-            "router must tell users where handoff artifacts live"
-        )
-
-    def test_ideator_askquestions_every_turn(self) -> None:
-        text = _read("share/agents/ideator.agent.md")
-        assert "askQuestions ends every user-facing turn" in text, (
-            "Ideator missing interaction contract: askQuestions must end every user-facing turn"
-        )
 
 
 class TestFromAC_EarlyChallengeLane:

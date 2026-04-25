@@ -8,6 +8,8 @@ user-invocable: false
 
 Phase 1 of the ideation workflow. The discovery agent owns M1-M2, sharpens the problem and outcomes, runs the early challenge lane, curates the first research pass, and hands off to Phase 2.
 
+Shared rules (interaction turns, decision template, handoff contract) are in `h-ideation`.
+
 ## Working Rules
 
 - End every user-facing turn with `askQuestions`.
@@ -16,28 +18,10 @@ Phase 1 of the ideation workflow. The discovery agent owns M1-M2, sharpens the p
 - Confirm project type early: `net-new`, `existing-feature/refactor`, or `uncertain`.
 - Do not lock approach decisions in Phase 1. Phase 1 sharpens the problem and the outcomes; Phase 2 owns approach choice.
 
-## Interaction Modes
+## Conditional Denoise
 
-### Investigative Turns
-
-- Default for M1-M2.
-- Freeform probing is required while the problem and outcomes are still being clarified.
-- Do not use the structured context header or anchor-recall unless the user is making a real choice or discovery has shifted into a synthesis relay.
-
-### Synthesis Turns
-
-- Use when relaying early-challenge output or the first research bridge.
-- Require the structured context header:
-  - current phase and moment
-  - current sub-topic
-  - prior anchor
-- Apply anchor-recall only when the anchor has changed in a meaningful way.
-
-### Decision Turns
-
-- Use only when the user is making a real choice about problem framing, outcomes, or scope boundaries.
-- Present options with per-option pro, con, risk, and confidence.
-- Record chosen and rejected options with rationale in `decisions.md`.
+- Use `ideation-pragmatist` in `mode=denoise` only when multiple early challenger outputs create genuine redundancy or volume.
+- If challenger output is already compact, read the challenger stances directly and do not create `synthesis-idea-panel.md`.
 
 ## Step 0 — Setup and Entry
 
@@ -67,7 +51,7 @@ Phase 1 of the ideation workflow. The discovery agent owns M1-M2, sharpens the p
 
 1. Shift from the problem to the desired future state.
 2. Define the best realistic outcome, the minimum viable win, and any obvious scope boundaries.
-3. Record candidate choices and rejected directions in `decisions.md` using the chosen/rejected format.
+3. Record candidate choices and rejected directions in `decisions.md` using the decision entry template from `h-ideation`.
 4. Invoke the early challenge lane at the end of M2:
    - always: `ideation-simplifier`
    - always: `ideation-firstprinciples`
@@ -76,8 +60,6 @@ Phase 1 of the ideation workflow. The discovery agent owns M1-M2, sharpens the p
 6. If the combined early-challenger output is actually redundant or noisy, invoke `ideation-pragmatist` in `denoise` mode to write `synthesis-idea-panel.md`.
 7. If challenger output is already compact, skip denoise and read the challenger stances directly.
 8. Update `context.md` with the locked outcomes and the latest active tensions.
-
-**Discovery choice rule:** when the user is making a real choice in Phase 1, record both the chosen and rejected options with rationale in `decisions.md`.
 
 **Exit criteria:** `context.md` contains the current outcomes; the early challenge lane has either produced direct challenger stances or an optional `synthesis-idea-panel.md` digest.
 
@@ -117,31 +99,7 @@ Phase 1 of the ideation workflow. The discovery agent owns M1-M2, sharpens the p
 - Append-only.
 - Preserve chosen and rejected options with rationale whenever a real choice is made.
 - Preserve exact user wording only when the wording itself matters.
-- Decision entry template:
-- Use this decision entry shape when discovery records a real choice:
-
-```markdown
-## D{N} — {YYYY-MM-DD HH:MM} — {Topic}
-
-**Status quo:** ...
-**Decision to make:** ...
-
-**Options considered:**
-
-- A: ...
-- B: ...
-
-**Chosen:** ...
-
-**Rejected:**
-
-- B because ...
-
-**Source inputs (when relevant):**
-
-- User: "..."
-- Panel / research: ...
-```
+- Use the decision entry template from `h-ideation`.
 
 ### `research-notes.md`
 

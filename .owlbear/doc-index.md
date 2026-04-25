@@ -325,11 +325,6 @@
 - ### `Channel B`
 - ### `Output File`
 
-## share/agents/ideator.agent.md
-- ### `Channel A`
-- ### `Channel B`
-- ### `Routing Logic`
-
 ## share/agents/memory-curator.agent.md
 - ### `Channel A`
 - ### `Channel B`
@@ -376,7 +371,7 @@
 describes: serve/cockpit/src/**, serve/cockpit/web/src/**
 
 ## share/diagrams/ideation.excalidraw
-describes: share/skills/w-ideation/**, share/skills/w-ideation-discovery/**, share/skills/w-ideation-mediation/**, share/skills/h-ideation-panel/**, share/agents/ideator.agent.md, share/agents/ideation-*.agent.md
+describes: share/skills/h-ideation/**, share/skills/w-ideation-discovery/**, share/skills/w-ideation-mediation/**, share/skills/h-ideation-panel/**, share/agents/ideation-*.agent.md
 
 ## share/diagrams/kanban.excalidraw
 describes: serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**
@@ -497,6 +492,16 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 3 - Apply final-detail checks`
 - ## `Step 4 - Verify before completion`
 - ## `Guardrails`
+
+## share/prompts/ideation-discover.prompt.md
+- ## `When to use this`
+- ## `What happens`
+- ## `Tips`
+
+## share/prompts/ideation-mediate.prompt.md
+- ## `When to use this`
+- ## `What happens`
+- ## `Tips`
 
 ## share/prompts/orchestrate.prompt.md
 
@@ -626,6 +631,27 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `UX Writing`
 - ## `Anti-Pattern Classification`
 - ## `Known Gotchas`
+
+## share/skills/h-ideation/SKILL.md
+- # `Ideation Handbook`
+- ## `Phase Map`
+- ## `User-Facing Entry Points`
+- ### ``@ideation-discoverer``
+- ### ``@ideation-mediator``
+- ## `Blackboard Artifacts`
+- ## `Shared Artifact Meanings`
+- ### ``context.md``
+- ### ``decisions.md``
+- ### ``research-notes.md``
+- ### ``synthesis-idea-panel.md``
+- ### ``synthesis.md``
+- ## `Shared Interaction Contract`
+- ### `Investigative Turns`
+- ### `Synthesis Turns`
+- ### `Decision Turns`
+- ## `Decision Entry Template`
+- ## `Handoff Contract`
+- ## `Cross-References`
 
 ## share/skills/h-ideation-panel/SKILL.md
 - # `Ideation Panel Handbook`
@@ -799,6 +825,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `2. Working Standards`
 - ### `Evidence Principles`
 - ### `Quality-Runner Mandate`
+- ### `Tool Availability`
 - ### `Defense-in-Depth`
 - ### `Confidence Thresholds (source of truth)`
 - ### `Process Habits`
@@ -813,7 +840,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Who Commits What`
 - ### `Post-task Reflection`
 - ## `5. Escalation`
-- ### `Blocking Convention`
+- ### `Escalation Routing`
 - #### `DR Required on Agent Block`
 - ### `Decision Tiers`
 - ### `User-Action Tasks`
@@ -938,38 +965,10 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 6 — Single Retry (max 1)`
 - ## `Known Pitfalls`
 
-## share/skills/w-ideation/SKILL.md
-- # `Ideation Workflow`
-- ## `Phase Map`
-- ## `User-Facing Entry Points`
-- ### ``@ideation-discoverer``
-- ### ``@ideation-mediator``
-- ### ``@ideator``
-- ## `Blackboard Artifacts`
-- ## `Shared Artifact Meanings`
-- ### ``context.md``
-- ### ``decisions.md``
-- ### ``research-notes.md``
-- ### ``synthesis-idea-panel.md``
-- ### ``synthesis.md``
-- ## `Shared Interaction Contract`
-- ### `Investigative Turns`
-- ### `Synthesis Turns`
-- ### `Decision Turns`
-- ## `Shared Validation Disciplines`
-- ### `Conditional Denoise`
-- ### `Critic Validation (O15)`
-- ### `Disclosure Ladder`
-- ## `Handoff Contract`
-- ## `Cross-References`
-
 ## share/skills/w-ideation-discovery/SKILL.md
 - # `Ideation Discovery`
 - ## `Working Rules`
-- ## `Interaction Modes`
-- ### `Investigative Turns`
-- ### `Synthesis Turns`
-- ### `Decision Turns`
+- ## `Conditional Denoise`
 - ## `Step 0 — Setup and Entry`
 - ## `Step 1 — M1: Understanding`
 - ## `Step 2 — M2: Outcomes and Early Challenge Lane`
@@ -984,20 +983,18 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/w-ideation-mediation/SKILL.md
 - # `Ideation Mediation`
 - ## `Working Rules`
-- ## `Step 0 — Phase 2 Start`
-- ## `Step 1 — M3: Landscape Presentation and Research Follow-Up`
-- ## `Step 2 — Late Domain Panel Orchestration`
-- ## `Step 3 — M4: Decision Support`
-- ## `Step 4 — Critic Validation Pass (O15)`
-- ## `Step 5 — M5: Brief Drafting and Disclosure Ladder`
-- ## `Step 6 — M6: Handoff`
-- ## `Interaction Modes`
-- ### `Synthesis Turns`
-- ### `Decision Turns`
+- ## `Critic Validation (O15)`
 - ## `Disclosure Ladder`
 - ### `Default Summary`
 - ### `Concrete Specifics`
 - ### `Inline Verbatim Evidence`
+- ## `Step 0 — Phase 2 Start`
+- ## `Step 1 — M3: Landscape Presentation and Research Follow-Up`
+- ## `Step 2 — Late Domain Panel Orchestration`
+- ## `Step 3 — M4: Decision Support`
+- ## `Step 4 — Critic Validation Pass`
+- ## `Step 5 — M5: Brief Drafting`
+- ## `Step 6 — M6: Handoff`
 - ## `Verification Checklist`
 
 ## share/skills/w-mem-curation/SKILL.md
@@ -1025,6 +1022,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 3 — Dispatch`
 - ### `Wave Assembly`
 - ### `Dispatch Mechanics`
+- ### `Tool-Failure Verification`
 - ### `Rate-Limit Sequential Fallback`
 - ## `Step 4 — Loop`
 - ## `Output Format`

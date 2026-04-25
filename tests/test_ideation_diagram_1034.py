@@ -47,11 +47,10 @@ _DOC_INDEX_PATH = _PROJECT_ROOT / ".owlbear" / "doc-index.md"
 
 # AC3 (6th-cycle update) — 6 required describes globs (was 4, added phase skills)
 _REQUIRED_DESCRIBES_GLOBS = [
-    "share/skills/w-ideation/**",
+    "share/skills/h-ideation/**",
     "share/skills/w-ideation-discovery/**",
     "share/skills/w-ideation-mediation/**",
     "share/skills/h-ideation-panel/**",
-    "share/agents/ideator.agent.md",
     "share/agents/ideation-*.agent.md",
 ]
 
