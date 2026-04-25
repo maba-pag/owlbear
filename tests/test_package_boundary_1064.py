@@ -329,6 +329,38 @@ class TestFromAC_KanbanInternalBoundary:
             "The violation entry must identify bad.py as the offending file."
         )
 
+    def test_durable_suite_alias_form_in_init_not_flagged(self, tmp_path: Path) -> None:
+        """AC-C45a (v4): ``from owlbear_kanban import storage`` in ``__init__.py``
+        must NOT produce a violation.
+
+        Arch v4 explicitly exempts ``__init__.py`` alongside ``engine.py`` from
+        the storage-import boundary.  ``__init__.py`` is a package API re-export
+        surface, not a feature module, so a storage re-export there is a
+        deliberate API expansion rather than an accidental boundary leak.
+
+        This is the negative counterpart to
+        ``test_durable_suite_detects_from_owlbear_kanban_import_storage``:
+        alias-form in ``__init__.py`` is *exempt*; alias-form in feature modules
+        is *detected*.  If the durable helper ever drops ``__init__.py`` from its
+        skip-list, this test will fail.
+        """
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "__init__.py").write_text(
+            "from owlbear_kanban import storage\n", encoding="utf-8"
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert not violations, (
+            "AC-C45a (v4) explicitly exempts __init__.py from the storage-import "
+            "boundary.  `from owlbear_kanban import storage` in __init__.py must NOT "
+            "be flagged as a violation.  The durable helper's skip-list must include "
+            "both 'engine.py' and '__init__.py'; removing __init__.py from the skip-list "
+            "violates the arch v4 decision.\n"
+            f"Current violations returned: {violations}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # 4th AC — no task_io import anywhere in the codebase
