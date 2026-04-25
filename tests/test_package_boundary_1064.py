@@ -361,6 +361,33 @@ class TestFromAC_KanbanInternalBoundary:
             f"Current violations returned: {violations}"
         )
 
+    def test_durable_suite_detects_direct_static_storage_import(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-C45a regression guard: durable helper detects direct
+        ``from owlbear_kanban.storage import X`` in non-engine source files.
+
+        The durable helper at ``tests/test_package_boundary.py:136-148`` implements
+        the direct static branches (``ast.ImportFrom`` with ``module ==
+        'owlbear_kanban.storage'`` and ``ast.Import``).  This regression guard
+        proves those branches remain active: removing them would cause this test
+        to fail.
+        """
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "engine.py").write_text("", encoding="utf-8")
+        (kanban_src / "bad.py").write_text(
+            "from owlbear_kanban.storage import read_task\n", encoding="utf-8"
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper must detect direct 'from owlbear_kanban.storage import X' "
+            "in non-engine source files"
+        )
+        assert any("bad.py" in v for v in violations)
+
 
 # ---------------------------------------------------------------------------
 # 4th AC — no task_io import anywhere in the codebase
@@ -512,5 +539,62 @@ class TestFromAC_KanbanTaskIoRemoval:
             "detect 'from owlbear_kanban.task_io import write_task' in non-engine "
             "source files.  Add this helper to the durable suite per refined AC-C45b."
         )
+
+    def test_durable_suite_task_io_init_py_exemption_in_place(self, tmp_path: Path) -> None:
+        """AC-C45b (v5): ``from owlbear_kanban.task_io import X`` in ``__init__.py``
+        must NOT produce a task_io violation.
+
+        Arch v5 explicitly exempts ``__init__.py`` from C45b for the same reason
+        as C45a (v4): ``__init__.py`` is a package API re-export surface, not a
+        feature module.  A deleted-module import in ``__init__.py`` would fail at
+        import time with ``ModuleNotFoundError``, making the structural scanner
+        redundant there.
+
+        This is the negative counterpart to
+        ``test_durable_suite_task_io_helper_detects_static_import``:
+        task_io import in ``__init__.py`` is *exempt*; task_io import in feature
+        modules is *detected*.  If the durable helper ever drops ``__init__.py``
+        from its skip-list, this test will fail.
+        """
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "__init__.py").write_text(
+            "from owlbear_kanban.task_io import write_task\n", encoding="utf-8"
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert not violations, (
+            "AC-C45b (v5) explicitly exempts __init__.py from the task_io-import "
+            "boundary scanner.  `from owlbear_kanban.task_io import write_task` in "
+            "__init__.py must NOT be flagged as a violation — a deleted-module import "
+            "there would fail at import time with ModuleNotFoundError, making the "
+            "structural guard redundant.  The durable helper's skip-list must include "
+            "'__init__.py'; removing it violates the arch v5 decision.\n"
+            f"Current violations returned: {violations}"
+        )
+
+    def test_durable_suite_detects_dynamic_task_io_import(self, tmp_path: Path) -> None:
+        """AC-C45b regression guard: durable helper detects
+        ``importlib.import_module("owlbear_kanban.task_io")`` in source files.
+
+        The durable helper at ``tests/test_package_boundary.py:203-212`` implements
+        the dynamic task_io detection branch.  This regression guard proves that
+        branch is active: removing it would cause this test to fail.
+        """
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "dispatch.py").write_text(
+            'import importlib\nimportlib.import_module("owlbear_kanban.task_io")\n',
+            encoding="utf-8",
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper must detect importlib.import_module('owlbear_kanban.task_io') "
+            "in source files"
+        )
+        assert any("dispatch.py" in v for v in violations)
 
 
