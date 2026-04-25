@@ -39,7 +39,7 @@ engine.release_task(42)
 | `move_task(task_id, status, *, archival_reason=None, archival_refs=None)` | Change task status; `"archived"` moves file to `archive/` — requires a valid `archival_reason` |
 | `claim_task(task_id)` | Mark task claimed by this engine's `agent_name`; rejects blocked/rival claims |
 | `release_task(task_id)` | Clear claim unconditionally |
-| `start_work(task_id)` | Claim and advance to `in-progress` |
+| `start_work(task_id)` | Claim the task for this agent (no status advancement) |
 | `end_work(task_id, …)` | Append outcome note and advance or reject |
 | `board_config()` | Defensive copy of the current `BoardConfig` |
 | `agent_view()` | Return the cached `AgentView` facade for agent-facing operations |
