@@ -111,7 +111,7 @@ class EndWorkParams(MCPParamsBase):
     """Input schema for end_work."""
 
     id: int
-    outcome: Literal["success", "reject", "release", "block"] = "success"
+    outcome: Literal["success", "fail", "reject", "release", "block"] = "success"
     move_to: str | None = None
     note: str | None = None
     archival_reason: str | None = None
