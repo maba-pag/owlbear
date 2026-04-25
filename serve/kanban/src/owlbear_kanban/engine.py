@@ -71,6 +71,7 @@ from owlbear_kanban.storage import (
 # ---------------------------------------------------------------------------
 
 _DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
+_BLOCK_REASON_UNSET = object()
 
 
 def _parse_duration(s: str) -> timedelta:
@@ -934,6 +935,8 @@ class KanbanEngine:
         block_reason: str | None = None,
         append_body: str | None = None,
         timestamp: bool = False,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
     ) -> Task:
         """Modify fields on a task in-place; filename (slug) is never changed.
 
@@ -952,6 +955,8 @@ class KanbanEngine:
             block_reason: Set block reason (cleared when blocked=False).
             append_body: Text appended to existing body.
             timestamp:   When True, prepend ``[[YYYY-MM-DD]]`` to append_body.
+            archival_reason: Replace archival reason when provided.
+            archival_refs:   Replace archival reference IDs when provided.
 
         Returns:
             Updated :class:`Task`.
@@ -969,7 +974,8 @@ class KanbanEngine:
             msg = f"Invalid priority {priority!r}. Valid options: {self._config.priorities}"
             raise ValueError(msg)
 
-        task_path = self._find_task_path(task_id, self._tasks_dir)
+        task_path = self._find_task_path(task_id, self._tasks_dir, include_archive_fallback=True)
+        target_dir = task_path.parent
         record = read_task(task_path)
         original = record.model_copy(deep=True)
 
@@ -1012,15 +1018,20 @@ class KanbanEngine:
                 prefix = f"[[{date_str}]]\n"
             record.body = record.body + "\n" + prefix + append_body
 
+        if archival_reason is not None:
+            record.archival_reason = archival_reason
+        if archival_refs is not None:
+            record.archival_refs = list(archival_refs)
+
         record.updated = datetime.now(tz=UTC).isoformat()
 
-        write_task(record, self._kanban_dir)
+        write_task(record, self._kanban_dir, target_dir=target_dir)
 
         try:
             self._emit_event("edit", record.id, "task edited")
         except OSError:
             with contextlib.suppress(Exception):
-                write_task(original, self._kanban_dir)
+                write_task(original, self._kanban_dir, target_dir=target_dir)
             raise
         self._revision += 1
         return record
@@ -1509,7 +1520,13 @@ class KanbanEngine:
         """Parse the ``claim_timeout`` string from config into a :class:`timedelta`."""
         return _parse_duration(self._config.claim_timeout)
 
-    def _find_task_path(self, task_id: str, search_dir: Path) -> Path:
+    def _find_task_path(
+        self,
+        task_id: str,
+        search_dir: Path,
+        *,
+        include_archive_fallback: bool = False,
+    ) -> Path:
         """Return the path of ``{task_id}-*.md`` in *search_dir*.
 
         Raises:
@@ -1524,10 +1541,16 @@ class KanbanEngine:
                 return self._tasks_dir / self._id_to_filename[int_id]
 
         matches = list(search_dir.glob(f"{task_id}-*.md"))
-        if not matches:
-            msg = f"Task {task_id!r} not found in {search_dir}"
-            raise FileNotFoundError(msg)
-        return matches[0]
+        if matches:
+            return matches[0]
+
+        if include_archive_fallback and search_dir == self._tasks_dir:
+            archive_matches = list(self._archive_dir.glob(f"{task_id}-*.md"))
+            if archive_matches:
+                return archive_matches[0]
+
+        msg = f"Task {task_id!r} not found in {search_dir}"
+        raise FileNotFoundError(msg)
 
 
 class AgentView:
@@ -1868,7 +1891,7 @@ class AgentView:
         remove_dep: list[int] | None = None,
         add_tag: list[str] | None = None,
         remove_tag: list[str] | None = None,
-        block_reason: str | None = None,
+        block_reason: str | None | object = _BLOCK_REASON_UNSET,
         archival_reason: str = "",
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
@@ -1882,6 +1905,9 @@ class AgentView:
         append_set = bool(append_body)
         archival_reason_set = bool(archival_reason)
         archival_refs_set = archival_refs is not None
+        block_reason_set = block_reason is not _BLOCK_REASON_UNSET
+        append_payload = append_body
+        append_resulting_body = ""
 
         if body_set and append_set:
             raise ValidationError(
@@ -1906,12 +1932,12 @@ class AgentView:
                 )
 
         if append_set:
-            prefix = ""
             if timestamp:
-                prefix = f"{datetime.now(tz=UTC).replace(microsecond=0).isoformat()}\n"
+                stamp = datetime.now(tz=UTC).replace(microsecond=0).isoformat()
+                append_payload = f"{stamp}\n{append_body}"
             current_body = existing.body if isinstance(existing.body, str) else ""
-            resulting = current_body + "\n" + prefix + append_body
-            self._validate_body_size(resulting)
+            append_resulting_body = current_body + "\n" + append_payload
+            self._validate_body_size(append_resulting_body)
 
         if archival_reason_set or archival_refs_set:
             if existing.status != "archived":
@@ -1974,11 +2000,7 @@ class AgentView:
         if body:
             kwargs["body"] = body
         if append_set:
-            append_text = append_body
-            if timestamp:
-                stamp = datetime.now(tz=UTC).replace(microsecond=0).isoformat()
-                append_text = f"{stamp}\n{append_text}"
-            kwargs["append_body"] = append_text
+            kwargs["append_body"] = append_payload
         if priority:
             kwargs["priority"] = priority
         if parent > 0:
@@ -1991,15 +2013,56 @@ class AgentView:
             kwargs["add_tags"] = add_tag
         if remove_tag is not None:
             kwargs["remove_tags"] = remove_tag
-        if block_reason is not None:
+        if block_reason_set:
             if block_reason:
                 kwargs["blocked"] = True
                 kwargs["block_reason"] = block_reason
             else:
                 kwargs["blocked"] = False
                 kwargs["block_reason"] = None
+        if archival_reason_set:
+            kwargs["archival_reason"] = archival_reason
+        if archival_refs_set:
+            kwargs["archival_refs"] = archival_refs
 
         if not kwargs and not archival_reason_set and not archival_refs_set:
+            raise ValidationError(
+                code="ERR_NO_OP",
+                user_message="No changes requested",
+            )
+
+        changes_requested = False
+        if body_set and body.rstrip("\n") != existing.body.rstrip("\n"):
+            changes_requested = True
+        if append_set:
+            changes_requested = True
+        if priority and priority != existing.priority:
+            changes_requested = True
+        if parent > 0 and parent != existing.parent:
+            changes_requested = True
+        if add_dep is not None and any(dep_id not in existing.depends_on for dep_id in add_dep):
+            changes_requested = True
+        if remove_dep is not None and any(dep_id in existing.depends_on for dep_id in remove_dep):
+            changes_requested = True
+        if add_tag is not None and any(tag not in existing.tags for tag in add_tag):
+            changes_requested = True
+        if remove_tag is not None and any(tag in existing.tags for tag in remove_tag):
+            changes_requested = True
+        if block_reason_set:
+            if block_reason:
+                changes_requested = changes_requested or (
+                    existing.blocked is not True or existing.block_reason != block_reason
+                )
+            else:
+                changes_requested = changes_requested or (
+                    existing.blocked is not False or existing.block_reason is not None
+                )
+        if archival_reason_set and archival_reason != (existing.archival_reason or ""):
+            changes_requested = True
+        if archival_refs_set and list(archival_refs or []) != list(existing.archival_refs):
+            changes_requested = True
+
+        if not changes_requested:
             raise ValidationError(
                 code="ERR_NO_OP",
                 user_message="No changes requested",
@@ -2011,7 +2074,9 @@ class AgentView:
             raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
 
         guidance: list[str] = []
-        if len(body.encode("utf-8")) > 100 * 1024:
+        if body_set and len(body.encode("utf-8")) > 100 * 1024:
+            guidance.append(self._BODY_SIZE_WARNING)
+        if append_set and len(append_resulting_body.encode("utf-8")) > 100 * 1024:
             guidance.append(self._BODY_SIZE_WARNING)
         return self._to_single_response(task, guidance)
 
