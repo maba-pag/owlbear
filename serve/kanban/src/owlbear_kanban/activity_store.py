@@ -97,7 +97,11 @@ def list_activity_events(  # noqa: C901, PLR0912, PLR0913
 
         if task_id is not None and data.get("task_id") != task_id:
             continue
-        if action is not None and data.get("action") != action:
+        if action == "start_work":
+            # Backward-compatible alias: start_work may be persisted as claim.
+            if data.get("action") not in {"start_work", "claim"}:
+                continue
+        elif action is not None and data.get("action") != action:
             continue
         if source is not None and data.get("source") != source:
             continue

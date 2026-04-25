@@ -43,6 +43,8 @@ from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.models import (
+    ActivityCompactionResult,
+    ActivityEvent,
     BoardConfig,
     ConcurrencyError,
     ConfigError,
@@ -255,7 +257,7 @@ def _collect_task_sessions(
         detail = str(event["detail"])
         ts = str(event["timestamp"])
 
-        if action == "claim":
+        if action in {"claim", "start_work"}:
             if open_claim_ts is not None:
                 # A new claim arrived without a close event (crash/restart scenario).
                 # Apply the same age-based logic as the unclosed-session path: only
@@ -283,7 +285,7 @@ def _collect_task_sessions(
                 continue
             if action == "release":
                 state = "released"
-                outcome = "released"
+                outcome = "release"
             elif action == "sweep-release":
                 state = "expired"
                 outcome = "expired"
@@ -1204,6 +1206,7 @@ class KanbanEngine:
                     self._agent_name,
                     task_status_at_start=record.status,
                     timestamp=effective_now,
+                    source="agent",
                 )
             except OSError:
                 with contextlib.suppress(Exception):
@@ -1212,13 +1215,14 @@ class KanbanEngine:
             self._revision += 1
             return record
 
-    def release_task(self, task_id: str) -> Task:
+    def release_task(self, task_id: str, *, source: str = "engine") -> Task:
         """Release the claim on a task, clearing ``claimed_at``.
 
         This operation is a no-op if the task is not currently claimed.
 
         Args:
             task_id: Numeric task ID as a string.
+            source:  Activity event source label (agent, cockpit, engine).
 
         Returns:
             Updated :class:`Task` with claim fields cleared.
@@ -1235,7 +1239,12 @@ class KanbanEngine:
         record.updated = datetime.now(tz=UTC).isoformat()
         write_task(record, self._kanban_dir)
         try:
-            self._emit_event("release", record.id, f"released by {self._agent_name}")
+            self._emit_event(
+                "release",
+                record.id,
+                f"released by {source}",
+                source=source,
+            )
         except OSError:
             with contextlib.suppress(Exception):
                 write_task(original, self._kanban_dir)
@@ -1526,13 +1535,14 @@ class KanbanEngine:
 
         return final_outcomes
 
-    def _emit_event(
+    def _emit_event(  # noqa: PLR0913
         self,
         action: str,
         task_id: int | None = None,
         detail: str | None = None,
         task_status_at_start: str | None = None,
         timestamp: datetime | None = None,
+        source: str = "engine",
     ) -> None:
         """Append one :class:`ActivityEvent` to ``activity.jsonl`` if logging is enabled."""
         if self._activity_log_path is None:
@@ -1545,11 +1555,48 @@ class KanbanEngine:
             timestamp=event_time.isoformat(),
             task_id=task_id,
             action=action,
-            source="engine",
+            source=source,
             detail=detail or "",
             task_status_at_start=task_status_at_start,
         )
         append_activity_event(evt, self._kanban_dir)
+
+    def list_activity(  # noqa: PLR0913
+        self,
+        *,
+        task_id: int | None = None,
+        action: str | None = None,
+        source: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int | None = None,
+    ) -> list[ActivityEvent]:
+        """Return activity log entries filtered by task/action/source/time window."""
+        return storage.list_activity_events(
+            self._kanban_dir,
+            task_id=task_id,
+            action=action,
+            source=source,
+            since=since,
+            until=until,
+            limit=limit,
+        )
+
+    def scan_corruption(self) -> list:
+        """Read-only corruption scan for tasks and archive directories."""
+        errors = []
+        for directory in (self._tasks_dir, self._archive_dir):
+            if not directory.exists():
+                continue
+            for path in sorted(directory.glob("*.md")):
+                issue = storage.detect_corruption(path, self._config)
+                if issue is not None:
+                    errors.append(issue)
+        return errors
+
+    def compact_activity(self) -> ActivityCompactionResult:
+        """Compact activity.jsonl using retention rules in activity_store."""
+        return storage.compact_activity_log(self._kanban_dir)
 
     # ------------------------------------------------------------------
     # Session helpers
@@ -2812,7 +2859,7 @@ class AgentView:
                 )
 
             if outcome == "release":
-                task = self.engine.release_task(str(task_id))
+                task = self.engine.release_task(str(task_id), source="agent")
             else:
                 safe_block_reason = block_reason or ""
                 task = self.engine.end_work(
@@ -2901,17 +2948,159 @@ class CockpitView:
         """Delegate to :meth:`AgentView.show_task` with identical signature."""
         return self.engine.agent_view().show_task(task_id, section)
 
-    def edit_task(self, task_id: int) -> None:
-        _ = task_id
-        raise NotImplementedError
+    @staticmethod
+    def _to_single_response(task: Task) -> SingleTaskResponse:
+        payload = task.model_dump()
+        if isinstance(payload.get("body"), list):
+            payload["body"] = None
+        payload["guidance"] = []
+        return SingleTaskResponse.model_validate(payload)
 
-    def move_task(self, task_id: int, status: str) -> None:
-        _ = (task_id, status)
-        raise NotImplementedError
+    @staticmethod
+    def _to_task_response(response: SingleTaskResponse) -> SingleTaskResponse:
+        payload = response.model_dump()
+        payload["guidance"] = []
+        return SingleTaskResponse.model_validate(payload)
 
-    def release_task(self, task_id: int) -> None:
-        _ = task_id
-        raise NotImplementedError
+    @staticmethod
+    def _not_found(task_id: int) -> NotFoundError:
+        return NotFoundError(
+            code="ERR_NOT_FOUND",
+            user_message=f"Task '{task_id}' not found",
+        )
 
-    def board_config(self) -> None:
-        raise NotImplementedError
+    def edit_task(  # noqa: PLR0913
+        self,
+        task_id: int,
+        *,
+        expected_updated: str,
+        body: str = "",
+        append_body: str = "",
+        timestamp: bool = False,
+        priority: str = "",
+        parent: int = 0,
+        add_dep: list[int] | None = None,
+        remove_dep: list[int] | None = None,
+        add_tag: list[str] | None = None,
+        remove_tag: list[str] | None = None,
+        block_reason: str | None | object = _BLOCK_REASON_UNSET,
+        archival_reason: str = "",
+        archival_refs: list[int] | None = None,
+    ) -> SingleTaskResponse:
+        """Edit a task with OCC token validation for cockpit clients."""
+        try:
+            current = self.engine.show_task(str(task_id))
+        except FileNotFoundError as exc:
+            raise self._not_found(task_id) from exc
+
+        if current.updated != expected_updated:
+            raise ConcurrencyError(
+                code="ERR_STALE",
+                user_message="Task changed since read; reload and retry",
+            )
+
+        response = self.engine.agent_view().edit_task(
+            task_id,
+            body=body,
+            append_body=append_body,
+            timestamp=timestamp,
+            priority=priority,
+            parent=parent,
+            add_dep=add_dep,
+            remove_dep=remove_dep,
+            add_tag=add_tag,
+            remove_tag=remove_tag,
+            block_reason=block_reason,
+            archival_reason=archival_reason,
+            archival_refs=archival_refs,
+        )
+        return self._to_task_response(response)
+
+    def move_task(
+        self,
+        task_id: int,
+        status: str,
+        *,
+        expected_updated: str,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
+    ) -> SingleTaskResponse:
+        """Move a task with OCC token validation for cockpit clients."""
+        try:
+            current = self.engine.show_task(str(task_id))
+        except FileNotFoundError as exc:
+            raise self._not_found(task_id) from exc
+
+        if current.updated != expected_updated:
+            raise ConcurrencyError(
+                code="ERR_STALE",
+                user_message="Task changed since read; reload and retry",
+            )
+
+        response = self.engine.agent_view().move_task(
+            task_id,
+            status,
+            archival_reason=archival_reason,
+            archival_refs=archival_refs,
+        )
+        return self._to_task_response(response)
+
+    def release_task(self, task_id: int) -> SingleTaskResponse:
+        """Release claim on task; unclaimed tasks are returned unchanged."""
+        try:
+            task = self.engine.show_task(str(task_id))
+        except FileNotFoundError as exc:
+            raise self._not_found(task_id) from exc
+
+        if task.claimed_at is None:
+            return self._to_single_response(task)
+
+        try:
+            released = self.engine.release_task(str(task_id), source="cockpit")
+        except FileNotFoundError as exc:
+            raise self._not_found(task_id) from exc
+        return self._to_single_response(released)
+
+    def sweep(self) -> list[int]:
+        """Release expired claims and return released task IDs."""
+        return self.engine.sweep()
+
+    def list_activity(  # noqa: PLR0913
+        self,
+        *,
+        task_id: int | None = None,
+        action: str | None = None,
+        source: str | None = None,
+        since: str | None = None,
+        until: str | None = None,
+        limit: int | None = None,
+    ) -> list[ActivityEvent]:
+        """Return activity events filtered by task/action/source/time window."""
+        return self.engine.list_activity(
+            task_id=task_id,
+            action=action,
+            source=source,
+            since=since,
+            until=until,
+            limit=limit,
+        )
+
+    def list_sessions(self, *, filter: str = "active") -> list[SessionRecord]:  # noqa: A002
+        """Return derived session records with the requested filter."""
+        return self.engine.list_sessions(filter=filter)
+
+    def scan_corruption(self) -> list:
+        """Read-only corruption scan for tasks and archive directories."""
+        return self.engine.scan_corruption()
+
+    def repair_storage(self) -> list:
+        """Run two-phase storage repair and return repair outcomes."""
+        return self.engine.repair_storage()
+
+    def compact_activity(self) -> ActivityCompactionResult:
+        """Compact activity log via storage delegate."""
+        return self.engine.compact_activity()
+
+    def board_config(self) -> BoardConfig:
+        """Return board configuration."""
+        return self.engine.board_config()
