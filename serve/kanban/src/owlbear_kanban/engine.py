@@ -2048,21 +2048,13 @@ class AgentView:
             unclaimed=True,
             sort="created",
         )
-        active_ids = {task.id for task in active}
-        archived_reasons = {
-            summary.id: summary.archival_reason
-            for summary in self.engine.list_tasks(archived=True)
-        }
-
+        # list_tasks computes dep_status against the full active snapshot before
+        # filters, so use the projected value directly to avoid reclassifying
+        # dependencies based on the filtered subset.
         dispatchable = [
             task
             for task in active
-            if self._compute_dep_status(
-                task,
-                active_ids=active_ids,
-                archived_reasons=archived_reasons,
-            )
-            != "blocked"
+            if task.dep_status != "blocked" and task.status != "archived"
         ]
         if not dispatchable:
             return PickTasksResponse(waves=[], guidance=[])
