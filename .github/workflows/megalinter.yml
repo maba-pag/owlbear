@@ -27,6 +27,7 @@ jobs:
   lint:
     name: Lint & Static Analysis
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       APPLY_FIXES: ${{ inputs.fix && 'all' || 'none' }}
       APPLY_FIXES_EVENT: all
