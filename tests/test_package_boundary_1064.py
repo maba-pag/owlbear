@@ -388,6 +388,24 @@ class TestFromAC_KanbanInternalBoundary:
         )
         assert any("bad.py" in v for v in violations)
 
+    def test_durable_suite_detects_bare_import_storage(self, tmp_path: Path) -> None:
+        """AC-C45a regression guard: durable helper detects bare
+        ``import owlbear_kanban.storage`` in non-engine source files.
+
+        The durable helper at ``tests/test_package_boundary.py:144`` implements the
+        ``ast.Import`` branch.  This regression guard proves that branch remains
+        active: removing it would cause this test to fail.
+        """
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "engine.py").write_text("", encoding="utf-8")
+        (kanban_src / "bad.py").write_text("import owlbear_kanban.storage\n", encoding="utf-8")
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, "Durable helper must detect bare 'import owlbear_kanban.storage'"
+        assert any("bad.py" in v for v in violations)
+
 
 # ---------------------------------------------------------------------------
 # 4th AC — no task_io import anywhere in the codebase
@@ -596,5 +614,64 @@ class TestFromAC_KanbanTaskIoRemoval:
             "in source files"
         )
         assert any("dispatch.py" in v for v in violations)
+
+    def test_durable_suite_detects_bare_import_task_io(self, tmp_path: Path) -> None:
+        """AC-C45b regression guard: durable helper detects bare
+        ``import owlbear_kanban.task_io`` in source files.
+
+        The durable helper at ``tests/test_package_boundary.py:192`` implements the
+        ``ast.Import`` branch for task_io.  This regression guard proves that branch
+        remains active: removing it would cause this test to fail.
+        """
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "bad.py").write_text("import owlbear_kanban.task_io\n", encoding="utf-8")
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, "Durable helper must detect bare 'import owlbear_kanban.task_io'"
+        assert any("bad.py" in v for v in violations)
+
+    def test_durable_suite_detects_dunder_import_task_io(self, tmp_path: Path) -> None:
+        """AC-C45b regression guard: durable helper detects
+        ``__import__("owlbear_kanban.task_io")`` in source files.
+
+        The durable helper at ``tests/test_package_boundary.py:209`` implements the
+        ``__import__`` dynamic branch for task_io.  This regression guard proves that
+        branch remains active: removing it would cause this test to fail.
+        """
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "bad.py").write_text(
+            '__import__("owlbear_kanban.task_io")\n', encoding="utf-8"
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper must detect __import__('owlbear_kanban.task_io') in source files"
+        )
+        assert any("bad.py" in v for v in violations)
+
+    def test_durable_suite_detects_alias_form_task_io_import(self, tmp_path: Path) -> None:
+        """AC-C45b regression guard: durable helper must catch ``from owlbear_kanban import task_io``.
+
+        The durable helper ``_find_task_io_import_violations`` currently only matches
+        ``module == "owlbear_kanban.task_io"`` in the ``ast.ImportFrom`` branch; it does
+        not check the alias form where ``module == "owlbear_kanban"`` and ``task_io`` is
+        an alias name.  This test proves that gap: it must FAIL until the helper adds the
+        ``(module == "owlbear_kanban" and any(a.name == "task_io" for a in node.names))``
+        clause mirroring ``_find_kanban_storage_import_violations`` at line 140-143.
+        """
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "bad.py").write_text(
+            "from owlbear_kanban import task_io\n", encoding="utf-8"
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, "Durable helper must detect 'from owlbear_kanban import task_io'"
+        assert any("bad.py" in v for v in violations)
 
 

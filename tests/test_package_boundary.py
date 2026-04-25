@@ -183,8 +183,10 @@ def _find_task_io_import_violations(project_root: Path) -> list[str]:  # noqa: C
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                if module == "owlbear_kanban.task_io" or module.startswith(
-                    "owlbear_kanban.task_io."
+                if (
+                    module == "owlbear_kanban.task_io"
+                    or module.startswith("owlbear_kanban.task_io.")
+                    or (module == "owlbear_kanban" and any(a.name == "task_io" for a in node.names))
                 ):
                     violations.append(f"{py_file.name}:{node.lineno}")
             elif isinstance(node, ast.Import):

@@ -238,3 +238,110 @@ class TestFromAC_EditTaskSemanticDiff:
         with pytest.raises(ValidationError) as exc_info:
             view.edit_task(1, body="Existing body content.")
         assert exc_info.value.code == "ERR_NO_OP"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EditTaskArchivedNoOp
+#
+# Regression proof (added in retry cycle per reviewer + builder findings):
+# same-value archival_reason / archival_refs on an archived task must raise
+# ERR_NO_OP, not silently write identical data.
+#
+# The archived-status short-circuit that caused these to slip through was
+# removed by the builder before this test class was authored.  Tests pass on
+# the current implementation and guard against regression.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EditTaskArchivedNoOp:
+    """Archived-task semantic no-op: same archival_reason or archival_refs → ERR_NO_OP."""
+
+    def test_same_archival_reason_on_archived_raises_no_op(self, tmp_path: Path) -> None:
+        """Archived task: edit_task(archival_reason="dropped") when reason already "dropped" → ERR_NO_OP.
+
+        Sending an identical archival_reason must not advance `updated` or rewrite
+        the task file.  Regression guard for the archived-status short-circuit fix.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="dropped",
+            archival_refs="[]",
+            subdir="archive",
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            view.edit_task(1, archival_reason="dropped")
+        assert exc_info.value.code == "ERR_NO_OP"
+
+    def test_same_archival_refs_on_archived_raises_no_op(self, tmp_path: Path) -> None:
+        """Archived task: edit_task(archival_refs=[2]) when refs already [2] → ERR_NO_OP.
+
+        Sending an identical archival_refs list must not advance `updated` or rewrite
+        the task file.  Regression guard for the archived-status short-circuit fix.
+        Task uses archival_reason "duplicate" (which requires refs) to satisfy the
+        archival-matrix validation before the no-op check can fire.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=2)  # reference target must exist
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="duplicate",
+            archival_refs="[2]",
+            subdir="archive",
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            view.edit_task(1, archival_refs=[2])
+        assert exc_info.value.code == "ERR_NO_OP"
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_D46NoExpectedUpdatedParam
+#
+# D46 executable proof (added in retry cycle per reviewer finding):
+# AgentView.edit_task must NOT accept an `expected_updated` parameter.
+# The param was never present; this test guards against accidental re-addition.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_D46NoExpectedUpdatedParam:
+    """D46 regression proof: AgentView.edit_task rejects unexpected `expected_updated` kwarg."""
+
+    def test_edit_task_rejects_expected_updated_kwarg(self, tmp_path: Path) -> None:
+        """D46: AgentView.edit_task(..., expected_updated=...) raises TypeError.
+
+        The `expected_updated` parameter must never appear in the AgentView signature
+        (last-writer-wins contract).  Passing it must produce a TypeError at call time.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=1)
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            view.edit_task(1, priority="someday", expected_updated="2026-01-01T10:00:00+00:00")  # type: ignore[call-arg]
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_D50NoStatusParam
+#
+# D50 executable proof (added in retry cycle per reviewer finding):
+# AgentView.create_task must NOT accept a `status` parameter — tasks are
+# always created at BoardConfig.entry_status.  The param was never present;
+# this test guards against accidental re-addition.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_D50NoStatusParam:
+    """D50 regression proof: AgentView.create_task rejects unexpected `status` kwarg."""
+
+    def test_create_task_rejects_status_kwarg(self, tmp_path: Path) -> None:
+        """D50: AgentView.create_task(..., status=...) raises TypeError.
+
+        The `status` parameter must never appear in the AgentView.create_task
+        signature — tasks are always created at BoardConfig.entry_status.
+        Passing it must produce a TypeError at call time.
+        """
+        view, _kanban_dir = _make_view(tmp_path)
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            view.create_task(title="Task", status="todo")  # type: ignore[call-arg]

@@ -82,7 +82,9 @@ def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
 
     if isinstance(node, ast.Call):
         if isinstance(node.func, ast.Name) and node.func.id == "Path" and node.args:
-            return _is_safe_path_expr(node.args[0], safe_names, tmp_aliases)
+            return all(
+                _is_safe_path_expr(arg, safe_names, tmp_aliases) for arg in node.args
+            )
         if isinstance(node.func, ast.Attribute) and node.func.attr in {
             "joinpath",
             "resolve",
@@ -334,4 +336,25 @@ class TestFromAC_DenyWritesEnforcement:
             "_is_safe_path_expr must return False for it.  "
             'Add ".." to the startswith tuple at line 52 of test_deny_code_writes.py '
             "to enforce the architect v2 refined AC-C46 relative-parent-hop rule."
+        )
+
+    def test_is_safe_path_expr_rejects_path_multi_arg_with_absolute_segment(self) -> None:
+        """AC-C46 (v9): Path(tmp_path, "/outside.txt") must be rejected.
+
+        pathlib resolves ``Path(tmp_path, "/outside.txt")`` to ``/outside.txt``
+        because an absolute segment overrides all preceding components.  The
+        current implementation only checks ``args[0]`` (``tmp_path`` → safe)
+        and ignores ``args[1]`` (``"/outside.txt"`` → starts with ``/``),
+        so this expression is incorrectly classified as safe.
+
+        Fix: validate ALL ``Path()`` args, mirroring the ``joinpath`` handler.
+        """
+        source = 'Path(tmp_path, "/outside.txt")'
+        expr = ast.parse(source, mode="eval").body
+        result = _is_safe_path_expr(expr, {"tmp_path"})
+        assert not result, (
+            'Path(tmp_path, "/outside.txt") must be rejected: pathlib resolves '
+            "absolute segments to override preceding path components, so the "
+            "write target escapes tmp_path.  _is_safe_path_expr currently checks "
+            "only args[0] and must validate ALL Path() arguments instead."
         )
