@@ -1993,6 +1993,36 @@ class AgentView:
     def pick_tasks(  # noqa: C901, PLR0912, PLR0915
         self, wave_size: int | None = None, max_waves: int = 3
     ) -> PickTasksResponse:
+        """Select dispatchable tasks and arrange them into dependency-disjoint waves.
+
+        Runs a four-step pipeline:
+
+        1. **Filter** — exclude claimed, archived, ``blocked=True``, and
+           ``dep_status="blocked"`` tasks.
+        2. **Sort** — deterministic ordering: ``priority_rank ASC``,
+           age (oldest first) ``DESC``, ``id ASC``.
+        3. **Greedy wave assembly** — fill waves respecting three constraints:
+           wave size cap, dependency disjointness (no intra-wave dep edges),
+           and agent-bucket compatibility.
+        4. **Agent assignment** — each :class:`DispatchEntry` carries the full
+           ``BoardConfig.agent_map`` value for the task's status.
+
+        Args:
+            wave_size:  Maximum tasks per wave.  Defaults to
+                        ``BoardConfig.wave_size``.
+            max_waves:  Maximum number of waves to produce (default ``3``).
+
+        Returns:
+            :class:`PickTasksResponse` with ``waves`` and ``guidance``.
+            Tasks that cannot be placed when ``max_waves`` is exhausted are
+            dropped for the current cycle; the count is reported in
+            ``guidance``.
+
+        Raises:
+            ValidationError: ``wave_size < 1``, ``max_waves < 1``, or the
+                             effective wave size resolved from config is
+                             ``< 1`` (``ERR_INVALID_WAVE_PARAM``).
+        """
         if max_waves < 1:
             raise ValidationError(
                 code="ERR_INVALID_WAVE_PARAM",

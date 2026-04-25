@@ -58,6 +58,18 @@ from owlbear_kanban import pick_dispatchable
 dispatchable = pick_dispatchable(tasks)   # returns list[TaskSummary]
 ```
 
+### AgentView dispatch pipeline
+
+```python
+agent = engine.agent_view()
+response = agent.pick_tasks(wave_size=3, max_waves=3)  # returns PickTasksResponse
+for wave in response.waves:
+    for entry in wave.tasks:   # each entry: id, status, priority, title, tags, agent
+        ...
+```
+
+`AgentView.pick_tasks` runs a four-step pipeline: filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
+
 ## Migration
 
 To migrate an existing board from the legacy schema to the Brief-C canonical schema:
