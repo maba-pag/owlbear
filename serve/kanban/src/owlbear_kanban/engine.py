@@ -2062,6 +2062,10 @@ class AgentView:
         if not dispatchable:
             return PickTasksResponse(waves=[], guidance=[])
 
+        created_by_id = {
+            task.id: self.engine.show_task(str(task.id)).created for task in dispatchable
+        }
+
         priority_rank = {name: idx for idx, name in enumerate(config.priorities)}
 
         def _created_key(created: str) -> datetime:
@@ -2077,7 +2081,7 @@ class AgentView:
             dispatchable,
             key=lambda task: (
                 priority_rank.get(task.priority, len(priority_rank)),
-                _created_key(getattr(task, "created", "")),
+                _created_key(created_by_id.get(task.id, "")),
                 task.id,
             ),
         )
