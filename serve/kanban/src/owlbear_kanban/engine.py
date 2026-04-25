@@ -2791,7 +2791,7 @@ class AgentView:
                     code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
                     user_message="archival fields are forbidden when outcome='block'",
                 )
-            if block_reason is None:
+            if block_reason is None or not block_reason.strip():
                 raise ValidationError(
                     code="ERR_BLOCK_REASON_REQUIRED",
                     user_message="block_reason is required when outcome='block'",
