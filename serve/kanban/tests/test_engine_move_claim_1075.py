@@ -293,3 +293,49 @@ class TestFromAC_StartWork_1075:
             f"Expected ERR_ALREADY_CLAIMED after ERR_STALE retry sees live claim; "
             f"got {exc_info.value.code!r}"
         )
+
+    def test_expired_claim_release_before_claim_two_cas_writes(
+        self, tmp_path: Path
+    ) -> None:
+        """D18+D36: expired-claim path must issue TWO CAS writes in sequence:
+        (1) release write — task with claimed_at=None, then (2) claim write —
+        task with claimed_at=<now>.
+
+        Brief §1.7: "lazy-release first per D18+D36 by routing the release through
+        storage.write_task_if_unchanged(cleared_task, expected_updated=current.updated, ...);
+        ... otherwise proceed to claim via the same CAS primitive."
+
+        The current engine.claim_task performs a single CAS write that sets
+        claimed_at to the new timestamp directly (no prior release step), so:
+          - cas_call_claimed_ats has only 1 entry → assertion len >= 2 fails.
+        Even if len were to pass, the first entry would have claimed_at != None.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        stale = "2026-01-01T00:00:00+00:00"  # well over 1h ago — expired
+        _write_task(kanban_dir, task_id=1, status="todo", claimed_at=f'"{stale}"')
+
+        real_cas = storage.write_task_if_unchanged
+        cas_call_claimed_ats: list[str | None] = []
+
+        def capture(task: object, expected_updated: str, kdir: Path) -> Path:
+            cas_call_claimed_ats.append(getattr(task, "claimed_at", None))
+            return real_cas(task, expected_updated, kdir)
+
+        with patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=capture):
+            view.start_work(1)
+
+        assert len(cas_call_claimed_ats) >= 2, (
+            f"Expected ≥2 CAS writes (release then claim) for expired-claim path; "
+            f"got {len(cas_call_claimed_ats)} write(s) with claimed_at values: "
+            f"{cas_call_claimed_ats!r}. "
+            f"Brief §1.7 requires a release step (claimed_at=None) before the claim write."
+        )
+        assert cas_call_claimed_ats[0] is None, (
+            f"First CAS write must be the release step with claimed_at=None; "
+            f"got claimed_at={cas_call_claimed_ats[0]!r}. "
+            f"Current implementation skips the release step and claims directly."
+        )
+        assert cas_call_claimed_ats[1] is not None, (
+            f"Second CAS write must be the claim step with claimed_at=<new timestamp>; "
+            f"got claimed_at={cas_call_claimed_ats[1]!r}"
+        )
