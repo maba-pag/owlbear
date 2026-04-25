@@ -1938,6 +1938,31 @@ class AgentView:
         parent: int | None = None,
         depends_on: list[int] | None = None,
     ) -> SingleTaskResponse:
+        """Create a new task at the board's entry_status.
+
+        Tasks are always created at ``BoardConfig.entry_status``; there is no
+        ``status`` parameter (D50).  The entry_status predicate is evaluated
+        against *body* before the task is written.
+
+        Args:
+            title:      Task title (must be non-empty).
+            body:       Initial markdown body.  Must not exceed 500 KB.
+            priority:   Task priority; defaults to ``BoardConfig.defaults.priority``.
+            tags:       Initial tag list.
+            parent:     Optional parent task ID; must refer to an existing task.
+            depends_on: Optional dependency task IDs; each must refer to an existing task.
+
+        Returns:
+            :class:`SingleTaskResponse` for the newly created task, including
+            a ``guidance`` warning when ``body`` exceeds 100 KB.
+
+        Raises:
+            :class:`ValidationError`: title is empty (``ERR_INVALID_STATUS``),
+                body exceeds 500 KB (``ERR_BODY_TOO_LARGE``),
+                parent not found (``ERR_PARENT_NOT_FOUND``),
+                a dependency not found (``ERR_DEP_NOT_FOUND``), or
+                the entry_status predicate is not satisfied (``ERR_PREDICATE_FAILED``).
+        """
         if not title.strip():
             raise ValidationError(
                 code="ERR_INVALID_STATUS",
@@ -2012,6 +2037,51 @@ class AgentView:
         archival_reason: str = "",
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
+        """Edit fields on an existing task with semantic no-op detection.
+
+        Raises ``ERR_NO_OP`` when all requested changes are already reflected in
+        the current task state (D46-last-writer-wins; no ``expected_updated`` param).
+
+        ``body`` and ``append_body`` are mutually exclusive.  When ``timestamp``
+        is ``True``, an ISO-8601 datestamp line is prepended to ``append_body``.
+        The post-append total body size is validated against the 500 KB hard cap.
+
+        Archival fields (``archival_reason``, ``archival_refs``) are only
+        permitted on archived tasks and are validated against the configured
+        archival-refs matrix (§3.2).
+
+        A non-empty *block_reason* sets ``blocked=True`` and stores the reason;
+        an empty or ``None`` *block_reason* clears both fields (D53).
+
+        Args:
+            task_id:        Numeric task ID.
+            body:           Replace the task body.  Mutually exclusive with *append_body*.
+            append_body:    Text to append to the existing body.
+            timestamp:      When ``True``, prepend an ISO-8601 datestamp to *append_body*.
+            priority:       Replace task priority.
+            parent:         Replace parent task ID (``0`` = no change).
+            add_dep:        Dependency IDs to add.
+            remove_dep:     Dependency IDs to remove.
+            add_tag:        Tags to add.
+            remove_tag:     Tags to remove.
+            block_reason:   Set or clear the block flag and reason (D53).
+            archival_reason: Replace archival reason on an archived task.
+            archival_refs:  Replace archival reference IDs on an archived task.
+
+        Returns:
+            :class:`SingleTaskResponse` reflecting the updated task, with a
+            ``guidance`` warning when the resulting body exceeds 100 KB.
+
+        Raises:
+            :class:`ValidationError`: task not found (``ERR_TASK_NOT_FOUND``),
+                *body* and *append_body* both set (``ERR_BODY_EXCLUSIVE``),
+                body exceeds 500 KB (``ERR_BODY_TOO_LARGE``),
+                parent not found (``ERR_PARENT_NOT_FOUND``),
+                a dependency not found (``ERR_DEP_NOT_FOUND``),
+                archival fields on a non-archived task (``ERR_ARCHIVAL_FIELDS_FORBIDDEN``),
+                archival-refs matrix violation (various ``ERR_ARCHIVAL_*`` codes),
+                no effective change detected (``ERR_NO_OP``).
+        """
         try:
             existing = self.engine.show_task(str(task_id))
         except FileNotFoundError as exc:
