@@ -72,6 +72,7 @@ from owlbear_kanban.storage import (
 
 _DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
 _BLOCK_REASON_UNSET = object()
+_MAX_CLAIM_STALE_RETRIES = 4
 
 
 def _parse_duration(s: str) -> timedelta:
@@ -1127,41 +1128,78 @@ class KanbanEngine:
                         whose claim has not expired.
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
-        original = record.model_copy(deep=True)
-
-        if record.blocked:
-            msg = f"Task {task_id!r} is blocked and cannot be claimed"
-            raise ValueError(msg)
-
         effective_now = now if now is not None else datetime.now(tz=UTC)
+        stale_retries = 0
 
-        if record.claimed_at is not None:
-            # Reject unless the existing claim has expired.
-            timeout = self._parse_claim_timeout()
-            claimed_at_dt = datetime.fromisoformat(record.claimed_at)  # type: ignore[arg-type]
-            if effective_now < claimed_at_dt + timeout:
-                msg = f"Task {task_id!r} is already claimed"
+        while True:
+            record = read_task(task_path)
+            original = record.model_copy(deep=True)
+            expected_for_claim = original.updated
+
+            if record.blocked:
+                msg = f"Task {task_id!r} is blocked and cannot be claimed"
                 raise ValueError(msg)
 
-        record.claimed_at = effective_now.isoformat()
-        record.claimed_by = self._agent_name
-        record.updated = effective_now.isoformat()
-        write_task(record, self._kanban_dir)
-        try:
-            self._emit_event(
-                "claim",
-                record.id,
-                self._agent_name,
-                task_status_at_start=record.status,
-                timestamp=effective_now,
-            )
-        except OSError:
-            with contextlib.suppress(Exception):
-                write_task(original, self._kanban_dir)
-            raise
-        self._revision += 1
-        return record
+            if record.claimed_at is not None:
+                # Reject unless the existing claim has expired.
+                timeout = self._parse_claim_timeout()
+                claimed_at_dt = datetime.fromisoformat(record.claimed_at)  # type: ignore[arg-type]
+                if effective_now < claimed_at_dt + timeout:
+                    msg = (
+                        f"Task {task_id!r} is already claimed "
+                        f"(claimed_at={record.claimed_at})"
+                    )
+                    raise ValueError(msg)
+
+                # Expired rival claim: clear it first via CAS before claiming.
+                cleared = record.model_copy(deep=True)
+                cleared.claimed_at = None
+                cleared.claimed_by = None
+                cleared.updated = effective_now.isoformat()
+                try:
+                    storage.write_task_if_unchanged(
+                        cleared,
+                        original.updated,
+                        self._kanban_dir,
+                    )
+                except ConcurrencyError as exc:
+                    if exc.code == "ERR_STALE" and stale_retries < _MAX_CLAIM_STALE_RETRIES:
+                        stale_retries += 1
+                        continue
+                    raise
+                expected_for_claim = cleared.updated
+                record = cleared
+
+            record.claimed_at = effective_now.isoformat()
+            record.claimed_by = self._agent_name
+            record.updated = effective_now.isoformat()
+
+            try:
+                storage.write_task_if_unchanged(
+                    record,
+                    expected_for_claim,
+                    self._kanban_dir,
+                )
+            except ConcurrencyError as exc:
+                if exc.code == "ERR_STALE" and stale_retries < _MAX_CLAIM_STALE_RETRIES:
+                    stale_retries += 1
+                    continue
+                raise
+
+            try:
+                self._emit_event(
+                    "claim",
+                    record.id,
+                    self._agent_name,
+                    task_status_at_start=record.status,
+                    timestamp=effective_now,
+                )
+            except OSError:
+                with contextlib.suppress(Exception):
+                    write_task(original, self._kanban_dir)
+                raise
+            self._revision += 1
+            return record
 
     def release_task(self, task_id: str) -> Task:
         """Release the claim on a task, clearing ``claimed_at``.
@@ -2564,9 +2602,18 @@ class AgentView:
         except ValueError as exc:
             msg = str(exc)
             if "already claimed" in msg:
+                claimed_at_match = re.search(r"claimed_at=([^\)\s]+)", msg)
+                claimed_at_hint = (
+                    f" (claimed_at={claimed_at_match.group(1)})"
+                    if claimed_at_match is not None
+                    else ""
+                )
                 raise ConcurrencyError(
                     code="ERR_ALREADY_CLAIMED",
-                    user_message=f"Task '{task_id}' is already claimed by another agent",
+                    user_message=(
+                        f"Task '{task_id}' is already claimed by another agent"
+                        f"{claimed_at_hint}"
+                    ),
                 ) from exc
             if "blocked" in msg and "cannot be claimed" in msg:
                 raise ValidationError(
