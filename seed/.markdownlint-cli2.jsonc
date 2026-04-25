@@ -1,11 +1,16 @@
 {
   "ignores": [
-    ".owlbear/briefs/*/**",
+    ".owlbear/doc-index.md",
+    ".owlbear/briefs/**",
     ".owlbear/decisions/**",
+    ".owlbear/hooks/**",
+    ".owlbear/kanban/archive/**",
     ".owlbear/kanban/tasks/**",
     ".owlbear/research/**",
     ".owlbear/scratch/**",
+    ".owlbear/sources/**",
     ".venv/**",
-    "node_modules/**"
+    "node_modules/**",
+    "**/*.excalidraw"
   ]
 }

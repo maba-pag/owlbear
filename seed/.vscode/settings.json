@@ -11,6 +11,7 @@
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
+  "chat.generalPurposeAgent.enabled": true,
   "chat.instructionsFilesLocations": {
     ".owlbear/instructions": true,
     "{{owlbear_path}}/share/instructions": true
@@ -56,10 +57,12 @@
   "git.autorefresh": false,
   "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
+  "github.copilot.chat.agentHistorySummarizationInline": true,
+  "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
   "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
-  "github.copilot.chat.cli.forkSessions.enabled": true,
   "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.copilotMemory.enabled": false,
+  "github.copilot.chat.enableUserPreferences": true,
   "github.copilot.chat.executionSubagent.enabled": true,
   "github.copilot.chat.executionSubagent.toolCallLimit": 50,
   "github.copilot.chat.githubMcpServer.enabled": true,

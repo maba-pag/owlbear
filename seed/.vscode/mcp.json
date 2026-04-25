@@ -40,6 +40,8 @@
       "type": "stdio",
       "command": "uv",
       "args": [
+        "--project",
+        "{{owlbear_path}}",
         "run",
         "ddgs",
         "mcp"

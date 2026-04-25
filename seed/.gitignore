@@ -1,3 +1,6 @@
+# Node.js
+node_modules/
+
 # Python bytecode and cache
 __pycache__/
 *.pyc
@@ -24,6 +27,10 @@ downloads/
 MANIFEST
 artifacts/
 
+# Databases
+*.db-shm
+*.db-wal
+
 # Testing and coverage
 .*cache
 .coverage
@@ -32,6 +39,9 @@ coverage.xml
 htmlcov/
 .hypothesis/
 .benchmarks/
+megalinter-reports/
+test-results/
+playwright-report/
 
 # IDE and editor
 .vscode/*
@@ -69,3 +79,4 @@ htmlcov/
 .owlbear/kanban/tasks/.*.lock
 .owlbear/kanban/archive/.*.lock
 .owlbear/kanban/activity.jsonl
+.coverage.*
