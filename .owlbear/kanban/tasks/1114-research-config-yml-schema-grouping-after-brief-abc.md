@@ -9,8 +9,9 @@ tags:
 - scope:kanban
 - type:research
 parent:
-depends_on: []
-blocked: true
+depends_on:
+- 1094
+blocked: false
 block_reason: 'Wait for Briefs A, B, C to land — field set may still change. Unblock when all Brief A tasks reach done.'
 claimed_by:
 claimed_at:

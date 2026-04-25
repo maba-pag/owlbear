@@ -1,22 +1,21 @@
----
 version: 10
 board:
   name: OwlBear
 tasks_dir: tasks
 statuses:
-  - research
-  - backlog
-  - todo
-  - in-progress
-  - review
-  - docs
-  - done
+- research
+- backlog
+- todo
+- in-progress
+- review
+- docs
+- done
 priorities:
-  - someday
-  - nice-to-have
-  - important
-  - needed
-  - critical
+- someday
+- nice-to-have
+- important
+- needed
+- critical
 defaults:
   status: research
   priority: important
@@ -25,7 +24,7 @@ claim_timeout: 1h
 tui:
   title_lines: 2
   hide_empty_columns: true
-next_id: 1120
+next_id: 1123
 archive_dir: archive
 activity_log: false
 entry_status: research
@@ -35,9 +34,9 @@ agent_types: {}
 agent_compatibility: {}
 non_impl_tags: []
 archival_reasons:
-  - completed
-  - deprecated
-  - dropped
-  - duplicate
-  - wontfix
+- completed
+- deprecated
+- dropped
+- duplicate
+- wontfix
 status_predicates: {}

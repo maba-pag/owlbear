@@ -1,10 +1,10 @@
 ---
 id: 1085
 title: 'A-02: GREEN — MCP boundary models'
-status: done
+status: archived
 priority: critical
 created: 2026-04-21T10:53:28.584627+00:00
-updated: 2026-04-24T14:23:39.331612+00:00
+updated: 2026-04-24T14:30:05.491066+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -15,8 +15,8 @@ depends_on:
 - 1084
 blocked: false
 block_reason:
-claimed_by: slow-fell
-claimed_at: 2026-04-24T14:23:39.331612+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -356,3 +356,33 @@ None found (no .owlbear/scratch/1085-* files).
 
 ### Notes
 No docs impact. Task was a GREEN implementation pass where the existing models.py already satisfied AC. Only file actually modified during the task lifecycle was serve/mcp-kanban/tests/test_mcp_models_1084.py (test-writer retry appending TestFromAC_EndWorkStringFieldContracts). All seven checklist items N/A or pass-through with evidence.
+[[2026-04-24]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All RED tests from A-01 (#1084) pass | Full-suite quality-runner: 123/123 passed in test_mcp_models_1084.py, 0 failed | PASS |
+| Input models: 8 *Params schemas | Direct read of models.py:16-119 — all 8 classes present (ListTasksParams, ShowTaskParams, PickTasksParams, CreateTaskParams, EditTaskParams, MoveTaskParams, StartWorkParams, EndWorkParams) | PASS |
+| EditTaskParams excludes status field (AC13) | Direct read of models.py:77-92 — no status field declared; tests reject it with ValidationError | PASS |
+| EndWorkParams includes outcome, move_to, note, block_reason, archival_reason, archival_refs per §5.8 | Direct read of models.py:110-119 — all 6 fields present with correct types; TestFromAC_EndWorkStringFieldContracts at test_mcp_models_1084.py:987-1072 closes prior proof gap | PASS |
+| Response envelopes importable from engine models | Reviewer verified at serve/kanban/src/owlbear_kanban/models.py:419-441; tests at test_mcp_models_1084.py:543-590 | PASS |
+| No file field, no claimed_by field (AC16, AC17) | Direct read of models.py:122-152 — KanbanTask declares neither; _coerce_claimed converts claimed_by to boolean claimed | PASS |
+
+### Test Results
+- pytest (full suite): 1872 passed, 65 failed, 4 skipped
+- Task-scoped (test_mcp_models_1084.py): 123 passed, 0 failed
+- 65 failures all in unrelated packages (storage, yaml12_loader, cockpit, mcp-knowledge, guidance_move_task)
+- ruff: 9 violations, all outside task scope; clean for models.py and test_mcp_models_1084.py
+
+### Architect Quality: 4/5
+Initial AC used *Input suffix when RED tests established *Params convention — caused one unnecessary review FAIL cycle. Architect corrected during refinement pass. Post-refinement AC was clear and verifiable. Minor upstream naming imprecision, corrected before re-entry.
+
+### Deduction Breakdown
+- Full-suite failures in task scope: 0 — no deduction
+- Lint violations in task scope: 0 — no deduction
+- AC lines without specific evidence: 0 — no deduction
+- AC quality score 4/5 (> 3) — no deduction
+- Missing reviewer evidence section: no (present, detailed, 3 cycles) — no deduction
+
+### Confidence: 0.98
+### Action: archive

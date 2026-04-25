@@ -1,19 +1,15 @@
 ---
 id: 1118
 title: Harden ideation-overhaul static test proofs with glob-based discovery
-status: in-progress
+status: archived
 priority: important
 created: 2026-04-24T11:10:50.379753+00:00
-updated: 2026-04-24T12:25:35.529419+00:00
+updated: 2026-04-24T19:10:46.969529+00:00
 tags: []
 parent:
 depends_on: []
-blocked: true
-block_reason: 'AC8 fails: `share/agents/ideation-critic.agent.md` has an uncommitted
-  `model: GPT-5.4 (copilot)` field (auto-added by VS Code IDE when the agent was invoked).
-  The new glob in `_ideation_agent_files()` correctly detects this violation — which
-  the old curated list would have missed. Fix: `git checkout -- share/agents/ideation-critic.agent.md`.
-  Once reverted, `uv run pytest tests/test_ideation_overhaul_static.py -q` passes.'
+blocked: false
+block_reason:
 claimed_by:
 claimed_at:
 archival_reason:
@@ -202,3 +198,132 @@ All 8 AC lines covered. Suite result: **36 passed, 0 failed**. Ruff: clean.
 
 ### Blocker
 `share/agents/ideation-critic.agent.md` has an uncommitted `model:` field (auto-added by VS Code). The glob-based discovery — which is the whole point of this task — correctly catches it. Ruff: clean.
+
+[[2026-04-24]]
+## Builder Notes
+- Implementation: restored pinned `model:` frontmatter in `share/agents/ideation-critic.agent.md` to satisfy existing `TestFromAC_AgentContracts.test_critic_has_pinned_model` contract.
+- Why this fix: after `git checkout -- share/agents/ideation-critic.agent.md`, AC8 command failed because the suite currently requires critic model pinning; this supersedes the older blocker note in task history.
+- Tests: `uv run pytest tests/test_ideation_overhaul_static.py -q --tb=short` -> 38 passed, 0 failed.
+- Coverage: not rerun (task AC8 requires full static suite pass, not coverage threshold).
+- Ruff: `uv run ruff check tests/test_ideation_overhaul_static.py` -> clean.
+- Evidence summary: task-scoped suite is green with critic contract + glob hardening intact.
+
+Post-task reflection:
+- Problem faced: retry context pointed to checkout-only remediation, but current TestFromAC contract requires critic model pin.
+- Workaround applied: validated live failing assertion first, then restored only required frontmatter field.
+- Pattern discovered: stale historical blocker notes can drift from current TestFromAC truth; execute suite before trusting note text.
+- Quality gap: AC text and historical notes around critic model policy should be aligned to avoid contradictory operator guidance.
+[[2026-04-24]]
+## Review Evidence
+
+### Changed-file scope
+- Source-control diff inspection was not available in the current tool set.
+- Review scope was established from the task history plus the live snapshot: tests/test_ideation_overhaul_static.py and share/agents/ideation-critic.agent.md.
+
+### Quality-Runner evidence
+- Tests: 38 passed, 0 failed, 0 skipped on tests/test_ideation_overhaul_static.py.
+- Lint: clean true, 0 violations.
+- Coverage: no data collected; quality-runner marked this as expected for a static non-runtime validation suite.
+- Exit codes: pytest 0, ruff 0.
+
+### AC compliance
+| AC line | Evidence | Status |
+|---|---|---|
+| 1. Model-field negative scan uses ideation glob | tests/test_ideation_overhaul_static.py:28-32 defines _ideation_agent_files() with _REPO_ROOT.glob("share/agents/ideation-*.agent.md"); tests/test_ideation_overhaul_static.py:178-184 uses that helper for the negative scan | PASS |
+| 2. working-log/checkpoint negative scan uses full ideation surface discovery | tests/test_ideation_overhaul_static.py:35-48 defines _ideation_surface_files() from the ideation glob plus ideator, 4 skills, and briefs README; tests/test_ideation_overhaul_static.py:224-231 scans that full surface | PASS |
+| 3. Both helpers have min-count guards | tests/test_ideation_overhaul_static.py:31 asserts >= 11; tests/test_ideation_overhaul_static.py:47 asserts >= 17 | PASS |
+| 4. Split negative-scan pairs are merged | The file now has one model-field negative-scan test at tests/test_ideation_overhaul_static.py:178 and one forbidden-term negative-scan test at tests/test_ideation_overhaul_static.py:224; grep found no remaining definitions for the former late-panelist split-test names | PASS |
+| 5. checkpoint check is case-insensitive | tests/test_ideation_overhaul_static.py:227 lowercases file content before the check at line 228 | PASS |
+| 6. Existence check covers the 4 late-domain panelists | tests/test_ideation_overhaul_static.py:68-71 includes ideation-architect, ideation-data, ideation-enduser, and ideation-security in the required list | PASS |
+| 7. Semantic-subset tests remain narrow | tests/test_ideation_overhaul_static.py:193-212 keeps the curated paired-contract subset; tests/test_ideation_overhaul_static.py:215-222 keeps the critic-only narrow-context contract | PASS |
+| 8. Task suite passes | Quality-runner report: 38 passed, 0 failed on tests/test_ideation_overhaul_static.py | PASS |
+
+### Critical checks
+- Test-writer audit: all 8 AC lines map to specific assertions that would fail on the targeted regressions. No MISSING or LAX coverage found.
+- Security review: no secrets, injection points, path-traversal input, unsafe deserialization, or boundary-validation regressions in the touched snapshot.
+- Test integrity: no evidence in the live snapshot of weakened or removed TestFromAC assertions. The latest builder note names the critic agent file, not assertion relaxation.
+- Test quality: STRONG. Assertions are specific, names are descriptive, and the negative scans would fail on the intended mutations.
+- Data safety: no issues; this is a static repository-contract suite.
+- Implementation-aware test gap analysis: no significant uncovered path remains within task scope.
+- Necessity check: not applicable; no new dependency, integration, or external capability.
+- Builder process quality: FRICTION only. Two builder notes exist, but the approaches differ and there is no loop-pattern violation.
+
+### Deductions
+- 0.03 confidence deduction for lack of direct diff visibility in the current tool set; changed-file attribution had to be inferred from task notes plus live files rather than a first-party diff listing.
+- 0.01 confidence deduction because the latest retry touched share/agents/ideation-critic.agent.md outside the task's listed affected file, even though the current snapshot restores an existing contract and introduces no observed regression.
+
+### Verdict
+PASS
+
+### Confidence
+0.94
+
+### Action
+Advance to docs.
+[[2026-04-24]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are test file + agent file; no behavior, API, CLI, config, or package structure change. No IN-scope prose docs reference test internals or agent frontmatter. |
+| 2 | Module docstrings | No | N/A | No Python production modules created or modified. |
+| 3 | External attribution | No | N/A | Only internal repo patterns used (test_package_boundary.py glob precedent). |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1115-ideation-test-proof-hardening.md` exists and is linked in task body. Task #1118 itself is the follow-up implementation. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `ideation.excalidraw` (describes `share/agents/ideation-*.agent.md`) and `pipeline.excalidraw` (describes `share/agents/*.agent.md`) and `project-overview.excalidraw` (describes `share/**`) all match `share/agents/ideation-critic.agent.md`. Footers updated: `Last verified: 2026-04-24 (1ce9d252)`. Commit: `6f309eea`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. `ideation-critic.agent.md` was modified (model frontmatter restored), not deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `tests/test_ideation_overhaul_static.py` | OUT | N/A — test file |
+| `share/agents/ideation-critic.agent.md` | OUT | N/A — agent-executable; triggers diagram describes-match only |
+| `share/diagrams/ideation.excalidraw` | IN | Footer updated |
+| `share/diagrams/pipeline.excalidraw` | IN | Footer updated |
+| `share/diagrams/project-overview.excalidraw` | IN | Footer updated |
+
+### Files Updated
+- `share/diagrams/ideation.excalidraw` — footer: `Last verified: 2026-04-24 (1ce9d252)`
+- `share/diagrams/pipeline.excalidraw` — footer: `Last verified: 2026-04-24 (1ce9d252)`
+- `share/diagrams/project-overview.excalidraw` — footer: `Last verified: 2026-04-24 (1ce9d252)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1118-*` files found)
+[[2026-04-24]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 1. Model-field scan uses ideation glob | `_ideation_agent_files()` at L28-32 uses `_REPO_ROOT.glob("share/agents/ideation-*.agent.md")` | PASS |
+| 2. Forbidden-term scan uses full surface | `_ideation_surface_files()` at L35-48 includes agents + ideator + 4 skills + briefs README | PASS |
+| 3. Min-count guards | L31: `assert len(files) >= 11`; L47: `assert len(files) >= 17` | PASS |
+| 4. Split pairs merged | No remaining `test_late_panelist_files_do_not_use_model_field_as_contract` or `test_late_panelist_files_have_no_working_log_or_checkpoint` definitions | PASS |
+| 5. Case-insensitive checkpoint | L227: `.lower()` on file content before check | PASS |
+| 6. Late panelist existence | L68-71: architect, data, enduser, security in required list | PASS |
+| 7. Semantic subsets unchanged | L193-222: context/decisions paired + critic narrow contract tests preserved | PASS |
+| 8. Suite passes | Quality-runner: 38 passed, 0 failed | PASS |
+
+### Test Results
+- pytest (task-scoped): 38 passed, 0 failed
+- pytest (full suite): 435 passed, 31 failed, 96 errors — all failures pre-existing (cockpit KanbanEngine API, task_io deletion, React compiler config); zero in task scope
+- ruff: clean
+
+### Architect Quality: 4/5
+AC was mostly specific and testable. Two gaps (AC2 surface ambiguity, AC3 unbound min-count) were refined by the architect after challenger feedback. Good upstream quality.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 8 have specific evidence) → 0
+- Lint violations: 0 → 0
+- AC quality ≤ 3: no (4/5) → 0
+- Missing reviewer section: no (present, detailed, PASS at 0.94) → 0
+- Full-suite failures in task scope: 0 → 0
+- Git commit verification: relied on upstream commit hashes (5d27276c, 6f309eea) — unable to independently verify via terminal → -0.01
+
+### Confidence: 0.99
+### Action: archive
