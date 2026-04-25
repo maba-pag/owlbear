@@ -1974,7 +1974,9 @@ class AgentView:
         payload["missing_sections"] = missing_sections
         return ShowTaskResponse.model_validate(payload)
 
-    def pick_tasks(self, wave_size: int | None = None, max_waves: int = 3) -> PickTasksResponse:
+    def pick_tasks(  # noqa: C901, PLR0912, PLR0915
+        self, wave_size: int | None = None, max_waves: int = 3
+    ) -> PickTasksResponse:
         if max_waves < 1:
             raise ValidationError(
                 code="ERR_INVALID_WAVE_PARAM",
@@ -1986,20 +1988,123 @@ class AgentView:
                 user_message="wave_size must be >= 1",
             )
 
+        config = self.engine.board_config()
+        effective_wave = wave_size if wave_size is not None else config.wave_size
+        if effective_wave < 1:
+            raise ValidationError(
+                code="ERR_INVALID_WAVE_PARAM",
+                user_message="wave_size must be >= 1",
+            )
+
         active = self.engine.list_tasks(archived=False, blocked=False, unclaimed=True)
-        dispatchable = [task for task in active if task.status == "todo"]
+        active_ids = {task.id for task in active}
+        archived_reasons = {
+            summary.id: summary.archival_reason
+            for summary in self.engine.list_tasks(archived=True)
+        }
+
+        dispatchable = [
+            task
+            for task in active
+            if self._compute_dep_status(
+                task,
+                active_ids=active_ids,
+                archived_reasons=archived_reasons,
+            )
+            != "blocked"
+        ]
         if not dispatchable:
             return PickTasksResponse(waves=[], guidance=[])
 
-        effective_wave = wave_size if wave_size is not None else self.engine.board_config().wave_size
-        max_items = effective_wave * max_waves
-        selected = dispatchable[:max_items]
+        priority_rank = {name: idx for idx, name in enumerate(config.priorities)}
 
-        status_agents = self.engine.board_config().agent_map
-        default_agent = ""
+        def _created_key(created: str) -> datetime:
+            try:
+                parsed = datetime.fromisoformat(created)
+            except ValueError:
+                return datetime.max.replace(tzinfo=UTC)
+            if parsed.tzinfo is None:
+                return parsed.replace(tzinfo=UTC)
+            return parsed
+
+        ordered = sorted(
+            dispatchable,
+            key=lambda task: (
+                priority_rank.get(task.priority, len(priority_rank)),
+                _created_key(getattr(task, "created", "")),
+                task.id,
+            ),
+        )
+
+        status_agents = config.agent_map
+        agent_types = config.agent_types
+        compatibility = config.agent_compatibility
+
+        def _dispatch_agent_for_status(status: str) -> str:
+            mapped = status_agents.get(status, "")
+            if isinstance(mapped, list):
+                return str(mapped[0]) if mapped else ""
+            return str(mapped)
+
+        def _agent_bucket(agent: str) -> str:
+            mapped = agent_types.get(agent, "")
+            if isinstance(mapped, str):
+                return mapped
+            return str(mapped)
+
+        def _has_dep_edge(left: TaskSummary, right: TaskSummary) -> bool:
+            left_deps = set(left.depends_on or [])
+            right_deps = set(right.depends_on or [])
+            return right.id in left_deps or left.id in right_deps
+
+        def _buckets_compatible(existing_bucket: str, candidate_bucket: str) -> bool:
+            if not compatibility:
+                return True
+            existing_allowed = set(compatibility.get(existing_bucket, []))
+            candidate_allowed = set(compatibility.get(candidate_bucket, []))
+            return (
+                candidate_bucket in existing_allowed
+                and existing_bucket in candidate_allowed
+            )
+
+        wave_tasks: list[list[TaskSummary]] = []
+        dropped = 0
+        for task in ordered:
+            candidate_agent = _dispatch_agent_for_status(task.status)
+            candidate_bucket = _agent_bucket(candidate_agent)
+            placed = False
+
+            for wave in wave_tasks:
+                if len(wave) >= effective_wave:
+                    continue
+                if any(_has_dep_edge(existing, task) for existing in wave):
+                    continue
+
+                compatible = True
+                for existing in wave:
+                    existing_agent = _dispatch_agent_for_status(existing.status)
+                    existing_bucket = _agent_bucket(existing_agent)
+                    if not _buckets_compatible(existing_bucket, candidate_bucket):
+                        compatible = False
+                        break
+                if not compatible:
+                    continue
+
+                wave.append(task)
+                placed = True
+                break
+
+            if placed:
+                continue
+
+            if len(wave_tasks) < max_waves:
+                wave_tasks.append([task])
+            else:
+                dropped += 1
+
         waves: list[Wave] = []
-        for wave_index, start in enumerate(range(0, len(selected), effective_wave)):
-            chunk = selected[start : start + effective_wave]
+        dispatched_count = 0
+        for wave_index, chunk in enumerate(wave_tasks):
             entries = [
                 DispatchEntry(
                     id=task.id,
@@ -2007,13 +2112,18 @@ class AgentView:
                     priority=task.priority,
                     title=task.title,
                     tags=list(task.tags),
-                    agent=(status_agents.get(task.status) or [default_agent])[0],
+                    agent=_dispatch_agent_for_status(task.status),
                 )
                 for task in chunk
             ]
+            dispatched_count += len(entries)
             waves.append(Wave(index=wave_index, tasks=entries))
 
-        guidance = [f"Dispatch hints: {len(selected)} task(s) across {len(waves)} wave(s)."]
+        guidance = [
+            f"Dispatch hints: {dispatched_count} task(s) across {len(waves)} wave(s)."
+        ]
+        if dropped:
+            guidance.append(f"Dropped {dropped} task(s) because no wave fit within max_waves.")
         return PickTasksResponse(waves=waves, guidance=guidance)
 
     def create_task(  # noqa: PLR0913
