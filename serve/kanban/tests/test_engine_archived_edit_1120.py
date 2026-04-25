@@ -205,36 +205,14 @@ class TestFromAC_ArchivedTaskEditPersistence:
     def test_agentview_edit_archived_archival_refs_result_updated(
         self, tmp_path: Path
     ) -> None:
-        """AC-2: edit_task on archived task (reason=deprecated) with archival_refs=[2]; result shows updated refs.
+        """AC-2: edit_task on archived task (reason=deprecated) with archival_refs=[2, 3]; result shows updated refs.
 
-        Task starts with empty refs; 'deprecated' reason requires at least one ref on the final value.
+        Task starts with refs=[2]; edit adds ref 3 so the change is non-trivial and not a no-op.
         Fails now: _find_task_path raises FileNotFoundError (D1).
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=2, status="done", subdir="tasks")
-        _write_task(
-            kanban_dir,
-            task_id=1,
-            status="archived",
-            archival_reason="deprecated",
-            archival_refs="[2]",  # pre-existing valid ref; re-asserting same set
-            subdir="archive",
-        )
-
-        result = view.edit_task(1, archival_refs=[2])
-
-        assert result.archival_refs == [2]
-
-    def test_agentview_edit_archived_archival_refs_reread_from_archive(
-        self, tmp_path: Path
-    ) -> None:
-        """AC-2: after archival_refs edit, re-read from archive shows the new refs.
-
-        Starts with refs=[2]; edits to confirm a round-trip through disk.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
-        """
-        view, kanban_dir = _make_view(tmp_path)
-        _write_task(kanban_dir, task_id=2, status="done", subdir="tasks")
+        _write_task(kanban_dir, task_id=3, status="done", subdir="tasks")
         _write_task(
             kanban_dir,
             task_id=1,
@@ -244,10 +222,34 @@ class TestFromAC_ArchivedTaskEditPersistence:
             subdir="archive",
         )
 
-        view.edit_task(1, archival_refs=[2])
+        result = view.edit_task(1, archival_refs=[2, 3])
+
+        assert result.archival_refs == [2, 3]
+
+    def test_agentview_edit_archived_archival_refs_reread_from_archive(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-2: after archival_refs edit, re-read from archive shows the new refs.
+
+        Starts with refs=[2]; edits to [2, 3] to confirm a real change round-trips through disk.
+        Fails now: _find_task_path raises FileNotFoundError (D1).
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=2, status="done", subdir="tasks")
+        _write_task(kanban_dir, task_id=3, status="done", subdir="tasks")
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            archival_reason="deprecated",
+            archival_refs="[2]",
+            subdir="archive",
+        )
+
+        view.edit_task(1, archival_refs=[2, 3])
 
         reread = view.engine.show_task("1")
-        assert 2 in reread.archival_refs
+        assert 3 in reread.archival_refs
 
     # ------------------------------------------------------------------
     # AC-3: AgentView.edit_task — append_body
