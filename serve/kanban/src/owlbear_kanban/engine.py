@@ -191,6 +191,8 @@ def _classify_end_work_state(detail: str) -> str:
         return "completed"
     if detail.startswith("reject:"):
         return "rejected"
+    if detail.startswith("release"):
+        return "released"
     # blocked:* and outcome=fail both map to the canonical blocked state.
     return "blocked"
 
@@ -201,6 +203,8 @@ def _classify_end_work_outcome(detail: str) -> str:
         return "success"
     if detail.startswith("reject:"):
         return "reject"
+    if detail.startswith("release"):
+        return "released"
     if detail.startswith("outcome=fail"):
         return "fail"
     return "block"
@@ -218,6 +222,11 @@ def _compute_duration(claim_ts: str, close_ts: str) -> float:
     if close_dt.tzinfo is None:
         close_dt = close_dt.replace(tzinfo=UTC)
     return (close_dt - claim_dt).total_seconds()
+
+
+def _task_body_as_text(body: object) -> str:
+    """Return a string body for task mutation operations."""
+    return body if isinstance(body, str) else ""
 
 
 def _state_from_age(ref_ts: str, timeout: timedelta, now: datetime) -> str:
@@ -1253,12 +1262,14 @@ class KanbanEngine:
         """
         return self.claim_task(task_id, now=now)
 
-    def _apply_outcome(
+    def _apply_outcome(  # noqa: PLR0913
         self,
         record: Task,
         outcome: str,
         block_reason: str,
-        move_to: str,
+        move_to: str | None,
+        archival_reason: str | None,
+        archival_refs: list[int],
     ) -> bool:
         """Apply outcome-specific mutations to *record* in-place.
 
@@ -1271,24 +1282,36 @@ class KanbanEngine:
             )
             if current_idx == len(statuses) - 1:
                 record.status = "archived"
+                record.archival_reason = "completed"
+                record.archival_refs = []
                 return True
             record.status = statuses[current_idx + 1]
         elif outcome == "block":
             record.blocked = True
             record.block_reason = block_reason
+            if move_to:
+                record.status = move_to
         elif outcome == "reject":
-            record.status = move_to
+            if move_to == "archived":
+                record.status = "archived"
+                record.archival_reason = archival_reason
+                record.archival_refs = archival_refs
+                return True
+            if move_to is not None:
+                record.status = move_to
         # outcome == "fail": no status change
         return False
 
-    def end_work(
+    def end_work(  # noqa: PLR0913
         self,
         task_id: str,
         *,
         note: str,
         outcome: str = "success",
         block_reason: str = "",
-        move_to: str = "research",
+        move_to: str | None = "research",
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
     ) -> Task:
         """Finalise a work session: append note, update task state, release claim.
 
@@ -1297,10 +1320,12 @@ class KanbanEngine:
 
         Args:
             task_id:      Numeric task ID as a string.
-            note:         Text to append (prefixed with ``[[YYYY-MM-DD]]`` timestamp).
+            note:         Text to append (prefixed with ISO-8601 datetime timestamp).
             outcome:      One of ``"success"``, ``"fail"``, ``"block"``, ``"reject"``.
             block_reason: Required when *outcome* is ``"block"``; stored on the task.
             move_to:      Target status when *outcome* is ``"reject"`` (default ``"research"``).
+            archival_reason: Archival reason used when ``reject`` moves to ``"archived"``.
+            archival_refs: Archival references used when ``reject`` moves to ``"archived"``.
 
         Returns:
             Updated :class:`Task` reflecting the new state.
@@ -1322,8 +1347,9 @@ class KanbanEngine:
             msg = f"Unknown outcome: {outcome!r}"
             raise ValueError(msg)
 
-        if outcome == "reject":
+        if outcome == "reject" and move_to is not None:
             valid_statuses = set(self._config.statuses)
+            valid_statuses.add("archived")
             if move_to not in valid_statuses:
                 msg = f"Invalid move_to status {move_to!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
@@ -1335,16 +1361,29 @@ class KanbanEngine:
         old_status = record.status
 
         # --- Append timestamped note ---
-        date_str = datetime.now(tz=UTC).strftime("%Y-%m-%d")
-        record.body = record.body + "\n" + f"[[{date_str}]]\n" + note
+        now = datetime.now(tz=UTC)
+        body = _task_body_as_text(record.body)
+        if outcome != "release":
+            stamp = now.replace(microsecond=0).isoformat()
+            record.body = body + "\n" + stamp + "\n" + note
+        else:
+            record.body = body
 
         # --- Release claim ---
         record.claimed_at = None
+        record.claimed_by = None
 
         # --- Apply outcome-specific mutations ---
-        needs_archive = self._apply_outcome(record, outcome, block_reason, move_to)
+        needs_archive = self._apply_outcome(
+            record,
+            outcome,
+            block_reason,
+            move_to,
+            archival_reason,
+            list(archival_refs or []),
+        )
 
-        record.updated = datetime.now(tz=UTC).isoformat()
+        record.updated = now.isoformat()
 
         # --- Single write ---
         write_task(record, self._kanban_dir)
@@ -1361,6 +1400,7 @@ class KanbanEngine:
             "fail": "outcome=fail",
             "block": f"blocked: {block_reason}",
             "reject": f"reject: {old_status} -> {move_to}",
+            "release": "release",
         }
         try:
             self._emit_event("end_work", record.id, _end_work_details[outcome])
@@ -1656,7 +1696,7 @@ class AgentView:
             to_idx = status_names.index(after_status)
         except ValueError:
             return []
-        delta = to_idx - from_idx
+        delta = abs(to_idx - from_idx)
         if delta <= 1:
             return []
         skipped = delta if include_target_column else delta - 1
@@ -2632,7 +2672,7 @@ class AgentView:
             raise ValidationError(code="ERR_INVALID_STATUS", user_message=msg) from exc
         return self._to_single_response(task)
 
-    def end_work(  # noqa: PLR0913
+    def end_work(  # noqa: C901, PLR0912, PLR0913, PLR0915
         self,
         task_id: int,
         *,
@@ -2643,16 +2683,147 @@ class AgentView:
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
-        _ = (archival_reason, archival_refs)
+        config = self.engine.board_config()
+        effective_archival_refs = list(archival_refs or [])
+
+        valid_outcomes = {"success", "reject", "block", "release"}
+
+        if outcome == "success":
+            if move_to is not None:
+                raise ValidationError(
+                    code="ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS",
+                    user_message="move_to is forbidden when outcome='success'",
+                )
+            if archival_reason is not None or archival_refs is not None:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS",
+                    user_message="archival fields are forbidden when outcome='success'",
+                )
+            if block_reason is not None:
+                raise ValidationError(
+                    code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
+                    user_message="block_reason is only allowed when outcome='block'",
+                )
+        elif outcome == "reject":
+            if block_reason is not None:
+                raise ValidationError(
+                    code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
+                    user_message="block_reason is only allowed when outcome='block'",
+                )
+            if move_to is None:
+                raise ValidationError(
+                    code="ERR_REJECT_REQUIRES_MOVE_TO",
+                    user_message="move_to is required when outcome='reject'",
+                )
+            valid_statuses = set(config.statuses)
+            valid_statuses.add("archived")
+            if move_to not in valid_statuses:
+                raise ValidationError(
+                    code="ERR_INVALID_STATUS",
+                    user_message=(
+                        "move_to must be one of "
+                        f"{sorted(valid_statuses)}"
+                    ),
+                )
+            if move_to == "archived":
+                self._validate_move_archival_for_archive(
+                    task_id=task_id,
+                    can_mark_completed=False,
+                    config=config,
+                    archival_reason=archival_reason,
+                    archival_refs=effective_archival_refs,
+                )
+            elif archival_reason is not None or archival_refs is not None:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                    user_message="archival fields are only allowed when move_to='archived'",
+                )
+        elif outcome == "block":
+            if archival_reason is not None or archival_refs is not None:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                    user_message="archival fields are forbidden when outcome='block'",
+                )
+            if block_reason is None:
+                raise ValidationError(
+                    code="ERR_BLOCK_REASON_REQUIRED",
+                    user_message="block_reason is required when outcome='block'",
+                )
+            if move_to is not None and move_to not in set(config.statuses):
+                raise ValidationError(
+                    code="ERR_INVALID_STATUS",
+                    user_message=f"move_to must be one of {sorted(config.statuses)}",
+                )
+        elif outcome == "release":
+            if move_to is not None:
+                raise ValidationError(
+                    code="ERR_MOVE_TO_FORBIDDEN_ON_RELEASE",
+                    user_message="move_to is forbidden when outcome='release'",
+                )
+            if archival_reason is not None or archival_refs is not None:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                    user_message="archival fields are forbidden when outcome='release'",
+                )
+            if block_reason is not None:
+                raise ValidationError(
+                    code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
+                    user_message="block_reason is only allowed when outcome='block'",
+                )
+        elif outcome not in valid_outcomes:
+            raise ValidationError(
+                code="ERR_INVALID_OUTCOME",
+                user_message=f"Unknown outcome: {outcome!r}",
+            )
+
         try:
             before = self.engine.show_task(str(task_id))
-            task = self.engine.end_work(
-                str(task_id),
-                note=note,
-                outcome=outcome,
-                block_reason=block_reason or "",
-                move_to=move_to or "research",
-            )
+
+            claimed = before.claimed_at is not None
+            if outcome == "release" and not claimed:
+                unchanged = before.model_copy(deep=True)
+                unchanged.body = _task_body_as_text(unchanged.body).rstrip("\n")
+                return self._to_single_response(unchanged)
+            if outcome in {"success", "reject", "block"} and not claimed:
+                raise ValidationError(
+                    code="ERR_NOT_CLAIMED",
+                    user_message=(
+                        "Task must be claimed before ending work with "
+                        f"outcome='{outcome}'"
+                    ),
+                )
+
+            body = _task_body_as_text(before.body)
+            if outcome == "success":
+                statuses = list(config.statuses)
+                if before.status in statuses:
+                    current_idx = statuses.index(before.status)
+                    if current_idx < len(statuses) - 1:
+                        self._validate_move_destination_predicate(
+                            target_status=statuses[current_idx + 1],
+                            body=body,
+                            config=config,
+                        )
+            elif outcome in {"reject", "block"} and move_to is not None:
+                self._validate_move_destination_predicate(
+                    target_status=move_to,
+                    body=body,
+                    config=config,
+                )
+
+            if outcome == "release":
+                task = self.engine.release_task(str(task_id))
+            else:
+                safe_block_reason = block_reason or ""
+                task = self.engine.end_work(
+                    str(task_id),
+                    note=note,
+                    outcome=outcome,
+                    block_reason=safe_block_reason,
+                    move_to=move_to,
+                    archival_reason=archival_reason,
+                    archival_refs=effective_archival_refs,
+                )
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
         except ValueError as exc:
@@ -2674,6 +2845,15 @@ class AgentView:
             )
         elif outcome == "block":
             guidance = [self._BLOCK_AR_HINT]
+            if move_to is not None:
+                guidance.extend(
+                    self._skip_transition_guidance(
+                        before_status=before.status,
+                        after_status=task.status,
+                        status_names=self.engine.board_config().statuses,
+                        include_target_column=True,
+                    )
+                )
         return self._to_single_response(task, guidance)
 
 
