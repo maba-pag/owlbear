@@ -35,7 +35,7 @@ import pytest
 
 from owlbear_kanban import KanbanEngine, storage
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import ConcurrencyError
+from owlbear_kanban.models import ConcurrencyError, ValidationError
 
 # ---------------------------------------------------------------------------
 # Minimal board + task helpers (mirrors test_engine_move_claim.py conventions)
@@ -338,4 +338,136 @@ class TestFromAC_StartWork_1075:
         assert cas_call_claimed_ats[1] is not None, (
             f"Second CAS write must be the claim step with claimed_at=<new timestamp>; "
             f"got claimed_at={cas_call_claimed_ats[1]!r}"
+        )
+
+    def test_stale_retry_success_produces_fresh_timestamps(
+        self, tmp_path: Path
+    ) -> None:
+        """D14: on stale-retry-success, claimed_at and updated must be fresher
+        than the pre-attempt snapshot (effective_now refreshed inside retry loop).
+
+        Brief §3.2: updated is advanced on every successful write.
+        Regression guard: if effective_now were captured once before the retry loop
+        (old bug), successful retries after ERR_STALE could reuse a stale timestamp
+        and set updated/claimed_at to a value that lags the re-read snapshot.
+        Fix at engine.py:1136 refreshes effective_now inside the loop.
+
+        Failure mode: CAS-raise-stale logic is absent (write_task_if_unchanged never
+        called) → second call never fires → call_count stays 1 → assertion fails.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=1, status="todo")
+
+        # Read the initial snapshot so we have a definite lower bound for freshness.
+        task_path = next((kanban_dir / "tasks").glob("1-*.md"))
+        snapshot = storage.read_task(task_path)
+        snapshot_updated_str = snapshot.updated  # "2026-01-01T10:00:00+00:00"
+
+        call_count = 0
+        real_cas = storage.write_task_if_unchanged
+
+        def stale_on_first(task: object, expected_updated: str, kdir: Path) -> Path:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConcurrencyError(
+                    code="ERR_STALE",
+                    user_message="simulated stale — retry should refresh timestamps",
+                )
+            return real_cas(task, expected_updated, kdir)
+
+        with patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_on_first):
+            result = view.start_work(1)
+
+        from datetime import datetime  # noqa: PLC0415
+
+        snapshot_dt = datetime.fromisoformat(snapshot_updated_str)
+        result_claimed_at = datetime.fromisoformat(result.claimed_at)
+        result_updated = datetime.fromisoformat(result.updated)
+
+        assert result_claimed_at > snapshot_dt, (
+            f"D14: after stale-retry-success, claimed_at={result.claimed_at!r} must be "
+            f"fresher than pre-attempt snapshot.updated={snapshot_updated_str!r}"
+        )
+        assert result_updated > snapshot_dt, (
+            f"D14: after stale-retry-success, updated={result.updated!r} must be "
+            f"fresher than pre-attempt snapshot.updated={snapshot_updated_str!r}"
+        )
+        assert call_count == 2, (  # noqa: PLR2004
+            f"Expected exactly 2 CAS calls (first stale, second success); got {call_count}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_MoveTask_D37_1075
+#
+# D37 full matrix: _validate_move_archival must reject self-references and
+# archival cycles, matching the edit_task path at engine.py:2443-2456.
+# Current _validate_move_archival lacks both checks (no task_id param, no
+# _has_archival_cycle call), so both tests fail.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MoveTask_D37_1075:
+    """D37 archival-matrix self-ref and cycle tests for AgentView.move_task."""
+
+    def test_move_task_archival_rejects_self_reference(
+        self, tmp_path: Path
+    ) -> None:
+        """D37: move_task('archived') must raise ERR_ARCHIVAL_REF_SELF when
+        archival_refs includes the task's own id.
+
+        Brief §1.6 D37 matrix (same as edit_task): self-references are always
+        forbidden.  The edit_task path enforces this at engine.py:2443-2445.
+        Current _validate_move_archival omits the check (no task_id param) so
+        the call completes without raising.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=1, status="done")
+
+        with pytest.raises(ValidationError) as exc_info:
+            view.move_task(
+                1,
+                "archived",
+                archival_reason="deprecated",
+                archival_refs=[1],  # self-reference
+            )
+        assert exc_info.value.code == "ERR_ARCHIVAL_REF_SELF", (
+            f"move_task must reject self-referencing archival_refs with "
+            f"ERR_ARCHIVAL_REF_SELF; got {exc_info.value.code!r}"
+        )
+
+    def test_move_task_archival_rejects_cycle(
+        self, tmp_path: Path
+    ) -> None:
+        """D37: move_task('archived') must raise ERR_ARCHIVAL_REF_CYCLE when
+        archival_refs would introduce a transitive cycle.
+
+        Setup: task 2 already references task 1 (archival_refs=[1]).
+        Archiving task 1 with archival_refs=[2] creates the cycle 1→2→1.
+        The edit_task path catches this at engine.py:2454-2456 via the existing
+        _has_archival_cycle helper.  Current _validate_move_archival never calls
+        that helper, so no error is raised.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        # task 2 already archived and references task 1
+        _write_task(
+            kanban_dir,
+            task_id=2,
+            status="todo",
+            archival_refs="[1]",
+        )
+        # task 1 (the one being moved) references task 2 → creates cycle 1→2→1
+        _write_task(kanban_dir, task_id=1, status="done")
+
+        with pytest.raises(ValidationError) as exc_info:
+            view.move_task(
+                1,
+                "archived",
+                archival_reason="deprecated",
+                archival_refs=[2],
+            )
+        assert exc_info.value.code == "ERR_ARCHIVAL_REF_CYCLE", (
+            f"move_task must reject cycles in archival_refs with "
+            f"ERR_ARCHIVAL_REF_CYCLE; got {exc_info.value.code!r}"
         )
