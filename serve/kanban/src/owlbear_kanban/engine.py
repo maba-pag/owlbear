@@ -1041,12 +1041,21 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def move_task(self, task_id: str, status: str) -> Task:
+    def move_task(
+        self,
+        task_id: str,
+        status: str,
+        *,
+        archival_reason: str | None = None,
+        archival_refs: list[int] | None = None,
+    ) -> Task:
         """Change the status of a task; "archived" moves the file to archive/.
 
         Args:
             task_id: Numeric task ID as a string.
             status:  Target status name, or ``"archived"`` to archive the task.
+            archival_reason: Optional archive reason persisted when archiving.
+            archival_refs: Optional archive reference IDs persisted when archiving.
 
         Returns:
             Updated :class:`Task`.
@@ -1072,9 +1081,16 @@ class KanbanEngine:
             record.status = "archived"
             record.claimed_at = None
             record.claimed_by = None
+            record.archival_reason = archival_reason
+            record.archival_refs = list(archival_refs) if archival_refs is not None else []
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(record, self._kanban_dir)
-            _move_file(task_path, dest)
+            try:
+                _move_file(task_path, dest)
+            except OSError:
+                with contextlib.suppress(Exception):
+                    write_task(original, self._kanban_dir)
+                raise
             self._task_cache.pop(task_path.name, None)
             self._id_to_filename.pop(record.id, None)
             archived = True
@@ -2496,7 +2512,12 @@ class AgentView:
                 config=config,
             )
 
-            task = self.engine.move_task(str(task_id), status)
+            task = self.engine.move_task(
+                str(task_id),
+                status,
+                archival_reason=archival_reason,
+                archival_refs=archival_refs,
+            )
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
         except ValueError as exc:
