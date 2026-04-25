@@ -612,6 +612,7 @@ class KanbanEngine:
         status: str = "",
         tag: str = "",
         priority: str = "",
+        parent: int | None = None,
         search: str = "",
         sort: str = "",
         unclaimed: bool = False,
@@ -626,6 +627,7 @@ class KanbanEngine:
             status:    Only return tasks with this status.  Empty = no filter.
             tag:       Only return tasks that include this tag.  Empty = no filter.
             priority:  Only return tasks with this priority.  Empty = no filter.
+            parent:    Only return tasks whose parent exactly equals this task ID.
             search:    Case-insensitive substring match on title and body.
             sort:      Field to sort by: id, title, status, priority, created, updated.
             unclaimed: When True, only tasks with no claimed_at value (not claimed).
@@ -743,6 +745,8 @@ class KanbanEngine:
             tasks = [t for t in tasks if tag in t.tags]
         if priority:
             tasks = [t for t in tasks if t.priority == priority]
+        if parent is not None:
+            tasks = [t for t in tasks if t.parent == parent]
         if blocked is not None:
             tasks = [t for t in tasks if t.blocked is blocked]
         if unclaimed:
@@ -1610,6 +1614,40 @@ class AgentView:
             user_message=f"Task '{task_id}' not found",
         )
 
+    @staticmethod
+    def _dep_effect_from_archival_reason(reason: str | None) -> str:
+        if reason in {"dropped", "wontfix"}:
+            return "blocked"
+        if reason in {"deprecated", "duplicate"}:
+            return "redirect"
+        return "ok"
+
+    def _compute_dep_status(
+        self,
+        task: Task,
+        *,
+        active_ids: set[int],
+        archived_reasons: dict[int, str | None],
+    ) -> str | None:
+        deps = task.depends_on or []
+        if not deps:
+            return None
+
+        status = "ok"
+        for dep_id in deps:
+            if dep_id in active_ids:
+                continue
+            if dep_id not in archived_reasons:
+                return "blocked"
+
+            dep_effect = self._dep_effect_from_archival_reason(archived_reasons[dep_id])
+            if dep_effect == "blocked":
+                return "blocked"
+            if dep_effect == "redirect":
+                status = "redirect"
+
+        return status
+
     def _task_exists(self, task_id: int) -> bool:
         try:
             self.engine.show_task(str(task_id))
@@ -1662,6 +1700,7 @@ class AgentView:
         priority: str = "",
         archival_reason: str = "",
         ids: list[int] | None = None,
+        parent: int | None = None,
         search: str = "",
         sort: str = "",
         unclaimed: bool = False,
@@ -1687,6 +1726,8 @@ class AgentView:
                              Mutually exclusive with ``ids``.
             ids:             Explicit list of task IDs to fetch; searches both
                              active and archive directories.
+            parent:          Filter by parent task ID.  Mutually exclusive with
+                             ``ids``.
             search:          Case-insensitive substring match on title and body.
             sort:            Sort field: id, title, status, priority, created,
                              updated.
@@ -1730,6 +1771,7 @@ class AgentView:
             status
             or tag
             or priority
+            or parent is not None
             or search
             or unclaimed
             or blocked is not None
@@ -1756,6 +1798,7 @@ class AgentView:
                 status=status,
                 tag=tag,
                 priority=priority,
+                parent=parent,
                 search=search,
                 sort=sort,
                 unclaimed=unclaimed,
@@ -1799,6 +1842,17 @@ class AgentView:
         payload = task.model_dump()
         if isinstance(payload.get("body"), list):
             payload["body"] = None
+
+        active_ids = {summary.id for summary in self.engine.list_tasks(archived=False)}
+        archived_reasons = {
+            summary.id: summary.archival_reason
+            for summary in self.engine.list_tasks(archived=True)
+        }
+        payload["dep_status"] = self._compute_dep_status(
+            task,
+            active_ids=active_ids,
+            archived_reasons=archived_reasons,
+        )
 
         guidance: list[str] = []
         missing_sections: list[str] | None = None
@@ -2237,12 +2291,41 @@ class CockpitView:
     def __init__(self, engine: KanbanEngine) -> None:
         self.engine = engine
 
-    def list_tasks(self) -> None:
-        raise NotImplementedError
+    def list_tasks(  # noqa: PLR0913
+        self,
+        *,
+        status: str = "",
+        tag: str = "",
+        priority: str = "",
+        archival_reason: str = "",
+        ids: list[int] | None = None,
+        parent: int | None = None,
+        search: str = "",
+        sort: str = "",
+        unclaimed: bool = False,
+        archived: bool = False,
+        limit: int = 0,
+        reverse: bool = False,
+        blocked: bool | None = None,
+    ) -> ListTasksResponse:
+        return self.engine.agent_view().list_tasks(
+            status=status,
+            tag=tag,
+            priority=priority,
+            archival_reason=archival_reason,
+            ids=ids,
+            parent=parent,
+            search=search,
+            sort=sort,
+            unclaimed=unclaimed,
+            archived=archived,
+            limit=limit,
+            reverse=reverse,
+            blocked=blocked,
+        )
 
-    def show_task(self, task_id: int) -> None:
-        _ = task_id
-        raise NotImplementedError
+    def show_task(self, task_id: int, section: str | None = None) -> ShowTaskResponse:
+        return self.engine.agent_view().show_task(task_id, section)
 
     def edit_task(self, task_id: int) -> None:
         _ = task_id
