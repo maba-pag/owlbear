@@ -1,9 +1,14 @@
-"""Tests for AgentView.pick_tasks — age-DESC sort correctness (task #1076).
+"""Tests for AgentView.pick_tasks — age-DESC sort correctness and defensive archived filter (task #1076).
 
-AC: Sort deterministic: priority_rank(BoardConfig.priorities index) ASC,
-    age DESC, id ASC.
+AC targeted by this file:
+  1. Sort deterministic: priority_rank(BoardConfig.priorities index) ASC,
+     age DESC, id ASC.
 
-Root cause targeted by this file:
+  2. pick_tasks defensively excludes status=="archived" tasks from the dispatch
+     pool (guards against the write-then-move window where status is written
+     before the file move to archive/).
+
+Root cause documented in original test-writer notes (age-sort):
   TaskSummary.model_config = ConfigDict(extra='ignore') and TaskSummary has no
   'created' field, so TaskSummary.model_validate(task.model_dump()) silently
   discards 'created'.  pick_tasks calls self.engine.list_tasks() which returns
@@ -16,10 +21,26 @@ Root cause targeted by this file:
   Every task gets the same datetime.max key, so the sort degenerates to
   (priority_rank ASC, id ASC) — the "age DESC" component is silently dropped.
 
-  A correct implementation must either pass sort="created" to list_tasks()
-  (before TaskSummary projection) or include 'created' in TaskSummary.
+Root cause documented for archived-filter gap:
+  The active scan at engine.py:710 explicitly permits status=="archived" files
+  in tasks/ (``if task.status not in _valid_statuses | {"archived"}``).
+  During the engine's archive write-then-move sequence, the task file in tasks/
+  has its status written to "archived" *before* the file is moved into archive/.
+  list_tasks(archived=False) reads from tasks/ only, but does not filter out
+  status=="archived" entries.  The dispatchable comprehension in pick_tasks
+  drops only dep_status=="blocked", so archived-status tasks leak into the pool.
 
-All tests are RED — they fail against the current implementation.
+Classes in this file (added incrementally across retry cycles):
+  TestFromAC_PickTasksAgeSortPrecedence — 3 tests (age-DESC sort, written in cycle 1)
+  TestFromAC_PickTasksArchivedInTasksDir — 2 tests (archived filter gap, added in cycle 3)
+
+Note on adversarial id-ASC tie-break (architecture review cycle-3 request):
+  A same-timestamp adversarial test (id=10 written first, id=3 second) was attempted.
+  It PASSED — list_tasks(sort="created") already sorts by (datetime, t.id), so
+  created_rank is always {3: 0, 10: 1} regardless of filesystem scan order.
+  The builder's cycle-2 fix already handles this correctly.  The passing test was
+  removed per mode rules (passing test = existing behaviour, not a RED test).
+  The builder must document the tie-break as evidence in their notes.
 """
 
 from __future__ import annotations
@@ -121,6 +142,42 @@ def _ordered_ids(resp: PickTasksResponse) -> list[int]:
     for wave in resp.waves:
         result.extend(entry.id for entry in wave.tasks)
     return result
+
+
+_ARCHIVED_IN_TASKS_TMPL = """\
+---
+id: {task_id}
+title: Task {task_id}
+status: archived
+priority: {priority}
+created: {created}
+updated: "2026-04-01T12:00:00+00:00"
+tags: []
+parent: null
+depends_on: []
+blocked: false
+block_reason: null
+claimed_at: null
+archival_reason: completed
+archival_refs: []
+---
+Body text.
+"""
+
+
+def _write_archived_in_tasks_dir(
+    board: Path,
+    task_id: int,
+    priority: str = "important",
+    created: str = '"2026-02-01T00:00:00+00:00"',
+) -> None:
+    """Write a task with status=archived into tasks/ (simulates write-then-move window)."""
+    content = _ARCHIVED_IN_TASKS_TMPL.format(
+        task_id=task_id,
+        priority=priority,
+        created=created,
+    )
+    (board / "tasks" / f"{task_id}-task.md").write_text(content, encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -242,3 +299,94 @@ class TestFromAC_PickTasksAgeSortPrecedence:
             f"Expected age-DESC within each priority group: [10, 5, 8, 2]; "
             f"got {ordered} — broken id-ASC fallback yields [5, 10, 2, 8]"
         )
+
+
+# ---------------------------------------------------------------------------
+# NEW AC: Defensive archived-status filter in tasks/ dir
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PickTasksArchivedInTasksDir:
+    """pick_tasks defensively excludes status=='archived' tasks from tasks/ dir.
+
+    AC: pick_tasks defensively excludes status=="archived" tasks from the dispatch
+    pool (guards against the write-then-move window where status is written before
+    the file move to archive/).
+
+    During the engine's archive write-then-move sequence:
+      1. Task status is written to 'archived' in tasks/{id}-task.md
+      2. File is then moved to archive/{id}-task.md
+
+    During the window between steps 1 and 2, the task is still in tasks/ with
+    status='archived'.  The active scan at engine.py:710 admits
+    status=='archived' files via the guard:
+
+        if task.status not in _valid_statuses | {"archived"}:
+            continue
+
+    Without a defensive ``and task.status != "archived"`` check in the
+    dispatchable comprehension, pick_tasks includes such tasks in the pool.
+
+    All tests below write an archived-status task directly into tasks/ to
+    simulate the write-then-move window.  All tests are RED — they fail against
+    the current implementation at engine.py:2054.
+    """
+
+    def test_archived_status_in_tasks_dir_excluded_from_dispatch(
+        self, tmp_path: Path
+    ) -> None:
+        """Status=='archived' task in tasks/ dir is excluded from pick_tasks dispatch pool.
+
+        Board:
+          id=1  status=archived  priority=critical  in tasks/  (write-then-move window)
+          id=2  status=todo      priority=important in tasks/  (valid dispatchable task)
+
+        pick_tasks must return only id=2. id=1 must not appear in any wave.
+
+        Mechanism: list_tasks(archived=False) scans tasks/ and includes the
+        archived-status file (engine.py:710 allows it).  The dispatchable
+        comprehension at engine.py:2054 only drops dep_status=='blocked', so
+        id=1 leaks into the pool.  The test fails by finding id=1 in the result.
+        """
+        board = _make_board(tmp_path)
+        _write_archived_in_tasks_dir(board, task_id=1, priority="critical")
+        _write_task(board, task_id=2, priority="important")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=3)
+        all_dispatched = _ordered_ids(resp)
+        assert 1 not in all_dispatched, (
+            f"Archived-status task (id=1, in tasks/ dir) must not appear in dispatch pool; "
+            f"got {all_dispatched} — pick_tasks is missing the defensive "
+            f"'task.status != \"archived\"' filter at the dispatchable comprehension"
+        )
+
+    def test_archived_status_high_priority_does_not_enter_dispatch_pool(
+        self, tmp_path: Path
+    ) -> None:
+        """Critical-priority archived-status task in tasks/ must not preempt valid tasks.
+
+        Board:
+          id=10  status=archived  priority=critical  (HIGHEST priority but archived)
+          id=3   status=todo      priority=someday   (LOWEST priority but dispatchable)
+
+        Expected dispatch: only id=3. id=10 must be absent regardless of priority.
+
+        This is more adversarial than the basic case: without the defensive filter,
+        id=10 (critical) would appear FIRST in the output (priority_rank=0),
+        masking the omission when only a single valid task is present.  Both
+        assertions must hold simultaneously to kill this false-negative variant.
+        """
+        board = _make_board(tmp_path)
+        _write_archived_in_tasks_dir(board, task_id=10, priority="critical")
+        _write_task(board, task_id=3, priority="someday")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=3)
+        all_dispatched = _ordered_ids(resp)
+        assert 10 not in all_dispatched, (
+            f"Critical-priority archived-status task (id=10) must be excluded from pool; "
+            f"got {all_dispatched} — priority rank does not override the archived filter"
+        )
+        assert 3 in all_dispatched, (
+            f"Someday-priority active task (id=3) must be dispatched; got {all_dispatched}"
+        )
+

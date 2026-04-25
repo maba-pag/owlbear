@@ -294,19 +294,9 @@ class TestFromAC_CockpitViewMethodStubs:
         view = CockpitView(_make_engine(tmp_path))
         assert callable(getattr(view, "list_tasks", None)), "CockpitView.list_tasks missing"
 
-    def test_cockpit_view_list_tasks_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.list_tasks()
-
     def test_cockpit_view_has_show_task_stub(self, tmp_path: Path) -> None:
         view = CockpitView(_make_engine(tmp_path))
         assert callable(getattr(view, "show_task", None)), "CockpitView.show_task missing"
-
-    def test_cockpit_view_show_task_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.show_task(1)
 
     def test_cockpit_view_has_edit_task_stub(self, tmp_path: Path) -> None:
         view = CockpitView(_make_engine(tmp_path))

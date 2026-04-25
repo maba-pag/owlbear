@@ -428,7 +428,7 @@ def write_task_if_unchanged(
 
     Raises:
         ConcurrencyError: code="ERR_STALE" when on-disk version is newer.
-        FileNotFoundError: Task file not found.
+        FileNotFoundError: Task file not found in tasks/ or archive/.
     """
     from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
 
@@ -441,6 +441,8 @@ def write_task_if_unchanged(
     with _exclusive_file_lock(lock_path), _exclusive_file_lock(archive_lock_path):
         matches = list(tasks_dir.glob(f"{task.id}-*.md"))
         if not matches:
+            matches = list(archive_dir.glob(f"{task.id}-*.md"))
+        if not matches:
             msg = f"Task file for id={task.id} not found"
             raise FileNotFoundError(msg)
         task_path = matches[0]
@@ -448,7 +450,7 @@ def write_task_if_unchanged(
         if current.updated != expected_updated:
             msg = f"task {task.id} changed since read; reload and retry"
             raise ConcurrencyError(code="ERR_STALE", user_message=msg)
-        return write_task(task, kanban_dir)
+        return write_task(task, kanban_dir, target_dir=task_path.parent)
 
 
 # ---------------------------------------------------------------------------

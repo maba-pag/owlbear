@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import contextlib
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -369,6 +370,13 @@ class TestFromAC_MoveTask:
             claimed_at='"2026-04-25T10:00:00+00:00"',
         )
         view.move_task(1, "archived", archival_reason="dropped")
+        # File must exist in archive/ and NOT remain in tasks/.
+        assert any((kanban_dir / "archive").glob("1-*.md")), (
+            "task file must exist in archive/ after archive"
+        )
+        assert not any((kanban_dir / "tasks").glob("1-*.md")), (
+            "task file must not remain in tasks/ after archive"
+        )
         # Fresh engine: bypasses any in-memory cache from the view's engine.
         fresh_engine = KanbanEngine(kanban_dir, activity_log=False)
         on_disk = fresh_engine.show_task("1")
@@ -410,6 +418,38 @@ class TestFromAC_MoveTask:
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(1, "not-a-valid-status-xyz")
         assert exc_info.value.code == "ERR_INVALID_STATUS"
+
+    def test_archive_move_failure_restores_original_task_record(self, tmp_path: Path) -> None:
+        """D17 (rollback proof): _move_file OSError during archive restores the original task record.
+
+        If _move_file raises OSError after write_task has written the archived record
+        to tasks/, the rollback branch (engine.py) must write the original record back
+        to tasks/ and re-raise. After the failure the task must remain in tasks/ (not
+        archive/) with its pre-archive status and claimed_at intact — proving the
+        partial write is unwound and the board is left in a consistent state.
+        """
+        original_claimed_at = "2026-04-25T10:00:00+00:00"
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="todo",
+            claimed_at=f'"{original_claimed_at}"',
+        )
+        with patch("owlbear_kanban.engine._move_file", side_effect=OSError("disk full")), pytest.raises(OSError):
+            view.move_task(1, "archived", archival_reason="dropped")
+        # Rollback must have restored the file to tasks/, not left it in archive/.
+        assert any((kanban_dir / "tasks").glob("1-*.md")), (
+            "original task file must be restored in tasks/ after _move_file OSError"
+        )
+        assert not any((kanban_dir / "archive").glob("1-*.md")), (
+            "no task file must exist in archive/ when the file move failed"
+        )
+        # Fresh engine proves the persisted record matches the pre-archive state.
+        fresh_engine = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh_engine.show_task("1")
+        assert restored.status == "todo", "status must be restored to pre-archive value after rollback"
+        assert restored.claimed_at is not None, "claimed_at must not be cleared on a failed archive"
 
 
 # ---------------------------------------------------------------------------
@@ -510,12 +550,16 @@ class TestFromAC_StartWork:
         the old claim and issues a new one. AgentView.start_work must return a
         SingleTaskResponse with a fresh claimed_at (not None).
         """
+        stale = "2026-01-01T00:00:00+00:00"
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
             kanban_dir,
             task_id=1,
             status="todo",
-            claimed_at='"2026-01-01T00:00:00+00:00"',  # well over 1h ago
+            claimed_at=f'"{stale}"',  # well over 1h ago
         )
         result = view.start_work(1)
         assert result.claimed_at is not None, "expired claim should be released and re-claimed"
+        assert result.claimed_at != stale, (
+            "re-claim must issue a new timestamp, not return the stale expired one"
+        )

@@ -13,7 +13,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.errors import ValidationError
 from owlbear_kanban.models import PickTasksResponse
 
 # ---------------------------------------------------------------------------
@@ -598,4 +601,236 @@ class TestFromAC_PickTasksDefaults:
         wave_order = [wave.tasks[0].id for wave in resp.waves]
         assert wave_order == [3, 2, 1], (
             f"Expected sort order [3 (critical), 2 (needed), 1 (someday)]; got {wave_order}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC22 proof tests — retry additions (review cited missing coverage)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PickTasksAC22Proof:
+    """Proof tests for the AC22 filter contract: claimed, blocked=true, archived, 3-wave cap.
+
+    Each test is a mutation guard: removing the corresponding filter line from
+    pick_tasks (engine.py:1999) would cause that test to fail.  All tests
+    verify already-implemented behaviour that lacked direct pick_tasks-level
+    proof in the initial test suite.
+    """
+
+    def test_claimed_task_excluded_from_pick_tasks(self, tmp_path: Path) -> None:
+        """AC22: a task with claimed_at set must be absent from pick_tasks results.
+
+        Task 1 has claimed_at set to a fixed timestamp (simulating an active
+        claim).  Task 2 is unclaimed (claimed_at=null).
+
+        pick_tasks passes unclaimed=True to list_tasks, which filters to
+        claimed_at is None (engine.py:753).  Removing that flag from the call
+        at engine.py:1999 would include task 1, failing this assertion.
+        """
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, claimed_at='"2026-04-25T10:00:00+00:00"')
+        _write_task(board, task_id=2)  # unclaimed
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks()
+        ids = _all_ids(resp)
+        assert 1 not in ids, (
+            "Task 1 has claimed_at set → must be excluded from pick_tasks (unclaimed=True filter)"
+        )
+        assert 2 in ids, "Task 2 is unclaimed → must be included"
+
+    def test_blocked_flag_true_task_excluded(self, tmp_path: Path) -> None:
+        """AC22: a task with blocked=true must be absent from pick_tasks results.
+
+        Task 1 has blocked=true.  Task 2 has blocked=false (default).
+
+        pick_tasks passes blocked=False to list_tasks, which filters to
+        t.blocked is False (engine.py:751).  Removing that flag from the call
+        at engine.py:1999 would include task 1, failing this assertion.
+        """
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, blocked="true")
+        _write_task(board, task_id=2)  # blocked=false
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks()
+        ids = _all_ids(resp)
+        assert 1 not in ids, (
+            "Task 1 has blocked=true → must be excluded from pick_tasks (blocked=False filter)"
+        )
+        assert 2 in ids, "Task 2 has blocked=false → must be included"
+
+    def test_archived_task_absent_from_dispatchable_pool(self, tmp_path: Path) -> None:
+        """AC22: archived tasks must never appear in pick_tasks results.
+
+        Task 1 is written to the archive directory (archival_reason=completed).
+        Task 2 is in the active tasks directory.
+
+        pick_tasks passes archived=False to list_tasks, which reads only from
+        tasks_dir (engine.py:693).  Changing archived=False to True at
+        engine.py:1999 would mix in archived tasks, failing this assertion.
+        """
+        board = _make_board(tmp_path)
+        _write_archived_task(board, task_id=1, archival_reason="completed")
+        _write_task(board, task_id=2)
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks()
+        ids = _all_ids(resp)
+        assert 1 not in ids, (
+            "Task 1 is archived (completed) → must not appear in dispatchable pool"
+        )
+        assert 2 in ids, "Task 2 is active → must be included"
+
+    def test_missing_dependency_makes_task_dep_blocked(self, tmp_path: Path) -> None:
+        """AC22: task depending on a non-existent ID gets dep_status='blocked' and is excluded.
+
+        Task 1 depends on ID 999, which does not exist in active tasks or
+        archive.  _compute_dep_status (engine.py:1642) returns 'blocked' when
+        the dep is in neither set.  Task 1 must be excluded from pick_tasks.
+        Task 2 has no deps and must appear.
+        """
+        board = _make_board(tmp_path)
+        _write_task(board, task_id=1, depends_on="[999]")  # 999 missing
+        _write_task(board, task_id=2)
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks()
+        ids = _all_ids(resp)
+        assert 1 not in ids, (
+            "Task 1 depends on missing ID 999 → dep_status='blocked' → must be excluded"
+        )
+        assert 2 in ids, "Task 2 has no deps → must be included"
+
+    def test_default_max_waves_cap_is_three(self, tmp_path: Path) -> None:
+        """AC22: default max_waves=3 caps output at three waves when not overridden.
+
+        Config wave_size=1, five tasks.  pick_tasks() called with no explicit
+        max_waves argument exercises the default (engine.py:1977: max_waves=3).
+        Result must have ≤ 3 waves and exactly 3 dispatched tasks (2 dropped).
+        Changing the default to a higher value would pass more tasks, failing
+        the total_dispatched assertion.
+        """
+        config = _BASE_CONFIG.replace("wave_size: 4", "wave_size: 1")
+        board = _make_board(tmp_path, config)
+        for i in range(1, 6):
+            _write_task(board, task_id=i)
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().pick_tasks()  # no explicit max_waves
+        assert len(resp.waves) <= 3, (
+            f"Default max_waves=3 must cap output at 3 waves; got {len(resp.waves)}"
+        )
+        total_dispatched = sum(len(w.tasks) for w in resp.waves)
+        assert total_dispatched == 3, (
+            f"wave_size=1 x max_waves=3 -> exactly 3 tasks dispatched; got {total_dispatched}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC: pick_tasks is on AgentView only, not CockpitView
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PickTasksViewScope:
+    """Negative proof: CockpitView must not expose pick_tasks (role-separation guard)."""
+
+    def test_cockpit_view_does_not_expose_pick_tasks(self, tmp_path: Path) -> None:
+        """CockpitView must not have a pick_tasks attribute.
+
+        pick_tasks is an agent-facing dispatch operation.  CockpitView is the
+        cockpit-facing facade and must not leak agent-side authority.  Adding
+        pick_tasks to CockpitView would make hasattr return True, failing this
+        assertion.
+        """
+        board = _make_board(tmp_path)
+        engine = KanbanEngine(board, activity_log=False)
+        cockpit = engine.cockpit_view()
+        assert not hasattr(cockpit, "pick_tasks"), (
+            "CockpitView must NOT expose pick_tasks — it is an AgentView-only operation"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC27 + AC28: exact dep_status string assertions via show_task (architect refinement)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PickTasksDepStatusString:
+    """AC27/AC28 refined: dep_status exact string must be asserted through the public API.
+
+    The pick_tasks exclusion/inclusion tests above prove the filter effect, but
+    the architect (architecture review) flagged that the dep_status CONTRACT
+    (the exact string value on TaskSummary/ShowTaskResponse) was never directly
+    asserted.  For AC28 this is critical: pick_tasks cannot distinguish
+    dep_status='redirect' from dep_status='ok' by inclusion alone.
+    """
+
+    def test_wontfix_archived_dep_sets_dep_status_blocked_string(self, tmp_path: Path) -> None:
+        """AC27 string contract: show_task returns dep_status='blocked' for wontfix-archived dep.
+
+        Task 1 depends on wontfix-archived task 99.  show_task(1) must return
+        dep_status exactly equal to the string 'blocked' (not None, not 'ok').
+        This is the public API contract that guards against renaming 'blocked'
+        in _compute_dep_status without updating the filter in pick_tasks.
+        """
+        board = _make_board(tmp_path)
+        _write_archived_task(board, task_id=99, archival_reason="wontfix")
+        _write_task(board, task_id=1, status="todo", depends_on="[99]")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().show_task(1)
+        assert resp.dep_status == "blocked", (
+            f"Task 1 dep on wontfix-archived #99: show_task must return "
+            f"dep_status='blocked' but got {resp.dep_status!r}"
+        )
+
+    def test_deprecated_archived_dep_sets_dep_status_redirect_string(self, tmp_path: Path) -> None:
+        """AC28 string contract: show_task returns dep_status='redirect' for deprecated-archived dep.
+
+        Task 2 depends on deprecated-archived task 99.  show_task(2) must return
+        dep_status exactly equal to the string 'redirect' (not None, not 'ok',
+        not 'blocked').  This is the ONLY way to prove AC28's dep_status contract:
+        pick_tasks inclusion cannot distinguish 'redirect' from 'ok' in isolation.
+        """
+        board = _make_board(tmp_path)
+        _write_archived_task(board, task_id=99, archival_reason="deprecated")
+        _write_task(board, task_id=2, status="todo", depends_on="[99]")
+        engine = KanbanEngine(board, activity_log=False)
+        resp = engine.agent_view().show_task(2)
+        assert resp.dep_status == "redirect", (
+            f"Task 2 dep on deprecated-archived #99: show_task must return "
+            f"dep_status='redirect' but got {resp.dep_status!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# New AC: BoardConfig.wave_size < 1 (no explicit arg) → ValidationError
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PickTasksConfigFallback:
+    """New AC (architect refinement): config.wave_size < 1 triggers ERR_INVALID_WAVE_PARAM.
+
+    BoardConfig has no ge=1 validator on wave_size (models.py:161), so a board
+    with wave_size: 0 in config.yml is valid at parse time.  The defensive guard
+    at engine.py:2009 (effective_wave < 1) is the only protection and must raise
+    ValidationError(ERR_INVALID_WAVE_PARAM) when pick_tasks() is called without
+    an explicit wave_size argument.
+    """
+
+    def test_config_wave_size_zero_raises_validation_error_without_explicit_arg(
+        self, tmp_path: Path
+    ) -> None:
+        """pick_tasks() with config.wave_size=0 and no explicit wave_size → ValidationError.
+
+        The explicit-arg guard (wave_size is not None and wave_size < 1) does NOT
+        fire when wave_size is omitted.  The effective_wave fallback path
+        (engine.py:2008-2011) must catch config.wave_size=0 and raise
+        ValidationError(code='ERR_INVALID_WAVE_PARAM').  Removing the effective_wave
+        guard would silently produce empty waves instead of raising.
+        """
+        config = _BASE_CONFIG.replace("wave_size: 4", "wave_size: 0")
+        board = _make_board(tmp_path, config)
+        _write_task(board, task_id=1)
+        engine = KanbanEngine(board, activity_log=False)
+        with pytest.raises(ValidationError) as exc_info:
+            engine.agent_view().pick_tasks()  # no explicit wave_size — uses config.wave_size=0
+        assert exc_info.value.code == "ERR_INVALID_WAVE_PARAM", (
+            f"Expected ERR_INVALID_WAVE_PARAM; got code={exc_info.value.code!r}"
         )

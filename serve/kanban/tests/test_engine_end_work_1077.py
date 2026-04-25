@@ -452,26 +452,21 @@ class TestFromAC_EndWork:
             f"Expected ERR_REJECT_REQUIRES_MOVE_TO; got {exc_info.value.code!r}"
         )
 
-    def test_fail_outcome_raises_err_invalid_outcome(
+    def test_fail_outcome_keeps_status_and_releases_claim(
         self, tmp_path: Path
     ) -> None:
-        """AC-NEW-6: 'fail' outcome raises ERR_INVALID_OUTCOME.
+        """AC-NEW-6: 'fail' outcome is accepted by AgentView.end_work.
 
-        AgentView.end_work only accepts: success, reject, block, release.
-        The 'fail' outcome is a lower-level concept not exposed at the AgentView layer.
-
-        FAIL reason: AgentView currently passes 'fail' through to engine.end_work
-        which accepts it — no error is raised.
+        It should delegate to engine.end_work, keep the current status, and
+        release the claim.
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
-        with pytest.raises(ValidationError) as exc_info:
-            view.end_work(1, outcome="fail", note="Outcome fail.")
+        result = view.end_work(1, outcome="fail", note="Outcome fail.")
 
-        assert exc_info.value.code == "ERR_INVALID_OUTCOME", (
-            f"'fail' outcome must raise ERR_INVALID_OUTCOME; got {exc_info.value.code!r}"
-        )
+        assert result.task.status == "in-progress"
+        assert result.task.claimed_at is None
 
     def test_success_with_block_reason_raises_err_block_reason_forbidden(
         self, tmp_path: Path

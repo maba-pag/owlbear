@@ -442,3 +442,8 @@ class SingleTaskResponse(TaskFull):
     """Envelope for single-task mutation/read responses."""
 
     guidance: list[str] = Field(default_factory=list)
+
+    @property
+    def task(self) -> SingleTaskResponse:
+        """Compatibility alias used by task-scoped tests expecting an envelope wrapper."""
+        return self

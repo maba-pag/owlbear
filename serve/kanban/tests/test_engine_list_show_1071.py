@@ -428,3 +428,236 @@ class TestFromAC_CockpitViewShowTask:
         with pytest.raises(NotFoundError) as exc_info:
             view.show_task(99999)
         assert exc_info.value.code == "ERR_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# AC-sort-rev-lim: AgentView.list_tasks forwards sort, reverse, limit
+# Removing any one of these from the delegation must cause these tests to fail.
+# Expectation: sorted/reversed/limited results returned by AgentView.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_AgentViewSortReverseLimitForwarding:
+    """AC: AgentView.list_tasks forwards sort, reverse, limit — removing any one must fail a test.
+
+    Tests write tasks in non-trivial ID order so that unsorted results differ
+    from sorted results, making each assertion mutation-sensitive.
+    """
+
+    def test_sort_id_returns_ascending_order(self, tmp_path: Path) -> None:
+        """sort='id' produces ascending task ID order through AgentView."""
+        kanban_dir = _make_board(tmp_path)
+        # Write in descending ID order so default scan order != sorted order.
+        _write_task(kanban_dir, task_id=4, title="Four")
+        _write_task(kanban_dir, task_id=2, title="Two")
+        _write_task(kanban_dir, task_id=3, title="Three")
+        _write_task(kanban_dir, task_id=1, title="One")
+        view = _make_agent_view(kanban_dir)
+        resp = view.list_tasks(sort="id")
+        ids = [t.id for t in resp.tasks]
+        assert len(ids) == 4, f"expected 4 tasks, got {len(ids)}"
+        assert ids == sorted(ids), (
+            f"sort='id' must produce ascending ID order; got {ids}"
+        )
+
+    def test_sort_title_produces_non_id_order(self, tmp_path: Path) -> None:
+        """sort='title' returns alphabetical title order, provably different from filename order.
+
+        Files are named '{id}-task.md', so os.scandir() on APFS/ext4 enumerates them
+        in ID order [1, 2, 3].  Title-alphabetical order for "Apple"(id=2), "Mango"(id=3),
+        "Zebra"(id=1) is [2, 3, 1] — a result impossible to produce without sort forwarding.
+        Removing sort='title' from AgentView.list_tasks yields [1, 2, 3], failing the assertion.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Zebra")
+        _write_task(kanban_dir, task_id=2, title="Apple")
+        _write_task(kanban_dir, task_id=3, title="Mango")
+        view = _make_agent_view(kanban_dir)
+        resp = view.list_tasks(sort="title")
+        ids = [t.id for t in resp.tasks]
+        assert ids == [2, 3, 1], (
+            f"sort='title' must produce alphabetical title order [2, 3, 1]; got {ids}"
+        )
+
+    def test_sort_id_with_reverse_returns_descending_order(self, tmp_path: Path) -> None:
+        """reverse=True inverts sort='id' to produce descending ID order through AgentView."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="One")
+        _write_task(kanban_dir, task_id=3, title="Three")
+        _write_task(kanban_dir, task_id=2, title="Two")
+        view = _make_agent_view(kanban_dir)
+        resp = view.list_tasks(sort="id", reverse=True)
+        ids = [t.id for t in resp.tasks]
+        assert len(ids) == 3, f"expected 3 tasks, got {len(ids)}"
+        assert ids == sorted(ids, reverse=True), (
+            f"reverse=True must produce descending ID order; got {ids}"
+        )
+
+    def test_limit_caps_result_count(self, tmp_path: Path) -> None:
+        """limit=2 returns exactly 2 tasks even when more exist through AgentView."""
+        kanban_dir = _make_board(tmp_path)
+        for i in range(1, 6):
+            _write_task(kanban_dir, task_id=i, title=f"Task {i}")
+        view = _make_agent_view(kanban_dir)
+        resp = view.list_tasks(limit=2)
+        assert len(resp.tasks) == 2, (
+            f"limit=2 must return exactly 2 tasks; got {len(resp.tasks)}"
+        )
+
+    def test_limit_zero_returns_all_tasks(self, tmp_path: Path) -> None:
+        """limit=0 (default) returns all tasks with no cap through AgentView."""
+        kanban_dir = _make_board(tmp_path)
+        for i in range(1, 6):
+            _write_task(kanban_dir, task_id=i, title=f"Task {i}")
+        view = _make_agent_view(kanban_dir)
+        resp = view.list_tasks(limit=0)
+        assert len(resp.tasks) == 5, (
+            f"limit=0 must return all 5 tasks; got {len(resp.tasks)}"
+        )
+
+    def test_sort_title_with_reverse_produces_title_descending_order(
+        self, tmp_path: Path
+    ) -> None:
+        """reverse=True with sort='title' produces reverse-alphabetical title order.
+
+        Title-descending order for Zebra(id=1), Mango(id=3), Apple(id=2) is [1, 3, 2].
+        Filename-based scan order is always ID-based [1, 2, 3].
+        Forward-sorted title order is [2, 3, 1].
+        Neither [1, 2, 3] nor [2, 3, 1] equals [1, 3, 2], so removing reverse=reverse
+        OR sort=sort from AgentView.list_tasks always fails this assertion.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Zebra")
+        _write_task(kanban_dir, task_id=2, title="Apple")
+        _write_task(kanban_dir, task_id=3, title="Mango")
+        view = _make_agent_view(kanban_dir)
+        resp = view.list_tasks(sort="title", reverse=True)
+        ids = [t.id for t in resp.tasks]
+        assert ids == [1, 3, 2], (
+            f"sort='title' + reverse=True must produce reverse-title order [1, 3, 2]; got {ids}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC-cv-parent: CockpitView.list_tasks forwards parent filter
+# Removing parent=parent from the CockpitView delegation must fail these tests.
+# Expectation: parent filter propagated through CockpitView → AgentView.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CockpitViewParentForwarding:
+    """AC: CockpitView.list_tasks forwards parent — removing it must fail a test."""
+
+    def test_cockpit_parent_filter_returns_matching_child(self, tmp_path: Path) -> None:
+        """CockpitView.list_tasks(parent=42) returns only tasks with parent==42."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Child", parent="42")
+        _write_task(kanban_dir, task_id=2, title="RootLevel", parent="null")
+        _write_task(kanban_dir, task_id=3, title="OtherChild", parent="99")
+        view = _make_cockpit_view(kanban_dir)
+        resp = view.list_tasks(parent=42)
+        ids = [t.id for t in resp.tasks]
+        assert ids == [1], (
+            f"CockpitView.list_tasks(parent=42) must return only task 1; got {ids}"
+        )
+
+    def test_cockpit_parent_filter_excludes_top_level_tasks(
+        self, tmp_path: Path
+    ) -> None:
+        """CockpitView.list_tasks(parent=5) excludes tasks whose parent is null."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="TopLevel", parent="null")
+        _write_task(kanban_dir, task_id=2, title="Child", parent="5")
+        view = _make_cockpit_view(kanban_dir)
+        resp = view.list_tasks(parent=5)
+        ids = [t.id for t in resp.tasks]
+        assert 1 not in ids, (
+            "CockpitView.list_tasks(parent=5) must exclude top-level (null parent) tasks"
+        )
+        assert 2 in ids
+
+    def test_cockpit_parent_filter_empty_when_no_match(self, tmp_path: Path) -> None:
+        """CockpitView.list_tasks(parent=999) returns empty when no tasks match."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, title="Child", parent="42")
+        view = _make_cockpit_view(kanban_dir)
+        resp = view.list_tasks(parent=999)
+        assert isinstance(resp, ListTasksResponse)
+        assert resp.tasks == [], (
+            f"CockpitView.list_tasks(parent=999) must return empty list; got {resp.tasks!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC-D56: section filter matches heading NAME regardless of heading level
+# "case-insensitive heading match regardless of level per D56"
+# Expectation: show_task(section="X") matches ## X, # X, ### X equally.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SectionHeadingLevelAgnostic:
+    """AC-D56: section filter is case-insensitive AND level-agnostic per D56.
+
+    The engine matches on the heading name only, not the markdown heading level.
+    These tests prove that # Goals, ## Goals, and ### Goals all match section='Goals'.
+    """
+
+    def test_level1_heading_matches_section_filter(self, tmp_path: Path) -> None:
+        """show_task(section='Goals') matches a level-1 (# Goals) heading — D56."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=50,
+            title="Level1Section",
+            body="# Goals\nLevel-one goal content.\n\n## Notes\nNot included.\n",
+        )
+        view = _make_agent_view(kanban_dir)
+        view.engine.list_tasks()  # warm index
+        resp = view.show_task(50, section="Goals")
+        assert resp.body is not None, (
+            "D56: level-1 '# Goals' heading must match section='Goals'"
+        )
+        assert "Level-one goal content." in resp.body
+        assert "Not included." not in resp.body
+
+    def test_level3_heading_matches_section_filter(self, tmp_path: Path) -> None:
+        """show_task(section='GOALS') matches a level-3 (### Goals) heading — D56."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            task_id=51,
+            title="Level3Section",
+            body="### Goals\nLevel-three goal content.\n\n## Notes\nNot included.\n",
+        )
+        view = _make_agent_view(kanban_dir)
+        view.engine.list_tasks()  # warm index
+        resp = view.show_task(51, section="GOALS")
+        assert resp.body is not None, (
+            "D56: level-3 '### Goals' heading must match case-insensitive section='GOALS'"
+        )
+        assert "Level-three goal content." in resp.body
+        assert "Not included." not in resp.body
+
+    def test_mixed_heading_levels_all_match_same_section_name(
+        self, tmp_path: Path
+    ) -> None:
+        """show_task(section='Goals') matches # Goals AND ### Goals in the same body — D56."""
+        kanban_dir = _make_board(tmp_path)
+        body = (
+            "# Goals\n"
+            "Level-one content.\n\n"
+            "## Notes\n"
+            "Notes not included.\n\n"
+            "### Goals\n"
+            "Level-three content.\n"
+        )
+        _write_task(kanban_dir, task_id=52, title="MixedLevels", body=body)
+        view = _make_agent_view(kanban_dir)
+        view.engine.list_tasks()  # warm index
+        resp = view.show_task(52, section="Goals")
+        assert resp.body is not None, (
+            "D56: both # Goals and ### Goals must match section='Goals'"
+        )
+        assert "Level-one content." in resp.body
+        assert "Level-three content." in resp.body
+        assert "Notes not included." not in resp.body
