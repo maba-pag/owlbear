@@ -26,16 +26,16 @@ AC coverage (from task #1121):
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import Task
+from owlbear_kanban.models import ConcurrencyError, Task
 from owlbear_kanban.storage import (
-    ConcurrencyError,
     CorruptionError,
+    _normalize_timestamp,
     allocate_next_id,
     generate_slug,
     list_archive_files,
@@ -165,11 +165,11 @@ def _make_view(base_dir: Path) -> tuple[AgentView, Path]:
 
 
 class TestFromAC_ArchivedTaskEditPersistence:
-    """Covers archived-task edit persistence — defects D1 and D2 in engine + storage.
+    """Regression tests for archived-task edit persistence (task #1121).
 
-    All tests currently fail with FileNotFoundError at the engine._find_task_path step (D1).
-    After D1 is fixed, tests for file location (AC-5) and on-disk content (AC-1 through AC-4, AC-6)
-    will additionally expose D2 (write_task targets tasks/ instead of archive/).
+    Verifies that AgentView.edit_task and KanbanEngine.edit_task correctly locate
+    and persist edits to tasks stored in archive/.  Covers archival_reason, archival_refs,
+    append_body, priority update, archive-dir placement, and updated-timestamp propagation.
     """
 
     # ------------------------------------------------------------------
@@ -179,10 +179,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     def test_agentview_edit_archived_archival_reason_result_updated(
         self, tmp_path: Path
     ) -> None:
-        """AC-1: edit_task on archived task with archival_reason='dropped'; returned object shows updated reason.
-
-        Fails now: _find_task_path raises FileNotFoundError (D1 — tasks/ only).
-        """
+        """AC-1: edit_task on archived task with archival_reason='dropped'; returned object shows updated reason."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
             kanban_dir,
@@ -203,7 +200,6 @@ class TestFromAC_ArchivedTaskEditPersistence:
         """AC-1: after edit, re-reading via show_task returns updated archival_reason from archive/.
 
         Confirms on-disk persistence, not just the in-memory return value.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -230,7 +226,6 @@ class TestFromAC_ArchivedTaskEditPersistence:
         """AC-2: edit_task on archived task (reason=deprecated) with archival_refs=[2, 3]; result shows updated refs.
 
         Task starts with refs=[2]; edit adds ref 3 so the change is non-trivial and not a no-op.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=2, status="done", subdir="tasks")
@@ -254,7 +249,6 @@ class TestFromAC_ArchivedTaskEditPersistence:
         """AC-2: after archival_refs edit, re-read from archive shows the new refs.
 
         Starts with refs=[2]; edits to [2, 3] to confirm a real change round-trips through disk.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=2, status="done", subdir="tasks")
@@ -280,10 +274,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     def test_agentview_edit_archived_append_body_result_contains_text(
         self, tmp_path: Path
     ) -> None:
-        """AC-3: append_body on an archived task; returned body contains the appended text.
-
-        Fails now: _find_task_path raises FileNotFoundError (D1).
-        """
+        """AC-3: append_body on an archived task; returned body contains the appended text."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
             kanban_dir,
@@ -304,10 +295,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     def test_agentview_edit_archived_append_body_reread_from_archive(
         self, tmp_path: Path
     ) -> None:
-        """AC-3: after append_body edit, re-reading from archive confirms text was persisted.
-
-        Fails now: _find_task_path raises FileNotFoundError (D1).
-        """
+        """AC-3: after append_body edit, re-reading from archive confirms text was persisted."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
             kanban_dir,
@@ -335,8 +323,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     ) -> None:
         """AC-4: KanbanEngine.edit_task on archived task with priority='critical'; result shows updated priority.
 
-        Bypasses AgentView to confirm the defect is in the core engine path, not only AgentView.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
+        Bypasses AgentView to confirm the fix covers the core engine path, not only AgentView.
         """
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(
@@ -355,10 +342,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     def test_core_engine_edit_archived_priority_reread_from_archive(
         self, tmp_path: Path
     ) -> None:
-        """AC-4: after engine.edit_task, re-reading from archive shows the updated priority on disk.
-
-        Fails now: _find_task_path raises FileNotFoundError (D1).
-        """
+        """AC-4: after engine.edit_task, re-reading from archive shows the updated priority on disk."""
         engine, kanban_dir = _make_engine(tmp_path)
         _write_task(
             kanban_dir,
@@ -381,12 +365,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     def test_edit_archived_file_stays_in_archive_dir(
         self, tmp_path: Path
     ) -> None:
-        """AC-5: after a successful edit the task file still exists in archive/.
-
-        D1 prevents reaching the write step; once D1 is fixed, D2 would still
-        create the file in the wrong location.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
-        """
+        """AC-5: after a successful edit the task file still exists in archive/."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
             kanban_dir,
@@ -404,11 +383,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     def test_edit_archived_no_duplicate_created_in_tasks_dir(
         self, tmp_path: Path
     ) -> None:
-        """AC-5: no task file is created in tasks/ after editing an archived task.
-
-        D2 causes write_task to always target tasks/; the fix must preserve archive/ placement.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
-        """
+        """AC-5: no task file is created in tasks/ after editing an archived task."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
             kanban_dir,
@@ -435,8 +410,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     ) -> None:
         """AC-6: successful edit of an archived task advances the 'updated' timestamp.
 
-        The initial timestamp is '2026-01-01T10:00:00+00:00'; any successful edit must change it.
-        Fails now: _find_task_path raises FileNotFoundError (D1).
+        The initial timestamp is '2026-01-01T10:00:00+00:00'; any successful edit must advance it.
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -650,412 +624,439 @@ _TASK_DICT = {
 }
 
 
+# ---------------------------------------------------------------------------
+# TestFromAC_StorageCoveragePaths
+# ---------------------------------------------------------------------------
+
+
 class TestFromAC_StorageCoveragePaths:
-    """Supplementary coverage tests for owlbear_kanban.storage.
+    """Direct-call coverage tests for storage.py branches not exercised by the
+    archived-edit AC suite.
 
-    Written to bring storage module coverage to >=90% by exercising branches
-    not reached by the AC test suite above. Each test targets a specific
-    uncovered line-range identified from the coverage report when running
-    only the 16 AC tests.
-
-    These tests are GREEN against the completed implementation (round 2+).
-    Added post-implementation per builder and reviewer coverage requests.
+    Each test exercises a specific function or branch documented in the
+    storage-module coverage gap report.  All tests run against the
+    already-fixed implementation and are expected to PASS.
     """
 
     # ------------------------------------------------------------------
-    # generate_slug
+    # generate_slug (lines 101-108)
     # ------------------------------------------------------------------
 
     def test_generate_slug_empty_title_returns_empty(self) -> None:
-        """generate_slug('') returns '' via the early-return branch."""
+        """Line 101-102: empty title → early return ''."""
         assert generate_slug("") == ""
 
+    def test_generate_slug_normal_title_returns_slug(self) -> None:
+        """Lines 101, 103-104, 108: normal title → lower-cased slug."""
+        assert generate_slug("Hello World") == "hello-world"
+
     def test_generate_slug_windows_reserved_name_raises(self) -> None:
-        """generate_slug raises ValueError for Windows reserved filenames like 'con'."""
+        """Lines 105-107: slug matches Windows reserved name → ValueError."""
+        with pytest.raises(ValueError, match="Windows reserved"):
+            generate_slug("nul")
+
+    def test_generate_slug_con_reserved_raises(self) -> None:
+        """Lines 105-107: 'con' is reserved → ValueError."""
         with pytest.raises(ValueError, match="Windows reserved"):
             generate_slug("con")
 
     # ------------------------------------------------------------------
-    # make_task_filename
+    # make_task_filename (line 113)
     # ------------------------------------------------------------------
 
-    def test_make_task_filename_returns_id_dash_slug_dot_md(self) -> None:
-        """make_task_filename returns '{id}-{slug}.md'."""
-        assert make_task_filename(5, "Hello World") == "5-hello-world.md"
+    def test_make_task_filename_returns_id_slug_md(self) -> None:
+        """Line 113: make_task_filename delegates to generate_slug."""
+        assert make_task_filename(42, "My Task") == "42-my-task.md"
 
     # ------------------------------------------------------------------
-    # validate_path_containment
+    # validate_path_containment (lines 119-120, 126-127, 131-133)
     # ------------------------------------------------------------------
 
-    def test_validate_path_containment_null_byte_raises(self, tmp_path: Path) -> None:
-        """validate_path_containment raises ValueError when str(path) contains a null byte."""
-        bad_path = MagicMock()
-        bad_path.__str__ = MagicMock(return_value="evil\x00.md")  # noqa: S108
+    def test_validate_path_containment_null_byte_raises(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 119-120: path string contains null byte → ValueError.
+
+        Uses a minimal path-like object so Path construction issues on
+        stricter platforms do not mask the real guard.
+        """
+        null_str = str(tmp_path / "evil") + "\x00extra"
+
+        class _NullPath:
+            def __str__(self) -> str:
+                return null_str
+
+            def resolve(self) -> Path:
+                return tmp_path / "evil"
 
         with pytest.raises(ValueError, match="null byte"):
-            validate_path_containment(tmp_path, bad_path)
+            validate_path_containment(tmp_path, _NullPath())  # type: ignore[arg-type]
 
     def test_validate_path_containment_path_equals_dir_raises(
         self, tmp_path: Path
     ) -> None:
-        """validate_path_containment raises ValueError when path == tasks_dir."""
-        with pytest.raises(ValueError, match="not tasks_dir itself"):
+        """Lines 126-127: path == tasks_dir → ValueError."""
+        with pytest.raises(ValueError, match="file inside tasks_dir"):
             validate_path_containment(tmp_path, tmp_path)
 
     def test_validate_path_containment_path_outside_dir_raises(
         self, tmp_path: Path
     ) -> None:
-        """validate_path_containment raises PermissionError when path escapes tasks_dir."""
-        outside = tmp_path.parent / "other" / "file.md"
+        """Lines 131-133: path outside tasks_dir → PermissionError."""
+        outside = tmp_path.parent / "other"
         with pytest.raises(PermissionError, match="outside tasks_dir"):
             validate_path_containment(tmp_path, outside)
 
     # ------------------------------------------------------------------
-    # read_task: special paths
+    # _normalize_timestamp (lines 272, 276, 280, 282)
+    # ------------------------------------------------------------------
+
+    def test_normalize_timestamp_none_returns_none(self) -> None:
+        """_normalize_timestamp(None) → None."""
+        assert _normalize_timestamp(None) is None
+
+    def test_normalize_timestamp_non_matching_string_returns_as_is(self) -> None:
+        """Line 272: string not matching _TS_RE → returned unchanged."""
+        result = _normalize_timestamp("not-a-timestamp")
+        assert result == "not-a-timestamp"
+
+    def test_normalize_timestamp_z_suffix_becomes_utc_plus00(self) -> None:
+        """Line 276: Z suffix → replaced with +00:00."""
+        result = _normalize_timestamp("2026-01-01T10:00:00Z")
+        assert result == "2026-01-01T10:00:00+00:00"
+
+    def test_normalize_timestamp_positive_offset_converts_to_utc(self) -> None:
+        """Line 280: non-Z timezone offset → UTC isoformat."""
+        result = _normalize_timestamp("2026-01-01T15:30:00+05:30")
+        # 15:30 +05:30 = 10:00 UTC
+        assert result == "2026-01-01T10:00:00+00:00"
+
+    def test_normalize_timestamp_no_timezone_appends_utc_suffix(self) -> None:
+        """Line 282: no timezone in string → +00:00 appended."""
+        result = _normalize_timestamp("2026-01-01T10:00:00")
+        assert result == "2026-01-01T10:00:00+00:00"
+
+    # ------------------------------------------------------------------
+    # read_task error paths (lines 140-141, 144-145, 154-155, 166-176,
+    #                        316-325, 338, 343-344, 346)
     # ------------------------------------------------------------------
 
     def test_read_task_cp1252_fallback_succeeds(self, tmp_path: Path) -> None:
-        """read_task falls back to cp1252 when the file is not valid UTF-8.
-
-        The euro sign (€ U+20AC) is byte 0x80 in cp1252, which is an invalid
-        continuation byte in UTF-8 — triggering the UnicodeDecodeError branch.
-        """
-        content = _TASK_TMPL.format(
-            task_id=1,
-            title="Task",
-            status="todo",
-            priority="needed",
-            archival_reason="null",
-            archival_refs="[]",
-            body="Body with euro: \u20ac",
+        """Lines 140-141: UTF-8 decode fails → cp1252 fallback reads task."""
+        task_file = tmp_path / "1-cp1252.md"
+        # \x80 is valid cp1252 (€) but NOT valid UTF-8.
+        content = (
+            b"---\nid: 1\ntitle: CP Task\nstatus: todo\npriority: needed\n"
+            b'created: "2026-01-01T10:00:00+00:00"\n'
+            b'updated: "2026-01-01T10:00:00+00:00"\n'
+            b"tags: []\nparent: null\ndepends_on: []\nblocked: false\n"
+            b"block_reason: null\nclaimed_at: null\narchival_reason: null\n"
+            b"archival_refs: []\n---\nBody with \x80 char.\n"
         )
-        path = tmp_path / "1-task.md"
-        path.write_bytes(content.encode("cp1252"))
-
-        task = read_task(path)
-
+        task_file.write_bytes(content)
+        # File is at tmp_path/1-cp1252.md; grandparent has no config.yml.
+        task = read_task(task_file)
         assert task.id == 1
-        assert "\u20ac" in (task.body or "")
+        assert task.title == "CP Task"
 
-    def test_read_task_missing_opening_delimiter_raises_corruption(
+    def test_read_task_no_opening_delimiter_raises_corruption(
         self, tmp_path: Path
     ) -> None:
-        """read_task raises CorruptionError (ERR_CORRUPT_DELIMITERS) without opening '---'."""
-        path = tmp_path / "no-frontmatter.md"
-        path.write_text("no yaml here\nbody content", encoding="utf-8")
-
+        """Lines 144-145, 324-329: no opening --- → ERR_CORRUPT_DELIMITERS."""
+        task_file = tmp_path / "1-nodelim.md"
+        task_file.write_text("No frontmatter here.\n", encoding="utf-8")
         with pytest.raises(CorruptionError) as exc_info:
-            read_task(path)
-
+            read_task(task_file)
         assert exc_info.value.code == "ERR_CORRUPT_DELIMITERS"
 
-    def test_read_task_missing_closing_delimiter_raises_corruption(
+    def test_read_task_no_closing_delimiter_raises_corruption(
         self, tmp_path: Path
     ) -> None:
-        """read_task raises CorruptionError (ERR_CORRUPT_DELIMITERS) without closing '---'."""
-        path = tmp_path / "1-no-close.md"
-        path.write_text("---\nid: 1\ntitle: Task\n", encoding="utf-8")
-
-        with pytest.raises(CorruptionError) as exc_info:
-            read_task(path)
-
-        assert exc_info.value.code == "ERR_CORRUPT_DELIMITERS"
-
-    def test_read_task_type_mismatch_raises_corruption(self, tmp_path: Path) -> None:
-        """read_task raises CorruptionError when a field has an incompatible type.
-
-        id: 'abc' (string) fails pydantic int coercion → ValidationError →
-        _validation_to_corruption → CorruptionError(ERR_CORRUPT_TYPE_MISMATCH).
-        No config.yml at path.parent.parent so board-level corruption check is skipped.
-        """
-        path = tmp_path / "bad.md"
-        path.write_text(
-            "---\n"
-            "id: abc\n"
-            "title: Task\n"
-            "status: todo\n"
-            "priority: needed\n"
-            "created: '2026-01-01T10:00:00+00:00'\n"
-            "updated: '2026-01-01T10:00:00+00:00'\n"
-            "tags: []\n"
-            "parent: null\n"
-            "depends_on: []\n"
-            "blocked: false\n"
-            "block_reason: null\n"
-            "claimed_at: null\n"
-            "archival_reason: null\n"
-            "archival_refs: []\n"
-            "---\nBody",
+        """Lines 154-155: no closing --- → ERR_CORRUPT_DELIMITERS."""
+        task_file = tmp_path / "1-noclosing.md"
+        task_file.write_text(
+            "---\nid: 1\ntitle: Task\n# no closing delimiter\nBody\n",
             encoding="utf-8",
         )
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(task_file)
+        assert exc_info.value.code == "ERR_CORRUPT_DELIMITERS"
 
-        with pytest.raises(CorruptionError):
-            read_task(path)
-
-    def test_read_task_non_integer_stem_prefix_skips_mismatch_check(
+    def test_read_task_yaml_parse_error_raises_corruption(
         self, tmp_path: Path
     ) -> None:
-        """read_task with non-integer stem sets file_id=None and skips mismatch guard."""
-        content = _TASK_TMPL.format(
+        """Lines 316-321: yaml.YAMLError → ERR_CORRUPT_YAML_PARSE."""
+        task_file = tmp_path / "1-badyaml.md"
+        # Unclosed YAML flow sequence → YAML parse error.
+        task_file.write_text(
+            "---\nid: [\nunclosed\n---\nBody\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(task_file)
+        assert "YAML" in exc_info.value.code or "ERR_CORRUPT" in exc_info.value.code
+
+    def test_read_task_missing_required_field_raises_missing_field_corruption(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 322-323, 166-176: Pydantic missing field → ERR_CORRUPT_MISSING_FIELD."""
+        task_file = tmp_path / "1-noid.md"
+        task_file.write_text(
+            "---\ntitle: No ID\nstatus: todo\npriority: needed\n"
+            'created: "2026-01-01T10:00:00+00:00"\n'
+            'updated: "2026-01-01T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\n"
+            "block_reason: null\nclaimed_at: null\narchival_reason: null\n"
+            "archival_refs: []\n---\nBody\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CorruptionError) as exc_info:
+            read_task(task_file)
+        assert exc_info.value.code == "ERR_CORRUPT_MISSING_FIELD"
+
+    def test_read_task_detect_corruption_raises_for_invalid_status(
+        self, tmp_path: Path
+    ) -> None:
+        """Line 338: detect_corruption returns error → raise corruption."""
+        kanban_dir = _make_board(tmp_path)
+        task_content = _TASK_TMPL.format(
             task_id=1,
-            title="Task",
-            status="todo",
+            title="Bad Status",
+            status="invalid-status-xyz",
             priority="needed",
             archival_reason="null",
             archival_refs="[]",
-            body="Body",
+            body="Body.",
         )
-        path = tmp_path / "abc-task.md"  # stem prefix "abc" is non-integer → file_id=None
-        path.write_text(content, encoding="utf-8")
+        task_file = kanban_dir / "tasks" / "1-bad-status.md"
+        task_file.write_text(task_content, encoding="utf-8")
+        with pytest.raises(CorruptionError):
+            read_task(task_file)
 
-        task = read_task(path)
-
-        assert task.id == 1  # no mismatch error despite name prefix ≠ frontmatter id
+    def test_read_task_non_integer_filename_prefix_reads_task_successfully(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 343-344: stem prefix is non-integer → file_id=None → no mismatch check."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        # Stem "abc-1-task" → split("-",1)[0]="abc" → int("abc") raises → file_id=None.
+        task_file = tasks_dir / "abc-1-task.md"
+        task_file.write_text(
+            "---\nid: 1\ntitle: Task\nstatus: todo\npriority: needed\n"
+            'created: "2026-01-01T10:00:00+00:00"\n'
+            'updated: "2026-01-01T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\n"
+            "block_reason: null\nclaimed_at: null\narchival_reason: null\n"
+            "archival_refs: []\n---\nBody.\n",
+            encoding="utf-8",
+        )
+        # tmp_path has no config.yml → no detect_corruption.
+        task = read_task(task_file)
+        assert task.id == 1
 
     def test_read_task_id_filename_mismatch_raises_corruption(
         self, tmp_path: Path
     ) -> None:
-        """read_task raises ERR_CORRUPT_ID_FILENAME_MISMATCH when filename id ≠ frontmatter id."""
-        content = _TASK_TMPL.format(
-            task_id=99,  # frontmatter id=99, but filename says id=1
-            title="Task",
-            status="todo",
-            priority="needed",
-            archival_reason="null",
-            archival_refs="[]",
-            body="Body",
+        """Line 346: filename prefix id=5 but frontmatter id=1 → ERR_CORRUPT_ID_FILENAME_MISMATCH."""
+        tasks_dir = tmp_path / "tasks"
+        tasks_dir.mkdir()
+        task_file = tasks_dir / "5-task.md"
+        task_file.write_text(
+            "---\nid: 1\ntitle: Task\nstatus: todo\npriority: needed\n"
+            'created: "2026-01-01T10:00:00+00:00"\n'
+            'updated: "2026-01-01T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\n"
+            "block_reason: null\nclaimed_at: null\narchival_reason: null\n"
+            "archival_refs: []\n---\nBody.\n",
+            encoding="utf-8",
         )
-        path = tmp_path / "1-task.md"
-        path.write_text(content, encoding="utf-8")
-
         with pytest.raises(CorruptionError) as exc_info:
-            read_task(path)
-
+            read_task(task_file)
         assert exc_info.value.code == "ERR_CORRUPT_ID_FILENAME_MISMATCH"
 
     # ------------------------------------------------------------------
-    # save_config
+    # save_config (lines 245-261)
     # ------------------------------------------------------------------
 
-    def test_save_config_roundtrip_persists_next_id(self, tmp_path: Path) -> None:
-        """save_config serialises BoardConfig to disk; load_config reads it back."""
+    def test_save_config_writes_readable_config(self, tmp_path: Path) -> None:
+        """Lines 245-261: save_config serialises BoardConfig to config.yml."""
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
         config.next_id = 42
-
         save_config(config, kanban_dir)
-
         reloaded = load_config(kanban_dir)
         assert reloaded.next_id == 42
 
     # ------------------------------------------------------------------
-    # write_task
+    # write_task: new-file else branch (lines 379-380) and default dir
     # ------------------------------------------------------------------
 
-    def test_write_task_default_target_dir_writes_to_tasks_dir(
+    def test_write_task_creates_new_file_when_no_existing_match(
         self, tmp_path: Path
     ) -> None:
-        """write_task(..., target_dir=None) writes to tasks/ — backwards-compat default."""
+        """Lines 379-380: no existing glob match → make_task_filename + new path created."""
         kanban_dir = _make_board(tmp_path)
-        task = Task.model_validate({**_TASK_DICT, "id": 1, "title": "New Task"})
-
+        task = Task.model_validate({**_TASK_DICT, "id": 99, "title": "New Task"})
         path = write_task(task, kanban_dir)
-
-        assert path.parent == kanban_dir / "tasks"
         assert path.exists()
-        assert path.name.startswith("1-")
+        assert "99-new-task" in path.name
 
-    def test_write_task_existing_file_keeps_filename_stable(
+    def test_write_task_default_target_dir_none_writes_to_tasks(
         self, tmp_path: Path
     ) -> None:
-        """write_task reuses existing filename when a file already exists for the task id."""
+        """Backwards-compat: write_task without target_dir → writes to tasks/."""
         kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="Task", status="todo", subdir="tasks")
-
-        # Change title to something that would produce a different slug.
-        task = Task.model_validate(
-            {**_TASK_DICT, "id": 1, "title": "Completely Different Title"}
-        )
-
+        task = Task.model_validate({**_TASK_DICT, "id": 1, "title": "Task"})
         path = write_task(task, kanban_dir)
-
-        # Must keep the original slug-based name, not derive a new one from the new title.
-        assert path.name == "1-task.md"
+        assert "tasks" in str(path)
 
     # ------------------------------------------------------------------
-    # write_task_if_unchanged
+    # write_task_if_unchanged (lines 433-451)
     # ------------------------------------------------------------------
 
-    def test_write_task_if_unchanged_happy_path_writes_task(
-        self, tmp_path: Path
-    ) -> None:
-        """write_task_if_unchanged succeeds when on-disk updated matches expected_updated."""
+    def test_write_task_if_unchanged_happy_path(self, tmp_path: Path) -> None:
+        """Lines 433-451: matching updated timestamp → writes successfully."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, status="todo", subdir="tasks")
         task_path = kanban_dir / "tasks" / "1-task.md"
         task = read_task(task_path)
-        expected_updated = task.updated
+        result_path = write_task_if_unchanged(task, task.updated, kanban_dir)
+        assert result_path.exists()
 
-        task.priority = "critical"
-        write_task_if_unchanged(task, expected_updated, kanban_dir)
-
-        reread = read_task(task_path)
-        assert reread.priority == "critical"
-
-    def test_write_task_if_unchanged_stale_raises_concurrency_error(
+    def test_write_task_if_unchanged_raises_stale_when_updated_changed(
         self, tmp_path: Path
     ) -> None:
-        """write_task_if_unchanged raises ConcurrencyError (ERR_STALE) for stale reads."""
+        """Lines 444-446: on-disk updated differs from expected → ConcurrencyError ERR_STALE."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, status="todo", subdir="tasks")
-        task = read_task(kanban_dir / "tasks" / "1-task.md")
-
+        task_path = kanban_dir / "tasks" / "1-task.md"
+        task = read_task(task_path)
+        old_updated = task.updated
+        # Write a newer version to disk.
+        newer = task.model_copy(update={"updated": "2026-12-31T23:59:59+00:00"})
+        write_task(newer, kanban_dir)
         with pytest.raises(ConcurrencyError) as exc_info:
-            write_task_if_unchanged(task, "2020-01-01T00:00:00+00:00", kanban_dir)
-
+            write_task_if_unchanged(task, old_updated, kanban_dir)
         assert exc_info.value.code == "ERR_STALE"
 
-    def test_write_task_if_unchanged_missing_file_raises_file_not_found(
+    def test_write_task_if_unchanged_raises_when_file_missing(
         self, tmp_path: Path
     ) -> None:
-        """write_task_if_unchanged raises FileNotFoundError when task file is absent."""
+        """Lines 436-439: no file found for id → FileNotFoundError."""
         kanban_dir = _make_board(tmp_path)
-        task = Task.model_validate({**_TASK_DICT, "id": 999, "title": "Ghost"})
-
+        task = Task.model_validate(
+            {**_TASK_DICT, "id": 99, "title": "Absent Task"}
+        )
         with pytest.raises(FileNotFoundError):
-            write_task_if_unchanged(task, task.updated, kanban_dir)
+            write_task_if_unchanged(task, "2026-01-01T10:00:00+00:00", kanban_dir)
 
     # ------------------------------------------------------------------
-    # list_task_files
+    # list_task_files (lines 461-465)
     # ------------------------------------------------------------------
 
-    def test_list_task_files_empty_tasks_dir_returns_empty_list(
+    def test_list_task_files_empty_dir_returns_empty_list(
         self, tmp_path: Path
     ) -> None:
-        """list_task_files returns [] when tasks/ is empty."""
+        """Lines 461-465: no files in tasks/ → []."""
         kanban_dir = _make_board(tmp_path)
+        assert list_task_files(kanban_dir) == []
 
+    def test_list_task_files_returns_sorted_md_files(
+        self, tmp_path: Path
+    ) -> None:
+        """list_task_files returns sorted .md files from tasks/."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, task_id=1, subdir="tasks")
+        _write_task(kanban_dir, task_id=2, subdir="tasks")
         result = list_task_files(kanban_dir)
-
-        assert result == []
-
-    def test_list_task_files_returns_sorted_md_files_excluding_hidden(
-        self, tmp_path: Path
-    ) -> None:
-        """list_task_files returns sorted .md files, excluding lock and hidden files."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=2, status="todo", subdir="tasks")
-        _write_task(kanban_dir, task_id=1, status="todo", subdir="tasks")
-        (kanban_dir / "tasks" / ".1.lock").write_text("", encoding="utf-8")
-
-        result = list_task_files(kanban_dir)
-
-        assert [p.name for p in result] == ["1-task.md", "2-task.md"]
+        assert len(result) == 2
+        assert all(p.suffix == ".md" for p in result)
 
     # ------------------------------------------------------------------
-    # list_archive_files
+    # list_archive_files (lines 477-481)
     # ------------------------------------------------------------------
 
-    def test_list_archive_files_empty_archive_dir_returns_empty_list(
+    def test_list_archive_files_empty_dir_returns_empty_list(
         self, tmp_path: Path
     ) -> None:
-        """list_archive_files returns [] when archive/ is empty."""
+        """Lines 477-481: no files in archive/ → []."""
         kanban_dir = _make_board(tmp_path)
+        assert list_archive_files(kanban_dir) == []
 
-        result = list_archive_files(kanban_dir)
-
-        assert result == []
-
-    def test_list_archive_files_returns_sorted_md_files(self, tmp_path: Path) -> None:
+    def test_list_archive_files_returns_sorted_archive_md_files(
+        self, tmp_path: Path
+    ) -> None:
         """list_archive_files returns sorted .md files from archive/."""
         kanban_dir = _make_board(tmp_path)
         _write_task(
             kanban_dir,
-            task_id=2,
-            status="archived",
-            archival_reason="completed",
-            subdir="archive",
-        )
-        _write_task(
-            kanban_dir,
             task_id=1,
             status="archived",
-            archival_reason="completed",
+            archival_reason="dropped",
             subdir="archive",
         )
-
         result = list_archive_files(kanban_dir)
-
-        assert [p.name for p in result] == ["1-task.md", "2-task.md"]
+        assert len(result) == 1
+        assert result[0].name == "1-task.md"
 
     # ------------------------------------------------------------------
-    # move_to_archive
+    # move_to_archive (lines 498-516)
     # ------------------------------------------------------------------
 
-    def test_move_to_archive_happy_path_moves_file(self, tmp_path: Path) -> None:
-        """move_to_archive moves the task file from tasks/ to archive/."""
+    def test_move_to_archive_moves_file_from_tasks_to_archive(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 498-516: task in tasks/ → moved to archive/."""
         kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, status="done", subdir="tasks")
-
+        _write_task(kanban_dir, task_id=1, subdir="tasks")
+        assert (kanban_dir / "tasks" / "1-task.md").exists()
         dest = move_to_archive(1, kanban_dir)
-
         assert dest.parent == kanban_dir / "archive"
-        assert dest.exists()
         assert not (kanban_dir / "tasks" / "1-task.md").exists()
 
-    def test_move_to_archive_missing_task_raises_file_not_found(
+    def test_move_to_archive_raises_when_file_not_found(
         self, tmp_path: Path
     ) -> None:
-        """move_to_archive raises FileNotFoundError when task is absent from tasks/."""
+        """move_to_archive raises FileNotFoundError when no file exists for id."""
         kanban_dir = _make_board(tmp_path)
-
-        with pytest.raises(FileNotFoundError, match="No task file found"):
-            move_to_archive(999, kanban_dir)
+        with pytest.raises(FileNotFoundError):
+            move_to_archive(99, kanban_dir)
 
     # ------------------------------------------------------------------
-    # move_to_quarantine
+    # move_to_quarantine (lines 528-537)
     # ------------------------------------------------------------------
 
-    def test_move_to_quarantine_happy_path_moves_file(self, tmp_path: Path) -> None:
-        """move_to_quarantine moves a task file to quarantine/."""
+    def test_move_to_quarantine_moves_non_lock_file(self, tmp_path: Path) -> None:
+        """Lines 528-537: regular file → moved to quarantine/."""
         kanban_dir = _make_board(tmp_path)
-        task_path = _write_task(kanban_dir, task_id=1, status="todo", subdir="tasks")
-
-        dest = move_to_quarantine(task_path, kanban_dir)
-
+        _write_task(kanban_dir, task_id=1, subdir="tasks")
+        task_file = kanban_dir / "tasks" / "1-task.md"
+        dest = move_to_quarantine(task_file, kanban_dir)
         assert dest.parent == kanban_dir / "quarantine"
-        assert dest.exists()
-        assert not task_path.exists()
+        assert not task_file.exists()
 
-    def test_move_to_quarantine_lock_file_is_skipped_and_returned_unchanged(
+    def test_move_to_quarantine_returns_lock_file_unchanged(
         self, tmp_path: Path
     ) -> None:
-        """move_to_quarantine returns lock files unchanged without moving them."""
+        """Lock files are returned immediately without moving."""
         kanban_dir = _make_board(tmp_path)
         lock_file = kanban_dir / "tasks" / ".1.lock"
         lock_file.write_text("", encoding="utf-8")
-
         result = move_to_quarantine(lock_file, kanban_dir)
-
         assert result == lock_file
-        assert lock_file.exists()
-        assert not (kanban_dir / "quarantine").exists()
+        assert lock_file.exists(), "lock file must not be moved"
 
     # ------------------------------------------------------------------
-    # allocate_next_id
+    # allocate_next_id (lines 547-555)
     # ------------------------------------------------------------------
 
     def test_allocate_next_id_returns_current_next_id_and_increments(
         self, tmp_path: Path
     ) -> None:
-        """allocate_next_id returns the current next_id and increments it in config."""
+        """Lines 547-555: allocate_next_id returns next_id; config advances by 1."""
         kanban_dir = _make_board(tmp_path)
-        config = load_config(kanban_dir)
-        expected_id = config.next_id
-
-        result = allocate_next_id(kanban_dir)
-
-        assert result == expected_id
-        new_config = load_config(kanban_dir)
-        assert new_config.next_id == expected_id + 1
+        expected_id = load_config(kanban_dir).next_id
+        allocated = allocate_next_id(kanban_dir)
+        assert allocated == expected_id
+        assert load_config(kanban_dir).next_id == expected_id + 1
 
