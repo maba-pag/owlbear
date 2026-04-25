@@ -748,7 +748,7 @@ class TestFromAC_EndWorkParamsContract:
         from owlbear_mcp_kanban.models import EndWorkParams
 
         with pytest.raises(ValidationError):
-            EndWorkParams(id=1, outcome="fail")  # type: ignore[arg-type]
+            EndWorkParams(id=1, outcome="retry")  # type: ignore[arg-type]
 
     def test_end_work_has_archival_reason_field(self) -> None:
         """EndWorkParams has archival_reason field (refined AC §5.8)."""
