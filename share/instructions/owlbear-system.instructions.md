@@ -57,13 +57,22 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 | User | `/memories/` | Tool patterns, CLI recipes, process pitfalls |
 | Session | `/memories/session/` | Task-specific context (auto-cleared) |
 | Repo inbox | `/memories/repo/inbox/` | Agent lessons-learned (legacy, dual-write) |
-| Canonical | mcp-memory `owlbearMemory` | Agent institutional knowledge (queryable) |
+| Canonical | mcp-memory `ob-memory` | Agent institutional knowledge (queryable) |
 
 Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
 
 Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
 ## 5. Operational Fundamentals
+
+- **MCP Tool Bootstrap.** Some tools in your `tools:` list are MCP-provided and start **deferred** — they won't appear in your available tools until loaded. If a tool is missing, call `tool_search` with the query from this table:
+
+  | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
+  |---|---|---|---|
+  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"kanban"` |
+  | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
+  | DDGS | `ddgs/*` | `mcp_ddgs_<tool>` | `"web search"` |
+  | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands.

@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [vscode/memory, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-kanban/edit_task', 'owlbear-memory/*']
+  [vscode/memory, vscode/toolSearch, execute/testFailure, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, execute/runTests, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'ob-kanban/start_work', 'ob-kanban/end_work', 'ob-kanban/show_task', 'ob-kanban/list_tasks', 'ob-kanban/create_task', 'ob-kanban/edit_task', 'ob-memory/*']
 agents: [scribe, quality-runner]
 hooks:
   SessionStart:
@@ -34,6 +34,13 @@ written in assertions — the builder reads it to understand what "correct" mean
 You never touch the production code. Your artifact is the test file, and every test
 in it must fail when you hand it off.
 </persona>
+
+<required_reading>
+
+- `r-pipeline-protocol` — task lifecycle, communication, quality
+- `w-tdd-red` — primary workflow
+
+</required_reading>
 
 <critical_rules>
 

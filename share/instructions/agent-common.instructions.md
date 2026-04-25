@@ -1,6 +1,6 @@
 ---
 description: "Common kanban and Channel B conventions for all pipeline agents"
-applyTo: "share/agents/**"
+applyTo: "share/skills/r-pipeline-protocol/**"
 ---
 
 ## Channel B

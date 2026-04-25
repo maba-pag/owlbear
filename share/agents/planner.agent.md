@@ -5,7 +5,7 @@ argument-hint: "Plan: {description}  |  Plan and create: #{id} — {description}
 user-invocable: true
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/end_work, owlbear-kanban/list_tasks, owlbear-kanban/move_task, owlbear-kanban/show_task, owlbear-kanban/start_work]
+  [vscode/memory, vscode/toolSearch, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_task, ob-kanban/start_work]
 agents: []
 ---
 
@@ -26,6 +26,13 @@ When invoked directly by the user, you present the plan for review before execut
 When dispatched by the orchestrator, you execute the plan immediately — the architect
 has already approved the scope.
 </persona>
+
+<required_reading>
+
+- `r-pipeline-protocol` — task lifecycle, communication, quality
+- `w-task-decomposition` — primary workflow
+
+</required_reading>
 
 <critical_rules>
 

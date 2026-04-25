@@ -1,7 +1,7 @@
 {
   "inputs": [],
   "servers": {
-    "owlbear-kanban": {
+    "ob-kanban": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -13,7 +13,7 @@
         "owlbear_mcp_kanban"
       ]
     },
-    "owlbear-knowledge": {
+    "ob-knowledge": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -25,7 +25,7 @@
         "owlbear_mcp_knowledge"
       ]
     },
-    "owlbear-memory": {
+    "ob-memory": {
       "type": "stdio",
       "command": "uv",
       "args": [
@@ -48,7 +48,7 @@
         "mcp"
       ]
     },
-    "microsoft/markitdown": {
+    "markitdown": {
       "type": "stdio",
       "command": "uvx",
       "args": [

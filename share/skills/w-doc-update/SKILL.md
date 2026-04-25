@@ -125,8 +125,8 @@ every task.
 - If yes (deletion candidate detected):
   1. Do **not** delete or modify the IN-scope doc directly.
   2. Create a child kanban task:
-     `owlbear-kanban/create_task(title="Delete stale docs in <path>", parent=<current_task_id>)`.
-  3. Block the child: `owlbear-kanban/edit_task(task_id=<child_id>, blocked=true,
+     `ob-kanban/create_task(title="Delete stale docs in <path>", parent=<current_task_id>)`.
+  3. Block the child: `ob-kanban/edit_task(task_id=<child_id>, blocked=true,
 block_reason="awaiting deletion DR")`.
   4. Invoke scribe: `Scribe: task_id=<current_task_id>, mode=check-or-create,
 concern="delete stale <path> — references deleted <feature>"`. Scribe writes a DR to

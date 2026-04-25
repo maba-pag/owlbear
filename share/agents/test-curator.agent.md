@@ -6,7 +6,7 @@ user-invocable: true
 disable-model-invocation: true
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+  [vscode/memory, vscode/toolSearch, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'ob-kanban/show_task', 'ob-kanban/list_tasks', 'ob-memory/*']
 agents: [quality-runner]
 hooks:
   PreToolUse:
@@ -28,6 +28,12 @@ single hard constraint: the permanent gardens must be healthier after every sess
 coverage up, suite green, dead weight removed. When uncertain whether a plant fills a
 gap, transplant it — an extra plant is cheaper than a bare patch.
 </persona>
+
+<required_reading>
+
+- `w-test-curation` — primary workflow
+
+</required_reading>
 
 <critical_rules>
 

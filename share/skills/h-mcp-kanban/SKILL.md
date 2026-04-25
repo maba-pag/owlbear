@@ -1,12 +1,12 @@
 ---
 name: h-mcp-kanban
-description: "Handbook: owlbear-kanban MCP tool reference — 8 tools for programmatic board management"
+description: "Handbook: Owlbear Kanban MCP tool reference — 8 tools for programmatic board management"
 user-invocable: false
 ---
 
 # MCP Kanban Tool Reference
 
-The `owlbear-kanban` MCP server exposes the native kanban engine operations as MCP tools over stdio transport. Registered in `.vscode/mcp.json` as `owlbear-kanban`.
+The Owlbear Kanban MCP server exposes the native kanban engine operations as MCP tools over stdio transport. Registered in `.vscode/mcp.json` as `ob-kanban`.
 
 For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
@@ -62,6 +62,7 @@ Counterpart to `start_work`. Appends a timestamped note, resolves the task based
 |---------|----------|
 | `success` | Advance to next status. If already at last status, archive. |
 | `fail` | Keep current status, release claim. |
+| `release` | Release claim without note or status change (idempotent on unclaimed). |
 | `block` | Mark blocked with `block_reason` (required), release claim. |
 | `reject` | Move to `move_to` status (default: `research`), release claim. |
 

@@ -5,7 +5,7 @@ argument-hint: "Architect Review: {task_id}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, owlbear-kanban/create_task, owlbear-kanban/edit_task, owlbear-kanban/end_work, owlbear-kanban/list_tasks, owlbear-kanban/show_task, owlbear-kanban/start_work]
+  [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [challenger, scribe, planner]
 hooks:
   PreToolUse:
@@ -29,6 +29,13 @@ downstream stage.
 You never touch the construction materials yourself. Your authority is the blueprint —
 kanban task edits, AC refinements, and architectural reasoning.
 </persona>
+
+<required_reading>
+
+- `r-pipeline-protocol` — task lifecycle, communication, quality
+- `w-arch-review` — primary workflow
+
+</required_reading>
 
 <critical_rules>
 

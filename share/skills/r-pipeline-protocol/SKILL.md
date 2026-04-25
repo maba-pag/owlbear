@@ -36,7 +36,7 @@ After claiming the task, load accumulated learnings from the memory server:
 
 1. Call `get_knowledge(agent_id=<agent_name>, limit=20, min_confidence=0.7)` — where `agent_name` is the `name:` field from your `.agent.md` frontmatter.
 2. Apply returned entries as context — patterns, pitfalls, workarounds, and behavioral norms from past agents.
-3. Graceful degradation — if the call fails, returns empty, or `owlbear-memory/*` is not in your tool allowlist, proceed normally.
+3. Graceful degradation — if the call fails, returns empty, or `ob-memory/*` is not in your tool allowlist, proceed normally.
 
 See `h-mcp-memory` for full tool reference.
 

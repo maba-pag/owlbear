@@ -36,7 +36,7 @@ KNOWN_STANDALONE_TOOLS: frozenset[str] = frozenset({"newWorkspace", "selection"}
 # MCP server names whose tools may appear as 'server/tool_name' or 'server/*'.
 # Update this set when a new MCP server is added to the workspace.
 KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
-    {"owlbear-kanban", "owlbear-memory", "ddgs", "microsoft"}
+    {"ob-kanban", "ob-memory", "ddgs", "microsoft"}
 )
 
 # Tool names that already produce specific ban errors — skip in unknown-tool check
@@ -83,13 +83,13 @@ def _is_valid_tool(name: str) -> bool:
         prefix = name.split("/", 1)[0]
         if prefix in KNOWN_TOOLSETS:
             return True
-        # (e) prefix is a known MCP server — e.g. 'owlbear-kanban/start_work'
+        # (e) prefix is a known MCP server — e.g. 'ob-kanban/start_work'
         if prefix in KNOWN_MCP_SERVERS:
             return True
     # (c) exact match in KNOWN_STANDALONE_TOOLS
     if name in KNOWN_STANDALONE_TOOLS:
         return True
-    # (d) MCP server wildcard pattern — e.g. 'owlbear-kanban/*'
+    # (d) MCP server wildcard pattern — e.g. 'ob-kanban/*'
     return bool(name.endswith("/*"))
 
 

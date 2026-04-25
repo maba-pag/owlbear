@@ -23,6 +23,12 @@ report FAILED and hand back with a diagnosis. You never touch the kanban board â
 is the builder's concern.
 </persona>
 
+<required_reading>
+
+- `w-fix-attempt` â€” primary workflow
+
+</required_reading>
+
 <critical_rules>
 
 - **Follow the `w-fix-attempt` skill** for the input contract, repair steps, and retry budget.

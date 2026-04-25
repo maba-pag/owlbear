@@ -97,7 +97,7 @@
   },
   "git.autorefresh": false,
   "github.copilot.chat.additionalReadAccessPaths": [
-    "../owlbear/"
+    "/Users/markus/Projects/owlbear"
   ],
   "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,

@@ -287,9 +287,9 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
     """Write .vscode/mcp.json, merging owlbear servers with existing entries.
 
     Writes five MCP server entries from the seed template:
-      - owlbear-kanban (owlbear_mcp_kanban)
-      - owlbear-knowledge (owlbear_mcp_knowledge)
-      - owlbear-memory (owlbear_mcp_memory)
+      - ob-kanban (owlbear_mcp_kanban)
+      - ob-knowledge (owlbear_mcp_knowledge)
+      - ob-memory (owlbear_mcp_memory)
       - ddgs (DuckDuckGo search)
       - microsoft/markitdown
 

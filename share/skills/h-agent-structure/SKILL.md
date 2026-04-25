@@ -15,12 +15,16 @@ Content reaches agents through four mechanisms, ordered by reliability:
 | Mechanism | Trigger | Reliability | Use for |
 |-----------|---------|-------------|---------|
 | `copilot-instructions.md` | Every interaction | Guaranteed | Universal foundation (80%+ of agents need it) |
-| Agent file body | Agent invocation | Guaranteed | Identity, constraints, communication format |
-| Skills (SKILL.md) | Explicit `read_file` or auto-load by relevance | High | Procedures, protocol, domain knowledge |
-| Authority instructions (.instructions.md) | `<critical_rules>` attachment | Guaranteed | Full protocol definitions (cross-agent conventions) |
+| Agent file body | Agent invocation | Guaranteed | Identity, constraints, `<required_reading>` list |
+| Skills (SKILL.md) | `read_file` via `<required_reading>` or on-demand | High | Procedures, protocol, domain knowledge |
+| Authority instructions (.instructions.md) | `applyTo` glob matches a touched file | High | Full protocol definitions (cross-agent conventions) |
 | Instruction stubs (.instructions.md) | `applyTo` glob matches a touched file | Medium | Safety nets — pointers to skills |
 
-Pipeline agents load `r-pipeline-protocol` and `r-project-standards` from their `<critical_rules>` reference. This is deterministic because the agent body always loads.
+**Two-tier skill loading:** Skills listed in an agent's `<required_reading>` are read at session start (mandatory). All other skills are loaded on-demand during the workflow when relevant.
+
+**Belts and suspenders:** For important skills, use both tiers — list in `<required_reading>` (belt) AND provide an `applyTo` instruction stub that fires when the agent touches relevant files (suspenders).
+
+Pipeline agents load `r-pipeline-protocol` via `<required_reading>`, which triggers `agent-common.instructions.md` (applyTo: `share/skills/r-pipeline-protocol/**`).
 
 ### File Type Selection
 
@@ -93,6 +97,7 @@ Every section in an agent file can carry more than its primary function:
 | Section | Primary function | Implicit function |
 |---------|-----------------|-------------------|
 | `<persona>` | Identity | Behavioral rules through emotional framing |
+| `<required_reading>` | Dependency declaration | Guaranteed skill loading at session start |
 | `<output_format>` | Communication spec | Evidence forcing through required columns |
 | `<examples>` | Behavioral reference | Reasoning patterns through abstract principles |
 | `<pipeline_position>` | Pipeline context | Quality bar through threshold conditions |
@@ -136,6 +141,21 @@ Design process:
 4. Cross-check: which explicit rules in `<critical_rules>` can now be removed because the persona already implies them?
 
 The persona is not decoration — it is an **implicit rule encoder**. A well-chosen emotional framing activates behavioral patterns that would otherwise cost explicit rule tokens.
+
+**`<required_reading>`** — Skills the agent must `read_file` at session start.
+
+Lists the skills this agent needs in 90%+ of sessions. These are Level 0 (direct) dependencies only — transitive dependencies (skills referenced by other skills) are handled by each skill's own Step 0 / preamble.
+
+**Criterion:** if the agent almost always needs the skill (90%+), list it. If the agent sometimes needs it, it stays on-demand (loaded during the workflow when relevant).
+
+```markdown
+<required_reading>
+
+- `r-pipeline-protocol` — task lifecycle, communication, quality
+- `w-tdd-green` — primary workflow
+
+</required_reading>
+```
 
 **`<critical_rules>`** — 3-7 non-negotiable constraints, ordered by importance.
 
@@ -299,7 +319,6 @@ Current stubs:
 | `python.instructions.md` | `"**/*.py"` | `h-python-conventions` |
 | `frontend.instructions.md` | `"**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss"` | `h-frontend-conventions` |
 | `research-docs.instructions.md` | `".owlbear/research/*.md"` | `w-research` |
-| `agents-and-skills.instructions.md` | `"share/agents/**,share/skills/**"` | `h-agent-structure` |
 
 ### Authority Files — Embedded Rules
 
