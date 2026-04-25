@@ -1060,3 +1060,33 @@ class TestFromAC_StorageCoveragePaths:
         assert allocated == expected_id
         assert load_config(kanban_dir).next_id == expected_id + 1
 
+    # ------------------------------------------------------------------
+    # write_task: backwards-compat default dir (canonical assertion — AC-2)
+    # ------------------------------------------------------------------
+
+    def test_write_task_default_target_dir_canonical_dir_is_tasks(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-2: write_task without target_dir → parent dir is exactly tasks/, not just a dir
+        containing 'tasks' in its name."""
+        kanban_dir = _make_board(tmp_path)
+        task = Task.model_validate({**_TASK_DICT, "id": 55, "title": "Canonical Dir Test"})
+        path = write_task(task, kanban_dir)
+        assert path.parent == kanban_dir / "tasks"
+
+    # ------------------------------------------------------------------
+    # write_task: explicit target_dir, no existing file (lines 375-380)
+    # ------------------------------------------------------------------
+
+    def test_write_task_explicit_target_dir_no_existing_file_writes_to_explicit_dir(
+        self, tmp_path: Path
+    ) -> None:
+        """Lines 375-380 (else branch): explicit target_dir + no existing glob match →
+        new file created in target_dir, not in tasks/."""
+        kanban_dir = _make_board(tmp_path)
+        archive_dir = kanban_dir / "archive"
+        task = Task.model_validate({**_TASK_DICT, "id": 77, "title": "Explicit Target Dir"})
+        path = write_task(task, kanban_dir, target_dir=archive_dir)
+        assert path.parent == archive_dir
+        assert not (kanban_dir / "tasks" / path.name).exists()
+
