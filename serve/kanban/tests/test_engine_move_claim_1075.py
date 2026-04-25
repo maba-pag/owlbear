@@ -397,6 +397,87 @@ class TestFromAC_StartWork_1075:
             f"Expected exactly 2 CAS calls (first stale, second success); got {call_count}"
         )
 
+    def test_stale_retry_success_timestamps_fresher_than_concurrent_update(
+        self, tmp_path: Path
+    ) -> None:
+        """D14 (mutation-resistant): stale-retry claimed_at/updated must be fresher
+        than the concurrent update written during ERR_STALE.
+
+        Mechanism (architect AC refinement — prescribes HOW, not just WHAT):
+          T1 < T_concurrent < T3
+          - datetime.now mocked: first loop iteration → T1, retry iteration → T3
+          - ERR_STALE callback writes the task file with updated=T_concurrent
+            (simulates a concurrent edit that beat our CAS)
+          - Engine re-reads: task.updated=T_concurrent, effective_now=T3 (refreshed)
+          - Assertions: result.claimed_at >= T3 AND result.updated >= T3
+
+        Mutation guard: if effective_now were captured once before the loop
+        (reverting engine.py:1136), both iterations use T1.  T1 < T_concurrent so
+        the second CAS succeeds but result.updated = T1 < T3 → assertion fails.
+
+        NOTE: regression guard — PASSES because engine.py:1136 fix is already in place.
+        """
+        import datetime as _dt  # noqa: PLC0415
+
+        t1 = _dt.datetime(2026, 1, 1, 10, 0, 1, tzinfo=_dt.UTC)
+        t_concurrent = _dt.datetime(2026, 1, 1, 10, 0, 2, tzinfo=_dt.UTC)
+        t3 = _dt.datetime(2026, 1, 1, 10, 0, 3, tzinfo=_dt.UTC)
+
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, task_id=1, status="todo")
+
+        scheduled: list[_dt.datetime] = [t1, t3]
+
+        class _MockDatetime(_dt.datetime):
+            @classmethod
+            def now(cls, tz: object = None) -> _dt.datetime:  # type: ignore[override]
+                if scheduled:
+                    return scheduled.pop(0)
+                return _dt.datetime.now(tz=tz)  # type: ignore[arg-type]
+
+        real_cas = storage.write_task_if_unchanged
+        cas_call_count = 0
+
+        def stale_then_succeed(task: object, expected_updated: str, kdir: Path) -> Path:
+            nonlocal cas_call_count
+            cas_call_count += 1
+            if cas_call_count == 1:
+                # Concurrent update: write t_concurrent to disk, then raise ERR_STALE.
+                task_path = next((kdir / "tasks").glob("1-*.md"))
+                from owlbear_kanban.storage import read_task as _read, write_task as _write  # noqa: PLC0415
+
+                concurrent_record = _read(task_path)
+                concurrent_record.updated = t_concurrent.isoformat()
+                _write(concurrent_record, kdir)
+                raise ConcurrencyError(
+                    code="ERR_STALE",
+                    user_message="simulated concurrent edit",
+                )
+            return real_cas(task, expected_updated, kdir)
+
+        with (
+            patch("owlbear_kanban.engine.datetime", _MockDatetime),
+            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_then_succeed),
+        ):
+            result = view.start_work(1)
+
+        result_claimed_at = _dt.datetime.fromisoformat(result.claimed_at)
+        result_updated = _dt.datetime.fromisoformat(result.updated)
+
+        assert result_claimed_at >= t3, (
+            f"D14: stale-retry-success claimed_at={result.claimed_at!r} must be "
+            f">= t3={t3.isoformat()!r}; mutation guard: reverting engine.py:1136 "
+            f"gives effective_now=t1={t1.isoformat()!r} < t3"
+        )
+        assert result_updated >= t3, (
+            f"D14: stale-retry-success updated={result.updated!r} must be "
+            f">= t3={t3.isoformat()!r}; mutation guard: reverting engine.py:1136 "
+            f"gives effective_now=t1={t1.isoformat()!r} < t3"
+        )
+        assert cas_call_count == 2, (  # noqa: PLR2004
+            f"Expected 2 CAS calls (stale then succeed); got {cas_call_count}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_MoveTask_D37_1075
