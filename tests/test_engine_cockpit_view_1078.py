@@ -517,6 +517,103 @@ class TestFromAC_CockpitViewListSessions:
         assert len(sessions) == 1
         assert sessions[0].outcome == "release"
 
+    def test_list_sessions_completed_end_work_has_state_completed_and_outcome_success(
+        self, tmp_path: Path
+    ) -> None:
+        """D31: end_work with 'success:' detail → state='completed', outcome='success'."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        _write_activity_event(
+            kanban_dir, task_id=1, action="start_work", source="agent",
+            detail="claimed", timestamp="2026-01-01T10:00:00+00:00",
+        )
+        _write_activity_event(
+            kanban_dir, task_id=1, action="end_work", source="agent",
+            detail="success: research -> backlog", timestamp="2026-01-01T11:00:00+00:00",
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        sessions = cv.list_sessions(filter="all")
+        task_sessions = [s for s in sessions if s.task_id == 1]
+        assert len(task_sessions) == 1
+        assert task_sessions[0].state == "completed"
+        assert task_sessions[0].outcome == "success"
+
+    def test_list_sessions_rejected_end_work_has_state_rejected_and_outcome_reject(
+        self, tmp_path: Path
+    ) -> None:
+        """D31: end_work with 'reject:' detail → state='rejected', outcome='reject'."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        _write_activity_event(
+            kanban_dir, task_id=1, action="start_work", source="agent",
+            detail="claimed", timestamp="2026-01-01T10:00:00+00:00",
+        )
+        _write_activity_event(
+            kanban_dir, task_id=1, action="end_work", source="agent",
+            detail="reject: research -> backlog", timestamp="2026-01-01T11:00:00+00:00",
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        sessions = cv.list_sessions(filter="blocked-or-rejected")
+        rejected = [s for s in sessions if s.task_id == 1]
+        assert len(rejected) == 1
+        assert rejected[0].state == "rejected"
+        assert rejected[0].outcome == "reject"
+
+    def test_list_sessions_blocked_end_work_has_state_blocked_and_outcome_block(
+        self, tmp_path: Path
+    ) -> None:
+        """D31: end_work with block/fail detail → state='blocked', outcome='block'."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        _write_activity_event(
+            kanban_dir, task_id=1, action="start_work", source="agent",
+            detail="claimed", timestamp="2026-01-01T10:00:00+00:00",
+        )
+        _write_activity_event(
+            kanban_dir, task_id=1, action="end_work", source="agent",
+            detail="block: needs clarification", timestamp="2026-01-01T11:00:00+00:00",
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        sessions = cv.list_sessions(filter="blocked-or-rejected")
+        blocked = [s for s in sessions if s.task_id == 1]
+        assert len(blocked) == 1
+        assert blocked[0].state == "blocked"
+        assert blocked[0].outcome == "block"
+
+    def test_list_sessions_open_stale_claim_has_state_stuck(self, tmp_path: Path) -> None:
+        """D31: open claim older than claim_timeout (1h config) → state='stuck'."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        stale_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
+        _write_activity_event(
+            kanban_dir, task_id=1, action="start_work", source="agent",
+            detail="claimed", timestamp=stale_ts,
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        sessions = cv.list_sessions(filter="active")
+        stuck = [s for s in sessions if s.task_id == 1]
+        assert len(stuck) == 1
+        assert stuck[0].state == "stuck"
+
+    def test_list_sessions_sweep_released_claim_has_state_expired(
+        self, tmp_path: Path
+    ) -> None:
+        """D31: sweep-release close action → state='expired', outcome='expired'."""
+        kanban_dir = _make_board(tmp_path)
+        expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
+        _write_task(kanban_dir, 1, claimed_at=f'"{expired_ts}"')
+        _write_activity_event(
+            kanban_dir, task_id=1, action="start_work", source="agent",
+            detail="claimed", timestamp=expired_ts,
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        cv.sweep()  # emits sweep-release event closing the open claim
+        sessions = cv.list_sessions(filter="all")
+        expired = [s for s in sessions if s.state == "expired"]
+        assert len(expired) == 1
+        assert expired[0].task_id == 1
+        assert expired[0].outcome == "expired"
+
     def test_list_sessions_empty_log_returns_empty_list(self, tmp_path: Path) -> None:
         """list_sessions on a board with no activity returns []."""
         kanban_dir = _make_board(tmp_path)
@@ -800,3 +897,55 @@ class TestFromAC_ActivityEventSource:
         events = list_activity_events(kanban_dir, action="sweep-release", task_id=1)
         assert len(events) == 1
         assert events[0].source == "engine"
+
+    def test_cockpit_view_edit_task_emits_source_cockpit(self, tmp_path: Path) -> None:
+        """CockpitView.edit_task emits ActivityEvent with source='cockpit'."""
+        from owlbear_kanban.activity_store import list_activity_events
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
+        cv = _make_cockpit_view(kanban_dir)
+        cv.edit_task(
+            1,
+            expected_updated="2026-01-01T10:00:00+00:00",
+            append_body="admin edit",
+        )
+        events = list_activity_events(kanban_dir, action="edit", task_id=1)
+        assert len(events) == 1
+        assert events[0].source == "cockpit"
+
+    def test_cockpit_view_move_task_emits_source_cockpit(self, tmp_path: Path) -> None:
+        """CockpitView.move_task emits ActivityEvent with source='cockpit'."""
+        from owlbear_kanban.activity_store import list_activity_events
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
+        cv = _make_cockpit_view(kanban_dir)
+        cv.move_task(1, "backlog", expected_updated="2026-01-01T10:00:00+00:00")
+        events = list_activity_events(kanban_dir, action="move", task_id=1)
+        assert len(events) == 1
+        assert events[0].source == "cockpit"
+
+    def test_agent_view_edit_task_emits_source_agent(self, tmp_path: Path) -> None:
+        """AgentView.edit_task emits ActivityEvent with source='agent'."""
+        from owlbear_kanban.activity_store import list_activity_events
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
+        engine = KanbanEngine(kanban_dir)
+        engine.agent_view().edit_task(1, append_body="agent note")
+        events = list_activity_events(kanban_dir, action="edit", task_id=1)
+        assert len(events) == 1
+        assert events[0].source == "agent"
+
+    def test_agent_view_move_task_emits_source_agent(self, tmp_path: Path) -> None:
+        """AgentView.move_task emits ActivityEvent with source='agent'."""
+        from owlbear_kanban.activity_store import list_activity_events
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
+        engine = KanbanEngine(kanban_dir)
+        engine.agent_view().move_task(1, "backlog")
+        events = list_activity_events(kanban_dir, action="move", task_id=1)
+        assert len(events) == 1
+        assert events[0].source == "agent"
