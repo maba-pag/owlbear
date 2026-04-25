@@ -799,7 +799,8 @@ class KanbanEngine:
             task_id: The numeric task ID as a string (e.g. ``"42"``).
 
         Raises:
-            FileNotFoundError: No task file matching ``{task_id}-*.md`` in tasks_dir.
+            FileNotFoundError: No task file matching ``{task_id}-*.md`` in tasks_dir or
+            archive_dir.
         """
         try:
             int_id = int(task_id)
@@ -1669,6 +1670,42 @@ class AgentView:
         reverse: bool = False,
         blocked: bool | None = None,
     ) -> ListTasksResponse:
+        """List tasks with optional filtering and input validation.
+
+        When ``ids`` is supplied it searches both the active and archive
+        directories and reports any requested IDs that were not found in
+        ``missing_ids``.  ``ids`` is mutually exclusive with all other filters.
+
+        Args:
+            status:          Filter by status string.  Use ``"archived"`` to read
+                             from the archive directory.  Mutually exclusive with
+                             ``ids``.
+            tag:             Filter by tag.  Mutually exclusive with ``ids``.
+            priority:        Filter by priority enum value.  Mutually exclusive
+                             with ``ids``.
+            archival_reason: Filter archived tasks by archival reason enum value.
+                             Mutually exclusive with ``ids``.
+            ids:             Explicit list of task IDs to fetch; searches both
+                             active and archive directories.
+            search:          Case-insensitive substring match on title and body.
+            sort:            Sort field: id, title, status, priority, created,
+                             updated.
+            unclaimed:       When True, only unclaimed tasks.
+            archived:        When True, read from archive/ instead of tasks_dir.
+            limit:           Cap on results (0 = unlimited).
+            reverse:         Reverse sort order when True.
+            blocked:         True = only blocked; False = only unblocked; None = all.
+
+        Returns:
+            :class:`ListTasksResponse` with ``tasks``, ``guidance``, and
+            ``missing_ids`` (populated only when ``ids`` is used and some IDs
+            were not found).
+
+        Raises:
+            ValidationError: ``status``, ``priority``, or ``archival_reason`` is
+                             not a recognised enum value, or ``ids`` is combined
+                             with other filter arguments.
+        """
         config = self.engine.board_config()
 
         if status and status != "archived" and status not in config.statuses:
@@ -1733,6 +1770,27 @@ class AgentView:
         return ListTasksResponse(tasks=tasks, guidance=[], missing_ids=missing_ids)
 
     def show_task(self, task_id: int, section: str | None = None) -> ShowTaskResponse:
+        """Fetch a single task by ID with optional section extraction.
+
+        When ``section`` is provided only the body content under matching
+        headings is returned (case-insensitive).  Multiple heading matches are
+        concatenated.  If the heading is absent, ``body`` is set to ``None`` and
+        ``missing_sections`` is populated.
+
+        Args:
+            task_id: Numeric task ID (integer).
+            section: Heading name to extract.  ``None`` returns the full body.
+
+        Returns:
+            :class:`ShowTaskResponse` with the task payload, ``guidance``
+            (populated when multiple section matches occur), and
+            ``missing_sections`` (populated when the requested heading is absent).
+
+        Raises:
+            ValidationError: ``section`` is an empty string.
+            NotFoundError:   No task with the given ID exists in the active or
+                             archive directories.
+        """
         try:
             task = self.engine.show_task(str(task_id))
         except FileNotFoundError as exc:
