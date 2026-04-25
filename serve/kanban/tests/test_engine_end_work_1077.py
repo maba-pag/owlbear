@@ -941,3 +941,83 @@ class TestFromAC_EndWork:
             "reject skipping >1 status backwards must emit skip-warning; "
             f"got guidance={result.guidance!r}"
         )
+
+    # --- Retry additions: AC-NEW-1 empty/whitespace block_reason (reviewer gap) ---
+
+    def test_block_with_empty_string_reason_raises_err_block_reason_required(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-NEW-1 (retry): block with block_reason='' raises ERR_BLOCK_REASON_REQUIRED.
+
+        An empty string is not a valid block reason.  AgentView.end_work only
+        guards ``block_reason is None``; an empty string passes that check and is
+        silently normalised to '' via ``block_reason or ""``.
+
+        FAIL reason: no ValidationError is raised for block_reason=''.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        with pytest.raises(ValidationError) as exc_info:
+            view.end_work(1, outcome="block", block_reason="", note="Stuck.")
+
+        assert exc_info.value.code == "ERR_BLOCK_REASON_REQUIRED", (
+            "block_reason='' must raise ERR_BLOCK_REASON_REQUIRED; "
+            f"got {exc_info.value.code!r}"
+        )
+
+    def test_block_with_whitespace_only_reason_raises_err_block_reason_required(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-NEW-1 (retry): block with block_reason='   ' raises ERR_BLOCK_REASON_REQUIRED.
+
+        Whitespace-only is not a valid block reason.  '   ' is not None (passes
+        the None guard) and is truthy (not caught by ``block_reason or ''``), so
+        it is stored as-is without raising any error.
+
+        FAIL reason: no ValidationError is raised for whitespace-only block_reason.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        with pytest.raises(ValidationError) as exc_info:
+            view.end_work(1, outcome="block", block_reason="   ", note="Stuck.")
+
+        assert exc_info.value.code == "ERR_BLOCK_REASON_REQUIRED", (
+            "block_reason='   ' (whitespace-only) must raise ERR_BLOCK_REASON_REQUIRED; "
+            f"got {exc_info.value.code!r}"
+        )
+
+    # --- Retry addition: AC-NEW-9 matrix proof (reject + non-archived + archival fields) ---
+
+    def test_reject_to_non_archived_with_archival_reason_raises_archival_fields_forbidden(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-NEW-9 matrix proof: reject+move_to=non-archived+archival_reason raises
+        ERR_ARCHIVAL_FIELDS_FORBIDDEN.
+
+        This exercises the reject-branch archival-guard (``elif archival_reason is
+        not None or archival_refs is not None``), which was not covered by any
+        task-scoped test.  The branch exists in the production code; this test
+        establishes the authoritative contract assertion.
+
+        FAIL reason (if branch is missing/removed): no error raised, archival_reason
+        silently accepted for a non-archival move.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="review", claimed_at=_LIVE_CLAIM_TS)
+
+        with pytest.raises(ValidationError) as exc_info:
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="backlog",
+                archival_reason="deprecated",
+                note="Back to backlog.",
+            )
+
+        assert exc_info.value.code == "ERR_ARCHIVAL_FIELDS_FORBIDDEN", (
+            "reject+move_to='backlog'+archival_reason must raise "
+            "ERR_ARCHIVAL_FIELDS_FORBIDDEN; "
+            f"got {exc_info.value.code!r}"
+        )
