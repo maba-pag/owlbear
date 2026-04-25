@@ -145,6 +145,8 @@ Restore before returning the terminal: `$env:PYTEST_DISABLE_PLUGIN_AUTOLOAD=''`
 
 ## Known Gotchas
 
+- **ruff `# noqa` on multiline function signatures must go on the `def` line.** For complexity-rule suppression (e.g., `# noqa: C901`), the comment must appear on the line containing `def`, not on a continuation line. Placing it on a parameter or return-type line is silently ignored by ruff. (Evidence: task 1064 builder)
+
 - **Stale pytest cache in retry cycles.** When running tests in a 2nd or 3rd builder/reviewer attempt, `.pytest_cache` can return cached results from prior runs, causing agents to report incorrect totals — e.g., "0 failed" when a test is actually failing. Two independent occurrences observed in the same sprint (#857 reviewer pass 2, #871 builder cycles 2–3). **Mitigation:** In any retry cycle, clear the cache before running: `Remove-Item -Recurse -Force .pytest_cache -ErrorAction SilentlyContinue; uv run pytest ...` — or add `-p no:cacheprovider` to the pytest command. Never trust a self-reported "N passed, 0 failed" in a retry cycle without cross-checking against terminal output.
 
 - **WMI + logfire pydantic plugin hang on Windows.** CPython 3.12+ calls `_wmi.exec_query()` inside `platform.uname()`. WMI has no timeout and blocks indefinitely when degraded. logfire triggers this via `platform.system()` at pydantic import. **Mitigation:** `tests/conftest.py` pre-populates the `platform.uname()` cache in a daemon thread with a 3-second timeout. If pytest hangs despite the fix, the WMI cache only works within a single process — check for zombie processes: `Get-Process python*,pytest* -ErrorAction SilentlyContinue | Stop-Process -Force`.
