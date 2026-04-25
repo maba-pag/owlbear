@@ -2624,6 +2624,7 @@ class CockpitView:
         reverse: bool = False,
         blocked: bool | None = None,
     ) -> ListTasksResponse:
+        """Delegate to :meth:`AgentView.list_tasks` with identical signature."""
         return self.engine.agent_view().list_tasks(
             status=status,
             tag=tag,
@@ -2641,6 +2642,7 @@ class CockpitView:
         )
 
     def show_task(self, task_id: int, section: str | None = None) -> ShowTaskResponse:
+        """Delegate to :meth:`AgentView.show_task` with identical signature."""
         return self.engine.agent_view().show_task(task_id, section)
 
     def edit_task(self, task_id: int) -> None:
