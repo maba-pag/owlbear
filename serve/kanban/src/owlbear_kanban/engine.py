@@ -1128,10 +1128,12 @@ class KanbanEngine:
                         whose claim has not expired.
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        effective_now = now if now is not None else datetime.now(tz=UTC)
         stale_retries = 0
 
         while True:
+            # Keep injected `now` deterministic in tests, but refresh runtime time
+            # after each ERR_STALE retry so successful retries cannot regress D14.
+            effective_now = now if now is not None else datetime.now(tz=UTC)
             record = read_task(task_path)
             original = record.model_copy(deep=True)
             expected_for_claim = original.updated
@@ -1748,63 +1750,64 @@ class AgentView:
 
         return any(visits_root(ref_id, set()) for ref_id in refs)
 
-    def _validate_move_archival(
+    def _validate_move_archival_for_archive(
         self,
         *,
-        target_status: str,
-        current_status: str,
+        task_id: int,
+        can_mark_completed: bool,
         config: BoardConfig,
         archival_reason: str | None,
-        archival_refs: list[int] | None,
+        archival_refs: list[int],
     ) -> None:
-        refs = archival_refs or []
-        if target_status == "archived":
-            if not archival_reason:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REASON_REQUIRED",
-                    user_message="archival_reason is required when status='archived'",
-                )
-            if archival_reason not in config.archival_reasons:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REASON_INVALID",
-                    user_message=(
-                        "archival_reason must be one of "
-                        f"{sorted(config.archival_reasons)}"
-                    ),
-                )
-            if archival_reason in {"deprecated", "duplicate"} and not refs:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REFS_REQUIRED",
-                    user_message=(
-                        "archival_refs required for "
-                        f"archival_reason='{archival_reason}'"
-                    ),
-                )
-            if archival_reason in {"completed", "dropped", "wontfix"} and refs:
-                raise ValidationError(
-                    code="ERR_ARCHIVAL_REFS_FORBIDDEN",
-                    user_message=(
-                        "archival_refs forbidden for "
-                        f"archival_reason='{archival_reason}'"
-                    ),
-                )
-            if archival_reason == "completed" and current_status != config.terminal_status:
-                raise ValidationError(
-                    code="ERR_COMPLETED_REQUIRES_DONE",
-                    user_message="archival_reason='completed' requires terminal status",
-                )
-            for ref_id in refs:
-                if not self._task_exists(ref_id):
-                    raise ValidationError(
-                        code="ERR_ARCHIVAL_REF_MISSING",
-                        user_message=f"archival reference task '{ref_id}' not found",
-                    )
-            return
-
-        if archival_reason is not None or archival_refs is not None:
+        if not archival_reason:
             raise ValidationError(
-                code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
-                user_message="archival fields are only allowed on archived tasks",
+                code="ERR_ARCHIVAL_REASON_REQUIRED",
+                user_message="archival_reason is required when status='archived'",
+            )
+        if archival_reason not in config.archival_reasons:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REASON_INVALID",
+                user_message=(
+                    "archival_reason must be one of "
+                    f"{sorted(config.archival_reasons)}"
+                ),
+            )
+        if archival_reason in {"deprecated", "duplicate"} and not archival_refs:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REFS_REQUIRED",
+                user_message=(
+                    "archival_refs required for "
+                    f"archival_reason='{archival_reason}'"
+                ),
+            )
+        if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REFS_FORBIDDEN",
+                user_message=(
+                    "archival_refs forbidden for "
+                    f"archival_reason='{archival_reason}'"
+                ),
+            )
+        if archival_reason == "completed" and not can_mark_completed:
+            raise ValidationError(
+                code="ERR_COMPLETED_REQUIRES_DONE",
+                user_message="archival_reason='completed' requires terminal status",
+            )
+        for ref_id in archival_refs:
+            if ref_id == task_id:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REF_SELF",
+                    user_message="archival_refs cannot include the task itself",
+                )
+            if not self._task_exists(ref_id):
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REF_MISSING",
+                    user_message=f"archival reference task '{ref_id}' not found",
+                )
+        if self._has_archival_cycle(task_id, archival_refs):
+            raise ValidationError(
+                code="ERR_ARCHIVAL_REF_CYCLE",
+                user_message="archival_refs would introduce a cycle",
             )
 
     def _validate_move_destination_predicate(
@@ -2555,13 +2558,19 @@ class AgentView:
             before = self.engine.show_task(str(task_id))
             config = self.engine.board_config()
 
-            self._validate_move_archival(
-                target_status=status,
-                current_status=before.status,
-                config=config,
-                archival_reason=archival_reason,
-                archival_refs=archival_refs,
-            )
+            if status == "archived":
+                self._validate_move_archival_for_archive(
+                    task_id=task_id,
+                    can_mark_completed=before.status == config.terminal_status,
+                    config=config,
+                    archival_reason=archival_reason,
+                    archival_refs=archival_refs or [],
+                )
+            elif archival_reason is not None or archival_refs is not None:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                    user_message="archival fields are only allowed on archived tasks",
+                )
 
             body = before.body if isinstance(before.body, str) else ""
             self._validate_move_destination_predicate(
