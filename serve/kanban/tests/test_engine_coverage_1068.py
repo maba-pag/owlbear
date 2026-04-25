@@ -2263,7 +2263,7 @@ class TestFromAC_AgentViewEndWork:
 
     def test_end_work_success_advances_status(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo")
+        _write_task(board, task_id=1, status="todo", claimed_at=_now_ts())
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().end_work(1, outcome="success", note="Done.")
         assert resp.status == "in-progress"
@@ -2272,12 +2272,13 @@ class TestFromAC_AgentViewEndWork:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="todo")
         engine = KanbanEngine(board, activity_log=False)
-        resp = engine.agent_view().end_work(1, outcome="fail", note="Failed.")
-        assert resp.status == "todo"
+        with pytest.raises(ValidationError) as exc_info:
+            engine.agent_view().end_work(1, outcome="fail", note="Failed.")
+        assert exc_info.value.code == "ERR_INVALID_OUTCOME"
 
     def test_end_work_block_returns_ar_hint_in_guidance(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo")
+        _write_task(board, task_id=1, status="todo", claimed_at=_now_ts())
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().end_work(
             1, outcome="block", note="Blocked.", block_reason="waiting for dep"
@@ -2288,7 +2289,7 @@ class TestFromAC_AgentViewEndWork:
         self, tmp_path: Path
     ) -> None:
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="research")
+        _write_task(board, task_id=1, status="research", claimed_at=_now_ts())
         engine = KanbanEngine(board, activity_log=False)
         # reject from research to in-progress skips backlog + todo → guidance
         resp = engine.agent_view().end_work(
