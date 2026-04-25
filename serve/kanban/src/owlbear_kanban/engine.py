@@ -954,6 +954,8 @@ class KanbanEngine:
         timestamp: bool = False,
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
+        expected_updated: str | None = None,
+        source: str = "engine",
     ) -> Task:
         """Modify fields on a task in-place; filename (slug) is never changed.
 
@@ -974,6 +976,8 @@ class KanbanEngine:
             timestamp:   When True, prepend ``[[YYYY-MM-DD]]`` to append_body.
             archival_reason: Replace archival reason when provided.
             archival_refs:   Replace archival reference IDs when provided.
+            expected_updated: Optional OCC token for compare-and-swap writes.
+            source:      Activity event source label (agent, cockpit, engine).
 
         Returns:
             Updated :class:`Task`.
@@ -1042,10 +1046,17 @@ class KanbanEngine:
 
         record.updated = datetime.now(tz=UTC).isoformat()
 
-        write_task(record, self._kanban_dir, target_dir=target_dir)
+        if expected_updated is not None:
+            storage.write_task_if_unchanged(
+                record,
+                expected_updated,
+                self._kanban_dir,
+            )
+        else:
+            write_task(record, self._kanban_dir, target_dir=target_dir)
 
         try:
-            self._emit_event("edit", record.id, "task edited")
+            self._emit_event("edit", record.id, "task edited", source=source)
         except OSError:
             with contextlib.suppress(Exception):
                 write_task(original, self._kanban_dir, target_dir=target_dir)
@@ -1053,13 +1064,15 @@ class KanbanEngine:
         self._revision += 1
         return record
 
-    def move_task(
+    def move_task(  # noqa: PLR0913
         self,
         task_id: str,
         status: str,
         *,
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
+        expected_updated: str | None = None,
+        source: str = "engine",
     ) -> Task:
         """Change the status of a task; "archived" moves the file to archive/.
 
@@ -1068,6 +1081,8 @@ class KanbanEngine:
             status:  Target status name, or ``"archived"`` to archive the task.
             archival_reason: Optional archive reason persisted when archiving.
             archival_refs: Optional archive reference IDs persisted when archiving.
+            expected_updated: Optional OCC token for compare-and-swap writes.
+            source: Activity event source label (agent, cockpit, engine).
 
         Returns:
             Updated :class:`Task`.
@@ -1096,7 +1111,14 @@ class KanbanEngine:
             record.archival_reason = archival_reason
             record.archival_refs = list(archival_refs) if archival_refs is not None else []
             record.updated = datetime.now(tz=UTC).isoformat()
-            write_task(record, self._kanban_dir)
+            if expected_updated is not None:
+                storage.write_task_if_unchanged(
+                    record,
+                    expected_updated,
+                    self._kanban_dir,
+                )
+            else:
+                write_task(record, self._kanban_dir)
             try:
                 _move_file(task_path, dest)
             except OSError:
@@ -1109,10 +1131,22 @@ class KanbanEngine:
         else:
             record.status = status
             record.updated = datetime.now(tz=UTC).isoformat()
-            write_task(record, self._kanban_dir)
+            if expected_updated is not None:
+                storage.write_task_if_unchanged(
+                    record,
+                    expected_updated,
+                    self._kanban_dir,
+                )
+            else:
+                write_task(record, self._kanban_dir)
 
         try:
-            self._emit_event("move", record.id, f"{old_status} -> {record.status}")
+            self._emit_event(
+                "move",
+                record.id,
+                f"{old_status} -> {record.status}",
+                source=source,
+            )
         except OSError:
             with contextlib.suppress(Exception):
                 if archived and dest.exists():
@@ -2622,7 +2656,7 @@ class AgentView:
             )
 
         try:
-            task = self.engine.edit_task(str(task_id), **kwargs)
+            task = self.engine.edit_task(str(task_id), source="agent", **kwargs)
         except ValueError as exc:
             raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
 
@@ -2671,6 +2705,7 @@ class AgentView:
                 status,
                 archival_reason=archival_reason,
                 archival_refs=archival_refs,
+                source="agent",
             )
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
@@ -2730,10 +2765,45 @@ class AgentView:
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
+        """Validate the outcome parameter matrix and finalise the work session.
+
+        Enforces agent-facing constraints before any mutation: the task is
+        left unchanged if validation fails (D41 atomicity).
+
+        Args:
+            task_id:         Numeric task ID.
+            outcome:         One of ``"success"``, ``"reject"``, ``"block"``,
+                             or ``"release"``.  ``"fail"`` raises
+                             :class:`ValidationError` at this layer.
+            note:            Text appended with an ISO-8601 timestamp prefix.
+                             Ignored for ``"release"`` on an unclaimed task.
+            move_to:         Required when *outcome* is ``"reject"``; target
+                             status or ``"archived"``.  Optional additional
+                             status move when *outcome* is ``"block"``.
+                             Forbidden on ``"success"`` and ``"release"``.
+            block_reason:    Non-empty, non-whitespace string required when
+                             *outcome* is ``"block"``; stored on the task.
+                             Forbidden on all other outcomes.
+            archival_reason: Required when *move_to* is ``"archived"``; stored
+                             on the task.  Forbidden otherwise.
+            archival_refs:   Optional list of related task IDs when archiving.
+                             Forbidden when not archiving.
+
+        Returns:
+            :class:`SingleTaskResponse` with the updated task state and any
+            guidance strings (e.g. skip-warning, block AR hint).
+
+        Raises:
+            :class:`ValidationError`: Parameter matrix violation, invalid
+                outcome, blank *block_reason*, unclaimed task on a mutating
+                outcome, or predicate failure on the destination status.
+            :class:`ConcurrencyError`: Task already claimed by another agent.
+            :class:`NotFoundError`: No task matching *task_id*.
+        """
         config = self.engine.board_config()
         effective_archival_refs = list(archival_refs or [])
 
-        valid_outcomes = {"success", "reject", "block", "release"}
+        valid_outcomes = {"success", "fail", "reject", "block", "release"}
 
         if outcome == "success":
             if move_to is not None:
@@ -2745,6 +2815,22 @@ class AgentView:
                 raise ValidationError(
                     code="ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS",
                     user_message="archival fields are forbidden when outcome='success'",
+                )
+            if block_reason is not None:
+                raise ValidationError(
+                    code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
+                    user_message="block_reason is only allowed when outcome='block'",
+                )
+        elif outcome == "fail":
+            if move_to is not None:
+                raise ValidationError(
+                    code="ERR_MOVE_TO_FORBIDDEN_ON_FAIL",
+                    user_message="move_to is forbidden when outcome='fail'",
+                )
+            if archival_reason is not None or archival_refs is not None:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_FAIL",
+                    user_message="archival fields are forbidden when outcome='fail'",
                 )
             if block_reason is not None:
                 raise ValidationError(
@@ -2831,7 +2917,7 @@ class AgentView:
                 unchanged = before.model_copy(deep=True)
                 unchanged.body = _task_body_as_text(unchanged.body).rstrip("\n")
                 return self._to_single_response(unchanged)
-            if outcome in {"success", "reject", "block"} and not claimed:
+            if outcome in {"success", "fail", "reject", "block"} and not claimed:
                 raise ValidationError(
                     code="ERR_NOT_CLAIMED",
                     user_message=(
@@ -2969,7 +3055,7 @@ class CockpitView:
             user_message=f"Task '{task_id}' not found",
         )
 
-    def edit_task(  # noqa: PLR0913
+    def edit_task(  # noqa: C901, PLR0912, PLR0913
         self,
         task_id: int,
         *,
@@ -2987,34 +3073,47 @@ class CockpitView:
         archival_reason: str = "",
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
-        """Edit a task with OCC token validation for cockpit clients."""
+        """Edit a task with OCC compare-and-swap validation for cockpit clients."""
+        kwargs: dict[str, object] = {
+            "expected_updated": expected_updated,
+            "source": "cockpit",
+        }
+        if body:
+            kwargs["body"] = body
+        if append_body:
+            kwargs["append_body"] = append_body
+            kwargs["timestamp"] = timestamp
+        if priority:
+            kwargs["priority"] = priority
+        if parent > 0:
+            kwargs["parent"] = parent
+        if add_dep is not None:
+            kwargs["add_deps"] = add_dep
+        if remove_dep is not None:
+            kwargs["remove_deps"] = remove_dep
+        if add_tag is not None:
+            kwargs["add_tags"] = add_tag
+        if remove_tag is not None:
+            kwargs["remove_tags"] = remove_tag
+        if block_reason is not _BLOCK_REASON_UNSET:
+            if block_reason:
+                kwargs["blocked"] = True
+                kwargs["block_reason"] = block_reason
+            else:
+                kwargs["blocked"] = False
+                kwargs["block_reason"] = None
+        if archival_reason:
+            kwargs["archival_reason"] = archival_reason
+        if archival_refs is not None:
+            kwargs["archival_refs"] = archival_refs
+
         try:
-            current = self.engine.show_task(str(task_id))
+            task = self.engine.edit_task(str(task_id), **kwargs)
         except FileNotFoundError as exc:
             raise self._not_found(task_id) from exc
-
-        if current.updated != expected_updated:
-            raise ConcurrencyError(
-                code="ERR_STALE",
-                user_message="Task changed since read; reload and retry",
-            )
-
-        response = self.engine.agent_view().edit_task(
-            task_id,
-            body=body,
-            append_body=append_body,
-            timestamp=timestamp,
-            priority=priority,
-            parent=parent,
-            add_dep=add_dep,
-            remove_dep=remove_dep,
-            add_tag=add_tag,
-            remove_tag=remove_tag,
-            block_reason=block_reason,
-            archival_reason=archival_reason,
-            archival_refs=archival_refs,
-        )
-        return self._to_task_response(response)
+        except ValueError as exc:
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+        return self._to_single_response(task)
 
     def move_task(
         self,
@@ -3025,25 +3124,21 @@ class CockpitView:
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
-        """Move a task with OCC token validation for cockpit clients."""
+        """Move a task with OCC compare-and-swap validation for cockpit clients."""
         try:
-            current = self.engine.show_task(str(task_id))
+            task = self.engine.move_task(
+                str(task_id),
+                status,
+                archival_reason=archival_reason,
+                archival_refs=archival_refs,
+                expected_updated=expected_updated,
+                source="cockpit",
+            )
         except FileNotFoundError as exc:
             raise self._not_found(task_id) from exc
-
-        if current.updated != expected_updated:
-            raise ConcurrencyError(
-                code="ERR_STALE",
-                user_message="Task changed since read; reload and retry",
-            )
-
-        response = self.engine.agent_view().move_task(
-            task_id,
-            status,
-            archival_reason=archival_reason,
-            archival_refs=archival_refs,
-        )
-        return self._to_task_response(response)
+        except ValueError as exc:
+            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+        return self._to_single_response(task)
 
     def release_task(self, task_id: int) -> SingleTaskResponse:
         """Release claim on task; unclaimed tasks are returned unchanged."""
