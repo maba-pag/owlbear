@@ -420,6 +420,9 @@ class TestFromAC_ShowTaskSectionConcat:
             "D56 requires ALL matches concatenated in document order; "
             "current impl returns only the first section."
         )
+        assert "Unrelated note." not in resp.body, (
+            "Section filter must exclude non-matching headings from concatenated result"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -694,13 +697,16 @@ class TestFromAC_ShowTaskSectionLookup:
             kanban_dir,
             task_id=11,
             title="CaseTest",
-            body="## Goals\nSome goal text.\n",
+            body="## Goals\nSome goal text.\n\n## Notes\nIrrelevant note.\n",
         )
         view = _make_view(kanban_dir)
         view.engine.list_tasks()  # warm index
         resp = view.show_task(11, section="GOALS")
         assert resp.body is not None, "Case-insensitive match must return body content"
         assert "Some goal text." in resp.body
+        assert "Irrelevant note." not in resp.body, (
+            "Section filter must exclude unrelated headings"
+        )
 
     def test_missing_section_body_is_none(self, tmp_path: Path) -> None:
         """AC11: section not found → body=None."""
