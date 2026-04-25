@@ -3,18 +3,20 @@ id: 22
 title: Build CLI trigger commands
 status: archived
 priority: needed
-created: 2026-03-26T17:22:48.6175218+01:00
-updated: 2026-04-01T18:57:07.5738249+02:00
-started: 2026-04-01T18:57:06.9413068+02:00
-completed: 2026-04-01T18:57:06.9413068+02:00
+created: 2026-03-26 17:22:48.617522+01:00
+updated: 2026-04-01 18:57:07.573825+02:00
+started: 2026-04-01 18:57:06.941307+02:00
+completed: 2026-04-01 18:57:06.941307+02:00
 tags:
-    - phase-2
-    - scope:cli
-    - type:build
+- phase-2
+- scope:cli
+- type:build
 depends_on:
-    - 20
-    - 202
+- 20
+- 202
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

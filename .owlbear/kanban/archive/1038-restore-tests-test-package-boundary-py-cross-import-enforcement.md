@@ -3,8 +3,8 @@ id: 1038
 title: Restore tests/test_package_boundary.py cross-import enforcement
 status: archived
 priority: important
-created: 2026-04-20T01:30:45.744379+00:00
-updated: 2026-04-20T02:06:38.287874+00:00
+created: 2026-04-20 01:30:45.744379+00:00
+updated: 2026-04-20 02:06:38.287874+00:00
 tags:
 - quality
 - test
@@ -15,6 +15,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Context
 

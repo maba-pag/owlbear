@@ -3,14 +3,16 @@ id: 1000
 title: Add tests for GraphEnricher cancellation and draining
 status: archived
 priority: nice-to-have
-created: 2026-03-25T04:37:30.2492659+01:00
-updated: 2026-03-26T09:00:58.5033141+01:00
-started: 2026-03-26T09:00:15.2817277+01:00
-completed: 2026-03-26T09:00:15.2817277+01:00
+created: 2026-03-25 04:37:30.249266+01:00
+updated: 2026-03-26 09:00:58.503314+01:00
+started: 2026-03-26 09:00:15.281728+01:00
+completed: 2026-03-26 09:00:15.281728+01:00
 tags:
-    - scope:core
-    - type:test
+- scope:core
+- type:test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Source: #871 research (docs/research/graphenricher-cancellation-draining.md).

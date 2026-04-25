@@ -3,19 +3,21 @@ id: 16
 title: Build mcp-knowledge server
 status: archived
 priority: needed
-created: 2026-03-26T17:21:28.0951097+01:00
-updated: 2026-03-31T05:53:48.0470657+02:00
-started: 2026-03-31T05:43:56.6345458+02:00
-completed: 2026-03-31T05:43:56.6345458+02:00
+created: 2026-03-26 17:21:28.095110+01:00
+updated: 2026-03-31 05:53:48.047066+02:00
+started: 2026-03-31 05:43:56.634546+02:00
+completed: 2026-03-31 05:43:56.634546+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:build
+- phase-1
+- scope:mcp
+- type:build
 depends_on:
-    - 2
-    - 15
-    - 152
+- 2
+- 15
+- 152
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

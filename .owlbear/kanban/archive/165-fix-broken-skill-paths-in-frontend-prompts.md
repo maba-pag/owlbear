@@ -3,15 +3,17 @@ id: 165
 title: Fix broken skill paths in frontend prompts
 status: archived
 priority: important
-created: 2026-03-29T19:49:17.606228+02:00
-updated: 2026-03-30T00:47:07.9550195+02:00
-started: 2026-03-29T20:16:38.0756442+02:00
-completed: 2026-03-30T00:46:31.186467+02:00
+created: 2026-03-29 19:49:17.606228+02:00
+updated: 2026-03-30 00:47:07.955020+02:00
+started: 2026-03-29 20:16:38.075644+02:00
+completed: 2026-03-30 00:46:31.186467+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

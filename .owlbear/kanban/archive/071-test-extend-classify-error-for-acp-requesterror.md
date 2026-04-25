@@ -3,15 +3,17 @@ id: 71
 title: 'Test: Extend classify_error for ACP RequestError codes'
 status: archived
 priority: needed
-created: 2026-03-26T20:17:59.4703951+01:00
-updated: 2026-03-27T13:28:52.5254295+01:00
-started: 2026-03-27T13:28:24.9786841+01:00
-completed: 2026-03-27T13:28:24.9786841+01:00
+created: 2026-03-26 20:17:59.470395+01:00
+updated: 2026-03-27 13:28:52.525430+01:00
+started: 2026-03-27 13:28:24.978684+01:00
+completed: 2026-03-27 13:28:24.978684+01:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - test
+- phase-1
+- scope:orchestrator
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,8 +3,8 @@ id: 1035
 title: 'P2-11: Cockpit diagram'
 status: archived
 priority: important
-created: 2026-04-19T23:53:28.601773+00:00
-updated: 2026-04-20T06:11:39.175194+00:00
+created: 2026-04-19 23:53:28.601773+00:00
+updated: 2026-04-20 06:11:39.175194+00:00
 tags:
 - phase-2
 - docs-currency
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 Brief: see parent #1016
 

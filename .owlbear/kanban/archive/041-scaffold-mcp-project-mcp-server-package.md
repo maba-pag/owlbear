@@ -3,18 +3,20 @@ id: 41
 title: Scaffold mcp-project MCP server package
 status: archived
 priority: needed
-created: 2026-03-26T18:50:07.7134154+01:00
-updated: 2026-03-27T22:15:35.5972788+01:00
-started: 2026-03-27T22:15:35.5972788+01:00
-completed: 2026-03-27T22:15:35.5972788+01:00
+created: 2026-03-26 18:50:07.713415+01:00
+updated: 2026-03-27 22:15:35.597279+01:00
+started: 2026-03-27 22:15:35.597279+01:00
+completed: 2026-03-27 22:15:35.597279+01:00
 tags:
-    - phase-1
-    - scope:mcp
-    - scope:build
+- phase-1
+- scope:mcp
+- scope:build
 depends_on:
-    - 7
-    - 67
+- 7
+- 67
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

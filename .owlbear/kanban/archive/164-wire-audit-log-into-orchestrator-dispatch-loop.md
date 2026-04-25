@@ -3,20 +3,22 @@ id: 164
 title: Wire audit log into orchestrator dispatch loop
 status: archived
 priority: needed
-created: 2026-03-29T19:44:23.6292421+02:00
-updated: 2026-04-02T14:45:33.7037242+02:00
-started: 2026-04-02T14:45:33.2630305+02:00
-completed: 2026-04-02T14:45:33.2630305+02:00
+created: 2026-03-29 19:44:23.629242+02:00
+updated: 2026-04-02 14:45:33.703724+02:00
+started: 2026-04-02 14:45:33.263031+02:00
+completed: 2026-04-02 14:45:33.263031+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 163
-    - 19
-    - 146
-    - 204
+- 163
+- 19
+- 146
+- 204
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Wire AuditLog into the orchestrator dispatch loop via constructor injection.

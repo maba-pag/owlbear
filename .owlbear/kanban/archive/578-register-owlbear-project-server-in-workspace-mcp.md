@@ -3,14 +3,16 @@ id: 578
 title: Register owlbear-project server in workspace mcp.json
 status: archived
 priority: nice-to-have
-created: 2026-04-03T11:38:44.9317127+02:00
-updated: 2026-04-03T14:28:31.8146116+02:00
-started: 2026-04-03T14:28:09.3966233+02:00
-completed: 2026-04-03T14:28:09.3966233+02:00
+created: 2026-04-03 11:38:44.931713+02:00
+updated: 2026-04-03 14:28:31.814612+02:00
+started: 2026-04-03 14:28:09.396623+02:00
+completed: 2026-04-03 14:28:09.396623+02:00
 tags:
-    - scope:config
-    - phase-2
+- scope:config
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 owlbear-project is missing from .vscode/mcp.json (same gap as owlbear-memory fixed by #570). No agent tool patterns use owlbear-project/* yet, so this is lower priority. Add when agents need project MCP tools.

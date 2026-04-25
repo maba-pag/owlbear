@@ -3,18 +3,20 @@ id: 204
 title: 'Test: Wire audit log into dispatch loop'
 status: archived
 priority: needed
-created: 2026-03-30T08:11:23.2576692+02:00
-updated: 2026-04-02T07:51:11.9063433+02:00
-started: 2026-04-02T07:51:06.8872082+02:00
-completed: 2026-04-02T07:51:06.8872082+02:00
+created: 2026-03-30 08:11:23.257669+02:00
+updated: 2026-04-02 07:51:11.906343+02:00
+started: 2026-04-02 07:51:06.887208+02:00
+completed: 2026-04-02 07:51:06.887208+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-2
+- scope:orchestrator
+- type:test
+- test
 depends_on:
-    - 146
+- 146
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED tests for #164 (wire audit log into dispatch loop).

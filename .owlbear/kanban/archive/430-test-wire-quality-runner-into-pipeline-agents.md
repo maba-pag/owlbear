@@ -3,17 +3,19 @@ id: 430
 title: 'Test: Wire Quality-Runner into pipeline agents'
 status: archived
 priority: needed
-created: 2026-03-30T21:24:44.6433602+02:00
-updated: 2026-04-05T04:01:58.1952021+02:00
-started: 2026-04-05T04:01:58.1952021+02:00
-completed: 2026-04-05T04:01:58.1952021+02:00
+created: 2026-03-30 21:24:44.643360+02:00
+updated: 2026-04-05 04:01:58.195202+02:00
+started: 2026-04-05 04:01:58.195202+02:00
+completed: 2026-04-05 04:01:58.195202+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - test
+- scope:agents
+- phase-2
+- test
 depends_on:
-    - 263
+- 263
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Test task for #264. Verify Quality-Runner wiring in agent frontmatter and skill files.

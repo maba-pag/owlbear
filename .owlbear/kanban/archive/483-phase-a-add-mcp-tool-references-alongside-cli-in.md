@@ -3,25 +3,27 @@ id: 483
 title: 'Phase A: Add MCP tool references alongside CLI in all agents and skills'
 status: archived
 priority: needed
-created: 2026-03-31T06:20:39.2789758+02:00
-updated: 2026-04-04T07:24:34.9598176+02:00
-started: 2026-04-04T07:24:34.9598176+02:00
-completed: 2026-04-04T07:24:34.9598176+02:00
+created: 2026-03-31 06:20:39.278976+02:00
+updated: 2026-04-04 07:24:34.959818+02:00
+started: 2026-04-04 07:24:34.959818+02:00
+completed: 2026-04-04 07:24:34.959818+02:00
 tags:
-    - scope:mcp
-    - ' scope:agents'
-    - ' scope:skills'
-    - ' type:build'
-    - ' phase-2'
-    - docs
+- scope:mcp
+- ' scope:agents'
+- ' scope:skills'
+- ' type:build'
+- ' phase-2'
+- docs
 depends_on:
-    - 470
-    - 471
-    - 472
-    - 475
-    - 476
-    - 477
+- 470
+- 471
+- 472
+- 475
+- 476
+- 477
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

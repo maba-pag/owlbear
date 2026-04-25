@@ -1,17 +1,20 @@
 ---
 id: 478
-title: 'RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)'
+title: 'RED: tests for modernized list_tasks (archived, limit, reverse, blocked tri-state,
+  lean JSON)'
 status: archived
 priority: needed
-created: 2026-03-31T06:13:41.4018366+02:00
-updated: 2026-04-02T05:57:23.3627651+02:00
-started: 2026-04-02T05:57:22.9086739+02:00
-completed: 2026-04-02T05:57:22.9086739+02:00
+created: 2026-03-31 06:13:41.401837+02:00
+updated: 2026-04-02 05:57:23.362765+02:00
+started: 2026-04-02 05:57:22.908674+02:00
+completed: 2026-04-02 05:57:22.908674+02:00
 tags:
-    - scope:mcp
-    - type:test
-    - phase-2
+- scope:mcp
+- type:test
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

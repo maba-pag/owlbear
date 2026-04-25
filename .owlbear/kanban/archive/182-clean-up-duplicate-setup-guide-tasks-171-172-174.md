@@ -3,15 +3,17 @@ id: 182
 title: 'Clean up duplicate setup-guide tasks (#171 #172 #174 #175)'
 status: archived
 priority: needed
-created: 2026-03-29T20:13:44.4010742+02:00
-updated: 2026-03-30T03:15:25.6153135+02:00
-started: 2026-03-29T20:29:33.0848762+02:00
-completed: 2026-03-30T03:14:38.0715928+02:00
+created: 2026-03-29 20:13:44.401074+02:00
+updated: 2026-03-30 03:15:25.615314+02:00
+started: 2026-03-29 20:29:33.084876+02:00
+completed: 2026-03-30 03:14:38.071593+02:00
 tags:
-    - phase-2
-    - scope:build
-    - type:build
+- phase-2
+- scope:build
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,17 +3,19 @@ id: 600
 title: Move .github/ customizations to share/
 status: archived
 priority: critical
-created: 2026-04-04T20:30:21.323724+02:00
-updated: 2026-04-05T04:50:52.2187372+02:00
-started: 2026-04-05T04:50:52.2187372+02:00
-completed: 2026-04-05T04:50:52.2187372+02:00
+created: 2026-04-04 20:30:21.323724+02:00
+updated: 2026-04-05 04:50:52.218737+02:00
+started: 2026-04-05 04:50:52.218737+02:00
+completed: 2026-04-05 04:50:52.218737+02:00
 tags:
-    - scope:infra
-    - type:build
-    - phase-2
-    - type:config
+- scope:infra
+- type:build
+- phase-2
+- type:config
 parent: 598
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

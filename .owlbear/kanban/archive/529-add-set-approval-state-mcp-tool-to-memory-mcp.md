@@ -3,17 +3,19 @@ id: 529
 title: Add set_approval_state MCP tool to memory-mcp
 status: archived
 priority: needed
-created: 2026-04-01T19:12:57.825057+02:00
-updated: 2026-04-03T17:40:33.9769862+02:00
-started: 2026-04-03T17:39:42.4724437+02:00
-completed: 2026-04-03T17:39:42.4724437+02:00
+created: 2026-04-01 19:12:57.825057+02:00
+updated: 2026-04-03 17:40:33.976986+02:00
+started: 2026-04-03 17:39:42.472444+02:00
+completed: 2026-04-03 17:39:42.472444+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 525
-    - 569
+- 525
+- 569
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Add a 5th MCP tool to memory-mcp for approval state transitions. Per docs/research/set-approval-state-mcp-tool.md and docs/research/curator-workflow-memory-mcp.md sec 3B. Depends on #525.

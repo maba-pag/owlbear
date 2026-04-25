@@ -3,15 +3,17 @@ id: 129
 title: Add mcp.json customization hint to setup.py output
 status: archived
 priority: important
-created: 2026-03-29T07:06:54.7365186+02:00
-updated: 2026-03-29T14:40:06.5712964+02:00
-started: 2026-03-29T07:34:09.3893315+02:00
-completed: 2026-03-29T14:39:50.9377761+02:00
+created: 2026-03-29 07:06:54.736519+02:00
+updated: 2026-03-29 14:40:06.571296+02:00
+started: 2026-03-29 07:34:09.389332+02:00
+completed: 2026-03-29 14:39:50.937776+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:docs
+- phase-1
+- scope:mcp
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

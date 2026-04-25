@@ -3,8 +3,8 @@ id: 1088
 title: 'A-05: RED — lifecycle tool adapter tests'
 status: in-progress
 priority: needed
-created: 2026-04-21T10:53:58.270590+00:00
-updated: 2026-04-24T15:36:13.676640+00:00
+created: '2026-04-21 10:53:58.270590+00:00'
+updated: '2026-04-24 15:36:13.676640+00:00'
 tags:
 - phase:mcp
 - brief:a
@@ -16,7 +16,6 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []

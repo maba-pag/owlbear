@@ -3,15 +3,17 @@ id: 155
 title: Build mock ACP agent for E2E testing
 status: archived
 priority: needed
-created: 2026-03-29T19:33:50.5555158+02:00
-updated: 2026-03-30T15:29:40.6471037+02:00
-started: 2026-03-30T15:29:04.9118616+02:00
-completed: 2026-03-30T15:29:04.9118616+02:00
+created: 2026-03-29 19:33:50.555516+02:00
+updated: 2026-03-30 15:29:40.647104+02:00
+started: 2026-03-30 15:29:04.911862+02:00
+completed: 2026-03-30 15:29:04.911862+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
+- phase-2
+- scope:orchestrator
+- type:test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

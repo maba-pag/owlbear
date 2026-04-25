@@ -3,17 +3,19 @@ id: 10
 title: Port instruction files
 status: archived
 priority: important
-created: 2026-03-26T17:20:03.836269+01:00
-updated: 2026-03-29T03:45:30.9262419+02:00
-started: 2026-03-29T03:45:26.448526+02:00
-completed: 2026-03-29T03:45:26.448526+02:00
+created: 2026-03-26 17:20:03.836269+01:00
+updated: 2026-03-29 03:45:30.926242+02:00
+started: 2026-03-29 03:45:26.448526+02:00
+completed: 2026-03-29 03:45:26.448526+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:build
+- phase-1
+- scope:docs
+- type:build
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

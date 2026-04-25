@@ -3,18 +3,20 @@ id: 605
 title: Extract system instructions from copilot-instructions.md
 status: archived
 priority: needed
-created: 2026-04-04T20:31:16.804802+02:00
-updated: 2026-04-05T12:08:07.3426071+02:00
-started: 2026-04-05T12:08:07.3426071+02:00
-completed: 2026-04-05T12:08:07.3426071+02:00
+created: 2026-04-04 20:31:16.804802+02:00
+updated: 2026-04-05 12:08:07.342607+02:00
+started: 2026-04-05 12:08:07.342607+02:00
+completed: 2026-04-05 12:08:07.342607+02:00
 tags:
-    - scope:infra
-    - phase-2
-    - type:config
+- scope:infra
+- phase-2
+- type:config
 parent: 598
 depends_on:
-    - 600
+- 600
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

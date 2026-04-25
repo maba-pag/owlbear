@@ -3,15 +3,17 @@ id: 217
 title: Implement Gate 3 architect-bypass in dispatch-planning SKILL.md
 status: archived
 priority: needed
-created: 2026-03-30T14:51:52.7303277+02:00
-updated: 2026-03-30T15:33:10.1181477+02:00
-started: 2026-03-30T15:33:10.1181477+02:00
-completed: 2026-03-30T15:33:10.1181477+02:00
+created: 2026-03-30 14:51:52.730328+02:00
+updated: 2026-03-30 15:33:10.118148+02:00
+started: 2026-03-30 15:33:10.118148+02:00
+completed: 2026-03-30 15:33:10.118148+02:00
 tags:
-    - scope:agents
-    - quality
-    - type:config
+- scope:agents
+- quality
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,17 +3,19 @@ id: 525
 title: Implement memory-mcp tools
 status: archived
 priority: needed
-created: 2026-04-01T16:11:21.612432+02:00
-updated: 2026-04-03T10:18:15.5135971+02:00
-started: 2026-04-02T07:38:31.230978+02:00
-completed: 2026-04-03T10:14:32.2145092+02:00
+created: 2026-04-01 16:11:21.612432+02:00
+updated: 2026-04-03 10:18:15.513597+02:00
+started: 2026-04-02 07:38:31.230978+02:00
+completed: 2026-04-03 10:14:32.214509+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 524
-    - 556
+- 524
+- 556
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

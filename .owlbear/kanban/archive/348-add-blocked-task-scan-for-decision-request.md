@@ -3,18 +3,20 @@ id: 348
 title: Add blocked-task scan for decision-request notifications
 status: archived
 priority: nice-to-have
-created: 2026-03-30T20:41:58.3577972+02:00
-updated: 2026-04-05T20:51:28.97911+02:00
-started: 2026-04-05T20:51:28.97911+02:00
-completed: 2026-04-05T20:51:28.97911+02:00
+created: 2026-03-30 20:41:58.357797+02:00
+updated: 2026-04-05 20:51:28.979110+02:00
+started: 2026-04-05 20:51:28.979110+02:00
+completed: 2026-04-05 20:51:28.979110+02:00
 tags:
-    - phase-3
-    - scope:orchestrator
-    - scope:notifications
-    - type:build
+- phase-3
+- scope:orchestrator
+- scope:notifications
+- type:build
 depends_on:
-    - 347
+- 347
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 [[2026-04-05]] Sun 12:53

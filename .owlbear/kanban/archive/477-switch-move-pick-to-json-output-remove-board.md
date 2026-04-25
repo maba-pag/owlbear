@@ -3,16 +3,18 @@ id: 477
 title: Switch move/pick to JSON output, remove board_context tool
 status: archived
 priority: needed
-created: 2026-03-31T06:06:24.5978486+02:00
-updated: 2026-04-05T08:19:11.6876054+02:00
-started: 2026-04-05T08:19:11.6876054+02:00
-completed: 2026-04-05T08:19:11.6876054+02:00
+created: 2026-03-31 06:06:24.597849+02:00
+updated: 2026-04-05 08:19:11.687605+02:00
+started: 2026-04-05 08:19:11.687605+02:00
+completed: 2026-04-05 08:19:11.687605+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
-    - quality
+- scope:mcp
+- type:build
+- phase-2
+- quality
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria\n\n- [ ] Switch `move_task` output to `--json` (return moved task as JSON object)\n- [ ] Switch `pick_task` output to `--json` (return picked task as JSON object)\n- [ ] Remove `board_context` tool entirely from server.py (YAGNI)\n- [ ] Tests cover: move returns JSON, pick returns JSON, board_context no longer registered\n- [ ] Update mcp-kanban SKILL.md: remove board_context, update move/pick docs\n\n## Design Notes\n\n- board_context is unused; removal simplifies the tool surface\n- move_task and pick_task are read-last, so JSON return gives structured confirmation

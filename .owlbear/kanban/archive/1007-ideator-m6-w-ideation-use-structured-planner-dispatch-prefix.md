@@ -3,8 +3,8 @@ id: 1007
 title: 'Ideator M6 + w-ideation: use structured planner dispatch prefix'
 status: archived
 priority: important
-created: 2026-04-18T21:54:42.565983+00:00
-updated: 2026-04-19T13:16:37.045483+00:00
+created: 2026-04-18 21:54:42.565983+00:00
+updated: 2026-04-19 13:16:37.045483+00:00
 tags:
 - type:improvement
 - scope:agents
@@ -15,6 +15,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 Ideator M6 invokes planner with `brief.md` reference but no structured task ID or mode prefix. This caused the #973 failure where planner defaulted to output-only mode instead of auto-creating tasks.

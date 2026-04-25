@@ -3,16 +3,18 @@ id: 527
 title: Build memory migration CLI tool
 status: archived
 priority: important
-created: 2026-04-01T16:11:40.9727728+02:00
-updated: 2026-04-02T22:09:23.8612753+02:00
-started: 2026-04-02T22:09:23.3474607+02:00
-completed: 2026-04-02T22:09:23.3474607+02:00
+created: 2026-04-01 16:11:40.972773+02:00
+updated: 2026-04-02 22:09:23.861275+02:00
+started: 2026-04-02 22:09:23.347461+02:00
+completed: 2026-04-02 22:09:23.347461+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 524
+- 524
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 CLI tool to bulk-import existing /memories/repo/ files into memory.db. Per docs/research/memory-mcp-server-design.md sec 3L (Phase 3). Depends on #524.

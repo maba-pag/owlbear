@@ -1,20 +1,23 @@
 ---
 id: 563
-title: Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool reference
+title: Expand mcp-kanban SKILL.md with agent workflow pattern and per-tool 
+  reference
 status: archived
 priority: critical
-created: 2026-04-03T07:45:59.8213457+02:00
-updated: 2026-04-03T15:09:23.8459439+02:00
-started: 2026-04-03T15:09:23.3942742+02:00
-completed: 2026-04-03T15:09:23.3942742+02:00
+created: 2026-04-03 07:45:59.821346+02:00
+updated: 2026-04-03 15:09:23.845944+02:00
+started: 2026-04-03 15:09:23.394274+02:00
+completed: 2026-04-03 15:09:23.394274+02:00
 tags:
-    - phase-2
-    - docs
-    - scope:agent-config
+- phase-2
+- docs
+- scope:agent-config
 parent: 483
 depends_on:
-    - 562
+- 562
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

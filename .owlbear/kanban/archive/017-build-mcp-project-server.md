@@ -3,20 +3,22 @@ id: 17
 title: Build mcp-project server
 status: archived
 priority: important
-created: 2026-03-26T17:21:36.1413972+01:00
-updated: 2026-04-01T06:24:21.3294679+02:00
-started: 2026-04-01T06:23:55.6037912+02:00
-completed: 2026-04-01T06:23:55.6037912+02:00
+created: 2026-03-26 17:21:36.141397+01:00
+updated: 2026-04-01 06:24:21.329468+02:00
+started: 2026-04-01 06:23:55.603791+02:00
+completed: 2026-04-01 06:23:55.603791+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:build
+- phase-1
+- scope:mcp
+- type:build
 depends_on:
-    - 2
-    - 7
-    - 68
-    - 99
+- 2
+- 7
+- 68
+- 99
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

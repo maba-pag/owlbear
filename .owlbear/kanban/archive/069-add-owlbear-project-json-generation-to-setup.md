@@ -3,17 +3,19 @@ id: 69
 title: Add owlbear-project.json generation to setup script
 status: archived
 priority: needed
-created: 2026-03-26T20:05:10.7303339+01:00
-updated: 2026-03-30T02:46:05.5229485+02:00
-started: 2026-03-30T02:46:00.6275707+02:00
-completed: 2026-03-30T02:46:00.6275707+02:00
+created: 2026-03-26 20:05:10.730334+01:00
+updated: 2026-03-30 02:46:05.522949+02:00
+started: 2026-03-30 02:46:00.627571+02:00
+completed: 2026-03-30 02:46:00.627571+02:00
 tags:
-    - phase-1
-    - scope:cli
+- phase-1
+- scope:cli
 depends_on:
-    - 68
-    - 75
+- 68
+- 75
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

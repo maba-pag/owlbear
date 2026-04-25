@@ -3,18 +3,20 @@ id: 34
 title: Knowledge package integration + hybrid search
 status: archived
 priority: needed
-created: 2026-03-26T18:33:53.2231299+01:00
-updated: 2026-04-03T05:52:18.0962646+02:00
-started: 2026-04-03T05:45:49.2075379+02:00
-completed: 2026-04-03T05:45:49.2075379+02:00
+created: 2026-03-26 18:33:53.223130+01:00
+updated: 2026-04-03 05:52:18.096265+02:00
+started: 2026-04-03 05:45:49.207538+02:00
+completed: 2026-04-03 05:45:49.207538+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 33
-    - 205
+- 33
+- 205
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

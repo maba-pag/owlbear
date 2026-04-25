@@ -3,14 +3,16 @@ id: 1007
 title: Write cancellation regression tests for knowledge pipelines
 status: archived
 priority: nice-to-have
-created: 2026-03-26T11:43:08.395742+01:00
-updated: 2026-03-26T11:43:18.3574169+01:00
+created: 2026-03-26 11:43:08.395742+01:00
+updated: 2026-03-26 11:43:18.357417+01:00
 tags:
-    - scope:core
-    - type:test
+- scope:core
+- type:test
 depends_on:
-    - 1006
+- 1006
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 [[2026-03-26]] Thu 11:43

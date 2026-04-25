@@ -4,8 +4,8 @@ title: Implement ad-hoc Critic invocation rules in w-ideation + h-ideation-panel
   cross-ref
 status: archived
 priority: important
-created: 2026-04-18T23:33:06.671427+00:00
-updated: 2026-04-19T14:10:48.245669+00:00
+created: 2026-04-18 23:33:06.671427+00:00
+updated: 2026-04-19 14:10:48.245669+00:00
 tags:
 - type:improvement
 - scope:skills
@@ -17,6 +17,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 Ad-hoc Critic invocation (user-request + Mediator self-trigger) is not documented in the ideation workflow. Research doc `.owlbear/research/1004-ad-hoc-critic-invocation.md` establishes the gap and recommends Option D.

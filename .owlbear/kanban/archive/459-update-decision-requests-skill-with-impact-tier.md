@@ -1,17 +1,20 @@
 ---
 id: 459
-title: Update decision-requests skill with impact_tier field and T3 indefinite blocking
+title: Update decision-requests skill with impact_tier field and T3 indefinite 
+  blocking
 status: archived
 priority: needed
-created: 2026-03-31T03:39:53.0605+02:00
-updated: 2026-03-31T11:14:59.7385689+02:00
-started: 2026-03-31T11:14:59.1183331+02:00
-completed: 2026-03-31T11:14:59.1183331+02:00
+created: 2026-03-31 03:39:53.060500+02:00
+updated: 2026-03-31 11:14:59.738569+02:00
+started: 2026-03-31 11:14:59.118333+02:00
+completed: 2026-03-31 11:14:59.118333+02:00
 tags:
-    - process
-    - scope:agents
-    - quality
+- process
+- scope:agents
+- quality
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Add impact_tier (1/2/3) to decision-request frontmatter. T3 decisions block indefinitely (no auto-resolve). T2 keeps 5-day auto-timeout. Update file format section, resolution workflow, and planner integration notes. See docs/research/mandatory-user-decision-gate.md.

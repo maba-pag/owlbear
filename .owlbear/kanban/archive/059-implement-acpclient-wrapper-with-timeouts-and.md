@@ -3,19 +3,21 @@ id: 59
 title: Implement AcpClient wrapper with timeouts and error classification
 status: archived
 priority: needed
-created: 2026-03-26T19:27:25.5707168+01:00
-updated: 2026-03-30T00:08:06.4311981+02:00
-started: 2026-03-30T00:08:01.7857513+02:00
-completed: 2026-03-30T00:08:01.7857513+02:00
+created: 2026-03-26 19:27:25.570717+01:00
+updated: 2026-03-30 00:08:06.431198+02:00
+started: 2026-03-30 00:08:01.785751+02:00
+completed: 2026-03-30 00:08:01.785751+02:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - type:build
+- phase-1
+- scope:orchestrator
+- type:build
 depends_on:
-    - 58
-    - 46
-    - 94
+- 58
+- 46
+- 94
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

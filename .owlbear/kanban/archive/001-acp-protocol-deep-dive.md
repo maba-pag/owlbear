@@ -3,15 +3,17 @@ id: 1
 title: ACP protocol deep-dive
 status: archived
 priority: needed
-created: 2026-03-26T17:18:05.2307425+01:00
-updated: 2026-03-31T15:05:13.1943458+02:00
-started: 2026-03-29T15:49:28.4753841+02:00
-completed: 2026-03-31T15:05:07.7878142+02:00
+created: 2026-03-26 17:18:05.230743+01:00
+updated: 2026-03-31 15:05:13.194346+02:00
+started: 2026-03-29 15:49:28.475384+02:00
+completed: 2026-03-31 15:05:07.787814+02:00
 tags:
-    - research
-    - phase-1
-    - scope:orchestrator
+- research
+- phase-1
+- scope:orchestrator
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,15 +3,17 @@ id: 491
 title: Implement KANBAN_TOOLS_EXCLUDE in mcp-kanban server
 status: archived
 priority: needed
-created: 2026-03-31T06:22:24.6041271+02:00
-updated: 2026-03-31T16:31:28.1959353+02:00
-started: 2026-03-31T16:31:14.2717173+02:00
-completed: 2026-03-31T16:31:14.2717173+02:00
+created: 2026-03-31 06:22:24.604127+02:00
+updated: 2026-03-31 16:31:28.195935+02:00
+started: 2026-03-31 16:31:14.271717+02:00
+completed: 2026-03-31 16:31:14.271717+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
+- scope:mcp
+- type:build
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

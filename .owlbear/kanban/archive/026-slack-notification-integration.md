@@ -3,17 +3,19 @@ id: 26
 title: Slack notification integration
 status: archived
 priority: nice-to-have
-created: 2026-03-26T17:23:41.5689417+01:00
-updated: 2026-04-04T07:10:06.7452546+02:00
-started: 2026-04-04T07:09:41.0349661+02:00
-completed: 2026-04-04T07:09:41.0349661+02:00
+created: 2026-03-26 17:23:41.568942+01:00
+updated: 2026-04-04 07:10:06.745255+02:00
+started: 2026-04-04 07:09:41.034966+02:00
+completed: 2026-04-04 07:09:41.034966+02:00
 tags:
-    - phase-3
-    - scope:notifications
-    - type:build
+- phase-3
+- scope:notifications
+- type:build
 depends_on:
-    - 21
+- 21
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

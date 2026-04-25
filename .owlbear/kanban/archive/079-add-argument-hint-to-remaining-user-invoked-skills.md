@@ -3,17 +3,19 @@ id: 79
 title: Add argument-hint to remaining user-invoked skills
 status: archived
 priority: nice-to-have
-created: 2026-03-27T02:56:52.2499907+01:00
-updated: 2026-03-30T06:37:31.7400847+02:00
-started: 2026-03-30T06:37:13.5343471+02:00
-completed: 2026-03-30T06:37:13.5343471+02:00
+created: 2026-03-27 02:56:52.249991+01:00
+updated: 2026-03-30 06:37:31.740085+02:00
+started: 2026-03-30 06:37:13.534347+02:00
+completed: 2026-03-30 06:37:13.534347+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:build
+- phase-1
+- scope:skills
+- type:build
 depends_on:
-    - 85
+- 85
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

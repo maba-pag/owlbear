@@ -3,17 +3,19 @@ id: 7
 title: Create monorepo skeleton
 status: archived
 priority: needed
-created: 2026-03-26T17:19:31.7912984+01:00
-updated: 2026-03-28T01:39:00.139252+01:00
-started: 2026-03-28T01:38:55.4378858+01:00
-completed: 2026-03-28T01:38:55.4378858+01:00
+created: 2026-03-26 17:19:31.791298+01:00
+updated: 2026-03-28 01:39:00.139252+01:00
+started: 2026-03-28 01:38:55.437886+01:00
+completed: 2026-03-28 01:38:55.437886+01:00
 tags:
-    - phase-1
-    - scope:build
-    - type:build
+- phase-1
+- scope:build
+- type:build
 depends_on:
-    - 6
+- 6
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

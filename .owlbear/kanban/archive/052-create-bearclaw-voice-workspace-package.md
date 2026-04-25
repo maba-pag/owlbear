@@ -3,18 +3,20 @@ id: 52
 title: Create owlbear-voice workspace package
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:57:37.151058+01:00
-updated: 2026-03-29T15:27:19.2000983+02:00
-started: 2026-03-29T15:26:58.6159762+02:00
-completed: 2026-03-29T15:26:58.6159762+02:00
+created: 2026-03-26 18:57:37.151058+01:00
+updated: 2026-03-29 15:27:19.200098+02:00
+started: 2026-03-29 15:26:58.615976+02:00
+completed: 2026-03-29 15:26:58.615976+02:00
 tags:
-    - phase-3
-    - scope:voice
-    - config
+- phase-3
+- scope:voice
+- config
 depends_on:
-    - 7
-    - 100
+- 7
+- 100
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

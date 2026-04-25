@@ -3,15 +3,17 @@ id: 467
 title: Create challenger.agent.md (adversarial pre-decision review subagent)
 status: archived
 priority: needed
-created: 2026-03-31T05:04:45.7284032+02:00
-updated: 2026-03-31T15:39:37.655324+02:00
-started: 2026-03-31T15:39:09.5059793+02:00
-completed: 2026-03-31T15:39:09.5059793+02:00
+created: 2026-03-31 05:04:45.728403+02:00
+updated: 2026-03-31 15:39:37.655324+02:00
+started: 2026-03-31 15:39:09.505979+02:00
+completed: 2026-03-31 15:39:09.505979+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Implement the Challenger agent per docs/research/challenger-subagent-design.md S3c-d.

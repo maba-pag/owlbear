@@ -1,19 +1,22 @@
 ---
 id: 547
-title: Add model-facing lint feedback via additionalContext to builder PostToolUse hook
+title: Add model-facing lint feedback via additionalContext to builder 
+  PostToolUse hook
 status: archived
 priority: important
-created: 2026-04-02T14:52:03.1922694+02:00
-updated: 2026-04-04T20:33:30.6851666+02:00
-started: 2026-04-04T20:33:02.9099738+02:00
-completed: 2026-04-04T20:33:02.9099738+02:00
+created: 2026-04-02 14:52:03.192269+02:00
+updated: 2026-04-04 20:33:30.685167+02:00
+started: 2026-04-04 20:33:02.909974+02:00
+completed: 2026-04-04 20:33:02.909974+02:00
 tags:
-    - scope:agents
-    - hooks
-    - type:build
+- scope:agents
+- hooks
+- type:build
 depends_on:
-    - 210
+- 210
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

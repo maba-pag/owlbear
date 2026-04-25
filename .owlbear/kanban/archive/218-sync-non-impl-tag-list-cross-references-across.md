@@ -3,15 +3,17 @@ id: 218
 title: Sync non-impl tag list cross-references across skill files
 status: archived
 priority: nice-to-have
-created: 2026-03-30T14:54:54.311161+02:00
-updated: 2026-04-03T03:31:16.9122956+02:00
-started: 2026-04-03T03:30:39.4471783+02:00
-completed: 2026-04-03T03:30:39.4471783+02:00
+created: 2026-03-30 14:54:54.311161+02:00
+updated: 2026-04-03 03:31:16.912296+02:00
+started: 2026-04-03 03:30:39.447178+02:00
+completed: 2026-04-03 03:30:39.447178+02:00
 tags:
-    - scope:agents
-    - quality
-    - type:config
+- scope:agents
+- quality
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

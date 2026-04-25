@@ -3,16 +3,18 @@ id: 521
 title: 'Test: Wire ErrorJournal into AcpClient'
 status: archived
 priority: nice-to-have
-created: 2026-04-01T15:14:45.4318471+02:00
-updated: 2026-04-10T02:02:10.4346885+02:00
-started: 2026-04-02T01:03:55.8090895+02:00
-completed: 2026-04-10T02:02:10.4346885+02:00
+created: 2026-04-01 15:14:45.431847+02:00
+updated: 2026-04-10 02:02:10.434689+02:00
+started: 2026-04-02 01:03:55.809090+02:00
+completed: 2026-04-10 02:02:10.434689+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-2
+- scope:orchestrator
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

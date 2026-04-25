@@ -3,15 +3,17 @@ id: 2
 title: MCP Python SDK deep-dive
 status: archived
 priority: needed
-created: 2026-03-26T17:18:16.5978974+01:00
-updated: 2026-03-28T01:20:14.8979615+01:00
-started: 2026-03-28T01:20:02.8454784+01:00
-completed: 2026-03-28T01:20:02.8454784+01:00
+created: 2026-03-26 17:18:16.597897+01:00
+updated: 2026-03-28 01:20:14.897962+01:00
+started: 2026-03-28 01:20:02.845478+01:00
+completed: 2026-03-28 01:20:02.845478+01:00
 tags:
-    - research
-    - phase-1
-    - scope:mcp
+- research
+- phase-1
+- scope:mcp
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

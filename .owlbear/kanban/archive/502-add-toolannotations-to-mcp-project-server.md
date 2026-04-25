@@ -3,15 +3,17 @@ id: 502
 title: Add ToolAnnotations to mcp-project server
 status: archived
 priority: needed
-created: 2026-03-31T16:49:55.4124729+02:00
-updated: 2026-04-01T07:04:05.5913984+02:00
-started: 2026-04-01T07:04:04.9668277+02:00
-completed: 2026-04-01T07:04:04.9668277+02:00
+created: 2026-03-31 16:49:55.412473+02:00
+updated: 2026-04-01 07:04:05.591398+02:00
+started: 2026-04-01 07:04:04.966828+02:00
+completed: 2026-04-01 07:04:04.966828+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,17 +3,19 @@ id: 58
 title: Implement ProcessSupervisor for ACP subprocess lifecycle
 status: archived
 priority: needed
-created: 2026-03-26T19:27:17.0329284+01:00
-updated: 2026-03-29T14:52:45.245595+02:00
-started: 2026-03-29T14:52:24.4874843+02:00
-completed: 2026-03-29T14:52:24.4874843+02:00
+created: 2026-03-26 19:27:17.032928+01:00
+updated: 2026-03-29 14:52:45.245595+02:00
+started: 2026-03-29 14:52:24.487484+02:00
+completed: 2026-03-29 14:52:24.487484+02:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - type:build
+- phase-1
+- scope:orchestrator
+- type:build
 depends_on:
-    - 73
+- 73
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

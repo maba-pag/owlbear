@@ -3,15 +3,17 @@ id: 169
 title: Document multi-project setup experience and sharing guide
 status: archived
 priority: important
-created: 2026-03-29T19:49:38.9701114+02:00
-updated: 2026-03-30T00:56:09.5042174+02:00
-started: 2026-03-30T00:55:20.0891145+02:00
-completed: 2026-03-30T00:55:20.0891145+02:00
+created: 2026-03-29 19:49:38.970111+02:00
+updated: 2026-03-30 00:56:09.504217+02:00
+started: 2026-03-30 00:55:20.089115+02:00
+completed: 2026-03-30 00:55:20.089115+02:00
 tags:
-    - phase-2
-    - scope:build
-    - type:docs
+- phase-2
+- scope:build
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

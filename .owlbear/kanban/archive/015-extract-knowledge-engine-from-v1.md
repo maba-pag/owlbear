@@ -3,17 +3,19 @@ id: 15
 title: Extract knowledge engine from v1
 status: archived
 priority: needed
-created: 2026-03-26T17:21:09.6126432+01:00
-updated: 2026-03-29T16:05:02.3038832+02:00
-started: 2026-03-29T16:04:25.8044465+02:00
-completed: 2026-03-29T16:04:25.8044465+02:00
+created: 2026-03-26 17:21:09.612643+01:00
+updated: 2026-03-29 16:05:02.303883+02:00
+started: 2026-03-29 16:04:25.804447+02:00
+completed: 2026-03-29 16:04:25.804447+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

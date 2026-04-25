@@ -3,16 +3,18 @@ id: 152
 title: 'Test: mcp-knowledge Phase A remaining tools'
 status: archived
 priority: needed
-created: 2026-03-29T19:20:21.3798812+02:00
-updated: 2026-03-30T15:39:18.2862509+02:00
-started: 2026-03-30T15:38:33.9276219+02:00
-completed: 2026-03-30T15:38:33.9276219+02:00
+created: 2026-03-29 19:20:21.379881+02:00
+updated: 2026-03-30 15:39:18.286251+02:00
+started: 2026-03-30 15:38:33.927622+02:00
+completed: 2026-03-30 15:38:33.927622+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - scope:knowledge
-    - test
+- phase-1
+- scope:mcp
+- scope:knowledge
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

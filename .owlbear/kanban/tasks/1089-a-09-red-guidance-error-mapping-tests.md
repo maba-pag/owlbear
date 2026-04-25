@@ -3,8 +3,8 @@ id: 1089
 title: 'A-09: RED — guidance + error mapping tests'
 status: review
 priority: needed
-created: 2026-04-21T10:54:09.278833+00:00
-updated: 2026-04-24T19:34:10.309435+00:00
+created: '2026-04-21 10:54:09.278833+00:00'
+updated: '2026-04-24 19:34:10.309435+00:00'
 tags:
 - phase:mcp
 - brief:a
@@ -16,7 +16,6 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []

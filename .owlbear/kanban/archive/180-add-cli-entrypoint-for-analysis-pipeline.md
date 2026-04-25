@@ -3,19 +3,21 @@ id: 180
 title: Add CLI entrypoint for analysis pipeline
 status: archived
 priority: important
-created: 2026-03-29T19:51:28.617595+02:00
-updated: 2026-03-31T22:47:54.3443747+02:00
-started: 2026-03-31T22:47:53.7649459+02:00
-completed: 2026-03-31T22:47:53.7649459+02:00
+created: 2026-03-29 19:51:28.617595+02:00
+updated: 2026-03-31 22:47:54.344375+02:00
+started: 2026-03-31 22:47:53.764946+02:00
+completed: 2026-03-31 22:47:53.764946+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
-    - cli
+- phase-2
+- scope:orchestrator
+- type:build
+- cli
 depends_on:
-    - 179
-    - 466
+- 179
+- 466
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Add `python -m owlbear_orchestrator.analyze` entrypoint via two new files in `packages/orchestrator/src/owlbear_orchestrator/analysis/`:

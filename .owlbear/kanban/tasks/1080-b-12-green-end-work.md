@@ -3,8 +3,8 @@ id: 1080
 title: 'B-12: GREEN — end_work'
 status: todo
 priority: important
-created: 2026-04-21T10:50:32.621365+00:00
-updated: 2026-04-21T10:50:32.621365+00:00
+created: '2026-04-21 10:50:32.621365+00:00'
+updated: '2026-04-21 10:50:32.621365+00:00'
 tags:
 - phase:engine
 - brief:b
@@ -15,8 +15,9 @@ depends_on:
 - 1077
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 Brief B (#1044) — paper-integration.md §1.8, §3.7

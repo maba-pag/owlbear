@@ -3,17 +3,19 @@ id: 514
 title: 'Test: Notifier protocol and SlackNotifier'
 status: archived
 priority: someday
-created: 2026-04-01T07:07:05.2617758+02:00
-updated: 2026-04-04T07:10:07.8391597+02:00
-started: 2026-04-04T07:09:42.1509406+02:00
-completed: 2026-04-04T07:09:42.1509406+02:00
+created: 2026-04-01 07:07:05.261776+02:00
+updated: 2026-04-04 07:10:07.839160+02:00
+started: 2026-04-04 07:09:42.150941+02:00
+completed: 2026-04-04 07:09:42.150941+02:00
 tags:
-    - phase-3
-    - scope:notifications
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-3
+- scope:notifications
+- scope:orchestrator
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

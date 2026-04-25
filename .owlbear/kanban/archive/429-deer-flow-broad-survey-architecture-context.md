@@ -1,19 +1,22 @@
 ---
 id: 429
-title: 'deer-flow broad survey: architecture, context engineering, guardrails, tooling patterns'
+title: 'deer-flow broad survey: architecture, context engineering, guardrails, tooling
+  patterns'
 status: archived
 priority: nice-to-have
-created: 2026-03-30T21:18:12.0439613+02:00
-updated: 2026-04-01T21:02:35.670608+02:00
-started: 2026-04-01T21:02:30.6774926+02:00
-completed: 2026-04-01T21:02:30.6774926+02:00
+created: 2026-03-30 21:18:12.043961+02:00
+updated: 2026-04-01 21:02:35.670608+02:00
+started: 2026-04-01 21:02:30.677493+02:00
+completed: 2026-04-01 21:02:30.677493+02:00
 tags:
-    - research
-    - ' scope:agents'
-    - ' phase-2'
+- research
+- ' scope:agents'
+- ' phase-2'
 depends_on:
-    - 386
+- 386
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

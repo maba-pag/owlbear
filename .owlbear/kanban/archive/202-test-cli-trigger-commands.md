@@ -3,18 +3,20 @@ id: 202
 title: 'Test: CLI trigger commands'
 status: archived
 priority: needed
-created: 2026-03-30T07:54:24.5857587+02:00
-updated: 2026-04-02T02:19:58.0751413+02:00
-started: 2026-03-30T07:54:31.4617797+02:00
-completed: 2026-04-02T02:19:46.8412784+02:00
+created: 2026-03-30 07:54:24.585759+02:00
+updated: 2026-04-02 02:19:58.075141+02:00
+started: 2026-03-30 07:54:31.461780+02:00
+completed: 2026-04-02 02:19:46.841278+02:00
 tags:
-    - phase-2
-    - ' scope:cli'
-    - ' type:test'
-    - ' test'
+- phase-2
+- ' scope:cli'
+- ' type:test'
+- ' test'
 depends_on:
-    - 20
+- 20
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

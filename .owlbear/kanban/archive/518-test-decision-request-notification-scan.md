@@ -3,19 +3,21 @@ id: 518
 title: 'Test: Decision-request notification scan'
 status: archived
 priority: someday
-created: 2026-04-01T07:07:44.706718+02:00
-updated: 2026-04-04T07:10:37.3226931+02:00
-started: 2026-04-04T07:09:47.0542516+02:00
-completed: 2026-04-04T07:09:47.0542516+02:00
+created: 2026-04-01 07:07:44.706718+02:00
+updated: 2026-04-04 07:10:37.322693+02:00
+started: 2026-04-04 07:09:47.054252+02:00
+completed: 2026-04-04 07:09:47.054252+02:00
 tags:
-    - phase-3
-    - scope:orchestrator
-    - scope:notifications
-    - type:test
-    - test
+- phase-3
+- scope:orchestrator
+- scope:notifications
+- type:test
+- test
 depends_on:
-    - 515
+- 515
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

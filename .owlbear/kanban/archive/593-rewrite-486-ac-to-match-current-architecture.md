@@ -3,18 +3,20 @@ id: 593
 title: 'Rewrite #486 AC to match current architecture'
 status: archived
 priority: needed
-created: 2026-04-04T19:16:32.6576966+02:00
-updated: 2026-04-05T10:30:52.9955099+02:00
-started: 2026-04-05T10:30:52.9955099+02:00
-completed: 2026-04-05T10:30:52.9955099+02:00
+created: 2026-04-04 19:16:32.657697+02:00
+updated: 2026-04-05 10:30:52.995510+02:00
+started: 2026-04-05 10:30:52.995510+02:00
+completed: 2026-04-05 10:30:52.995510+02:00
 tags:
-    - scope:agents
-    - ' scope:skills'
-    - ' type:docs'
-    - ' phase-2'
+- scope:agents
+- ' scope:skills'
+- ' type:docs'
+- ' phase-2'
 depends_on:
-    - 484
+- 484
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

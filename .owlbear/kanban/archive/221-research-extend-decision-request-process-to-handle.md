@@ -3,16 +3,18 @@ id: 221
 title: 'Research: Extend decision-request process to handle user action requests'
 status: archived
 priority: important
-created: 2026-03-30T15:32:02.339385+02:00
-updated: 2026-03-30T23:37:14.7356093+02:00
-started: 2026-03-30T23:37:09.2365859+02:00
-completed: 2026-03-30T23:37:09.2365859+02:00
+created: 2026-03-30 15:32:02.339385+02:00
+updated: 2026-03-30 23:37:14.735609+02:00
+started: 2026-03-30 23:37:09.236586+02:00
+completed: 2026-03-30 23:37:09.236586+02:00
 tags:
-    - research
-    - ' phase-1'
-    - ' scope:agents'
-    - type:docs
+- research
+- ' phase-1'
+- ' scope:agents'
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

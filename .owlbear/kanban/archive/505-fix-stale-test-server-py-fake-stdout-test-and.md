@@ -3,16 +3,18 @@ id: 505
 title: Fix stale test_server.py _FAKE_STDOUT test and output_schema underspec
 status: archived
 priority: nice-to-have
-created: 2026-03-31T22:15:57.2372393+02:00
-updated: 2026-04-02T07:01:51.4623653+02:00
-started: 2026-04-02T07:01:51.0037733+02:00
-completed: 2026-04-02T07:01:51.0037733+02:00
+created: 2026-03-31 22:15:57.237239+02:00
+updated: 2026-04-02 07:01:51.462365+02:00
+started: 2026-04-02 07:01:51.003773+02:00
+completed: 2026-04-02 07:01:51.003773+02:00
 tags:
-    - scope:mcp
-    - test
-    - quality
-    - phase-2
+- scope:mcp
+- test
+- quality
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

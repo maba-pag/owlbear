@@ -3,8 +3,8 @@ id: 1000
 title: 'Expand h-agent-structure: instruction taxonomy + boundary fitness'
 status: archived
 priority: important
-created: 2026-04-18T21:34:33.183531+00:00
-updated: 2026-04-19T02:33:55.010234+00:00
+created: 2026-04-18 21:34:33.183531+00:00
+updated: 2026-04-19 02:33:55.010234+00:00
 tags:
 - agent
 - agent-ecosystem
@@ -14,6 +14,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Objective
 

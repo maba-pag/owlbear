@@ -3,16 +3,18 @@ id: 548
 title: Verify exit code 2 routing via -File invocation in subagent context
 status: archived
 priority: nice-to-have
-created: 2026-04-02T14:52:11.6630432+02:00
-updated: 2026-04-04T18:08:53.3015367+02:00
-started: 2026-04-04T18:08:53.3015367+02:00
-completed: 2026-04-04T18:08:53.3015367+02:00
+created: 2026-04-02 14:52:11.663043+02:00
+updated: 2026-04-04 18:08:53.301537+02:00
+started: 2026-04-04 18:08:53.301537+02:00
+completed: 2026-04-04 18:08:53.301537+02:00
 tags:
-    - scope:agents
-    - hooks
-    - research
-    - type:test
+- scope:agents
+- hooks
+- research
+- type:test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

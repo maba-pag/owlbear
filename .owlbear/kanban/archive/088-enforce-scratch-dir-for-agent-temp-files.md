@@ -3,15 +3,17 @@ id: 88
 title: Enforce scratch dir for agent temp files
 status: archived
 priority: critical
-created: 2026-03-27T22:03:20.8197237+01:00
-updated: 2026-03-28T03:12:21.2152226+01:00
-started: 2026-03-28T03:12:17.074134+01:00
-completed: 2026-03-28T03:12:17.074134+01:00
+created: 2026-03-27 22:03:20.819724+01:00
+updated: 2026-03-28 03:12:21.215223+01:00
+started: 2026-03-28 03:12:17.074134+01:00
+completed: 2026-03-28 03:12:17.074134+01:00
 tags:
-    - tooling
-    - agent
-    - scope:core
+- tooling
+- agent
+- scope:core
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

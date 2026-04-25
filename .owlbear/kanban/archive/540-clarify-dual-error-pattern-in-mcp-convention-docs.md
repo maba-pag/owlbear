@@ -3,15 +3,17 @@ id: 540
 title: Clarify dual error pattern in MCP convention docs
 status: archived
 priority: important
-created: 2026-04-02T05:59:38.5297061+02:00
-updated: 2026-04-02T15:58:27.2178413+02:00
-started: 2026-04-02T15:58:26.8185758+02:00
-completed: 2026-04-02T15:58:26.8185758+02:00
+created: 2026-04-02 05:59:38.529706+02:00
+updated: 2026-04-02 15:58:27.217841+02:00
+started: 2026-04-02 15:58:26.818576+02:00
+completed: 2026-04-02 15:58:26.818576+02:00
 tags:
-    - scope:mcp
-    - type:docs
-    - phase-2
+- scope:mcp
+- type:docs
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## AC

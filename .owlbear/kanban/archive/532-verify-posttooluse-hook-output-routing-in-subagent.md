@@ -3,16 +3,18 @@ id: 532
 title: Verify PostToolUse hook output routing in subagent context
 status: archived
 priority: needed
-created: 2026-04-01T20:37:14.0136633+02:00
-updated: 2026-04-02T20:50:42.3622219+02:00
-started: 2026-04-01T21:26:02.0313708+02:00
-completed: 2026-04-02T20:50:41.848545+02:00
+created: 2026-04-01 20:37:14.013663+02:00
+updated: 2026-04-02 20:50:42.362222+02:00
+started: 2026-04-01 21:26:02.031371+02:00
+completed: 2026-04-02 20:50:41.848545+02:00
 tags:
-    - scope:agents
-    - hooks
-    - research
-    - type:test
+- scope:agents
+- hooks
+- research
+- type:test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

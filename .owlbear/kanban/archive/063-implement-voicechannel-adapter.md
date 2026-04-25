@@ -3,18 +3,20 @@ id: 63
 title: Implement VoiceChannel adapter
 status: archived
 priority: nice-to-have
-created: 2026-03-26T19:33:48.9743371+01:00
-updated: 2026-04-06T06:23:54.2789428+02:00
-started: 2026-04-06T06:23:54.2789428+02:00
-completed: 2026-04-06T06:23:54.2789428+02:00
+created: 2026-03-26 19:33:48.974337+01:00
+updated: 2026-04-06 06:23:54.278943+02:00
+started: 2026-04-06 06:23:54.278943+02:00
+completed: 2026-04-06 06:23:54.278943+02:00
 tags:
-    - phase-3
-    - scope:voice
+- phase-3
+- scope:voice
 depends_on:
-    - 61
-    - 62
-    - 142
+- 61
+- 62
+- 142
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

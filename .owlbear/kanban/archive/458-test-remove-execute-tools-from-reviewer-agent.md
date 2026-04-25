@@ -3,15 +3,17 @@ id: 458
 title: 'Test: Remove execute/* tools from reviewer agent'
 status: archived
 priority: nice-to-have
-created: 2026-03-30T23:48:03.5381382+02:00
-updated: 2026-04-06T09:29:10.9669258+02:00
-started: 2026-04-06T09:29:10.9669258+02:00
-completed: 2026-04-06T09:29:10.9669258+02:00
+created: 2026-03-30 23:48:03.538138+02:00
+updated: 2026-04-06 09:29:10.966926+02:00
+started: 2026-04-06 09:29:10.966926+02:00
+completed: 2026-04-06 09:29:10.966926+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - test
+- scope:agents
+- phase-2
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Test task for #457. Verify execute/* tool removal and MCP kanban migration in reviewer agent.

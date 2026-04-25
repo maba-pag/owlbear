@@ -1,19 +1,22 @@
 ---
 id: 479
-title: 'GREEN: implement modernized list_tasks (archived, limit, reverse, blocked tri-state, lean JSON)'
+title: 'GREEN: implement modernized list_tasks (archived, limit, reverse, blocked
+  tri-state, lean JSON)'
 status: archived
 priority: needed
-created: 2026-03-31T06:13:51.2541611+02:00
-updated: 2026-04-01T03:03:08.4039644+02:00
-started: 2026-04-01T03:03:03.5871954+02:00
-completed: 2026-04-01T03:03:03.5871954+02:00
+created: 2026-03-31 06:13:51.254161+02:00
+updated: 2026-04-01 03:03:08.403964+02:00
+started: 2026-04-01 03:03:03.587195+02:00
+completed: 2026-04-01 03:03:03.587195+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 depends_on:
-    - 478
+- 478
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

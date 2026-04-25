@@ -3,17 +3,19 @@ id: 595
 title: 'Cancel stale subtasks #580-#584 under Phase B parent #484'
 status: archived
 priority: important
-created: 2026-04-04T19:26:42.4504121+02:00
-updated: 2026-04-04T23:10:49.0057276+02:00
-started: 2026-04-04T23:01:55.8768805+02:00
-completed: 2026-04-04T23:02:16.6879893+02:00
+created: 2026-04-04 19:26:42.450412+02:00
+updated: 2026-04-04 23:10:49.005728+02:00
+started: 2026-04-04 23:01:55.876881+02:00
+completed: 2026-04-04 23:02:16.687989+02:00
 tags:
-    - phase-2
-    - ' type:cleanup'
-    - ' scope:kanban'
-    - ' type:config'
+- phase-2
+- ' type:cleanup'
+- ' scope:kanban'
+- ' type:config'
 parent: 484
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

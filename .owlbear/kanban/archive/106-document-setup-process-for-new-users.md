@@ -3,17 +3,19 @@ id: 106
 title: Document setup process for new users
 status: archived
 priority: important
-created: 2026-03-28T14:56:10.8441468+01:00
-updated: 2026-03-29T07:50:56.9533694+02:00
-started: 2026-03-29T07:50:56.6332422+02:00
-completed: 2026-03-29T07:50:56.6332422+02:00
+created: 2026-03-28 14:56:10.844147+01:00
+updated: 2026-03-29 07:50:56.953369+02:00
+started: 2026-03-29 07:50:56.633242+02:00
+completed: 2026-03-29 07:50:56.633242+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 depends_on:
-    - 12
+- 12
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

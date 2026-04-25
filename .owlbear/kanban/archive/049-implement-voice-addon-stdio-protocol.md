@@ -3,14 +3,16 @@ id: 49
 title: Implement voice addon stdio protocol
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:57:17.0081341+01:00
-updated: 2026-03-30T15:35:59.9682199+02:00
-started: 2026-03-30T15:31:30.839261+02:00
-completed: 2026-03-30T15:31:30.839261+02:00
+created: 2026-03-26 18:57:17.008134+01:00
+updated: 2026-03-30 15:35:59.968220+02:00
+started: 2026-03-30 15:31:30.839261+02:00
+completed: 2026-03-30 15:31:30.839261+02:00
 tags:
-    - phase-3
-    - scope:voice
+- phase-3
+- scope:voice
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

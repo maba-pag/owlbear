@@ -3,17 +3,19 @@ id: 13
 title: Copy v1 docs to v2
 status: archived
 priority: important
-created: 2026-03-26T17:20:40.4674737+01:00
-updated: 2026-03-28T01:49:31.0542562+01:00
-started: 2026-03-28T01:49:26.4920716+01:00
-completed: 2026-03-28T01:49:26.4920716+01:00
+created: 2026-03-26 17:20:40.467474+01:00
+updated: 2026-03-28 01:49:31.054256+01:00
+started: 2026-03-28 01:49:26.492072+01:00
+completed: 2026-03-28 01:49:26.492072+01:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

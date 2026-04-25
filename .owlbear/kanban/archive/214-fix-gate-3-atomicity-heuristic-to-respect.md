@@ -3,15 +3,17 @@ id: 214
 title: Fix Gate 3 atomicity heuristic to respect architect approval
 status: archived
 priority: needed
-created: 2026-03-30T14:22:41.4749237+02:00
-updated: 2026-03-30T20:36:49.1717721+02:00
-started: 2026-03-30T20:36:17.0490051+02:00
-completed: 2026-03-30T20:36:17.0490051+02:00
+created: 2026-03-30 14:22:41.474924+02:00
+updated: 2026-03-30 20:36:49.171772+02:00
+started: 2026-03-30 20:36:17.049005+02:00
+completed: 2026-03-30 20:36:17.049005+02:00
 tags:
-    - scope:agents
-    - quality
-    - type:config
+- scope:agents
+- quality
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

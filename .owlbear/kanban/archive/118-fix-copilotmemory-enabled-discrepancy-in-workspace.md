@@ -3,15 +3,17 @@ id: 118
 title: Fix copilotMemory.enabled discrepancy in workspace settings
 status: archived
 priority: needed
-created: 2026-03-29T03:24:19.2554264+02:00
-updated: 2026-03-29T05:59:38.074258+02:00
-started: 2026-03-29T05:59:33.2639395+02:00
-completed: 2026-03-29T05:59:33.2639395+02:00
+created: 2026-03-29 03:24:19.255426+02:00
+updated: 2026-03-29 05:59:38.074258+02:00
+started: 2026-03-29 05:59:33.263940+02:00
+completed: 2026-03-29 05:59:33.263940+02:00
 tags:
-    - config
-    - phase-1
-    - scope:copilot
+- config
+- phase-1
+- scope:copilot
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

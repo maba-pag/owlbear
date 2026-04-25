@@ -3,17 +3,19 @@ id: 188
 title: Fix stale .github/agents/ paths in v1-era test files
 status: archived
 priority: nice-to-have
-created: 2026-03-29T20:46:55.1055537+02:00
-updated: 2026-03-30T03:56:33.2392337+02:00
-started: 2026-03-30T03:55:13.6594047+02:00
-completed: 2026-03-30T03:55:13.6594047+02:00
+created: 2026-03-29 20:46:55.105554+02:00
+updated: 2026-03-30 03:56:33.239234+02:00
+started: 2026-03-30 03:55:13.659405+02:00
+completed: 2026-03-30 03:55:13.659405+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:test
+- phase-1
+- scope:docs
+- type:test
 claimed_by: auditor
-claimed_at: 2026-03-30T03:56:33.2392337+02:00
+claimed_at: 2026-03-30 03:56:33.239234+02:00
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

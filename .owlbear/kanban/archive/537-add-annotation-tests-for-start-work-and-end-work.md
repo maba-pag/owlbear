@@ -3,16 +3,18 @@ id: 537
 title: Add annotation tests for start_work and end_work tools
 status: archived
 priority: nice-to-have
-created: 2026-04-02T05:25:08.1017914+02:00
-updated: 2026-04-02T17:39:18.1120187+02:00
-started: 2026-04-02T17:39:09.3150204+02:00
-completed: 2026-04-02T17:39:09.3150204+02:00
+created: 2026-04-02 05:25:08.101791+02:00
+updated: 2026-04-02 17:39:18.112019+02:00
+started: 2026-04-02 17:39:09.315020+02:00
+completed: 2026-04-02 17:39:09.315020+02:00
 tags:
-    - scope:mcp
-    - type:test
-    - phase-2
-    - quality
+- scope:mcp
+- type:test
+- phase-2
+- quality
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

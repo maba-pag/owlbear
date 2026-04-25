@@ -3,18 +3,20 @@ id: 56
 title: Expand mcp-kanban to full kanban-md tool set
 status: archived
 priority: important
-created: 2026-03-26T19:20:05.6961756+01:00
-updated: 2026-03-28T03:46:08.9743685+01:00
-started: 2026-03-28T03:46:08.9743685+01:00
-completed: 2026-03-28T03:46:08.9743685+01:00
+created: 2026-03-26 19:20:05.696176+01:00
+updated: 2026-03-28 03:46:08.974369+01:00
+started: 2026-03-28 03:46:08.974369+01:00
+completed: 2026-03-28 03:46:08.974369+01:00
 tags:
-    - phase-3
-    - mcp
-    - tooling
+- phase-3
+- mcp
+- tooling
 depends_on:
-    - 39
-    - 89
+- 39
+- 89
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

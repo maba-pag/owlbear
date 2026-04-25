@@ -3,16 +3,18 @@ id: 125
 title: 'Clean up askQuestions references: decouple confidence patterns from tool usage'
 status: archived
 priority: needed
-created: 2026-03-29T06:34:47.2192167+02:00
-updated: 2026-03-29T09:49:39.0747646+02:00
-started: 2026-03-29T09:49:35.0971678+02:00
-completed: 2026-03-29T09:49:35.0971678+02:00
+created: 2026-03-29 06:34:47.219217+02:00
+updated: 2026-03-29 09:49:39.074765+02:00
+started: 2026-03-29 09:49:35.097168+02:00
+completed: 2026-03-29 09:49:35.097168+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - scope:agents
-    - type:docs
+- phase-1
+- scope:docs
+- scope:agents
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

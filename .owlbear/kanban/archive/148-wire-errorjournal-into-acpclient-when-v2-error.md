@@ -3,17 +3,19 @@ id: 148
 title: Wire ErrorJournal into AcpClient when v2 error infrastructure exists
 status: archived
 priority: nice-to-have
-created: 2026-03-29T18:53:05.705807+02:00
-updated: 2026-04-04T07:09:52.7404645+02:00
-started: 2026-04-04T07:09:26.9395109+02:00
-completed: 2026-04-04T07:09:26.9395109+02:00
+created: 2026-03-29 18:53:05.705807+02:00
+updated: 2026-04-04 07:09:52.740465+02:00
+started: 2026-04-04 07:09:26.939511+02:00
+completed: 2026-04-04 07:09:26.939511+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 184
+- 184
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

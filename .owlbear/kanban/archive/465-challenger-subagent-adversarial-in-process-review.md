@@ -1,17 +1,20 @@
 ---
 id: 465
-title: Challenger subagent — adversarial in-process review for architect decisions
+title: Challenger subagent — adversarial in-process review for architect 
+  decisions
 status: archived
 priority: important
-created: 2026-03-31T04:06:56.7712879+02:00
-updated: 2026-04-01T02:17:18.4672539+02:00
-started: 2026-04-01T02:17:13.6409306+02:00
-completed: 2026-04-01T02:17:13.6409306+02:00
+created: 2026-03-31 04:06:56.771288+02:00
+updated: 2026-04-01 02:17:18.467254+02:00
+started: 2026-04-01 02:17:13.640931+02:00
+completed: 2026-04-01 02:17:13.640931+02:00
 tags:
-    - research
-    - ' scope:agents'
-    - ' phase-2'
+- research
+- ' scope:agents'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context
@@ -61,7 +64,8 @@ Infrastructure: uses subagent nesting confirmed in #228 (L2 depth, `allowInvocat
 ### Architecture Notes
 Research quality is high (.85 stated confidence). Grounded in academic sources (Du et al. 2023, Liang et al. 2024) and internal validated research (#228 nesting, #681 evaluator disposition). All design decisions are well-reasoned with explicit trade-off tables. The one-shot model is the right KISS approach for VS Code subagent constraints. Code-reader precedent validated for assign-mode read-only pattern.
 
-Task has esearch tag for test-writer pass-through. No implementation code produced by this task.
+Task has 
+esearch tag for test-writer pass-through. No implementation code produced by this task.
 
 T3 process gap: new capability research should require a DR before follow-up tasks are created at ideation. The pipeline allowed #467 to race ahead without a DR. Not blocking because the work is done, but this is a lessons-learned item.
 

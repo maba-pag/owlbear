@@ -3,16 +3,18 @@ id: 94
 title: 'Test: AcpClient wrapper with timeouts and error classification'
 status: archived
 priority: needed
-created: 2026-03-28T01:50:49.0538734+01:00
-updated: 2026-03-29T15:37:46.7394829+02:00
-started: 2026-03-29T15:37:46.4444022+02:00
-completed: 2026-03-29T15:37:46.4444022+02:00
+created: 2026-03-28 01:50:49.053873+01:00
+updated: 2026-03-29 15:37:46.739483+02:00
+started: 2026-03-29 15:37:46.444402+02:00
+completed: 2026-03-29 15:37:46.444402+02:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-1
+- scope:orchestrator
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

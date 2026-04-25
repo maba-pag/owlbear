@@ -3,15 +3,17 @@ id: 212
 title: 'Update #86 research doc to reflect command-execution hook model'
 status: archived
 priority: nice-to-have
-created: 2026-03-30T08:58:34.3969542+02:00
-updated: 2026-03-31T03:38:22.0701412+02:00
-started: 2026-03-31T03:37:34.2121463+02:00
-completed: 2026-03-31T03:37:34.2121463+02:00
+created: 2026-03-30 08:58:34.396954+02:00
+updated: 2026-03-31 03:38:22.070141+02:00
+started: 2026-03-31 03:37:34.212146+02:00
+completed: 2026-03-31 03:37:34.212146+02:00
 tags:
-    - docs
-    - hooks
-    - scope:agents
+- docs
+- hooks
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

@@ -3,17 +3,19 @@ id: 93
 title: Rewrite README.md for v2 architecture
 status: archived
 priority: needed
-created: 2026-03-28T01:48:37.0476424+01:00
-updated: 2026-03-29T16:17:50.6949145+02:00
-started: 2026-03-29T16:17:50.3711684+02:00
-completed: 2026-03-29T16:17:50.3711684+02:00
+created: 2026-03-28 01:48:37.047642+01:00
+updated: 2026-03-29 16:17:50.694915+02:00
+started: 2026-03-29 16:17:50.371168+02:00
+completed: 2026-03-29 16:17:50.371168+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 depends_on:
-    - 28
+- 28
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Rewrite README.md per docs/research/readme-v2-rewrite.md. Use the recommended structure: title, overview, prerequisites, quick start, directory layout, how it works, development, license. Target ~60 lines.

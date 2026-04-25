@@ -3,16 +3,18 @@ id: 86
 title: Evaluate agent-scoped hooks for pipeline enforcement (scoped AC)
 status: archived
 priority: nice-to-have
-created: 2026-03-27T13:36:44.4394535+01:00
-updated: 2026-03-30T09:53:59.2911578+02:00
-started: 2026-03-30T09:53:58.9674009+02:00
-completed: 2026-03-30T09:53:58.9674009+02:00
+created: 2026-03-27 13:36:44.439454+01:00
+updated: 2026-03-30 09:53:59.291158+02:00
+started: 2026-03-30 09:53:58.967401+02:00
+completed: 2026-03-30 09:53:58.967401+02:00
 tags:
-    - research
-    - phase-1
-    - scope:agents
-    - hooks
+- research
+- phase-1
+- scope:agents
+- hooks
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

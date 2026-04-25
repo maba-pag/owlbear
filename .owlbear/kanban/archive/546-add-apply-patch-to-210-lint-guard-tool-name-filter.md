@@ -3,17 +3,19 @@ id: 546
 title: 'Add apply_patch to #210 lint guard tool_name filter'
 status: archived
 priority: needed
-created: 2026-04-02T14:51:56.2992239+02:00
-updated: 2026-04-05T14:37:04.1470336+02:00
-started: 2026-04-05T14:37:04.1470336+02:00
-completed: 2026-04-05T14:37:04.1470336+02:00
+created: 2026-04-02 14:51:56.299224+02:00
+updated: 2026-04-05 14:37:04.147034+02:00
+started: 2026-04-05 14:37:04.147034+02:00
+completed: 2026-04-05 14:37:04.147034+02:00
 tags:
-    - scope:agents
-    - hooks
-    - type:build
+- scope:agents
+- hooks
+- type:build
 depends_on:
-    - 210
+- 210
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

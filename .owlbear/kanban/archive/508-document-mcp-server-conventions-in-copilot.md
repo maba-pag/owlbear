@@ -3,18 +3,20 @@ id: 508
 title: Document MCP server conventions in copilot-instructions.md
 status: archived
 priority: important
-created: 2026-03-31T23:41:06.5049024+02:00
-updated: 2026-04-01T17:50:31.1893336+02:00
-started: 2026-04-01T17:50:30.6315936+02:00
-completed: 2026-04-01T17:50:30.6315936+02:00
+created: 2026-03-31 23:41:06.504902+02:00
+updated: 2026-04-01 17:50:31.189334+02:00
+started: 2026-04-01 17:50:30.631594+02:00
+completed: 2026-04-01 17:50:30.631594+02:00
 tags:
-    - scope:mcp
-    - ' type:docs'
-    - ' phase-2'
+- scope:mcp
+- ' type:docs'
+- ' phase-2'
 depends_on:
-    - 506
-    - 507
+- 506
+- 507
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## AC

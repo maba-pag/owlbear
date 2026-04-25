@@ -3,15 +3,17 @@ id: 568
 title: Add owlbear-memory tool access to all pipeline agents
 status: archived
 priority: needed
-created: 2026-04-03T10:40:51.4467226+02:00
-updated: 2026-04-03T17:09:29.0429526+02:00
-started: 2026-04-03T17:06:30.6360382+02:00
-completed: 2026-04-03T17:06:30.6360382+02:00
+created: 2026-04-03 10:40:51.446723+02:00
+updated: 2026-04-03 17:09:29.042953+02:00
+started: 2026-04-03 17:06:30.636038+02:00
+completed: 2026-04-03 17:06:30.636038+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Add 'owlbear-memory/*' to the tools: array in every pipeline agent .agent.md frontmatter that already holds MCP server wildcards. Prerequisite for #526 (agent-common memory-mcp integration). Without this, get_knowledge and record_learning calls fail silently because agents lack MCP tool access.

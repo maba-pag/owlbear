@@ -3,17 +3,19 @@ id: 489
 title: 'Build: move/pick JSON output, drop board_context'
 status: archived
 priority: needed
-created: 2026-03-31T06:21:33.245938+02:00
-updated: 2026-03-31T21:22:10.5763158+02:00
-started: 2026-03-31T13:46:49.453514+02:00
-completed: 2026-03-31T21:22:10.0782933+02:00
+created: 2026-03-31 06:21:33.245938+02:00
+updated: 2026-03-31 21:22:10.576316+02:00
+started: 2026-03-31 13:46:49.453514+02:00
+completed: 2026-03-31 21:22:10.078293+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
+- scope:mcp
+- type:build
+- phase-2
 depends_on:
-    - 485
+- 485
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

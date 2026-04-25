@@ -3,17 +3,19 @@ id: 97
 title: 'Test: Knowledge engine foundation layer'
 status: archived
 priority: needed
-created: 2026-03-28T03:43:11.3576373+01:00
-updated: 2026-03-30T15:36:00.8494901+02:00
-started: 2026-03-30T15:18:48.042985+02:00
-completed: 2026-03-30T15:18:48.042985+02:00
+created: 2026-03-28 03:43:11.357637+01:00
+updated: 2026-03-30 15:36:00.849490+02:00
+started: 2026-03-30 15:18:48.042985+02:00
+completed: 2026-03-30 15:18:48.042985+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - test
+- phase-1
+- scope:knowledge
+- test
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

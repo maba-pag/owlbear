@@ -3,15 +3,17 @@ id: 475
 title: Add status and parent params to create_task, switch to JSON output
 status: archived
 priority: needed
-created: 2026-03-31T06:06:12.5782763+02:00
-updated: 2026-03-31T16:36:30.6870841+02:00
-started: 2026-03-31T16:36:30.1175675+02:00
-completed: 2026-03-31T16:36:30.1175675+02:00
+created: 2026-03-31 06:06:12.578276+02:00
+updated: 2026-03-31 16:36:30.687084+02:00
+started: 2026-03-31 16:36:30.117568+02:00
+completed: 2026-03-31 16:36:30.117568+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

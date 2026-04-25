@@ -3,8 +3,8 @@ id: 1005
 title: 'Planner: add askQuestions tool + explicit mode prefix convention'
 status: archived
 priority: important
-created: 2026-04-18T21:54:25.167093+00:00
-updated: 2026-04-19T03:09:24.370526+00:00
+created: 2026-04-18 21:54:25.167093+00:00
+updated: 2026-04-19 03:09:24.370526+00:00
 tags:
 - type:improvement
 - scope:agents
@@ -14,6 +14,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 planner.agent.md lacks `vscode/askQuestions` and has no explicit mode detection for user-invoked vs dispatch contexts. The current "parent task ID" detection is natural-language inference and unreliable (failed in #973).

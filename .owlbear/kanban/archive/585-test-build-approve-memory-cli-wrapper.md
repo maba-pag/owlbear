@@ -3,17 +3,19 @@ id: 585
 title: 'Test: Build approve_memory CLI wrapper'
 status: archived
 priority: important
-created: 2026-04-03T17:54:42.3450216+02:00
-updated: 2026-04-04T16:46:14.8041903+02:00
-started: 2026-04-04T16:46:14.8041903+02:00
-completed: 2026-04-04T16:46:14.8041903+02:00
+created: 2026-04-03 17:54:42.345022+02:00
+updated: 2026-04-04 16:46:14.804190+02:00
+started: 2026-04-04 16:46:14.804190+02:00
+completed: 2026-04-04 16:46:14.804190+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - test
+- scope:agents
+- phase-2
+- test
 depends_on:
-    - 529
+- 529
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED phase tests for #531 (approve_memory CLI wrapper).

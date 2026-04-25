@@ -1,17 +1,20 @@
 ---
 id: 95
-title: Evaluate new VS Code tools for v2 agents (search/usages, search/changes, vscode/askQuestions)
+title: Evaluate new VS Code tools for v2 agents (search/usages, search/changes, 
+  vscode/askQuestions)
 status: archived
 priority: nice-to-have
-created: 2026-03-28T01:59:30.0695304+01:00
-updated: 2026-03-30T04:37:55.0080195+02:00
-started: 2026-03-30T04:37:50.3436448+02:00
-completed: 2026-03-30T04:37:50.3436448+02:00
+created: 2026-03-28 01:59:30.069530+01:00
+updated: 2026-03-30 04:37:55.008020+02:00
+started: 2026-03-30 04:37:50.343645+02:00
+completed: 2026-03-30 04:37:50.343645+02:00
 tags:
-    - phase-2
-    - scope:agents
-    - research
+- phase-2
+- scope:agents
+- research
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

@@ -3,15 +3,17 @@ id: 81
 title: 'Set disable-model-invocation: true on 8 pipeline agents'
 status: archived
 priority: nice-to-have
-created: 2026-03-27T04:51:29.8169691+01:00
-updated: 2026-03-30T15:36:00.4215703+02:00
-started: 2026-03-30T15:18:47.5101141+02:00
-completed: 2026-03-30T15:18:47.5101141+02:00
+created: 2026-03-27 04:51:29.816969+01:00
+updated: 2026-03-30 15:36:00.421570+02:00
+started: 2026-03-30 15:18:47.510114+02:00
+completed: 2026-03-30 15:18:47.510114+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - type:build
+- phase-1
+- scope:agents
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

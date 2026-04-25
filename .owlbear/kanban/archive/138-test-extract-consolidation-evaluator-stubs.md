@@ -3,15 +3,17 @@ id: 138
 title: 'Test: Extract consolidation + evaluator stubs'
 status: archived
 priority: nice-to-have
-created: 2026-03-29T14:51:11.332447+02:00
-updated: 2026-03-30T04:53:08.547412+02:00
-started: 2026-03-29T14:51:55.8102367+02:00
-completed: 2026-03-30T04:52:29.5644442+02:00
+created: 2026-03-29 14:51:11.332447+02:00
+updated: 2026-03-30 04:53:08.547412+02:00
+started: 2026-03-29 14:51:55.810237+02:00
+completed: 2026-03-30 04:52:29.564444+02:00
 tags:
-    - phase-1
-    - ' scope:knowledge'
-    - ' type:test'
+- phase-1
+- ' scope:knowledge'
+- ' type:test'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

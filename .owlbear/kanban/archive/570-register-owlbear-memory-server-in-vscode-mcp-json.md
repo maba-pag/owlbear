@@ -3,14 +3,16 @@ id: 570
 title: Register owlbear-memory server in .vscode/mcp.json
 status: archived
 priority: needed
-created: 2026-04-03T11:04:47.5649332+02:00
-updated: 2026-04-05T04:18:26.5956173+02:00
-started: 2026-04-05T04:18:26.5956173+02:00
-completed: 2026-04-05T04:18:26.5956173+02:00
+created: 2026-04-03 11:04:47.564933+02:00
+updated: 2026-04-05 04:18:26.595617+02:00
+started: 2026-04-05 04:18:26.595617+02:00
+completed: 2026-04-05 04:18:26.595617+02:00
 tags:
-    - scope:config
-    - phase-2
+- scope:config
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

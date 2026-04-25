@@ -1,17 +1,20 @@
 ---
 id: 130
-title: Extract knowledge secondary features (consolidation, evaluator, bookmark pipeline, refresh)
+title: Extract knowledge secondary features (consolidation, evaluator, bookmark 
+  pipeline, refresh)
 status: archived
 priority: nice-to-have
-created: 2026-03-29T08:06:41.412836+02:00
-updated: 2026-03-29T14:52:32.5501321+02:00
-started: 2026-03-29T14:52:32.5501321+02:00
-completed: 2026-03-29T14:52:32.5501321+02:00
+created: 2026-03-29 08:06:41.412836+02:00
+updated: 2026-03-29 14:52:32.550132+02:00
+started: 2026-03-29 14:52:32.550132+02:00
+completed: 2026-03-29 14:52:32.550132+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

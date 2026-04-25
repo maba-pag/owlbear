@@ -3,17 +3,19 @@ id: 100
 title: 'Test: owlbear-voice workspace package scaffolding'
 status: archived
 priority: nice-to-have
-created: 2026-03-28T04:10:07.8252463+01:00
-updated: 2026-03-29T04:59:25.2874352+02:00
-started: 2026-03-29T04:59:20.4733255+02:00
-completed: 2026-03-29T04:59:20.4733255+02:00
+created: 2026-03-28 04:10:07.825246+01:00
+updated: 2026-03-29 04:59:25.287435+02:00
+started: 2026-03-29 04:59:20.473326+02:00
+completed: 2026-03-29 04:59:20.473326+02:00
 tags:
-    - phase-3
-    - scope:voice
-    - test
+- phase-3
+- scope:voice
+- test
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

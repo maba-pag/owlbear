@@ -3,15 +3,17 @@ id: 27
 title: Clean up instruction files for v2
 status: archived
 priority: critical
-created: 2026-03-26T17:38:30.4685087+01:00
-updated: 2026-03-27T02:49:11.34302+01:00
-started: 2026-03-27T02:49:06.7593846+01:00
-completed: 2026-03-27T02:49:06.7593846+01:00
+created: 2026-03-26 17:38:30.468509+01:00
+updated: 2026-03-27 02:49:11.343020+01:00
+started: 2026-03-27 02:49:06.759385+01:00
+completed: 2026-03-27 02:49:06.759385+01:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:build
+- phase-1
+- scope:docs
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

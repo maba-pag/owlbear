@@ -1,16 +1,19 @@
 ---
 id: 513
-title: Fix dispatch failure audit logging gap — dispatch_entry never emits CompletionEvent on failure
+title: Fix dispatch failure audit logging gap — dispatch_entry never emits 
+  CompletionEvent on failure
 status: archived
 priority: important
-created: 2026-04-01T06:00:49.8879127+02:00
-updated: 2026-04-01T21:23:15.7579746+02:00
-started: 2026-04-01T06:00:56.8629057+02:00
-completed: 2026-04-01T21:23:05.9498176+02:00
+created: 2026-04-01 06:00:49.887913+02:00
+updated: 2026-04-01 21:23:15.757975+02:00
+started: 2026-04-01 06:00:56.862906+02:00
+completed: 2026-04-01 21:23:05.949818+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
+- phase-2
+- scope:orchestrator
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

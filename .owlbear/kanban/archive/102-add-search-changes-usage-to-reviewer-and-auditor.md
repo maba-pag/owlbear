@@ -3,15 +3,17 @@ id: 102
 title: Add search/changes usage to reviewer and auditor skill workflows
 status: archived
 priority: important
-created: 2026-03-28T13:34:47.1583491+01:00
-updated: 2026-03-29T03:41:32.7011184+02:00
-started: 2026-03-29T03:41:27.838056+02:00
-completed: 2026-03-29T03:41:27.838056+02:00
+created: 2026-03-28 13:34:47.158349+01:00
+updated: 2026-03-29 03:41:32.701118+02:00
+started: 2026-03-29 03:41:27.838056+02:00
+completed: 2026-03-29 03:41:27.838056+02:00
 tags:
-    - phase-2
-    - scope:agents
-    - docs
+- phase-2
+- scope:agents
+- docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

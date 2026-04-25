@@ -3,15 +3,17 @@ id: 177
 title: Document KB curation process
 status: archived
 priority: important
-created: 2026-03-29T19:50:54.093837+02:00
-updated: 2026-03-30T05:06:44.2389569+02:00
-started: 2026-03-30T05:06:09.6935581+02:00
-completed: 2026-03-30T05:06:09.6935581+02:00
+created: 2026-03-29 19:50:54.093837+02:00
+updated: 2026-03-30 05:06:44.238957+02:00
+started: 2026-03-30 05:06:09.693558+02:00
+completed: 2026-03-30 05:06:09.693558+02:00
 tags:
-    - phase-2
-    - scope:knowledge
-    - type:docs
+- phase-2
+- scope:knowledge
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

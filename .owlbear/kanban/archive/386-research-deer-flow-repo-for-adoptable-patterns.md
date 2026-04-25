@@ -1,17 +1,20 @@
 ---
 id: 386
-title: Research deer-flow repo for adoptable patterns across harness, memory, subagents, and context
+title: Research deer-flow repo for adoptable patterns across harness, memory, 
+  subagents, and context
 status: archived
 priority: needed
-created: 2026-03-30T20:57:13.6184382+02:00
-updated: 2026-03-31T06:53:52.3464395+02:00
-started: 2026-03-31T06:53:23.2382282+02:00
-completed: 2026-03-31T06:53:23.2382282+02:00
+created: 2026-03-30 20:57:13.618438+02:00
+updated: 2026-03-31 06:53:52.346440+02:00
+started: 2026-03-31 06:53:23.238228+02:00
+completed: 2026-03-31 06:53:23.238228+02:00
 tags:
-    - research
-    - ' scope:agents'
-    - ' phase-2'
+- research
+- ' scope:agents'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

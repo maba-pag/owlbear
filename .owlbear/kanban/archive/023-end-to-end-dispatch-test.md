@@ -3,19 +3,21 @@ id: 23
 title: End-to-end dispatch test
 status: archived
 priority: needed
-created: 2026-03-26T17:22:57.6175767+01:00
-updated: 2026-04-01T19:27:17.2979025+02:00
-started: 2026-04-01T19:27:16.7292015+02:00
-completed: 2026-04-01T19:27:16.7292015+02:00
+created: 2026-03-26 17:22:57.617577+01:00
+updated: 2026-04-01 19:27:17.297903+02:00
+started: 2026-04-01 19:27:16.729202+02:00
+completed: 2026-04-01 19:27:16.729202+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
+- phase-2
+- scope:orchestrator
+- type:test
 depends_on:
-    - 20
-    - 22
-    - 14
+- 20
+- 22
+- 14
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

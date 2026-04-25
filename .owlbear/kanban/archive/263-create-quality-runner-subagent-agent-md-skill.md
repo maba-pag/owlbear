@@ -3,15 +3,17 @@ id: 263
 title: Create Quality-Runner subagent (agent.md + skill)
 status: archived
 priority: needed
-created: 2026-03-30T19:30:52.0129159+02:00
-updated: 2026-04-04T18:43:24.0626866+02:00
-started: 2026-04-04T18:43:24.0626866+02:00
-completed: 2026-04-04T18:43:24.0626866+02:00
+created: 2026-03-30 19:30:52.012916+02:00
+updated: 2026-04-04 18:43:24.062687+02:00
+started: 2026-04-04 18:43:24.062687+02:00
+completed: 2026-04-04 18:43:24.062687+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Create the Quality-Runner utility subagent â€” a mechanical agent that runs pytest, ruff, and coverage, returning structured reports. Design validated in docs/research/quality-runner-subagent-design.md. Decision approved: docs/decisions/resolved/228-esub-utility-subagents.md (Option A).

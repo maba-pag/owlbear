@@ -3,19 +3,21 @@ id: 1004
 title: 'Test: assembly-time notify dedup in build_hooks (RED)'
 status: archived
 priority: important
-created: 2026-03-26T02:35:26.9404225+01:00
-updated: 2026-03-26T08:32:29.692116+01:00
-started: 2026-03-26T08:31:48.6021289+01:00
-completed: 2026-03-26T08:31:48.6021289+01:00
+created: 2026-03-26 02:35:26.940423+01:00
+updated: 2026-03-26 08:32:29.692116+01:00
+started: 2026-03-26 08:31:48.602129+01:00
+completed: 2026-03-26 08:31:48.602129+01:00
 tags:
-    - hooks
-    - scope:core
-    - type:test
-    - test
+- hooks
+- scope:core
+- type:test
+- test
 depends_on:
-    - 955
-    - 957
+- 955
+- 957
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Scope

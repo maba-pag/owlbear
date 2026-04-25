@@ -1,17 +1,20 @@
 ---
 id: 460
-title: Update researcher agent and research-workflow skill with tier classification
+title: Update researcher agent and research-workflow skill with tier 
+  classification
 status: archived
 priority: needed
-created: 2026-03-31T03:40:02.1287985+02:00
-updated: 2026-03-31T08:51:41.5940636+02:00
-started: 2026-03-31T08:51:40.9944032+02:00
-completed: 2026-03-31T08:51:40.9944032+02:00
+created: 2026-03-31 03:40:02.128799+02:00
+updated: 2026-03-31 08:51:41.594064+02:00
+started: 2026-03-31 08:51:40.994403+02:00
+completed: 2026-03-31 08:51:40.994403+02:00
 tags:
-    - process
-    - scope:agents
-    - quality
+- process
+- scope:agents
+- quality
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Add mandatory tier classification step to research-workflow Step 5 and researcher agent boundaries. After completing analysis, researcher must classify outcome as T1/T2/T3 using deterministic triggers. T3 outcomes MUST create a blocking decision request. T1 proceeds directly. See docs/research/mandatory-user-decision-gate.md. AC: - [ ] research-workflow Step 5 has tier classification decision tree - [ ] researcher agent boundaries list T3 triggers explicitly - [ ] researcher critical_rules updated: T3 outcomes require blocking DR - [ ] Red flag added: creating follow-up tasks for T3 outcome without DR

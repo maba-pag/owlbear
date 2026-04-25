@@ -3,14 +3,16 @@ id: 38
 title: Add disable-model-invocation to pipeline-only agents
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:45:14.9415651+01:00
-updated: 2026-03-29T04:19:46.7373058+02:00
-started: 2026-03-29T04:19:42.2551086+02:00
-completed: 2026-03-29T04:19:42.2551086+02:00
+created: 2026-03-26 18:45:14.941565+01:00
+updated: 2026-03-29 04:19:46.737306+02:00
+started: 2026-03-29 04:19:42.255109+02:00
+completed: 2026-03-29 04:19:42.255109+02:00
 tags:
-    - phase-1
-    - scope:agents
+- phase-1
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 - [ ] `disable-model-invocation: true` added to YAML frontmatter of exactly these 8 agents: planner, researcher, architect, test-writer, builder, reviewer, writer, auditor

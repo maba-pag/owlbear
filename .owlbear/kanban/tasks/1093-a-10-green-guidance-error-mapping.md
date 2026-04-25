@@ -3,8 +3,8 @@ id: 1093
 title: 'A-10: GREEN — guidance + error mapping'
 status: todo
 priority: needed
-created: 2026-04-21T10:54:47.282679+00:00
-updated: 2026-04-21T10:54:47.282679+00:00
+created: '2026-04-21 10:54:47.282679+00:00'
+updated: '2026-04-21 10:54:47.282679+00:00'
 tags:
 - phase:mcp
 - brief:a
@@ -16,8 +16,9 @@ depends_on:
 - 1092
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 Brief A (#1045) — kanban-mcp-surface-v2/brief.md §7 "guidance field", paper-integration.md §3.6–§3.7

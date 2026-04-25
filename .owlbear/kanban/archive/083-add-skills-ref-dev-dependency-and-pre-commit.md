@@ -3,18 +3,20 @@ id: 83
 title: Add skills-ref dev dependency and pre-commit validation hook
 status: archived
 priority: nice-to-have
-created: 2026-03-27T04:56:44.051489+01:00
-updated: 2026-03-27T05:24:19.9242451+01:00
-started: 2026-03-27T05:24:19.9242451+01:00
-completed: 2026-03-27T05:24:19.9242451+01:00
+created: 2026-03-27 04:56:44.051489+01:00
+updated: 2026-03-27 05:24:19.924245+01:00
+started: 2026-03-27 05:24:19.924245+01:00
+completed: 2026-03-27 05:24:19.924245+01:00
 tags:
-    - phase-1
-    - scope:skills
-    - scope:build
-    - type:build
+- phase-1
+- scope:skills
+- scope:build
+- type:build
 depends_on:
-    - 44
+- 44
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

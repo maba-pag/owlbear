@@ -3,17 +3,19 @@ id: 227
 title: Create action request file for blocked task 167
 status: archived
 priority: needed
-created: 2026-03-30T16:57:45.5260962+02:00
-updated: 2026-03-31T06:46:02.9393701+02:00
-started: 2026-03-31T06:45:29.1209591+02:00
-completed: 2026-03-31T06:45:29.1209591+02:00
+created: 2026-03-30 16:57:45.526096+02:00
+updated: 2026-03-31 06:46:02.939370+02:00
+started: 2026-03-31 06:45:29.120959+02:00
+completed: 2026-03-31 06:45:29.120959+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - type:docs
+- phase-1
+- scope:agents
+- type:docs
 depends_on:
-    - 224
+- 224
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

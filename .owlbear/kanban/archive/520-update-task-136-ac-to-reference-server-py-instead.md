@@ -3,19 +3,21 @@ id: 520
 title: 'Update task #136 AC to reference server.py instead of tools.py'
 status: archived
 priority: nice-to-have
-created: 2026-04-01T15:04:50.8907765+02:00
-updated: 2026-04-03T04:47:29.6721631+02:00
-started: 2026-04-03T04:45:48.5311726+02:00
-completed: 2026-04-03T04:45:48.5311726+02:00
+created: 2026-04-01 15:04:50.890777+02:00
+updated: 2026-04-03 04:47:29.672163+02:00
+started: 2026-04-03 04:45:48.531173+02:00
+completed: 2026-04-03 04:45:48.531173+02:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
-    - chore
-    - quality
+- phase-2
+- scope:mcp
+- scope:knowledge
+- chore
+- quality
 depends_on:
-    - 223
+- 223
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

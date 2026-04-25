@@ -3,15 +3,17 @@ id: 4
 title: .agent.md format validation
 status: archived
 priority: needed
-created: 2026-03-26T17:18:37.5800694+01:00
-updated: 2026-03-28T03:36:28.7061289+01:00
-started: 2026-03-28T03:36:23.0090099+01:00
-completed: 2026-03-28T03:36:23.0090099+01:00
+created: 2026-03-26 17:18:37.580069+01:00
+updated: 2026-03-28 03:36:28.706129+01:00
+started: 2026-03-28 03:36:23.009010+01:00
+completed: 2026-03-28 03:36:23.009010+01:00
 tags:
-    - research
-    - phase-1
-    - scope:agents
+- research
+- phase-1
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

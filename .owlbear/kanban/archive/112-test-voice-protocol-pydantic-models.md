@@ -3,18 +3,20 @@ id: 112
 title: 'Test: Voice protocol Pydantic models'
 status: archived
 priority: nice-to-have
-created: 2026-03-28T22:26:21.6972367+01:00
-updated: 2026-03-30T04:45:34.3648846+02:00
-started: 2026-03-30T04:45:00.965129+02:00
-completed: 2026-03-30T04:45:00.965129+02:00
+created: 2026-03-28 22:26:21.697237+01:00
+updated: 2026-03-30 04:45:34.364885+02:00
+started: 2026-03-30 04:45:00.965129+02:00
+completed: 2026-03-30 04:45:00.965129+02:00
 tags:
-    - phase-3
-    - scope:voice
-    - type:test
-    - test
+- phase-3
+- scope:voice
+- type:test
+- test
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

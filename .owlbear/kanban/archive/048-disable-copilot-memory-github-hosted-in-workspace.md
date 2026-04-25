@@ -3,15 +3,17 @@ id: 48
 title: Disable Copilot Memory (GitHub-hosted) in workspace settings
 status: archived
 priority: needed
-created: 2026-03-26T18:56:50.0782762+01:00
-updated: 2026-03-27T05:23:10.8545829+01:00
-started: 2026-03-26T19:19:11.8267114+01:00
-completed: 2026-03-27T05:23:05.9044751+01:00
+created: 2026-03-26 18:56:50.078276+01:00
+updated: 2026-03-27 05:23:10.854583+01:00
+started: 2026-03-26 19:19:11.826711+01:00
+completed: 2026-03-27 05:23:05.904475+01:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - config
+- phase-1
+- scope:knowledge
+- config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Ensure github.copilot.chat.copilotMemory.enabled is explicitly set to false in workspace settings to prevent accidental use of the cloud-hosted memory system.

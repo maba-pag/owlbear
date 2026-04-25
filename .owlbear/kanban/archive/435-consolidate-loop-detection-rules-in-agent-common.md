@@ -3,14 +3,16 @@ id: 435
 title: Consolidate loop detection rules in agent-common.instructions.md
 status: archived
 priority: needed
-created: 2026-03-30T21:45:53.9677998+02:00
-updated: 2026-03-31T05:33:02.3352765+02:00
-started: 2026-03-31T05:32:35.2851635+02:00
-completed: 2026-03-31T05:32:35.2851635+02:00
+created: 2026-03-30 21:45:53.967800+02:00
+updated: 2026-03-31 05:33:02.335277+02:00
+started: 2026-03-31 05:32:35.285164+02:00
+completed: 2026-03-31 05:32:35.285164+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

@@ -3,18 +3,20 @@ id: 179
 title: Implement analysis module with pattern detectors
 status: archived
 priority: needed
-created: 2026-03-29T19:51:21.7412918+02:00
-updated: 2026-03-31T00:29:22.4762248+02:00
-started: 2026-03-31T00:22:20.5752253+02:00
-completed: 2026-03-31T00:22:20.5752253+02:00
+created: 2026-03-29 19:51:21.741292+02:00
+updated: 2026-03-31 00:29:22.476225+02:00
+started: 2026-03-31 00:22:20.575225+02:00
+completed: 2026-03-31 00:22:20.575225+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 21
-    - 222
+- 21
+- 222
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Implementation task: create packages/orchestrator/src/owlbear_orchestrator/analysis/ with:

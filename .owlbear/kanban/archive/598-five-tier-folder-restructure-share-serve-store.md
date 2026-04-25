@@ -3,19 +3,21 @@ id: 598
 title: Five-tier folder restructure (share/serve/store/seed/.owlbear)
 status: archived
 priority: critical
-created: 2026-04-04T20:30:01.0914716+02:00
-updated: 2026-04-06T02:05:57.6607825+02:00
-started: 2026-04-06T02:05:57.6607825+02:00
-completed: 2026-04-06T02:05:57.6607825+02:00
+created: 2026-04-04 20:30:01.091472+02:00
+updated: 2026-04-06 02:05:57.660783+02:00
+started: 2026-04-06 02:05:57.660783+02:00
+completed: 2026-04-06 02:05:57.660783+02:00
 tags:
-    - scope:infra
-    - type:restructure
-    - type:config
-    - phase-2
+- scope:infra
+- type:restructure
+- type:config
+- phase-2
 depends_on:
-    - 609
-    - 608
+- 609
+- 608
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

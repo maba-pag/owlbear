@@ -3,15 +3,17 @@ id: 485
 title: Switch move/pick to JSON output, remove board_context — tests
 status: archived
 priority: needed
-created: 2026-03-31T06:21:02.7216362+02:00
-updated: 2026-03-31T13:50:10.8699189+02:00
-started: 2026-03-31T13:49:52.4962688+02:00
-completed: 2026-03-31T13:49:52.4962688+02:00
+created: 2026-03-31 06:21:02.721636+02:00
+updated: 2026-03-31 13:50:10.869919+02:00
+started: 2026-03-31 13:49:52.496269+02:00
+completed: 2026-03-31 13:49:52.496269+02:00
 tags:
-    - scope:mcp
-    - type:test
-    - phase-2
+- scope:mcp
+- type:test
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

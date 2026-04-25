@@ -3,15 +3,17 @@ id: 154
 title: Add Typer dependency to orchestrator package
 status: archived
 priority: needed
-created: 2026-03-29T19:27:30.1304414+02:00
-updated: 2026-03-30T00:17:15.9590513+02:00
-started: 2026-03-30T00:17:15.6035516+02:00
-completed: 2026-03-30T00:17:15.6035516+02:00
+created: 2026-03-29 19:27:30.130441+02:00
+updated: 2026-03-30 00:17:15.959051+02:00
+started: 2026-03-30 00:17:15.603552+02:00
+completed: 2026-03-30 00:17:15.603552+02:00
 tags:
-    - phase-2
-    - scope:cli
-    - type:config
+- phase-2
+- scope:cli
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

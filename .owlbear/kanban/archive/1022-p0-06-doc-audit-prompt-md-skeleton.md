@@ -3,8 +3,8 @@ id: 1022
 title: 'P0-06: doc-audit.prompt.md skeleton'
 status: archived
 priority: needed
-created: 2026-04-19T23:51:49.165749+00:00
-updated: 2026-04-20T01:42:58.708152+00:00
+created: 2026-04-19 23:51:49.165749+00:00
+updated: 2026-04-20 01:42:58.708152+00:00
 tags:
 - phase-0
 - docs-currency
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 Brief: see parent #1016
 

@@ -3,18 +3,20 @@ id: 25
 title: Multi-project setup test
 status: archived
 priority: important
-created: 2026-03-26T17:23:32.2827073+01:00
-updated: 2026-03-30T15:35:59.5696133+02:00
-started: 2026-03-30T15:18:47.0201355+02:00
-completed: 2026-03-30T15:18:47.0201355+02:00
+created: 2026-03-26 17:23:32.282707+01:00
+updated: 2026-03-30 15:35:59.569613+02:00
+started: 2026-03-30 15:18:47.020136+02:00
+completed: 2026-03-30 15:18:47.020136+02:00
 tags:
-    - phase-2
-    - scope:build
-    - type:test
+- phase-2
+- scope:build
+- type:test
 depends_on:
-    - 12
-    - 18
+- 12
+- 18
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

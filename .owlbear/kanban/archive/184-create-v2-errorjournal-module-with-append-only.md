@@ -3,17 +3,19 @@ id: 184
 title: Create v2 ErrorJournal module with append-only JSONL persistence
 status: archived
 priority: nice-to-have
-created: 2026-03-29T20:23:15.50196+02:00
-updated: 2026-03-31T03:20:50.4501607+02:00
-started: 2026-03-31T03:20:26.0233865+02:00
-completed: 2026-03-31T03:20:26.0233865+02:00
+created: 2026-03-29 20:23:15.501960+02:00
+updated: 2026-03-31 03:20:50.450161+02:00
+started: 2026-03-31 03:20:26.023387+02:00
+completed: 2026-03-31 03:20:26.023387+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 189
+- 189
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

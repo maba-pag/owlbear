@@ -3,17 +3,19 @@ id: 220
 title: Add gate_warned tracking to orchestration SKILL.md
 status: archived
 priority: needed
-created: 2026-03-30T15:17:02.0028127+02:00
-updated: 2026-03-31T06:30:52.1873414+02:00
-started: 2026-03-31T06:30:35.2880943+02:00
-completed: 2026-03-31T06:30:35.2880943+02:00
+created: 2026-03-30 15:17:02.002813+02:00
+updated: 2026-03-31 06:30:52.187341+02:00
+started: 2026-03-31 06:30:35.288094+02:00
+completed: 2026-03-31 06:30:35.288094+02:00
 tags:
-    - scope:agents
-    - quality
-    - type:config
+- scope:agents
+- quality
+- type:config
 depends_on:
-    - 219
+- 219
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

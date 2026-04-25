@@ -3,15 +3,17 @@ id: 103
 title: Add search/usages guidance to reviewer and builder skill workflows
 status: archived
 priority: nice-to-have
-created: 2026-03-28T13:34:53.1996415+01:00
-updated: 2026-03-29T14:32:37.8888515+02:00
-started: 2026-03-29T14:32:18.9145567+02:00
-completed: 2026-03-29T14:32:18.9145567+02:00
+created: 2026-03-28 13:34:53.199642+01:00
+updated: 2026-03-29 14:32:37.888852+02:00
+started: 2026-03-29 14:32:18.914557+02:00
+completed: 2026-03-29 14:32:18.914557+02:00
 tags:
-    - phase-2
-    - scope:agents
-    - docs
+- phase-2
+- scope:agents
+- docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

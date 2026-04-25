@@ -3,16 +3,18 @@ id: 209
 title: Add stop commit guard hooks to builder and writer agents (Phase 1)
 status: archived
 priority: nice-to-have
-created: 2026-03-30T08:52:09.122925+02:00
-updated: 2026-04-04T07:10:40.9020065+02:00
-started: 2026-04-04T07:09:49.7942912+02:00
-completed: 2026-04-04T07:09:49.7942912+02:00
+created: 2026-03-30 08:52:09.122925+02:00
+updated: 2026-04-04 07:10:40.902007+02:00
+started: 2026-04-04 07:09:49.794291+02:00
+completed: 2026-04-04 07:09:49.794291+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - hooks
-    - type:build
+- phase-1
+- scope:agents
+- hooks
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

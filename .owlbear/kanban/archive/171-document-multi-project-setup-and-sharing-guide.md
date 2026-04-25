@@ -3,17 +3,19 @@ id: 171
 title: Document multi-project setup and sharing guide
 status: archived
 priority: important
-created: 2026-03-29T19:49:45.5033047+02:00
-updated: 2026-03-29T21:45:21.1660859+02:00
-started: 2026-03-29T21:45:21.1660859+02:00
-completed: 2026-03-29T21:45:21.1660859+02:00
+created: 2026-03-29 19:49:45.503305+02:00
+updated: 2026-03-29 21:45:21.166086+02:00
+started: 2026-03-29 21:45:21.166086+02:00
+completed: 2026-03-29 21:45:21.166086+02:00
 tags:
-    - phase-2
-    - scope:build
-    - type:docs
+- phase-2
+- scope:build
+- type:docs
 blocked: true
 block_reason: 'Duplicate of #169 — pending cleanup via #182'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

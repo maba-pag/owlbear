@@ -3,15 +3,17 @@ id: 476
 title: Add dep/parent/title params to edit_task, switch to JSON output
 status: archived
 priority: needed
-created: 2026-03-31T06:06:19.0737281+02:00
-updated: 2026-04-03T04:12:30.9960494+02:00
-started: 2026-04-03T04:11:19.4718226+02:00
-completed: 2026-04-03T04:11:19.4718226+02:00
+created: 2026-03-31 06:06:19.073728+02:00
+updated: 2026-04-03 04:12:30.996049+02:00
+started: 2026-04-03 04:11:19.471823+02:00
+completed: 2026-04-03 04:11:19.471823+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

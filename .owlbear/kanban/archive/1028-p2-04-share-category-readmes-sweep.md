@@ -3,8 +3,8 @@ id: 1028
 title: 'P2-04: share-category READMEs sweep'
 status: archived
 priority: important
-created: 2026-04-19T23:52:56.675044+00:00
-updated: 2026-04-20T04:52:11.053219+00:00
+created: 2026-04-19 23:52:56.675044+00:00
+updated: 2026-04-20 04:52:11.053219+00:00
 tags:
 - phase-2
 - docs-currency
@@ -17,6 +17,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 Brief: see parent #1016
 

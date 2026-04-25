@@ -3,17 +3,19 @@ id: 523
 title: Wire LLM callable injection into ConsolidationService and SourceEvaluator
 status: archived
 priority: nice-to-have
-created: 2026-04-01T15:27:37.9672707+02:00
-updated: 2026-04-02T22:22:02.2747618+02:00
-started: 2026-04-02T22:21:59.4567453+02:00
-completed: 2026-04-02T22:21:59.4567453+02:00
+created: 2026-04-01 15:27:37.967271+02:00
+updated: 2026-04-02 22:22:02.274762+02:00
+started: 2026-04-02 22:21:59.456745+02:00
+completed: 2026-04-02 22:21:59.456745+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 135
+- 135
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

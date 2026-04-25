@@ -3,18 +3,20 @@ id: 551
 title: 'Test: Bookmark pipeline orchestrator'
 status: archived
 priority: nice-to-have
-created: 2026-04-02T16:05:55.0904942+02:00
-updated: 2026-04-02T17:27:42.2036615+02:00
-started: 2026-04-02T17:27:42.2036615+02:00
-completed: 2026-04-02T17:27:42.2036615+02:00
+created: 2026-04-02 16:05:55.090494+02:00
+updated: 2026-04-02 17:27:42.203662+02:00
+started: 2026-04-02 17:27:42.203662+02:00
+completed: 2026-04-02 17:27:42.203662+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:test
-    - test
+- phase-1
+- scope:knowledge
+- type:test
+- test
 claimed_by: researcher
-claimed_at: 2026-04-02T17:27:32.9541627+02:00
+claimed_at: 2026-04-02 17:27:32.954163+02:00
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

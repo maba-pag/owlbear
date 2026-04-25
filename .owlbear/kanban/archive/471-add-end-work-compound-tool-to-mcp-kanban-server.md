@@ -3,17 +3,19 @@ id: 471
 title: Add end_work compound tool to mcp-kanban server
 status: archived
 priority: needed
-created: 2026-03-31T05:21:15.4470299+02:00
-updated: 2026-04-01T16:00:27.4483715+02:00
-started: 2026-04-01T16:00:15.2356325+02:00
-completed: 2026-04-01T16:00:15.2356325+02:00
+created: 2026-03-31 05:21:15.447030+02:00
+updated: 2026-04-01 16:00:27.448372+02:00
+started: 2026-04-01 16:00:15.235633+02:00
+completed: 2026-04-01 16:00:15.235633+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 depends_on:
-    - 497
+- 497
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

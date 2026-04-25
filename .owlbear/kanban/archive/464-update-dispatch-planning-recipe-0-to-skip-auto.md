@@ -3,17 +3,19 @@ id: 464
 title: Update dispatch-planning Recipe 0 to skip auto-resolve for impact_tier=3
 status: archived
 priority: needed
-created: 2026-03-31T03:54:57.0490464+02:00
-updated: 2026-03-31T22:33:33.1602346+02:00
-started: 2026-03-31T22:33:32.6655058+02:00
-completed: 2026-03-31T22:33:32.6655058+02:00
+created: 2026-03-31 03:54:57.049046+02:00
+updated: 2026-03-31 22:33:33.160235+02:00
+started: 2026-03-31 22:33:32.665506+02:00
+completed: 2026-03-31 22:33:32.665506+02:00
 tags:
-    - process
-    - scope:agents
-    - quality
+- process
+- scope:agents
+- quality
 depends_on:
-    - 459
+- 459
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Recipe 0 in dispatch-planning skill auto-resolves pending decisions after 5 days. With impact_tier (from #459), T3 decisions must NOT auto-resolve. Update Recipe 0 logic: check impact_tier field, skip 5-day timer when impact_tier=3, report T3 pending count separately in JSON output. See docs/research/recipe0-tier-aware-auto-resolve.md.

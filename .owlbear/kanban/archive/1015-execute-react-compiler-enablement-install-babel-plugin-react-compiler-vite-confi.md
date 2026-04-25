@@ -3,8 +3,8 @@ id: 1015
 title: 'Execute React Compiler enablement: install babel-plugin-react-compiler + vite.config.ts'
 status: archived
 priority: nice-to-have
-created: 2026-04-19T16:44:26.745900+00:00
-updated: 2026-04-19T17:57:11.090635+00:00
+created: 2026-04-19 16:44:26.745900+00:00
+updated: 2026-04-19 17:57:11.090635+00:00
 tags:
 - cockpit
 - frontend
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Objective
 

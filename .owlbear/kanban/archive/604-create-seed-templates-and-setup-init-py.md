@@ -3,19 +3,21 @@ id: 604
 title: Create seed/ templates and setup/init.py
 status: archived
 priority: needed
-created: 2026-04-04T20:31:05.5323847+02:00
-updated: 2026-04-05T09:22:27.2546633+02:00
-started: 2026-04-05T09:22:27.2546633+02:00
-completed: 2026-04-05T09:22:27.2546633+02:00
+created: 2026-04-04 20:31:05.532385+02:00
+updated: 2026-04-05 09:22:27.254663+02:00
+started: 2026-04-05 09:22:27.254663+02:00
+completed: 2026-04-05 09:22:27.254663+02:00
 tags:
-    - scope:infra
-    - type:build
-    - phase-2
+- scope:infra
+- type:build
+- phase-2
 parent: 598
 depends_on:
-    - 600
-    - 603
+- 600
+- 603
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

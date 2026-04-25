@@ -3,15 +3,17 @@ id: 114
 title: Apply python.instructions.md v2 layout edits
 status: archived
 priority: nice-to-have
-created: 2026-03-29T00:44:20.5981122+01:00
-updated: 2026-03-29T03:27:04.2090543+02:00
-started: 2026-03-29T01:46:10.9930907+01:00
-completed: 2026-03-29T03:27:04.2090543+02:00
+created: 2026-03-29 00:44:20.598112+01:00
+updated: 2026-03-29 03:27:04.209054+02:00
+started: 2026-03-29 01:46:10.993091+01:00
+completed: 2026-03-29 03:27:04.209054+02:00
 tags:
-    - phase-1
-    - docs
-    - scope:build
+- phase-1
+- docs
+- scope:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

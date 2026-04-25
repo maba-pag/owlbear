@@ -3,15 +3,17 @@ id: 137
 title: Implement memory boundary instruction file
 status: archived
 priority: important
-created: 2026-03-29T13:00:01.081171+02:00
-updated: 2026-03-30T15:36:01.2624666+02:00
-started: 2026-03-30T15:18:48.537351+02:00
-completed: 2026-03-30T15:18:48.537351+02:00
+created: 2026-03-29 13:00:01.081171+02:00
+updated: 2026-03-30 15:36:01.262467+02:00
+started: 2026-03-30 15:18:48.537351+02:00
+completed: 2026-03-30 15:18:48.537351+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:docs
+- phase-1
+- scope:knowledge
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

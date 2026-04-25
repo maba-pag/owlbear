@@ -3,17 +3,19 @@ id: 51
 title: Implement voice addon TTS with Kokoro and pyttsx3 fallback
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:57:30.5848405+01:00
-updated: 2026-03-30T06:33:38.9424441+02:00
-started: 2026-03-30T06:33:11.8339457+02:00
-completed: 2026-03-30T06:33:11.8339457+02:00
+created: 2026-03-26 18:57:30.584841+01:00
+updated: 2026-03-30 06:33:38.942444+02:00
+started: 2026-03-30 06:33:11.833946+02:00
+completed: 2026-03-30 06:33:11.833946+02:00
 tags:
-    - phase-3
-    - scope:voice
+- phase-3
+- scope:voice
 depends_on:
-    - 52
-    - 78
+- 52
+- 78
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

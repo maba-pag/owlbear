@@ -3,17 +3,19 @@ id: 24
 title: General KB initial data load
 status: archived
 priority: important
-created: 2026-03-26T17:23:17.8229702+01:00
-updated: 2026-03-30T23:08:59.9838496+02:00
-started: 2026-03-30T23:08:59.9838496+02:00
-completed: 2026-03-30T23:08:59.9838496+02:00
+created: 2026-03-26 17:23:17.822970+01:00
+updated: 2026-03-30 23:08:59.983850+02:00
+started: 2026-03-30 23:08:59.983850+02:00
+completed: 2026-03-30 23:08:59.983850+02:00
 tags:
-    - phase-2
-    - scope:knowledge
-    - type:build
+- phase-2
+- scope:knowledge
+- type:build
 depends_on:
-    - 16
+- 16
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

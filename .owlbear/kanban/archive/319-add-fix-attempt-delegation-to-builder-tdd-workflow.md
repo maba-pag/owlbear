@@ -3,17 +3,19 @@ id: 319
 title: Add fix-attempt delegation to builder tdd-workflow
 status: archived
 priority: needed
-created: 2026-03-30T20:38:22.4647449+02:00
-updated: 2026-04-05T16:57:16.6657538+02:00
-started: 2026-04-05T16:57:16.6657538+02:00
-completed: 2026-04-05T16:57:16.6657538+02:00
+created: 2026-03-30 20:38:22.464745+02:00
+updated: 2026-04-05 16:57:16.665754+02:00
+started: 2026-04-05 16:57:16.665754+02:00
+completed: 2026-04-05 16:57:16.665754+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 depends_on:
-    - 318
+- 318
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 AC:

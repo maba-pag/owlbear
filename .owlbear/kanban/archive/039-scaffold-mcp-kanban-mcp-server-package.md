@@ -3,18 +3,20 @@ id: 39
 title: Scaffold mcp-kanban MCP server package
 status: archived
 priority: needed
-created: 2026-03-26T18:49:54.1341081+01:00
-updated: 2026-03-27T22:15:34.9292956+01:00
-started: 2026-03-27T22:15:34.9292956+01:00
-completed: 2026-03-27T22:15:34.9292956+01:00
+created: 2026-03-26 18:49:54.134108+01:00
+updated: 2026-03-27 22:15:34.929296+01:00
+started: 2026-03-27 22:15:34.929296+01:00
+completed: 2026-03-27 22:15:34.929296+01:00
 tags:
-    - phase-1
-    - scope:mcp
-    - scope:build
+- phase-1
+- scope:mcp
+- scope:build
 depends_on:
-    - 7
-    - 65
+- 7
+- 65
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,16 +3,18 @@ id: 534
 title: 'Test: search quality benchmark CLI (#178)'
 status: archived
 priority: important
-created: 2026-04-02T01:43:22.6349698+02:00
-updated: 2026-04-02T04:31:25.6641195+02:00
-started: 2026-04-02T04:31:25.1081111+02:00
-completed: 2026-04-02T04:31:25.1081111+02:00
+created: 2026-04-02 01:43:22.634970+02:00
+updated: 2026-04-02 04:31:25.664120+02:00
+started: 2026-04-02 04:31:25.108111+02:00
+completed: 2026-04-02 04:31:25.108111+02:00
 tags:
-    - phase-2
-    - scope:knowledge
-    - type:test
-    - test
+- phase-2
+- scope:knowledge
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

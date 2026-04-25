@@ -3,19 +3,21 @@ id: 20
 title: Build dispatch planner
 status: archived
 priority: needed
-created: 2026-03-26T17:22:22.8937692+01:00
-updated: 2026-04-01T22:36:43.9002892+02:00
-started: 2026-04-01T22:36:43.3770591+02:00
-completed: 2026-04-01T22:36:43.3770591+02:00
+created: 2026-03-26 17:22:22.893769+01:00
+updated: 2026-04-01 22:36:43.900289+02:00
+started: 2026-04-01 22:36:43.377059+02:00
+completed: 2026-04-01 22:36:43.377059+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 144
-    - 145
-    - 146
+- 144
+- 145
+- 146
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,18 +3,20 @@ id: 516
 title: 'Test: Notifier dispatch loop integration'
 status: archived
 priority: someday
-created: 2026-04-01T07:07:25.1531395+02:00
-updated: 2026-04-04T07:10:33.6098175+02:00
-started: 2026-04-04T07:09:44.6847136+02:00
-completed: 2026-04-04T07:09:44.6847136+02:00
+created: 2026-04-01 07:07:25.153140+02:00
+updated: 2026-04-04 07:10:33.609818+02:00
+started: 2026-04-04 07:09:44.684714+02:00
+completed: 2026-04-04 07:09:44.684714+02:00
 tags:
-    - phase-3
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-3
+- scope:orchestrator
+- type:test
+- test
 depends_on:
-    - 515
+- 515
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,15 +3,17 @@ id: 308
 title: Add strictyaml to knowledge package dependencies
 status: archived
 priority: needed
-created: 2026-03-30T20:30:35.1438782+02:00
-updated: 2026-03-31T04:34:46.0452664+02:00
-started: 2026-03-31T04:34:45.5142376+02:00
-completed: 2026-03-31T04:34:45.5142376+02:00
+created: 2026-03-30 20:30:35.143878+02:00
+updated: 2026-03-31 04:34:46.045266+02:00
+started: 2026-03-31 04:34:45.514238+02:00
+completed: 2026-03-31 04:34:45.514238+02:00
 tags:
-    - phase-2
-    - scope:knowledge
-    - type:build
+- phase-2
+- scope:knowledge
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

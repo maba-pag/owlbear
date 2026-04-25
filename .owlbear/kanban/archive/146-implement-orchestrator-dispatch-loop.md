@@ -3,18 +3,20 @@ id: 146
 title: Implement orchestrator dispatch loop
 status: archived
 priority: needed
-created: 2026-03-29T16:23:47.2530291+02:00
-updated: 2026-04-01T21:40:45.1715822+02:00
-started: 2026-04-01T21:40:39.2888478+02:00
-completed: 2026-04-01T21:40:39.2888478+02:00
+created: 2026-03-29 16:23:47.253029+02:00
+updated: 2026-04-01 21:40:45.171582+02:00
+started: 2026-04-01 21:40:39.288848+02:00
+completed: 2026-04-01 21:40:39.288848+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 145
-    - 19
+- 145
+- 19
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 See docs/research/orchestrator-dispatch-loop.md for validated research.

@@ -3,17 +3,19 @@ id: 21
 title: Build audit log
 status: archived
 priority: important
-created: 2026-03-26T17:22:35.5978869+01:00
-updated: 2026-03-30T15:35:59.1521227+02:00
-started: 2026-03-30T15:18:46.5256209+02:00
-completed: 2026-03-30T15:18:46.5256209+02:00
+created: 2026-03-26 17:22:35.597887+01:00
+updated: 2026-03-30 15:35:59.152123+02:00
+started: 2026-03-30 15:18:46.525621+02:00
+completed: 2026-03-30 15:18:46.525621+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 19
+- 19
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

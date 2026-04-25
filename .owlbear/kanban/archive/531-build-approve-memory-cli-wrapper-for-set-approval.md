@@ -3,18 +3,20 @@ id: 531
 title: Build approve_memory CLI wrapper for set_approval_state
 status: archived
 priority: important
-created: 2026-04-01T19:13:11.4079479+02:00
-updated: 2026-04-05T09:32:59.4897691+02:00
-started: 2026-04-05T09:32:59.4897691+02:00
-completed: 2026-04-05T09:32:59.4897691+02:00
+created: 2026-04-01 19:13:11.407948+02:00
+updated: 2026-04-05 09:32:59.489769+02:00
+started: 2026-04-05 09:32:59.489769+02:00
+completed: 2026-04-05 09:32:59.489769+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 525
-    - 529
-    - 585
+- 525
+- 529
+- 585
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 CLI wrapper for batch approve/reject of pending memory entries, calling set_approval_state MCP tool via in-memory transport. Per docs/research/approve-memory-cli-wrapper.md.

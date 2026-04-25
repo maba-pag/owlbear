@@ -3,15 +3,18 @@ id: 1003
 title: 'Test: Track LLM usage in daemon poll_tick builder dispatch'
 status: archived
 priority: nice-to-have
-created: 2026-03-25T13:52:00.3682716+01:00
-updated: 2026-03-25T14:31:32.551114+01:00
+created: 2026-03-25 13:52:00.368272+01:00
+updated: 2026-03-25 14:31:32.551114+01:00
 tags:
-    - scope:core
-    - phase-3
-    - test
+- scope:core
+- phase-3
+- test
 blocked: true
-block_reason: 'Redundant: all 7 ACs already covered by 34 tests in tests/test_845_daemon_usage_tracking.py (test-writer output for #845 in-progress)'
+block_reason: 'Redundant: all 7 ACs already covered by 34 tests in tests/test_845_daemon_usage_tracking.py
+  (test-writer output for #845 in-progress)'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 **AC (RED phase — all tests must fail before implementation):**

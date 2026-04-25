@@ -3,15 +3,17 @@ id: 111
 title: Clean up stale .github/instructions/ references
 status: archived
 priority: nice-to-have
-created: 2026-03-28T22:24:22.9333309+01:00
-updated: 2026-03-30T04:50:20.1272217+02:00
-started: 2026-03-30T04:47:07.5506987+02:00
-completed: 2026-03-30T04:47:07.5506987+02:00
+created: 2026-03-28 22:24:22.933331+01:00
+updated: 2026-03-30 04:50:20.127222+02:00
+started: 2026-03-30 04:47:07.550699+02:00
+completed: 2026-03-30 04:47:07.550699+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

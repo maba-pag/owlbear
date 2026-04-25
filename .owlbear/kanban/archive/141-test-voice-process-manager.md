@@ -3,18 +3,20 @@ id: 141
 title: 'Test: Voice process manager'
 status: archived
 priority: nice-to-have
-created: 2026-03-29T15:39:36.7418317+02:00
-updated: 2026-04-03T02:47:24.7015227+02:00
-started: 2026-04-03T02:44:48.7370316+02:00
-completed: 2026-04-03T02:44:48.7370316+02:00
+created: 2026-03-29 15:39:36.741832+02:00
+updated: 2026-04-03 02:47:24.701523+02:00
+started: 2026-04-03 02:44:48.737032+02:00
+completed: 2026-04-03 02:44:48.737032+02:00
 tags:
-    - phase-3
-    - ' scope:voice'
-    - ' type:test'
-    - ' test'
+- phase-3
+- ' scope:voice'
+- ' type:test'
+- ' test'
 depends_on:
-    - 61
+- 61
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

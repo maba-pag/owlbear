@@ -3,17 +3,19 @@ id: 159
 title: Extract retrieval.py (GraphAugmentedRetriever)
 status: archived
 priority: needed
-created: 2026-03-29T19:37:22.7410344+02:00
-updated: 2026-04-04T07:09:54.1661913+02:00
-started: 2026-04-04T07:09:28.2968981+02:00
-completed: 2026-04-04T07:09:28.2968981+02:00
+created: 2026-03-29 19:37:22.741034+02:00
+updated: 2026-04-04 07:09:54.166191+02:00
+started: 2026-04-04 07:09:28.296898+02:00
+completed: 2026-04-04 07:09:28.296898+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 32
+- 32
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

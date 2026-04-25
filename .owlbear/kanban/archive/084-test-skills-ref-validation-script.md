@@ -3,17 +3,19 @@ id: 84
 title: 'Test: skills-ref validation script'
 status: archived
 priority: nice-to-have
-created: 2026-03-27T05:24:29.868156+01:00
-updated: 2026-03-29T00:40:19.3196463+01:00
-started: 2026-03-29T00:40:13.8835716+01:00
-completed: 2026-03-29T00:40:13.8835716+01:00
+created: 2026-03-27 05:24:29.868156+01:00
+updated: 2026-03-29 00:40:19.319646+01:00
+started: 2026-03-29 00:40:13.883572+01:00
+completed: 2026-03-29 00:40:13.883572+01:00
 tags:
-    - phase-1
-    - scope:skills
-    - scope:build
-    - type:test
-    - test
+- phase-1
+- scope:skills
+- scope:build
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

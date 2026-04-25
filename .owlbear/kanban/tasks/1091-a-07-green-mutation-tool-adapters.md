@@ -3,8 +3,8 @@ id: 1091
 title: 'A-07: GREEN — mutation tool adapters'
 status: todo
 priority: critical
-created: 2026-04-21T10:54:28.949075+00:00
-updated: 2026-04-21T10:54:28.949075+00:00
+created: '2026-04-21 10:54:28.949075+00:00'
+updated: '2026-04-21 10:54:28.949075+00:00'
 tags:
 - phase:mcp
 - brief:a
@@ -16,8 +16,9 @@ depends_on:
 - 1090
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 Brief A (#1045) — kanban-mcp-surface-v2/brief.md §5.4–§5.5, paper-integration.md §1.4–§1.5

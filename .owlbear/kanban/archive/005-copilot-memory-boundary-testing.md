@@ -3,15 +3,17 @@ id: 5
 title: Copilot Memory boundary testing
 status: archived
 priority: important
-created: 2026-03-26T17:18:48.5935306+01:00
-updated: 2026-03-29T03:16:13.4154759+02:00
-started: 2026-03-29T03:16:08.9854942+02:00
-completed: 2026-03-29T03:16:08.9854942+02:00
+created: 2026-03-26 17:18:48.593531+01:00
+updated: 2026-03-29 03:16:13.415476+02:00
+started: 2026-03-29 03:16:08.985494+02:00
+completed: 2026-03-29 03:16:08.985494+02:00
 tags:
-    - research
-    - phase-1
-    - scope:knowledge
+- research
+- phase-1
+- scope:knowledge
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,15 +3,17 @@ id: 536
 title: Add dispatch-cycle trace ID to orchestrator protocol
 status: archived
 priority: nice-to-have
-created: 2026-03-30T21:37:56.9725911+02:00
-updated: 2026-04-02T10:12:57.8052023+02:00
-started: 2026-04-02T10:12:57.8052023+02:00
-completed: 2026-04-02T10:12:57.8052023+02:00
+created: 2026-03-30 21:37:56.972591+02:00
+updated: 2026-04-02 10:12:57.805202+02:00
+started: 2026-04-02 10:12:57.805202+02:00
+completed: 2026-04-02 10:12:57.805202+02:00
 tags:
-    - research
-    - scope:agents
-    - phase-2
+- research
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

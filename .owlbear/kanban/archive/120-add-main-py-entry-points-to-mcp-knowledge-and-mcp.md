@@ -3,17 +3,19 @@ id: 120
 title: Add __main__.py entry points to mcp-knowledge and mcp-project
 status: archived
 priority: needed
-created: 2026-03-29T06:32:41.4713366+02:00
-updated: 2026-03-29T11:10:02.3624583+02:00
-started: 2026-03-29T11:10:02.3624583+02:00
-completed: 2026-03-29T11:10:02.3624583+02:00
+created: 2026-03-29 06:32:41.471337+02:00
+updated: 2026-03-29 11:10:02.362458+02:00
+started: 2026-03-29 11:10:02.362458+02:00
+completed: 2026-03-29 11:10:02.362458+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:build
+- phase-1
+- scope:mcp
+- type:build
 depends_on:
-    - 119
+- 119
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

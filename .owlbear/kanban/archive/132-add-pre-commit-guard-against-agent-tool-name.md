@@ -3,15 +3,17 @@ id: 132
 title: Add pre-commit guard against agent tool name regression
 status: archived
 priority: nice-to-have
-created: 2026-03-29T08:15:13.0520159+02:00
-updated: 2026-03-29T14:56:44.2962844+02:00
-started: 2026-03-29T14:56:44.2962844+02:00
-completed: 2026-03-29T14:56:44.2962844+02:00
+created: 2026-03-29 08:15:13.052016+02:00
+updated: 2026-03-29 14:56:44.296284+02:00
+started: 2026-03-29 14:56:44.296284+02:00
+completed: 2026-03-29 14:56:44.296284+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - tooling
+- phase-1
+- scope:agents
+- tooling
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

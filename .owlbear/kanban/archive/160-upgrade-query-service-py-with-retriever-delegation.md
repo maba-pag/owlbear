@@ -3,17 +3,19 @@ id: 160
 title: Upgrade query_service.py with retriever delegation and hybrid search
 status: archived
 priority: needed
-created: 2026-03-29T19:37:32.4203226+02:00
-updated: 2026-04-02T01:32:10.0647465+02:00
-started: 2026-04-02T01:31:59.7930287+02:00
-completed: 2026-04-02T01:31:59.7930287+02:00
+created: 2026-03-29 19:37:32.420323+02:00
+updated: 2026-04-02 01:32:10.064747+02:00
+started: 2026-04-02 01:31:59.793029+02:00
+completed: 2026-04-02 01:31:59.793029+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 159
+- 159
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

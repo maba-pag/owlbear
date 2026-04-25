@@ -3,17 +3,19 @@ id: 57
 title: Add mcp-kanban integration tests with real kanban-md binary
 status: archived
 priority: nice-to-have
-created: 2026-03-26T19:20:10.4264872+01:00
-updated: 2026-03-30T03:46:44.1434658+02:00
-started: 2026-03-30T03:46:43.8226462+02:00
-completed: 2026-03-30T03:46:43.8226462+02:00
+created: 2026-03-26 19:20:10.426487+01:00
+updated: 2026-03-30 03:46:44.143466+02:00
+started: 2026-03-30 03:46:43.822646+02:00
+completed: 2026-03-30 03:46:43.822646+02:00
 tags:
-    - phase-3
-    - mcp
-    - test
+- phase-3
+- mcp
+- test
 depends_on:
-    - 14
+- 14
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Integration tests that exercise mcp-kanban against real kanban-md binary with temp board directory.

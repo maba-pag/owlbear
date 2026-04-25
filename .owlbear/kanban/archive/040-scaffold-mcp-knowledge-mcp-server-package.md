@@ -3,18 +3,20 @@ id: 40
 title: Scaffold mcp-knowledge MCP server package
 status: archived
 priority: needed
-created: 2026-03-26T18:50:00.9259952+01:00
-updated: 2026-03-27T22:15:35.2760064+01:00
-started: 2026-03-27T22:15:35.2760064+01:00
-completed: 2026-03-27T22:15:35.2760064+01:00
+created: 2026-03-26 18:50:00.925995+01:00
+updated: 2026-03-27 22:15:35.276006+01:00
+started: 2026-03-27 22:15:35.276006+01:00
+completed: 2026-03-27 22:15:35.276006+01:00
 tags:
-    - phase-1
-    - scope:mcp
-    - scope:build
+- phase-1
+- scope:mcp
+- scope:build
 depends_on:
-    - 7
-    - 66
+- 7
+- 66
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

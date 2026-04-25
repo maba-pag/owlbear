@@ -3,17 +3,19 @@ id: 457
 title: Remove execute/* tools from reviewer agent
 status: archived
 priority: nice-to-have
-created: 2026-03-30T23:47:55.0036687+02:00
-updated: 2026-04-06T06:33:09.2586312+02:00
-started: 2026-04-06T06:33:09.2586312+02:00
-completed: 2026-04-06T06:33:09.2586312+02:00
+created: 2026-03-30 23:47:55.003669+02:00
+updated: 2026-04-06 06:33:09.258631+02:00
+started: 2026-04-06 06:33:09.258631+02:00
+completed: 2026-04-06 06:33:09.258631+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 depends_on:
-    - 264
+- 264
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Remove all 7 execute/* tools and read/terminalLastCommand from reviewer.agent.md. Replace terminal fallback sections in code-review skills with BLOCK instructions. See .owlbear/research/reviewer-execute-tool-removal.md for full analysis.

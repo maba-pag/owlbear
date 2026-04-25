@@ -3,17 +3,19 @@ id: 50
 title: Implement voice addon STT with Moonshine
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:57:23.8838546+01:00
-updated: 2026-04-01T17:57:36.1006015+02:00
-started: 2026-04-01T17:57:26.2434729+02:00
-completed: 2026-04-01T17:57:26.2434729+02:00
+created: 2026-03-26 18:57:23.883855+01:00
+updated: 2026-04-01 17:57:36.100602+02:00
+started: 2026-04-01 17:57:26.243473+02:00
+completed: 2026-04-01 17:57:26.243473+02:00
 tags:
-    - phase-3
-    - scope:voice
+- phase-3
+- scope:voice
 depends_on:
-    - 52
-    - 61
+- 52
+- 61
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

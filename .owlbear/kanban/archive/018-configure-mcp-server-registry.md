@@ -3,17 +3,19 @@ id: 18
 title: Configure MCP server registry
 status: archived
 priority: important
-created: 2026-03-26T17:21:51.105499+01:00
-updated: 2026-03-30T01:28:09.8360761+02:00
-started: 2026-03-30T01:27:42.7470672+02:00
-completed: 2026-03-30T01:27:42.7470672+02:00
+created: 2026-03-26 17:21:51.105499+01:00
+updated: 2026-03-30 01:28:09.836076+02:00
+started: 2026-03-30 01:27:42.747067+02:00
+completed: 2026-03-30 01:27:42.747067+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:build
+- phase-1
+- scope:mcp
+- type:build
 depends_on:
-    - 14
+- 14
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,8 +3,8 @@ id: 1114
 title: 'Research: config.yml schema grouping after Brief A/B/C'
 status: research
 priority: nice-to-have
-created: 2026-04-24T12:00:00+00:00
-updated: 2026-04-24T12:00:00+00:00
+created: '2026-04-24 12:00:00+00:00'
+updated: '2026-04-24 12:00:00+00:00'
 tags:
 - scope:kanban
 - type:research
@@ -12,8 +12,8 @@ parent:
 depends_on:
 - 1094
 blocked: false
-block_reason: 'Wait for Briefs A, B, C to land — field set may still change. Unblock when all Brief A tasks reach done.'
-claimed_by:
+block_reason: Wait for Briefs A, B, C to land — field set may still change. 
+  Unblock when all Brief A tasks reach done.
 claimed_at:
 archival_reason:
 archival_refs: []

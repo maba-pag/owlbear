@@ -3,16 +3,18 @@ id: 199
 title: Ban manage_todo_list/todos tool from agents and validator
 status: archived
 priority: needed
-created: 2026-03-30T02:43:08.6585692+02:00
-updated: 2026-03-30T03:13:59.3302986+02:00
-started: 2026-03-30T03:13:59.3302986+02:00
-completed: 2026-03-30T03:13:59.3302986+02:00
+created: 2026-03-30 02:43:08.658569+02:00
+updated: 2026-03-30 03:13:59.330299+02:00
+started: 2026-03-30 03:13:59.330299+02:00
+completed: 2026-03-30 03:13:59.330299+02:00
 tags:
-    - phase-1
-    - tooling
-    - agent
-    - config
+- phase-1
+- tooling
+- agent
+- config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

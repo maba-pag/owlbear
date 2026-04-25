@@ -3,15 +3,17 @@ id: 437
 title: 'Test: parallel fan-out in reviewer agent'
 status: archived
 priority: important
-created: 2026-03-30T21:47:34.6368074+02:00
-updated: 2026-04-05T16:04:47.8746604+02:00
-started: 2026-04-05T16:04:47.8746604+02:00
-completed: 2026-04-05T16:04:47.8746604+02:00
+created: 2026-03-30 21:47:34.636807+02:00
+updated: 2026-04-05 16:04:47.874660+02:00
+started: 2026-04-05 16:04:47.874660+02:00
+completed: 2026-04-05 16:04:47.874660+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - test
+- scope:agents
+- phase-2
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Test task for #265. Structural regression tests for reviewer.agent.md and w-code-review SKILL.md after parallel fan-out wiring.

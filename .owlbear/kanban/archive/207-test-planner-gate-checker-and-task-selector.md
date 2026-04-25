@@ -3,18 +3,20 @@ id: 207
 title: 'Test: planner gate checker and task selector'
 status: archived
 priority: needed
-created: 2026-03-30T08:22:01.9959303+02:00
-updated: 2026-03-31T23:48:45.8768891+02:00
-started: 2026-03-31T23:48:45.3753355+02:00
-completed: 2026-03-31T23:48:45.3753355+02:00
+created: 2026-03-30 08:22:01.995930+02:00
+updated: 2026-03-31 23:48:45.876889+02:00
+started: 2026-03-31 23:48:45.375336+02:00
+completed: 2026-03-31 23:48:45.375336+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-2
+- scope:orchestrator
+- type:test
+- test
 depends_on:
-    - 144
+- 144
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED tests for #145. Write failing tests that define the interface contract for gate

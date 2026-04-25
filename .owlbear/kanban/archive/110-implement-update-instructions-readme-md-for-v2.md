@@ -3,15 +3,17 @@ id: 110
 title: 'Implement: update instructions/README.md for v2'
 status: archived
 priority: nice-to-have
-created: 2026-03-28T22:23:30.253662+01:00
-updated: 2026-03-29T01:19:04.5392448+01:00
-started: 2026-03-29T01:19:04.5392448+01:00
-completed: 2026-03-29T01:19:04.5392448+01:00
+created: 2026-03-28 22:23:30.253662+01:00
+updated: 2026-03-29 01:19:04.539245+01:00
+started: 2026-03-29 01:19:04.539245+01:00
+completed: 2026-03-29 01:19:04.539245+01:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

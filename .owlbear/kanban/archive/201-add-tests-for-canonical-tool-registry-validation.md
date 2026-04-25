@@ -3,17 +3,19 @@ id: 201
 title: Add tests for canonical tool registry validation
 status: archived
 priority: nice-to-have
-created: 2026-03-30T03:21:27.7619329+02:00
-updated: 2026-04-01T20:30:53.7843861+02:00
-started: 2026-04-01T20:30:53.2072864+02:00
-completed: 2026-04-01T20:30:53.2072864+02:00
+created: 2026-03-30 03:21:27.761933+02:00
+updated: 2026-04-01 20:30:53.784386+02:00
+started: 2026-04-01 20:30:53.207286+02:00
+completed: 2026-04-01 20:30:53.207286+02:00
 tags:
-    - phase-1
-    - tooling
-    - test
+- phase-1
+- tooling
+- test
 depends_on:
-    - 198
+- 198
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

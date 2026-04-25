@@ -3,8 +3,8 @@ id: 1081
 title: 'B-16: GREEN — CockpitView'
 status: todo
 priority: needed
-created: 2026-04-21T10:50:32.631056+00:00
-updated: 2026-04-21T10:50:32.631056+00:00
+created: '2026-04-21 10:50:32.631056+00:00'
+updated: '2026-04-21 10:50:32.631056+00:00'
 tags:
 - phase:engine
 - brief:b
@@ -15,8 +15,9 @@ depends_on:
 - 1078
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 Brief B (#1044) — paper-integration.md §5, §3.8

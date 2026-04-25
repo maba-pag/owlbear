@@ -3,17 +3,19 @@ id: 62
 title: Implement voice process manager
 status: archived
 priority: nice-to-have
-created: 2026-03-26T19:33:42.8168161+01:00
-updated: 2026-04-05T21:35:52.9202493+02:00
-started: 2026-04-05T21:35:52.9202493+02:00
-completed: 2026-04-05T21:35:52.9202493+02:00
+created: 2026-03-26 19:33:42.816816+01:00
+updated: 2026-04-05 21:35:52.920249+02:00
+started: 2026-04-05 21:35:52.920249+02:00
+completed: 2026-04-05 21:35:52.920249+02:00
 tags:
-    - phase-3
-    - scope:voice
+- phase-3
+- scope:voice
 depends_on:
-    - 61
-    - 141
+- 61
+- 141
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

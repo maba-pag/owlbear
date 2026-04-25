@@ -3,14 +3,16 @@ id: 436
 title: Add loop-pattern detection to reviewer checklist
 status: archived
 priority: important
-created: 2026-03-30T21:45:59.7102837+02:00
-updated: 2026-03-31T03:51:52.9677814+02:00
-started: 2026-03-31T03:51:52.9677814+02:00
-completed: 2026-03-31T03:51:52.9677814+02:00
+created: 2026-03-30 21:45:59.710284+02:00
+updated: 2026-03-31 03:51:52.967781+02:00
+started: 2026-03-31 03:51:52.967781+02:00
+completed: 2026-03-31 03:51:52.967781+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

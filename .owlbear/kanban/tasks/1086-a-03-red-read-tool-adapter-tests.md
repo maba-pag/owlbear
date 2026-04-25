@@ -3,8 +3,8 @@ id: 1086
 title: 'A-03: RED — read tool adapter tests'
 status: todo
 priority: needed
-created: 2026-04-21T10:53:39.529461+00:00
-updated: 2026-04-24T17:56:56.742898+00:00
+created: '2026-04-21 10:53:39.529461+00:00'
+updated: '2026-04-24 17:56:56.742898+00:00'
 tags:
 - phase:mcp
 - brief:a
@@ -16,7 +16,6 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []

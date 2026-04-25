@@ -3,17 +3,19 @@ id: 562
 title: 'Test: Validate MCP tool references in agents, skills, and instructions'
 status: archived
 priority: critical
-created: 2026-04-03T07:45:45.8819382+02:00
-updated: 2026-04-03T11:00:04.3456172+02:00
-started: 2026-04-03T10:59:59.553792+02:00
-completed: 2026-04-03T10:59:59.553792+02:00
+created: 2026-04-03 07:45:45.881938+02:00
+updated: 2026-04-03 11:00:04.345617+02:00
+started: 2026-04-03 10:59:59.553792+02:00
+completed: 2026-04-03 10:59:59.553792+02:00
 tags:
-    - phase-2
-    - ' scope:agent-config'
-    - ' type:test'
-    - ' test'
+- phase-2
+- ' scope:agent-config'
+- ' type:test'
+- ' test'
 parent: 483
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

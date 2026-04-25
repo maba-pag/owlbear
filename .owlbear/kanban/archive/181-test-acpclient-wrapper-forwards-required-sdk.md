@@ -3,18 +3,20 @@ id: 181
 title: 'Test: AcpClient wrapper forwards required SDK parameters'
 status: archived
 priority: needed
-created: 2026-03-29T20:03:34.5436669+02:00
-updated: 2026-03-30T16:59:07.7049845+02:00
-started: 2026-03-30T16:58:48.4594263+02:00
-completed: 2026-03-30T16:58:48.4594263+02:00
+created: 2026-03-29 20:03:34.543667+02:00
+updated: 2026-03-30 16:59:07.704985+02:00
+started: 2026-03-30 16:58:48.459426+02:00
+completed: 2026-03-30 16:58:48.459426+02:00
 tags:
-    - phase-1
-    - ' scope:orchestrator'
-    - ' type:test'
-    - ' test'
+- phase-1
+- ' scope:orchestrator'
+- ' type:test'
+- ' test'
 depends_on:
-    - 59
+- 59
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

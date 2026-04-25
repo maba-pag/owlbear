@@ -3,8 +3,8 @@ id: 1011
 title: 'Archive pre-split Brief #984 children (#992, #993, #994, #995)'
 status: archived
 priority: needed
-created: 2026-04-18T23:21:43.979706+00:00
-updated: 2026-04-19T15:43:40.054886+00:00
+created: 2026-04-18 23:21:43.979706+00:00
+updated: 2026-04-19 15:43:40.054886+00:00
 tags:
 - type:chore
 parent: 984
@@ -13,6 +13,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Objective
 

@@ -3,16 +3,18 @@ id: 597
 title: 'User verification: test Power Automate Workflows webhook in corp Teams'
 status: archived
 priority: nice-to-have
-created: 2026-04-04T20:14:08.5441141+02:00
-updated: 2026-04-06T18:46:13.0462638+02:00
-started: 2026-04-06T18:46:13.0462638+02:00
-completed: 2026-04-06T18:46:13.0462638+02:00
+created: 2026-04-04 20:14:08.544114+02:00
+updated: 2026-04-06 18:46:13.046264+02:00
+started: 2026-04-06 18:46:13.046264+02:00
+completed: 2026-04-06 18:46:13.046264+02:00
 tags:
-    - phase-3
-    - scope:notifications
-    - scope:orchestrator
-    - type:test
+- phase-3
+- scope:notifications
+- scope:orchestrator
+- type:test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

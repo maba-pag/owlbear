@@ -3,16 +3,18 @@ id: 510
 title: Add AST-based package boundary enforcement test
 status: archived
 priority: important
-created: 2026-04-01T00:12:37.3334859+02:00
-updated: 2026-04-01T13:07:10.0905475+02:00
-started: 2026-04-01T13:07:09.6437946+02:00
-completed: 2026-04-01T13:07:09.6437946+02:00
+created: 2026-04-01 00:12:37.333486+02:00
+updated: 2026-04-01 13:07:10.090548+02:00
+started: 2026-04-01 13:07:09.643795+02:00
+completed: 2026-04-01 13:07:09.643795+02:00
 tags:
-    - scope:core
-    - phase-2
-    - type:test
-    - tooling
+- scope:core
+- phase-2
+- type:test
+- tooling
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

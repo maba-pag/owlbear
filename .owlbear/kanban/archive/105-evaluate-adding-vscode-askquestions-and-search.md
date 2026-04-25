@@ -1,17 +1,20 @@
 ---
 id: 105
-title: Evaluate adding vscode/askQuestions and search/changes tools to agent toolkits
+title: Evaluate adding vscode/askQuestions and search/changes tools to agent 
+  toolkits
 status: archived
 priority: nice-to-have
-created: 2026-03-28T14:33:43.0629427+01:00
-updated: 2026-03-29T04:07:09.5806602+02:00
-started: 2026-03-29T04:07:09.5806602+02:00
-completed: 2026-03-29T04:07:09.5806602+02:00
+created: 2026-03-28 14:33:43.062943+01:00
+updated: 2026-03-29 04:07:09.580660+02:00
+started: 2026-03-29 04:07:09.580660+02:00
+completed: 2026-03-29 04:07:09.580660+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - research
+- phase-1
+- scope:agents
+- research
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 [[2026-03-29]] Sun 00:44

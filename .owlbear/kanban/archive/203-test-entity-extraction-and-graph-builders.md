@@ -3,17 +3,19 @@ id: 203
 title: 'Test: Entity extraction and graph builders'
 status: archived
 priority: needed
-created: 2026-03-30T08:11:19.8857429+02:00
-updated: 2026-03-31T00:35:22.8181679+02:00
-started: 2026-03-30T08:11:24.6685937+02:00
-completed: 2026-03-31T00:34:26.5811658+02:00
+created: 2026-03-30 08:11:19.885743+02:00
+updated: 2026-03-31 00:35:22.818168+02:00
+started: 2026-03-30 08:11:24.668594+02:00
+completed: 2026-03-31 00:34:26.581166+02:00
 tags:
-    - phase-1
-    - ' scope:knowledge'
-    - ' test'
+- phase-1
+- ' scope:knowledge'
+- ' test'
 depends_on:
-    - 32
+- 32
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

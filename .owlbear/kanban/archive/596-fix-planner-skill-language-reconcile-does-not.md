@@ -3,16 +3,18 @@ id: 596
 title: 'Fix planner skill language: reconcile "does NOT claim" with end_work usage'
 status: archived
 priority: nice-to-have
-created: 2026-04-04T20:09:51.968555+02:00
-updated: 2026-04-06T06:00:09.9482011+02:00
-started: 2026-04-06T06:00:09.9482011+02:00
-completed: 2026-04-06T06:00:09.9482011+02:00
+created: 2026-04-04 20:09:51.968555+02:00
+updated: 2026-04-06 06:00:09.948201+02:00
+started: 2026-04-06 06:00:09.948201+02:00
+completed: 2026-04-06 06:00:09.948201+02:00
 tags:
-    - phase-2
-    - ' scope:agent-config'
-    - ' type:fix'
-    - agent
+- phase-2
+- ' scope:agent-config'
+- ' type:fix'
+- agent
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

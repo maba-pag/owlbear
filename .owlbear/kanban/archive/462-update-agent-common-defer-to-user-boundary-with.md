@@ -3,15 +3,17 @@ id: 462
 title: Update agent-common defer-to-user boundary with tier classification
 status: archived
 priority: needed
-created: 2026-03-31T03:40:17.7617381+02:00
-updated: 2026-03-31T08:03:43.1481912+02:00
-started: 2026-03-31T08:03:42.7488869+02:00
-completed: 2026-03-31T08:03:42.7488869+02:00
+created: 2026-03-31 03:40:17.761738+02:00
+updated: 2026-03-31 08:03:43.148191+02:00
+started: 2026-03-31 08:03:42.748887+02:00
+completed: 2026-03-31 08:03:42.748887+02:00
 tags:
-    - process
-    - scope:agents
-    - quality
+- process
+- scope:agents
+- quality
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Update the "Defer-to-user boundary" section of instructions/agent-common.instructions.md (currently lines ~42-75) with tier classification references from docs/research/mandatory-user-decision-gate.md.

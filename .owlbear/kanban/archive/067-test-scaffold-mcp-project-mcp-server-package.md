@@ -3,18 +3,20 @@ id: 67
 title: 'Test: Scaffold mcp-project MCP server package'
 status: archived
 priority: needed
-created: 2026-03-26T20:03:36.6070627+01:00
-updated: 2026-03-27T22:15:50.5357694+01:00
-started: 2026-03-27T22:15:50.5357694+01:00
-completed: 2026-03-27T22:15:50.5357694+01:00
+created: 2026-03-26 20:03:36.607063+01:00
+updated: 2026-03-27 22:15:50.535769+01:00
+started: 2026-03-27 22:15:50.535769+01:00
+completed: 2026-03-27 22:15:50.535769+01:00
 tags:
-    - phase-1
-    - scope:mcp
-    - scope:build
-    - test
+- phase-1
+- scope:mcp
+- scope:build
+- test
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

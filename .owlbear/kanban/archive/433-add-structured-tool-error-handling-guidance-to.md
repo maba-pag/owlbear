@@ -3,17 +3,19 @@ id: 433
 title: Add structured tool-error handling guidance to agent instructions
 status: archived
 priority: important
-created: 2026-03-30T21:37:50.6549223+02:00
-updated: 2026-03-31T15:54:36.8387894+02:00
-started: 2026-03-31T15:54:31.9218182+02:00
-completed: 2026-03-31T15:54:31.9218182+02:00
+created: 2026-03-30 21:37:50.654922+02:00
+updated: 2026-03-31 15:54:36.838789+02:00
+started: 2026-03-31 15:54:31.921818+02:00
+completed: 2026-03-31 15:54:31.921818+02:00
 tags:
-    - research
-    - scope:agents
-    - phase-2
+- research
+- scope:agents
+- phase-2
 depends_on:
-    - 435
+- 435
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

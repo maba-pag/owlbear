@@ -3,15 +3,17 @@ id: 122
 title: Document adding project-specific MCP servers
 status: archived
 priority: important
-created: 2026-03-29T06:33:45.5318806+02:00
-updated: 2026-03-29T10:41:11.026626+02:00
-started: 2026-03-29T10:41:06.3756873+02:00
-completed: 2026-03-29T10:41:06.3756873+02:00
+created: 2026-03-29 06:33:45.531881+02:00
+updated: 2026-03-29 10:41:11.026626+02:00
+started: 2026-03-29 10:41:06.375687+02:00
+completed: 2026-03-29 10:41:06.375687+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:docs
+- phase-1
+- scope:mcp
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

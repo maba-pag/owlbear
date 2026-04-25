@@ -3,18 +3,20 @@ id: 142
 title: 'Test: VoiceChannel adapter'
 status: archived
 priority: nice-to-have
-created: 2026-03-29T16:01:31.5585818+02:00
-updated: 2026-03-30T09:01:48.6340526+02:00
-started: 2026-03-29T16:01:45.8076799+02:00
-completed: 2026-03-30T09:01:02.5261335+02:00
+created: 2026-03-29 16:01:31.558582+02:00
+updated: 2026-03-30 09:01:48.634053+02:00
+started: 2026-03-29 16:01:45.807680+02:00
+completed: 2026-03-30 09:01:02.526134+02:00
 tags:
-    - phase-3
-    - ' scope:voice'
-    - ' type:test'
-    - ' test'
+- phase-3
+- ' scope:voice'
+- ' type:test'
+- ' test'
 depends_on:
-    - 61
+- 61
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

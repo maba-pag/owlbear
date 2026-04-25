@@ -1,18 +1,21 @@
 ---
 id: 198
-title: Expand validate_agents.py to check all tool names against canonical registry
+title: Expand validate_agents.py to check all tool names against canonical 
+  registry
 status: archived
 priority: nice-to-have
-created: 2026-03-29T23:08:48.2138586+02:00
-updated: 2026-03-31T03:31:19.8161154+02:00
-started: 2026-03-31T03:30:11.3180275+02:00
-completed: 2026-03-31T03:30:11.3180275+02:00
+created: 2026-03-29 23:08:48.213859+02:00
+updated: 2026-03-31 03:31:19.816115+02:00
+started: 2026-03-31 03:30:11.318028+02:00
+completed: 2026-03-31 03:30:11.318028+02:00
 tags:
-    - phase-1
-    - tooling
-    - agent
-    - config
+- phase-1
+- tooling
+- agent
+- config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

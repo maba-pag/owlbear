@@ -3,16 +3,18 @@ id: 123
 title: 'Test: Revert askQuestions from all agents'
 status: archived
 priority: needed
-created: 2026-03-29T06:33:50.389824+02:00
-updated: 2026-03-29T09:11:33.2320992+02:00
-started: 2026-03-29T09:11:28.7259583+02:00
-completed: 2026-03-29T09:11:28.7259583+02:00
+created: 2026-03-29 06:33:50.389824+02:00
+updated: 2026-03-29 09:11:33.232099+02:00
+started: 2026-03-29 09:11:28.725958+02:00
+completed: 2026-03-29 09:11:28.725958+02:00
 tags:
-    - phase-2
-    - scope:agents
-    - config
-    - test
+- phase-2
+- scope:agents
+- config
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

@@ -3,15 +3,17 @@ id: 456
 title: Implement audit-centric dispatch-cycle trace ID
 status: archived
 priority: nice-to-have
-created: 2026-03-30T23:47:25.36335+02:00
-updated: 2026-04-03T01:13:11.3671107+02:00
-started: 2026-04-03T01:13:11.3671107+02:00
-completed: 2026-04-03T01:13:11.3671107+02:00
+created: 2026-03-30 23:47:25.363350+02:00
+updated: 2026-04-03 01:13:11.367111+02:00
+started: 2026-04-03 01:13:11.367111+02:00
+completed: 2026-04-03 01:13:11.367111+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - type:build
+- scope:agents
+- phase-2
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

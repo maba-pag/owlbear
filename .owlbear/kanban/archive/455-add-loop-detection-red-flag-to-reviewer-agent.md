@@ -3,17 +3,19 @@ id: 455
 title: Add loop-detection red flag to reviewer agent
 status: archived
 priority: important
-created: 2026-03-30T23:40:45.9947194+02:00
-updated: 2026-04-01T02:28:24.9681348+02:00
-started: 2026-04-01T02:28:04.2511756+02:00
-completed: 2026-04-01T02:28:04.2511756+02:00
+created: 2026-03-30 23:40:45.994719+02:00
+updated: 2026-04-01 02:28:24.968135+02:00
+started: 2026-04-01 02:28:04.251176+02:00
+completed: 2026-04-01 02:28:04.251176+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 depends_on:
-    - 454
+- 454
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

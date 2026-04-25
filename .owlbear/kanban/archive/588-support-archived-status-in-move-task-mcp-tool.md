@@ -3,15 +3,17 @@ id: 588
 title: Support 'archived' status in move_task MCP tool
 status: archived
 priority: needed
-created: 2026-04-04T07:08:49.8265186+02:00
-updated: 2026-04-04T18:17:38.0487989+02:00
-started: 2026-04-04T18:17:38.0487989+02:00
-completed: 2026-04-04T18:17:38.0487989+02:00
+created: 2026-04-04 07:08:49.826519+02:00
+updated: 2026-04-04 18:17:38.048799+02:00
+started: 2026-04-04 18:17:38.048799+02:00
+completed: 2026-04-04 18:17:38.048799+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
+- scope:mcp
+- type:build
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

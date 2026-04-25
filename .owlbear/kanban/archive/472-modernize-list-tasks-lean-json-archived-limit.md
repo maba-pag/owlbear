@@ -3,18 +3,20 @@ id: 472
 title: 'Modernize list_tasks: lean JSON, archived, limit, blocked tri-state'
 status: archived
 priority: needed
-created: 2026-03-31T05:21:21.4356377+02:00
-updated: 2026-04-01T05:55:52.0873542+02:00
-started: 2026-04-01T05:55:47.3858373+02:00
-completed: 2026-04-01T05:55:47.3858373+02:00
+created: 2026-03-31 05:21:21.435638+02:00
+updated: 2026-04-01 05:55:52.087354+02:00
+started: 2026-04-01 05:55:47.385837+02:00
+completed: 2026-04-01 05:55:47.385837+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 depends_on:
-    - 478
-    - 479
+- 478
+- 479
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria\n\n- [ ] Add `archived: bool = False` parameter to `list_tasks` tool\n- [ ] When True, pass `--archived` flag to kanban-md list\n- [ ] Add `limit: int = 0` parameter (0 = no limit); when > 0, pass `--limit N`\n- [ ] Add `reverse: bool = False` parameter; when True, pass `--reverse`\n- [ ] Change `block_filter: str` to `blocked: bool | None = None`: None = no filter, True = `--blocked`, False = `--not-blocked`\n- [ ] Switch `list_tasks` output from `--compact` to `--json` + server-side stripping of `body`, `file`, `created`, `updated` fields (lean JSON)\n- [ ] Tests cover: archived flag, limit, reverse, blocked tri-state, lean JSON output (no body in result)\n- [ ] Update mcp-kanban SKILL.md to document changed and new parameters\n\n## Design Notes\n\n- `blocked` as `Optional[bool]` replaces the string enum pattern with a natural tri-state: None/True/False\n- Lean JSON: use `json.loads()` on kanban-md output, strip noisy fields, `json.dumps()` back\n- This is a breaking change for `block_filter` parameter name

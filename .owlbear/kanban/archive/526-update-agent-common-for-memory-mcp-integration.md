@@ -3,18 +3,20 @@ id: 526
 title: Update agent-common for memory-mcp integration
 status: archived
 priority: needed
-created: 2026-04-01T16:11:31.0131309+02:00
-updated: 2026-04-03T19:38:24.9867256+02:00
-started: 2026-04-03T19:38:24.423798+02:00
-completed: 2026-04-03T19:38:24.423798+02:00
+created: 2026-04-01 16:11:31.013131+02:00
+updated: 2026-04-03 19:38:24.986726+02:00
+started: 2026-04-03 19:38:24.423798+02:00
+completed: 2026-04-03 19:38:24.423798+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 depends_on:
-    - 525
-    - 568
+- 525
+- 568
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 AC:

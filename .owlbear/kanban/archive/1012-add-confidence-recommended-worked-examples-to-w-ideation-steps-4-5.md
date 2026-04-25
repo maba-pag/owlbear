@@ -3,8 +3,8 @@ id: 1012
 title: Add confidence/recommended worked examples to w-ideation Steps 4–5
 status: archived
 priority: important
-created: 2026-04-18T23:29:08.851410+00:00
-updated: 2026-04-19T16:07:46.619523+00:00
+created: 2026-04-18 23:29:08.851410+00:00
+updated: 2026-04-19 16:07:46.619523+00:00
 tags:
 - type:improvement
 - scope:skills
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 The "use per-option confidence (0.0–1.0) and one `recommended` choice when trade-offs exist" rule lives only in `ideator.agent.md` critical_rules. Per `r-pipeline-protocol`, skills are the authority — agents trained to follow the skill miss the pattern. This was observed during ideation session for #984 when the Mediator presented 4 options without confidence scores.

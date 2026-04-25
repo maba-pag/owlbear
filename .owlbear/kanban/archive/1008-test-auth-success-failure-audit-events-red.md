@@ -3,16 +3,18 @@ id: 1008
 title: 'Test: auth success-failure audit events (RED)'
 status: archived
 priority: nice-to-have
-created: 2026-03-26T12:40:41.0745669+01:00
-updated: 2026-03-26T13:37:09.5922955+01:00
+created: 2026-03-26 12:40:41.074567+01:00
+updated: 2026-03-26 13:37:09.592296+01:00
 tags:
-    - audit
-    - security
-    - auth
-    - test
-    - type:test
-    - cli
+- audit
+- security
+- auth
+- test
+- type:test
+- cli
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED phase for #848 (auth audit events).

@@ -3,16 +3,18 @@ id: 602
 title: Rename data/ to store/
 status: archived
 priority: critical
-created: 2026-04-04T20:30:39.4451838+02:00
-updated: 2026-04-05T15:30:06.2574744+02:00
-started: 2026-04-05T15:30:06.2574744+02:00
-completed: 2026-04-05T15:30:06.2574744+02:00
+created: 2026-04-04 20:30:39.445184+02:00
+updated: 2026-04-05 15:30:06.257474+02:00
+started: 2026-04-05 15:30:06.257474+02:00
+completed: 2026-04-05 15:30:06.257474+02:00
 tags:
-    - scope:infra
-    - type:build
-    - phase-2
+- scope:infra
+- type:build
+- phase-2
 parent: 598
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

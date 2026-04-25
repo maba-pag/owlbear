@@ -3,15 +3,17 @@ id: 539
 title: Add null safety and fix __all__ in mcp-knowledge server
 status: archived
 priority: needed
-created: 2026-04-02T05:59:31.0264698+02:00
-updated: 2026-04-02T15:48:51.1417337+02:00
-started: 2026-04-02T15:48:44.7235584+02:00
-completed: 2026-04-02T15:48:44.7235584+02:00
+created: 2026-04-02 05:59:31.026470+02:00
+updated: 2026-04-02 15:48:51.141734+02:00
+started: 2026-04-02 15:48:44.723558+02:00
+completed: 2026-04-02 15:48:44.723558+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
+- scope:mcp
+- type:build
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## AC

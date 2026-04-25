@@ -3,16 +3,18 @@ id: 223
 title: Clean up dead tools.py and test_search_knowledge.py in mcp-knowledge
 status: archived
 priority: nice-to-have
-created: 2026-03-30T16:48:43.7634243+02:00
-updated: 2026-04-03T03:00:20.7452595+02:00
-started: 2026-03-30T20:46:51.7457455+02:00
-completed: 2026-04-03T02:59:31.2170606+02:00
+created: 2026-03-30 16:48:43.763424+02:00
+updated: 2026-04-03 03:00:20.745260+02:00
+started: 2026-03-30 20:46:51.745746+02:00
+completed: 2026-04-03 02:59:31.217061+02:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
-    - chore
+- phase-2
+- scope:mcp
+- scope:knowledge
+- chore
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

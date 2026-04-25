@@ -3,17 +3,19 @@ id: 45
 title: Build ACP hello-world script
 status: archived
 priority: needed
-created: 2026-03-26T18:55:56.6812494+01:00
-updated: 2026-03-29T04:40:24.5760814+02:00
-started: 2026-03-29T04:40:19.2160508+02:00
-completed: 2026-03-29T04:40:19.2160508+02:00
+created: 2026-03-26 18:55:56.681249+01:00
+updated: 2026-03-29 04:40:24.576081+02:00
+started: 2026-03-29 04:40:19.216051+02:00
+completed: 2026-03-29 04:40:19.216051+02:00
 tags:
-    - phase-1
-    - scope:orchestrator
+- phase-1
+- scope:orchestrator
 depends_on:
-    - 7
-    - 46
+- 7
+- 46
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

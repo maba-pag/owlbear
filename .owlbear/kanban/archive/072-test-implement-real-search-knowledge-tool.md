@@ -3,18 +3,20 @@ id: 72
 title: 'Test: Implement real search_knowledge tool'
 status: archived
 priority: needed
-created: 2026-03-26T20:18:53.0419904+01:00
-updated: 2026-03-28T13:57:43.7666643+01:00
-started: 2026-03-28T13:57:39.5357441+01:00
-completed: 2026-03-28T13:57:39.5357441+01:00
+created: 2026-03-26 20:18:53.041990+01:00
+updated: 2026-03-28 13:57:43.766664+01:00
+started: 2026-03-28 13:57:39.535744+01:00
+completed: 2026-03-28 13:57:39.535744+01:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
-    - test
+- phase-2
+- scope:mcp
+- scope:knowledge
+- test
 depends_on:
-    - 40
+- 40
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

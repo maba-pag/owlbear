@@ -3,18 +3,20 @@ id: 153
 title: 'Test: planner data models and board reader'
 status: archived
 priority: needed
-created: 2026-03-29T19:26:49.0532083+02:00
-updated: 2026-03-30T17:02:25.1533138+02:00
-started: 2026-03-29T19:26:53.8364954+02:00
-completed: 2026-03-30T17:02:03.7644787+02:00
+created: 2026-03-29 19:26:49.053208+02:00
+updated: 2026-03-30 17:02:25.153314+02:00
+started: 2026-03-29 19:26:53.836495+02:00
+completed: 2026-03-30 17:02:03.764479+02:00
 tags:
-    - phase-2
-    - ' scope:orchestrator'
-    - ' type:test'
-    - ' test'
+- phase-2
+- ' scope:orchestrator'
+- ' type:test'
+- ' test'
 depends_on:
-    - 14
+- 14
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

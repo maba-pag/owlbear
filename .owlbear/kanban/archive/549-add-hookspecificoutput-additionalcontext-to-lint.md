@@ -3,17 +3,19 @@ id: 549
 title: Add hookSpecificOutput.additionalContext to lint-changed.ps1
 status: archived
 priority: important
-created: 2026-04-02T15:59:05.7374784+02:00
-updated: 2026-04-02T16:35:25.853836+02:00
-started: 2026-04-02T16:35:25.853836+02:00
-completed: 2026-04-02T16:35:25.853836+02:00
+created: 2026-04-02 15:59:05.737478+02:00
+updated: 2026-04-02 16:35:25.853836+02:00
+started: 2026-04-02 16:35:25.853836+02:00
+completed: 2026-04-02 16:35:25.853836+02:00
 tags:
-    - scope:agents
-    - hooks
-    - type:build
+- scope:agents
+- hooks
+- type:build
 depends_on:
-    - 210
+- 210
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

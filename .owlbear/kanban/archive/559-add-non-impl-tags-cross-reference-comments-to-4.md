@@ -3,15 +3,17 @@ id: 559
 title: Add NON_IMPL_TAGS cross-reference comments to 4 skill/prompt files
 status: archived
 priority: nice-to-have
-created: 2026-03-30T20:39:07.9214391+02:00
-updated: 2026-04-02T22:43:09.5892763+02:00
-started: 2026-04-02T04:16:07.9625368+02:00
-completed: 2026-04-02T04:16:07.9625368+02:00
+created: 2026-03-30 20:39:07.921439+02:00
+updated: 2026-04-02 22:43:09.589276+02:00
+started: 2026-04-02 04:16:07.962537+02:00
+completed: 2026-04-02 04:16:07.962537+02:00
 tags:
-    - scope:agents
-    - quality
-    - type:config
+- scope:agents
+- quality
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

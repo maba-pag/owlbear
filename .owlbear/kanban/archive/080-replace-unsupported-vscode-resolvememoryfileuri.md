@@ -1,17 +1,20 @@
 ---
 id: 80
-title: Replace unsupported vscode/resolveMemoryFileUri tool usage in curator agent
+title: Replace unsupported vscode/resolveMemoryFileUri tool usage in curator 
+  agent
 status: archived
 priority: important
-created: 2026-03-27T04:44:24.8807515+01:00
-updated: 2026-03-29T01:47:32.2753756+01:00
-started: 2026-03-29T01:47:27.9424086+01:00
-completed: 2026-03-29T01:47:27.9424086+01:00
+created: 2026-03-27 04:44:24.880752+01:00
+updated: 2026-03-29 01:47:32.275376+01:00
+started: 2026-03-29 01:47:27.942409+01:00
+completed: 2026-03-29 01:47:27.942409+01:00
 tags:
-    - phase-1
-    - scope:agents
-    - type:build
+- phase-1
+- scope:agents
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

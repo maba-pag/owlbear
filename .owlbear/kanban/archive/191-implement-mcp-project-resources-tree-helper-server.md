@@ -3,17 +3,19 @@ id: 191
 title: Implement mcp-project resources + tree helper (server.py part 2)
 status: archived
 priority: needed
-created: 2026-03-29T22:44:09.0266926+02:00
-updated: 2026-03-30T21:08:55.7970747+02:00
-started: 2026-03-29T22:44:30.3182174+02:00
-completed: 2026-03-30T21:08:23.651872+02:00
+created: 2026-03-29 22:44:09.026693+02:00
+updated: 2026-03-30 21:08:55.797075+02:00
+started: 2026-03-29 22:44:30.318217+02:00
+completed: 2026-03-30 21:08:23.651872+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - test
+- phase-1
+- scope:mcp
+- test
 depends_on:
-    - 190
+- 190
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

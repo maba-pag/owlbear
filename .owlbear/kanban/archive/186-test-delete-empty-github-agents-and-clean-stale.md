@@ -3,16 +3,18 @@ id: 186
 title: 'Test: Delete empty .github/agents/ and clean stale settings'
 status: archived
 priority: important
-created: 2026-03-29T20:38:21.691583+02:00
-updated: 2026-03-30T00:41:33.9335094+02:00
-started: 2026-03-29T20:38:40.3495752+02:00
-completed: 2026-03-30T00:41:33.6006461+02:00
+created: 2026-03-29 20:38:21.691583+02:00
+updated: 2026-03-30 00:41:33.933509+02:00
+started: 2026-03-29 20:38:40.349575+02:00
+completed: 2026-03-30 00:41:33.600646+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:test
-    - test
+- phase-1
+- scope:docs
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

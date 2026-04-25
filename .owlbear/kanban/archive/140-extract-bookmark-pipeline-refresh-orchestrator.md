@@ -3,18 +3,20 @@ id: 140
 title: Extract bookmark pipeline + refresh orchestrator
 status: archived
 priority: nice-to-have
-created: 2026-03-29T14:51:50.4920453+02:00
-updated: 2026-04-04T07:09:51.5129093+02:00
-started: 2026-04-04T07:09:25.5956065+02:00
-completed: 2026-04-04T07:09:25.5956065+02:00
+created: 2026-03-29 14:51:50.492045+02:00
+updated: 2026-04-04 07:09:51.512909+02:00
+started: 2026-04-04 07:09:25.595607+02:00
+completed: 2026-04-04 07:09:25.595607+02:00
 tags:
-    - phase-1
-    - ' scope:knowledge'
-    - ' type:build'
+- phase-1
+- ' scope:knowledge'
+- ' type:build'
 depends_on:
-    - 33
-    - 139
+- 33
+- 139
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

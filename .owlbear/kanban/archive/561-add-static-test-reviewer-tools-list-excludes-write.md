@@ -3,15 +3,17 @@ id: 561
 title: 'Add static test: reviewer tools list excludes write tools'
 status: archived
 priority: important
-created: 2026-04-02T23:11:12.7175706+02:00
-updated: 2026-04-04T07:10:05.37224+02:00
-started: 2026-04-04T07:09:39.5937612+02:00
-completed: 2026-04-04T07:09:39.5937612+02:00
+created: 2026-04-02 23:11:12.717571+02:00
+updated: 2026-04-04 07:10:05.372240+02:00
+started: 2026-04-04 07:09:39.593761+02:00
+completed: 2026-04-04 07:09:39.593761+02:00
 tags:
-    - scope:agents
-    - test
-    - type:test
+- scope:agents
+- test
+- type:test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

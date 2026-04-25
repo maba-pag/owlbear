@@ -1,16 +1,17 @@
 ---
 id: 1127
 title: Fix release outcome to append notes per Brief B D52
-status: research
+status: backlog
 priority: important
-created: '2026-04-25 18:07:12.599139+00:00'
-updated: '2026-04-25 18:07:12.599139+00:00'
+created: 2026-04-25 18:07:12.599139+00:00
+updated: 2026-04-25T21:03:48.336514+00:00
 tags: []
 parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_by: mild-leaf
+claimed_at: 2026-04-25T21:03:48.336514+00:00
 archival_reason:
 archival_refs: []
 ---

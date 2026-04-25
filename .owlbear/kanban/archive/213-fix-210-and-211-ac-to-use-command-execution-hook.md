@@ -3,15 +3,17 @@ id: 213
 title: 'Fix #210 and #211 AC to use command-execution hook model'
 status: archived
 priority: nice-to-have
-created: 2026-03-30T14:07:05.4528518+02:00
-updated: 2026-03-30T20:25:33.834705+02:00
-started: 2026-03-30T20:24:40.2617325+02:00
-completed: 2026-03-30T20:24:40.2617325+02:00
+created: 2026-03-30 14:07:05.452852+02:00
+updated: 2026-03-30 20:25:33.834705+02:00
+started: 2026-03-30 20:24:40.261733+02:00
+completed: 2026-03-30 20:24:40.261733+02:00
 tags:
-    - docs
-    - hooks
-    - scope:agents
+- docs
+- hooks
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

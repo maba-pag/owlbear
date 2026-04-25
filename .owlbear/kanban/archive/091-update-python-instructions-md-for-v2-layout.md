@@ -3,17 +3,19 @@ id: 91
 title: Update python.instructions.md for v2 layout
 status: archived
 priority: nice-to-have
-created: 2026-03-28T01:40:33.7026721+01:00
-updated: 2026-03-29T05:03:40.0816764+02:00
-started: 2026-03-29T05:03:35.7371241+02:00
-completed: 2026-03-29T05:03:35.7371241+02:00
+created: 2026-03-28 01:40:33.702672+01:00
+updated: 2026-03-29 05:03:40.081676+02:00
+started: 2026-03-29 05:03:35.737124+02:00
+completed: 2026-03-29 05:03:35.737124+02:00
 tags:
-    - phase-1
-    - docs
-    - scope:build
+- phase-1
+- docs
+- scope:build
 depends_on:
-    - 35
+- 35
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

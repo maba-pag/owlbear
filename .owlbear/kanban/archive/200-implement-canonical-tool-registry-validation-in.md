@@ -3,16 +3,18 @@ id: 200
 title: Implement canonical tool registry validation in validate_agents.py
 status: archived
 priority: nice-to-have
-created: 2026-03-30T03:21:21.8636492+02:00
-updated: 2026-03-30T06:28:19.7093334+02:00
-started: 2026-03-30T06:28:19.7093334+02:00
-completed: 2026-03-30T06:28:19.7093334+02:00
+created: 2026-03-30 03:21:21.863649+02:00
+updated: 2026-03-30 06:28:19.709333+02:00
+started: 2026-03-30 06:28:19.709333+02:00
+completed: 2026-03-30 06:28:19.709333+02:00
 tags:
-    - phase-1
-    - tooling
-    - agent
-    - config
+- phase-1
+- tooling
+- agent
+- config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

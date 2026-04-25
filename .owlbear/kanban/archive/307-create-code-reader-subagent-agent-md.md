@@ -3,14 +3,16 @@ id: 307
 title: Create Code-Reader subagent (agent.md)
 status: archived
 priority: needed
-created: 2026-03-30T20:29:35.2589109+02:00
-updated: 2026-03-31T05:52:00.4746382+02:00
-started: 2026-03-31T05:51:37.424203+02:00
-completed: 2026-03-31T05:51:37.424203+02:00
+created: 2026-03-30 20:29:35.258911+02:00
+updated: 2026-03-31 05:52:00.474638+02:00
+started: 2026-03-31 05:51:37.424203+02:00
+completed: 2026-03-31 05:51:37.424203+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Create the Code-Reader read-only analysis subagent per docs/research/reviewer-parallel-fan-out.md S3b and docs/research/code-reader-subagent-design.md. Assign-mode agent with read+search tools only.

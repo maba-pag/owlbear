@@ -3,15 +3,17 @@ id: 194
 title: Add environment audit step to research-workflow skill
 status: archived
 priority: needed
-created: 2026-03-29T23:08:12.686527+02:00
-updated: 2026-03-30T05:00:59.5551014+02:00
-started: 2026-03-30T05:00:33.842204+02:00
-completed: 2026-03-30T05:00:33.842204+02:00
+created: 2026-03-29 23:08:12.686527+02:00
+updated: 2026-03-30 05:00:59.555101+02:00
+started: 2026-03-30 05:00:33.842204+02:00
+completed: 2026-03-30 05:00:33.842204+02:00
 tags:
-    - agent
-    - quality
-    - scope:agents
+- agent
+- quality
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

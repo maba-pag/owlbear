@@ -3,18 +3,20 @@ id: 14
 title: Build mcp-kanban server
 status: archived
 priority: needed
-created: 2026-03-26T17:20:58.5923925+01:00
-updated: 2026-03-29T06:35:43.9771395+02:00
-started: 2026-03-29T06:35:38.9424032+02:00
-completed: 2026-03-29T06:35:38.9424032+02:00
+created: 2026-03-26 17:20:58.592393+01:00
+updated: 2026-03-29 06:35:43.977140+02:00
+started: 2026-03-29 06:35:38.942403+02:00
+completed: 2026-03-29 06:35:38.942403+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:build
+- phase-1
+- scope:mcp
+- type:build
 depends_on:
-    - 2
-    - 7
+- 2
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

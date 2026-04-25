@@ -3,14 +3,16 @@ id: 524
 title: Scaffold mcp-memory package
 status: archived
 priority: needed
-created: 2026-04-01T16:11:09.9921046+02:00
-updated: 2026-04-02T16:34:23.7628412+02:00
-started: 2026-04-02T16:33:44.2708492+02:00
-completed: 2026-04-02T16:33:44.2708492+02:00
+created: 2026-04-01 16:11:09.992105+02:00
+updated: 2026-04-02 16:34:23.762841+02:00
+started: 2026-04-02 16:33:44.270849+02:00
+completed: 2026-04-02 16:33:44.270849+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 AC:

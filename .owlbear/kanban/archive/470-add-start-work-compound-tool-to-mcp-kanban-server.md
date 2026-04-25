@@ -3,15 +3,17 @@ id: 470
 title: Add start_work compound tool to mcp-kanban server
 status: archived
 priority: needed
-created: 2026-03-31T05:21:07.0515037+02:00
-updated: 2026-03-31T22:22:24.4802194+02:00
-started: 2026-03-31T22:22:24.0121389+02:00
-completed: 2026-03-31T22:22:24.0121389+02:00
+created: 2026-03-31 05:21:07.051504+02:00
+updated: 2026-03-31 22:22:24.480219+02:00
+started: 2026-03-31 22:22:24.012139+02:00
+completed: 2026-03-31 22:22:24.012139+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria\n\n- [ ] New `start_work(task_id, claim?)` tool in `server.py`\n- [ ] If no claim provided, generate one via `kanban-md agent-name` subprocess call\n- [ ] Claim the task at its current status (no status change)\n- [ ] Return JSON: task details (full, like show_task) + `claim_name` field with the name used\n- [ ] Compound operation: single tool call replaces claim + show (2 tool calls -> 1)\n- [ ] Tests cover: auto-generated claim, explicit claim, already-claimed error, JSON response\n- [ ] Tool respects KANBAN_TOOLS_EXCLUDE if implemented (#473)\n- [ ] Update mcp-kanban SKILL.md to document the new tool\n\n## Design Notes\n\n- Every pipeline agent calls this before starting work on a dispatched task\n- No status move: the task is already in the correct status when dispatched\n- The auto-generated claim name lets agents release their claim at end_work without needing to know their name in advance

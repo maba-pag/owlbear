@@ -3,18 +3,20 @@ id: 156
 title: Implement E2E dispatch integration test
 status: archived
 priority: needed
-created: 2026-03-29T19:33:58.2007939+02:00
-updated: 2026-04-01T23:46:29.0917144+02:00
-started: 2026-04-01T23:46:28.4732904+02:00
-completed: 2026-04-01T23:46:28.4732904+02:00
+created: 2026-03-29 19:33:58.200794+02:00
+updated: 2026-04-01 23:46:29.091714+02:00
+started: 2026-04-01 23:46:28.473290+02:00
+completed: 2026-04-01 23:46:28.473290+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
+- phase-2
+- scope:orchestrator
+- type:test
 depends_on:
-    - 155
-    - 146
+- 155
+- 146
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

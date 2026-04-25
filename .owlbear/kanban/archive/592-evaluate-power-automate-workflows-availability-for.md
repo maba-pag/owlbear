@@ -3,16 +3,18 @@ id: 592
 title: Evaluate Power Automate Workflows availability for Teams notifications
 status: archived
 priority: nice-to-have
-created: 2026-04-04T18:01:47.4587011+02:00
-updated: 2026-04-06T05:47:23.3428387+02:00
-started: 2026-04-06T05:47:23.3428387+02:00
-completed: 2026-04-06T05:47:23.3428387+02:00
+created: 2026-04-04 18:01:47.458701+02:00
+updated: 2026-04-06 05:47:23.342839+02:00
+started: 2026-04-06 05:47:23.342839+02:00
+completed: 2026-04-06 05:47:23.342839+02:00
 tags:
-    - phase-3
-    - scope:notifications
-    - scope:orchestrator
-    - type:research
+- phase-3
+- scope:notifications
+- scope:orchestrator
+- type:research
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

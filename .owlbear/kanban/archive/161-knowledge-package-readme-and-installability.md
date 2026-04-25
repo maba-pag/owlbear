@@ -3,17 +3,19 @@ id: 161
 title: Knowledge package README and installability verification
 status: archived
 priority: needed
-created: 2026-03-29T19:37:41.2084335+02:00
-updated: 2026-04-02T03:53:15.7027676+02:00
-started: 2026-04-02T03:53:15.2470083+02:00
-completed: 2026-04-02T03:53:15.2470083+02:00
+created: 2026-03-29 19:37:41.208434+02:00
+updated: 2026-04-02 03:53:15.702768+02:00
+started: 2026-04-02 03:53:15.247008+02:00
+completed: 2026-04-02 03:53:15.247008+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:docs
+- phase-1
+- scope:knowledge
+- type:docs
 depends_on:
-    - 160
+- 160
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

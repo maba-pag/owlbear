@@ -3,8 +3,8 @@ id: 1014
 title: Implement Brief Walkthrough topic-chunk + commentary + top-level rule
 status: archived
 priority: nice-to-have
-created: 2026-04-18T23:35:19.098920+00:00
-updated: 2026-04-19T01:57:42.383771+00:00
+created: 2026-04-18 23:35:19.098920+00:00
+updated: 2026-04-19 01:57:42.383771+00:00
 tags:
 - type:improvement
 - scope:skills
@@ -14,6 +14,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 Brief Walkthrough Protocol in w-ideation needs three changes per #999 research findings.

@@ -3,15 +3,17 @@ id: 197
 title: Calibrate auditor confidence scoring with deduction rubric
 status: archived
 priority: important
-created: 2026-03-29T23:08:40.6714421+02:00
-updated: 2026-03-30T05:21:03.3652945+02:00
-started: 2026-03-30T05:20:28.0739267+02:00
-completed: 2026-03-30T05:20:28.0739267+02:00
+created: 2026-03-29 23:08:40.671442+02:00
+updated: 2026-03-30 05:21:03.365295+02:00
+started: 2026-03-30 05:20:28.073927+02:00
+completed: 2026-03-30 05:20:28.073927+02:00
 tags:
-    - agent
-    - quality
-    - scope:agents
+- agent
+- quality
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,16 +3,18 @@ id: 601
 title: Rename packages/ to serve/
 status: archived
 priority: critical
-created: 2026-04-04T20:30:31.2520737+02:00
-updated: 2026-04-05T07:09:38.6851154+02:00
-started: 2026-04-05T07:09:38.6851154+02:00
-completed: 2026-04-05T07:09:38.6851154+02:00
+created: 2026-04-04 20:30:31.252074+02:00
+updated: 2026-04-05 07:09:38.685115+02:00
+started: 2026-04-05 07:09:38.685115+02:00
+completed: 2026-04-05 07:09:38.685115+02:00
 tags:
-    - scope:infra
-    - type:build
-    - phase-2
+- scope:infra
+- type:build
+- phase-2
 parent: 598
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

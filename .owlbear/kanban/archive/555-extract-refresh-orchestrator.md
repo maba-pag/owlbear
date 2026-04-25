@@ -3,17 +3,19 @@ id: 555
 title: Extract refresh orchestrator
 status: archived
 priority: nice-to-have
-created: 2026-04-02T16:07:24.5297504+02:00
-updated: 2026-04-03T19:12:31.9932813+02:00
-started: 2026-04-03T19:12:31.4854034+02:00
-completed: 2026-04-03T19:12:31.4854034+02:00
+created: 2026-04-02 16:07:24.529750+02:00
+updated: 2026-04-03 19:12:31.993281+02:00
+started: 2026-04-03 19:12:31.485403+02:00
+completed: 2026-04-03 19:12:31.485403+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 554
+- 554
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

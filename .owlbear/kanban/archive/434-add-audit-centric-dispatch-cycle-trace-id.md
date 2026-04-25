@@ -3,17 +3,19 @@ id: 434
 title: Add audit-centric dispatch-cycle trace ID
 status: archived
 priority: nice-to-have
-created: 2026-03-30T21:37:56.9725911+02:00
-updated: 2026-04-03T01:24:26.4910855+02:00
-started: 2026-04-03T01:23:51.3398769+02:00
-completed: 2026-04-03T01:23:51.3398769+02:00
+created: 2026-03-30 21:37:56.972591+02:00
+updated: 2026-04-03 01:24:26.491086+02:00
+started: 2026-04-03 01:23:51.339877+02:00
+completed: 2026-04-03 01:23:51.339877+02:00
 tags:
-    - scope:orchestrator
-    - phase-2
-    - type:build
+- scope:orchestrator
+- phase-2
+- type:build
 depends_on:
-    - 509
+- 509
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

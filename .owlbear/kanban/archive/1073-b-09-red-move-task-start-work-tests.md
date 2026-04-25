@@ -1,10 +1,10 @@
 ---
 id: 1073
 title: 'B-09: RED — move_task + start_work tests'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21T10:49:15.724135+00:00
-updated: 2026-04-25T12:19:50.357637+00:00
+updated: 2026-04-25T12:31:32.543833+00:00
 tags:
 - phase:engine
 - brief:b
@@ -1012,3 +1012,47 @@ Architecture review (2nd loop-breaker re-entry) added one new AC line:
 
 ### Scratch Files Cleaned
 - None
+[[2026-04-25]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC4 archive without reason | test_engine_move_claim.py L195-207, exact ERR_ARCHIVAL_REASON_REQUIRED assertion | PASS |
+| AC5 completed archive from non-terminal | test_engine_move_claim.py L209-223, exact ERR_COMPLETED_REQUIRES_DONE | PASS |
+| AC7 deprecated archive without refs | test_engine_move_claim.py L225-239, exact ERR_ARCHIVAL_REFS_REQUIRED | PASS |
+| AC8 dropped archive with refs | test_engine_move_claim.py L241-255, exact ERR_ARCHIVAL_REFS_FORBIDDEN | PASS |
+| AC9 invalid archival reason enum | test_engine_move_claim.py L257-271, exact ERR_ARCHIVAL_REASON_INVALID | PASS |
+| AC26 archival ref missing | test_engine_move_claim.py L273-288, exact ERR_ARCHIVAL_REF_MISSING | PASS |
+| archival fields forbidden on active status | test_engine_move_claim.py L290-304, exact ERR_ARCHIVAL_FIELDS_FORBIDDEN | PASS |
+| D15 predicate failure | test_engine_move_claim.py L306-320, exact ERR_PREDICATE_FAILED | PASS |
+| D41 predicate failure no move | test_engine_move_claim.py L322-338, unchanged-status assertion | PASS |
+| D17 archive clears claim (return) | test_engine_move_claim.py L340-355, claimed_at is None | PASS |
+| D17 archive clears claim (persistence + location) | test_engine_move_claim.py L357-382, file in archive/ not tasks/, fresh engine reread | PASS |
+| D17 rollback on _move_file failure | test_engine_move_claim.py L422-452, patches _move_file, asserts tasks/ restored, status/claimed_at preserved | PASS |
+| AC-NEW-5 skip guidance | test_engine_move_claim.py L385-396, non-empty guidance with "skip" | PASS |
+| AC-NEW-16 move missing id | test_engine_move_claim.py L398-406, NotFoundError(ERR_NOT_FOUND) | PASS |
+| Invalid status enum | test_engine_move_claim.py L408-420, ValidationError(ERR_INVALID_STATUS) | PASS |
+| start_work blocked | test_engine_move_claim.py L475-493, exact ERR_BLOCKED_NOT_CLAIMABLE | PASS |
+| start_work archived | test_engine_move_claim.py L495-514, exact ERR_ARCHIVED_NOT_CLAIMABLE | PASS |
+| AC-NEW-16 start_work missing id | test_engine_move_claim.py L516-524, NotFoundError(ERR_NOT_FOUND) | PASS |
+| start_work already claimed | test_engine_move_claim.py L526-544, ConcurrencyError(ERR_ALREADY_CLAIMED) | PASS |
+| D18+D36 expired claim re-claim | test_engine_move_claim.py L548-563, claimed_at != stale timestamp | PASS |
+
+### Test Results
+- pytest (full suite): 2099 passed, 165 failed, 209 errors, 4 skipped
+- Task-scoped tests: all 20 passed, 0 failed
+- Broad failures: ConfigError agent_map validation + KanbanEngine.__init__ agent_name signature mismatch — all unrelated to #1073 move/start_work scope
+- ruff: clean on engine.py + test_engine_move_claim.py; 8 violations in other packages (knowledge, mcp-knowledge, mcp-memory, orchestrator) — not #1073 scope
+
+### Architect Quality: 4/5
+Initial AC included unverifiable RED-phase line and ambiguous coverage scope, causing unnecessary review cycles. Architect was responsive through 3 refinement rounds: struck RED AC, clarified coverage gate, tightened D17 (file-location) and D18+D36 (timestamp-discrimination), added _move_file rollback proof AC. Final AC state is strong.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 20 live AC lines have task-owned passing tests)
+- Lint violations in task scope: 0
+- AC quality score 4 > 3: no deduction
+- Missing reviewer evidence: 0 (5th reviewer section present, detailed, PASS at 0.93)
+- Full-suite failures in task scope: 0
+
+### Confidence: .98
+### Action: archive

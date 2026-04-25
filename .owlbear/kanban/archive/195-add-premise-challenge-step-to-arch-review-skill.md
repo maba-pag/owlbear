@@ -3,15 +3,17 @@ id: 195
 title: Add premise challenge step to arch-review skill
 status: archived
 priority: needed
-created: 2026-03-29T23:08:21.4457556+02:00
-updated: 2026-03-30T04:28:53.25216+02:00
-started: 2026-03-30T04:28:48.2697598+02:00
-completed: 2026-03-30T04:28:48.2697598+02:00
+created: 2026-03-29 23:08:21.445756+02:00
+updated: 2026-03-30 04:28:53.252160+02:00
+started: 2026-03-30 04:28:48.269760+02:00
+completed: 2026-03-30 04:28:48.269760+02:00
 tags:
-    - agent
-    - quality
-    - scope:agents
+- agent
+- quality
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,17 +3,19 @@ id: 139
 title: Extract consolidation + evaluator stubs
 status: archived
 priority: nice-to-have
-created: 2026-03-29T14:51:25.9331186+02:00
-updated: 2026-03-30T07:31:05.3191891+02:00
-started: 2026-03-29T14:51:55.8631752+02:00
-completed: 2026-03-30T07:30:17.4255995+02:00
+created: 2026-03-29 14:51:25.933119+02:00
+updated: 2026-03-30 07:31:05.319189+02:00
+started: 2026-03-29 14:51:55.863175+02:00
+completed: 2026-03-30 07:30:17.425600+02:00
 tags:
-    - phase-1
-    - ' scope:knowledge'
-    - ' type:build'
+- phase-1
+- ' scope:knowledge'
+- ' type:build'
 depends_on:
-    - 138
+- 138
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,18 +3,20 @@ id: 167
 title: Validate multi-project setup in VS Code (manual)
 status: archived
 priority: important
-created: 2026-03-29T19:49:30.9245641+02:00
-updated: 2026-04-05T18:24:06.3014128+02:00
-started: 2026-04-05T18:24:06.3014128+02:00
-completed: 2026-04-05T18:24:06.3014128+02:00
+created: 2026-03-29 19:49:30.924564+02:00
+updated: 2026-04-05 18:24:06.301413+02:00
+started: 2026-04-05 18:24:06.301413+02:00
+completed: 2026-04-05 18:24:06.301413+02:00
 tags:
-    - phase-2
-    - scope:build
-    - type:test
-    - rigor:lean
+- phase-2
+- scope:build
+- type:test
+- rigor:lean
 depends_on:
-    - 18
+- 18
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

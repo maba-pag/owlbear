@@ -3,18 +3,20 @@ id: 208
 title: 'Test: orchestrator dispatch loop'
 status: archived
 priority: needed
-created: 2026-03-30T08:24:37.3734451+02:00
-updated: 2026-03-31T00:05:27.0960618+02:00
-started: 2026-03-30T08:24:41.9816185+02:00
-completed: 2026-03-31T00:04:42.4034772+02:00
+created: 2026-03-30 08:24:37.373445+02:00
+updated: 2026-03-31 00:05:27.096062+02:00
+started: 2026-03-30 08:24:41.981619+02:00
+completed: 2026-03-31 00:04:42.403477+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-2
+- scope:orchestrator
+- type:test
+- test
 depends_on:
-    - 144
+- 144
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED phase tests for #146 (orchestrator dispatch loop). Tests target waves.py and loop.py in packages/orchestrator/src/owlbear/orchestrator/.

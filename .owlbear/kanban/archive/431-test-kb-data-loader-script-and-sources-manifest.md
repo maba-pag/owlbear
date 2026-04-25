@@ -3,18 +3,20 @@ id: 431
 title: 'Test: KB data loader script and sources manifest'
 status: archived
 priority: needed
-created: 2026-03-30T21:31:51.1166724+02:00
-updated: 2026-03-31T17:07:15.7154906+02:00
-started: 2026-03-30T21:32:05.2789979+02:00
-completed: 2026-03-31T17:07:10.4144268+02:00
+created: 2026-03-30 21:31:51.116672+02:00
+updated: 2026-03-31 17:07:15.715491+02:00
+started: 2026-03-30 21:32:05.278998+02:00
+completed: 2026-03-31 17:07:10.414427+02:00
 tags:
-    - phase-2
-    - scope:knowledge
-    - type:test
-    - test
+- phase-2
+- scope:knowledge
+- type:test
+- test
 depends_on:
-    - 308
+- 308
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

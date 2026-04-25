@@ -3,15 +3,17 @@ id: 205
 title: 'Test: Knowledge package hybrid search + retrieval'
 status: archived
 priority: needed
-created: 2026-03-30T08:13:51.224589+02:00
-updated: 2026-03-30T14:22:08.2483419+02:00
-started: 2026-03-30T14:21:42.4981297+02:00
-completed: 2026-03-30T14:21:42.4981297+02:00
+created: 2026-03-30 08:13:51.224589+02:00
+updated: 2026-03-30 14:22:08.248342+02:00
+started: 2026-03-30 14:21:42.498130+02:00
+completed: 2026-03-30 14:21:42.498130+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - test
+- phase-1
+- scope:knowledge
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

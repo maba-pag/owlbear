@@ -3,17 +3,19 @@ id: 75
 title: 'Test: owlbear-project.json generation in setup script'
 status: archived
 priority: needed
-created: 2026-03-26T20:37:44.1881492+01:00
-updated: 2026-03-30T00:12:41.4520476+02:00
-started: 2026-03-30T00:12:41.1141697+02:00
-completed: 2026-03-30T00:12:41.1141697+02:00
+created: 2026-03-26 20:37:44.188149+01:00
+updated: 2026-03-30 00:12:41.452048+02:00
+started: 2026-03-30 00:12:41.114170+02:00
+completed: 2026-03-30 00:12:41.114170+02:00
 tags:
-    - phase-1
-    - scope:cli
-    - test
+- phase-1
+- scope:cli
+- test
 depends_on:
-    - 68
+- 68
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

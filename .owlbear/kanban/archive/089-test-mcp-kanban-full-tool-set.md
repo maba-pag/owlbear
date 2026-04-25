@@ -3,18 +3,20 @@ id: 89
 title: 'Test: mcp-kanban full tool set'
 status: archived
 priority: important
-created: 2026-03-27T22:47:10.8520099+01:00
-updated: 2026-03-30T06:59:35.4828286+02:00
-started: 2026-03-30T06:58:49.694304+02:00
-completed: 2026-03-30T06:58:49.694304+02:00
+created: 2026-03-27 22:47:10.852010+01:00
+updated: 2026-03-30 06:59:35.482829+02:00
+started: 2026-03-30 06:58:49.694304+02:00
+completed: 2026-03-30 06:58:49.694304+02:00
 tags:
-    - phase-3
-    - mcp
-    - tooling
-    - test
+- phase-3
+- mcp
+- tooling
+- test
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

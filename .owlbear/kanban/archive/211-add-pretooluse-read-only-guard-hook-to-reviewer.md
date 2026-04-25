@@ -1,18 +1,21 @@
 ---
 id: 211
-title: Add preToolUse read-only guard hook to reviewer agent (Phase 2, defense-in-depth)
+title: Add preToolUse read-only guard hook to reviewer agent (Phase 2, 
+  defense-in-depth)
 status: archived
 priority: nice-to-have
-created: 2026-03-30T08:52:23.636729+02:00
-updated: 2026-04-03T06:42:32.2304151+02:00
-started: 2026-04-03T06:42:10.4071447+02:00
-completed: 2026-04-03T06:42:10.4071447+02:00
+created: 2026-03-30 08:52:23.636729+02:00
+updated: 2026-04-03 06:42:32.230415+02:00
+started: 2026-04-03 06:42:10.407145+02:00
+completed: 2026-04-03 06:42:10.407145+02:00
 tags:
-    - scope:agents
-    - hooks
-    - type:build
-    - phase-2
+- scope:agents
+- hooks
+- type:build
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

@@ -3,18 +3,20 @@ id: 104
 title: 'Test: FastMCP server and lifespan wiring for mcp-knowledge'
 status: archived
 priority: needed
-created: 2026-03-28T14:01:13.729874+01:00
-updated: 2026-03-29T08:27:24.430974+02:00
-started: 2026-03-29T08:27:20.2507+02:00
-completed: 2026-03-29T08:27:20.2507+02:00
+created: 2026-03-28 14:01:13.729874+01:00
+updated: 2026-03-29 08:27:24.430974+02:00
+started: 2026-03-29 08:27:20.250700+02:00
+completed: 2026-03-29 08:27:20.250700+02:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
-    - test
+- phase-2
+- scope:mcp
+- scope:knowledge
+- test
 depends_on:
-    - 40
+- 40
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

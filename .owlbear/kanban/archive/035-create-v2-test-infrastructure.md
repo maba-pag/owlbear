@@ -3,17 +3,19 @@ id: 35
 title: Create v2 test infrastructure
 status: archived
 priority: critical
-created: 2026-03-26T18:34:45.6659768+01:00
-updated: 2026-03-28T04:15:44.8781655+01:00
-started: 2026-03-28T04:14:39.4802747+01:00
-completed: 2026-03-28T04:14:39.4802747+01:00
+created: 2026-03-26 18:34:45.665977+01:00
+updated: 2026-03-28 04:15:44.878166+01:00
+started: 2026-03-28 04:14:39.480275+01:00
+completed: 2026-03-28 04:14:39.480275+01:00
 tags:
-    - phase-1
-    - scope:build
-    - type:test
+- phase-1
+- scope:build
+- type:test
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

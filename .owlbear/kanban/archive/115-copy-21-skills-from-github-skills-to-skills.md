@@ -3,15 +3,17 @@ id: 115
 title: Copy 21 skills from .github/skills/ to skills/
 status: archived
 priority: needed
-created: 2026-03-29T01:40:43.4709867+01:00
-updated: 2026-03-29T06:15:15.6593059+02:00
-started: 2026-03-29T06:14:48.1246902+02:00
-completed: 2026-03-29T06:14:48.1246902+02:00
+created: 2026-03-29 01:40:43.470987+01:00
+updated: 2026-03-29 06:15:15.659306+02:00
+started: 2026-03-29 06:14:48.124690+02:00
+completed: 2026-03-29 06:14:48.124690+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:build
+- phase-1
+- scope:skills
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,14 +3,16 @@ id: 454
 title: Add Step 6.7 loop-detection check to code-review skill
 status: archived
 priority: needed
-created: 2026-03-30T23:40:39.0685332+02:00
-updated: 2026-04-02T06:52:53.5411756+02:00
-started: 2026-04-02T06:52:53.060182+02:00
-completed: 2026-04-02T06:52:53.060182+02:00
+created: 2026-03-30 23:40:39.068533+02:00
+updated: 2026-04-02 06:52:53.541176+02:00
+started: 2026-04-02 06:52:53.060182+02:00
+completed: 2026-04-02 06:52:53.060182+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

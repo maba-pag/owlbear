@@ -3,17 +3,19 @@ id: 74
 title: 'Test: OwlbearProjectFile Pydantic model'
 status: archived
 priority: needed
-created: 2026-03-26T20:30:19.6232649+01:00
-updated: 2026-03-29T09:15:17.053764+02:00
-started: 2026-03-29T09:15:12.628466+02:00
-completed: 2026-03-29T09:15:12.628466+02:00
+created: 2026-03-26 20:30:19.623265+01:00
+updated: 2026-03-29 09:15:17.053764+02:00
+started: 2026-03-29 09:15:12.628466+02:00
+completed: 2026-03-29 09:15:12.628466+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - test
+- phase-1
+- scope:mcp
+- test
 depends_on:
-    - 41
+- 41
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

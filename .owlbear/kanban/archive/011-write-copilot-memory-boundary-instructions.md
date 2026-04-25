@@ -3,17 +3,19 @@ id: 11
 title: Write Copilot Memory boundary instructions
 status: archived
 priority: important
-created: 2026-03-26T17:20:13.9642078+01:00
-updated: 2026-03-30T05:06:04.0497201+02:00
-started: 2026-03-30T05:01:31.6697627+02:00
-completed: 2026-03-30T05:01:31.6697627+02:00
+created: 2026-03-26 17:20:13.964208+01:00
+updated: 2026-03-30 05:06:04.049720+02:00
+started: 2026-03-30 05:01:31.669763+02:00
+completed: 2026-03-30 05:01:31.669763+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:docs
+- phase-1
+- scope:knowledge
+- type:docs
 depends_on:
-    - 5
+- 5
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

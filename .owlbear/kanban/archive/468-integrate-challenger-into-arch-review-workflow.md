@@ -3,17 +3,19 @@ id: 468
 title: Integrate Challenger into arch-review workflow (Step 3.5)
 status: archived
 priority: needed
-created: 2026-03-31T05:04:52.5039779+02:00
-updated: 2026-04-01T02:01:57.2682109+02:00
-started: 2026-04-01T02:01:52.5485368+02:00
-completed: 2026-04-01T02:01:52.5485368+02:00
+created: 2026-03-31 05:04:52.503978+02:00
+updated: 2026-04-01 02:01:57.268211+02:00
+started: 2026-04-01 02:01:52.548537+02:00
+completed: 2026-04-01 02:01:52.548537+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 depends_on:
-    - 467
+- 467
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Wire Challenger invocation into the architect's arch-review skill per docs/research/challenger-arch-review-integration.md.

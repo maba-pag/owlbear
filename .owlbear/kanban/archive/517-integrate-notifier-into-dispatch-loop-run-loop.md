@@ -3,17 +3,19 @@ id: 517
 title: Integrate Notifier into dispatch loop (run_loop)
 status: archived
 priority: someday
-created: 2026-04-01T07:07:35.0254784+02:00
-updated: 2026-04-04T07:10:35.4554556+02:00
-started: 2026-04-04T07:09:45.8254288+02:00
-completed: 2026-04-04T07:09:45.8254288+02:00
+created: 2026-04-01 07:07:35.025478+02:00
+updated: 2026-04-04 07:10:35.455456+02:00
+started: 2026-04-04 07:09:45.825429+02:00
+completed: 2026-04-04 07:09:45.825429+02:00
 tags:
-    - phase-3
-    - scope:orchestrator
-    - type:build
+- phase-3
+- scope:orchestrator
+- type:build
 depends_on:
-    - 516
+- 516
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

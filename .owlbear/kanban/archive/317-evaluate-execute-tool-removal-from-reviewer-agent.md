@@ -3,15 +3,17 @@ id: 317
 title: Evaluate execute/* tool removal from reviewer agent
 status: archived
 priority: nice-to-have
-created: 2026-03-30T20:32:19.1638978+02:00
-updated: 2026-04-03T03:41:06.268215+02:00
-started: 2026-04-03T03:40:11.9101151+02:00
-completed: 2026-04-03T03:40:11.9101151+02:00
+created: 2026-03-30 20:32:19.163898+02:00
+updated: 2026-04-03 03:41:06.268215+02:00
+started: 2026-04-03 03:40:11.910115+02:00
+completed: 2026-04-03 03:40:11.910115+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - research
+- scope:agents
+- phase-2
+- research
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 After Quality-Runner is wired in and validated, evaluate whether the reviewer agent can drop execute/* tools entirely. The reviewer only uses terminal for pytest and ruff — both now handled by Quality-Runner. Removing execute/* tools would enforce the read-only boundary more strictly. Requires validation that no edge-case terminal usage exists. See docs/research/quality-runner-wiring.md.

@@ -3,17 +3,19 @@ id: 78
 title: 'Test: voice addon TTS backends and factory'
 status: archived
 priority: nice-to-have
-created: 2026-03-26T21:17:56.9640853+01:00
-updated: 2026-03-30T04:13:15.6361939+02:00
-started: 2026-03-30T04:12:44.1826493+02:00
-completed: 2026-03-30T04:12:44.1826493+02:00
+created: 2026-03-26 21:17:56.964085+01:00
+updated: 2026-03-30 04:13:15.636194+02:00
+started: 2026-03-30 04:12:44.182649+02:00
+completed: 2026-03-30 04:12:44.182649+02:00
 tags:
-    - phase-3
-    - scope:voice
-    - test
+- phase-3
+- scope:voice
+- test
 depends_on:
-    - 52
+- 52
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

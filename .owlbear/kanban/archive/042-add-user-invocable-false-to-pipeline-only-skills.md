@@ -3,15 +3,17 @@ id: 42
 title: 'Add user-invocable: false to pipeline-only skills'
 status: archived
 priority: important
-created: 2026-03-26T18:55:38.450539+01:00
-updated: 2026-04-02T22:57:59.7079864+02:00
-started: 2026-03-30T00:29:06.0548815+02:00
-completed: 2026-03-30T00:29:06.0548815+02:00
+created: 2026-03-26 18:55:38.450539+01:00
+updated: 2026-04-02 22:57:59.707986+02:00
+started: 2026-03-30 00:29:06.054882+02:00
+completed: 2026-03-30 00:29:06.054882+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:build
+- phase-1
+- scope:skills
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

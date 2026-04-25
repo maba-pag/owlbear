@@ -3,17 +3,19 @@ id: 226
 title: Update planner Recipe 0 for action request resolution
 status: archived
 priority: needed
-created: 2026-03-30T16:57:32.0682585+02:00
-updated: 2026-03-31T21:30:47.4929399+02:00
-started: 2026-03-31T21:30:47.0263685+02:00
-completed: 2026-03-31T21:30:47.0263685+02:00
+created: 2026-03-30 16:57:32.068259+02:00
+updated: 2026-03-31 21:30:47.492940+02:00
+started: 2026-03-31 21:30:47.026369+02:00
+completed: 2026-03-31 21:30:47.026369+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - type:docs
+- phase-1
+- scope:agents
+- type:docs
 depends_on:
-    - 224
+- 224
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

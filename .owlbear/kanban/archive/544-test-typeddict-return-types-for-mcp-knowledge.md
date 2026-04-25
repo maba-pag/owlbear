@@ -3,16 +3,18 @@ id: 544
 title: 'Test: TypedDict return types for mcp-knowledge outputSchema'
 status: archived
 priority: important
-created: 2026-04-02T08:08:03.4466175+02:00
-updated: 2026-04-02T20:30:12.9034367+02:00
-started: 2026-04-02T20:30:12.4871102+02:00
-completed: 2026-04-02T20:30:12.4871102+02:00
+created: 2026-04-02 08:08:03.446618+02:00
+updated: 2026-04-02 20:30:12.903437+02:00
+started: 2026-04-02 20:30:12.487110+02:00
+completed: 2026-04-02 20:30:12.487110+02:00
 tags:
-    - scope:mcp
-    - type:test
-    - phase-2
-    - test
+- scope:mcp
+- type:test
+- phase-2
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

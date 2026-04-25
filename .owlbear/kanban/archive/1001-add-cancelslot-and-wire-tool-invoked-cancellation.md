@@ -3,15 +3,17 @@ id: 1001
 title: Add CancelSlot and wire tool-invoked cancellation to daemon shutdown
 status: archived
 priority: nice-to-have
-created: 2026-03-25T04:41:37.5048227+01:00
-updated: 2026-03-25T06:37:17.3284782+01:00
+created: 2026-03-25 04:41:37.504823+01:00
+updated: 2026-03-25 06:37:17.328478+01:00
 tags:
-    - scope:core
-    - type:build
+- scope:core
+- type:build
 depends_on:
-    - 870
-    - 1002
+- 870
+- 1002
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 **Source:** #877 research (docs/research/tool-invoked-cancellation.md)

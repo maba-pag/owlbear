@@ -3,18 +3,20 @@ id: 99
 title: 'Test: mcp-project server tools and resources'
 status: archived
 priority: needed
-created: 2026-03-28T04:04:45.3489882+01:00
-updated: 2026-03-31T06:40:22.6352468+02:00
-started: 2026-03-31T06:40:02.8717612+02:00
-completed: 2026-03-31T06:40:02.8717612+02:00
+created: 2026-03-28 04:04:45.348988+01:00
+updated: 2026-03-31 06:40:22.635247+02:00
+started: 2026-03-31 06:40:02.871761+02:00
+completed: 2026-03-31 06:40:02.871761+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - test
+- phase-1
+- scope:mcp
+- test
 depends_on:
-    - 190
-    - 191
+- 190
+- 191
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

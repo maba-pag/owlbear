@@ -3,17 +3,19 @@ id: 190
 title: Implement mcp-project server infrastructure + tools (server.py part 1)
 status: archived
 priority: needed
-created: 2026-03-29T22:43:56.3602548+02:00
-updated: 2026-03-30T07:12:41.8333864+02:00
-started: 2026-03-29T22:44:26.8745996+02:00
-completed: 2026-03-30T07:12:21.4065194+02:00
+created: 2026-03-29 22:43:56.360255+02:00
+updated: 2026-03-30 07:12:41.833386+02:00
+started: 2026-03-29 22:44:26.874600+02:00
+completed: 2026-03-30 07:12:21.406519+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - test
+- phase-1
+- scope:mcp
+- test
 depends_on:
-    - 68
+- 68
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

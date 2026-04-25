@@ -3,18 +3,20 @@ id: 530
 title: Update curator agent and skill for memory-mcp
 status: archived
 priority: important
-created: 2026-04-01T19:13:05.3558386+02:00
-updated: 2026-04-04T17:29:26.3420671+02:00
-started: 2026-04-04T17:29:26.3420671+02:00
-completed: 2026-04-04T17:29:26.3420671+02:00
+created: 2026-04-01 19:13:05.355839+02:00
+updated: 2026-04-04 17:29:26.342067+02:00
+started: 2026-04-04 17:29:26.342067+02:00
+completed: 2026-04-04 17:29:26.342067+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 depends_on:
-    - 525
-    - 568
+- 525
+- 568
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Depends on #525 (memory-mcp tools implemented) and #568 (owlbear-memory tool access added to all agents).

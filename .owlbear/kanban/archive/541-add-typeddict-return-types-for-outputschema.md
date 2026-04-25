@@ -3,17 +3,19 @@ id: 541
 title: Add TypedDict return types for outputSchema specificity on mcp-knowledge
 status: archived
 priority: important
-created: 2026-04-02T06:16:15.54793+02:00
-updated: 2026-04-03T04:34:33.2302585+02:00
-started: 2026-04-03T04:33:01.76317+02:00
-completed: 2026-04-03T04:33:01.76317+02:00
+created: 2026-04-02 06:16:15.547930+02:00
+updated: 2026-04-03 04:34:33.230259+02:00
+started: 2026-04-03 04:33:01.763170+02:00
+completed: 2026-04-03 04:33:01.763170+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
+- scope:mcp
+- type:build
+- phase-2
 depends_on:
-    - 544
+- 544
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

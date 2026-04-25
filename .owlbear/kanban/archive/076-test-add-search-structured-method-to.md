@@ -3,15 +3,17 @@ id: 76
 title: 'Test: Add search_structured method to KnowledgeQueryService'
 status: archived
 priority: important
-created: 2026-03-26T20:40:19.7027016+01:00
-updated: 2026-03-28T00:53:29.3655667+01:00
-started: 2026-03-28T00:52:52.3100619+01:00
-completed: 2026-03-28T00:52:52.3100619+01:00
+created: 2026-03-26 20:40:19.702702+01:00
+updated: 2026-03-28 00:53:29.365567+01:00
+started: 2026-03-28 00:52:52.310062+01:00
+completed: 2026-03-28 00:52:52.310062+01:00
 tags:
-    - phase-2
-    - scope:knowledge
-    - test
+- phase-2
+- scope:knowledge
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

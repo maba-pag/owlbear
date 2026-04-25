@@ -3,20 +3,22 @@ id: 33
 title: Extract entity extraction + graph builders
 status: archived
 priority: needed
-created: 2026-03-26T18:33:48.3894411+01:00
-updated: 2026-03-31T07:52:43.3299225+02:00
-started: 2026-03-31T07:52:23.7514659+02:00
-completed: 2026-03-31T07:52:23.7514659+02:00
+created: 2026-03-26 18:33:48.389441+01:00
+updated: 2026-03-31 07:52:43.329923+02:00
+started: 2026-03-31 07:52:23.751466+02:00
+completed: 2026-03-31 07:52:23.751466+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 32
-    - 203
+- 32
+- 203
 claimed_by: auditor
-claimed_at: 2026-03-31T07:52:43.3289048+02:00
+claimed_at: 2026-03-31 07:52:43.328905+02:00
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

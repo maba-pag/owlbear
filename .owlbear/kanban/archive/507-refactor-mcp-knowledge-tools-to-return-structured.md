@@ -3,15 +3,17 @@ id: 507
 title: Refactor mcp-knowledge tools to return structured data
 status: archived
 priority: needed
-created: 2026-03-31T23:40:59.9575737+02:00
-updated: 2026-04-01T06:08:14.0560618+02:00
-started: 2026-04-01T06:08:13.5590375+02:00
-completed: 2026-04-01T06:08:13.5590375+02:00
+created: 2026-03-31 23:40:59.957574+02:00
+updated: 2026-04-01 06:08:14.056062+02:00
+started: 2026-04-01 06:08:13.559038+02:00
+completed: 2026-04-01 06:08:13.559038+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## AC

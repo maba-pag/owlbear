@@ -3,17 +3,20 @@ id: 174
 title: Document multi-project setup and sharing guide
 status: archived
 priority: important
-created: 2026-03-29T19:49:59.1435632+02:00
-updated: 2026-03-29T21:45:21.2765759+02:00
-started: 2026-03-29T21:45:21.2765759+02:00
-completed: 2026-03-29T21:45:21.2765759+02:00
+created: 2026-03-29 19:49:59.143563+02:00
+updated: 2026-03-29 21:45:21.276576+02:00
+started: 2026-03-29 21:45:21.276576+02:00
+completed: 2026-03-29 21:45:21.276576+02:00
 tags:
-    - phase-2
-    - scope:build
-    - type:docs
+- phase-2
+- scope:build
+- type:docs
 blocked: true
-block_reason: 'Waiting on user: task body is empty — needs acceptance criteria and scope before research can begin'
+block_reason: 'Waiting on user: task body is empty — needs acceptance criteria and
+  scope before research can begin'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 [[2026-03-29]] Sun 20:16

@@ -3,17 +3,19 @@ id: 264
 title: Wire Quality-Runner into pipeline agents
 status: archived
 priority: needed
-created: 2026-03-30T19:31:12.4867876+02:00
-updated: 2026-04-05T11:52:25.7473923+02:00
-started: 2026-04-05T11:52:25.7473923+02:00
-completed: 2026-04-05T11:52:25.7473923+02:00
+created: 2026-03-30 19:31:12.486788+02:00
+updated: 2026-04-05 11:52:25.747392+02:00
+started: 2026-04-05 11:52:25.747392+02:00
+completed: 2026-04-05 11:52:25.747392+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 263
-    - 430
+- 263
+- 430
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Wire Quality-Runner subagent into the 4 pipeline agents that run pytest/ruff directly. See docs/research/quality-runner-wiring.md for full analysis.

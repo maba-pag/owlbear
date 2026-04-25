@@ -3,14 +3,16 @@ id: 1005
 title: Thread CancelSignal to enricher in _ingest_from_intake
 status: archived
 priority: nice-to-have
-created: 2026-03-26T03:12:35.8203012+01:00
-updated: 2026-03-26T05:12:46.9758716+01:00
+created: 2026-03-26 03:12:35.820301+01:00
+updated: 2026-03-26 05:12:46.975872+01:00
 tags:
-    - scope:core
-    - type:build
+- scope:core
+- type:build
 depends_on:
-    - 1006
+- 1006
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Source: #999 research (docs/research/ingestpipeline-cancel-threading-to-enricher.md).

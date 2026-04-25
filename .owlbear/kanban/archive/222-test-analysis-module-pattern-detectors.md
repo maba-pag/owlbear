@@ -3,18 +3,20 @@ id: 222
 title: 'Test: analysis module pattern detectors'
 status: archived
 priority: needed
-created: 2026-03-30T16:42:42.1510101+02:00
-updated: 2026-03-30T20:58:10.3243073+02:00
-started: 2026-03-30T16:42:46.8556346+02:00
-completed: 2026-03-30T20:57:33.7469941+02:00
+created: 2026-03-30 16:42:42.151010+02:00
+updated: 2026-03-30 20:58:10.324307+02:00
+started: 2026-03-30 16:42:46.855635+02:00
+completed: 2026-03-30 20:57:33.746994+02:00
 tags:
-    - phase-2
-    - ' scope:orchestrator'
-    - ' type:test'
-    - ' test'
+- phase-2
+- ' scope:orchestrator'
+- ' type:test'
+- ' test'
 depends_on:
-    - 21
+- 21
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Test task (RED phase) for #179. Write failing tests for the analysis module.

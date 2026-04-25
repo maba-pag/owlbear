@@ -3,8 +3,8 @@ id: 1008
 title: 'Architect: update planner delegation to use structured prefix'
 status: archived
 priority: important
-created: 2026-04-18T21:54:49.289730+00:00
-updated: 2026-04-19T14:19:20.367559+00:00
+created: 2026-04-18 21:54:49.289730+00:00
+updated: 2026-04-19 14:19:20.367559+00:00
 tags:
 - type:improvement
 - scope:agents
@@ -15,6 +15,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 Architect delegates to planner when task body contains "Needs decomposition:" but the delegation prompt (`Plan: {description}`) lacks a structured task ID or mode prefix. This could cause planner to default to approval mode mid-pipeline.

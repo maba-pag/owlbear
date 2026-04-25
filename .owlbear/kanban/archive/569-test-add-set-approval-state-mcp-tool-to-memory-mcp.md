@@ -3,17 +3,19 @@ id: 569
 title: 'Test: Add set_approval_state MCP tool to memory-mcp'
 status: archived
 priority: needed
-created: 2026-04-03T10:57:25.8250734+02:00
-updated: 2026-04-03T15:37:05.6905517+02:00
-started: 2026-04-03T15:36:45.584782+02:00
-completed: 2026-04-03T15:36:45.584782+02:00
+created: 2026-04-03 10:57:25.825073+02:00
+updated: 2026-04-03 15:37:05.690552+02:00
+started: 2026-04-03 15:36:45.584782+02:00
+completed: 2026-04-03 15:36:45.584782+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - test
+- scope:agents
+- phase-2
+- test
 depends_on:
-    - 525
+- 525
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED phase for #529. Write failing tests for set_approval_state tool before implementation.

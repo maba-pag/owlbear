@@ -3,15 +3,17 @@ id: 151
 title: 'Test: Vector store and embedding pipeline'
 status: archived
 priority: needed
-created: 2026-03-29T19:13:47.4828015+02:00
-updated: 2026-03-30T17:08:09.8875281+02:00
-started: 2026-03-30T17:07:45.9103111+02:00
-completed: 2026-03-30T17:07:45.9103111+02:00
+created: 2026-03-29 19:13:47.482802+02:00
+updated: 2026-03-30 17:08:09.887528+02:00
+started: 2026-03-30 17:07:45.910311+02:00
+completed: 2026-03-30 17:07:45.910311+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - test
+- phase-1
+- scope:knowledge
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

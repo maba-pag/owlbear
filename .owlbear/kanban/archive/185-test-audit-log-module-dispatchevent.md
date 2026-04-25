@@ -3,15 +3,17 @@ id: 185
 title: 'Test: audit log module (DispatchEvent + CompletionEvent)'
 status: archived
 priority: needed
-created: 2026-03-29T20:29:44.1186399+02:00
-updated: 2026-03-30T04:26:28.4780007+02:00
-started: 2026-03-29T20:30:01.8009314+02:00
-completed: 2026-03-30T04:25:40.3692046+02:00
+created: 2026-03-29 20:29:44.118640+02:00
+updated: 2026-03-30 04:26:28.478001+02:00
+started: 2026-03-29 20:30:01.800931+02:00
+completed: 2026-03-30 04:25:40.369205+02:00
 tags:
-    - phase-2
-    - ' scope:orchestrator'
-    - ' type:test'
+- phase-2
+- ' scope:orchestrator'
+- ' type:test'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Write failing tests for `packages/orchestrator/src/owlbear/audit/` before implementation (TDD RED phase).

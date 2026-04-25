@@ -3,18 +3,20 @@ id: 157
 title: Create E2E smoke test script for real Copilot CLI
 status: archived
 priority: important
-created: 2026-03-29T19:34:05.2150485+02:00
-updated: 2026-04-02T16:43:57.6343406+02:00
-started: 2026-04-02T16:43:57.1699844+02:00
-completed: 2026-04-02T16:43:57.1699844+02:00
+created: 2026-03-29 19:34:05.215049+02:00
+updated: 2026-04-02 16:43:57.634341+02:00
+started: 2026-04-02 16:43:57.169984+02:00
+completed: 2026-04-02 16:43:57.169984+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
+- phase-2
+- scope:orchestrator
+- type:test
 depends_on:
-    - 20
-    - 22
+- 20
+- 22
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

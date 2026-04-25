@@ -3,17 +3,19 @@ id: 495
 title: Define KanbanTask model + add outputSchema to show/move/pick
 status: archived
 priority: needed
-created: 2026-03-31T06:47:09.5895363+02:00
-updated: 2026-04-01T06:18:42.9033548+02:00
-started: 2026-04-01T06:18:39.0092863+02:00
-completed: 2026-04-01T06:18:39.0092863+02:00
+created: 2026-03-31 06:47:09.589536+02:00
+updated: 2026-04-01 06:18:42.903355+02:00
+started: 2026-04-01 06:18:39.009286+02:00
+completed: 2026-04-01 06:18:39.009286+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
+- scope:mcp
+- type:build
+- phase-2
 depends_on:
-    - 489
+- 489
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

@@ -1,20 +1,23 @@
 ---
 id: 135
-title: Extract CancelSignal, sandbox_path, consolidation, and evaluator into knowledge package
+title: Extract CancelSignal, sandbox_path, consolidation, and evaluator into 
+  knowledge package
 status: archived
 priority: nice-to-have
-created: 2026-03-29T12:07:28.9585653+02:00
-updated: 2026-04-02T00:49:27.6912486+02:00
-started: 2026-04-02T00:49:18.5613857+02:00
-completed: 2026-04-02T00:49:18.5613857+02:00
+created: 2026-03-29 12:07:28.958565+02:00
+updated: 2026-04-02 00:49:27.691249+02:00
+started: 2026-04-02 00:49:18.561386+02:00
+completed: 2026-04-02 00:49:18.561386+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
-    - type:config
+- phase-1
+- scope:knowledge
+- type:build
+- type:config
 depends_on:
-    - 143
+- 143
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

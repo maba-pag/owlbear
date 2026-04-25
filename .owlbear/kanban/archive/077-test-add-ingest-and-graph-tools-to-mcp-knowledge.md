@@ -3,16 +3,18 @@ id: 77
 title: 'Test: Add ingest and graph tools to mcp-knowledge'
 status: archived
 priority: important
-created: 2026-03-26T21:02:00.1833273+01:00
-updated: 2026-03-30T01:01:29.7967921+02:00
-started: 2026-03-30T01:01:02.3131489+02:00
-completed: 2026-03-30T01:01:02.3131489+02:00
+created: 2026-03-26 21:02:00.183327+01:00
+updated: 2026-03-30 01:01:29.796792+02:00
+started: 2026-03-30 01:01:02.313149+02:00
+completed: 2026-03-30 01:01:02.313149+02:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
-    - test
+- phase-2
+- scope:mcp
+- scope:knowledge
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

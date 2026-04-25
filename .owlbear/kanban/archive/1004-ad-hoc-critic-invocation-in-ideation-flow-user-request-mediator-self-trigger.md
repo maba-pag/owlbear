@@ -4,8 +4,8 @@ title: Ad-hoc Critic invocation in ideation flow (user-request + Mediator
   self-trigger)
 status: archived
 priority: important
-created: 2026-04-18T21:47:42.612522+00:00
-updated: 2026-04-19T11:43:40.133224+00:00
+created: 2026-04-18 21:47:42.612522+00:00
+updated: 2026-04-19 11:43:40.133224+00:00
 tags:
 - type:improvement
 - scope:agents
@@ -17,6 +17,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 The Critic (`ideation-critic`) is currently invoked only at fixed moment boundaries: standalone after M1, M2, M4, M5, and embedded inside each domain panelist's Critic loop. This works for planned moment transitions but misses the "unexpected hard call surfaces mid-flow" case — when the user proposes (or the Mediator considers) a structural addition or deviation that wasn't on the M3-M4 panel agenda.

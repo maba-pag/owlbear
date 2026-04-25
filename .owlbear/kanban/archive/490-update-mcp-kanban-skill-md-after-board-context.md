@@ -3,17 +3,19 @@ id: 490
 title: Update mcp-kanban SKILL.md after board_context removal
 status: archived
 priority: needed
-created: 2026-03-31T06:22:01.7121655+02:00
-updated: 2026-04-01T01:58:07.2328622+02:00
-started: 2026-04-01T01:58:06.7268619+02:00
-completed: 2026-04-01T01:58:06.7268619+02:00
+created: 2026-03-31 06:22:01.712166+02:00
+updated: 2026-04-01 01:58:07.232862+02:00
+started: 2026-04-01 01:58:06.726862+02:00
+completed: 2026-04-01 01:58:06.726862+02:00
 tags:
-    - scope:mcp
-    - type:docs
-    - phase-2
+- scope:mcp
+- type:docs
+- phase-2
 depends_on:
-    - 489
+- 489
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

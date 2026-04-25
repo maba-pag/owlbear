@@ -3,15 +3,17 @@ id: 501
 title: Complete ToolAnnotations on mcp-knowledge server
 status: archived
 priority: needed
-created: 2026-03-31T16:49:47.3946583+02:00
-updated: 2026-04-01T04:56:41.1947248+02:00
-started: 2026-03-31T17:11:27.48647+02:00
-completed: 2026-04-01T04:56:40.6517377+02:00
+created: 2026-03-31 16:49:47.394658+02:00
+updated: 2026-04-01 04:56:41.194725+02:00
+started: 2026-03-31 17:11:27.486470+02:00
+completed: 2026-04-01 04:56:40.651738+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

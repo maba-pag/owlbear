@@ -3,16 +3,18 @@ id: 96
 title: 'Test: Port agents to agent-md v2 location'
 status: archived
 priority: needed
-created: 2026-03-28T03:42:21.9792291+01:00
-updated: 2026-03-29T15:16:08.4817707+02:00
-started: 2026-03-29T15:16:08.1847756+02:00
-completed: 2026-03-29T15:16:08.1847756+02:00
+created: 2026-03-28 03:42:21.979229+01:00
+updated: 2026-03-29 15:16:08.481771+02:00
+started: 2026-03-29 15:16:08.184776+02:00
+completed: 2026-03-29 15:16:08.184776+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - type:test
-    - test
+- phase-1
+- scope:agents
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

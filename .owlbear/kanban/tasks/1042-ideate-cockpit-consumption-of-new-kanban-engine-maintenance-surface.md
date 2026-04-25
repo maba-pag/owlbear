@@ -3,8 +3,8 @@ id: 1042
 title: Ideate cockpit consumption of new kanban engine maintenance surface
 status: research
 priority: nice-to-have
-created: 2026-04-21T08:08:06.219579+00:00
-updated: 2026-04-21T08:09:43.565916+00:00
+created: '2026-04-21 08:08:06.219579+00:00'
+updated: '2026-04-21 08:09:43.565916+00:00'
 tags:
 - phase:cockpit
 - type:ideation
@@ -16,8 +16,9 @@ block_reason: 'User Decision-Request: review the engine capabilities and UX seed
   in the body. Decide whether to build cockpit operator-console UI (which seeds, which
   to drop), defer, or close as wontfix. Do not unblock without an explicit scope direction
   or wontfix decision.'
-claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Context
 

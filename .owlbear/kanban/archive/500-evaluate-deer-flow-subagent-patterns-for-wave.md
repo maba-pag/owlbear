@@ -3,15 +3,17 @@ id: 500
 title: Evaluate deer-flow subagent patterns for wave dispatch improvements
 status: archived
 priority: nice-to-have
-created: 2026-03-31T13:40:33.2399239+02:00
-updated: 2026-04-02T03:33:05.0358583+02:00
-started: 2026-04-02T03:33:04.5634732+02:00
-completed: 2026-04-02T03:33:04.5634732+02:00
+created: 2026-03-31 13:40:33.239924+02:00
+updated: 2026-04-02 03:33:05.035858+02:00
+started: 2026-04-02 03:33:04.563473+02:00
+completed: 2026-04-02 03:33:04.563473+02:00
 tags:
-    - research
-    - scope:agents
-    - phase-2
+- research
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

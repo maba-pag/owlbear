@@ -3,17 +3,19 @@ id: 46
 title: Add agent-client-protocol to orchestrator deps
 status: archived
 priority: needed
-created: 2026-03-26T18:56:04.3992332+01:00
-updated: 2026-03-29T09:18:41.3910103+02:00
-started: 2026-03-29T08:44:15.3359124+02:00
-completed: 2026-03-29T09:18:41.0904939+02:00
+created: 2026-03-26 18:56:04.399233+01:00
+updated: 2026-03-29 09:18:41.391010+02:00
+started: 2026-03-29 08:44:15.335912+02:00
+completed: 2026-03-29 09:18:41.090494+02:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - config
+- phase-1
+- scope:orchestrator
+- config
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

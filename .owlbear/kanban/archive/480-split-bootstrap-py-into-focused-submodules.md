@@ -3,16 +3,18 @@ id: 480
 title: Split bootstrap.py into focused submodules
 status: archived
 priority: important
-created: 2026-03-04T07:37:58.1734377+01:00
-updated: 2026-03-09T19:36:04.021111+01:00
-started: 2026-03-06T23:05:03.8938338+01:00
-completed: 2026-03-09T19:36:04.021111+01:00
+created: 2026-03-04 07:37:58.173438+01:00
+updated: 2026-03-09 19:36:04.021111+01:00
+started: 2026-03-06 23:05:03.893834+01:00
+completed: 2026-03-09 19:36:04.021111+01:00
 tags:
-    - audit
-    - refactor
-    - modularity
-    - scope:core
+- audit
+- refactor
+- modularity
+- scope:core
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 **Context:** bootstrap.py is now 1247 lines (was 894 at task creation). build_toolsets has C901/PLR0912/PLR0915 suppressions. See docs/research/bootstrap-split.md for full analysis.

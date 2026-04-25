@@ -3,16 +3,18 @@ id: 370
 title: 'Update #136 AC: bookmark tools target server.py not tools.py'
 status: archived
 priority: nice-to-have
-created: 2026-03-30T20:46:21.9111795+02:00
-updated: 2026-04-04T07:09:56.2969147+02:00
-started: 2026-04-04T07:09:30.646974+02:00
-completed: 2026-04-04T07:09:30.646974+02:00
+created: 2026-03-30 20:46:21.911180+02:00
+updated: 2026-04-04 07:09:56.296915+02:00
+started: 2026-04-04 07:09:30.646974+02:00
+completed: 2026-04-04 07:09:30.646974+02:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
-    - chore
+- phase-2
+- scope:mcp
+- scope:knowledge
+- chore
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

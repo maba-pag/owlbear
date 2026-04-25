@@ -3,15 +3,17 @@ id: 3
 title: agentskills.io spec validation
 status: archived
 priority: needed
-created: 2026-03-26T17:18:26.7722859+01:00
-updated: 2026-03-29T01:25:07.0782497+01:00
-started: 2026-03-29T01:25:06.7796329+01:00
-completed: 2026-03-29T01:25:06.7796329+01:00
+created: 2026-03-26 17:18:26.772286+01:00
+updated: 2026-03-29 01:25:07.078250+01:00
+started: 2026-03-29 01:25:06.779633+01:00
+completed: 2026-03-29 01:25:06.779633+01:00
 tags:
-    - research
-    - phase-1
-    - scope:skills
+- research
+- phase-1
+- scope:skills
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

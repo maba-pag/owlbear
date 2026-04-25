@@ -3,15 +3,17 @@ id: 538
 title: Verify structuredContent behavior for KanbanTask MCP tools
 status: archived
 priority: nice-to-have
-created: 2026-04-02T05:25:08.4262839+02:00
-updated: 2026-04-02T17:46:06.0409345+02:00
-started: 2026-04-02T17:45:56.7639958+02:00
-completed: 2026-04-02T17:45:56.7639958+02:00
+created: 2026-04-02 05:25:08.426284+02:00
+updated: 2026-04-02 17:46:06.040935+02:00
+started: 2026-04-02 17:45:56.763996+02:00
+completed: 2026-04-02 17:45:56.763996+02:00
 tags:
-    - scope:mcp
-    - type:test
-    - phase-2
+- scope:mcp
+- type:test
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

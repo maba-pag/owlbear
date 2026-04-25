@@ -3,16 +3,18 @@ id: 498
 title: Add test-writer fallback for unrecognized non-impl tasks
 status: archived
 priority: important
-created: 2026-03-31T09:01:15.8127243+02:00
-updated: 2026-04-01T12:25:53.7421286+02:00
-started: 2026-04-01T12:25:53.2447907+02:00
-completed: 2026-04-01T12:25:53.2447907+02:00
+created: 2026-03-31 09:01:15.812724+02:00
+updated: 2026-04-01 12:25:53.742129+02:00
+started: 2026-04-01 12:25:53.244791+02:00
+completed: 2026-04-01 12:25:53.244791+02:00
 tags:
-    - scope:agents
-    - ' quality'
-    - ' type:config'
-    - ' agent'
+- scope:agents
+- ' quality'
+- ' type:config'
+- ' agent'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

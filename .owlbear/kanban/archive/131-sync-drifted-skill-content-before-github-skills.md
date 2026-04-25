@@ -3,15 +3,17 @@ id: 131
 title: Sync drifted skill content before .github/skills/ deletion
 status: archived
 priority: needed
-created: 2026-03-29T08:06:55.3132572+02:00
-updated: 2026-03-29T11:57:58.0293035+02:00
-started: 2026-03-29T08:29:09.2041961+02:00
-completed: 2026-03-29T11:57:53.3115444+02:00
+created: 2026-03-29 08:06:55.313257+02:00
+updated: 2026-03-29 11:57:58.029304+02:00
+started: 2026-03-29 08:29:09.204196+02:00
+completed: 2026-03-29 11:57:53.311544+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:build
+- phase-1
+- scope:skills
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

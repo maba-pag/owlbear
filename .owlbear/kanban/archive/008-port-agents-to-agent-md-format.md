@@ -3,17 +3,19 @@ id: 8
 title: Port agents to .agent.md format
 status: archived
 priority: needed
-created: 2026-03-26T17:19:41.2513734+01:00
-updated: 2026-03-29T11:14:57.1181231+02:00
-started: 2026-03-29T11:14:56.8210589+02:00
-completed: 2026-03-29T11:14:56.8210589+02:00
+created: 2026-03-26 17:19:41.251373+01:00
+updated: 2026-03-29 11:14:57.118123+02:00
+started: 2026-03-29 11:14:56.821059+02:00
+completed: 2026-03-29 11:14:56.821059+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - type:build
+- phase-1
+- scope:agents
+- type:build
 depends_on:
-    - 4
+- 4
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

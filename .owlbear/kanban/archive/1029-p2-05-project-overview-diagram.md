@@ -3,8 +3,8 @@ id: 1029
 title: 'P2-05: Project overview diagram'
 status: archived
 priority: important
-created: 2026-04-19T23:53:28.512480+00:00
-updated: 2026-04-20T04:42:26.387937+00:00
+created: 2026-04-19 23:53:28.512480+00:00
+updated: 2026-04-20 04:42:26.387937+00:00
 tags:
 - phase-2
 - docs-currency
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 Brief: see parent #1016
 

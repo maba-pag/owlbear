@@ -3,16 +3,18 @@ id: 108
 title: 'Test: Grant vscode/askQuestions to user-invocable agents'
 status: archived
 priority: needed
-created: 2026-03-28T15:10:25.0729158+01:00
-updated: 2026-03-29T01:17:31.219303+01:00
-started: 2026-03-29T01:17:30.9219452+01:00
-completed: 2026-03-29T01:17:30.9219452+01:00
+created: 2026-03-28 15:10:25.072916+01:00
+updated: 2026-03-29 01:17:31.219303+01:00
+started: 2026-03-29 01:17:30.921945+01:00
+completed: 2026-03-29 01:17:30.921945+01:00
 tags:
-    - phase-2
-    - scope:agents
-    - type:test
-    - test
+- phase-2
+- scope:agents
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

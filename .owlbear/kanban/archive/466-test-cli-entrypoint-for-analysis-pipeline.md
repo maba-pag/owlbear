@@ -3,19 +3,21 @@ id: 466
 title: 'Test: CLI entrypoint for analysis pipeline'
 status: archived
 priority: important
-created: 2026-03-31T04:56:48.2314847+02:00
-updated: 2026-03-31T11:29:00.9908347+02:00
-started: 2026-03-31T04:57:02.2910553+02:00
-completed: 2026-03-31T11:29:00.3820769+02:00
+created: 2026-03-31 04:56:48.231485+02:00
+updated: 2026-03-31 11:29:00.990835+02:00
+started: 2026-03-31 04:57:02.291055+02:00
+completed: 2026-03-31 11:29:00.382077+02:00
 tags:
-    - phase-2
-    - ' scope:orchestrator'
-    - ' type:test'
-    - ' cli'
-    - ' test'
+- phase-2
+- ' scope:orchestrator'
+- ' type:test'
+- ' cli'
+- ' test'
 depends_on:
-    - 179
+- 179
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 RED phase tests for #180 (CLI entrypoint for analysis pipeline).

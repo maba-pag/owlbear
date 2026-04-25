@@ -1,20 +1,23 @@
 ---
 id: 101
-title: Grant vscode/askQuestions to user-invocable agents (orchestrator, kanban-planner, curator)
+title: Grant vscode/askQuestions to user-invocable agents (orchestrator, 
+  kanban-planner, curator)
 status: archived
 priority: needed
-created: 2026-03-28T13:34:40.5473274+01:00
-updated: 2026-03-29T12:01:31.23165+02:00
-started: 2026-03-29T06:22:54.1638539+02:00
-completed: 2026-03-29T12:01:30.8848004+02:00
+created: 2026-03-28 13:34:40.547327+01:00
+updated: 2026-03-29 12:01:31.231650+02:00
+started: 2026-03-29 06:22:54.163854+02:00
+completed: 2026-03-29 12:01:30.884800+02:00
 tags:
-    - phase-2
-    - scope:agents
-    - config
+- phase-2
+- scope:agents
+- config
 depends_on:
-    - 108
-    - 123
+- 108
+- 123
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

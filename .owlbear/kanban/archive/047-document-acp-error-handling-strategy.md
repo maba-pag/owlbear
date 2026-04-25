@@ -3,15 +3,17 @@ id: 47
 title: Document ACP error handling strategy
 status: archived
 priority: important
-created: 2026-03-26T18:56:10.8382134+01:00
-updated: 2026-03-27T05:35:34.1745633+01:00
-started: 2026-03-27T05:35:15.9953409+01:00
-completed: 2026-03-27T05:35:15.9953409+01:00
+created: 2026-03-26 18:56:10.838213+01:00
+updated: 2026-03-27 05:35:34.174563+01:00
+started: 2026-03-27 05:35:15.995341+01:00
+completed: 2026-03-27 05:35:15.995341+01:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - docs
+- phase-1
+- scope:orchestrator
+- docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

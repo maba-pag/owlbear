@@ -3,16 +3,18 @@ id: 107
 title: 'Test: Knowledge engine foundation (#15)'
 status: archived
 priority: needed
-created: 2026-03-28T15:04:38.2299397+01:00
-updated: 2026-03-29T04:16:46.3262265+02:00
-started: 2026-03-29T04:16:45.9997673+02:00
-completed: 2026-03-29T04:16:45.9997673+02:00
+created: 2026-03-28 15:04:38.229940+01:00
+updated: 2026-03-29 04:16:46.326227+02:00
+started: 2026-03-29 04:16:45.999767+02:00
+completed: 2026-03-29 04:16:45.999767+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:test
-    - test
+- phase-1
+- scope:knowledge
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,17 +3,19 @@ id: 90
 title: Update pytest-and-linting skill for v2 paths
 status: archived
 priority: nice-to-have
-created: 2026-03-28T01:40:27.8103029+01:00
-updated: 2026-03-30T07:23:06.6504214+02:00
-started: 2026-03-30T07:22:23.8827604+02:00
-completed: 2026-03-30T07:22:23.8827604+02:00
+created: 2026-03-28 01:40:27.810303+01:00
+updated: 2026-03-30 07:23:06.650421+02:00
+started: 2026-03-30 07:22:23.882760+02:00
+completed: 2026-03-30 07:22:23.882760+02:00
 tags:
-    - phase-1
-    - docs
-    - scope:build
+- phase-1
+- docs
+- scope:build
 depends_on:
-    - 35
+- 35
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

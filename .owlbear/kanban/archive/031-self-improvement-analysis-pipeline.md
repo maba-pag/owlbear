@@ -3,17 +3,19 @@ id: 31
 title: Self-improvement analysis pipeline
 status: archived
 priority: important
-created: 2026-03-26T18:05:35.1098126+01:00
-updated: 2026-04-04T07:09:50.4701553+02:00
-started: 2026-04-04T07:09:24.389261+02:00
-completed: 2026-04-04T07:09:24.389261+02:00
+created: 2026-03-26 18:05:35.109813+01:00
+updated: 2026-04-04 07:09:50.470155+02:00
+started: 2026-04-04 07:09:24.389261+02:00
+completed: 2026-04-04 07:09:24.389261+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 21
+- 21
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

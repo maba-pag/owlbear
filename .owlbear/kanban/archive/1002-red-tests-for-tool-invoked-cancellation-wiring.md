@@ -3,15 +3,17 @@ id: 1002
 title: RED tests for tool-invoked cancellation wiring
 status: archived
 priority: nice-to-have
-created: 2026-03-25T04:41:44.0812204+01:00
-updated: 2026-03-25T06:12:34.16749+01:00
+created: 2026-03-25 04:41:44.081220+01:00
+updated: 2026-03-25 06:12:34.167490+01:00
 tags:
-    - scope:core
-    - type:test
+- scope:core
+- type:test
 depends_on:
-    - 1001
-    - 870
+- 1001
+- 870
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 **Source:** #877 research (docs/research/tool-invoked-cancellation.md)

@@ -3,18 +3,20 @@ id: 32
 title: Extract vector store + embedding pipeline
 status: archived
 priority: needed
-created: 2026-03-26T18:33:43.753881+01:00
-updated: 2026-03-30T20:26:32.0968688+02:00
-started: 2026-03-30T20:25:18.6502883+02:00
-completed: 2026-03-30T20:25:18.6502883+02:00
+created: 2026-03-26 18:33:43.753881+01:00
+updated: 2026-03-30 20:26:32.096869+02:00
+started: 2026-03-30 20:25:18.650288+02:00
+completed: 2026-03-30 20:25:18.650288+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 15
-    - 151
+- 15
+- 151
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

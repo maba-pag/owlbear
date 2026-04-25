@@ -3,15 +3,17 @@ id: 215
 title: Add tag-based exemptions to Gate 4 TW:MISSING check
 status: archived
 priority: needed
-created: 2026-03-30T14:22:41.7989178+02:00
-updated: 2026-03-30T20:50:10.0601069+02:00
-started: 2026-03-30T20:49:13.9875978+02:00
-completed: 2026-03-30T20:49:13.9875978+02:00
+created: 2026-03-30 14:22:41.798918+02:00
+updated: 2026-03-30 20:50:10.060107+02:00
+started: 2026-03-30 20:49:13.987598+02:00
+completed: 2026-03-30 20:49:13.987598+02:00
 tags:
-    - scope:agents
-    - quality
-    - type:config
+- scope:agents
+- quality
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,15 +3,17 @@ id: 189
 title: 'Test: ErrorJournal module (ErrorEntry + JSONL persistence)'
 status: archived
 priority: nice-to-have
-created: 2026-03-29T20:53:53.1784331+02:00
-updated: 2026-03-30T04:07:07.7718587+02:00
-started: 2026-03-30T04:04:56.8532491+02:00
-completed: 2026-03-30T04:04:56.8532491+02:00
+created: 2026-03-29 20:53:53.178433+02:00
+updated: 2026-03-30 04:07:07.771859+02:00
+started: 2026-03-30 04:04:56.853249+02:00
+completed: 2026-03-30 04:04:56.853249+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:test
+- phase-2
+- scope:orchestrator
+- type:test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Write failing tests for packages/orchestrator/src/owlbear_orchestrator/error_journal.py before implementation (TDD RED phase).

@@ -3,15 +3,17 @@ id: 143
 title: 'Test: Extract CancelSignal and sandbox_path'
 status: archived
 priority: someday
-created: 2026-03-29T16:12:59.6641148+02:00
-updated: 2026-04-03T02:11:58.7132586+02:00
-started: 2026-04-03T02:10:43.0453515+02:00
-completed: 2026-04-03T02:10:43.0453515+02:00
+created: 2026-03-29 16:12:59.664115+02:00
+updated: 2026-04-03 02:11:58.713259+02:00
+started: 2026-04-03 02:10:43.045352+02:00
+completed: 2026-04-03 02:10:43.045352+02:00
 tags:
-    - phase-1
-    - ' scope:knowledge'
-    - ' test'
+- phase-1
+- ' scope:knowledge'
+- ' test'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

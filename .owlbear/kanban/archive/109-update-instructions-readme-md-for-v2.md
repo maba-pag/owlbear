@@ -3,15 +3,17 @@ id: 109
 title: Update instructions/README.md for v2
 status: archived
 priority: nice-to-have
-created: 2026-03-28T21:46:19.0352268+01:00
-updated: 2026-03-30T04:41:38.0865203+02:00
-started: 2026-03-30T04:40:53.8634767+02:00
-completed: 2026-03-30T04:40:53.8634767+02:00
+created: 2026-03-28 21:46:19.035227+01:00
+updated: 2026-03-30 04:41:38.086520+02:00
+started: 2026-03-30 04:40:53.863477+02:00
+completed: 2026-03-30 04:40:53.863477+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

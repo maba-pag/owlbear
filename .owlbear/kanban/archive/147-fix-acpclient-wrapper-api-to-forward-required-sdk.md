@@ -3,17 +3,19 @@ id: 147
 title: Fix AcpClient wrapper API to forward required SDK parameters
 status: archived
 priority: needed
-created: 2026-03-29T18:52:57.581756+02:00
-updated: 2026-04-01T01:12:45.478598+02:00
-started: 2026-04-01T01:12:44.9196268+02:00
-completed: 2026-04-01T01:12:44.9196268+02:00
+created: 2026-03-29 18:52:57.581756+02:00
+updated: 2026-04-01 01:12:45.478598+02:00
+started: 2026-04-01 01:12:44.919627+02:00
+completed: 2026-04-01 01:12:44.919627+02:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - type:build
+- phase-1
+- scope:orchestrator
+- type:build
 depends_on:
-    - 181
+- 181
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

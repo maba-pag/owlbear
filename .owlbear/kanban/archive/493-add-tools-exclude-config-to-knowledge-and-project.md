@@ -3,17 +3,19 @@ id: 493
 title: Add TOOLS_EXCLUDE config to knowledge and project MCP servers
 status: archived
 priority: nice-to-have
-created: 2026-03-31T06:37:25.2412013+02:00
-updated: 2026-04-02T02:58:52.9645434+02:00
-started: 2026-04-02T02:58:52.5157444+02:00
-completed: 2026-04-02T02:58:52.5157444+02:00
+created: 2026-03-31 06:37:25.241201+02:00
+updated: 2026-04-02 02:58:52.964543+02:00
+started: 2026-04-02 02:58:52.515744+02:00
+completed: 2026-04-02 02:58:52.515744+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 depends_on:
-    - 473
+- 473
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

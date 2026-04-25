@@ -3,8 +3,8 @@ id: 1006
 title: 'w-task-decomposition: add conditional approval step for user-invoked mode'
 status: archived
 priority: important
-created: 2026-04-18T21:54:33.726798+00:00
-updated: 2026-04-19T13:07:51.881344+00:00
+created: 2026-04-18 21:54:33.726798+00:00
+updated: 2026-04-19 13:07:51.881344+00:00
 tags:
 - type:improvement
 - scope:agents
@@ -15,6 +15,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 w-task-decomposition skill has no approval step between plan validation and task creation. When planner runs in user-invoked mode, it needs to present the plan and ask for approval before executing create_task calls.

@@ -3,15 +3,17 @@ id: 432
 title: Implement loop-detection pattern in agent instructions
 status: archived
 priority: needed
-created: 2026-03-30T21:37:43.8553771+02:00
-updated: 2026-03-30T22:19:13.8382648+02:00
-started: 2026-03-30T22:19:13.8382648+02:00
-completed: 2026-03-30T22:19:13.8382648+02:00
+created: 2026-03-30 21:37:43.855377+02:00
+updated: 2026-03-30 22:19:13.838265+02:00
+started: 2026-03-30 22:19:13.838265+02:00
+completed: 2026-03-30 22:19:13.838265+02:00
 tags:
-    - research
-    - scope:agents
-    - phase-2
+- research
+- scope:agents
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

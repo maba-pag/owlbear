@@ -3,14 +3,16 @@ id: 149
 title: Add GraphStore.get_counts() method
 status: archived
 priority: needed
-created: 2026-03-29T19:04:04.6269412+02:00
-updated: 2026-03-30T15:36:01.6512542+02:00
-started: 2026-03-30T15:18:49.0518667+02:00
-completed: 2026-03-30T15:18:49.0518667+02:00
+created: 2026-03-29 19:04:04.626941+02:00
+updated: 2026-03-30 15:36:01.651254+02:00
+started: 2026-03-30 15:18:49.051867+02:00
+completed: 2026-03-30 15:18:49.051867+02:00
 tags:
-    - phase-1
-    - scope:knowledge
+- phase-1
+- scope:knowledge
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Add a get_counts() method to GraphStore returning document, entity, and edge counts. ~10 LOC. Needed by mcp-knowledge get_stats tool. Ref: docs/research/build-mcp-knowledge-server.md

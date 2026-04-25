@@ -3,15 +3,17 @@ id: 43
 title: Add argument-hint to user-invocable skills
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:55:45.9770529+01:00
-updated: 2026-03-28T01:56:47.2985596+01:00
-started: 2026-03-28T01:56:42.0512683+01:00
-completed: 2026-03-28T01:56:42.0512683+01:00
+created: 2026-03-26 18:55:45.977053+01:00
+updated: 2026-03-28 01:56:47.298560+01:00
+started: 2026-03-28 01:56:42.051268+01:00
+completed: 2026-03-28 01:56:42.051268+01:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:build
+- phase-1
+- scope:skills
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

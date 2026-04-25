@@ -3,17 +3,19 @@ id: 428
 title: 'deer-flow deep dive: memory system + subagent delegation patterns'
 status: archived
 priority: needed
-created: 2026-03-30T21:17:52.6808313+02:00
-updated: 2026-04-02T05:35:12.4838601+02:00
-started: 2026-04-02T05:35:12.0193317+02:00
-completed: 2026-04-02T05:35:12.0193317+02:00
+created: 2026-03-30 21:17:52.680831+02:00
+updated: 2026-04-02 05:35:12.483860+02:00
+started: 2026-04-02 05:35:12.019332+02:00
+completed: 2026-04-02 05:35:12.019332+02:00
 tags:
-    - research
-    - ' scope:agents'
-    - ' phase-2'
+- research
+- ' scope:agents'
+- ' phase-2'
 depends_on:
-    - 386
+- 386
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

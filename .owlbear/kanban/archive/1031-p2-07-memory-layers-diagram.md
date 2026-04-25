@@ -3,8 +3,8 @@ id: 1031
 title: 'P2-07: Memory layers diagram'
 status: archived
 priority: important
-created: 2026-04-19T23:53:28.570554+00:00
-updated: 2026-04-20T05:16:06.248100+00:00
+created: 2026-04-19 23:53:28.570554+00:00
+updated: 2026-04-20 05:16:06.248100+00:00
 tags:
 - phase-2
 - docs-currency
@@ -17,6 +17,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 Brief: see parent #1016
 

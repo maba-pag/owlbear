@@ -3,19 +3,21 @@ id: 136
 title: Extract bookmark pipeline, refresh orchestrator, bookmark MCP tools
 status: archived
 priority: nice-to-have
-created: 2026-03-29T12:07:36.7065824+02:00
-updated: 2026-04-06T21:15:15.8392319+02:00
-started: 2026-04-06T21:15:15.8392319+02:00
-completed: 2026-04-06T21:15:15.8392319+02:00
+created: 2026-03-29 12:07:36.706582+02:00
+updated: 2026-04-06 21:15:15.839232+02:00
+started: 2026-04-06 21:15:15.839232+02:00
+completed: 2026-04-06 21:15:15.839232+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 33
-    - 135
-    - 223
+- 33
+- 135
+- 223
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

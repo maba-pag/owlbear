@@ -3,8 +3,8 @@ id: 1024
 title: 'P1-02: doc-writer v2 implementation (GREEN)'
 status: archived
 priority: critical
-created: 2026-04-19T23:52:28.175472+00:00
-updated: 2026-04-20T02:54:02.949322+00:00
+created: 2026-04-19 23:52:28.175472+00:00
+updated: 2026-04-20 02:54:02.949322+00:00
 tags:
 - phase-1
 - docs-currency
@@ -16,6 +16,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 Brief: see parent #1016
 

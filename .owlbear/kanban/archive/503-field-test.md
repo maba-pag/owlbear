@@ -3,14 +3,17 @@ id: 503
 title: FIELD-TEST
 status: archived
 priority: important
-created: 2026-03-31T21:35:12.6301959+02:00
-updated: 2026-04-01T02:56:54.1616805+02:00
-started: 2026-03-31T23:33:55.4051829+02:00
-completed: 2026-04-01T02:56:54.1616805+02:00
+created: 2026-03-31 21:35:12.630196+02:00
+updated: 2026-04-01 02:56:54.161681+02:00
+started: 2026-03-31 23:33:55.405183+02:00
+completed: 2026-04-01 02:56:54.161681+02:00
 parent: 489
 blocked: true
-block_reason: 'Placeholder task: title is FIELD-TEST with empty body, no AC, no research question. Parent #489 is archived. Cannot research without scope.'
+block_reason: 'Placeholder task: title is FIELD-TEST with empty body, no AC, no research
+  question. Parent #489 is archived. Cannot research without scope.'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 [[2026-03-31]] Tue 23:33

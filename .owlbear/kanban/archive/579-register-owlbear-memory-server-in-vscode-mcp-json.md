@@ -3,14 +3,16 @@ id: 579
 title: Register owlbear-memory server in .vscode/mcp.json
 status: archived
 priority: important
-created: 2026-04-03T12:03:12.2995965+02:00
-updated: 2026-04-03T12:40:58.2103736+02:00
-started: 2026-04-03T12:40:57.7459397+02:00
-completed: 2026-04-03T12:40:57.7459397+02:00
+created: 2026-04-03 12:03:12.299597+02:00
+updated: 2026-04-03 12:40:58.210374+02:00
+started: 2026-04-03 12:40:57.745940+02:00
+completed: 2026-04-03 12:40:57.745940+02:00
 tags:
-    - scope:config
-    - phase-2
+- scope:config
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 owlbear-memory MCP server is also missing from .vscode/mcp.json (same gap as #577). setup.py generates the entry for consumer projects and the package has __main__.py.

@@ -3,17 +3,19 @@ id: 567
 title: 'Curator: write curation-report.json to store/memory/'
 status: archived
 priority: important
-created: 2026-04-03T10:25:09.2481537+02:00
-updated: 2026-04-05T17:05:26.9999628+02:00
-started: 2026-04-05T17:05:26.9999628+02:00
-completed: 2026-04-05T17:05:26.9999628+02:00
+created: 2026-04-03 10:25:09.248154+02:00
+updated: 2026-04-05 17:05:26.999963+02:00
+started: 2026-04-05 17:05:26.999963+02:00
+completed: 2026-04-05 17:05:26.999963+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 depends_on:
-    - 530
+- 530
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 When curator completes a curation cycle, write a structured JSON report to store/memory/curation-report.json containing entry IDs with recommendations. Per .owlbear/research/approve-memory-cli-wrapper.md 3C.

@@ -3,16 +3,18 @@ id: 594
 title: 'Re-scope #575 AC for v2 architecture: 10 agents, per-agent MCP lifecycle blocks'
 status: archived
 priority: needed
-created: 2026-04-04T19:17:51.5286689+02:00
-updated: 2026-04-04T21:48:04.5234945+02:00
-started: 2026-04-04T21:48:04.5234945+02:00
-completed: 2026-04-04T21:48:04.5234945+02:00
+created: 2026-04-04 19:17:51.528669+02:00
+updated: 2026-04-04 21:48:04.523495+02:00
+started: 2026-04-04 21:48:04.523495+02:00
+completed: 2026-04-04 21:48:04.523495+02:00
 tags:
-    - phase-2
-    - ' scope:agent-config'
-    - ' type:build'
+- phase-2
+- ' scope:agent-config'
+- ' type:build'
 parent: 575
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

@@ -3,15 +3,17 @@ id: 206
 title: 'Test: intake, document_store, and ingest pipeline modules'
 status: archived
 priority: needed
-created: 2026-03-30T08:14:52.468527+02:00
-updated: 2026-03-30T14:15:18.197761+02:00
-started: 2026-03-30T14:14:54.3298887+02:00
-completed: 2026-03-30T14:14:54.3298887+02:00
+created: 2026-03-30 08:14:52.468527+02:00
+updated: 2026-03-30 14:15:18.197761+02:00
+started: 2026-03-30 14:14:54.329889+02:00
+completed: 2026-03-30 14:14:54.329889+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - test
+- phase-1
+- scope:knowledge
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED tests for #158. All tests must FAIL before builder implements.

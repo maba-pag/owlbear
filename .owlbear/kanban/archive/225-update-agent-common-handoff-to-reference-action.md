@@ -3,17 +3,19 @@ id: 225
 title: Update agent-common handoff to reference action requests
 status: archived
 priority: needed
-created: 2026-03-30T16:57:22.0388952+02:00
-updated: 2026-03-31T05:39:09.2226939+02:00
-started: 2026-03-31T05:35:37.9736422+02:00
-completed: 2026-03-31T05:35:37.9736422+02:00
+created: 2026-03-30 16:57:22.038895+02:00
+updated: 2026-03-31 05:39:09.222694+02:00
+started: 2026-03-31 05:35:37.973642+02:00
+completed: 2026-03-31 05:35:37.973642+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - type:docs
+- phase-1
+- scope:agents
+- type:docs
 depends_on:
-    - 224
+- 224
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

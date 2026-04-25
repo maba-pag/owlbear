@@ -3,17 +3,19 @@ id: 556
 title: 'Test: Implement memory-mcp tools'
 status: archived
 priority: needed
-created: 2026-04-02T16:34:22.2953439+02:00
-updated: 2026-04-03T01:06:37.0266206+02:00
-started: 2026-04-03T01:05:38.6400589+02:00
-completed: 2026-04-03T01:05:38.6400589+02:00
+created: 2026-04-02 16:34:22.295344+02:00
+updated: 2026-04-03 01:06:37.026621+02:00
+started: 2026-04-03 01:05:38.640059+02:00
+completed: 2026-04-03 01:05:38.640059+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - test
+- scope:agents
+- phase-2
+- test
 depends_on:
-    - 524
+- 524
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Write failing tests for #525 memory-mcp tool implementations. Tests cover all 4 tools: get_knowledge, record_learning, list_entries, mark_for_deletion.

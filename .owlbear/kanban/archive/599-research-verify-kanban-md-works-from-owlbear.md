@@ -3,16 +3,18 @@ id: 599
 title: 'Research: Verify kanban-md works from .owlbear/kanban/'
 status: archived
 priority: critical
-created: 2026-04-04T20:30:11.3710718+02:00
-updated: 2026-04-05T04:32:35.7902463+02:00
-started: 2026-04-05T04:32:35.7902463+02:00
-completed: 2026-04-05T04:32:35.7902463+02:00
+created: 2026-04-04 20:30:11.371072+02:00
+updated: 2026-04-05 04:32:35.790246+02:00
+started: 2026-04-05 04:32:35.790246+02:00
+completed: 2026-04-05 04:32:35.790246+02:00
 tags:
-    - scope:infra
-    - type:research
-    - phase-2
+- scope:infra
+- type:research
+- phase-2
 parent: 598
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

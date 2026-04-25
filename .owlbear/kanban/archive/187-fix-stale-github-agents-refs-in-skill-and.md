@@ -3,15 +3,17 @@ id: 187
 title: Fix stale .github/agents/ refs in skill and instruction files
 status: archived
 priority: nice-to-have
-created: 2026-03-29T20:46:45.7365474+02:00
-updated: 2026-03-30T04:16:16.2691981+02:00
-started: 2026-03-30T04:15:55.8165827+02:00
-completed: 2026-03-30T04:15:55.8165827+02:00
+created: 2026-03-29 20:46:45.736547+02:00
+updated: 2026-03-30 04:16:16.269198+02:00
+started: 2026-03-30 04:15:55.816583+02:00
+completed: 2026-03-30 04:15:55.816583+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

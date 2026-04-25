@@ -3,16 +3,18 @@ id: 61
 title: Implement voice protocol Pydantic models
 status: archived
 priority: nice-to-have
-created: 2026-03-26T19:33:36.0085175+01:00
-updated: 2026-03-30T03:38:25.6191377+02:00
-started: 2026-03-30T03:38:25.2935506+02:00
-completed: 2026-03-30T03:38:25.2935506+02:00
+created: 2026-03-26 19:33:36.008518+01:00
+updated: 2026-03-30 03:38:25.619138+02:00
+started: 2026-03-30 03:38:25.293551+02:00
+completed: 2026-03-30 03:38:25.293551+02:00
 tags:
-    - phase-3
-    - scope:voice
+- phase-3
+- scope:voice
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,19 +3,21 @@ id: 176
 title: Build KB data loader script and sources manifest
 status: archived
 priority: needed
-created: 2026-03-29T19:50:47.4770555+02:00
-updated: 2026-04-01T04:38:21.6859271+02:00
-started: 2026-04-01T04:38:17.41088+02:00
-completed: 2026-04-01T04:38:17.41088+02:00
+created: 2026-03-29 19:50:47.477056+02:00
+updated: 2026-04-01 04:38:21.685927+02:00
+started: 2026-04-01 04:38:17.410880+02:00
+completed: 2026-04-01 04:38:17.410880+02:00
 tags:
-    - phase-2
-    - scope:knowledge
-    - type:build
+- phase-2
+- scope:knowledge
+- type:build
 depends_on:
-    - 32
-    - 308
-    - 431
+- 32
+- 308
+- 431
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,17 +3,19 @@ id: 553
 title: Extract bookmark pipeline orchestrator
 status: archived
 priority: nice-to-have
-created: 2026-04-02T16:06:30.3206592+02:00
-updated: 2026-04-03T06:07:12.0429423+02:00
-started: 2026-04-03T06:06:30.0290749+02:00
-completed: 2026-04-03T06:06:30.0290749+02:00
+created: 2026-04-02 16:06:30.320659+02:00
+updated: 2026-04-03 06:07:12.042942+02:00
+started: 2026-04-03 06:06:30.029075+02:00
+completed: 2026-04-03 06:06:30.029075+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 552
+- 552
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

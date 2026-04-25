@@ -1,17 +1,20 @@
 ---
 id: 127
-title: Add confidence scoring and structured options rules to copilot-instructions.md
+title: Add confidence scoring and structured options rules to 
+  copilot-instructions.md
 status: archived
 priority: needed
-created: 2026-03-29T07:03:49.5676207+02:00
-updated: 2026-03-29T10:21:27.1169727+02:00
-started: 2026-03-29T07:29:09.3457361+02:00
-completed: 2026-03-29T10:21:22.3097235+02:00
+created: 2026-03-29 07:03:49.567621+02:00
+updated: 2026-03-29 10:21:27.116973+02:00
+started: 2026-03-29 07:29:09.345736+02:00
+completed: 2026-03-29 10:21:22.309724+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

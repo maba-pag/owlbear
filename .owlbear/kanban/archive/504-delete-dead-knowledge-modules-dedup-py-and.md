@@ -3,15 +3,17 @@ id: 504
 title: 'Delete dead knowledge modules: dedup.py and reranker.py'
 status: archived
 priority: important
-created: 2026-03-04T07:38:16.8793979+01:00
-updated: 2026-03-07T18:07:58.4473006+01:00
-started: 2026-03-06T19:25:59.3662573+01:00
-completed: 2026-03-07T18:07:58.4473006+01:00
+created: 2026-03-04 07:38:16.879398+01:00
+updated: 2026-03-07 18:07:58.447301+01:00
+started: 2026-03-06 19:25:59.366257+01:00
+completed: 2026-03-07 18:07:58.447301+01:00
 tags:
-    - audit
-    - yagni
-    - knowledge
+- audit
+- yagni
+- knowledge
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Delete the two dead knowledge modules and their tests. Neither module is imported by any production code, exported from `__init__.py`, or wired into any pipeline.

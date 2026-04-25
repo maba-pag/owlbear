@@ -1,18 +1,21 @@
 ---
 id: 385
-title: Mandatory user-decision gate for research-driven features and architectural changes
+title: Mandatory user-decision gate for research-driven features and 
+  architectural changes
 status: archived
 priority: critical
-created: 2026-03-30T20:56:31.6511501+02:00
-updated: 2026-03-31T08:38:16.775382+02:00
-started: 2026-03-31T08:38:13.0954315+02:00
-completed: 2026-03-31T08:38:13.0954315+02:00
+created: 2026-03-30 20:56:31.651150+02:00
+updated: 2026-03-31 08:38:16.775382+02:00
+started: 2026-03-31 08:38:13.095432+02:00
+completed: 2026-03-31 08:38:13.095432+02:00
 tags:
-    - research
-    - ' scope:agents'
-    - ' process'
-    - ' quality'
+- research
+- ' scope:agents'
+- ' process'
+- ' quality'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

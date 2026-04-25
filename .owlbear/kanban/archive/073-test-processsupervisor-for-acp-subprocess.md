@@ -3,16 +3,18 @@ id: 73
 title: 'Test: ProcessSupervisor for ACP subprocess lifecycle'
 status: archived
 priority: needed
-created: 2026-03-26T20:23:24.4133263+01:00
-updated: 2026-03-28T16:20:21.7853537+01:00
-started: 2026-03-28T16:20:21.4622906+01:00
-completed: 2026-03-28T16:20:21.4622906+01:00
+created: 2026-03-26 20:23:24.413326+01:00
+updated: 2026-03-28 16:20:21.785354+01:00
+started: 2026-03-28 16:20:21.462291+01:00
+completed: 2026-03-28 16:20:21.462291+01:00
 tags:
-    - phase-1
-    - scope:orchestrator
-    - type:test
-    - test
+- phase-1
+- scope:orchestrator
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

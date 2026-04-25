@@ -3,17 +3,19 @@ id: 9
 title: Port skills to agentskills.io format
 status: archived
 priority: needed
-created: 2026-03-26T17:19:53.9934892+01:00
-updated: 2026-03-30T15:35:58.7489671+02:00
-started: 2026-03-30T15:18:45.9928034+02:00
-completed: 2026-03-30T15:18:45.9928034+02:00
+created: 2026-03-26 17:19:53.993489+01:00
+updated: 2026-03-30 15:35:58.748967+02:00
+started: 2026-03-30 15:18:45.992803+02:00
+completed: 2026-03-30 15:18:45.992803+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:build
+- phase-1
+- scope:skills
+- type:build
 depends_on:
-    - 3
+- 3
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,15 +3,17 @@ id: 53
 title: Define owlbear-project.json schema specification
 status: archived
 priority: needed
-created: 2026-03-26T19:11:49.3907211+01:00
-updated: 2026-03-27T08:49:23.2827949+01:00
-started: 2026-03-27T08:49:07.235593+01:00
-completed: 2026-03-27T08:49:07.235593+01:00
+created: 2026-03-26 19:11:49.390721+01:00
+updated: 2026-03-27 08:49:23.282795+01:00
+started: 2026-03-27 08:49:07.235593+01:00
+completed: 2026-03-27 08:49:07.235593+01:00
 tags:
-    - phase-1
-    - scope:mcp
-    - research
+- phase-1
+- scope:mcp
+- research
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,18 +3,20 @@ id: 145
 title: Implement planner gate checker and task selector
 status: archived
 priority: needed
-created: 2026-03-29T16:23:38.8707663+02:00
-updated: 2026-03-31T23:57:01.4584833+02:00
-started: 2026-03-31T23:56:51.5650996+02:00
-completed: 2026-03-31T23:56:51.5650996+02:00
+created: 2026-03-29 16:23:38.870766+02:00
+updated: 2026-03-31 23:57:01.458483+02:00
+started: 2026-03-31 23:56:51.565100+02:00
+completed: 2026-03-31 23:56:51.565100+02:00
 tags:
-    - phase-2
-    - scope:orchestrator
-    - type:build
+- phase-2
+- scope:orchestrator
+- type:build
 depends_on:
-    - 144
-    - 207
+- 144
+- 207
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 See docs/research/planner-gate-checker-selector.md for validated research.

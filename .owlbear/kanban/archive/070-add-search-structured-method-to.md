@@ -3,16 +3,18 @@ id: 70
 title: Add search_structured method to KnowledgeQueryService
 status: archived
 priority: important
-created: 2026-03-26T20:13:07.2317587+01:00
-updated: 2026-03-29T09:21:54.4462186+02:00
-started: 2026-03-29T09:21:50.167023+02:00
-completed: 2026-03-29T09:21:50.167023+02:00
+created: 2026-03-26 20:13:07.231759+01:00
+updated: 2026-03-29 09:21:54.446219+02:00
+started: 2026-03-29 09:21:50.167023+02:00
+completed: 2026-03-29 09:21:50.167023+02:00
 tags:
-    - phase-2
-    - scope:knowledge
+- phase-2
+- scope:knowledge
 depends_on:
-    - 76
+- 76
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

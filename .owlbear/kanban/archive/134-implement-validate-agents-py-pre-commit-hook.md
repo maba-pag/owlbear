@@ -3,16 +3,18 @@ id: 134
 title: Implement validate_agents.py pre-commit hook
 status: archived
 priority: nice-to-have
-created: 2026-03-29T12:02:19.4869945+02:00
-updated: 2026-03-30T04:39:34.6649392+02:00
-started: 2026-03-30T04:38:30.0412936+02:00
-completed: 2026-03-30T04:38:30.0412936+02:00
+created: 2026-03-29 12:02:19.486995+02:00
+updated: 2026-03-30 04:39:34.664939+02:00
+started: 2026-03-30 04:38:30.041294+02:00
+completed: 2026-03-30 04:38:30.041294+02:00
 tags:
-    - phase-1
-    - scope:agents
-    - tooling
-    - type:build
+- phase-1
+- scope:agents
+- tooling
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

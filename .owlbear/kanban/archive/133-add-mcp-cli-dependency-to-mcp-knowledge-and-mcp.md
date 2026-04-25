@@ -3,15 +3,17 @@ id: 133
 title: Add mcp[cli] dependency to mcp-knowledge and mcp-project pyproject.toml
 status: archived
 priority: needed
-created: 2026-03-29T10:27:06.2817777+02:00
-updated: 2026-03-29T15:40:25.0840549+02:00
-started: 2026-03-29T15:40:24.7962197+02:00
-completed: 2026-03-29T15:40:24.7962197+02:00
+created: 2026-03-29 10:27:06.281778+02:00
+updated: 2026-03-29 15:40:25.084055+02:00
+started: 2026-03-29 15:40:24.796220+02:00
+completed: 2026-03-29 15:40:24.796220+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:build
+- phase-1
+- scope:mcp
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

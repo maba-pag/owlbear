@@ -3,17 +3,19 @@ id: 116
 title: Update .github/skills/ references to skills/ after copy
 status: archived
 priority: needed
-created: 2026-03-29T01:40:51.0049156+01:00
-updated: 2026-03-29T10:26:53.0957529+02:00
-started: 2026-03-29T10:26:52.8027306+02:00
-completed: 2026-03-29T10:26:52.8027306+02:00
+created: 2026-03-29 01:40:51.004916+01:00
+updated: 2026-03-29 10:26:53.095753+02:00
+started: 2026-03-29 10:26:52.802731+02:00
+completed: 2026-03-29 10:26:52.802731+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:docs
+- phase-1
+- scope:skills
+- type:docs
 depends_on:
-    - 115
+- 115
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

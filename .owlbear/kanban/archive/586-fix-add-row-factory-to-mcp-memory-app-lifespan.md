@@ -3,17 +3,19 @@ id: 586
 title: 'Fix: add row-factory to mcp-memory app_lifespan'
 status: archived
 priority: needed
-created: 2026-04-03T17:54:52.4003742+02:00
-updated: 2026-04-04T21:20:53.1299868+02:00
-started: 2026-04-04T21:20:53.1299868+02:00
-completed: 2026-04-04T21:20:53.1299868+02:00
+created: 2026-04-03 17:54:52.400374+02:00
+updated: 2026-04-04 21:20:53.129987+02:00
+started: 2026-04-04 21:20:53.129987+02:00
+completed: 2026-04-04 21:20:53.129987+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 525
-    - 587
+- 525
+- 587
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Latent bug: server.py app_lifespan opens sqlite3.connect() without setting conn.row-factory = sqlite3.Row. list_entries (tools.py L224) and get_knowledge (tools.py L126) call dict(row) on cursor results, which requires row-factory. Without it, dict() on plain tuples raises ValueError. Tests mask this by setting row-factory in test helpers (test_memory_tools_556.py L91).

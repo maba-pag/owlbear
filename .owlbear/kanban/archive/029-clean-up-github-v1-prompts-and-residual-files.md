@@ -3,19 +3,21 @@ id: 29
 title: Clean up .github/ v1 prompts and residual files
 status: archived
 priority: important
-created: 2026-03-26T17:59:04.1808507+01:00
-updated: 2026-04-04T06:39:36.9196789+02:00
-started: 2026-04-04T06:39:36.9196789+02:00
-completed: 2026-04-04T06:39:36.9196789+02:00
+created: 2026-03-26 17:59:04.180851+01:00
+updated: 2026-04-04 06:39:36.919679+02:00
+started: 2026-04-04 06:39:36.919679+02:00
+completed: 2026-04-04 06:39:36.919679+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:build
+- phase-1
+- scope:docs
+- type:build
 depends_on:
-    - 8
-    - 9
-    - 10
+- 8
+- 9
+- 10
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

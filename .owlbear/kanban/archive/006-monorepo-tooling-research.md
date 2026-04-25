@@ -3,15 +3,17 @@ id: 6
 title: Monorepo tooling research
 status: archived
 priority: needed
-created: 2026-03-26T17:19:14.2346579+01:00
-updated: 2026-03-27T13:33:18.3284369+01:00
-started: 2026-03-27T13:33:13.8341123+01:00
-completed: 2026-03-27T13:33:13.8341123+01:00
+created: 2026-03-26 17:19:14.234658+01:00
+updated: 2026-03-27 13:33:18.328437+01:00
+started: 2026-03-27 13:33:13.834112+01:00
+completed: 2026-03-27 13:33:13.834112+01:00
 tags:
-    - research
-    - phase-1
-    - scope:build
+- research
+- phase-1
+- scope:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

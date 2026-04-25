@@ -3,15 +3,17 @@ id: 196
 title: Add necessity check to code-review skill critical checks
 status: archived
 priority: needed
-created: 2026-03-29T23:08:30.248244+02:00
-updated: 2026-03-30T16:52:55.8111055+02:00
-started: 2026-03-30T15:25:48.1247518+02:00
-completed: 2026-03-30T16:52:35.0364391+02:00
+created: 2026-03-29 23:08:30.248244+02:00
+updated: 2026-03-30 16:52:55.811106+02:00
+started: 2026-03-30 15:25:48.124752+02:00
+completed: 2026-03-30 16:52:35.036439+02:00
 tags:
-    - agent
-    - quality
-    - scope:agents
+- agent
+- quality
+- scope:agents
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

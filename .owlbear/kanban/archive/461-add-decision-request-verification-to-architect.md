@@ -3,15 +3,17 @@ id: 461
 title: Add decision-request verification to architect backlog gate
 status: archived
 priority: needed
-created: 2026-03-31T03:40:10.0274088+02:00
-updated: 2026-03-31T09:02:15.7569801+02:00
-started: 2026-03-31T09:02:12.7497947+02:00
-completed: 2026-03-31T09:02:12.7497947+02:00
+created: 2026-03-31 03:40:10.027409+02:00
+updated: 2026-03-31 09:02:15.756980+02:00
+started: 2026-03-31 09:02:12.749795+02:00
+completed: 2026-03-31 09:02:12.749795+02:00
 tags:
-    - process
-    - scope:agents
-    - quality
+- process
+- scope:agents
+- quality
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Scope: `skills/arch-review/SKILL.md` and `agents/architect.agent.md` only. No code, no tests.

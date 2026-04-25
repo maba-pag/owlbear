@@ -3,17 +3,19 @@ id: 320
 title: Tests for fix-attempt delegation flow
 status: archived
 priority: needed
-created: 2026-03-30T20:38:27.954547+02:00
-updated: 2026-04-05T02:04:57.7946715+02:00
-started: 2026-04-05T02:04:57.7946715+02:00
-completed: 2026-04-05T02:04:57.7946715+02:00
+created: 2026-03-30 20:38:27.954547+02:00
+updated: 2026-04-05 02:04:57.794672+02:00
+started: 2026-04-05 02:04:57.794672+02:00
+completed: 2026-04-05 02:04:57.794672+02:00
 tags:
-    - scope:agents
-    - test
-    - phase-2
+- scope:agents
+- test
+- phase-2
 depends_on:
-    - 318
+- 318
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 AC:

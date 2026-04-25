@@ -3,15 +3,17 @@ id: 30
 title: Research voice addon architecture
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:05:24.8333451+01:00
-updated: 2026-03-27T12:40:23.5994841+01:00
-started: 2026-03-27T12:38:58.653198+01:00
-completed: 2026-03-27T12:38:58.653198+01:00
+created: 2026-03-26 18:05:24.833345+01:00
+updated: 2026-03-27 12:40:23.599484+01:00
+started: 2026-03-27 12:38:58.653198+01:00
+completed: 2026-03-27 12:38:58.653198+01:00
 tags:
-    - phase-3
-    - scope:voice
-    - research
+- phase-3
+- scope:voice
+- research
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

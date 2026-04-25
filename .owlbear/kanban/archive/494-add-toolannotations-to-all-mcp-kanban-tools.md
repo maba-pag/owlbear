@@ -3,15 +3,17 @@ id: 494
 title: Add ToolAnnotations to all mcp-kanban tools
 status: archived
 priority: needed
-created: 2026-03-31T06:46:59.3680944+02:00
-updated: 2026-03-31T13:43:02.8971257+02:00
-started: 2026-03-31T13:43:02.4271079+02:00
-completed: 2026-03-31T13:43:02.4271079+02:00
+created: 2026-03-31 06:46:59.368094+02:00
+updated: 2026-03-31 13:43:02.897126+02:00
+started: 2026-03-31 13:43:02.427108+02:00
+completed: 2026-03-31 13:43:02.427108+02:00
 tags:
-    - scope:mcp
-    - type:build
-    - phase-2
+- scope:mcp
+- type:build
+- phase-2
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

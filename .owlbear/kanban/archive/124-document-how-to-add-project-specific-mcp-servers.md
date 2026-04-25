@@ -3,17 +3,19 @@ id: 124
 title: Document how to add project-specific MCP servers
 status: archived
 priority: important
-created: 2026-03-29T06:33:52.3672096+02:00
-updated: 2026-03-29T15:36:41.4933596+02:00
-started: 2026-03-29T15:36:41.4933596+02:00
-completed: 2026-03-29T15:36:41.4933596+02:00
+created: 2026-03-29 06:33:52.367210+02:00
+updated: 2026-03-29 15:36:41.493360+02:00
+started: 2026-03-29 15:36:41.493360+02:00
+completed: 2026-03-29 15:36:41.493360+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:docs
+- phase-1
+- scope:mcp
+- type:docs
 blocked: true
 block_reason: 'Duplicate of #122 - identical AC and context'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

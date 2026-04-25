@@ -3,17 +3,19 @@ id: 28
 title: Update README.md for v2
 status: archived
 priority: needed
-created: 2026-03-26T17:43:30.1119723+01:00
-updated: 2026-03-29T01:21:46.274496+01:00
-started: 2026-03-29T01:21:41.6554473+01:00
-completed: 2026-03-29T01:21:41.6554473+01:00
+created: 2026-03-26 17:43:30.111972+01:00
+updated: 2026-03-29 01:21:46.274496+01:00
+started: 2026-03-29 01:21:41.655447+01:00
+completed: 2026-03-29 01:21:41.655447+01:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

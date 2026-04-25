@@ -3,16 +3,18 @@ id: 126
 title: Rewrite askQuestions behavioral references to tool-agnostic language
 status: archived
 priority: needed
-created: 2026-03-29T07:03:36.7362601+02:00
-updated: 2026-03-29T10:38:13.8401888+02:00
-started: 2026-03-29T10:38:07.9173467+02:00
-completed: 2026-03-29T10:38:07.9173467+02:00
+created: 2026-03-29 07:03:36.736260+02:00
+updated: 2026-03-29 10:38:13.840189+02:00
+started: 2026-03-29 10:38:07.917347+02:00
+completed: 2026-03-29 10:38:07.917347+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - scope:agents
-    - type:docs
+- phase-1
+- scope:docs
+- scope:agents
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

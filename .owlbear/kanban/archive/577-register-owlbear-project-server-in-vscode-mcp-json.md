@@ -3,15 +3,17 @@ id: 577
 title: Register owlbear-project server in .vscode/mcp.json
 status: archived
 priority: important
-created: 2026-04-03T11:38:43.9628854+02:00
-updated: 2026-04-03T18:33:26.7448661+02:00
-started: 2026-04-03T18:33:03.5187983+02:00
-completed: 2026-04-03T18:33:03.5187983+02:00
+created: 2026-04-03 11:38:43.962885+02:00
+updated: 2026-04-03 18:33:26.744866+02:00
+started: 2026-04-03 18:33:03.518798+02:00
+completed: 2026-04-03 18:33:03.518798+02:00
 tags:
-    - scope:config
-    - phase-2
-    - type:config
+- scope:config
+- phase-2
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

@@ -3,15 +3,17 @@ id: 216
 title: Add remediation process for gate-blocked tasks in dispatch-planning
 status: archived
 priority: important
-created: 2026-03-30T14:22:42.0846704+02:00
-updated: 2026-03-30T15:53:03.8069195+02:00
-started: 2026-03-30T15:53:03.8069195+02:00
-completed: 2026-03-30T15:53:03.8069195+02:00
+created: 2026-03-30 14:22:42.084670+02:00
+updated: 2026-03-30 15:53:03.806920+02:00
+started: 2026-03-30 15:53:03.806920+02:00
+completed: 2026-03-30 15:53:03.806920+02:00
 tags:
-    - scope:agents
-    - quality
-    - type:config
+- scope:agents
+- quality
+- type:config
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Architecture Review

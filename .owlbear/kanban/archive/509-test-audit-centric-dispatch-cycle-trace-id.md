@@ -3,15 +3,17 @@ id: 509
 title: 'Test: audit-centric dispatch-cycle trace ID'
 status: archived
 priority: nice-to-have
-created: 2026-03-31T23:53:17.8817072+02:00
-updated: 2026-04-02T00:14:23.9271061+02:00
-started: 2026-04-02T00:14:13.1396376+02:00
-completed: 2026-04-02T00:14:13.1396376+02:00
+created: 2026-03-31 23:53:17.881707+02:00
+updated: 2026-04-02 00:14:23.927106+02:00
+started: 2026-04-02 00:14:13.139638+02:00
+completed: 2026-04-02 00:14:13.139638+02:00
 tags:
-    - scope:orchestrator
-    - phase-2
-    - test
+- scope:orchestrator
+- phase-2
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

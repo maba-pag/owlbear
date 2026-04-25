@@ -3,18 +3,20 @@ id: 162
 title: 'Integration test: full ingest-to-search cycle'
 status: archived
 priority: needed
-created: 2026-03-29T19:37:50.9697847+02:00
-updated: 2026-04-01T02:07:59.1119172+02:00
-started: 2026-04-01T02:07:58.6247473+02:00
-completed: 2026-04-01T02:07:58.6247473+02:00
+created: 2026-03-29 19:37:50.969785+02:00
+updated: 2026-04-01 02:07:59.111917+02:00
+started: 2026-04-01 02:07:58.624747+02:00
+completed: 2026-04-01 02:07:58.624747+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:test
+- phase-1
+- scope:knowledge
+- type:test
 depends_on:
-    - 158
-    - 34
+- 158
+- 34
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

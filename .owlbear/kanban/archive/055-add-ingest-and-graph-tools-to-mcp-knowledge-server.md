@@ -3,17 +3,19 @@ id: 55
 title: Add ingest and graph tools to mcp-knowledge server
 status: archived
 priority: important
-created: 2026-03-26T19:12:49.2923419+01:00
-updated: 2026-03-30T14:34:46.4573121+02:00
-started: 2026-03-30T14:34:39.3610306+02:00
-completed: 2026-03-30T14:34:39.3610306+02:00
+created: 2026-03-26 19:12:49.292342+01:00
+updated: 2026-03-30 14:34:46.457312+02:00
+started: 2026-03-30 14:34:39.361031+02:00
+completed: 2026-03-30 14:34:39.361031+02:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
+- phase-2
+- scope:mcp
+- scope:knowledge
 depends_on:
-    - 77
+- 77
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

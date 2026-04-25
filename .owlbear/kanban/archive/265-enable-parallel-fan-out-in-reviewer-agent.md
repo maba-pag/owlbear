@@ -3,17 +3,19 @@ id: 265
 title: Enable parallel fan-out in reviewer agent
 status: archived
 priority: important
-created: 2026-03-30T19:31:23.5606586+02:00
-updated: 2026-04-05T15:04:47.3139546+02:00
-started: 2026-04-05T15:04:47.3139546+02:00
-completed: 2026-04-05T15:04:47.3139546+02:00
+created: 2026-03-30 19:31:23.560659+02:00
+updated: 2026-04-05 15:04:47.313955+02:00
+started: 2026-04-05 15:04:47.313955+02:00
+completed: 2026-04-05 15:04:47.313955+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 263
-    - 307
+- 263
+- 307
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Acceptance Criteria

@@ -3,17 +3,19 @@ id: 158
 title: Create intake + ingest pipeline modules in knowledge package
 status: archived
 priority: needed
-created: 2026-03-29T19:35:58.8584239+02:00
-updated: 2026-03-30T23:39:56.0860205+02:00
-started: 2026-03-30T23:39:07.8257019+02:00
-completed: 2026-03-30T23:39:07.8257019+02:00
+created: 2026-03-29 19:35:58.858424+02:00
+updated: 2026-03-30 23:39:56.086021+02:00
+started: 2026-03-30 23:39:07.825702+02:00
+completed: 2026-03-30 23:39:07.825702+02:00
 tags:
-    - phase-1
-    - scope:knowledge
-    - type:build
+- phase-1
+- scope:knowledge
+- type:build
 depends_on:
-    - 206
+- 206
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

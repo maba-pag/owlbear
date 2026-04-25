@@ -3,17 +3,19 @@ id: 92
 title: 'Test: setup script core functions (settings, mcp, kanban, idempotency)'
 status: archived
 priority: needed
-created: 2026-03-28T01:41:20.8115575+01:00
-updated: 2026-03-28T21:43:50.2057241+01:00
-started: 2026-03-28T21:43:45.1397811+01:00
-completed: 2026-03-28T21:43:45.1397811+01:00
+created: 2026-03-28 01:41:20.811558+01:00
+updated: 2026-03-28 21:43:50.205724+01:00
+started: 2026-03-28 21:43:45.139781+01:00
+completed: 2026-03-28 21:43:45.139781+01:00
 tags:
-    - phase-1
-    - scope:cli
-    - type:test
+- phase-1
+- scope:cli
+- type:test
 depends_on:
-    - 7
+- 7
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

@@ -3,16 +3,18 @@ id: 528
 title: Design curator workflow for memory-mcp
 status: archived
 priority: important
-created: 2026-04-01T16:11:51.0425772+02:00
-updated: 2026-04-03T10:22:07.083576+02:00
-started: 2026-04-01T19:15:15.4660781+02:00
-completed: 2026-04-03T10:22:07.083576+02:00
+created: 2026-04-01 16:11:51.042577+02:00
+updated: 2026-04-03 10:22:07.083576+02:00
+started: 2026-04-01 19:15:15.466078+02:00
+completed: 2026-04-03 10:22:07.083576+02:00
 tags:
-    - scope:agents
-    - phase-2
+- scope:agents
+- phase-2
 depends_on:
-    - 525
+- 525
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 Update curator agent and curation-workflow skill for memory-mcp integration per docs/research/memory-mcp-server-design.md sec 3I. Depends on #525.

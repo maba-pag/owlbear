@@ -3,15 +3,17 @@ id: 473
 title: Add KANBAN_TOOLS_EXCLUDE config for selective tool exposure
 status: archived
 priority: needed
-created: 2026-03-31T05:21:29.1281475+02:00
-updated: 2026-04-02T15:00:26.0701098+02:00
-started: 2026-04-02T15:00:25.6666878+02:00
-completed: 2026-04-02T15:00:25.6666878+02:00
+created: 2026-03-31 05:21:29.128148+02:00
+updated: 2026-04-02 15:00:26.070110+02:00
+started: 2026-04-02 15:00:25.666688+02:00
+completed: 2026-04-02 15:00:25.666688+02:00
 tags:
-    - scope:mcp
-    - ' phase-2'
-    - research
+- scope:mcp
+- ' phase-2'
+- research
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Research Deliverables

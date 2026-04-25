@@ -3,15 +3,17 @@ id: 587
 title: 'Test: Fix row-factory in mcp-memory app_lifespan'
 status: archived
 priority: needed
-created: 2026-04-03T18:05:59.6474997+02:00
-updated: 2026-04-04T03:01:22.3299886+02:00
-started: 2026-04-03T18:06:10.3769271+02:00
-completed: 2026-04-04T03:01:12.8723383+02:00
+created: 2026-04-03 18:05:59.647500+02:00
+updated: 2026-04-04 03:01:22.329989+02:00
+started: 2026-04-03 18:06:10.376927+02:00
+completed: 2026-04-04 03:01:12.872338+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - test
+- scope:agents
+- phase-2
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 TDD RED phase for #586.

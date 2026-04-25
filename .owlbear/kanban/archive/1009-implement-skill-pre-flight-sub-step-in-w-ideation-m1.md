@@ -3,8 +3,8 @@ id: 1009
 title: Implement skill pre-flight sub-step in w-ideation M1
 status: archived
 priority: nice-to-have
-created: 2026-04-18T21:57:35.239825+00:00
-updated: 2026-04-19T16:40:39.540051+00:00
+created: 2026-04-18 21:57:35.239825+00:00
+updated: 2026-04-19 16:40:39.540051+00:00
 tags:
 - type:improvement
 - scope:skills
@@ -15,6 +15,8 @@ blocked: false
 block_reason:
 claimed_by:
 claimed_at:
+archival_reason: completed
+archival_refs: []
 ---
 ## Problem
 w-ideation M1 lacks a skill pre-flight check. Existing conventions in skill files may contradict assumptions made during problem narrowing, only surfacing at M3 when decisions are locked.

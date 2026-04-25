@@ -3,16 +3,18 @@ id: 85
 title: 'Test: Add argument-hint to remaining user-invoked skills'
 status: archived
 priority: nice-to-have
-created: 2026-03-27T08:48:16.9125448+01:00
-updated: 2026-03-30T04:00:55.1385022+02:00
-started: 2026-03-30T04:00:29.9930343+02:00
-completed: 2026-03-30T04:00:29.9930343+02:00
+created: 2026-03-27 08:48:16.912545+01:00
+updated: 2026-03-30 04:00:55.138502+02:00
+started: 2026-03-30 04:00:29.993034+02:00
+completed: 2026-03-30 04:00:29.993034+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - type:test
-    - test
+- phase-1
+- scope:skills
+- type:test
+- test
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

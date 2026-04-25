@@ -3,21 +3,23 @@ id: 603
 title: Move project ops data to .owlbear/
 status: archived
 priority: critical
-created: 2026-04-04T20:30:51.9919622+02:00
-updated: 2026-04-05T08:34:57.7597478+02:00
-started: 2026-04-05T08:34:57.7597478+02:00
-completed: 2026-04-05T08:34:57.7597478+02:00
+created: 2026-04-04 20:30:51.991962+02:00
+updated: 2026-04-05 08:34:57.759748+02:00
+started: 2026-04-05 08:34:57.759748+02:00
+completed: 2026-04-05 08:34:57.759748+02:00
 tags:
-    - scope:infra
-    - type:build
-    - phase-2
-    - type:config
+- scope:infra
+- type:build
+- phase-2
+- type:config
 parent: 598
 depends_on:
-    - 599
+- 599
 claimed_by: flare-heath
-claimed_at: 2026-04-05T08:34:12.835362+02:00
+claimed_at: 2026-04-05 08:34:12.835362+02:00
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Summary

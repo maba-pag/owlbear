@@ -3,18 +3,20 @@ id: 54
 title: Implement real search_knowledge tool in mcp-knowledge
 status: archived
 priority: needed
-created: 2026-03-26T19:12:42.1178047+01:00
-updated: 2026-03-30T22:56:49.2354676+02:00
-started: 2026-03-30T22:56:17.0864873+02:00
-completed: 2026-03-30T22:56:17.0864873+02:00
+created: 2026-03-26 19:12:42.117805+01:00
+updated: 2026-03-30 22:56:49.235468+02:00
+started: 2026-03-30 22:56:17.086487+02:00
+completed: 2026-03-30 22:56:17.086487+02:00
 tags:
-    - phase-2
-    - scope:mcp
-    - scope:knowledge
+- phase-2
+- scope:mcp
+- scope:knowledge
 depends_on:
-    - 40
-    - 72
+- 40
+- 72
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

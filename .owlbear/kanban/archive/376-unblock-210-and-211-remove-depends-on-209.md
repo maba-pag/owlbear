@@ -3,15 +3,17 @@ id: 376
 title: 'Unblock #210 and #211: remove depends_on 209'
 status: archived
 priority: nice-to-have
-created: 2026-03-30T20:46:43.1402112+02:00
-updated: 2026-04-01T08:14:10.1366597+02:00
-started: 2026-03-30T23:39:05.5597753+02:00
-completed: 2026-04-01T08:14:10.1366597+02:00
+created: 2026-03-30 20:46:43.140211+02:00
+updated: 2026-04-01 08:14:10.136660+02:00
+started: 2026-03-30 23:39:05.559775+02:00
+completed: 2026-04-01 08:14:10.136660+02:00
 tags:
-    - scope:agents
-    - hooks
-    - type:build
+- scope:agents
+- hooks
+- type:build
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Context

@@ -3,18 +3,20 @@ id: 44
 title: Add skills-ref validation to CI
 status: archived
 priority: nice-to-have
-created: 2026-03-26T18:55:53.1789806+01:00
-updated: 2026-04-04T07:30:31.295705+02:00
-started: 2026-04-04T07:30:31.295705+02:00
-completed: 2026-04-04T07:30:31.295705+02:00
+created: 2026-03-26 18:55:53.178981+01:00
+updated: 2026-04-04 07:30:31.295705+02:00
+started: 2026-04-04 07:30:31.295705+02:00
+completed: 2026-04-04 07:30:31.295705+02:00
 tags:
-    - phase-1
-    - scope:skills
-    - scope:build
-    - type:build
+- phase-1
+- scope:skills
+- scope:build
+- type:build
 depends_on:
-    - 84
+- 84
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

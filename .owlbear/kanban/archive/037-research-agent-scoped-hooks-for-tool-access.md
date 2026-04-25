@@ -1,18 +1,21 @@
 ---
 id: 37
-title: Research agent-scoped hooks for tool access, lifecycle, and pipeline enforcement
+title: Research agent-scoped hooks for tool access, lifecycle, and pipeline 
+  enforcement
 status: archived
 priority: important
-created: 2026-03-26T18:45:09.795589+01:00
-updated: 2026-04-05T14:45:36.0060956+02:00
-started: 2026-04-05T14:45:36.0060956+02:00
-completed: 2026-04-05T14:45:36.0060956+02:00
+created: 2026-03-26 18:45:09.795589+01:00
+updated: 2026-04-05 14:45:36.006096+02:00
+started: 2026-04-05 14:45:36.006096+02:00
+completed: 2026-04-05 14:45:36.006096+02:00
 tags:
-    - research
-    - phase-1
-    - scope:agents
-    - hooks
+- research
+- phase-1
+- scope:agents
+- hooks
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

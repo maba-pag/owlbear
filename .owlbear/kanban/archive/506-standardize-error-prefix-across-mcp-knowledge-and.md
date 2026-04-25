@@ -3,15 +3,17 @@ id: 506
 title: 'Standardize error: prefix across mcp-knowledge and mcp-project'
 status: archived
 priority: needed
-created: 2026-03-31T23:40:53.2213873+02:00
-updated: 2026-04-01T05:31:05.125234+02:00
-started: 2026-04-01T05:31:00.4909441+02:00
-completed: 2026-04-01T05:31:00.4909441+02:00
+created: 2026-03-31 23:40:53.221387+02:00
+updated: 2026-04-01 05:31:05.125234+02:00
+started: 2026-04-01 05:31:00.490944+02:00
+completed: 2026-04-01 05:31:00.490944+02:00
 tags:
-    - scope:mcp
-    - ' type:build'
-    - ' phase-2'
+- scope:mcp
+- ' type:build'
+- ' phase-2'
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## AC

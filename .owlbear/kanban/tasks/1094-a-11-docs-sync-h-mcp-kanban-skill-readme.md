@@ -3,8 +3,8 @@ id: 1094
 title: 'A-11: docs sync — h-mcp-kanban skill + README'
 status: todo
 priority: needed
-created: 2026-04-21T10:55:00.686129+00:00
-updated: 2026-04-21T10:55:00.686129+00:00
+created: '2026-04-21 10:55:00.686129+00:00'
+updated: '2026-04-21 10:55:00.686129+00:00'
 tags:
 - phase:mcp
 - brief:a
@@ -15,8 +15,9 @@ depends_on:
 - 1093
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
+archival_reason:
+archival_refs: []
 ---
 ## Brief
 Brief A (#1045) — kanban-mcp-surface-v2/brief.md "Handoff Notes"

@@ -3,15 +3,17 @@ id: 318
 title: Create fix-attempt.agent.md with assign-mode tools
 status: archived
 priority: needed
-created: 2026-03-30T20:38:16.8297495+02:00
-updated: 2026-04-04T19:48:51.7495197+02:00
-started: 2026-04-04T19:48:51.7495197+02:00
-completed: 2026-04-04T19:48:51.7495197+02:00
+created: 2026-03-30 20:38:16.829750+02:00
+updated: 2026-04-04 19:48:51.749520+02:00
+started: 2026-04-04 19:48:51.749520+02:00
+completed: 2026-04-04 19:48:51.749520+02:00
 tags:
-    - scope:agents
-    - phase-2
-    - agent
+- scope:agents
+- phase-2
+- agent
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 AC:

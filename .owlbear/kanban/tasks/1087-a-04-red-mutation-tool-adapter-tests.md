@@ -3,8 +3,8 @@ id: 1087
 title: 'A-04: RED — mutation tool adapter tests'
 status: review
 priority: needed
-created: 2026-04-21T10:53:48.099115+00:00
-updated: 2026-04-24T18:00:08.159390+00:00
+created: '2026-04-21 10:53:48.099115+00:00'
+updated: '2026-04-24 18:00:08.159390+00:00'
 tags:
 - phase:mcp
 - brief:a
@@ -16,7 +16,6 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []

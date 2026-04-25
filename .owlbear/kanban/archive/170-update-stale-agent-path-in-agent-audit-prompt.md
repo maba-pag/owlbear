@@ -3,15 +3,17 @@ id: 170
 title: Update stale agent path in agent-audit prompt
 status: archived
 priority: nice-to-have
-created: 2026-03-29T19:49:39.6297224+02:00
-updated: 2026-03-30T15:36:02.0826964+02:00
-started: 2026-03-30T15:18:49.5324013+02:00
-completed: 2026-03-30T15:18:49.5324013+02:00
+created: 2026-03-29 19:49:39.629722+02:00
+updated: 2026-03-30 15:36:02.082696+02:00
+started: 2026-03-30 15:18:49.532401+02:00
+completed: 2026-03-30 15:18:49.532401+02:00
 tags:
-    - phase-1
-    - scope:docs
-    - type:docs
+- phase-1
+- scope:docs
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective

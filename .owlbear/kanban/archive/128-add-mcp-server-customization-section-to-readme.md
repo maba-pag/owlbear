@@ -3,15 +3,17 @@ id: 128
 title: Add MCP server customization section to README
 status: archived
 priority: important
-created: 2026-03-29T07:06:43.608754+02:00
-updated: 2026-03-29T14:35:30.1385466+02:00
-started: 2026-03-29T14:35:18.632805+02:00
-completed: 2026-03-29T14:35:18.632805+02:00
+created: 2026-03-29 07:06:43.608754+02:00
+updated: 2026-03-29 14:35:30.138547+02:00
+started: 2026-03-29 14:35:18.632805+02:00
+completed: 2026-03-29 14:35:18.632805+02:00
 tags:
-    - phase-1
-    - scope:mcp
-    - type:docs
+- phase-1
+- scope:mcp
+- type:docs
 class: standard
+archival_reason: completed
+archival_refs: []
 ---
 
 ## Objective
