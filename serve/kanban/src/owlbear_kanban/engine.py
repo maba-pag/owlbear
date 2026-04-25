@@ -772,9 +772,9 @@ class KanbanEngine:
             elif sort == "title":
                 tasks.sort(key=lambda t: t.title)
             elif sort == "created":
-                tasks.sort(key=lambda t: datetime.fromisoformat(t.created))
+                tasks.sort(key=lambda t: (datetime.fromisoformat(t.created), t.id))
             elif sort == "updated":
-                tasks.sort(key=lambda t: datetime.fromisoformat(t.updated))
+                tasks.sort(key=lambda t: (datetime.fromisoformat(t.updated), t.id))
 
         if reverse:
             tasks.reverse()
@@ -2042,7 +2042,12 @@ class AgentView:
                 user_message="wave_size must be >= 1",
             )
 
-        active = self.engine.list_tasks(archived=False, blocked=False, unclaimed=True)
+        active = self.engine.list_tasks(
+            archived=False,
+            blocked=False,
+            unclaimed=True,
+            sort="created",
+        )
         active_ids = {task.id for task in active}
         archived_reasons = {
             summary.id: summary.archival_reason
@@ -2062,26 +2067,15 @@ class AgentView:
         if not dispatchable:
             return PickTasksResponse(waves=[], guidance=[])
 
-        created_by_id = {
-            task.id: self.engine.show_task(str(task.id)).created for task in dispatchable
-        }
+        created_rank = {task.id: index for index, task in enumerate(active)}
 
         priority_rank = {name: idx for idx, name in enumerate(config.priorities)}
-
-        def _created_key(created: str) -> datetime:
-            try:
-                parsed = datetime.fromisoformat(created)
-            except ValueError:
-                return datetime.max.replace(tzinfo=UTC)
-            if parsed.tzinfo is None:
-                return parsed.replace(tzinfo=UTC)
-            return parsed
 
         ordered = sorted(
             dispatchable,
             key=lambda task: (
                 priority_rank.get(task.priority, len(priority_rank)),
-                _created_key(created_by_id.get(task.id, "")),
+                created_rank.get(task.id, len(created_rank)),
                 task.id,
             ),
         )
