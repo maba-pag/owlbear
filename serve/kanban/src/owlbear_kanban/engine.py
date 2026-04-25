@@ -1070,6 +1070,8 @@ class KanbanEngine:
         if status == "archived":
             self._archive_dir.mkdir(parents=True, exist_ok=True)
             record.status = "archived"
+            record.claimed_at = None
+            record.claimed_by = None
             record.updated = datetime.now(tz=UTC).isoformat()
             write_task(record, self._kanban_dir)
             _move_file(task_path, dest)
@@ -1692,6 +1694,92 @@ class AgentView:
 
         return any(visits_root(ref_id, set()) for ref_id in refs)
 
+    def _validate_move_archival(
+        self,
+        *,
+        target_status: str,
+        current_status: str,
+        config: BoardConfig,
+        archival_reason: str | None,
+        archival_refs: list[int] | None,
+    ) -> None:
+        refs = archival_refs or []
+        if target_status == "archived":
+            if not archival_reason:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REASON_REQUIRED",
+                    user_message="archival_reason is required when status='archived'",
+                )
+            if archival_reason not in config.archival_reasons:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REASON_INVALID",
+                    user_message=(
+                        "archival_reason must be one of "
+                        f"{sorted(config.archival_reasons)}"
+                    ),
+                )
+            if archival_reason in {"deprecated", "duplicate"} and not refs:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REFS_REQUIRED",
+                    user_message=(
+                        "archival_refs required for "
+                        f"archival_reason='{archival_reason}'"
+                    ),
+                )
+            if archival_reason in {"completed", "dropped", "wontfix"} and refs:
+                raise ValidationError(
+                    code="ERR_ARCHIVAL_REFS_FORBIDDEN",
+                    user_message=(
+                        "archival_refs forbidden for "
+                        f"archival_reason='{archival_reason}'"
+                    ),
+                )
+            if archival_reason == "completed" and current_status != config.terminal_status:
+                raise ValidationError(
+                    code="ERR_COMPLETED_REQUIRES_DONE",
+                    user_message="archival_reason='completed' requires terminal status",
+                )
+            for ref_id in refs:
+                if not self._task_exists(ref_id):
+                    raise ValidationError(
+                        code="ERR_ARCHIVAL_REF_MISSING",
+                        user_message=f"archival reference task '{ref_id}' not found",
+                    )
+            return
+
+        if archival_reason is not None or archival_refs is not None:
+            raise ValidationError(
+                code="ERR_ARCHIVAL_FIELDS_FORBIDDEN",
+                user_message="archival fields are only allowed on archived tasks",
+            )
+
+    def _validate_move_destination_predicate(
+        self,
+        *,
+        target_status: str,
+        body: str,
+        config: BoardConfig,
+    ) -> None:
+        if target_status == "archived":
+            return
+
+        predicate_spec = config.status_predicates.get(target_status)
+        if not isinstance(predicate_spec, dict):
+            return
+        if predicate_spec.get("type") != "required_sections":
+            return
+
+        sections = predicate_spec.get("sections")
+        required = [str(section) for section in sections] if isinstance(sections, list) else []
+        if not self._required_sections_passes(body, required):
+            raise ValidationError(
+                code="ERR_PREDICATE_FAILED",
+                user_message=(
+                    "Task body does not satisfy predicate for status "
+                    f"'{target_status}'"
+                ),
+            )
+
     def list_tasks(  # noqa: PLR0913
         self,
         *,
@@ -2279,9 +2367,25 @@ class AgentView:
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
     ) -> SingleTaskResponse:
-        _ = (archival_reason, archival_refs)
         try:
             before = self.engine.show_task(str(task_id))
+            config = self.engine.board_config()
+
+            self._validate_move_archival(
+                target_status=status,
+                current_status=before.status,
+                config=config,
+                archival_reason=archival_reason,
+                archival_refs=archival_refs,
+            )
+
+            body = before.body if isinstance(before.body, str) else ""
+            self._validate_move_destination_predicate(
+                target_status=status,
+                body=body,
+                config=config,
+            )
+
             task = self.engine.move_task(str(task_id), status)
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
@@ -2297,6 +2401,12 @@ class AgentView:
 
     def start_work(self, task_id: int) -> SingleTaskResponse:
         try:
+            task_record = self.engine.show_task(str(task_id))
+            if task_record.status == "archived":
+                raise ValidationError(
+                    code="ERR_ARCHIVED_NOT_CLAIMABLE",
+                    user_message=f"Task '{task_id}' is archived and cannot be claimed",
+                )
             task = self.engine.start_work(str(task_id))
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
@@ -2306,6 +2416,11 @@ class AgentView:
                 raise ConcurrencyError(
                     code="ERR_ALREADY_CLAIMED",
                     user_message=f"Task '{task_id}' is already claimed by another agent",
+                ) from exc
+            if "blocked" in msg and "cannot be claimed" in msg:
+                raise ValidationError(
+                    code="ERR_BLOCKED_NOT_CLAIMABLE",
+                    user_message=f"Task '{task_id}' is blocked and cannot be claimed",
                 ) from exc
             raise ValidationError(code="ERR_INVALID_STATUS", user_message=msg) from exc
         return self._to_single_response(task)
