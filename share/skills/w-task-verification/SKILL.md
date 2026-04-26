@@ -39,11 +39,18 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 
   ### Fallback: Quality-Runner Unavailable
 
-  If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
+  If `quality-runner` dispatch fails or the agent is absent from your runtime agents list, use the **Subagent Dispatch Fallback** from `r-pipeline-protocol`:
 
-  ```
-  end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run full suite independently")
-  ```
+  1. Read the `h-quality-runner` skill to obtain the full behavioral contract.
+  2. Dispatch `General Purpose` as a surrogate with the contract and your `mode=full` prompt embedded.
+  3. Verify the surrogate's output matches the expected Quality-Runner report format (5 sections: Tests, Lint, Coverage, Exit Codes, Errors).
+  4. If `General Purpose` is also unavailable, then hard fail:
+
+     ```
+     end_work(outcome="fail")
+     ```
+
+     Return: `FAIL #{id} | TOOL_UNAVAILABLE: quality-runner`
 
 - **Lint:** Included in Quality-Runner `mode=full` report. Direct `ruff` invocation is prohibited per `r-pipeline-protocol` → Quality-Runner Mandate.
 - **AC deviations:** Flag missing functionality or incomplete features. Minor deviations the reviewer already accepted are fine.

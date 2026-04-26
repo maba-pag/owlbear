@@ -33,6 +33,8 @@ prompt: |
 agents: [quality-runner]
 ```
 
+**Fallback:** If `quality-runner` is not resolvable at runtime (e.g., at nesting depth ≥3), use the Subagent Dispatch Fallback from `r-pipeline-protocol` — dispatch `General Purpose` as a surrogate with this skill's full contract embedded in the prompt. The surrogate must produce the same 5-section output format documented below.
+
 ## Input Fields
 
 | Field | Type | Required | Description |

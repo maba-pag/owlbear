@@ -76,9 +76,43 @@ All pipeline agents (test-writer, builder, reviewer, auditor) **must** delegate 
 
 Exception: the `quality-runner` agent itself runs the underlying tools — that's its job.
 
+Exception: when `quality-runner` cannot be dispatched due to runtime limitations (see § Subagent Dispatch Fallback), agents may delegate through `General Purpose` as a surrogate. The surrogate must follow the same input/output contract defined in `h-quality-runner`.
+
 ### Tool Availability
 
-When a required tool or subagent is unavailable or fails to dispatch, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs. The orchestrator reads this marker and will verify and halt if the problem is systemic.
+When a required tool is unavailable or fails, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs.
+
+### Subagent Dispatch Fallback
+
+At runtime nesting depth ≥3, VS Code may not resolve custom `.agent.md` subagents — only built-in agents (`Explore`, `General Purpose`) remain visible. When a custom subagent dispatch fails:
+
+1. **Try first.** Always attempt `runSubagent(agentName="target-agent", ...)`. If it succeeds, use the result normally.
+2. **Surrogate via General Purpose.** If dispatch fails or the target agent is absent from your runtime agents list:
+   - Read the target agent's handbook skill (e.g., `h-quality-runner` for `quality-runner`) to obtain the full behavioral contract, input/output format, and constraints.
+   - Dispatch `General Purpose` with the target agent's contract and your original task prompt embedded:
+
+     ```
+     runSubagent(
+       agentName: "General Purpose",
+       prompt: |
+         You are acting as a surrogate for the "{target-agent}" agent.
+         Follow the behavioral contract below EXACTLY — same inputs,
+         same output format, same constraints. Do not add interpretation
+         or judgment beyond what the contract specifies.
+
+         <contract>
+         {full content from the target agent's handbook skill}
+         </contract>
+
+         <task>
+         {the original prompt you would have sent to the target agent}
+         </task>
+     )
+     ```
+
+3. **Hard fail.** If `General Purpose` is also unavailable, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {target-agent}`.
+
+The surrogate inherits `General Purpose`'s full tool set (including terminal), so it can execute commands the calling agent may lack. The calling agent must still verify surrogate output with the same rigor as real subagent output.
 
 ### Defense-in-Depth
 
