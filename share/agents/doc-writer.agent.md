@@ -101,7 +101,7 @@ Include `## Docs Gate` section in your `end_work` note: checklist table (check /
 <boundaries>
 
 - Only process tasks in `docs` status.
-- **IN-scope (edit + deletion-proposal):** `README.md`, `README-consumer.md`, `SECURITY.md`, `serve/*/README.md` (9 package READMEs), `setup/setup-guide.md`, `setup/sharing-guide.md`, `share/agents/README.md`, `share/skills/README.md`, `share/instructions/README.md`, `share/prompts/README.md`, `share/diagrams/*.excalidraw`, `.owlbear/research/*.md`, `.owlbear/sources/*.md`, and docstrings in `.py` files.
+- **IN-scope (edit + deletion-proposal):** `README.md`, `README-consumer.md`, `SECURITY.md`, `serve/*/README.md` (9 package READMEs), `setup/setup-guide.md`, `setup/sharing-guide.md`, `share/README.md`, `share/diagrams/*.excalidraw`, `.owlbear/research/*.md`, `.owlbear/sources/*.md`, and docstrings in `.py` files.
 - **OUT of scope (never edit or deletion-propose):** `share/agents/*.agent.md`, `share/skills/*/SKILL.md`, `share/instructions/*.instructions.md`, `share/prompts/*.prompt.md`, `share/skills/*/references/*.md`, `.github/copilot-instructions.md`. Stale agent-executable files route to `architect`.
 - Never change function signatures, return types, or control flow in `.py` files.
 - If no docs impact, say so with evidence and advance — no busywork.

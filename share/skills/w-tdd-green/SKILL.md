@@ -270,6 +270,6 @@ Append to task body before advancing:
 
 - **Modifying or adding tests:** The builder must never weaken, remove, or add tests. Missing blocking edge-case coverage goes back to the test-writer.
 - **Scoped test runs:** Always scope to task-specific files. The full suite has hundreds of tests and will time out.
-- **Coverage measurement failures:** Load `h-pytest-and-linting` before retrying flag variations. The skill documents the exact approach.
+- **Coverage measurement failures:** Invoke the `quality-runner` subagent for coverage measurement — do not load pytest skills or retry flag variations directly.
 - **Symbol renames breaking other tests:** When renaming imports or mock targets, grep all test files for the old name. Single-file updates cause 10–40 regressions when other files still reference the old symbol.
 - **Non-impl pass-through:** Check for the test-writer's pass-through note FIRST. Missing this check causes unnecessary implementation attempts on config/docs tasks.

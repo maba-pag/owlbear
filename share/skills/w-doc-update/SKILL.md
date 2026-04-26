@@ -49,8 +49,7 @@ Classify each file as **IN-scope** or **OUT-scope**:
 - Root: `README.md`, `README-consumer.md`, `SECURITY.md`
 - Package READMEs: `serve/*/README.md` (9 files)
 - Setup guides: `setup/setup-guide.md`, `setup/sharing-guide.md`
-- Share-category READMEs: `share/agents/README.md`, `share/skills/README.md`,
-  `share/instructions/README.md`, `share/prompts/README.md`
+- Share ecosystem doc: `share/README.md`
 - Diagrams: `share/diagrams/*.excalidraw`
 - Research and sources: `.owlbear/research/*.md`, `.owlbear/sources/*.md`
 - Docstrings in `.py` files

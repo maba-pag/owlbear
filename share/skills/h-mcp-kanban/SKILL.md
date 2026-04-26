@@ -86,7 +86,7 @@ end_work(task_id="480", note="## Builder Notes\n- Files changed: ...\n\n12 tests
 
 Put your full agent section (header + content + summary) into the `note` parameter of `end_work`. The note is appended to the task body with a timestamp, then the task advances and the claim is released — all atomically.
 
-For the section header to use per agent, see `agent-common.instructions.md` — `## Per-Agent Section Mapping`.
+For the section header to use per agent, see `pipeline-agents.instructions.md` — `## Per-Agent Section Mapping`.
 
 ### edit_task (advanced)
 

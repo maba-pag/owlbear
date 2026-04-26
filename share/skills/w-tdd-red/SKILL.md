@@ -109,24 +109,17 @@ Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runn
 
 ### Fallback: Quality-Runner Unavailable
 
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, run directly:
+If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, **block the task** per `r-pipeline-protocol` → Quality-Runner Mandate:
 
-```shell
-uv run pytest tests/test_{module}_{task_id}.py -q --tb=short
-uv run ruff check tests/test_{module}_{task_id}.py
+```
+end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot verify RED-phase failures independently")
 ```
 
-See `h-pytest-and-linting` for flags and known pitfalls.
+Do not run pytest directly. Direct shell invocation is prohibited — it bypasses the canonical evidence pipeline.
 
 **Expected failure types:** `ImportError`, `NotImplementedError`, `AssertionError`.
 
 **Fix these:** `SyntaxError` (bug in test code). Any test that **passes** means the implementation already exists — remove the test or make it more specific.
-
-Then run ruff:
-
-```shell
-uv run ruff check tests/test_{module}_{task_id}.py
-```
 
 Must be clean.
 

@@ -40,7 +40,7 @@ research → (researcher) → backlog → (architect) → todo → (test-writer)
 | `serve/` | Python workspace packages (orchestrator, knowledge, browser, MCP servers) |
 | `share/agents/` | Agent definitions (`.agent.md`) |
 | `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
-| `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `agent-common.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
+| `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `pipeline-agents.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
 | `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
 | `.owlbear/` | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
 | `store/` | Knowledge and memory data |

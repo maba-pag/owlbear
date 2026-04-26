@@ -54,7 +54,7 @@ uv run pytest {test_file} -q --tb=short
 uv run ruff check {changed_files}
 ```
 
-See `h-pytest-and-linting` for flag pitfalls.
+Fix-attempt runs pytest directly (no quality-runner access — `agents: []`).
 
 ## Step 6 — Single Retry (max 1)
 

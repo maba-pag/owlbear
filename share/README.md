@@ -1,0 +1,130 @@
+# share/ — Agent Ecosystem
+
+OwlBear's agent ecosystem: 27 agents, 33 skills, 7 instructions, 10 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+
+## Directory Layout
+
+| Directory | Contents | Count |
+|-----------|----------|-------|
+| `agents/` | Agent definitions (`.agent.md`) | 27 |
+| `skills/` | Reusable domain knowledge (`SKILL.md`) | 33 |
+| `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 6 |
+| `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 10 |
+| `diagrams/` | Shared visual assets (Excalidraw, SVG) | — |
+
+## Loading Model
+
+Content reaches agents through four mechanisms, ordered by cost:
+
+| Mechanism | When it loads | Cost | Use for |
+|-----------|--------------|------|---------|
+| `copilot-instructions.md` | Every turn, every agent | ~200 tokens/turn | Universal project identity |
+| Instructions (`.instructions.md`) | Every turn when `applyTo` glob matches a touched file | ~20–70 tokens/turn | Safety-net stubs, pipeline protocol |
+| Skill frontmatter | Every turn, every agent (YAML header only) | ~20 tokens/skill/turn | Discovery — VS Code uses this to decide when to suggest the skill |
+| Skill body (`read_file`) | Once per session, on demand | One-time read (~300–500 tokens) | Procedures, protocol, domain knowledge |
+
+**Key insight:** Instructions are per-turn system prompt cost. Skills are one-time read cost. Large content belongs in skills, not instructions.
+
+### Two-Tier Skill Loading
+
+1. **Mandatory** — listed in the agent's `<required_reading>` section. Read via `read_file` at session start. These are skills the agent needs in 90%+ of sessions.
+2. **On-demand** — loaded during the workflow when a specific scenario arises. Referenced by other skills' companion tables or Step 0 directives.
+
+### Belts and Suspenders
+
+For important skills, use both tiers:
+- **Belt:** List the skill in the agent's `<required_reading>` (guarantees it's loaded)
+- **Suspenders:** Provide an `applyTo` instruction stub that fires when the agent touches relevant files (catches agents that skip required_reading)
+
+### Transitive Dependencies
+
+Skills can declare companion skills that consumers should load when needed:
+- **Level 0 (direct):** Agent → skill, listed in `<required_reading>`
+- **Level 1 (transitive):** Skill A → skill B, declared in A's companion table or Step 0
+- Only Level 0 goes in `<required_reading>`. Level 1 is the skill's responsibility.
+
+## Universal Files
+
+These load into every agent's context on every turn:
+
+| File | Mechanism |
+|------|-----------|
+| `.github/copilot-instructions.md` | Workspace instructions (always present) |
+| `owlbear-system.instructions.md` | `applyTo: "**"` (fires on any file touch) |
+
+## Agents
+
+27 agent definitions (`.agent.md` files).
+
+| Tier | Count | Agents |
+|------|-------|--------|
+| T1 — Orchestrator | 3 | orchestrator, ideation-discoverer, ideation-mediator |
+| T2 — Pipeline | 7 | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor |
+| T3 — Support | 4 | scribe, planner, test-curator, memory-curator |
+| T4 — Tools/Panel | 13 | quality-runner, code-reader, fix-attempt, challenger, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier |
+
+Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — problem framing) and `ideation-mediator` (Phase 2 — synthesis, decisions, Brief).
+
+## Skills
+
+33 skill definitions (`share/skills/{name}/SKILL.md`).
+
+| Prefix | Count | Purpose |
+|--------|-------|---------|
+| `w-` | 15 | Workflow — step-by-step procedures |
+| `r-` | 4 | Rules — shared conventions |
+| `h-` | 14 | Handbook — domain knowledge |
+
+## Instructions
+
+6 instruction files (`.instructions.md`). Two categories:
+
+**Substantive documents** — contain full behavioral specifications:
+
+| File | Purpose |
+|------|---------|
+| `pipeline-agents.instructions.md` | Channel B communication protocol, section-header mapping, and per-agent kanban conventions |
+| `owlbear-system.instructions.md` | Decision heuristics, system awareness, memory governance, and operational fundamentals |
+
+**Instruction stubs** — safety nets loaded when `applyTo` glob matches a touched file; each stub points to the authoritative skill:
+
+| File | applyTo | Points to |
+|------|---------|-----------|
+| `python.instructions.md` | `**/*.py` | `h-python-conventions` |
+| `frontend.instructions.md` | `**/*.tsx,**/*.jsx,**/*.vue,**/*.svelte,**/*.css,**/*.scss` | `h-frontend-conventions` |
+| `research-docs.instructions.md` | `.owlbear/research/*.md` | `w-research` |
+| `agent-ecosystem.instructions.md` | `share/agents/**,share/skills/**,share/instructions/**,share/prompts/**` | `share/README.md` + `h-agent-structure` |
+| `doc-standards.instructions.md` | `README.md,README-consumer.md,SECURITY.md,serve/*/README.md,share/README.md,setup/*.md` | `r-doc-standards` |
+
+Stubs catch agents editing files without the relevant skill loaded. They do not duplicate the skill content — they direct the agent to load it.
+
+## Prompts
+
+10 prompt files (`.prompt.md`). Prompts are user-invocable one-shot commands triggered from the VS Code chat command palette. Many accept `${input:...}` variable substitution.
+
+**Naming convention:**
+
+| Pattern | Meaning |
+|---------|---------|
+| `{verb}.prompt.md` | Single-purpose action (e.g., `orchestrate`) |
+| `{scope}-{verb}.prompt.md` | Scoped action (e.g., `frontend-audit`, `doc-audit`) |
+
+**Current prompts:**
+
+| Group | Prompts |
+|-------|---------|
+| Orchestration | `orchestrate` |
+| Audits | `agent-audit`, `doc-audit`, `frontend-audit` |
+| Frontend | `frontend-normalize`, `frontend-polish`, `design-context` |
+| Ideation | `ideation-discover`, `ideation-mediate` |
+| Curation | `test-curation` |
+
+## File Interconnections
+
+See [WIRING.md](WIRING.md) for the full two-way mapping:
+- **Table 1:** Agent/Prompt → relevant files (regularly vs. seldom, with connection method)
+- **Table 2:** File → consuming agents/prompts (inverse)
+
+## Structural Standards
+
+For the authoritative specification of agent/skill/instruction file structure, section conventions, and naming grammar, see the `h-agent-structure` skill.

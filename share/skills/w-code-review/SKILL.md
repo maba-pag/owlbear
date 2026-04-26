@@ -368,5 +368,5 @@ Append to task body before advancing:
 - **Trusting builder self-reports:** Always run tests yourself. "Builder said it passes" is not evidence.
 - **Gut-feeling confidence:** If your score is .91–.95 without explicit deductions, recalculate with the rubric.
 - **Terminal runTests tool:** Deadlocks with parallel agents. Always use `uv run pytest` in terminal.
-- **Coverage measurement:** Load `h-pytest-and-linting` before attempting coverage. Flag variations without the skill cause repeated failures.
+- **Coverage measurement:** Invoke the `quality-runner` subagent for coverage measurement — do not load pytest skills or retry flag variations directly.
 - **Suppression over-application:** Suppressions are for intentional patterns only. Do not suppress genuine issues using the suppression list as justification.

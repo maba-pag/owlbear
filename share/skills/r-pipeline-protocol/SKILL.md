@@ -8,7 +8,14 @@ user-invocable: false
 
 Shared conventions for pipeline agents (T1–T3). Read once at session start from your `<critical_rules>` reference. This skill is the single source of truth for pipeline coordination.
 
-For project-wide conventions (commit format, file placement, priorities, tags), see `r-project-standards`.
+### Companion Skills
+
+Load these via `read_file` when the referenced capability is needed during your workflow:
+
+| Skill | Load when |
+|-------|-----------|
+| `h-mcp-kanban` | Using kanban tools — claiming, moving, editing tasks |
+| `r-project-standards` | Committing changes — commit format, file placement, tags |
 
 ## 1. Task Setup
 
@@ -133,7 +140,7 @@ To append a mid-task note outside the `end_work` lifecycle, use `edit_task(appen
 
 ### Per-Agent Signal Mapping
 
-See `agent-common.instructions.md` for the authoritative section-header-to-agent mapping table.
+See `pipeline-agents.instructions.md` for the authoritative section-header-to-agent mapping table.
 
 ### Body Size Rule
 
