@@ -14,7 +14,7 @@ Architecture:
   - move_task() changes status; "archived" moves file to archive/.
   - claim_task() marks a task as claimed by this engine's agent_name; rejects
     blocked tasks and rival claims within the configured timeout window.
-  - release_task() clears claimed_by and claimed_at fields unconditionally.
+  - release_task() clears claimed_by and claimed_at fields unconditionally; appends a timestamped note to the body when ``note`` is provided.
   - board_config() returns a defensive copy of the current BoardConfig.
   - refresh_config() reloads config from disk, updating all derived state.
   - valid_transitions(status) returns the set of all statuses except the given one.
@@ -1289,6 +1289,9 @@ class KanbanEngine:
         original = record.model_copy(deep=True)
         now = datetime.now(tz=UTC)
 
+        if record.claimed_at is None:
+            return record
+
         self._append_timestamped_note(record, note, now)
 
         record.claimed_at = None
@@ -1453,7 +1456,12 @@ class KanbanEngine:
         dest = self._archive_dir / task_path.name
         if needs_archive:
             self._archive_dir.mkdir(parents=True, exist_ok=True)
-            _move_file(task_path, dest)
+            try:
+                _move_file(task_path, dest)
+            except OSError:
+                with contextlib.suppress(Exception):
+                    write_task(original, self._kanban_dir)
+                raise
 
         # --- Activity logging ---
         _end_work_details = {
