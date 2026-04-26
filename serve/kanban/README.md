@@ -40,7 +40,7 @@ engine.release_task(42)
 | `claim_task(task_id)` | Mark task claimed by this engine's `agent_name`; rejects blocked/rival claims |
 | `release_task(task_id, *, note=None)` | Clear claim unconditionally; appends a timestamped note to the body when `note` is provided |
 | `start_work(task_id)` | Claim the task for this agent (no status advancement) |
-| `end_work(task_id, …)` | Append outcome note and advance or reject |
+| `end_work(task_id, …)` | Finalise a work session: append timestamped note and apply outcome (success, fail, block, or reject) |
 | `board_config()` | Defensive copy of the current `BoardConfig` |
 | `agent_view()` | Return the cached `AgentView` facade for agent-facing operations |
 | `cockpit_view()` | Return the cached `CockpitView` facade for cockpit-facing operations |
