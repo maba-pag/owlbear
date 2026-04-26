@@ -1,13 +1,17 @@
-"""Validate OwlBear agent files against known tool-name regressions.
+"""Validate OwlBear agent files against conventions.
 
 Checks each agents/*.agent.md file for:
-  - Bare 'todo' on the tools: line (word-boundary matched) — tool is disabled for subagents
+  - Bare 'todo' on the tools: line — tool is disabled for subagents
   - 'todos' on the tools: line — tool is disabled for subagents
-  - Presence of 'manage_todo_list' anywhere in the file — tool is disabled for subagents
-  - Presence of 'resolveMemoryFileUri' anywhere in the file
+  - Presence of 'manage_todo_list' anywhere — tool is disabled for subagents
+  - Presence of 'resolveMemoryFileUri' anywhere
+  - Unknown tool names not in the canonical registry
+  - Frontmatter agents: ↔ body <agents> table alignment
+  - ND3 agents have disable-model-invocation: false
 
 Usage:
-    python scripts/validate_agents.py <agent_file> [<agent_file> ...]
+    python .owlbear/scripts/validate_agents.py [<agent_file> ...]
+    # No args = discover and validate all agents in share/agents/
 """
 
 from __future__ import annotations
@@ -44,6 +48,17 @@ KNOWN_MCP_SERVERS: frozenset[str] = frozenset(
 _BANNED_TOOL_NAMES: frozenset[str] = frozenset(
     {"todos", "todo", "manage_todo_list", "resolveMemoryFileUri"}
 )
+
+_AGENTS_DIR = Path(__file__).resolve().parents[2] / "share" / "agents"
+
+# Known ND3 agents — must have disable-model-invocation: false.
+# See share/WIRING.md § "Nesting Depth" for the canonical list.
+ND3_AGENTS: frozenset[str] = frozenset({
+    "challenger", "scribe", "planner", "fix-attempt",
+    "code-reader", "ideation-critic", "quality-runner",
+})
+
+_BUILTINS = frozenset({"Explore", "General Purpose"})
 
 
 def _frontmatter_lines(content: str) -> list[str]:
@@ -93,6 +108,55 @@ def _is_valid_tool(name: str) -> bool:
     return bool(name.endswith("/*"))
 
 
+def _fm_scalar(fm_lines: list[str], key: str) -> str | None:
+    """Get a scalar frontmatter value by key."""
+    for line in fm_lines:
+        if line.startswith(f"{key}:"):
+            _, _, val = line.partition(":")
+            return val.strip()
+    return None
+
+
+def _fm_agents(fm_lines: list[str]) -> list[str]:
+    """Extract the agents: array from frontmatter lines (inline or multi-line)."""
+    agents: list[str] = []
+    in_agents = False
+    for line in fm_lines:
+        if in_agents:
+            stripped = line.strip()
+            if stripped.startswith("- "):
+                agents.append(stripped[2:].strip())
+                continue
+            else:
+                in_agents = False
+        if line.startswith("agents:"):
+            _, _, val = line.partition(":")
+            val = val.strip()
+            if val.startswith("[") and val.endswith("]"):
+                inner = val[1:-1]
+                return [a.strip() for a in inner.split(",") if a.strip()]
+            elif val == "[]":
+                return []
+            else:
+                in_agents = True
+    return agents
+
+
+def _body_agents_table(content: str) -> list[str]:
+    """Extract agent names from the <agents> body section table."""
+    m = re.search(r"<agents>(.*?)</agents>", content, re.DOTALL)
+    if not m:
+        return []
+    agents: list[str] = []
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if line.startswith("|") and not line.startswith("| Agent") and not line.startswith("|---"):
+            cells = [c.strip() for c in line.split("|")]
+            if len(cells) >= 2 and cells[1] and cells[1] != "Agent":
+                agents.append(cells[1])
+    return agents
+
+
 def _check_unknown_tools(fm_lines: list[str], agent_file: Path) -> list[str]:
     """Return error messages for tool names not in the canonical registry.
 
@@ -129,6 +193,7 @@ def validate_agent(agent_file: Path) -> list[str]:
     """
     content = Path(agent_file).read_text(encoding="utf-8")
     errors: list[str] = []
+    fm_lines = _frontmatter_lines(content)
 
     # Full-file checks for disabled tools
     if _RESOLVE_URI in content:
@@ -139,7 +204,7 @@ def validate_agent(agent_file: Path) -> list[str]:
         )
 
     # tools: line checks — word-boundary checks for banned tool names
-    tools = _tools_text(_frontmatter_lines(content))
+    tools = _tools_text(fm_lines)
     if tools and _TODOS_RE.search(tools):
         errors.append(
             f"{agent_file}: tools: contains 'todos' — tool is disabled for subagents"
@@ -150,27 +215,70 @@ def validate_agent(agent_file: Path) -> list[str]:
         )
 
     # Unknown-tool check — runs after ban checks so banned tools are not double-reported
-    errors.extend(_check_unknown_tools(_frontmatter_lines(content), agent_file))
+    errors.extend(_check_unknown_tools(fm_lines, agent_file))
+
+    # --- Agent table alignment ---
+    name = agent_file.stem.replace(".agent", "")
+    fm_agents = set(_fm_agents(fm_lines))
+    body_agents = set(_body_agents_table(content))
+    fm_custom = fm_agents - _BUILTINS
+    body_custom = body_agents - _BUILTINS
+
+    if fm_custom and not body_agents:
+        has_section = "<agents>" in content and "</agents>" in content
+        if not has_section:
+            errors.append(
+                f"{agent_file}: has agents: {sorted(fm_custom)} in frontmatter "
+                f"but no <agents> body section"
+            )
+
+    in_fm_not_body = fm_custom - body_custom
+    if in_fm_not_body:
+        errors.append(
+            f"{agent_file}: in frontmatter agents: but missing from <agents> table: "
+            f"{sorted(in_fm_not_body)}"
+        )
+
+    in_body_not_fm = body_custom - fm_custom
+    if in_body_not_fm:
+        errors.append(
+            f"{agent_file}: in <agents> table but missing from frontmatter agents:: "
+            f"{sorted(in_body_not_fm)}"
+        )
+
+    # --- ND3 DMI rule ---
+    dmi = _fm_scalar(fm_lines, "disable-model-invocation")
+    if name in ND3_AGENTS and dmi != "false":
+        errors.append(
+            f"{agent_file}: ND3 agent must have disable-model-invocation: false "
+            f"(currently: {dmi})"
+        )
 
     return errors
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point.  Accepts agent file paths as positional arguments."""
+    """CLI entry point.  Accepts agent file paths; no args = all agents."""
     args = argv if argv is not None else sys.argv[1:]
 
     if not args:
-        sys.stderr.write("Usage: validate_agents.py <agent_file> [<agent_file> ...]\n")
-        return 1
+        if not _AGENTS_DIR.is_dir():
+            sys.stderr.write(f"Agent directory not found: {_AGENTS_DIR}\n")
+            return 1
+        agent_files = sorted(_AGENTS_DIR.glob("*.agent.md"))
+    else:
+        agent_files = [Path(p) for p in args]
 
     has_errors = False
-    for raw_path in args:
-        agent_file = Path(raw_path)
+    for agent_file in agent_files:
         errors = validate_agent(agent_file)
         if errors:
             has_errors = True
             for error in errors:
                 sys.stderr.write(f"{error}\n")
+
+    if not has_errors and not args:
+        print(f"PASS — all {len(agent_files)} agent files conform to conventions")
 
     return 1 if has_errors else 0
 

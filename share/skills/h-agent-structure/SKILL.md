@@ -202,7 +202,7 @@ Compact transition table showing what triggers this agent and what it produces:
 | scribe | Decision point requiring user input | `Scribe: task_id=42, mode=check-or-create, concern="..."` |
 ```
 
-The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate-agent-tables.py`.
+The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate_agents.py`.
 
 ### Forbidden Content
 
