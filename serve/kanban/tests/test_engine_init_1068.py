@@ -5,11 +5,11 @@ Covers:
   - D37: BoardConfig.archival_reasons must be a frozenset (not list)
   - AgentView method stubs: list_tasks, show_task, pick_tasks, create_task,
     edit_task, start_work, end_work — each raises NotImplementedError
-  - CockpitView method stubs: list_tasks, show_task, edit_task, move_task,
-    release_task, board_config — each raises NotImplementedError
+    - CockpitView method surface: list_tasks, show_task, edit_task, move_task,
+        release_task, board_config — methods are available on the cockpit facade
 
-All tests FAIL in RED phase — field declarations and method stubs are not
-yet implemented in owlbear_kanban.engine / owlbear_kanban.models.
+These RED tests established initial contracts for init/config behavior and
+role-view method surfaces in owlbear_kanban.engine / owlbear_kanban.models.
 """
 
 from __future__ import annotations
@@ -283,12 +283,17 @@ class TestFromAC_AgentViewMethodStubs:
 
 
 # ---------------------------------------------------------------------------
-# CockpitView method stubs (implementations deferred to later tasks)
+# CockpitView method surface (implementations are now live)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_CockpitViewMethodStubs:
-    """CockpitView must expose method stubs that raise NotImplementedError."""
+    """CockpitView must expose the required cockpit-facing methods.
+
+    Note: CockpitView methods are implemented. This class keeps interface
+    availability checks; retired stub-phase NotImplementedError assertions were
+    removed after implementations went live.
+    """
 
     def test_cockpit_view_has_list_tasks_stub(self, tmp_path: Path) -> None:
         view = CockpitView(_make_engine(tmp_path))
@@ -302,37 +307,17 @@ class TestFromAC_CockpitViewMethodStubs:
         view = CockpitView(_make_engine(tmp_path))
         assert callable(getattr(view, "edit_task", None)), "CockpitView.edit_task missing"
 
-    def test_cockpit_view_edit_task_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.edit_task(1)
-
     def test_cockpit_view_has_move_task_stub(self, tmp_path: Path) -> None:
         view = CockpitView(_make_engine(tmp_path))
         assert callable(getattr(view, "move_task", None)), "CockpitView.move_task missing"
-
-    def test_cockpit_view_move_task_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.move_task(1, "done")
 
     def test_cockpit_view_has_release_task_stub(self, tmp_path: Path) -> None:
         view = CockpitView(_make_engine(tmp_path))
         assert callable(getattr(view, "release_task", None)), "CockpitView.release_task missing"
 
-    def test_cockpit_view_release_task_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.release_task(1)
-
     def test_cockpit_view_has_board_config_stub(self, tmp_path: Path) -> None:
         view = CockpitView(_make_engine(tmp_path))
         assert callable(getattr(view, "board_config", None)), "CockpitView.board_config missing"
-
-    def test_cockpit_view_board_config_raises_not_implemented(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        with pytest.raises(NotImplementedError):
-            view.board_config()
 
 
 # ---------------------------------------------------------------------------
