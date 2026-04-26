@@ -1,4 +1,4 @@
-"""RED-phase tests for AgentView.end_work fail outcome + MCP model alignment (task #1125).
+"""Tests for AgentView.end_work fail outcome + MCP model alignment (task #1125).
 
 Tests:
   AC1 — AgentView.end_work(outcome="fail") succeeds: note appended, status unchanged, claim released
@@ -6,19 +6,19 @@ Tests:
   AC3 — AgentView.end_work(outcome="fail") rejects move_to / block_reason / archival fields
   AC4 — EndWorkParams(outcome="fail") validates successfully (Literal includes "fail")
   AC5 — h-mcp-kanban SKILL.md outcome table includes release row
-
-All tests are expected to FAIL — RED phase.
+  AC6 — AgentView.end_work(outcome="fail") CAS stale-recovery branch proof
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import ValidationError
+from owlbear_kanban.models import ConcurrencyError, ValidationError
 
 # ---------------------------------------------------------------------------
 # Board helpers (mirrored from test_engine_end_work_1077.py)
@@ -391,4 +391,80 @@ class TestFromAC_SkillDocReleaseRow:
         ), (
             "h-mcp-kanban/SKILL.md release row does not contain the exact AC5 behavior "
             "text 'Release claim without note or status change (idempotent on unclaimed)'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_FailOutcomeCASRecovery — AC6
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_FailOutcomeCASRecovery:
+    """AgentView.end_work(outcome='fail') CAS stale-recovery branch — AC6."""
+
+    def test_fail_outcome_stale_unclaimed_raises_not_claimed(self, tmp_path: Path) -> None:
+        """AC6(a): ERR_STALE + concurrent release → ValidationError(ERR_NOT_CLAIMED).
+
+        Simulation: patch write_task_if_unchanged to release the claim (write
+        claimed_at=None to disk) then raise ConcurrencyError(ERR_STALE).
+        AgentView re-reads the task, finds claimed_at is None, and maps the
+        stale error to ERR_NOT_CLAIMED.
+
+        Test pattern mirrors test_engine_move_claim_1075.py CAS injection.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        def stale_then_unclaim(_task: object, _expected_updated: str, kdir: Path) -> Path:
+            # Simulate: concurrent agent releases the claim before our CAS write.
+            task_path = next((kdir / "tasks").glob("1-*.md"))
+            from owlbear_kanban.storage import read_task as _read, write_task as _write  # noqa: PLC0415
+
+            record = _read(task_path)
+            record.claimed_at = None  # release the claim in the file
+            _write(record, kdir)
+            raise ConcurrencyError(
+                code="ERR_STALE",
+                user_message="simulated concurrent release",
+            )
+
+        with (
+            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_then_unclaim),
+            pytest.raises(ValidationError) as exc_info,
+        ):
+            view.end_work(1, outcome="fail", note="Fail note.")
+
+        assert exc_info.value.code == "ERR_NOT_CLAIMED", (
+            f"Expected ERR_NOT_CLAIMED when stale write finds unclaimed task; "
+            f"got {exc_info.value.code!r}"
+        )
+
+    def test_fail_outcome_stale_still_claimed_raises_stale(self, tmp_path: Path) -> None:
+        """AC6(b): ERR_STALE + task still claimed → ConcurrencyError(ERR_STALE).
+
+        Simulation: patch write_task_if_unchanged to raise ConcurrencyError(ERR_STALE)
+        without releasing the claim. AgentView re-reads the task, finds claimed_at
+        is still set, and propagates ERR_STALE with retry guidance.
+
+        Test pattern mirrors test_engine_move_claim_1075.py CAS injection.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        def stale_keep_claimed(_task: object, _expected_updated: str, _kdir: Path) -> Path:
+            # Simulate: concurrent modification without releasing the claim.
+            raise ConcurrencyError(
+                code="ERR_STALE",
+                user_message="simulated concurrent modification",
+            )
+
+        with (
+            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_keep_claimed),
+            pytest.raises(ConcurrencyError) as exc_info,
+        ):
+            view.end_work(1, outcome="fail", note="Fail note.")
+
+        assert exc_info.value.code == "ERR_STALE", (
+            f"Expected ERR_STALE when stale write finds still-claimed task; "
+            f"got {exc_info.value.code!r}"
         )
