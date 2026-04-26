@@ -1,23 +1,32 @@
-"""GREEN characterization tests for cockpit mutation race conditions and OCC gaps (#1131).
+"""GREEN characterization tests for cockpit mutation route OCC gaps (#1131).
 
-These tests document CURRENT behavior (OCC gaps) in the cockpit mutation routes:
-  - G1: Edit route precheck-only TOCTOU — engine CAS (expected_updated) never engaged
-  - G2: Move route has no OCC token — succeeds regardless of concurrent edits
-  - G3: Release route actor-agnostic — clears any claim regardless of owner identity
-  - AC4: Exact 409 detail strings for stale edit and unclaimed release
-  - AC5: All 14 TaskDetailOut keys present in 200 responses
+These tests document CURRENT (broken) behavior in the cockpit mutation HTTP routes:
+  - G1 (confirmed): Edit route precheck-only TOCTOU — engine CAS (expected_updated)
+    never engaged.  The route compares req.updated against task.updated and raises 409
+    on mismatch, but on match it calls engine.edit_task(**kwargs) WITHOUT forwarding
+    expected_updated (mutation.py L~209).
+  - G2 (RETRACTED): Move route DOES have OCC — MoveRequest carries updated: str and
+    the route passes expected_updated=req.updated to engine.move_task (mutation.py
+    L~108).  Original research incorrectly claimed move had no OCC.
+  - G3 (confirmed, reframed): Release route guard uses task.claimed_by (Field
+    exclude=True — never persisted, always None after disk round-trip).  The route's
+    ``if not task.claimed_by`` guard fires even when claimed_at IS on disk, so the
+    route always returns 409 on new-schema boards regardless of actual claim state.
 
-Tests pass against current code. Follow-up tasks #1134, #1135, #1136 address fixes.
+Tests pass against current code without production changes.  Follow-up fix tasks
+#1134 (edit CAS fix), #1135 (move re-evaluation), #1136 (release ownership check).
 
 AC coverage:
-  - AC1: engine.edit_task never receives expected_updated kwarg
-  - AC2: move succeeds despite concurrent engine edit bumping updated
-  - AC3: cockpit release clears claim held by a foreign engine instance
-  - AC4a: edit stale → exact detail "Task was modified since your last load (stale snapshot)"
-  - AC4b: release unclaimed → exact detail "Task {id} is not currently claimed"
+  - AC1: engine.edit_task never receives expected_updated kwarg (gap G1)
+  - AC2: engine.move_task does receive expected_updated kwarg matching req.updated
+         (contrast — move has OCC, edit does not)
+  - AC3: claiming a task via engine then releasing via cockpit HTTP always returns
+         409 (gap G3 — claimed_by guard broken on new-schema boards)
+  - AC4a: edit with stale updated → 409 "Task was modified since your last load
+          (stale snapshot)"
+  - AC4b: release on unclaimed task → 409 "Task {id} is not currently claimed"
   - AC5a: move 200 response has all 14 TaskDetailOut keys
   - AC5b: edit 200 response has all 14 TaskDetailOut keys
-  - AC5c: release 200 response has all 14 TaskDetailOut keys
 """
 
 from __future__ import annotations
@@ -31,7 +40,7 @@ from owlbear_kanban import KanbanEngine
 
 
 # ---------------------------------------------------------------------------
-# Board fixture helpers (same pattern as test_cockpit_mutation_api.py)
+# Board fixture helpers
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
@@ -87,27 +96,22 @@ def _make_board(base_dir: Path) -> Path:
 
 @pytest.fixture
 def board_dir(tmp_path: Path) -> Path:
-    """Board with 3 tasks. Task 2 is pre-claimed by 'seed' for release tests.
+    """Board with one task in todo status.
 
-    Task 1: status=todo,        priority=important  (unclaimed)
-    Task 2: status=in-progress, priority=needed     (claimed)
-    Task 3: status=todo,        priority=someday    (unclaimed)
+    Task 1: status=todo, priority=important (unclaimed — target for all AC tests)
     """
     kanban_dir = _make_board(tmp_path)
-    seed = KanbanEngine(kanban_dir)
+    seed = KanbanEngine(kanban_dir, agent_name="seed")
     seed.create_task("Alpha task", status="todo", priority="important")
-    seed.create_task("Beta task", status="in-progress", priority="needed")
-    seed.create_task("Gamma task", status="todo", priority="someday")
     seed.list_tasks()  # populate id→filename cache
-    seed.claim_task("2")
     return kanban_dir
 
 
 @pytest.fixture
 def engine(board_dir: Path) -> KanbanEngine:
-    """KanbanEngine with activity logging enabled (agent_name auto-assigned)."""
-    eng = KanbanEngine(board_dir, activity_log=True)
-    eng.list_tasks()
+    """KanbanEngine bound to the test board."""
+    eng = KanbanEngine(board_dir, agent_name="cockpit", activity_log=False)
+    eng.list_tasks()  # populate id→filename cache
     return eng
 
 
@@ -163,79 +167,77 @@ class TestFromAC_EditTOCTOU:
 
 
 # ---------------------------------------------------------------------------
-# AC2 — Move no-OCC: move succeeds despite concurrent engine edit
+# AC2 — Move OCC contrast: engine.move_task DOES receive expected_updated
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_MoveNoOCC:
-    """AC2: Move route has no OCC token — succeeds regardless of concurrent edits (gap G2)."""
+class TestFromAC_MoveOCCContrast:
+    """AC2: Move route forwards OCC token — contrast with AC1's edit gap.
 
-    def test_move_succeeds_after_concurrent_edit_bumps_updated(
-        self, client, engine: KanbanEngine
-    ) -> None:
-        """Engine mutates task (bumps updated) before HTTP move; move still returns 200.
-
-        Proves MoveRequest has no 'updated' field — the move path cannot detect
-        that the task was modified between the client's snapshot and the request.
-        """
-        # Simulate concurrent edit that bumps task.updated
-        engine.edit_task("1", title="Concurrent edit — bumps updated timestamp")
-        # Move via cockpit HTTP — no OCC check means this must succeed
-        response = client.post("/api/tasks/1/move", json={"status": "in-progress"})
-        assert response.status_code == 200, (
-            "Move route must succeed regardless of concurrent engine edit (gap G2)"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AC3 — Release actor-agnostic: cockpit clears any active claim
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ReleaseActorAgnostic:
-    """AC3: Release route actor-agnostic — clears any active claim regardless of owner (gap G3).
-
-    NOTE: The cockpit release route checks ``task.claimed_by`` to detect a claim.
-    Due to AC-C13, ``claimed_by`` is never written to disk; it is an in-memory alias
-    only.  To set up the precondition (a claimed task visible to the route's guard),
-    this test patches ``engine.show_task`` to inject ``claimed_by`` into the returned
-    Task.  The underlying ``engine.release_task`` reads ``claimed_at`` from disk, which
-    IS set by ``engine.claim_task``, so the release proceeds correctly.  The mock proves
-    that once the guard sees a claim, the route does NOT verify ownership — any caller
-    can release any active claim (gap G3).
+    Unlike the edit route, the move route (mutation.py L~84) passes
+    expected_updated=req.updated to engine.move_task, engaging the engine's
+    CAS.  This test proves the structural asymmetry between the two routes.
     """
 
-    def test_release_clears_foreign_claimed_by_without_ownership_check(
+    def test_move_route_passes_expected_updated_to_engine(
         self, client, engine: KanbanEngine
     ) -> None:
-        """Inject claimed_by='foreign-agent' via mock; cockpit releases without verifying owner.
+        """Wraps engine.move_task; expected_updated must be present in call kwargs.
 
-        Proves the route's guard (``if not task.claimed_by``) passes when claimed_by is
-        set, and the route then calls engine.release_task WITHOUT any ownership check.
-        The task is first claimed via engine so that ``claimed_at`` is on disk (enabling
-        the real engine.release_task to clear the claim).
+        Sends a valid move request using the task's current updated timestamp.
+        Proves the route correctly forwards the OCC token to the engine.
         """
-        # Set up: claim task 1 so claimed_at is on disk
+        task = engine.show_task("1")
+        with mock.patch.object(engine, "move_task", wraps=engine.move_task) as mocked:
+            response = client.post(
+                "/api/tasks/1/move",
+                json={"status": "in-progress", "updated": task.updated},
+            )
+        assert response.status_code == 200
+        assert mocked.called, "engine.move_task must have been called"
+        call_kwargs = mocked.call_args.kwargs
+        assert "expected_updated" in call_kwargs, (
+            "Move route must forward expected_updated to engine (OCC engaged)"
+        )
+        assert call_kwargs["expected_updated"] == task.updated, (
+            "expected_updated must match the updated value sent in the request"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3 — Release guard broken on new-schema boards (gap G3)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ReleaseGuardBroken:
+    """AC3: Release route returns 409 even for genuinely claimed tasks (gap G3).
+
+    The release route (mutation.py L~227) guards with ``if not task.claimed_by``.
+    Because Task.claimed_by has Field(exclude=True), it is never written to the
+    YAML file.  After any disk round-trip, show_task() always returns
+    claimed_by=None — so the guard always fires and the route always returns 409,
+    making the release endpoint unreachable on new-schema boards.
+    """
+
+    def test_release_returns_409_even_when_task_is_genuinely_claimed(
+        self, client, engine: KanbanEngine
+    ) -> None:
+        """Claim task 1 via engine (writes claimed_at to disk); release route → 409.
+
+        No mocking: proves the live route behavior when claimed_at IS on disk
+        but claimed_by is None due to Field(exclude=True).
+        """
+        # Write claimed_at to disk via engine
         engine.claim_task("1")
 
-        # Inject claimed_by via mock — simulates a foreign-agent claim visible to the route
-        _real_show = engine.show_task
+        # Release route reads claimed_by (always None) → guard fires → 409
+        response = client.post("/api/tasks/1/release")
 
-        def _show_with_claimed_by(task_id: str) -> object:
-            task = _real_show(task_id)
-            task.claimed_by = "foreign-agent"  # in-memory only; prove route ignores identity
-            return task
-
-        with mock.patch.object(engine, "show_task", side_effect=_show_with_claimed_by):
-            response = client.post("/api/tasks/1/release")
-
-        assert response.status_code == 200, (
-            "Release route must succeed without verifying claimed_by identity (gap G3)"
+        assert response.status_code == 409, (
+            "Release route must return 409 even when task is claimed (gap G3 — "
+            "claimed_by guard always fires because claimed_by is never persisted)"
         )
-        body = response.json()
-        assert body.get("claimed_by") is None, (
-            "claimed_by must be absent/null in response after release"
-        )
+        assert response.json()["detail"] == "Task 1 is not currently claimed"
 
 
 # ---------------------------------------------------------------------------
@@ -271,50 +273,34 @@ class TestFromAC_409DetailStrings:
 
 
 class TestFromAC_SchemaBaseline:
-    """AC5: All 14 TaskDetailOut keys present in 200 responses for race-path routes."""
+    """AC5: All 14 TaskDetailOut keys present in move and edit 200 responses.
 
-    def test_move_response_has_all_14_taskdetailout_keys(self, client) -> None:
-        """Move 200 response contains all 14 TaskDetailOut keys."""
-        response = client.post("/api/tasks/1/move", json={"status": "in-progress"})
-        assert response.status_code == 200
-        body = response.json()
-        missing = _TASK_DETAIL_KEYS - set(body.keys())
-        assert not missing, f"Missing TaskDetailOut keys in move response: {missing}"
+    No release 200 test — the release 200 path is unreachable on new-schema
+    boards due to gap G3 (AC3 above).
+    """
 
-    def test_edit_response_has_all_14_taskdetailout_keys(
+    def test_move_200_response_has_all_14_taskdetailout_keys(
         self, client, engine: KanbanEngine
     ) -> None:
-        """Edit 200 response contains all 14 TaskDetailOut keys."""
+        """Move 200 response body contains all 14 TaskDetailOut keys."""
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
+        assert response.status_code == 200
+        missing = _TASK_DETAIL_KEYS - set(response.json().keys())
+        assert not missing, f"Missing TaskDetailOut keys in move response: {missing}"
+
+    def test_edit_200_response_has_all_14_taskdetailout_keys(
+        self, client, engine: KanbanEngine
+    ) -> None:
+        """Edit 200 response body contains all 14 TaskDetailOut keys."""
         task = engine.show_task("1")
         response = client.post(
             "/api/tasks/1/edit",
             json={"updated": task.updated, "title": "Schema baseline probe"},
         )
         assert response.status_code == 200
-        body = response.json()
-        missing = _TASK_DETAIL_KEYS - set(body.keys())
+        missing = _TASK_DETAIL_KEYS - set(response.json().keys())
         assert not missing, f"Missing TaskDetailOut keys in edit response: {missing}"
-
-    def test_release_response_has_all_14_taskdetailout_keys(
-        self, client, engine: KanbanEngine
-    ) -> None:
-        """Release 200 response contains all 14 TaskDetailOut keys (task 2, pre-claimed).
-
-        Task 2 has ``claimed_at`` on disk (seed.claim_task in board_dir fixture).
-        show_task is patched to inject ``claimed_by`` so the route's guard passes.
-        The real engine.release_task then reads claimed_at from disk and clears it.
-        """
-        _real_show = engine.show_task
-
-        def _show_with_claimed_by(task_id: str) -> object:
-            task = _real_show(task_id)
-            task.claimed_by = "seed"
-            return task
-
-        with mock.patch.object(engine, "show_task", side_effect=_show_with_claimed_by):
-            response = client.post("/api/tasks/2/release")
-
-        assert response.status_code == 200
-        body = response.json()
-        missing = _TASK_DETAIL_KEYS - set(body.keys())
-        assert not missing, f"Missing TaskDetailOut keys in release response: {missing}"
