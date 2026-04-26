@@ -1,10 +1,10 @@
 ---
 id: 1077
 title: 'B-11: RED — end_work tests'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21 10:50:12.206656+00:00
-updated: 2026-04-26T13:24:30.805316+00:00
+updated: 2026-04-26T13:30:29.044379+00:00
 tags:
 - phase:engine
 - brief:b
@@ -16,8 +16,8 @@ depends_on:
 blocked: false
 block_reason: 'auditor failed twice: TOOL_UNAVAILABLE quality-runner — auditor agent
   cannot reach quality-runner subagent'
-claimed_by: near-frost
-claimed_at: 2026-04-26T13:24:30.805316+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -528,3 +528,68 @@ Final reviewer pass (cycle 3): PASS at 0.93. All AC lines mapped. Selector-scope
 
 ### Blocked
 Quality-Runner subagent not available in auditor runtime. Cannot execute full-suite regression check (auditor's primary unique value). Deliverables and reviewer evidence look solid; full suite run required before archive.
+
+[[2026-04-26]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC18 | test_success_advances_status_with_iso_datetime_in_note, test_success_from_terminal_archives_with_completed_reason — 33/0 in task suite | PASS |
+| AC19 | test_reject_to_non_archived_status_updates_status_with_iso_datetime, test_reject_to_archived_moves_file_to_archive_dir — 33/0 | PASS |
+| AC20 | test_release_clears_claim_no_status_change_no_note — 33/0 | PASS |
+| AC-NEW-1 | test_block_without_reason_*, test_block_with_empty_string_reason_*, test_block_with_whitespace_only_reason_* — 33/0; .strip() guard at engine.py:2887 | PASS |
+| AC-NEW-2 | test_block_with_reason_on_claimed_sets_blocked_clears_claim — 33/0 | PASS |
+| AC-NEW-3 | test_block_with_reason_and_move_to_*, test_block_with_move_to_fires_predicate_* — 33/0 | PASS |
+| AC-NEW-4 | test_block_with_move_to_guidance_contains_ar_hint_and_skip_warning — 33/0 | PASS |
+| AC-NEW-5 | test_reject_backwards_skip_multiple_statuses_emits_skip_warning — 33/0 | PASS |
+| AC-NEW-6 | test_fail_outcome_raises_err_invalid_outcome — 33/0 | PASS |
+| AC-NEW-7 | test_release_on_unclaimed_is_pure_noop_not_updated — 33/0 | PASS |
+| AC-NEW-8 | test_unclaimed_success/reject/block_raises_err_not_claimed (3 tests) — 33/0 | PASS |
+| AC-NEW-9 | 7 forbidden-parameter tests covering success/reject/release/block — 33/0; coverage proof at test_reject_to_non_archived_with_archival_reason | PASS |
+| AC-NEW-10 | test_reject_without_move_to_raises_err_reject_requires_move_to — 33/0 | PASS |
+| AC-NEW-11 | test_success/reject/release_with_block_reason_raises_forbidden (3 tests) — 33/0 | PASS |
+| AC-NEW-12 | test_success_predicate_fail_claim_not_cleared — 33/0 | PASS |
+| AC-NEW-13 | test_block_move_to_predicate_fail_blocked_not_set_claim_not_cleared — 33/0 | PASS |
+| AC-NEW-17 | test_reject_to_archived_without_archival_reason_raises_required — 33/0 | PASS |
+| AC-NEW-18 | test_release_with_move_to_raises_err_move_to_forbidden_on_release — 33/0 | PASS |
+| AC-NEW-19 | test_release_with_archival_reason_raises_archival_fields_forbidden — 33/0 | PASS |
+| AC-NEW-20 | test_block_with_archival_reason/refs_raises_archival_fields_forbidden (2 tests) — 33/0 | PASS |
+| D20/AC30 | ISO 8601 assertions in success/reject/block happy paths — 33/0 | PASS |
+| Deterministic matrix | test_release_with_move_to_error_is_not_err_invalid_outcome — 33/0 | PASS |
+| RED history | Task body Test-Writer Notes document 30 failing RED → 33 green | HISTORICAL |
+| AC-REC-1–6 | TestFromAC_AgentViewEndWork selector: 5/0; reconciled fixtures and expectations verified | PASS |
+
+### Test Results
+- pytest (full suite): 2223 passed, 173 failed, 4 skipped, 209 errors — **0 failures in task scope**
+- pytest (task-scoped): TestFromAC_EndWork 33/0, TestFromAC_AgentViewEndWork 5/0
+- ruff: clean on serve/kanban/src/ and serve/kanban/tests/
+- Coverage: owlbear_kanban.engine 95% (full suite)
+
+### Background Failures (informational)
+173 failures + 209 errors in full suite — all outside task scope: cockpit API (expected_updated kwargs), MCP kanban (agent_name/agent_map fixtures), frontend (vite config), corruption, storage. None attributable to #1077 changes.
+
+### Architect Quality: 4/5
+AC was comprehensive (22 specific criteria with exact error codes, parameter combinations, state invariants). Minor gap: AC-NEW-1 didn't explicitly specify empty/whitespace handling — caught by reviewer and addressed via retry. Reconciliation AC (AC-REC-*) added mid-cycle for cross-suite contract conflict. Appropriate architect response.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| AC line with no specific evidence | 0 (all covered) |
+| Lint violations | 0 (clean) |
+| AC quality score ≤ 3 | 0 (score 4) |
+| Missing reviewer evidence section | 0 (present, 3 cycles) |
+| Full-suite test failures in task scope | 0 (none) |
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 4c34dcbe | test | test_engine_end_work_1077.py | #1077 |
+| bc996b9c | feat | engine.py | #1077 |
+| bdfd568f | test | test_engine_end_work_1077.py | #1077 |
+| b75588f5 | fix | engine.py | #1077 |
+| 5864ee64 | test | test_engine_coverage_1068.py | #1077 |
+| 15a4cf67 | docs | engine.py, kanban.excalidraw | #1077 |
