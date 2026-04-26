@@ -61,7 +61,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Run full test suite and lint for exit gate verification | `quality-runner: mode=full, task_id=42` |
-| scribe | Sustained low AC quality across tasks or ambiguous confidence | `Scribe: task_id=42, mode=check-or-create, concern="systemic AC quality degradation"` |
+| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="systemic AC quality degradation"` |
 | Explore | Need broad codebase context for AC verification | `Find all modules that import the retry decorator` |
 
 </agents>

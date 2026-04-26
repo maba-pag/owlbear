@@ -59,7 +59,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 
 | Agent | When | Example |
 |-------|------|---------|
-| scribe | Every cycle start (housekeeping) — resolves responded DRs, unblocks tasks | `Scribe: task_id=all, mode=resolve, agent=orchestrator` |
+| scribe | Every cycle start (housekeeping) — resolves responded DRs, unblocks tasks | `Scribe: task_id=all, mode=resolve` |
 | planner | Delegated by architect when task body contains `Needs decomposition:` | (not dispatched directly by orchestrator) |
 | researcher | Dispatched per plan — processes research tasks | (dispatched via plan, not directly) |
 | architect | Dispatched per plan — reviews backlog tasks | (dispatched via plan, not directly) |
