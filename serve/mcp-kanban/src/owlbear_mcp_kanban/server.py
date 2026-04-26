@@ -282,10 +282,6 @@ async def move_task(
                 archival_refs=archival_refs,
             )
             return _to_single_task_response(record)
-        except TypeError:
-            with contextlib.suppress(NotImplementedError):
-                record = view.move_task(int(task_id), status)
-                return _to_single_task_response(record)
         except KanbanError as exc:
             raise ToolError(exc.user_message) from exc
         except NotImplementedError:
@@ -418,23 +414,6 @@ async def end_work(  # noqa: PLR0913
                 archival_refs=archival_refs,
             )
             return _to_single_task_response(record)
-        except TypeError:
-            with contextlib.suppress(TypeError, NotImplementedError):
-                record = view.end_work(
-                    int(task_id),
-                    outcome=outcome,
-                    move_to=move_to,
-                    note=note,
-                    block_reason=block_reason,
-                )
-                return _to_single_task_response(record)
-            with contextlib.suppress(NotImplementedError):
-                record = view.end_work(
-                    int(task_id),
-                    outcome=outcome,
-                    note=note,
-                )
-                return _to_single_task_response(record)
         except KanbanError as exc:
             raise ToolError(exc.user_message) from exc
         except NotImplementedError:
