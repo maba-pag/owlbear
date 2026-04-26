@@ -352,3 +352,48 @@ class TestFromAC_MoveStaleUpdated:
             json={"status": "in-progress", "updated": task.updated},
         )
         assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# AC4 — Shared suite contract: test_cockpit_mutation_api.py move tests updated
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MoveSharedSuiteContract:
+    """AC4: All /move POST calls in test_cockpit_mutation_api.py include 'updated' token.
+
+    Source inspection guard. Fails until the builder updates the shared mutation
+    suite to carry the required OCC token in every move request payload.
+    """
+
+    def test_shared_suite_move_posts_all_include_updated_token(self) -> None:
+        """Source inspection: every /move POST in test_cockpit_mutation_api.py
+        carries 'updated' in the json payload.
+
+        Fails currently because test_cockpit_mutation_api.py sends status-only
+        payloads for all 6 move POST calls (lines ~139, 144, 153, 164, 169, 400).
+        Passes after builder applies AC4 and adds 'updated' to each call.
+        """
+        source = Path("tests/test_cockpit_mutation_api.py").read_text(encoding="utf-8")
+        lines = source.splitlines()
+        violations: list[str] = []
+
+        for i, line in enumerate(lines):
+            # Match lines that contain a /move URL fragment (part of a move POST)
+            if "/move" not in line:
+                continue
+            # Collect a window covering the enclosing client.post(...) call
+            start = max(0, i - 2)
+            end = min(len(lines), i + 5)
+            window = "\n".join(lines[start:end])
+            # Skip lines that are not part of a client.post call
+            if "client.post" not in window:
+                continue
+            # Flag if 'updated' is absent from the payload context
+            if '"updated"' not in window and "'updated'" not in window:
+                violations.append(f"  line {i + 1}: {line.strip()!r}")
+
+        assert not violations, (
+            "Move POST calls in test_cockpit_mutation_api.py missing 'updated' OCC token"
+            " (AC4 — builder must update all move payloads):\n" + "\n".join(violations)
+        )
