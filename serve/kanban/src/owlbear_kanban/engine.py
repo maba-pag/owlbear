@@ -1249,7 +1249,26 @@ class KanbanEngine:
             self._revision += 1
             return record
 
-    def release_task(self, task_id: str, *, source: str = "engine") -> Task:
+    def _append_timestamped_note(
+        self,
+        record: Task,
+        note: str | None,
+        now: datetime,
+    ) -> None:
+        """Append an ISO timestamp line and note line to ``record.body`` when provided."""
+        if note is None:
+            return
+        body = _task_body_as_text(record.body)
+        stamp = now.replace(microsecond=0).isoformat()
+        record.body = body + "\n" + stamp + "\n" + note
+
+    def release_task(
+        self,
+        task_id: str,
+        *,
+        source: str = "engine",
+        note: str | None = None,
+    ) -> Task:
         """Release the claim on a task, clearing ``claimed_at``.
 
         This operation is a no-op if the task is not currently claimed.
@@ -1257,6 +1276,7 @@ class KanbanEngine:
         Args:
             task_id: Numeric task ID as a string.
             source:  Activity event source label (agent, cockpit, engine).
+            note:    Optional note text appended with an ISO-8601 timestamp.
 
         Returns:
             Updated :class:`Task` with claim fields cleared.
@@ -1267,10 +1287,13 @@ class KanbanEngine:
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
         original = record.model_copy(deep=True)
+        now = datetime.now(tz=UTC)
+
+        self._append_timestamped_note(record, note, now)
 
         record.claimed_at = None
         record.claimed_by = None
-        record.updated = datetime.now(tz=UTC).isoformat()
+        record.updated = now.isoformat()
         write_task(record, self._kanban_dir)
         try:
             self._emit_event(
@@ -1405,12 +1428,7 @@ class KanbanEngine:
 
         # --- Append timestamped note ---
         now = datetime.now(tz=UTC)
-        body = _task_body_as_text(record.body)
-        if outcome != "release":
-            stamp = now.replace(microsecond=0).isoformat()
-            record.body = body + "\n" + stamp + "\n" + note
-        else:
-            record.body = body
+        self._append_timestamped_note(record, note, now)
 
         # --- Release claim ---
         record.claimed_at = None
@@ -2945,7 +2963,11 @@ class AgentView:
                 )
 
             if outcome == "release":
-                task = self.engine.release_task(str(task_id), source="agent")
+                task = self.engine.release_task(
+                    str(task_id),
+                    source="agent",
+                    note=note,
+                )
             else:
                 safe_block_reason = block_reason or ""
                 task = self.engine.end_work(
