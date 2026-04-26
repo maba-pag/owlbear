@@ -4,7 +4,7 @@ title: 'B-11: RED — end_work tests'
 status: done
 priority: needed
 created: 2026-04-21 10:50:12.206656+00:00
-updated: 2026-04-26T01:42:13.823594+00:00
+updated: 2026-04-26T13:24:30.805316+00:00
 tags:
 - phase:engine
 - brief:b
@@ -16,8 +16,8 @@ depends_on:
 blocked: false
 block_reason: 'auditor failed twice: TOOL_UNAVAILABLE quality-runner — auditor agent
   cannot reach quality-runner subagent'
-claimed_by:
-claimed_at:
+claimed_by: near-frost
+claimed_at: 2026-04-26T13:24:30.805316+00:00
 archival_reason:
 archival_refs: []
 ---
