@@ -111,5 +111,6 @@ The `release` note-appending gap is a separate D52 implementation bug fixed rega
 
 ## 5. Follow-up Tasks
 
-- **T-A (revised #1125):** Restore `fail` to AgentView valid_outcomes + EndWorkParams Literal + fix `release` note-appending + update tests (T2, needs advisory DR)
-- **T-B (existing #1126):** Remove dead try/except TypeError fallback chains in MCP server.py (T1, cleanup — already researched separately)
+- **T-A (#1125):** Restore `fail` to AgentView valid_outcomes + EndWorkParams Literal + update tests (T2, needs advisory DR)
+- **T-B (#1126):** Remove dead try/except TypeError fallback chains in MCP server.py (T1, cleanup — already researched separately)
+- **T-C (#1127):** Fix `release` outcome to append notes per Brief B D52 (T1, defect D2 — separate from the `fail` restoration)
