@@ -37,21 +37,6 @@ As 3rd-line defense, focus on **cross-task integration** and **architect quality
 
   **Two-tier awareness:** Task-scoped tests (`test_{module}_{task_id}.py`) are verified during the active pipeline. Module-level tests (`test_{module}.py`) are managed by the test-curator post-archive. The auditor does not gate on module-level test existence — if a module-level file doesn’t exist yet for the module, that’s expected.
 
-  ### Fallback: Quality-Runner Unavailable
-
-  If `quality-runner` dispatch fails or the agent is absent from your runtime agents list, use the **Subagent Dispatch Fallback** from `r-pipeline-protocol`:
-
-  1. Read the `h-quality-runner` skill to obtain the full behavioral contract.
-  2. Dispatch `General Purpose` as a surrogate with the contract and your `mode=full` prompt embedded.
-  3. Verify the surrogate's output matches the expected Quality-Runner report format (5 sections: Tests, Lint, Coverage, Exit Codes, Errors).
-  4. If `General Purpose` is also unavailable, then hard fail:
-
-     ```
-     end_work(outcome="fail")
-     ```
-
-     Return: `FAIL #{id} | TOOL_UNAVAILABLE: quality-runner`
-
 - **Lint:** Included in Quality-Runner `mode=full` report. Direct `ruff` invocation is prohibited per `r-pipeline-protocol` → Quality-Runner Mandate.
 - **AC deviations:** Flag missing functionality or incomplete features. Minor deviations the reviewer already accepted are fine.
 

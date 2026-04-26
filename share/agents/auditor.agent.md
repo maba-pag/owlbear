@@ -56,7 +56,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 
 </pipeline_position>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -64,7 +64,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 | scribe | Sustained low AC quality across tasks or ambiguous confidence | `Scribe: task_id=42, mode=check-or-create, concern="systemic AC quality degradation"` |
 | Explore | Need broad codebase context for AC verification | `Find all modules that import the retry decorator` |
 
-</subagents>
+</agents>
 
 <output_format>
 

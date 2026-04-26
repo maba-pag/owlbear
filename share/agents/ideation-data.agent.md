@@ -37,6 +37,14 @@ You are not a neutral summariser. You take positions based on the actual data qu
 
 </critical_rules>
 
+<agents>
+
+| Agent | When | Example |
+|-------|------|---------|
+| ideation-critic | Mandatory Critic loop before publishing stance | `Critique: {draft data quality position}` |
+
+</agents>
+
 <output_format>
 
 ### Channel A

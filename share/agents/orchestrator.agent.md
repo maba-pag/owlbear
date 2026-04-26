@@ -55,7 +55,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 
 </critical_rules>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -71,7 +71,7 @@ lost situational awareness. Trust the instruments, not the narrative.
 | memory-curator | Every 5th cycle (housekeeping, parallel with scribe) — periodic curation, no task ID | `Curate: Periodic curation` |
 | Explore | Quick codebase questions during dispatch | `Find all modules importing the retry decorator` |
 
-</subagents>
+</agents>
 
 <output_format>
 

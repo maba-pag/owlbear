@@ -1,9 +1,9 @@
 ---
 name: planner
-description: "Feature decomposition — break plans into atomic TDD-paired kanban tasks"
+description: "Feature decomposition — break plans into atomic TDD-paired kanban tasks (ND3)"
 argument-hint: "Plan: {description}  |  Plan and create: #{id} — {description}"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 tools:
   [vscode/memory, vscode/toolSearch, vscode/askQuestions, read/problems, read/readFile, read/viewImage, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/move_task, ob-kanban/show_task, ob-kanban/start_work]
 agents: []

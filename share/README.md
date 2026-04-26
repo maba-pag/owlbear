@@ -65,6 +65,14 @@ These load into every agent's context on every turn:
 
 Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — problem framing) and `ideation-mediator` (Phase 2 — synthesis, decisions, Brief).
 
+### Nesting Depth
+
+VS Code does not inject the agents catalog at nesting depth ≥2. Agents at depth ≥3 (ND3) must have `disable-model-invocation: false` to be resolvable, and dispatching agents rely on their `<agents>` body section — not the system-injected catalog — for subagent discovery.
+
+**ND3 agents** (marked with `(ND3)` in their description): challenger, scribe, planner, fix-attempt, code-reader, ideation-critic, quality-runner.
+
+See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent table.
+
 ## Skills
 
 33 skill definitions (`share/skills/{name}/SKILL.md`).

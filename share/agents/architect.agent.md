@@ -63,7 +63,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 
 </pipeline_position>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -71,7 +71,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 | scribe | Design choice with product implications needs user input | `Scribe: task_id=42, mode=check-or-create, concern="API surface area for skill loading"` |
 | planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan and create: #{task_id} — {feature description from task body}` |
 
-</subagents>
+</agents>
 
 <output_format>
 

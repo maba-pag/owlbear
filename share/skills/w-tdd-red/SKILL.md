@@ -107,16 +107,6 @@ prompt: |
 
 Confirm all tests appear in `failed:` list and `clean: true` in the Quality-Runner report.
 
-### Fallback: Quality-Runner Unavailable
-
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, **block the task** per `r-pipeline-protocol` → Quality-Runner Mandate:
-
-```
-end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot verify RED-phase failures independently")
-```
-
-Do not run pytest directly. Direct shell invocation is prohibited — it bypasses the canonical evidence pipeline.
-
 **Expected failure types:** `ImportError`, `NotImplementedError`, `AssertionError`.
 
 **Fix these:** `SyntaxError` (bug in test code). Any test that **passes** means the implementation already exists — remove the test or make it more specific.

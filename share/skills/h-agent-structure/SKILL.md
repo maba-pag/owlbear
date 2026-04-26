@@ -127,7 +127,7 @@ hooks:                         # only if enforcement needed
 ```
 
 - `user-invocable: false` — hides from the `/` slash-command menu. Use for pipeline-only agents/skills that should only be dispatched by the orchestrator.
-- `disable-model-invocation: true` — prevents direct invocation by other models. The orchestrator's explicit `agents` array overrides this. Use for all pipeline agents (T2-T3).
+- `disable-model-invocation: true` — prevents autonomous invocation by other models. Use for L1/L2 pipeline agents. **Must be `false` for ND3 agents** (agents that may be called at nesting depth ≥3), because VS Code does not resolve agents with `true` at depth ≥2. See § Nesting Depth & DMI below.
 
 ### Required Sections
 
@@ -194,13 +194,15 @@ Compact transition table showing what triggers this agent and what it produces:
 | Reject  | done → review | fixable gaps |
 ```
 
-**`<subagents>`** — Only agents that delegate to sub-agents.
+**`<agents>`** — Only agents that delegate to sub-agents.
 
 ```markdown
 | Agent | When | Example |
 |-------|------|---------|
 | scribe | Decision point requiring user input | `Scribe: task_id=42, mode=check-or-create, concern="..."` |
 ```
+
+The `<agents>` table must list every agent in the frontmatter `agents:` array and vice versa. This is the **only** source of subagent knowledge at nesting depth ≥2 (VS Code does not inject the agents catalog at that depth). A CI validation script enforces alignment — see `.owlbear/scripts/validate-agent-tables.py`.
 
 ### Forbidden Content
 
@@ -213,6 +215,31 @@ Agent files must NOT contain:
 - Command templates (MCP kanban tools, git) → belongs in the skill's output template
 - Verbatim copies of skill checklist content → reference the skill instead
 - Rules that apply identically to 2+ agents → belongs in a shared location
+
+### Nesting Depth & DMI
+
+VS Code has a limitation: at nesting depth ≥2 (3rd-level subagents), agents with `disable-model-invocation: true` cannot be resolved. Additionally, the `<agents>` catalog from the VS Code system prompt is not injected at depth ≥2 — agents rely solely on their own `<agents>` body section to know what subagents are available.
+
+**Rules:**
+
+1. **ND3 agents** (agents callable at nesting depth ≥3) must have `disable-model-invocation: false`.
+2. **ND1/ND2 agents** keep `disable-model-invocation: true` (default for pipeline agents).
+3. **Every dispatching agent** must have an `<agents>` body section listing all agents from its frontmatter `agents:` array — this is the only discovery mechanism at depth ≥2.
+4. ND3 agents are tagged with `(ND3)` in their `description` field for identification.
+
+**Current ND3 agents:**
+
+| Agent | Called by (at L2) |
+|-------|-------------------|
+| challenger | architect, researcher |
+| scribe | architect, researcher, builder, reviewer, test-writer, doc-writer, auditor |
+| planner | architect |
+| fix-attempt | builder |
+| code-reader | reviewer |
+| ideation-critic | ideation-architect, ideation-data, ideation-enduser, ideation-security |
+| quality-runner | builder, reviewer, test-writer, auditor |
+
+Built-in agents (`Explore`, `General Purpose`) resolve at any depth regardless of settings.
 
 ## Skill File Structure (SKILL.md)
 

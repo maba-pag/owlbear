@@ -68,13 +68,13 @@ loop, not to you unilaterally.
 
 </pipeline_position>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
 | scribe | Deletion proposal DR, or documentation structure decision with no clear right answer | `Scribe: task_id=42, mode=check-or-create, concern="delete stale serve/browser/README.md CLI section"` |
 
-</subagents>
+</agents>
 
 <output_format>
 

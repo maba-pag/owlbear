@@ -45,7 +45,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 
 </critical_rules>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -58,7 +58,7 @@ You begin from discovery artifacts in a fresh context. You own M3-M6 only.
 | ideation-critic | Stress-test chosen approach or Brief | `Critique: {current position}` |
 | planner | Brief handoff | `Plan and create: #{parent_id} — {brief summary}` |
 
-</subagents>
+</agents>
 
 <output_format>
 
