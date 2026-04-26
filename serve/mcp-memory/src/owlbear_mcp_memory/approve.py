@@ -75,31 +75,6 @@ def _build_server(db_path: Path) -> FastMCP:
     return server
 
 
-def _load_curation_report(db_path: Path) -> dict[str, str] | None:
-    """Load curation-report.json from the same directory as the DB.
-
-    Supports two formats:
-      - Top-level JSON array: [{entry_id: ..., recommendation: ...}, ...]
-      - Legacy dict format:   {entries: [{id: ..., recommendation: ...}, ...]}
-
-    Returns a mapping of entry_id -> recommendation string, or None if absent.
-    Prints warning to stderr on json.JSONDecodeError.
-    """
-    report_path = db_path.parent / "curation-report.json"
-    try:
-        data = json.loads(report_path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return None
-    except json.JSONDecodeError as exc:
-        print(  # noqa: T201
-            f"WARNING: curation-report.json is malformed ({exc}); recommendation column unavailable",
-            file=sys.stderr,
-        )
-        return None
-    if isinstance(data, list):
-        return {e["entry_id"]: e.get("recommendation", "") for e in data}
-    return {e["id"]: e.get("recommendation", "") for e in data.get("entries", [])}
-
 
 def _parse_list_result(content: list) -> list[dict]:
     """Parse FastMCP content items into a list of entry dicts.
@@ -120,20 +95,14 @@ def _parse_list_result(content: list) -> list[dict]:
     return entries
 
 
-def _print_table(entries: list[dict], recommendations: dict[str, str] | None) -> None:
+def _print_table(entries: list[dict]) -> None:
     """Print pending entries as a numbered table to stdout."""
-    has_rec = recommendations is not None
     col_width = _CONTENT_PREVIEW_LEN + 3  # content + "..."
-    if has_rec:
-        header = f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}  Recommendation"
-        print(header)  # noqa: T201
-        print("-" * len(header))  # noqa: T201
-    else:
-        header = (
-            f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}"
-        )
-        print(header)  # noqa: T201
-        print("-" * len(header))  # noqa: T201
+    header = (
+        f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}"
+    )
+    print(header)  # noqa: T201
+    print("-" * len(header))  # noqa: T201
     for i, entry in enumerate(entries, 1):
         id_short = entry["id"][:8]
         category = entry["category"]
@@ -142,11 +111,7 @@ def _print_table(entries: list[dict], recommendations: dict[str, str] | None) ->
             preview = content[:_CONTENT_PREVIEW_LEN] + "..."
         else:
             preview = content
-        if has_rec:
-            rec = recommendations.get(entry["id"], "")
-            print(f"{i:3}  {id_short}  {category:<12}  {preview:<{col_width}}  {rec}")  # noqa: T201
-        else:
-            print(f"{i:3}  {id_short}  {category:<12}  {preview:<{col_width}}")  # noqa: T201
+        print(f"{i:3}  {id_short}  {category:<12}  {preview:<{col_width}}")  # noqa: T201
 
 
 async def _async_run_interactive(client: object) -> tuple[bool, int, int, int]:
@@ -269,15 +234,7 @@ async def _async_main(argv: list[str] | None = None) -> int:
             list_result = await client.call_tool("list_entries", {"status": "pending"})
             entries = _parse_list_result(list_result.content)
             if entries:
-                recommendations = _load_curation_report(db_path)
-                if recommendations is None:
-                    report_path = db_path.parent / "curation-report.json"
-                    if not report_path.exists():
-                        print(  # noqa: T201
-                            "WARNING: curation-report.json not found; recommendation column unavailable",
-                            file=sys.stderr,
-                        )
-                _print_table(entries, recommendations)
+                _print_table(entries)
 
     return 1 if had_error else 0
 

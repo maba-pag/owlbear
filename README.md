@@ -146,8 +146,6 @@ Optional flags:
 
 - `--db-path PATH` — override the default `store/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
 
-If `store/memory/curation-report.json` is present, a recommendation column is shown in the listing table.
-
 Exit codes: 0 on full success, 1 if any operation failed.
 
 ## Doc Index

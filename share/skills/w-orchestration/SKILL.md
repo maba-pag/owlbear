@@ -14,7 +14,6 @@ The orchestrator maintains minimal session state:
 
 - **`rate_limited`** (boolean, default `False`): Set to `True` on any rate-limit error. Once set, all subsequent `pick_tasks` calls use `wave_size=1`. Never reset within a session.
 - **`cycle_count`** (integer, starts at 1): Incremented each cycle. Used to trigger the memory-curator every 5th cycle.
-- **`needs_info_dispatches`** (list of `{task_id, agent}` pairs, cleared each cycle): Populated from scribe's `resolve-summary.json` in Step 1. Injected into dispatch plan in Step 2.
 - **No board state.** `pick_tasks` reads the board each cycle via MCP tool call.
 - **Channel A reading.** Read agent return values for outcome detection: `FAIL` (task failed), `TOOL_UNAVAILABLE` (tool degraded), or success. Do not parse signals for task routing — re-plan from board state each cycle.
 - **Brief context:** Available to pipeline agents via parent task lookup — the orchestrator does not use Brief context directly.
@@ -46,27 +45,31 @@ See `r-pipeline-protocol` → Communication for Channel A/B spec.
 
 Empty `waves` means nothing dispatchable for this cycle.
 
-**Pipeline subagent output:** Channel A diagnostic line. Read for outcome detection: `FAIL` signals a task failure, `TOOL_UNAVAILABLE` signals tool degradation, any other return is success. Do not parse for routing. After scribe returns, read `resolve-summary.json` for structured dispatch data (see Step 1).
+**Pipeline subagent output:** Channel A diagnostic line. Read for outcome detection: `FAIL` signals a task failure, `TOOL_UNAVAILABLE` signals tool degradation, any other return is success. Do not parse for routing.
 
-## Step 1 — Resolve Pending Decision Requests
+## Step 1 — Housekeeping
 
-At the **start of every cycle**, call the **scribe** agent to process any responded decision/action requests:
+At the **start of every cycle**, dispatch non-task agents. These agents modify board state (scribe unblocks tasks) or maintain institutional memory (curator). Both must complete before `pick_tasks` so the board is up-to-date.
+
+**Every cycle — scribe:**
 
 ```
 runSubagent("scribe", "Scribe: task_id=all, mode=resolve, agent=orchestrator", "Resolve pending DRs")
 ```
 
-The scribe scans `.owlbear/decisions/pending/`, classifies each file by its `response` field (`pending`, `approved`, `completed`, `needs-info`, `rejected`). It writes summaries to task bodies, unblocks approved/rejected/completed tasks, keeps `needs-info` tasks blocked and signals for re-dispatch, moves resolved files, and handles 5-day auto-resolution.
+The scribe scans `.owlbear/decisions/pending/`, resolves responded DRs (unblocks tasks, writes summaries, moves resolved files, handles 5-day auto-resolution).
 
-**NEEDS-INFO dispatch injection:** After the scribe returns, read `.owlbear/decisions/resolve-summary.json` via `readFile`. Extract the `needs_info` array — each entry is `{task_id, agent}`. Store as `needs_info_dispatches`. Delete the file after reading (stale-file mitigation). If the file is missing, treat as empty (graceful degradation). These are **injected into the dispatch plan in Step 2** after `pick_tasks` returns, bypassing the blocked-task filter. The originating agent is dispatched for the task, regardless of the task's current status.
+The orchestrator does not use housekeeping agent output for dispatch planning — `pick_tasks` reads fresh board state. Surface informational signals to the user (e.g., curator deferred count, scribe pending-DR list).
 
-If the scribe reports `PENDING` DRs awaiting user action, surface them in the cycle output (once per session, cycle 1 only):
+**Every 5th cycle — memory-curator** (`cycle_count % 5 == 0`):
 
 ```
-Cycle 1 (DRs): Pending user response: #616 (616-scope-params-approval.md), ...
+runSubagent("memory-curator", "Curate: Periodic curation", "Curation")
 ```
 
-If the scribe reports errors, note them but proceed. If zero resolved, proceed.
+Dispatch in parallel with the scribe. The curator does not affect board state.
+
+If either agent errors, note it but proceed to Step 2.
 
 ## Step 2 — Plan
 
@@ -90,16 +93,6 @@ If `pick_tasks` returns `waves=[]`, report to user and stop.
 2. Sort
 3. Greedy wave assembly
 4. Return `PickTasksResponse`
-
-**NEEDS-INFO injection:** Append `needs_info_dispatches` (from Step 1) to the dispatch list. Each entry uses the originating agent from the DR, not the status-to-agent mapping. Skip any that are already in the pick_tasks result.
-
-**Non-Status-Triggered Agents:**
-
-| Agent   | Trigger condition |
-| ------- | ----------------- |
-| memory-curator | Every 5th cycle (`cycle_count % 5 == 0`) |
-
-If the processed dispatch list is empty, report to user and stop.
 
 ## Configuration
 
@@ -135,35 +128,27 @@ Orchestrator dispatches waves in returned order. No local re-bucketing or re-ass
 
 **Dispatch prompt contains ONLY the task ID.** Subagents claim and read their own AC via `start_work` in their own Step 0.
 
-**Exception — memory-curator:** No task ID (dispatched every 5th cycle):
+**Error handling — unified model:**
 
-```
-runSubagent("memory-curator", "Curate: Periodic curation", "Curation")
-```
+Classify agent returns top-to-bottom. First match wins.
 
-**Error handling — unified failure model:**
+**Structured vs crash classification:** A return that starts with a recognized verdict keyword (`DONE`, `FAIL`, `BLOCKED`, `REJECTED`, `ARCHIVED`, `APPROVED`) is a *structured return* — the agent completed its lifecycle and called `end_work`. Any other return (error, empty, unrecognized) is a *crash* — the agent did NOT call `end_work`.
 
-1. Check for rate-limit errors first (message contains "rate-limited", "rate_limited", or "rate limits"). Set `rate_limited = True`. Retry the dispatch once.
-2. If the agent's return contains `FAIL`: retry the dispatch once.
-3. If the agent crashes (non-rate-limit error): retry the dispatch once.
-4. If the retry also fails (any of the above): **block the task** on the board via `edit_task(block="{agent} failed twice: {reason}")`. Include the error or FAIL reason in the block note.
-5. After blocking, proceed to the next task in the wave.
-
-### Tool-Failure Verification
-
-When an agent's return contains `TOOL_UNAVAILABLE`, the agent could not reach a required tool or subagent (see `r-pipeline-protocol` → Tool Availability). This may be transient (one-off dispatch glitch) or systemic (VS Code extension degraded).
-
-1. Re-dispatch the same agent on the same task immediately.
-2. If the retry also returns `TOOL_UNAVAILABLE`: halt orchestration — "Tool availability degraded: {agent} cannot reach {tool_name}. Restart VS Code or check extension status."
-3. If the retry succeeds: tools recovered. Continue the loop normally.
-
-### Rate-Limit Handling
-
-When a rate-limit error occurs:
-
-1. Set `rate_limited = True`.
-2. Retry the rate-limited dispatch once.
-3. All subsequent `pick_tasks` calls use `wave_size=1` (one-way transition — no resume to parallel).
+1. **TOOL_UNAVAILABLE** (return contains `TOOL_UNAVAILABLE`):
+   - Re-dispatch the same agent on the same task immediately.
+   - If the retry also returns `TOOL_UNAVAILABLE`: **halt orchestration** — "Tool availability degraded: {agent} cannot reach {tool_name}. Restart VS Code or check extension status."
+   - If the retry succeeds: tools recovered. Continue normally.
+   - Note: TOOL_UNAVAILABLE returns are always structured (agent called `end_work`). The orchestrator does not block or edit the task — the agent already handled its own state.
+2. **Rate-limit** (message contains "rate-limited", "rate_limited", or "rate limits"):
+   - Set `rate_limited = True`. Retry the dispatch once.
+   - All subsequent `pick_tasks` calls use `wave_size=1` (one-way transition — no resume to parallel).
+3. **Structured return** (verdict keyword present — including `FAIL`):
+   - The agent called `end_work` and managed its own task state (status, block, release). **Do not override** — no `edit_task(block=...)`, no `move_task`. The task is in the correct state.
+   - Proceed to the next task in the wave.
+4. **Crash** (no structured return — agent error, timeout, or unrecognized output):
+   - Retry the dispatch once.
+   - If the retry also crashes: **block the task** via `edit_task(block="{agent} crashed twice: {reason}")`.
+   - After blocking, proceed to the next task in the wave.
 
 ## Step 4 — Loop
 
@@ -195,12 +180,13 @@ Session complete:
 
 ## Verification Checklist
 
-- [ ] If a dispatch failed twice, the task is blocked on the board with a reason note
+- [ ] If an agent crashed twice (no structured verdict), the task is blocked on the board with a reason note
+- [ ] If an agent returned a structured verdict (including FAIL), the orchestrator did NOT edit or block the task
 - [ ] If rate-limited at any point, all subsequent `pick_tasks` calls use `wave_size=1`
 - [ ] Loop not stopped early — only empty waves or user intervention
 
 ## Known Pitfalls
 
-- **File-based dispatch injection:** The orchestrator reads agent return values for outcome detection (FAIL, TOOL_UNAVAILABLE, success) but does NOT parse Channel A for routing decisions. After scribe returns, read `.owlbear/decisions/resolve-summary.json` for structured dispatch data — reading deposited state is infrastructure, not signal parsing.
-- **NEEDS-INFO dispatch injection:** If the scribe signals NEEDS-INFO and the orchestrator does NOT inject those tasks into the dispatch plan, the task stays blocked forever. The user will repeatedly set `response: needs-info`, and the scribe will append duplicate `## Clarification Requested` sections each cycle.
+- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCKED`, etc.), it called `end_work` and managed its own task state. Never `edit_task(block=...)` or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
+- **No dispatch decisions from housekeeping agents.** The orchestrator does not use scribe or curator output for dispatch planning. They modify board state directly; `pick_tasks` reads fresh state each cycle. Informational signals (deferred count, pending DRs) are surfaced to the user only.
 - **Legacy wave planner drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.

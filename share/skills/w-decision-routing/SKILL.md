@@ -50,18 +50,6 @@ Task blocked. End your work with outcome=block and reference this DR in your not
 
 #### resolve
 
-After processing all DRs, write `.owlbear/decisions/resolve-summary.json`:
-
-```json
-{
-  "resolved": [{"task_id": 616, "response": "approved"}],
-  "needs_info": [{"task_id": 616, "agent": "researcher"}],
-  "pending": [{"task_id": 617, "filename": "617-something.md"}]
-}
-```
-
-Write the file even when all arrays are empty — the orchestrator reads it and deletes it after reading.
-
 Always emit all three lines (set N/M/P to 0 when none):
 
 ```
@@ -69,8 +57,6 @@ RESOLVED {N} requests | {details per request}
 NEEDS-INFO {M} requests | #{task_id} agent={originating_agent}, ...
 PENDING {P} awaiting user | #{task_id} ({filename}), ...
 ```
-
-The orchestrator uses PENDING to surface unanswered DRs to the user and reads `resolve-summary.json` for structured dispatch data.
 
 #### query
 
@@ -118,9 +104,7 @@ The user has follow-up questions in `notes:`. Do NOT treat as approval.
 
 1. **Write clarification to task body** — append `## Clarification Requested` with user's `notes:` verbatim via `edit_task`. **Idempotency guard:** if the task body already contains a `## Clarification Requested` section with identical notes, skip the append.
 2. **Keep the task blocked.** Do NOT unblock.
-3. **Reset the file** — set `response: pending` and leave in `pending/`. This re-enters the pending queue.
-4. **Record in resolve-summary.json** — add `{"task_id": {task_id}, "agent": "{agent:}"}` to the `needs_info` array (written by scribe at end of resolve mode, after all DRs are processed).
-5. **Signal the originating agent** — return `NEEDS-INFO #{task_id}` so the orchestrator re-dispatches the agent (from `agent:` field) to address the questions. The agent should create a new or updated DR after researching.
+3. **Reset the file** — set `response: pending` and leave in `pending/`. This re-enters the pending queue for the next cycle.
 
 #### response: rejected — User rejects all options
 

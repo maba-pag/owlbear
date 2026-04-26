@@ -8,15 +8,16 @@ user-invocable: false
 
 Maintain institutional memory by deduplicating, consolidating, and pruning lessons learned from agent task notes. Process inbox entries and promote high-signal findings to project knowledge.
 
-**Kanban operations:** See `h-mcp-kanban` skill — section `## Agent Lifecycle Pattern`.
-
 ## Step 0 — Setup
 
 Read `r-pipeline-protocol` skill if not already loaded.
 
-If dispatched with a curation task ID, claim the task via `start_work` (atomic claim + retrieves task body). Check for resolved decision/action requests per pipeline-protocol → Task Setup → Resolved Decision Pre-flight.
+**Mode detection:**
 
-If dispatched periodically by the orchestrator (no task ID), proceed without claiming.
+- **Periodic mode** — dispatched by the orchestrator. Handle clear-cut entries only. Do NOT call `askQuestions` or block on user input — the orchestrator pipeline stalls if you do. Write CONFLICT/UNCERTAIN entries to the deferred folder (Step 4).
+- **Manual mode** — invoked directly by the user via prompt. Full interactive capabilities: `askQuestions` available. Process both new entries and any items in the deferred folder.
+
+**Deferred folder:** List `/memories/repo/deferred/`. Count files as `deferred_count`. This count appears in the Channel A return (periodic) and determines whether Step 4 processes deferred items (manual).
 
 ## Step 1 — Gather Pending Entries
 
@@ -25,9 +26,7 @@ Gather from both active sources (during migration, both are active):
 1. **Primary (MCP):** Call `list_entries(status=pending)` to fetch all pending entries from the `owlbearMemory` MCP database. See `h-mcp-memory` for full parameter reference.
 2. **Secondary (file-based):** List the repo memory inbox: `memory view /memories/repo/inbox/` — read each file.
 3. Scan parent directory: `memory view /memories/repo/` — check for misplaced entries that agents wrote to `/memories/repo/` instead of the inbox. Move any unreviewed entries to the inbox first.
-4. Also check task bodies via `show_task` for inline agent notes not written to either source (legacy pattern).
-5. Filter to the scope specified (all, last N tasks, tag filter).
-6. Collect all entries from both sources for the remaining steps.
+4. Collect all entries from both sources for the remaining steps.
 
 ## Step 2 — Deduplicate
 
@@ -58,12 +57,24 @@ Rate each: **HIGH** / **MEDIUM** / **LOW** / **NOISE** / **CONFLICT**
 | MEDIUM (actionable, single occurrence) | Keep in inbox for next curation cycle |
 | LOW (vaguely useful, not actionable) | Mark for deletion |
 | NOISE (obvious, generic, empty) | Mark for deletion |
-| CONFLICT (contradicts existing rule) | Create decision request via scribe — do NOT auto-resolve |
-| UNCERTAIN (needs user opinion) | Create decision request via scribe — do NOT keep for next cycle |
+| CONFLICT (contradicts existing rule) | **Periodic:** write to deferred folder. **Manual:** resolve interactively via `askQuestions` |
+| UNCERTAIN (needs user opinion) | **Periodic:** write to deferred folder. **Manual:** resolve interactively via `askQuestions` |
 
-For HIGH findings: identify which file to change (instruction, skill, or agent) and propose the specific edit. Write the proposal to the curation report.
+For HIGH findings: identify which file to change (instruction, skill, or agent) and propose the specific edit.
 
-For CONFLICT/UNCERTAIN findings: use the scribe to check/create a decision request. Present conflicting entries with confidence scores and recommended disposition.
+**CONFLICT/UNCERTAIN handling by mode:**
+
+- **Periodic mode:** Create a file at `/memories/repo/deferred/{source}-{entry-id}.md` with:
+  - The new entry's content
+  - The existing rule it contradicts (with file path + line reference)
+  - Recommended options (keep new, keep existing, revise existing) with confidence scores
+
+  Do NOT auto-resolve. Do NOT call `askQuestions`.
+- **Manual mode:** For each file in `/memories/repo/deferred/`:
+  1. Read the file.
+  2. Present the conflict to the user via `askQuestions` with the options and confidence scores from the file.
+  3. Apply the user's decision (promote the new entry, prune it, or revise the existing rule).
+  4. Delete the deferred file after resolution.
 
 **Deletions:**
 
@@ -79,68 +90,15 @@ For CONFLICT/UNCERTAIN findings: use the scribe to check/create a decision reque
 
 Cross-pollinated entries re-enter the pending queue and are evaluated in the next curation cycle.
 
-## Step 5 — Deliverables
+## Step 5 — Return Channel A signal
 
-### 5a — Write curation-report.json
+Return per `r-pipeline-protocol`:
+- Periodic mode: `DONE | {N} promoted, {M} pruned` (add `— {K} items need manual curation` when `deferred_count > 0`)
+- Manual mode: summary of actions taken (promotions, resolutions, deletions)
 
-Write a machine-readable report to `store/memory/curation-report.json` (overwrite each cycle — latest report only).
+## Step 6 — Done
 
-Format: top-level JSON array, one object per processed entry:
-
-```json
-[
-  {
-    "entry_id": "<MCP entry ID or inbox filename>",
-    "content_preview": "<first ~80 chars of entry content>",
-    "recommendation": "approve | keep | reject",
-    "reason": "<one-line human-readable rationale>"
-  }
-]
-```
-
-This file is consumed by `approve.py _load_curation_report()` to annotate the interactive approval UI with curator recommendations. Include every entry processed in this cycle (HIGH/MEDIUM = `approve`, LOW/NOISE = `reject`, MEDIUM held for next cycle = `keep`).
-
-Write this file **before** appending to the task body.
-
-### 5b — Append to task body
-
-If dispatched with a task ID, include the curation report in your `end_work` note.
-
-## Step 6 — Advance
-
-If dispatched with a task ID, advance via `end_work` (advances status + releases claim).
-
-Return Channel A signal per `r-pipeline-protocol`.
-
-## Output Template
-
-Append to task body (if applicable):
-
-```
-## Curation
-### Summary
-- Entries processed: {N}
-- Duplicates found: {dedup_count}
-- Promoted (HIGH): {N}
-- Kept (MEDIUM): {N}
-- Pruned (LOW/NOISE): {N}
-- Conflicts flagged: {N}
-
-### Promotions
-| Finding | Target File | Proposed Change |
-|---------|------------|-----------------|
-| {finding} | {file} | {change description} |
-
-### Conflicts
-| Finding | Contradicts | Disposition |
-|---------|-------------|-------------|
-| {finding} | {existing rule} | DR created / kept for review |
-
-### Deletions
-| Source | ID/File | Rating | Reason |
-|--------|---------|--------|--------|
-| {MCP/inbox} | {entry_id or filename} | {NOISE/LOW} | {why} |
-```
+Curation actions are the deliverable.
 
 ## Verification Checklist
 
@@ -148,13 +106,12 @@ Append to task body (if applicable):
 - [ ] Deduplicated by meaning, not just exact text match
 - [ ] Promotions are genuinely actionable + non-obvious + recurring
 - [ ] Noise removals are truly generic/empty (not just unfamiliar)
-- [ ] Conflicts flagged via scribe, not auto-resolved
-- [ ] Report statistics match actions taken
+- [ ] Conflicts deferred to `/memories/repo/deferred/` (periodic) or resolved via user input (manual)
 - [ ] Did not fabricate any findings
 
 ## Known Pitfalls
 
-- **Auto-resolving conflicts:** Conflicting lessons must go to a decision request. The curator does not have authority to pick a winner when existing rules disagree.
+- **Auto-resolving conflicts:** Conflicting lessons must be deferred to `/memories/repo/deferred/` in periodic mode for manual resolution. The curator does not have authority to pick a winner when existing rules disagree.
 - **Aggressive pruning:** Unfamiliar findings may be non-obvious signals from a different agent context. Only prune if genuinely low-signal.
 - **Misplaced inbox entries:** Agents sometimes write to `/memories/repo/` instead of `/memories/repo/inbox/`. Scan the parent directory first.
 - **Dedup by exact match only:** Semantic deduplication is needed. "Always use --cov" and "Coverage requires bare --cov flag" are duplicates.
