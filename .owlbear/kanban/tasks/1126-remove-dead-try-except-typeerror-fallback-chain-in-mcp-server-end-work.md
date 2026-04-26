@@ -1,17 +1,17 @@
 ---
 id: 1126
 title: Remove dead try/except TypeError fallback chain in MCP server end_work
-status: review
+status: done
 priority: important
 created: 2026-04-25 17:32:36.614244+00:00
-updated: 2026-04-26T02:16:52.225704+00:00
+updated: 2026-04-26T13:24:32.519691+00:00
 tags: []
 parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: near-frost
+claimed_at: 2026-04-26T13:24:32.519691+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -72,7 +72,7 @@ Task title says end_work only, but move_task has identical dead code (lines 285-
 - ruff: clean
 - AC coverage:
   | AC | Test(s) |
-  |----|---------| 
+  |----|---------|
   | AC1 end_work TypeError fallback removed | test_end_work_typeerror_propagates_after_one_call, test_end_work_typeerror_null_archival_args_propagates_after_one_call |
   | AC2 move_task TypeError fallback removed | test_move_task_typeerror_propagates_after_one_call |
   | AC3 structural — except TypeError absent | test_no_except_typeerror_in_server_source |
@@ -214,3 +214,106 @@ All 10 criteria: unchanged PASS. Only AC3 text was refined.
 - patterns_discovered: for dead-code cleanup tasks, pair behavior assertions with one structural source assertion to prevent false greens.
 - time_sinks: historical broad-suite failures can obscure task signal; scoped quality runs are clearer for builder evidence.
 - quality_gaps: module-wide coverage on large adapter modules remains below global thresholds even when scoped AC evidence is fully green.
+
+[[2026-04-26]]
+## Review Evidence
+### Test Results
+- Quality-runner, task-owned suite: tests/test_mcp_kanban_1126.py = 4 passed, 0 failed, 0 skipped.
+- Quality-runner, refined AC scope: serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py plus tests/test_mcp_kanban_1126.py = 33 passed, 0 failed, 0 skipped.
+
+### Lint
+- Quality-runner scoped lint on serve/mcp-kanban/src/owlbear_mcp_kanban/server.py, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py, and tests/test_mcp_kanban_1126.py: clean.
+
+### Coverage
+- owlbear_mcp_kanban.server: 48% on the refined AC scope.
+- Residual risk only: uncovered lines concentrate in the retained engine-fallback and guidance paths after the NotImplementedError pass points, while the changed delegation path is directly exercised and the removed TypeError branches are absent from source.
+
+### Pass 1 - Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Were Violated? | Verdict |
+|---|---|---|---|
+| AC1: end_work removes the TypeError fallback chain and retains the primary delegation plus KanbanError / NotImplementedError handlers | tests/test_mcp_kanban_1126.py::test_end_work_typeerror_propagates_after_one_call, tests/test_mcp_kanban_1126.py::test_end_work_typeerror_null_archival_args_propagates_after_one_call, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_end_work_all_params_forwarded_to_agent_view, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_end_work_block_without_block_reason_raises_tool_error, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_migration_error_mapped_to_tool_error_with_user_message | Yes. The task tests fail on any reintroduced retry chain via exact call_count == 1 assertions, the lifecycle tests fail on parameter forwarding drift or broken KanbanError mapping, and source inspection confirms the retained handlers remain at server.py lines 417 and 419. | COVERED |
+| AC2: move_task removes the TypeError fallback chain and retains the primary delegation plus KanbanError / NotImplementedError handlers | tests/test_mcp_kanban_1126.py::test_move_task_typeerror_propagates_after_one_call, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_move_task_forwards_id_and_status_to_agent_view, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_move_task_forwards_archival_reason_and_refs, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_validation_error_mapped_to_tool_error_with_user_message | Yes. The task test fails on any reintroduced retry chain via exact call_count == 1, the lifecycle tests fail on forwarding drift or broken KanbanError mapping, and source inspection confirms the retained handlers remain at server.py lines 285 and 287. | COVERED |
+| AC3, latest binding refinement from Architecture Review 2nd pass: the end_work and move_task regression suites stay green without test edits, scoped to serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py plus tests/test_mcp_kanban_1126.py | Independent quality-runner run on the refined scope | Yes. This AC is satisfied directly by the green run on the named suites. | COVERED |
+
+#### Security Review
+- No security findings in scope. The change removes dead in-process retry branches only and does not alter boundaries, deserialization, shelling, filesystem access, or secret handling.
+
+#### Test Integrity
+- No evidence of weakened or removed TestFromAC assertions. The current task-owned file still contains the four test-writer-named tests at lines 133, 165, 199, and 231, with exact one-call assertions at lines 162, 192, and 225.
+
+#### Test Quality
+- STRONG: task-owned assertions are exact and mutation-resistant. Reintroducing either TypeError fallback chain changes the observed call count immediately, and any forwarding drift breaks assert_called_once_with checks in the lifecycle suite.
+- ADEQUATE: the retained NotImplementedError to engine fallback branch is not executed by the refined AC scope, but that branch was retained unchanged and verified structurally in source. Residual risk only.
+
+#### Data Safety
+- No data-safety findings in scope.
+
+#### Implementation-Aware Test Gap Analysis
+- No blocking gap in the task slice. The changed adapter path is directly covered by exact one-call propagation tests, exact forwarding assertions, exact KanbanError mapping assertions, and a structural source-absence assertion for except TypeError.
+- Residual gap: the retained NotImplementedError to engine fallback path in move_task and end_work is not executed by the refined suite. Given the latest Architecture Review explicitly narrowed AC3 to the lifecycle plus task suite and this task only removes dead TypeError branches, I am treating that as pre-existing adapter debt rather than a blocker for this cleanup.
+
+#### Necessity Check
+- Pass. No dependency, integration, or speculative capability was added.
+
+#### Builder Process Quality
+- CLEAN. Two builder sections exist in the body, but the second cycle is AC re-validation after scope refinement, not a repeated blind retry.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| AC1: remove the end_work TypeError fallback chain while retaining the primary call and allowed handlers | Direct source read of serve/mcp-kanban/src/owlbear_mcp_kanban/server.py lines 390 to 419, plus an exact search with no matches for except TypeError in server.py | tests/test_mcp_kanban_1126.py::test_end_work_typeerror_propagates_after_one_call, tests/test_mcp_kanban_1126.py::test_end_work_typeerror_null_archival_args_propagates_after_one_call, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_end_work_all_params_forwarded_to_agent_view | PASS |
+| AC2: remove the move_task TypeError fallback chain while retaining the primary call and allowed handlers | Direct source read of serve/mcp-kanban/src/owlbear_mcp_kanban/server.py lines 265 to 287, plus an exact search with no matches for except TypeError in server.py | tests/test_mcp_kanban_1126.py::test_move_task_typeerror_propagates_after_one_call, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_move_task_forwards_id_and_status_to_agent_view, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py::test_move_task_forwards_archival_reason_and_refs | PASS |
+| AC3, latest binding refinement: the named end_work and move_task suites pass without modification | Quality-runner combined run: 33 passed, 0 failed, 0 skipped on serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py plus tests/test_mcp_kanban_1126.py | The green run itself is the authority for this AC | PASS |
+
+### Deductions
+- 0.04 deduction: the refined AC scope does not execute the retained NotImplementedError to engine fallback branch in these handlers, so residual adapter compatibility debt remains outside this task slice.
+
+### Verdict
+- PASS
+- Confidence: 0.94
+- Routing: docs
+- Reason: the latest binding AC is satisfied by independent green runs on the refined suite, exact task-owned assertions that would fail on any reintroduced fallback chain, exact lifecycle forwarding assertions, and direct source confirmation that both except TypeError chains are gone while the required retained handlers remain.
+
+### Action
+- Advance to docs.
+
+### Informational
+- tests/test_mcp_kanban_1126.py still contains RED-phase prose and FAILS NOW comments in docstrings. Non-blocking, but mildly misleading now that the tests are green.
+
+### Reflection
+- problems_faced: stale earlier fail notes in the task body required anchoring the review to the latest Architecture Review refinement rather than the older broader-suite gate.
+- workarounds_applied: re-ran only the refined lifecycle plus task suite through quality-runner and then cross-checked the live source directly.
+- patterns_discovered: dead-code cleanup tasks benefit from one behavioral proof pair plus one structural source-absence assertion; either alone is weaker.
+- quality_gaps: the retained NotImplementedError to engine fallback path in these handlers remains uncovered by the refined suite.
+[[2026-04-26]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | `serve/mcp-kanban/README.md` lists tools and their descriptions at API level — no reference to internal error-handling patterns or TypeError behavior. Dead-code removal does not affect the documented tool interface. |
+| 2 | Module docstrings | Yes | N/A | `move_task` docstring: "Move a task to the specified status column…" — accurate. `end_work` docstring: "Release a task: append note, advance or resolve status, release claim." — accurate. Neither changed. |
+| 3 | External attribution | No | N/A | All 7 sources in research doc are internal (server.py, engine.py, test files, prior research doc). No external repos or articles used. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/dead-typeerror-fallback-chain.md` exists. Linked from task body. Follow-up tasks not required (this task IS the follow-up). |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes `serve/mcp-kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes `serve/mcp-*/src/**`) both match. Footers updated to `Last verified: 2026-04-26 (e181d145)`. Commit: cbe4d1f5. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. Only dead code removed within `server.py`. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` | IN (docstrings) | Docstrings verified accurate — no edit needed |
+| `tests/test_mcp_kanban_1126.py` | OUT | Test file — no action |
+| `.owlbear/research/dead-typeerror-fallback-chain.md` | IN | Verified exists and linked |
+| `share/diagrams/kanban.excalidraw` | IN | Footer updated |
+| `share/diagrams/mcp-topology.excalidraw` | IN | Footer updated |
+
+### Files Updated
+- `share/diagrams/kanban.excalidraw` — footer updated to 2026-04-26 (e181d145)
+- `share/diagrams/mcp-topology.excalidraw` — footer updated to 2026-04-26 (e181d145)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1126-*` scratch files found)
