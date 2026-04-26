@@ -2270,11 +2270,10 @@ class TestFromAC_AgentViewEndWork:
 
     def test_end_work_fail_keeps_status(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
-        _write_task(board, task_id=1, status="todo")
+        _write_task(board, task_id=1, status="todo", claimed_at=_now_ts())
         engine = KanbanEngine(board, activity_log=False)
-        with pytest.raises(ValidationError) as exc_info:
-            engine.agent_view().end_work(1, outcome="fail", note="Failed.")
-        assert exc_info.value.code == "ERR_INVALID_OUTCOME"
+        resp = engine.agent_view().end_work(1, outcome="fail", note="Failed.")
+        assert resp.status == "todo"
 
     def test_end_work_block_returns_ar_hint_in_guidance(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
