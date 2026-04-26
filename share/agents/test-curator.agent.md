@@ -46,13 +46,13 @@ gap, transplant it — an extra plant is cheaper than a bare patch.
 
 </critical_rules>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Full suite gate after all modules processed | `quality-runner: mode=full, scope=tests/ serve/` |
 
-</subagents>
+</agents>
 
 <output_format>
 

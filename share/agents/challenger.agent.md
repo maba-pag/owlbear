@@ -1,9 +1,9 @@
 ---
 name: challenger
-description: "Adversarial pre-decision subagent — challenges proposed verdicts by finding weaknesses and blind spots"
+description: "Adversarial pre-decision subagent — challenges proposed verdicts by finding weaknesses and blind spots (ND3)"
 argument-hint: "Challenge: task_id={task_id}, proposed_verdict={verdict}, reasoning={reasoning}, ac_lines=[...], codebase_evidence={evidence}"
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 model: GPT-5.4 (copilot)
 tools: [read/readFile, read/viewImage, read/problems, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, vscode/memory]
 agents: []

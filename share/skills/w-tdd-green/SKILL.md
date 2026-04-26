@@ -60,16 +60,6 @@ prompt: |
 
 Confirm all `TestFromAC_*` tests appear in the `failed:` list. If any pass, investigate before implementing.
 
-### Fallback: Quality-Runner Unavailable
-
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, **block the task** per `r-pipeline-protocol` → Quality-Runner Mandate:
-
-```
-end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot verify TestFromAC failures independently")
-```
-
-Do not run pytest directly. Direct shell invocation is prohibited — it bypasses the canonical evidence pipeline.
-
 > **Backward compatibility:** When no `TestFromAC_*` classes exist (old-style single-agent TDD), fall back to the full RED+GREEN workflow — write failing tests yourself, then implement.
 
 ### Module-Level Test Visibility
@@ -104,16 +94,6 @@ prompt: |
 ```
 
 All tests must pass (`failed: []`), zero failures.
-
-### Fallback: Quality-Runner Unavailable
-
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, **block the task** per `r-pipeline-protocol` → Quality-Runner Mandate:
-
-```
-end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot verify GREEN-phase tests independently")
-```
-
-Do not run pytest directly.
 
 ## Step 4 — Handle Missing Blocking Edge Cases
 
@@ -162,16 +142,6 @@ Also run the module-level durable tests (if they exist) to catch cross-task regr
 ```shell
 uv run pytest tests/test_{module}.py -q --tb=short 2>/dev/null || echo "No module-level test file — skip"
 ```
-
-### Fallback: Quality-Runner Unavailable
-
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails, **block the task** per `r-pipeline-protocol` → Quality-Runner Mandate:
-
-```
-end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot verify Step 6 suite independently")
-```
-
-Do not run pytest, coverage, or ruff directly.
 
 **Refactoring check:** If your change renames imports, changes function signatures, or moves mock targets, grep all test files for the old symbol name before proceeding:
 

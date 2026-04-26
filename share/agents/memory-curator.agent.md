@@ -54,13 +54,13 @@ it on the spot.
 
 </critical_rules>
 
-<subagents>
+<agents>
 
 None. The memory-curator resolves all issues through its own two modes:
 - **Periodic:** defers to `/memories/repo/deferred/`
 - **Manual:** resolves interactively via `askQuestions`
 
-</subagents>
+</agents>
 
 <output_format>
 

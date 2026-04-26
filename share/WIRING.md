@@ -16,6 +16,22 @@
 | `directed:skill` | Skill explicitly instructs "load X when condition Y" |
 | `organic` | Domain affinity — agent may load based on task context, no explicit instruction |
 
+## Nesting Depth (ND3 Agents)
+
+Agents marked **(ND3)** may be called at nesting depth ≥3 and require `disable-model-invocation: false`. At depth ≥2, VS Code does not inject the agents catalog — dispatching agents rely on their `<agents>` body section for subagent discovery.
+
+| ND3 Agent | DMI | Called by (ND2) |
+|----------|-----|----------------|
+| challenger | `false` | architect, researcher |
+| scribe | `false` | architect, researcher, builder, reviewer, test-writer, doc-writer, auditor |
+| planner | `false` | architect |
+| fix-attempt | `false` | builder |
+| code-reader | `false` | reviewer |
+| ideation-critic | `false` | ideation-architect, ideation-data, ideation-enduser, ideation-security |
+| quality-runner | `false` | builder, reviewer, test-writer, auditor |
+
+All other agents keep `disable-model-invocation: true`. Built-in agents (`Explore`, `General Purpose`) resolve at any depth.
+
 ## Universal Files (apply to ALL agents/prompts)
 
 These are omitted from per-agent rows to avoid noise:

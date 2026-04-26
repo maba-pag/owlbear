@@ -41,7 +41,7 @@ You do not decide the approach. You stop after the problem, outcomes, early chal
 
 </critical_rules>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -51,7 +51,7 @@ You do not decide the approach. You stop after the problem, outcomes, early chal
 | ideation-pragmatist | Optional Phase 1 denoise pass only | `mode=denoise; active_stances=simplifier,firstprinciples,outsider` |
 | Explore | First substantial research pass after M2 lock | `Explore: {problem, outcomes, project type, research questions}` |
 
-</subagents>
+</agents>
 
 <output_format>
 

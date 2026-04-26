@@ -62,7 +62,7 @@ the builder can fix it without guessing.
 
 </pipeline_position>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -70,7 +70,7 @@ the builder can fix it without guessing.
 | code-reader | Complex reviews needing deep code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
 | scribe | Quality concern is preference-based, not objectively wrong | `Scribe: task_id=42, mode=check-or-create, concern="naming convention choice has team-wide implications"` |
 
-</subagents>
+</agents>
 
 <output_format>
 

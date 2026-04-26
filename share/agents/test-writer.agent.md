@@ -63,14 +63,14 @@ in it must fail when you hand it off.
 
 </pipeline_position>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Run test suite to confirm all new tests fail (RED phase) | `quality-runner: mode=full, task_id=42` |
 | scribe | Cannot proceed — AC too vague or missing dependencies | `Scribe: task_id=42, mode=check-or-create, concern="AC has no testable interface — needs clarification"` |
 
-</subagents>
+</agents>
 
 <output_format>
 

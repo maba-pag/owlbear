@@ -39,14 +39,6 @@ prompt: |
 
 Record: passed/failed counts from the `## Tests` section of the Quality-Runner report.
 
-### Fallback: Quality-Runner Unavailable
-
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
-
-```
-end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run tests independently")
-```
-
 ## Step 2.5 — Parallel Fan-Out Dispatch
 
 For implementation reviews, dispatch **quality-runner** (steps 3–5: tests, lint, coverage) and **code-reader** (steps 6–7: code analysis, AC compliance) in parallel. This is the **default dispatch path** for implementation reviews. Steps 3–7 are the sequential fallback, used only when subagents return execution errors.
@@ -115,14 +107,6 @@ prompt: |
 
 Record: `clean: true/false` and any `violations` from the `## Lint` section.
 
-### Fallback: Quality-Runner Unavailable
-
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
-
-```
-end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run lint independently")
-```
-
 ## Step 4 — Run Coverage
 
 Invoke Quality-Runner for coverage:
@@ -138,14 +122,6 @@ prompt: |
 ```
 
 Verify touched modules have 90% coverage or higher from the `## Coverage` section.
-
-### Fallback: Quality-Runner Unavailable
-
-If `quality-runner` is not in the calling agent's `agents:` array or subagent dispatch fails:
-
-```
-end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run coverage independently")
-```
 
 ## Step 5 — Pass 1: CRITICAL Checks
 

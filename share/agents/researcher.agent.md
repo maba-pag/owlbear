@@ -55,7 +55,7 @@ can choose — you never disguise opinion as conclusion.
 
 </pipeline_position>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -63,7 +63,7 @@ can choose — you never disguise opinion as conclusion.
 | challenger | Validate findings before committing to a recommendation | `Challenge the recommendation to use sqlite-vec over ChromaDB` |
 | scribe | T2/T3 finding requires a decision or action request | `Scribe: task_id=42, mode=check-or-create, concern="library choice with security implications"` |
 
-</subagents>
+</agents>
 
 <output_format>
 

@@ -1,9 +1,9 @@
 ---
 name: scribe
-description: "Decision request gateway — sole handler of .owlbear/decisions/ namespace"
+description: "Decision request gateway — sole handler of .owlbear/decisions/ namespace (ND3)"
 argument-hint: "Scribe: task_id={task_id}, mode={check-or-create|resolve|query}, concern={description}"
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
 tools: [vscode/memory, vscode/toolSearch, execute/getTerminalOutput, execute/runInTerminal, read/readFile, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/list_tasks, ob-kanban/show_task]
 agents: []

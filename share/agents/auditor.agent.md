@@ -5,7 +5,7 @@ argument-hint: "Audit: {task_id}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [scribe, Explore, quality-runner]
 hooks:
   PreToolUse:
@@ -56,7 +56,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 
 </pipeline_position>
 
-<subagents>
+<agents>
 
 | Agent | When | Example |
 |-------|------|---------|
@@ -64,7 +64,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 | scribe | Sustained low AC quality across tasks or ambiguous confidence | `Scribe: task_id=42, mode=check-or-create, concern="systemic AC quality degradation"` |
 | Explore | Need broad codebase context for AC verification | `Find all modules that import the retry decorator` |
 
-</subagents>
+</agents>
 
 <output_format>
 

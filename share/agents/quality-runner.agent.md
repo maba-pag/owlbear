@@ -1,9 +1,9 @@
 ---
 name: quality-runner
-description: "Mechanical utility — run pytest, ruff, and coverage; return structured reports"
+description: "Mechanical utility — run pytest, ruff, and coverage; return structured reports (ND3)"
 argument-hint: "Run: mode={scoped|full}, test_paths=[...], task_id={id}, coverage_modules=[...], lint_paths=[...]"
 user-invocable: false
-disable-model-invocation: true
+disable-model-invocation: false
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
 tools: [execute/runInTerminal, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, read/readFile, vscode/memory, read/terminalLastCommand, execute/testFailure]
 agents: []

@@ -3,25 +3,25 @@
   "chat.agent.maxRequests": 99999,
   "chat.agentFilesLocations": {
     ".owlbear/agents": true,
-    "{{owlbear_path}}/share/agents": true
+    "{{owlbear_rel_path}}/share/agents": true
   },
   "chat.agentSkillsLocations": {
     ".owlbear/skills": true,
-    "{{owlbear_path}}/share/skills": true
+    "{{owlbear_rel_path}}/share/skills": true
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
   "chat.generalPurposeAgent.enabled": true,
   "chat.instructionsFilesLocations": {
     ".owlbear/instructions": true,
-    "{{owlbear_path}}/share/instructions": true
+    "{{owlbear_rel_path}}/share/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
   "chat.promptFilesLocations": {
     ".owlbear/prompts": true,
-    "{{owlbear_path}}/share/prompts": true
+    "{{owlbear_rel_path}}/share/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.terminal.autoApprove": {
@@ -55,6 +55,9 @@
     ".owlbear/kanban/**": true
   },
   "git.autorefresh": false,
+  "github.copilot.chat.additionalReadAccessPaths": [
+    "{{owlbear_abs_path}}"
+  ],
   "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
   "github.copilot.chat.agentHistorySummarizationInline": true,
