@@ -366,6 +366,26 @@ class TestFromAC_CockpitViewSweep:
         released = cv.sweep()
         assert all(isinstance(x, int) for x in released)
 
+    def test_sweep_returns_exactly_the_expired_task_ids_no_extras_and_no_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-NEW-22: sweep returns EXACTLY the set of expired claim IDs — no extras, no missing.
+
+        A board with one expired task, one fresh-claimed task, and one unclaimed task.
+        sweep() must return exactly {1}: not {1, 2}, not {1, 3}, not [].
+        """
+        kanban_dir = _make_board(tmp_path)
+        expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
+        fresh_ts = (datetime.now(tz=UTC) - timedelta(minutes=1)).isoformat()
+        _write_task(kanban_dir, 1, claimed_at=f'"{expired_ts}"')  # expired → must appear
+        _write_task(kanban_dir, 2, title="Task Two", claimed_at=f'"{fresh_ts}"')  # fresh → must NOT appear
+        _write_task(kanban_dir, 3, title="Task Three", claimed_at="null")  # unclaimed → must NOT appear
+        cv = _make_cockpit_view(kanban_dir)
+        released = cv.sweep()
+        assert set(released) == {1}, (
+            f"sweep returned {released!r} but must return exactly the set of expired IDs: {{1}}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC: act-all, act-task-id, act-action, act-source, act-since, act-until,
@@ -675,6 +695,37 @@ class TestFromAC_CockpitViewScanCorruption:
         cv = _make_cockpit_view(kanban_dir)
         result = cv.scan_corruption()
         assert len(result) >= 1
+
+    def test_scan_corruption_does_not_mutate_clean_task_file_contents(
+        self, tmp_path: Path
+    ) -> None:
+        """scan_corruption must not mutate file contents — clean task byte content unchanged."""
+        kanban_dir = _make_board(tmp_path)
+        task_path = _write_task(kanban_dir, 1)
+        content_before = task_path.read_bytes()
+        cv = _make_cockpit_view(kanban_dir)
+        cv.scan_corruption()
+        content_after = task_path.read_bytes()
+        assert content_after == content_before, (
+            "scan_corruption must not modify clean task file contents (strictly read-only)"
+        )
+
+    def test_scan_corruption_does_not_mutate_corrupt_file_contents(
+        self, tmp_path: Path
+    ) -> None:
+        """scan_corruption must not modify corrupt file contents — quarantine is repair_storage's job."""
+        kanban_dir = _make_board(tmp_path)
+        corrupt_content = b"no yaml frontmatter here at all"
+        corrupt_path = kanban_dir / "tasks" / "99-corrupt.md"
+        corrupt_path.write_bytes(corrupt_content)
+        cv = _make_cockpit_view(kanban_dir)
+        cv.scan_corruption()
+        assert corrupt_path.exists(), (
+            "scan_corruption must not delete corrupt files (quarantine is repair_storage's job)"
+        )
+        assert corrupt_path.read_bytes() == corrupt_content, (
+            "scan_corruption must not modify corrupt file contents"
+        )
 
 
 # ---------------------------------------------------------------------------
