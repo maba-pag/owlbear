@@ -40,22 +40,25 @@ def test_init_writes_settings_without_hook_locations_and_with_local_hints(
 
     settings_path = target_dir / ".vscode" / "settings.json"
     data = json.loads(settings_path.read_text(encoding="utf-8"))
-    owlbear_path = Path(os.path.relpath(_REPO_ROOT, target_dir)).as_posix()
+    owlbear_rel_path = Path(os.path.relpath(_REPO_ROOT, target_dir)).as_posix()
 
     assert "chat.hookFilesLocations" not in data
     assert data["chat.agentFilesLocations"] == {
-        f"{owlbear_path}/share/agents": True,
+        f"{owlbear_rel_path}/share/agents": True,
         ".owlbear/agents": True,
     }
     assert data["chat.agentSkillsLocations"] == {
-        f"{owlbear_path}/share/skills": True,
+        f"{owlbear_rel_path}/share/skills": True,
         ".owlbear/skills": True,
     }
     assert data["chat.instructionsFilesLocations"] == {
-        f"{owlbear_path}/share/instructions": True,
+        f"{owlbear_rel_path}/share/instructions": True,
         ".owlbear/instructions": True,
     }
     assert data["chat.promptFilesLocations"] == {
-        f"{owlbear_path}/share/prompts": True,
+        f"{owlbear_rel_path}/share/prompts": True,
         ".owlbear/prompts": True,
     }
+    assert data["github.copilot.chat.additionalReadAccessPaths"] == [
+        str(_REPO_ROOT.resolve()),
+    ]

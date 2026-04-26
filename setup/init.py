@@ -103,6 +103,14 @@ def _replace_placeholders(content: str, replacements: dict[str, str]) -> str:
     return content
 
 
+def _build_replacements(owlbear_dir: Path, target_dir: Path) -> dict[str, str]:
+    """Build the placeholder replacement dict for seed templates."""
+    return {
+        "owlbear_rel_path": Path(os.path.relpath(owlbear_dir, target_dir)).as_posix(),
+        "owlbear_abs_path": str(owlbear_dir.resolve()),
+    }
+
+
 def _write_gitignore(src: Path, dest: Path) -> None:
     """Write .gitignore, appending owlbear-managed section to existing file.
 
@@ -131,10 +139,12 @@ def _write_gitignore(src: Path, dest: Path) -> None:
     dest.write_text(existing + separator + "\n" + owlbear_section, encoding="utf-8")
 
 
-def _write_settings(src: Path, dest: Path, owlbear_path: str) -> None:
+def _write_settings(
+    src: Path, dest: Path, replacements: dict[str, str]
+) -> None:
     """Write .vscode/settings.json, merging with existing file if present (AC12)."""
     template = src.read_text(encoding="utf-8")
-    template = _replace_placeholders(template, {"owlbear_path": owlbear_path})
+    template = _replace_placeholders(template, replacements)
     owlbear_settings: dict = json.loads(template)
 
     existing: dict = {}
@@ -157,7 +167,7 @@ def _write_settings(src: Path, dest: Path, owlbear_path: str) -> None:
 def _write_project_json(
     src: Path,
     dest: Path,
-    owlbear_path: str,
+    owlbear_rel_path: str,
     name: str,
 ) -> None:
     """Write owlbear-project.json with computed fields.  Skips if dest already exists."""
@@ -166,12 +176,12 @@ def _write_project_json(
     template = src.read_text(encoding="utf-8")
     template = _replace_placeholders(template, {"name": name})
     data: dict = json.loads(template)
-    data["owlbear_path"] = owlbear_path
+    data["owlbear_rel_path"] = owlbear_rel_path
     data["created_at"] = datetime.now(tz=UTC).isoformat()
     dest.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def _write_mcp(src: Path, dest: Path, owlbear_path: str) -> None:
+def _write_mcp(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     """Write .vscode/mcp.json, merging with existing file if present.
 
     Owlbear servers are added as defaults; existing user entries are preserved
@@ -179,7 +189,7 @@ def _write_mcp(src: Path, dest: Path, owlbear_path: str) -> None:
     keys).
     """
     template = src.read_text(encoding="utf-8")
-    template = _replace_placeholders(template, {"owlbear_path": owlbear_path})
+    template = _replace_placeholders(template, replacements)
     owlbear_mcp: dict = json.loads(template)
 
     existing: dict = {}
@@ -198,11 +208,11 @@ def _write_mcp(src: Path, dest: Path, owlbear_path: str) -> None:
     dest.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
 
-def _write_seed_file(src: Path, dest: Path, owlbear_path: str) -> None:
+def _write_seed_file(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     """Write a generic seed file with placeholder replacement when needed."""
     if src.suffix in (".json", ".yml"):
         content = src.read_text(encoding="utf-8")
-        content = _replace_placeholders(content, {"owlbear_path": owlbear_path})
+        content = _replace_placeholders(content, replacements)
         dest.write_text(content, encoding="utf-8")
         return
 
@@ -271,10 +281,10 @@ def _hook_diff(src: Path, dest: Path) -> str:
         return ""
     diff_lines = list(
         difflib.unified_diff(
-            seed_lines,
             existing_lines,
-            fromfile=f"seed/{src.name}",
-            tofile=str(dest),
+            seed_lines,
+            fromfile=str(dest),
+            tofile=f"seed/{src.name}",
             n=2,
         )
     )
@@ -302,8 +312,8 @@ def create_mcp_config(target_dir: Path, owlbear_dir: Path) -> None:
     """
     mcp_dest = target_dir / ".vscode" / "mcp.json"
     mcp_src = owlbear_dir / "seed" / ".vscode" / "mcp.json"
-    owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
-    _write_mcp(mcp_src, mcp_dest, owlbear_path)
+    replacements = _build_replacements(owlbear_dir, target_dir)
+    _write_mcp(mcp_src, mcp_dest, replacements)
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +333,7 @@ def init(
 
     Walks the seed/ tree inside *owlbear_dir*, copies static files, and
     replaces ``{{placeholder}}`` tokens in ``.json`` / ``.yml`` templates.
-    Computed fields (owlbear_path, created_at) are generated here rather than
+    Computed fields (owlbear_rel_path, created_at) are generated here rather than
     stored as template placeholders.
 
     Idempotent: ``owlbear-project.json`` is skipped when it already exists.
@@ -337,7 +347,8 @@ def init(
         interactive: Whether hook conflicts may prompt. Defaults to TTY detect.
     """
     seed_dir = owlbear_dir / "seed"
-    owlbear_path = Path(os.path.relpath(owlbear_dir, target_dir)).as_posix()
+    replacements = _build_replacements(owlbear_dir, target_dir)
+    owlbear_rel_path = replacements["owlbear_rel_path"]
     resolved_name = name if name is not None else target_dir.name
     interactive_mode = _is_interactive_session() if interactive is None else interactive
 
@@ -357,11 +368,11 @@ def init(
         # --- per-file dispatch ---
 
         if rel_posix == ".vscode/settings.json":
-            _write_settings(src, dest, owlbear_path)
+            _write_settings(src, dest, replacements)
             continue
 
         if rel_posix == ".vscode/mcp.json":
-            _write_mcp(src, dest, owlbear_path)
+            _write_mcp(src, dest, replacements)
             continue
 
         if rel_posix == ".gitignore":
@@ -369,7 +380,7 @@ def init(
             continue
 
         if rel_posix == "owlbear-project.json":
-            _write_project_json(src, dest, owlbear_path, resolved_name)
+            _write_project_json(src, dest, owlbear_rel_path, resolved_name)
             continue
 
         if rel_posix in _SKIP_IF_EXISTS_REL and dest.exists():
@@ -386,7 +397,7 @@ def init(
             ):
                 continue
 
-        _write_seed_file(src, dest, owlbear_path)
+        _write_seed_file(src, dest, replacements)
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@
       "command": "uv",
       "args": [
         "--project",
-        "{{owlbear_path}}",
+        "{{owlbear_rel_path}}",
         "run",
         "python",
         "-m",
@@ -17,7 +17,7 @@
       "command": "uv",
       "args": [
         "--project",
-        "{{owlbear_path}}",
+        "{{owlbear_rel_path}}",
         "run",
         "python",
         "-m",
@@ -29,7 +29,7 @@
       "command": "uv",
       "args": [
         "--project",
-        "{{owlbear_path}}",
+        "{{owlbear_rel_path}}",
         "run",
         "python",
         "-m",
@@ -41,7 +41,7 @@
       "command": "uv",
       "args": [
         "--project",
-        "{{owlbear_path}}",
+        "{{owlbear_rel_path}}",
         "run",
         "ddgs",
         "mcp"
