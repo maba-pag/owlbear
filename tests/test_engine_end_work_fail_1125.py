@@ -377,20 +377,24 @@ class TestFromAC_SkillDocReleaseRow:
         )
 
     def test_skill_doc_release_row_exact_behavior_text(self) -> None:
-        """AC5: release row contains the exact required behavior string.
+        """AC5: release row contains the exact corrected behavior string.
 
-        Reviewer-requested strengthening (retry): keyword matching is lax and
-        can false-green on a partial behavior string. This test asserts the full
-        AC5-mandated behavior text verbatim:
-          'Release claim without note or status change (idempotent on unclaimed)'
+        Corrected (retry cycle 7): prior text 'without note' contradicted live
+        release_task behavior which appends notes when provided (engine.py:1296).
+        Required text (AC5 corrected):
+          'Release claim, no status change (note appended if provided; no-op when unclaimed)'
+
+        FAIL reason: handbook still contains stale text 'without note or status change
+        (idempotent on unclaimed)' — builder must update the release row in
+        share/skills/h-mcp-kanban/SKILL.md.
         """
         content = self._SKILL_PATH.read_text(encoding="utf-8")
         assert (
-            "Release claim without note or status change (idempotent on unclaimed)"
+            "Release claim, no status change (note appended if provided; no-op when unclaimed)"
             in content
         ), (
-            "h-mcp-kanban/SKILL.md release row does not contain the exact AC5 behavior "
-            "text 'Release claim without note or status change (idempotent on unclaimed)'"
+            "h-mcp-kanban/SKILL.md release row does not contain the corrected AC5 behavior "
+            "text 'Release claim, no status change (note appended if provided; no-op when unclaimed)'"
         )
 
 
@@ -467,4 +471,7 @@ class TestFromAC_FailOutcomeCASRecovery:
         assert exc_info.value.code == "ERR_STALE", (
             f"Expected ERR_STALE when stale write finds still-claimed task; "
             f"got {exc_info.value.code!r}"
+        )
+        assert "changed concurrently; reload and retry" in exc_info.value.user_message, (
+            f"Expected retry-guidance in user_message; got {exc_info.value.user_message!r}"
         )
