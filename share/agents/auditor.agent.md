@@ -5,7 +5,7 @@ argument-hint: "Audit: {task_id}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [scribe, Explore, quality-runner]
 hooks:
   PreToolUse:
