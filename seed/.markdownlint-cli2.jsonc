@@ -1,12 +1,16 @@
 {
-    "ignores": [
-        ".owlbear/briefs/*/**",
-        ".owlbear/decisions/**",
-        ".owlbear/kanban/tasks/**",
-        ".owlbear/research/**",
-        ".owlbear/scratch/**",
-        ".github/**",
-        ".venv/**",
-        "node_modules/**"
-    ]
+  "ignores": [
+    ".owlbear/doc-index.md",
+    ".owlbear/briefs/**",
+    ".owlbear/decisions/**",
+    ".owlbear/hooks/**",
+    ".owlbear/kanban/archive/**",
+    ".owlbear/kanban/tasks/**",
+    ".owlbear/research/**",
+    ".owlbear/scratch/**",
+    ".owlbear/sources/**",
+    ".venv/**",
+    "node_modules/**",
+    "**/*.excalidraw"
+  ]
 }

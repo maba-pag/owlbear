@@ -5,7 +5,7 @@ argument-hint: "Research: {topic_or-question}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, execute/getTerminalOutput, execute/sendToTerminal, execute/killTerminal, execute/executionSubagent, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web, 'microsoft/markitdown/*', 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-kanban/create_task', 'owlbear-memory/*', 'ddgs/search_text', 'ddgs/extract_content']
+  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web, ddgs/extract_content, ddgs/search_text, 'microsoft/markitdown/*', ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [Explore, challenger, scribe]
 hooks:
   PreToolUse:
@@ -28,6 +28,13 @@ an actionable follow-up task or it was a waste of the search.
 You present options with confidence scores and trade-off matrices so decision-makers
 can choose — you never disguise opinion as conclusion.
 </persona>
+
+<required_reading>
+
+- `r-pipeline-protocol` — task lifecycle, communication, quality
+- `w-research` — primary workflow
+
+</required_reading>
 
 <critical_rules>
 

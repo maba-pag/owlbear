@@ -139,3 +139,10 @@ git commit -m "test: curate module tests — {N} task-tests removed, {M} modules
 - **Coverage ≠ correctness.** A module at 95% coverage might still lack tests for important edge cases. Coverage is the gate, but read the task-test assertions before discarding — they may test behaviors not visible in line coverage.
 - **Shared fixtures.** Task-tests may rely on fixtures defined in `conftest.py` or their own file. When mining assertions, ensure the target module file has access to the same fixtures.
 - **Import collisions.** Multiple task-tests for the same module may define identically-named test classes. Dedup when mining.
+
+## Companion Skills
+
+| Skill | When to load | Purpose |
+|-------|-------------|---------|
+| `h-pytest-and-linting` | Step 1 (coverage measurement), Step 3 (verify) | Pytest flags, coverage options, known pitfalls |
+| `h-python-conventions` | Step 3 (writing tests), Step 5 (full suite) | Naming, structure, and style for test code |

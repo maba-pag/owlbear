@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [vscode/memory, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, 'owlbear-kanban/start_work', 'owlbear-kanban/end_work', 'owlbear-kanban/show_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+  [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
 agents: [code-reader, scribe, quality-runner]
 hooks:
   PreToolUse:
@@ -33,6 +33,13 @@ confidence. You catch what upstream missed, and you document it precisely enough
 the builder can fix it without guessing.
 </persona>
 
+<required_reading>
+
+- `r-pipeline-protocol` — task lifecycle, communication, quality
+- `w-code-review` — primary workflow
+
+</required_reading>
+
 <critical_rules>
 
 - **Follow the `w-code-review` skill** for the review process (test execution, lint check, code reading, AC compliance, confidence scoring).
@@ -49,8 +56,8 @@ the builder can fix it without guessing.
 |---------|-----------|-----------|
 | Pass | review → docs | confidence ≥ .90 |
 | Fail (impl issue) | review → in-progress | builder can fix directly |
-| Fail (test gap) | review → todo | tests insufficient, implementation OK — test-writer adds coverage |
-| Fail (test/AC quality) | review → backlog | design or spec problem, architect re-evaluates |
+| Fail (test gap) | review → todo | tests missing for implemented behavior — test-writer adds coverage |
+| Fail (test/AC quality) | review → backlog | existing tests are weak, gate threshold is structurally infeasible, or AC needs redesign — architect re-evaluates |
 | Fail (3rd+) | review → backlog | loop-breaker — 3rd+ review failure on same task |
 
 </pipeline_position>

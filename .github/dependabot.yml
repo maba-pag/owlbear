@@ -7,6 +7,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "github-actions"
@@ -14,9 +16,6 @@ updates:
       github-actions:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
       github-actions-security:
         applies-to: "security-updates"
         patterns:
@@ -28,6 +27,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "python"
@@ -35,9 +36,6 @@ updates:
       python-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
       python-security:
         applies-to: "security-updates"
         patterns:
@@ -49,6 +47,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "javascript"
@@ -56,9 +56,6 @@ updates:
       npm-dependencies:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
       npm-security:
         applies-to: "security-updates"
         patterns:

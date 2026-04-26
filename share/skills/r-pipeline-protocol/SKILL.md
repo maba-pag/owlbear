@@ -8,7 +8,14 @@ user-invocable: false
 
 Shared conventions for pipeline agents (T1–T3). Read once at session start from your `<critical_rules>` reference. This skill is the single source of truth for pipeline coordination.
 
-For project-wide conventions (commit format, file placement, priorities, tags), see `r-project-standards`.
+### Companion Skills
+
+Load these via `read_file` when the referenced capability is needed during your workflow:
+
+| Skill | Load when |
+|-------|-----------|
+| `h-mcp-kanban` | Using kanban tools — claiming, moving, editing tasks |
+| `r-project-standards` | Committing changes — commit format, file placement, tags |
 
 ## 1. Task Setup
 
@@ -26,28 +33,28 @@ The kanban board is shared — multiple agents work on it simultaneously.
 - You may read any task and create follow-up tasks freely. Never move, edit, claim, or release tasks that aren't yours.
 - Leave a handoff note in the task body before parking a task unfinished.
 
-For claiming command syntax, see the `h-mcp-kanban` skill (`start_work` tool: atomic claim + show).
+For claiming command syntax, see the `h-mcp-kanban` skill (`start_work` tool: atomic claim + show). `start_work` returns the full task body — no separate `show_task` needed.
+
+**If `start_work` fails, stop.** A `ToolError` from `start_work` means the task is blocked, already claimed, or missing. Do not fall through to `show_task` — report the error in your response and exit without further work on that task.
 
 ### Knowledge Pre-flight
 
-Before starting work, load accumulated learnings from the memory server:
+After claiming the task, load accumulated learnings from the memory server:
 
 1. Call `get_knowledge(agent_id=<agent_name>, limit=20, min_confidence=0.7)` — where `agent_name` is the `name:` field from your `.agent.md` frontmatter.
 2. Apply returned entries as context — patterns, pitfalls, workarounds, and behavioral norms from past agents.
-3. Graceful degradation — if the call fails, returns empty, or `owlbear-memory/*` is not in your tool allowlist, proceed normally.
+3. Graceful degradation — if the call fails, returns empty, or `ob-memory/*` is not in your tool allowlist, proceed normally.
 
 See `h-mcp-memory` for full tool reference.
 
 ### Resolved Decision Pre-flight
 
-Before starting work, check whether the task was previously blocked by a decision or action request:
+After claiming the task, check whether it was previously blocked by a decision or action request:
 
 1. Check the task body for `## Decision Resolved` or `## Action Completed` sections. If present, the user's chosen option and notes are binding constraints.
 2. If no summary in the body, call the **scribe** agent in query mode to check for existing DRs.
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
 4. Never write to `.owlbear/decisions/` directly — always use the **scribe** agent.
-
-To read the full task body and check for decision sections, use `show_task(task_id="{id}")` (see `h-mcp-kanban`).
 
 ### Entry-Gate Agents
 
@@ -67,9 +74,11 @@ Researcher, architect, and planner must reject invalid task inputs immediately:
 
 All pipeline agents (test-writer, builder, reviewer, auditor) **must** delegate test, lint, and coverage execution to the `quality-runner` subagent. Direct `pytest` / `ruff` invocation in agent terminals is prohibited — it bypasses the canonical evidence pipeline and produces non-comparable reports across agents.
 
-If `quality-runner` is unavailable (not in the calling agent's `agents:` array, or subagent dispatch fails), the agent **blocks the task** via `end_work(outcome="block", block_reason="Quality-Runner unavailable — cannot run {tests|lint|coverage} independently")`. Never improvise with direct shell commands.
-
 Exception: the `quality-runner` agent itself runs the underlying tools — that's its job.
+
+### Tool Availability
+
+When a required tool or subagent is unavailable or fails to dispatch, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs. The orchestrator reads this marker and will verify and halt if the problem is systemic.
 
 ### Defense-in-Depth
 
@@ -131,7 +140,7 @@ To append a mid-task note outside the `end_work` lifecycle, use `edit_task(appen
 
 ### Per-Agent Signal Mapping
 
-See `agent-common.instructions.md` for the authoritative section-header-to-agent mapping table.
+See `pipeline-agents.instructions.md` for the authoritative section-header-to-agent mapping table.
 
 ### Body Size Rule
 
@@ -188,18 +197,23 @@ See `h-mcp-memory` for full tool reference.
 
 ## 5. Escalation
 
-### Blocking Convention
+### Escalation Routing
 
 Routine gate rejections (reviewer FAIL, doc-writer reject) use simple status movement and claim release — **no blocking**. The task re-enters the pipeline automatically on the next dispatch cycle.
 
-When an agent cannot proceed (missing dependencies, infeasible AC, vague scope) or discovers the AC requires physical user action (manual testing, GUI verification, credential setup, deployment), it calls the **scribe** to create a DR or action request. Do not pass through hoping a downstream agent will handle it. The scribe creates the file; the calling agent then calls `end_work(outcome="block", block_reason="DR pending: {filename}")` to release its claim and append its reasoning to the task body.
+When an agent cannot proceed, route by cause:
 
-The kanban `block` action is reserved for:
+| Cause | Action | Resolution |
+|-------|--------|------------|
+| Prerequisite work needed | Create task(s), `edit_task(add_dep="{new_id}")`, `end_work(outcome="fail")` | Self-resolving — `pick_tasks` dep gate holds until deps archive |
+| Infeasible / wrong AC | `end_work(outcome="reject", move_to="backlog")` with note to architect | Self-resolving — architect fixes AC |
+| Vague scope | `end_work(outcome="reject", move_to="research")` with note | Self-resolving — researcher/architect refines |
+| Design trade-off (T2) | Advisory DR via scribe, then `end_work(outcome="reject", move_to="backlog")` | Auto-resolving — DR expires in 5 days (see Decision Tiers) |
+| Arch / breaking change (T3) | Mandatory DR via scribe, then `end_work(outcome="block", block_reason="DR pending: {file}")` | **Blocks** — user must respond (see Decision Tiers) |
+| User action required | AR via scribe, then `end_work(outcome="block", block_reason="AR pending: {file}")` | **Blocks** — user must act |
+| Stale task (orchestrator triage) | `edit_task(block="reason")` / `edit_task(unblock=True)` | **Blocks** — orchestrator decision |
 
-- Stale tasks — blocked for triage by orchestrator
-- Tasks with pending DRs — blocked until user responds
-
-Blocking and unblocking outside the standard lifecycle (e.g., orchestrator triage) uses `edit_task(block="reason")` / `edit_task(unblock=True)` (see `h-mcp-kanban`).
+**Block is reserved for T3 decisions, user-action tasks, and orchestrator triage.** Do not block when a reject or dependency gate would suffice. Do not pass through hoping a downstream agent will handle it.
 
 #### DR Required on Agent Block
 

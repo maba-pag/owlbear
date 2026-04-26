@@ -37,7 +37,7 @@ All other `serve/` packages are Python — use `uv run` for those.
 | Entry point | `uv run doc-index` |
 | Output | `.owlbear/doc-index.md` (auto-generated; committed to repo) |
 | Conditional regen | Skips write when index mtime > newest collected doc mtime |
-| Exclusion list | `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/decisions`, `.owlbear/briefs`, `.owlbear/sources`, `store`, `tests`, `node_modules`, `.git`, `dist`, `build` |
+| Exclusion list | Paths: `.owlbear/scratch`, `.owlbear/research`, `.owlbear/kanban`, `.owlbear/decisions`, `.owlbear/briefs`, `.owlbear/sources`, `store`, `tests`; Names (any depth): `node_modules`, `.git`, `.venv`, `dist`, `build` |
 | Public API | `collect_docs()`, `generate_index()`, `should_regenerate()`, `parse_index()` — all in `owlbear_tools.doc_index` |
 | Test scope | `serve/tools/tests/test_doc_index_1018.py` |
 | Package manager | `uv` |

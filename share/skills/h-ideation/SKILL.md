@@ -1,17 +1,17 @@
 ---
-name: w-ideation
-description: "Workflow: Ideation phase map, entrypoints, and blackboard handoff artifacts"
+name: h-ideation
+description: "Handbook: Ideation shared rules — phase map, blackboard contract, interaction turns, and handoff"
 user-invocable: false
 ---
 
-# Ideation Workflow
+# Ideation Handbook
 
-This is the thin overview/router for ideation. The operational procedure now lives in two phase-specific skills:
+Shared handbook for the ideation workflow. Phase-specific operating procedures live in:
 
-- `w-ideation-discovery` for Phase 1
-- `w-ideation-mediation` for Phase 2
+- `w-ideation-discovery` — Phase 1
+- `w-ideation-mediation` — Phase 2
 
-User-facing phase agents should load their phase skill, not this file, for day-to-day operation.
+Phase agents load this file for shared rules and their own phase skill for steps.
 
 ## Phase Map
 
@@ -19,8 +19,6 @@ User-facing phase agents should load their phase skill, not this file, for day-t
 | ------------------- | --------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Phase 1 — Discovery | `ideation-discoverer` | M1-M2, early challenge lane, first research bridge          | `context.md`, `decisions.md`, `research-notes.md`, optional `synthesis-idea-panel.md` |
 | Phase 2 — Mediation | `ideation-mediator`   | M3-M6, late-domain panel, Critic validation, Brief, handoff | `synthesis.md`, `brief.md`, kanban parent task                                        |
-
-`ideator` remains as a thin compatibility router that directs users to the correct phase.
 
 ## User-Facing Entry Points
 
@@ -43,10 +41,6 @@ Use for:
 - approach choice
 - Brief drafting
 - kanban handoff
-
-### `@ideator`
-
-Use only when the correct phase is unclear and the user needs routing help.
 
 ## Blackboard Artifacts
 
@@ -116,27 +110,32 @@ Late-domain panel synthesis for Phase 2.
 - Present options with per-option pro, con, risk, and confidence, then make the recommendation explicit.
 - Record chosen and rejected options with rationale in `decisions.md`.
 
-## Shared Validation Disciplines
+## Decision Entry Template
 
-### Conditional Denoise
+Use this shape whenever a phase agent records a real choice:
 
-- Use `ideation-pragmatist` in `mode=denoise` only when multiple early challenger outputs create genuine redundancy or volume.
-- If challenger output is already compact, read the challenger stances directly and do not create `synthesis-idea-panel.md`.
+```markdown
+## D{N} — {YYYY-MM-DD HH:MM} — {Topic}
 
-### Critic Validation (O15)
+**Status quo:** ...
+**Decision to make:** ...
 
-- Treat Critic output as adversarial stress input, not truth.
-- Classify each finding as `nonsense`, `minor`, or `material` before it affects the user-facing recommendation.
-- Present material findings individually.
-- Group minor findings only when thematic grouping improves clarity, with at most 3 findings per grouped question.
-- Do not bulk-accept Critic output.
+**Options considered:**
 
-### Disclosure Ladder
+- A: ...
+- B: ...
 
-- default summary first
-- concrete specifics when they are already decision-relevant or when the user asks
-- inline verbatim evidence only when exact wording matters or the user requests it
-- never hide decision-critical detail behind a file path alone
+**Chosen:** ...
+
+**Rejected:**
+
+- B because ...
+
+**Source inputs (when relevant):**
+
+- User: "..."
+- Panel / research: ...
+```
 
 ## Handoff Contract
 
@@ -146,7 +145,7 @@ Phase 1 ends only when all three handoff artifacts exist and are usable:
 - `decisions.md`
 - `research-notes.md`
 
-Phase 1 must end with an explicit message naming `@ideation-mediator` and those artifact paths. Phase 2 starts from those files in a fresh context rather than pretending the same agent never changed phase.
+Phase 1 must end with an explicit message naming `@ideation-mediator` and those artifact paths. Phase 2 starts from those files in a fresh context.
 
 ## Cross-References
 

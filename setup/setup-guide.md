@@ -100,7 +100,7 @@ After opening the project in VS Code, use the **Diagnostics view** to confirm ev
 | OwlBear agents loaded | Chat Customizations shows agents from `../owlbear/share/agents/` |
 | OwlBear skills loaded | Chat Customizations shows skills from `../owlbear/share/skills/` |
 | Instructions loaded | Chat Customizations shows `*.instructions.md` files from `../owlbear/share/instructions/` |
-| MCP servers running | Run `MCP: List Servers` from the Command Palette — owlbear-kanba should show `running` |
+| MCP servers running | Run `MCP: List Servers` from the Command Palette — ob-kanban should show `running` |
 
 For runtime debugging, use **"Show Agent Debug Logs"** (Chat view ellipsis `…` menu) —
 this shows chronological tool calls, LLM requests, and prompt discovery events.
@@ -145,7 +145,7 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 ```json
 {
   "servers": {
-    "owlbearKanban": { ... },
+    "ob-kanban": { ... },
     "myProjectServer": {
       "type": "stdio",
       "command": "uv",
@@ -161,13 +161,13 @@ Edit `.vscode/mcp.json` to add additional servers alongside the owlbear defaults
 
 ### Configuring the kanban MCP server
 
-The `owlbearKanban` server supports environment variables to customise its behaviour.
+The `ob-kanban` server supports environment variables to customise its behaviour.
 Set these in `.vscode/mcp.json` under the server's `env` key:
 
 ```json
 {
   "servers": {
-    "owlbearKanban": {
+    "ob-kanban": {
       "type": "stdio",
       "command": "uv",
       "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_kanban"],
@@ -185,13 +185,13 @@ Set these in `.vscode/mcp.json` under the server's `env` key:
 
 ### Configuring the knowledge MCP server
 
-The `owlbearKnowledge` server supports environment variables to customise its behaviour.
+The `ob-knowledge` server supports environment variables to customise its behaviour.
 Set these in `.vscode/mcp.json` under the server's `env` key:
 
 ```json
 {
   "servers": {
-    "owlbearKnowledge": {
+    "ob-knowledge": {
       "type": "stdio",
       "command": "uv",
       "args": ["run", "--project", "../owlbear", "-m", "owlbear_mcp_knowledge"],

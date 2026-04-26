@@ -1,3 +1,4 @@
+---
 version: 10
 tasks_dir: tasks
 archive_dir: archive
@@ -9,6 +10,7 @@ statuses:
   - name: review
   - name: docs
   - name: done
+entry_status: research
 priorities:
   - someday
   - nice-to-have
@@ -19,6 +21,18 @@ defaults:
   status: research
   priority: important
   class: standard
+wave_size: 4
+agent_map: {}
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons:
+  - completed
+  - deprecated
+  - dropped
+  - duplicate
+  - wontfix
+status_predicates: {}
 claim_timeout: 1h
 activity_log: false
 next_id: 1

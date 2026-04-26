@@ -40,7 +40,7 @@ research → (researcher) → backlog → (architect) → todo → (test-writer)
 | `serve/` | Python workspace packages (orchestrator, knowledge, browser, MCP servers) |
 | `share/agents/` | Agent definitions (`.agent.md`) |
 | `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
-| `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `agent-common.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
+| `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `pipeline-agents.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
 | `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
 | `.owlbear/` | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
 | `store/` | Knowledge and memory data |
@@ -57,19 +57,26 @@ For file placement rules, commit format, priorities, and tags, see `r-project-st
 | User | `/memories/` | Tool patterns, CLI recipes, process pitfalls |
 | Session | `/memories/session/` | Task-specific context (auto-cleared) |
 | Repo inbox | `/memories/repo/inbox/` | Agent lessons-learned (legacy, dual-write) |
-| Canonical | mcp-memory `owlbearMemory` | Agent institutional knowledge (queryable) |
+| Canonical | mcp-memory `ob-memory` | Agent institutional knowledge (queryable) |
 
 Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), research findings (`.owlbear/research/`), domain knowledge (project KB via MCP), code snippets, or task-specific context.
 
 Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
-GitHub-hosted Copilot Memory is disabled to preserve local-first operation.
-
 ## 5. Operational Fundamentals
+
+- **MCP Tool Bootstrap.** Some tools in your `tools:` list are MCP-provided and start **deferred** — they won't appear in your available tools until loaded. If a tool is missing, call `tool_search` with the query from this table:
+
+  | MCP server | `tools:` prefix | Runtime tool ID | `tool_search` query |
+  |---|---|---|---|
+  | OwlBear Kanban | `ob-kanban/*` | `mcp_ob-kanban_<tool>` | `"kanban"` |
+  | OwlBear Memory | `ob-memory/*` | `mcp_ob-memory_<tool>` | `"memory"` |
+  | DDGS | `ddgs/*` | `mcp_ddgs_<tool>` | `"web search"` |
+  | MarkItDown | `markitdown/*` | `mcp_markitdown_<tool>` | `"markdown convert"` |
 
 - **Skill authority.** Skills override dispatch prompts. Dispatch prompts provide context, not procedure.
 - **Tool failure.** Capture error → diagnose root cause → adapt approach. Never retry identical commands.
-- **Loop detection.** Tier 1: same call twice — change approach. Tier 2: two different approaches failed — consider skipping. Tier 3: 3+ attempts — stop, write what failed, hand off.
-- **Terminal.** `uv run` for all Python tools. Chain with `;` (never `&&` — PowerShell 5.1).
+- **Loop detection.** Tier 1: same approach twice — change approach. Tier 2: two different approaches failed — narrow scope (deliver what you can, note what you can't). Tier 3: 3+ attempts — stop, write what failed, escalate per §5 Escalation Routing in `r-pipeline-protocol`.
+- **Terminal.** `uv run` for all Python tools.
 - **Scratch files.** Terminal output, temp/debug files, and one-off scripts go to `.owlbear/scratch/`, never the project root.
 - **Commits.** Follow `r-project-standards` for format, types, and git discipline.

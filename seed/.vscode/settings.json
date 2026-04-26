@@ -1,51 +1,27 @@
 {
-  "[chatagent]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[instructions]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[json]": {
-    "editor.defaultFormatter": "vscode.json-language-features",
-    "editor.formatOnSave": false
-  },
-  "[jsonc]": {
-    "editor.defaultFormatter": "vscode.json-language-features"
-  },
-  "[markdown]": {
-    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
-  },
-  "[toml]": {
-    "editor.defaultFormatter": "tamasfe.even-better-toml"
-  },
-  "[xml]": {
-    "editor.defaultFormatter": "redhat.vscode-xml"
-  },
-  "[yaml]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
   "accessibility.chat.showCheckmarks": true,
   "chat.agent.maxRequests": 99999,
   "chat.agentFilesLocations": {
-    "{{owlbear_path}}/share/agents": true,
-    ".owlbear/agents": true
+    ".owlbear/agents": true,
+    "{{owlbear_path}}/share/agents": true
   },
   "chat.agentSkillsLocations": {
-    "{{owlbear_path}}/share/skills": true,
-    ".owlbear/skills": true
+    ".owlbear/skills": true,
+    "{{owlbear_path}}/share/skills": true
   },
   "chat.autopilot.enabled": true,
   "chat.checkpoints.showFileChanges": true,
+  "chat.generalPurposeAgent.enabled": true,
   "chat.instructionsFilesLocations": {
-    "{{owlbear_path}}/share/instructions": true,
-    ".owlbear/instructions": true
+    ".owlbear/instructions": true,
+    "{{owlbear_path}}/share/instructions": true
   },
   "chat.mcp.gallery.enabled": true,
   "chat.notifyWindowOnConfirmation": "always",
   "chat.notifyWindowOnResponseReceived": "always",
   "chat.promptFilesLocations": {
-    "{{owlbear_path}}/share/prompts": true,
-    ".owlbear/prompts": true
+    ".owlbear/prompts": true,
+    "{{owlbear_path}}/share/prompts": true
   },
   "chat.subagents.allowInvocationsFromSubagents": true,
   "chat.tools.terminal.autoApprove": {
@@ -55,12 +31,10 @@
     "uv run python": true,
     "uv run ruff": true
   },
-  "chat.tools.terminal.backgroundNotifications": true,
   "chat.tools.terminal.blockDetectedFileWrites": "never",
   "chat.useCustomAgentHooks": true,
   "chat.viewSessions.orientation": "stacked",
   "diffEditor.hideUnchangedRegions.enabled": false,
-  "editor.defaultFormatter": "charliermarsh.ruff",
   "editor.formatOnPaste": false,
   "editor.formatOnSave": false,
   "editor.links": false,
@@ -83,10 +57,12 @@
   "git.autorefresh": false,
   "github.copilot.chat.agent.autoFix": false,
   "github.copilot.chat.agent.currentEditorContext.enabled": false,
+  "github.copilot.chat.agentHistorySummarizationInline": true,
+  "github.copilot.chat.anthropic.contextEditing.mode": "clear-tooluse",
   "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
-  "github.copilot.chat.cli.forkSessions.enabled": true,
   "github.copilot.chat.cli.sessionController.enabled": true,
   "github.copilot.chat.copilotMemory.enabled": false,
+  "github.copilot.chat.enableUserPreferences": true,
   "github.copilot.chat.executionSubagent.enabled": true,
   "github.copilot.chat.executionSubagent.toolCallLimit": 50,
   "github.copilot.chat.githubMcpServer.enabled": true,
@@ -102,6 +78,7 @@
   },
   "github.copilot.nextEditSuggestions.enabled": true,
   "github.copilot.nextEditSuggestions.extendedRange": true,
+  "json.maxItemsComputed": 5000,
   "MS-CST-E.vscode-devskim.rules.enableBestPracticeSeverityRules": true,
   "MS-CST-E.vscode-devskim.rules.enableManualReviewSeverityRules": true,
   "python.analysis.aiCodeActions": {

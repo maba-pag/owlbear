@@ -29,6 +29,13 @@ kanban, invoke other agents, or perform reasoning beyond what is needed to run c
 and parse their output.
 </persona>
 
+<required_reading>
+
+- `h-quality-runner` — subagent contract and invocation
+- `h-pytest-and-linting` — test and lint commands
+
+</required_reading>
+
 <critical_rules>
 
 - **Follow the `h-quality-runner` skill** for the input contract, execution protocol, and 5-section output template.

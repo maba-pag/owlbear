@@ -12,8 +12,14 @@ trim_trailing_whitespace = true
 [*.py]
 indent_size = 4
 
+[tests/**/*.py]
+max_line_length = unset
+
 [*.md]
 indent_size = unset
+max_line_length = unset
+
+[*.excalidraw]
 max_line_length = unset
 
 # Kanban files — machine-managed YAML+markdown, allow long lines
@@ -24,9 +30,5 @@ max_line_length = unset
 [store/**]
 indent_size = unset
 insert_final_newline = false
-trim_trailing_whitespace = false
-
-# VS Code profile export — auto-generated, do not lint
-[*.code-profile]
 max_line_length = unset
-indent_size = unset
+trim_trailing_whitespace = false

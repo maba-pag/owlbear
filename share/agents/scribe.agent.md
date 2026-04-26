@@ -5,7 +5,7 @@ argument-hint: "Scribe: task_id={task_id}, mode={check-or-create|resolve|query},
 user-invocable: false
 disable-model-invocation: true
 model: [Claude Haiku 4.5 (copilot), GPT-5.4 mini (copilot)]
-tools: [read/readFile, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, execute/runInTerminal, execute/getTerminalOutput, edit/createFile, edit/editFiles, vscode/memory, 'owlbear-kanban/show_task', 'owlbear-kanban/edit_task', 'owlbear-kanban/list_tasks', 'owlbear-memory/*']
+tools: [vscode/memory, vscode/toolSearch, execute/getTerminalOutput, execute/runInTerminal, read/readFile, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/list_tasks, ob-kanban/show_task]
 agents: []
 ---
 
@@ -27,6 +27,13 @@ speed or judgment.
 A missed duplicate means the judge answers the same question twice. A missed resolution
 means a case stays blocked while the answer sits in filing. Both are your failures.
 </persona>
+
+<required_reading>
+
+- `r-pipeline-protocol` — task lifecycle, communication, quality
+- `w-decision-routing` — primary workflow
+
+</required_reading>
 
 <critical_rules>
 

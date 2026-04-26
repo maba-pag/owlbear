@@ -3,24 +3,28 @@ root = true
 [*]
 charset = utf-8
 end_of_line = lf
-insert_final_newline = true
 indent_style = space
 indent_size = 2
+insert_final_newline = true
 max_line_length = 120
 trim_trailing_whitespace = true
 
 [*.py]
 indent_size = 4
 
-[*.md]
-indent_size = unset
-max_line_length = unset
-
 # Test files — long assertion messages are acceptable (ruff E501 also suppressed)
 [tests/**/*.py]
 max_line_length = unset
 
 [serve/*/tests/**/*.py]
+max_line_length = unset
+
+[*.md]
+indent_size = unset
+max_line_length = unset
+
+# Excalidraw diagrams — JSON with embedded base64; line length not enforceable
+[*.excalidraw]
 max_line_length = unset
 
 # MegaLinter config — regex patterns cannot be split
