@@ -1,7 +1,7 @@
 ---
-response: pending
+response: approved
 decision: "A: Close #1136 as superseded by #1133"
-notes: ""
+notes: "User confirmed: OCC timestamp comparison (#1133) is the correct mechanism. Admin force-release stays unconditional per D12. Ownership enforcement is not wanted."
 task_id: 1136
 agent: "architect"
 created: 2026-04-26
