@@ -375,3 +375,20 @@ class TestFromAC_SkillDocReleaseRow:
         pytest.fail(
             "release row in outcome table does not describe idempotent/unclaimed behavior"
         )
+
+    def test_skill_doc_release_row_exact_behavior_text(self) -> None:
+        """AC5: release row contains the exact required behavior string.
+
+        Reviewer-requested strengthening (retry): keyword matching is lax and
+        can false-green on a partial behavior string. This test asserts the full
+        AC5-mandated behavior text verbatim:
+          'Release claim without note or status change (idempotent on unclaimed)'
+        """
+        content = self._SKILL_PATH.read_text(encoding="utf-8")
+        assert (
+            "Release claim without note or status change (idempotent on unclaimed)"
+            in content
+        ), (
+            "h-mcp-kanban/SKILL.md release row does not contain the exact AC5 behavior "
+            "text 'Release claim without note or status change (idempotent on unclaimed)'"
+        )
