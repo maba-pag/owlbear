@@ -3,7 +3,7 @@
 Tests Brief B paper-integration.md §1.8, §4:
   AC18  — success advances one step; from terminal archives completed/[]; clears claim
   AC19  — reject to archived archives + appends + clears
-  AC20  — release clears claim, no status change
+  AC20  — release clears claim, no status change (D52: note appended when provided)
   AC-NEW-1  — block without block_reason → ERR_BLOCK_REASON_REQUIRED
   AC-NEW-2  — block+block_reason sets blocked+block_reason, clears claim
   AC-NEW-3  — block+block_reason+move_to additionally moves (predicate fires)
@@ -275,10 +275,11 @@ class TestFromAC_EndWork:
         )
         assert result.claimed_at is None, "claim must be cleared after reject"
 
-    def test_release_clears_claim_no_status_change_no_note(
+    def test_release_clears_claim_no_status_change(
         self, tmp_path: Path
     ) -> None:
-        """AC20: release clears claimed_at; status unchanged; note NOT appended.
+        """AC20 (updated for D52): release clears claimed_at; status unchanged;
+        note appended to body when provided on a claimed task.
 
         FAIL reason: 'release' is not a valid outcome in engine.end_work;
         raises ValidationError(ERR_INVALID_OUTCOME) instead of succeeding.
@@ -295,9 +296,9 @@ class TestFromAC_EndWork:
 
         assert result.claimed_at is None, "release must clear claimed_at"
         assert result.status == "in-progress", "release must not change status"
-        # Note must NOT be appended to body for release outcome.
-        assert "Releasing claim." not in (result.body or ""), (
-            "release must not append note to body"
+        # D52: note must be appended to body when provided on a claimed release.
+        assert "Releasing claim." in (result.body or ""), (
+            "D52: release with note on claimed task must append note to body"
         )
 
     def test_release_on_unclaimed_is_pure_noop_not_updated(
