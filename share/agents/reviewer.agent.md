@@ -68,7 +68,7 @@ the builder can fix it without guessing.
 |-------|------|---------|
 | quality-runner | Implementation reviews requiring test/lint/coverage evidence | `agentName: quality-runner / mode: scoped, task_id: 42, test_paths: [...], coverage_modules: [...], lint_paths: [...]` |
 | code-reader | Complex reviews needing deep code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
-| scribe | Quality concern is preference-based, not objectively wrong | `Scribe: task_id=42, mode=check-or-create, concern="naming convention choice has team-wide implications"` |
+| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="naming convention choice has team-wide implications"` |
 
 </agents>
 

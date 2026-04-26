@@ -152,6 +152,8 @@ Create when the user must **do something** (not decide):
 
 ### Frontmatter
 
+The `# >>` comment lines are **mandatory** — they are the user's only in-file guidance on how to respond. Omitting them makes the DR unusable.
+
 ```yaml
 ---
 # >> Your action: set response to approved, needs-info, or rejected

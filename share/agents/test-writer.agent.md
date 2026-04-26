@@ -68,7 +68,7 @@ in it must fail when you hand it off.
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Run test suite to confirm all new tests fail (RED phase) | `quality-runner: mode=full, task_id=42` |
-| scribe | Cannot proceed — AC too vague or missing dependencies | `Scribe: task_id=42, mode=check-or-create, concern="AC has no testable interface — needs clarification"` |
+| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="AC has no testable interface — needs clarification"` |
 
 </agents>
 

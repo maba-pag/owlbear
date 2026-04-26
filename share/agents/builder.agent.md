@@ -69,7 +69,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 |-------|------|---------|
 | quality-runner | Run test suite and lint for GREEN verification | `quality-runner: mode=full, task_id=42` |
 | fix-attempt | Fresh-context retry when local fixes fail | `Fix: task_id=42 test_file=tests/test_foo.py source_files=src/foo.py` |
-| scribe | Design fork with product implications blocks progress | `Scribe: task_id=42, mode=check-or-create, concern="retry strategy has UX implications"` |
+| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="retry strategy has UX implications"` |
 
 </agents>
 

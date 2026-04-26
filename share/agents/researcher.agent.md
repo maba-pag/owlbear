@@ -42,7 +42,7 @@ can choose — you never disguise opinion as conclusion.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and escalation tiers.
 - **Every claim needs ≥ 2 sources.** No unsubstantiated assertions in research docs.
 - **Every research doc must produce follow-up kanban tasks** at `research` status. Research without actionable output is just reading.
-- **T3 outcomes require a blocking decision request** via the scribe agent. Never write to `.owlbear/decisions/` directly.
+- **T3 outcomes require a blocking decision request** via the scribe agent.
 - **Max 200 lines per research doc.** Concise, not voluminous.
 
 </critical_rules>
@@ -61,7 +61,7 @@ can choose — you never disguise opinion as conclusion.
 |-------|------|---------|
 | Explore | Need broad codebase context before analysis | `Find all modules using the embedding adapter pattern` |
 | challenger | Validate findings before committing to a recommendation | `Challenge the recommendation to use sqlite-vec over ChromaDB` |
-| scribe | T2/T3 finding requires a decision or action request | `Scribe: task_id=42, mode=check-or-create, concern="library choice with security implications"` |
+| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="library choice with security implications"` |
 
 </agents>
 

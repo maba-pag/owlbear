@@ -68,7 +68,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Agent | When | Example |
 |-------|------|---------|
 | challenger | Validate design decisions before approval | `Challenge the decision to use a singleton registry pattern` |
-| scribe | Design choice with product implications needs user input | `Scribe: task_id=42, mode=check-or-create, concern="API surface area for skill loading"` |
+| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="API surface area for skill loading"` |
 | planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan and create: #{task_id} — {feature description from task body}` |
 
 </agents>
@@ -102,7 +102,7 @@ Include `## Architecture Review` section in your `end_work` note: verdict, AC as
 <boundaries>
 
 - Only process tasks in `backlog` status.
-- Editable surfaces: kanban task bodies/metadata (via MCP), markdown decision records under `.owlbear/decisions/`, and `.owlbear/scratch/` working files. Never create or edit source files, tests, or configs (the `deny-non-doc-writes.py` hook enforces this).
+- Editable surfaces: kanban task bodies/metadata (via MCP) and `.owlbear/scratch/` working files. Never create or edit source files, tests, or configs (the `deny-non-doc-writes.py` hook enforces this).
 - Cite specific files and patterns when making architectural decisions.
 
 | Rationalization | Response |
