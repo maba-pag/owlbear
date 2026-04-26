@@ -1,10 +1,10 @@
 ---
 id: 1122
 title: 'GREEN: fix archived-task edit persistence'
-status: done
+status: archived
 priority: important
-created: '2026-04-24 23:20:30.734062+00:00'
-updated: '2026-04-25 20:45:04.899224+00:00'
+created: 2026-04-24 23:20:30.734062+00:00
+updated: 2026-04-26T01:21:01.756009+00:00
 tags:
 - phase:engine
 - brief:b
@@ -15,6 +15,7 @@ depends_on:
 - 1121
 blocked: false
 block_reason:
+claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -324,3 +325,35 @@ AC-6 corrected: "Existing 26 tests" → "Existing tests" — live file has 31, c
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1122-*` files found)
+[[2026-04-26]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Core edit_task finds archived task files via _find_task_path archive fallback | engine.py:998 confirmed `_find_task_path(..., include_archive_fallback=True)`; reviewer maps to test_edit_archived_stale_id_to_filename_cache_falls_back_to_archive | PASS |
+| write_task accepts optional target_dir param (defaults to tasks/ for backwards compat) | storage.py:354 confirmed `target_dir: Path | None = None`; 2 strengthened tests at L1067 and L1081 with exact path assertions | PASS |
+| Edited archived task file is written to archive/ dir, not tasks/ | engine.py:999 `target_dir = task_path.parent` confirmed; reviewer maps to archive placement tests | PASS |
+| No duplicate file created in tasks/ | Reviewer maps to test_engine_archived_edit_1120.py:381-399 and :567-598 | PASS |
+| All tests from RED task pass (GREEN phase) | Reviewer: 54 passed, 0 failed in task suite | PASS |
+| Existing tests in test_engine_create_edit_1070.py still pass (regression) | Reviewer: 31 passed, 0 failed in regression suite | PASS |
+| ruff clean on changed files | Reviewer: clean on serve/kanban/src and both test files | PASS |
+
+### Test Results
+- pytest: 109 passed, 0 failed (reviewer evidence — 3 independent quality-runner runs; no independent auditor full-suite due to no terminal tool)
+- ruff: clean (reviewer evidence)
+
+### Architect Quality: 4/5
+AC was specific and testable. All 7 lines mapped to verifiable code behavior. Minor issue: AC-6 originally had stale count ("26 tests") corrected during review to "Existing tests." Edge cases (rollback, stale cache, no-duplicate) well-covered. Clean TDD split with #1121.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| AC lines without evidence | 0 (7/7 have reviewer + spot-check evidence) |
+| Lint violations | 0 (clean) |
+| AC quality ≤ 3 | 0 (score 4/5) |
+| Missing reviewer evidence | 0 (detailed 2-pass review, PASS at 0.92) |
+| Full-suite test failures | 0 (109 passed, 0 failed) |
+| No independent full-suite run | -0.02 (mitigated: zero code changes, thorough reviewer evidence) |
+
+### Confidence: 0.98
+### Action: archive

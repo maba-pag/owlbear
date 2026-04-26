@@ -3,8 +3,8 @@ id: 1077
 title: 'B-11: RED — end_work tests'
 status: done
 priority: needed
-created: '2026-04-21 10:50:12.206656+00:00'
-updated: '2026-04-25 18:35:00+00:00'
+created: 2026-04-21 10:50:12.206656+00:00
+updated: 2026-04-26T01:42:13.823594+00:00
 tags:
 - phase:engine
 - brief:b
@@ -14,7 +14,9 @@ parent: 1044
 depends_on:
 - 1075
 blocked: false
-block_reason:
+block_reason: 'auditor failed twice: TOOL_UNAVAILABLE quality-runner — auditor agent
+  cannot reach quality-runner subagent'
+claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -508,3 +510,21 @@ Advance to docs. The latest Architecture Review refinement is satisfied, the ear
 
 ### Commit
 `15a4cf67` — docs: add AgentView.end_work docstring, update diagram footer (#1077, doc-writer)
+
+[[2026-04-26]]
+## Audit (partial)
+
+### Deliverable Verification
+- serve/kanban/tests/test_engine_end_work_1077.py: EXISTS, 33 tests in TestFromAC_EndWork
+- serve/kanban/src/owlbear_kanban/engine.py: EXISTS, AgentView.end_work at L2757 with docstring (L2769-2807), block_reason .strip() validation at L2887-2890
+- serve/kanban/tests/test_engine_coverage_1068.py: EXISTS, TestFromAC_AgentViewEndWork reconciled (claimed_at fixtures, ERR_INVALID_OUTCOME expectation)
+
+### Reviewer Evidence
+Final reviewer pass (cycle 3): PASS at 0.93. All AC lines mapped. Selector-scoped run: 38 passed, 0 failed. Cross-suite contradiction resolved.
+
+### AC Spot-Check
+- AC-NEW-1 (empty block_reason): Confirmed .strip() guard at engine.py:2887. Tests exist for None, empty string, whitespace-only.
+- AC-REC-2 (fail outcome): Confirmed test_engine_coverage_1068.py:2272 now expects ERR_INVALID_OUTCOME.
+
+### Blocked
+Quality-Runner subagent not available in auditor runtime. Cannot execute full-suite regression check (auditor's primary unique value). Deliverables and reviewer evidence look solid; full suite run required before archive.

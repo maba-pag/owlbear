@@ -1,10 +1,10 @@
 ---
 id: 1078
 title: 'B-15: RED — CockpitView tests'
-status: todo
+status: in-progress
 priority: needed
-created: '2026-04-21 10:50:12.218304+00:00'
-updated: '2026-04-25 18:26:32.359853+00:00'
+created: 2026-04-21 10:50:12.218304+00:00
+updated: 2026-04-26T01:59:13.611581+00:00
 tags:
 - phase:engine
 - brief:b
@@ -14,8 +14,10 @@ parent: 1044
 depends_on:
 - 1071
 - 1075
-blocked: false
-block_reason:
+blocked: true
+block_reason: 'builder failed twice: coverage gate unreachable (58% engine vs 90%
+  required) — needs prerequisite test coverage work before builder can pass'
+claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -466,3 +468,54 @@ The reviewer's 90% gate applied to the entire `owlbear_kanban.engine` module (~3
 
 ### Verdict: APPROVE (after REFINE)
 ### Action Taken: Refined two AC lines for assertion specificity, added coverage scope guidance, advanced to todo.
+[[2026-04-26]]
+## Test-Writer Notes
+- Retry: added 3 new tests per architect AC refinements after reviewer FAIL #3 (confidence 0.86).
+- Test file: `tests/test_engine_cockpit_view_1078.py`
+- Classes extended:
+  - `TestFromAC_CockpitViewSweep` — +1 test: `test_sweep_returns_exactly_the_expired_task_ids_no_extras_and_no_missing` — board with 1 expired + 1 fresh-claimed + 1 unclaimed; `assert set(released) == {1}` proves exact-set contract (no extras, no missing) per architect AC-NEW-22 refinement
+  - `TestFromAC_CockpitViewScanCorruption` — +2 tests: `test_scan_corruption_does_not_mutate_clean_task_file_contents` + `test_scan_corruption_does_not_mutate_corrupt_file_contents` — reads bytes before/after scan and asserts equality, proving no content mutation (architect refined AC to "no file creation, deletion, or content mutation")
+- Tests per category (new only): boundary 1, error-path 2
+- Total: 57 tests (54 existing preserved + 3 new)
+- All 57 PASS: implementation already satisfies refined AC constraints per architect sign-off ("implementation is functionally correct; remaining gaps are assertion-specificity issues addressed by AC refinement"). New tests serve as mutation-resistant regression guards — they would fail if someone weakened the sweep return value or added file writes to scan_corruption.
+- ruff: clean
+
+AC coverage additions:
+| Architect refinement | New test |
+|---|---|
+| sweep: "exactly the set of released task IDs (no extras, no missing)" | `test_sweep_returns_exactly_the_expired_task_ids_no_extras_and_no_missing` — `assert set(released) == {1}` |
+| scan_corruption: "no content mutation" (clean file) | `test_scan_corruption_does_not_mutate_clean_task_file_contents` — byte comparison before/after |
+| scan_corruption: "no content mutation" (corrupt file) | `test_scan_corruption_does_not_mutate_corrupt_file_contents` — byte comparison + existence check |
+[[2026-04-26]]
+## Builder Notes
+- Implementation: no source edits required in this pass; current implementation already satisfies refined AC behaviors exercised by task-owned suite.
+- Tests (green scoped): 57 passed, 0 failed (`tests/test_engine_cockpit_view_1078.py`).
+- Lint: clean on `serve/kanban/src/owlbear_kanban/engine.py`, `serve/kanban/src/owlbear_kanban/storage.py`, and `tests/test_engine_cockpit_view_1078.py`.
+- Coverage (green scoped): `owlbear_kanban.engine` 40%, `owlbear_kanban.storage` 68%.
+- Coverage (high-coverage run): `owlbear_kanban.engine` 94%, `owlbear_kanban.storage` 98%, but run fails due unrelated legacy-suite contract drift (`serve/kanban/tests/test_engine_coverage_1068.py`, `serve/kanban/tests/test_engine_coverage_1110.py`) and incompatible historical expectations.
+- Additional broad run findings: including cockpit integration suites introduces unrelated constructor-contract failures (`KanbanEngine.__init__(agent_name=...)`) in `tests/test_cockpit_launch.py` and related fixtures, preventing an all-green high-coverage gate.
+- Evidence summary:
+  - Achievable state A: all-green verification with low module coverage.
+  - Achievable state B: >=90% engine coverage with unrelated failing suites.
+  - Unachievable in current board state: all-green + >=90% engine coverage simultaneously for this task without prerequisite legacy-suite reconciliation.
+- Escalation rationale: Step-6 gate is structurally unreachable for task #1078 under current unrelated suite drift; requires prerequisite cleanup/alignment tasks outside this task's AC scope.
+- Post-task reflection:
+  - Historical/legacy suite drift is the dominant blocker, not current CockpitView behavior.
+  - Task-owned assertions are green and lint-clean; blocker is evidence-gate coupling to unrelated suite health.
+  - Next cycle should attach explicit prerequisite deps for legacy contract alignment before re-running builder gate.
+[[2026-04-26]]
+## Builder Notes
+- Implementation: no source edits in this pass.
+- Files changed: none.
+- Verification run 1 (quality-runner, scoped): 57 passed, 0 failed; ruff clean; coverage `owlbear_kanban.engine` 40%, `owlbear_kanban.storage` 68%.
+- Verification run 2 (quality-runner, broader retry): 197 passed, 0 failed; ruff clean; coverage `owlbear_kanban.engine` 58%, `owlbear_kanban.storage` 98%.
+- Step-6 status: FAIL (coverage gate not met for `owlbear_kanban.engine`).
+- fix-attempt result: FAILED — structurally unreachable via minimal source-only builder changes; no failing behavior remains and coverage increase to >=90% requires additional test work or non-surgical module reshaping.
+- Escalation: prerequisite task creation/linking was attempted but kanban tooling is currently failing with board/index errors (`string indices must be integers, not 'str'` and duplicate task id read failure), preventing dependency wiring from this session.
+- Lint status: clean.
+- Evidence summary: AC-facing behavior remains green; blocker is evidence gate coupling to module-wide coverage beyond task-owned test scope under builder no-test constraints.
+
+Post-task reflection:
+- Coverage-only failure can persist even when behavior and lint are fully green.
+- Builder no-test rule makes module-wide coverage gates dependent on upstream test-task availability.
+- Kanban tool health issues prevented prerequisite dependency management in this run.

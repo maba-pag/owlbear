@@ -1,15 +1,17 @@
 ---
 id: 1124
-title: 'B-XX: Reconcile MCP end_work outcome contract with AgentView validation'
-status: research
+title: 'Research: reconcile end-work outcome contract'
+status: backlog
 priority: important
-created: '2026-04-25 17:19:08.063026+00:00'
-updated: '2026-04-25T20:54:03.386033+00:00'
-tags: []
+created: 2026-04-25 17:19:08.063026+00:00
+updated: 2026-04-26T02:18:32.192769+00:00
+tags:
+- research
 parent:
 depends_on: []
 blocked: false
 block_reason:
+claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -120,3 +122,110 @@ D52 deviation doesn't add new capabilities or change architecture — ratifies d
 **Authority:** User (via scribe)
 
 Approved — restore `fail` to AgentView and EndWorkParams valid_outcomes, overriding Brief B D52 based on system-wide observability evidence. Follow-up tasks #1125, #1126, #1127 approved to proceed.
+
+[[2026-04-26]]
+## Research (validation pass)
+
+Validated all v2 research artifacts are current and complete:
+- Research doc: `.owlbear/research/reconcile-end-work-outcome-contract-v2.md` — exists, 16 sources
+- DR: `.owlbear/decisions/resolved/1124-end-work-outcome-authority.md` — resolved (Option A: ratify live 5-outcome contract)
+- Follow-up #1125: in-progress (AC1-AC5, tests written, impl appears done)
+- Follow-up #1126: review (AC present, builder done)
+- Follow-up #1127: todo (AC present, architecture approved)
+- No stale findings — codebase state matches v2 analysis
+[[2026-04-26]]
+## Architecture Review (v2 research)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Research umbrella for one topic: end-work outcome contract reconciliation |
+| Interface clarity | N/A | Research task — no implementation AC. Deliverables documented in body |
+| Dependency correctness | PASS | No deps; follow-ups are independent tasks |
+| Module layering | N/A | Research only |
+| TDD compliance | N/A | Tagged `research` for pass-through |
+| KISS/YAGNI | PASS | Focused scope, minimal follow-up set (3 tasks) |
+| Premise challenge | PASS | Outcome contract gap confirmed by 9/11 layer analysis; DR resolved |
+| Pattern consistency | PASS | Follows research umbrella conventions |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | Kanban engine domain |
+
+### Research Quality Assessment
+| Deliverable | Status | Evidence |
+|---|---|---|
+| Research doc v2 | Complete | `.owlbear/research/reconcile-end-work-outcome-contract-v2.md` — 16 sources |
+| DR resolved | Complete | `.owlbear/decisions/resolved/1124-end-work-outcome-authority.md` — Option A |
+| Two-option trade-off | Complete | Option X (KISS 0.35) vs Option Y (KISS 0.80) with authority/risk/effort analysis |
+| Follow-up #1125 | In-progress | AC1-AC5, 13 tests, implementation appears done |
+| Follow-up #1126 | Backlog | Returned from review — AC3 needs narrowing (pre-existing suite failures) |
+| Follow-up #1127 | Todo | AC1-AC4, architecture approved |
+
+### V1→V2 Rejection Feedback Resolution
+All 5 items from previous rejection addressed:
+1. ✅ Brief B D52 authority consulted and cited
+2. ✅ Two-option analysis with trade-off matrix
+3. ✅ T1→T2 reclassification with DR
+4. ✅ Follow-ups populated with concrete AC
+5. ✅ `release` note gap identified as separate defect (#1127)
+
+### Challenge Results
+- Challenger: proceed (confidence: 0.85)
+- Key finding: #1126's AC3 issue is a child-task lifecycle concern, not a research gap
+- Architect response: accepted — umbrella research is complete regardless of child task status
+
+### Non-implementation tagging
+Tagged `research` — task produces no testable Python code; pass-through in pipeline.
+
+### Verdict: APPROVE
+### Action Taken: Tagged `research`, advanced to todo.
+[[2026-04-26]]
+## Test-Writer Notes
+- Non-implementation task (tagged `research`) — no tests applicable.
+- Passing through to builder.
+[[2026-04-26]]
+## Builder Notes
+- Non-implementation task (tagged `research`) — no code changes needed.
+- Passing through to review.
+[[2026-04-26]]
+## Review Evidence
+### Test Results
+- N/A. Task `#1124` is tagged `research`, the latest Architecture Review marks TDD as N/A / pass-through, and the review scope is artifact integrity rather than executable implementation.
+
+### Lint
+- N/A. No implementation artifact is under review.
+
+### Coverage
+- N/A. No touched runtime module is owned by this umbrella research task.
+
+### Pass 1 - CRITICAL
+#### Research Deliverable Integrity
+| Claim | Evidence | Status |
+|---|---|---|
+| Research doc v2 is complete and current | The task body marks `Research doc v2` as complete at [.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md](.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md#L156) and says `No stale findings` at [.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md](.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md#L135), but the follow-up section in [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L112) still lists only `T-A (revised #1125)` and `T-B (existing #1126)` at [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L114) and [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L115). It omits `#1127` entirely. | FAIL |
+| D2 (`release` note appending) is captured as a separate defect / follow-up | The task body says `#1127: Fix release note-appending per D52` at [.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md](.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md#L109) and later claims previous rejection item 5 was addressed because the `release` note gap is a separate defect `(#1127)` at [.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md](.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md#L169). The research doc itself states `D1` and `D2` are separate defects at [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L73) to [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L78), but its follow-up section collapses D2 into revised `#1125` at [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L114). The child tasks prove the actual split: `#1125` scope is fail/model/doc-row work at [.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md](.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md#L36) to [.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md](.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md#L42), while `#1127` separately owns release-note appending at [.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md](.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md#L22), [.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md](.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md#L35), and [.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md](.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md#L36). | FAIL |
+
+#### Deliverable Compliance
+| Deliverable | Evidence | Status |
+|---|---|---|
+| Research doc exists with 16-source analysis | [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L1) to [.owlbear/research/reconcile-end-work-outcome-contract-v2.md](.owlbear/research/reconcile-end-work-outcome-contract-v2.md#L24) | PASS |
+| DR is resolved | [.owlbear/decisions/resolved/1124-end-work-outcome-authority.md](.owlbear/decisions/resolved/1124-end-work-outcome-authority.md#L1) to [.owlbear/decisions/resolved/1124-end-work-outcome-authority.md](.owlbear/decisions/resolved/1124-end-work-outcome-authority.md#L7) | PASS |
+| Follow-up tasks exist with concrete scopes | [.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md](.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md#L36) to [.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md](.owlbear/kanban/tasks/1125-restore-fail-outcome-to-agentview-end-work-and-align-mcp-model.md#L54), [.owlbear/kanban/tasks/1126-remove-dead-try-except-typeerror-fallback-chain-in-mcp-server-end-work.md](.owlbear/kanban/tasks/1126-remove-dead-try-except-typeerror-fallback-chain-in-mcp-server-end-work.md#L24) to [.owlbear/kanban/tasks/1126-remove-dead-try-except-typeerror-fallback-chain-in-mcp-server-end-work.md](.owlbear/kanban/tasks/1126-remove-dead-try-except-typeerror-fallback-chain-in-mcp-server-end-work.md#L31), and [.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md](.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md#L26) to [.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md](.owlbear/kanban/tasks/1127-fix-release-outcome-to-append-notes-per-brief-b-d52.md#L39) | PASS |
+| Research doc accurately reflects the actual follow-up split | See the two FAIL rows above. | FAIL |
+
+### Deductions
+- -0.11 The claimed-complete research doc still carries a stale follow-up map that omits `#1127` and misstates D2 ownership.
+- -0.04 The validation pass and research-quality matrix overclaim completeness based on that stale document state.
+
+### Verdict
+- Confidence: 0.85
+- FAIL
+- Routing: backlog
+- Reason: this is a research-artifact quality issue, not an implementation issue. The parent task cannot pass while its claimed-complete research doc disagrees with both the task body and the actual downstream task split.
+
+### Action
+- Researcher/architect should update `.owlbear/research/reconcile-end-work-outcome-contract-v2.md` and the validation/completeness statements in task `#1124` so the umbrella artifact matches the actual three-task split: `#1125` (`fail`/model/doc-row), `#1126` (dead fallback cleanup), `#1127` (release-note defect).
+
+### Post-task Reflection
+- The task is legitimately non-implementation, so artifact integrity was the gate rather than test execution.
+- The research conclusion may still be sound; the blocking defect is the stale follow-up mapping inside the artifact claimed as complete.
+- The fix is surgical because the child tasks already encode the correct split; the parent research artifact just needs to be reconciled to them.
