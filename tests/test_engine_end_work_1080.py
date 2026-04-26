@@ -1,0 +1,569 @@
+"""Retry-cycle tests for AgentView.end_work (task #1080).
+
+Reviewer cited two gaps after second builder pass (B-12):
+
+GAP-1 — Missing direct ``end_work`` ``_move_file`` fault-injection proof.
+  The B-12 builder added an archive-move rollback branch in
+  ``KanbanEngine.end_work``.  No task-owned test proved that branch; the only
+  ``_move_file`` fault-injection proof in the workspace targeted the sibling
+  ``move_task`` path.  Tests here prove the ``end_work`` rollback directly for
+  both archive-triggering outcomes: success-from-terminal and reject-to-archived.
+
+GAP-2 — Weak guidance assertions for D54 (AR hint + skip-warning).
+  Existing tests used ``any("decision" in hint.lower() or "AR" in hint …)`` and
+  ``any("skip" in hint.lower() …)`` which pass on partial or malformed strings.
+  Tests here use exact-list equality so that drift in AR-hint wording, skip-count
+  arithmetic, or status names causes a suite failure.
+
+All new tests are expected to FAIL — RED phase.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from owlbear_kanban import KanbanEngine
+from owlbear_kanban.engine import AgentView
+
+# ---------------------------------------------------------------------------
+# Board helpers (mirrors conventions from test_engine_end_work_1077.py)
+# ---------------------------------------------------------------------------
+
+_BASE_CONFIG = """\
+statuses:
+  - research
+  - backlog
+  - todo
+  - in-progress
+  - review
+  - done
+priorities:
+  - someday
+  - nice-to-have
+  - important
+  - needed
+  - critical
+entry_status: research
+terminal_status: done
+wave_size: 4
+agent_map:
+  research: researcher
+  backlog: architect
+  todo: test-writer
+  in-progress: builder
+  review: reviewer
+  done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: [research, docs]
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
+claim_timeout: 1h
+next_id: 1
+"""
+
+_TASK_TMPL = """\
+---
+id: {task_id}
+title: {title}
+status: {status}
+priority: {priority}
+created: "2026-01-01T10:00:00+00:00"
+updated: "2026-01-01T10:00:00+00:00"
+tags: {tags}
+parent: {parent}
+depends_on: {depends_on}
+blocked: {blocked}
+block_reason: {block_reason}
+claimed_at: {claimed_at}
+archival_reason: {archival_reason}
+archival_refs: {archival_refs}
+---
+{body}
+"""
+
+_LIVE_CLAIM_TS = '"2026-04-25T08:00:00+00:00"'  # non-null, within 1 h claim_timeout
+
+# Exact D54 contract strings emitted by AgentView.
+_EXPECTED_BLOCK_AR_HINT = (
+    "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request for this block via the"
+    " scribe agent (see w-decision-routing)."
+    " Blocks without a DR are invisible to the pipeline."
+)
+
+
+def _expected_skip_warning(before: str, after: str, skipped: int) -> str:
+    return (
+        f"\u26a0\ufe0f Status skip: moved from '{before}' to '{after}'"
+        f" (skipped {skipped} column(s)). Verify this jump is intentional."
+    )
+
+
+def _make_board(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> Path:
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
+
+
+def _write_task(  # noqa: PLR0913
+    kanban_dir: Path,
+    task_id: int = 1,
+    title: str = "Task",
+    status: str = "in-progress",
+    priority: str = "needed",
+    tags: str = "[]",
+    blocked: str = "false",
+    block_reason: str = "null",
+    depends_on: str = "[]",
+    body: str = "Original body.",
+    subdir: str = "tasks",
+    parent: str = "null",
+    archival_reason: str = "null",
+    archival_refs: str = "[]",
+    claimed_at: str = "null",
+) -> Path:
+    content = _TASK_TMPL.format(
+        task_id=task_id,
+        title=title,
+        status=status,
+        priority=priority,
+        tags=tags,
+        blocked=blocked,
+        block_reason=block_reason,
+        depends_on=depends_on,
+        body=body,
+        parent=parent,
+        archival_reason=archival_reason,
+        archival_refs=archival_refs,
+        claimed_at=claimed_at,
+    )
+    dest_dir = kanban_dir / subdir
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    path = dest_dir / f"{task_id}-task.md"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _make_view(
+    base_dir: Path, config_yaml: str = _BASE_CONFIG
+) -> tuple[AgentView, Path]:
+    kanban_dir = _make_board(base_dir, config_yaml)
+    engine = KanbanEngine(kanban_dir, activity_log=False)
+    return AgentView(engine), kanban_dir
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EndWorkArchiveRollback
+#
+# GAP-1: direct _move_file fault-injection proof for end_work archive paths.
+#
+# Covers:
+#   - success outcome from terminal status (needs_archive=True path, D51)
+#   - reject outcome to archived (needs_archive=True path)
+#
+# Contract: when _move_file raises OSError the engine must:
+#   (a) NOT leave a file in archive/
+#   (b) restore the ORIGINAL task record in tasks/ (pre-mutation body, original
+#       claimed_at, original status)
+#   (c) re-raise the OSError to the caller
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EndWorkArchiveRollback:
+    """GAP-1: _move_file fault injection for end_work archive paths (D41 + new rollback branch)."""
+
+    def test_success_from_terminal_move_failure_reraises_oserror(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(success) from terminal + _move_file OSError → OSError propagates to caller.
+
+        FAIL reason: the rollback branch in KanbanEngine.end_work catches OSError
+        only to restore state and re-raise; if the catch-and-re-raise is missing,
+        the OSError is swallowed and the file is left in a partially-archived state.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError, match="disk full"):
+            view.end_work(1, outcome="success", note="Done.")
+
+    def test_success_from_terminal_move_failure_no_archive_file(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(success) from terminal + _move_file OSError → no file left in archive/.
+
+        FAIL reason: the post-write state before rollback has the mutated record in
+        tasks/ (status=archived); if rollback is missing the record stays there and
+        the file is never moved to archive/, but if _move_file raises AFTER a partial
+        move, a file could appear in archive/.  The contract: archive/ must be empty.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(1, outcome="success", note="Done.")
+
+        assert not any((kanban_dir / "archive").glob("1-*.md")), (
+            "archive/ must be empty after _move_file OSError in end_work(success)"
+        )
+
+    def test_success_from_terminal_move_failure_restores_original_status(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(success) from terminal + _move_file OSError → original status restored in tasks/.
+
+        FAIL reason: KanbanEngine.end_work calls write_task(record, …) BEFORE _move_file;
+        if the OSError rollback write_task(original, …) is missing, the file in tasks/
+        has status=archived instead of the pre-mutation status (done).
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(1, outcome="success", note="Done.")
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        assert restored.status == "done", (
+            f"status must be restored to 'done' after rollback; got {restored.status!r}"
+        )
+
+    def test_success_from_terminal_move_failure_restores_claimed_at(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(success) + _move_file OSError → claimed_at restored (not cleared) in tasks/.
+
+        FAIL reason: KanbanEngine.end_work clears claimed_at in the mutated record
+        before write_task(record, …); rollback must restore original where claimed_at
+        is non-null.  If rollback is absent, the persisted record has claimed_at=null.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(1, outcome="success", note="Done.")
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        assert restored.claimed_at is not None, (
+            "claimed_at must be restored (non-null) after _move_file OSError rollback"
+        )
+
+    def test_success_from_terminal_move_failure_restores_original_body(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(success) + _move_file OSError → original body restored (note NOT prepended).
+
+        FAIL reason: KanbanEngine.end_work prepends the timestamped note before
+        write_task(record, …); rollback must restore original which has no note.
+        If rollback is absent, the persisted body contains the prepended note.
+        """
+        original_body = "Original body before end_work."
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS, body=original_body)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(1, outcome="success", note="Prepended note that must be gone.")
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        body_text = restored.body if isinstance(restored.body, str) else "\n".join(restored.body or [])
+        assert "Prepended note that must be gone." not in body_text, (
+            "note must NOT be present in restored body after _move_file OSError rollback"
+        )
+        assert original_body in body_text, (
+            "original body content must be present in restored record after rollback"
+        )
+
+    def test_reject_to_archived_move_failure_reraises_oserror(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(reject, move_to='archived') + _move_file OSError → OSError propagates.
+
+        FAIL reason: same rollback branch covers reject-to-archived path; must re-raise.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError, match="disk full"):
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="archived",
+                archival_reason="dropped",
+                note="Dropping.",
+            )
+
+    def test_reject_to_archived_move_failure_no_archive_file(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(reject, archived) + _move_file OSError → no file in archive/.
+
+        FAIL reason: same as success path — rollback must leave archive/ empty.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="archived",
+                archival_reason="dropped",
+                note="Dropping.",
+            )
+
+        assert not any((kanban_dir / "archive").glob("1-*.md")), (
+            "archive/ must be empty after _move_file OSError in end_work(reject-to-archived)"
+        )
+
+    def test_reject_to_archived_move_failure_restores_original_status(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(reject, archived) + _move_file OSError → original status restored in tasks/.
+
+        FAIL reason: without rollback, tasks/ holds the mutated record with
+        status=archived instead of original status (in-progress).
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="archived",
+                archival_reason="dropped",
+                note="Dropping.",
+            )
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        assert restored.status == "in-progress", (
+            f"status must be restored to 'in-progress' after reject-to-archived rollback;"
+            f" got {restored.status!r}"
+        )
+
+    def test_reject_to_archived_move_failure_restores_claimed_at(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(reject, archived) + _move_file OSError → claimed_at restored.
+
+        FAIL reason: without rollback, the mutated record has claimed_at=null;
+        rollback must restore the original non-null claimed_at.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="archived",
+                archival_reason="dropped",
+                note="Dropping.",
+            )
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        assert restored.claimed_at is not None, (
+            "claimed_at must be non-null (restored from original) after reject-to-archived rollback"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_GuidanceExact
+#
+# GAP-2: exact guidance string assertions for D54 contract.
+#
+# Prior tests only checked generic substrings ("decision", "AR", "skip");
+# these tests use exact-list equality so that:
+#   - a changed AR-hint wording fails
+#   - a wrong skip-count or wrong status name fails
+#   - extra/missing guidance items fail
+#   - empty guidance where a hint is expected fails
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GuidanceExact:
+    """GAP-2: exact D54 guidance contract — AR hint and skip-warning strings (D54)."""
+
+    def test_block_outcome_guidance_is_singleton_exact_ar_hint(
+        self, tmp_path: Path
+    ) -> None:
+        """block without move_to → guidance == [_BLOCK_AR_HINT] exactly (no extra items).
+
+        FAIL reason: existing test uses any("decision" in hint …) which passes
+        even if guidance is ["see docs"] or ["AR stuff", "extra", "wrong"].
+        Exact list equality catches wording drift and extra/missing items.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        result = view.end_work(
+            1,
+            outcome="block",
+            block_reason="Blocker found.",
+            note="Blocking.",
+        )
+
+        assert result.guidance == [_EXPECTED_BLOCK_AR_HINT], (
+            f"block without move_to must produce exactly [{_EXPECTED_BLOCK_AR_HINT!r}];"
+            f" got {result.guidance!r}"
+        )
+
+    def test_block_with_multi_step_move_to_guidance_exact_list(
+        self, tmp_path: Path
+    ) -> None:
+        """block+move_to skipping >1 columns → guidance == [AR_HINT, skip_warning] exactly.
+
+        Task at 'review' (idx=4) moves to 'backlog' (idx=1): delta=3, skipped=3
+        (include_target_column=True).
+
+        FAIL reason: existing test uses any(…) checks; it passes if the skip-warning
+        has the wrong column count, wrong status names, or missing items.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="review", claimed_at=_LIVE_CLAIM_TS)
+
+        result = view.end_work(
+            1,
+            outcome="block",
+            block_reason="Design flaw.",
+            move_to="backlog",
+            note="Moving back.",
+        )
+
+        expected_skip = _expected_skip_warning("review", "backlog", 3)
+        expected = [_EXPECTED_BLOCK_AR_HINT, expected_skip]
+        assert result.guidance == expected, (
+            f"block+move_to(review→backlog) must produce guidance {expected!r};"
+            f" got {result.guidance!r}"
+        )
+
+    def test_block_with_single_step_move_to_guidance_is_singleton_ar_hint(
+        self, tmp_path: Path
+    ) -> None:
+        """block+move_to adjacent status (delta=1) → guidance == [AR_HINT] only, no skip-warning.
+
+        Task at 'in-progress' (idx=3) moves to 'review' (idx=4): delta=1 → no skip.
+
+        FAIL reason: if _skip_transition_guidance threshold is wrong (e.g. delta >= 1
+        instead of delta > 1), an adjacent move produces a spurious skip-warning.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        result = view.end_work(
+            1,
+            outcome="block",
+            block_reason="Minor issue.",
+            move_to="review",
+            note="Sending to review.",
+        )
+
+        assert result.guidance == [_EXPECTED_BLOCK_AR_HINT], (
+            f"block+adjacent move_to must produce only [AR_HINT], no skip-warning;"
+            f" got {result.guidance!r}"
+        )
+
+    def test_reject_backwards_multi_step_guidance_exact_list(
+        self, tmp_path: Path
+    ) -> None:
+        """reject from 'done' (idx=5) to 'research' (idx=0) → guidance == [skip_warning] exactly.
+
+        delta=5, include_target_column=True → skipped=5.
+
+        FAIL reason: existing test uses any("skip" in hint …); passes if the
+        warning has the wrong count, wrong status names, or wrong structure.
+        Exact list equality fails on all those deviations.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
+
+        result = view.end_work(
+            1,
+            outcome="reject",
+            move_to="research",
+            note="Full restart.",
+        )
+
+        expected_skip = _expected_skip_warning("done", "research", 5)
+        assert result.guidance == [expected_skip], (
+            f"reject(done→research) must produce guidance [{expected_skip!r}];"
+            f" got {result.guidance!r}"
+        )
+
+    def test_reject_adjacent_move_guidance_is_empty(
+        self, tmp_path: Path
+    ) -> None:
+        """reject from 'in-progress' (idx=3) to 'todo' (idx=2) → guidance == [] (no skip-warning).
+
+        delta=1 → no warning; delta must be strictly > 1 to emit a warning.
+
+        FAIL reason: if threshold is >= 1 instead of > 1, adjacent reject produces
+        a spurious skip-warning.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        result = view.end_work(
+            1,
+            outcome="reject",
+            move_to="todo",
+            note="Back one step.",
+        )
+
+        assert result.guidance == [], (
+            f"reject(in-progress→todo, delta=1) must produce no guidance;"
+            f" got {result.guidance!r}"
+        )
+
+    def test_success_outcome_guidance_is_empty(self, tmp_path: Path) -> None:
+        """success outcome (non-terminal) → guidance == [] exactly.
+
+        FAIL reason: if guidance generation accidentally fires for success,
+        the response would contain unexpected items.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        # Start at 'in-progress' (non-terminal) so success advances to 'review'.
+        _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+
+        result = view.end_work(1, outcome="success", note="Done with impl.")
+
+        assert result.guidance == [], (
+            f"success (non-terminal) must produce no guidance; got {result.guidance!r}"
+        )
