@@ -1,13 +1,8 @@
-"""TDD RED: Engine create_task crash-safety tests (AC-C51-engine).
+"""Engine create_task crash-safety tests (AC-C51-engine).
 
 Task:  #1101 — Engine create_task crash-safety test (AC-C51-engine)
 AC:    AC-1 (crash scenario / burned ID), AC-2 (allocate_next_id routing), AC-3 (regression)
 Depends on: #1062 (engine refactor to allocate_next_id)
-
-All tests FAIL (RED phase) because the current engine.create_task allocates IDs
-inline (write_task BEFORE save_config).  After #1062 refactors create_task to
-call allocate_next_id(), config is saved first — inside the flock — so an
-interrupted write_task burns the ID safely.
 """
 
 from __future__ import annotations
@@ -22,34 +17,43 @@ from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.storage import allocate_next_id
 
 # ---------------------------------------------------------------------------
-# Board fixture — legacy schema so the migration gate in KanbanEngine.__init__
-# is skipped (version field present ⇒ is_legacy_schema=True).
+# Board fixture in current BoardConfig schema.
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
 statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
+    - research
+    - backlog
+    - todo
+    - in-progress
+    - review
+    - docs
+    - done
 priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
+    - someday
+    - nice-to-have
+    - important
+    - needed
+    - critical
+entry_status: research
+terminal_status: done
+wave_size: 4
+agent_map:
+    research: researcher
+    backlog: architect
+    todo: builder
+    in-progress: builder
+    review: reviewer
+    docs: doc-writer
+    done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: [research, docs]
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
 claim_timeout: 1h
 next_id: 1001
+tasks_dir: tasks
 archive_dir: archive
 activity_log: false
 """
@@ -88,9 +92,6 @@ class TestFromAC_EngineCrashSafety:
           config.next_id == 1002  (already saved by allocate_next_id)
           no task file at ID 1001 (write_task never completed)
           next create_task returns task.id == 1002
-
-        Currently FAILS because config.next_id remains 1001 after crash
-        (save_config is not called until AFTER write_task in the current engine).
         """
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
@@ -118,7 +119,7 @@ class TestFromAC_EngineCrashSafety:
         assert config_after_crash.next_id == 1002, (
             f"Expected config.next_id=1002 after crash (allocate_next_id must save "
             f"config before write_task is called), got {config_after_crash.next_id}. "
-            "Current engine saves config AFTER write_task — refactor required."
+            "Crash-safety contract violated: next_id was not persisted before write_task."
         )
 
         # --- Assert: no task file at the burned ID ---
@@ -145,8 +146,6 @@ class TestFromAC_EngineCrashSafety:
 
         Intercepts write_task and snapshots config state during that call.
         Post-#1062: allocate_next_id saves next_id=1002 first; write_task sees 1002.
-        Currently FAILS: config.next_id is still 1001 when write_task is called
-        (save_config not yet executed at that point in the current engine).
         """
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
@@ -170,7 +169,7 @@ class TestFromAC_EngineCrashSafety:
         assert observed_next_id == 1002, (
             f"config.next_id must be 1002 when write_task executes "
             f"(allocate_next_id saves config first), got {observed_next_id}. "
-            "Current engine: next_id is still 1001 at write_task time — save_config runs later."
+            "write_task observed stale next_id; config persistence ordering is incorrect."
         )
 
     # ------------------------------------------------------------------
@@ -184,8 +183,6 @@ class TestFromAC_EngineCrashSafety:
         """AC-2: allocate_next_id is called exactly once per create_task invocation.
 
         Patches owlbear_kanban.storage.allocate_next_id with a wrapping spy.
-        Currently FAILS: current engine does not call allocate_next_id at all
-        (allocates IDs inline with config.next_id inside its own flock section).
         """
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
@@ -199,13 +196,12 @@ class TestFromAC_EngineCrashSafety:
         assert spy.call_count == 1, (
             f"create_task must call allocate_next_id exactly once; "
             f"got call_count={spy.call_count}. "
-            "Current engine allocates IDs inline — does not call allocate_next_id."
+            "create_task did not route ID allocation through allocate_next_id."
         )
 
     # ------------------------------------------------------------------
     # AC-3: Regression — basic create_task contract is preserved after
     #       the #1062 refactor (correct id, title, file on disk, config).
-    #       Combined with routing check so this test fails in RED phase.
     # ------------------------------------------------------------------
 
     def test_ac3_create_task_contract_preserved_with_new_routing(
@@ -214,8 +210,8 @@ class TestFromAC_EngineCrashSafety:
         """AC-3: create_task still returns a correct Task and updates config.
 
         Regression guard verifying that the #1062 allocate_next_id refactor does
-        not break existing create_task behavior. Routing check (spy) makes this
-        fail in RED phase — same assertion as AC-2b but scoped to the regression.
+        not break existing create_task behavior. Includes a routing check with
+        the same allocate_next_id spy assertion used in AC-2b.
         """
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
