@@ -15,7 +15,8 @@ GAP-2 — Weak guidance assertions for D54 (AR hint + skip-warning).
   Tests here use exact-list equality so that drift in AR-hint wording, skip-count
   arithmetic, or status names causes a suite failure.
 
-All new tests are expected to FAIL — RED phase.
+Tests added in loop-breaker pass (task #1080 cycle 3) prove the reject-to-archived
+rollback restores body, archival_reason, and archival_refs fields.
 """
 
 from __future__ import annotations
@@ -401,6 +402,128 @@ class TestFromAC_EndWorkArchiveRollback:
         restored = fresh.show_task("1")
         assert restored.claimed_at is not None, (
             "claimed_at must be non-null (restored from original) after reject-to-archived rollback"
+        )
+
+    def test_reject_to_archived_move_failure_restores_original_body(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(reject, archived) + _move_file OSError → original body restored (note NOT prepended).
+
+        FAIL reason: KanbanEngine.end_work prepends the timestamped note before
+        write_task(record, …); rollback must restore original which has no prepended note.
+        If rollback is absent, the persisted body contains the prepended note.
+        Mirrors the success-path proof at test_success_from_terminal_move_failure_restores_original_body.
+        """
+        original_body = "Original reject body before end_work."
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(
+            kanban_dir,
+            status="in-progress",
+            claimed_at=_LIVE_CLAIM_TS,
+            body=original_body,
+        )
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="archived",
+                archival_reason="dropped",
+                note="Prepended reject note that must be gone.",
+            )
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        body_text = (
+            restored.body
+            if isinstance(restored.body, str)
+            else "\n".join(restored.body or [])
+        )
+        assert "Prepended reject note that must be gone." not in body_text, (
+            "note must NOT be present in restored body after reject-to-archived _move_file OSError rollback"
+        )
+        assert original_body in body_text, (
+            "original body content must be present in restored record after rollback"
+        )
+
+    def test_reject_to_archived_move_failure_restores_archival_reason(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(reject, archived) + _move_file OSError → archival_reason restored to None.
+
+        FAIL reason: _apply_outcome sets record.archival_reason = archival_reason
+        (e.g. 'dropped') before write_task(record, …); rollback must restore original
+        where archival_reason is None.  If rollback is absent, the persisted record
+        has archival_reason='dropped' instead of None.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        _write_task(
+            kanban_dir,
+            status="in-progress",
+            claimed_at=_LIVE_CLAIM_TS,
+            archival_reason="null",
+        )
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="archived",
+                archival_reason="dropped",
+                note="Dropping.",
+            )
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        assert restored.archival_reason is None, (
+            f"archival_reason must be None (original) after reject-to-archived rollback;"
+            f" got {restored.archival_reason!r}"
+        )
+
+    def test_reject_to_archived_move_failure_restores_archival_refs(
+        self, tmp_path: Path
+    ) -> None:
+        """end_work(reject, archived) + _move_file OSError → archival_refs restored to [] (not caller-supplied).
+
+        FAIL reason: _apply_outcome sets record.archival_refs = archival_refs
+        ([2]) before write_task(record, …); rollback must restore the original
+        empty list.  If rollback is absent, the persisted record has archival_refs=[2]
+        instead of [].
+
+        Uses archival_reason='duplicate' (requires non-empty refs per validation) so
+        that a non-trivial archival_refs=[2] is legitimately set during mutation.
+        A second task (id=2) is created to satisfy the archival-ref-exists check.
+        """
+        view, kanban_dir = _make_view(tmp_path)
+        # Task 1: target (to be rejected to archived)
+        _write_task(kanban_dir, task_id=1, status="in-progress", claimed_at=_LIVE_CLAIM_TS, archival_refs="[]")
+        # Task 2: the duplicate reference required by archival_reason='duplicate'
+        _write_task(kanban_dir, task_id=2, status="done", archival_refs="[]")
+
+        with patch(
+            "owlbear_kanban.engine._move_file",
+            side_effect=OSError("disk full"),
+        ), pytest.raises(OSError):
+            view.end_work(
+                1,
+                outcome="reject",
+                move_to="archived",
+                archival_reason="duplicate",
+                archival_refs=[2],
+                note="Dropping as duplicate.",
+            )
+
+        fresh = KanbanEngine(kanban_dir, activity_log=False)
+        restored = fresh.show_task("1")
+        assert (restored.archival_refs or []) == [], (
+            f"archival_refs must be [] (original) after reject-to-archived rollback;"
+            f" got {restored.archival_refs!r}"
         )
 
 
