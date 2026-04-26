@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from owlbear_cockpit import adapter
 from owlbear_cockpit.deps import get_engine
 from owlbear_cockpit.models import TaskDetailOut
+from owlbear_kanban.errors import ConcurrencyError
 
 if TYPE_CHECKING:
     from owlbear_kanban import KanbanEngine
@@ -30,6 +31,7 @@ class MoveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: str
+    updated: str
 
 
 class EditRequest(BaseModel):
@@ -89,6 +91,12 @@ def move_task(task_id: int, req: MoveRequest, engine: _Engine) -> TaskDetailOut:
             status_code=404, detail=f"Task {task_id} not found"
         ) from None
 
+    if req.updated != str(task.updated):
+        raise HTTPException(
+            status_code=409,
+            detail="Task was modified since your last load (stale snapshot)",
+        )
+
     transitions = adapter.valid_transitions(engine, task.status)
     if req.status not in transitions:
         raise HTTPException(
@@ -96,7 +104,15 @@ def move_task(task_id: int, req: MoveRequest, engine: _Engine) -> TaskDetailOut:
             detail=f"Cannot move from '{task.status}' to '{req.status}'",
         )
 
-    updated_task = engine.move_task(str(task_id), req.status)
+    try:
+        updated_task = engine.move_task(
+            str(task_id), req.status, expected_updated=req.updated
+        )
+    except ConcurrencyError:
+        raise HTTPException(
+            status_code=409,
+            detail="Task was modified since your last load (stale snapshot)",
+        ) from None
     return _task_to_detail(updated_task)
 
 
