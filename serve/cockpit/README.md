@@ -28,7 +28,7 @@ The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goe
 
 | Method | Route | Notes |
 |--------|-------|-------|
-| `engine.show_task()` + `engine.move_task()` | `POST /tasks/{id}/move` | Pre-check read, then `valid_transitions` check, then move |
+| `engine.show_task()` + `engine.move_task()` | `POST /tasks/{id}/move` | OCC token precheck, then `valid_transitions` check, then move with `expected_updated` |
 | `engine.show_task()` + `engine.edit_task()` | `POST /tasks/{id}/edit` | Reads current task; diffs tags and deps before writing |
 | `engine.show_task()` + `engine.release_task()` | `POST /tasks/{id}/release` | Existence check then unconditional release |
 

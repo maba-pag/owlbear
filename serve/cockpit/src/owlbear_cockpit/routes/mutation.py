@@ -83,7 +83,7 @@ def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
 
 @router.post("/tasks/{task_id}/move", response_model=TaskDetailOut)
 def move_task(task_id: int, req: MoveRequest, engine: _Engine) -> TaskDetailOut:
-    """Move task to a new status. Validates against valid_transitions."""
+    """Move task to a new status. Validates OCC token then valid_transitions."""
     try:
         task = engine.show_task(str(task_id))
     except FileNotFoundError:
