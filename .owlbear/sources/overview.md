@@ -2,6 +2,13 @@
 
 External repos and resources studied during OwlBear development.
 
+## M3.5 Proposal Round (Task #1148)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Ousterhout "Design It Twice" (A Philosophy of Software Design, Ch.11) | <https://thedeployguy.com/2019-06-16-a-philosophy-of-software-design-summary-part-2-cp10-end/> | Generate ≥2 radically different approaches, comparison reveals priorities | `.owlbear/research/1148-m3-5-proposal-round.md` | 2026-04-27 |
+| mattpocock/skills design-an-interface | <https://github.com/mattpocock/skills/blob/main/design-an-interface/SKILL.md> | Parallel sub-agent design generation with constraint directives | `.owlbear/research/1148-m3-5-proposal-round.md` | 2026-04-27 |
+
 ## Kanban Board GREEN Phase (Task #933)
 
 | Source | URL | What | Where Used | Date |
