@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Arch-Audit Prompt (Task #1150)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| mattpocock/skills improve-codebase-architecture | <https://github.com/mattpocock/skills/blob/main/improve-codebase-architecture/SKILL.md> | Module quality vocabulary and codebase-wide audit approach — inspiration for Depth, Leverage, Locality, Seam, and Deletion Test prompt structure | `share/prompts/arch-audit.prompt.md` | 2026-04-27 |
+
 ## M3.5 Proposal Round (Task #1148)
 
 | Source | URL | What | Where Used | Date |
