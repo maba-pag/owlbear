@@ -393,7 +393,7 @@ class TestFromAC_CockpitViewSweep:
         assert released == []
 
     def test_sweep_return_type_is_list_of_ints(self, tmp_path: Path) -> None:
-        """sweep return type is list[int] — not list[str] or other type."""
+        """sweep return type is list[int] — not list[str] or other type; exact set of two expired IDs."""
         kanban_dir = _make_board(tmp_path)
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
         _write_task(kanban_dir, 1, claimed_at=f'"{expired_ts}"')
@@ -401,6 +401,7 @@ class TestFromAC_CockpitViewSweep:
         cv = _make_cockpit_view(kanban_dir)
         released = cv.sweep()
         assert all(isinstance(x, int) for x in released)
+        assert set(released) == {1, 2}
 
     def test_sweep_returns_exactly_the_expired_task_ids_no_extras_and_no_missing(
         self, tmp_path: Path
