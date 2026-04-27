@@ -42,6 +42,7 @@ AC coverage:
   src-agent    — AgentView mutations emit ActivityEvent.source='agent'
   src-cockpit  — CockpitView mutations emit ActivityEvent.source='cockpit'
   src-engine   — sweep() emits ActivityEvent.source='engine'
+  sweep-cas    — sweep skips stale task on CAS ERR_STALE, no error (AC-NEW-23)
 
 All tests FAIL (RED phase).
 """
@@ -423,6 +424,50 @@ class TestFromAC_CockpitViewSweep:
 
 
 # ---------------------------------------------------------------------------
+# AC: sweep-cas — CockpitView.sweep CAS contract (AC-NEW-23, Brief B §5)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CockpitViewSweepCAS:
+    """AC-NEW-23: sweep per-task release uses write_task_if_unchanged (CAS).
+
+    On ConcurrencyError(ERR_STALE) for any task, sweep skips that task silently —
+    no release in returned list, no exception raised (Brief B §5).
+    """
+
+    def test_sweep_cas_stale_task_skipped_no_error_raised(self, tmp_path: Path) -> None:
+        """AC-NEW-23: sweep skips a task on CAS ERR_STALE and does not raise.
+
+        Setup: one expired-claim task.
+        Mock: write_task_if_unchanged raises ConcurrencyError(ERR_STALE).
+        Assert: task NOT in released list, no exception propagated.
+
+        RED: current sweep calls write_task (plain), so mock never fires →
+             expired task IS released → assertion fails (correct RED behaviour).
+        GREEN: sweep calls write_task_if_unchanged → mock fires → task skipped
+               → released == [] → assertion passes.
+        """
+        from unittest.mock import patch
+
+        kanban_dir = _make_board(tmp_path)
+        expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
+        _write_task(kanban_dir, 1, claimed_at=f'"{expired_ts}"')
+        cv = _make_cockpit_view(kanban_dir)
+
+        stale_error = ConcurrencyError("ERR_STALE", "Task modified concurrently")
+        with patch(
+            "owlbear_kanban.storage.write_task_if_unchanged",
+            side_effect=stale_error,
+        ):
+            released = cv.sweep()  # must NOT raise even when CAS signals ERR_STALE
+
+        assert 1 not in released, (
+            "AC-NEW-23: sweep must skip the task that triggers ERR_STALE from CAS. "
+            "Brief B §5: per-task CAS, skip on ERR_STALE."
+        )
+
+
+# ---------------------------------------------------------------------------
 # AC: act-all, act-task-id, act-action, act-source, act-since, act-until,
 #     act-empty — CockpitView.list_activity
 # ---------------------------------------------------------------------------
@@ -496,6 +541,7 @@ class TestFromAC_CockpitViewListActivity:
         # since=12h must return only the task2 events (start_work, release).
         _, cv = self._board_with_events(tmp_path)
         events = cv.list_activity(since="2026-01-01T12:00:00+00:00")
+        assert len(events) == 2, "since filter must return exactly 2 events (task2 start_work and release)"
         task_ids = {e.task_id for e in events}
         actions = {e.action for e in events}
         assert task_ids == {2}, "since filter must exclude task1 events (before window)"
@@ -518,6 +564,7 @@ class TestFromAC_CockpitViewListActivity:
         # until=11h must return only the task1 events (start_work, end_work).
         _, cv = self._board_with_events(tmp_path)
         events = cv.list_activity(until="2026-01-01T11:00:00+00:00")
+        assert len(events) == 2, "until filter must return exactly 2 events (task1 start_work and end_work)"
         task_ids = {e.task_id for e in events}
         actions = {e.action for e in events}
         assert task_ids == {1}, "until filter must exclude task2 events (after window)"
