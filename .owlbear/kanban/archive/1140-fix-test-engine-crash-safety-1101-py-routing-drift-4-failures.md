@@ -1,10 +1,10 @@
 ---
 id: 1140
 title: Fix test_engine_crash_safety_1101.py routing drift — 4 failures
-status: done
+status: archived
 priority: needed
 created: 2026-04-26T16:56:45.310009+00:00
-updated: 2026-04-27T04:26:26.900783+00:00
+updated: 2026-04-27T04:32:18.411411+00:00
 tags:
 - scope:kanban,phase:engine,tdd:fix
 - test
@@ -12,8 +12,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: sharp-hive
-claimed_at: 2026-04-27T04:26:26.900783+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -307,3 +307,43 @@ See `.owlbear/research/1140-crash-safety-suite-drift.md` §3. Low effort — sin
 
 ### Scratch Files Cleaned
 - None (no `1140-*` scratch files found)
+[[2026-04-27]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `_CONFIG_YAML` fixture updated to current BoardConfig schema (7 statuses, agent_map, entry_status, terminal_status, next_id: 1001) | File lines 23-55: all 7 statuses present, full agent_map (research→auditor), entry_status: research, terminal_status: done, next_id: 1001 | PASS |
+| All 4 tests pass green | Scoped pytest: 4 passed, 0 failed, 0 skipped | PASS |
+| Stale RED-phase language removed from docstrings and assertion messages | Zero-match grep for `Currently FAILS\|refactor required\|Current engine allocates IDs inline\|fails in RED\|Refactor not yet applied\|even without the refactor` | PASS |
+| No regressions in the file | 4/4 green on scoped run | PASS |
+| ruff clean | Reviewer scoped lint clean; full-suite lint violations in unrelated packages only | PASS |
+
+### Test Results
+- pytest (scoped): 4 passed, 0 failed
+- pytest (full suite): 2304 passed, 174 failed, 172 errors — all failures are pre-existing `ConfigError: agent_map missing status entries` across 15+ other test files (same legacy fixture problem this task fixed for its own file). Not caused by this task.
+- ruff (full suite): 8 violations in unrelated packages (knowledge, mcp-knowledge, mcp-memory, orchestrator). 0 in task scope.
+
+### Architect Quality: 4/5
+Initially vague AC ("updated for current routing") — refined to explicit fixture schema requirements and stale-language cleanup after challenger feedback (0.67, reconsider). Final AC was specific and verifiable. Minor initial gap corrected through the challenge process.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 5 verified) → no deduction
+- Lint violations in task scope: 0 → no deduction
+- AC quality score 4/5 (> 3) → no deduction
+- Reviewer evidence: present, detailed, two-pass with zero-match sweep → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+
+### Confidence: 0.98
+### Action: archive
+
+### Notes
+- Two builder passes: first fixed fixture schema + partial wording, reviewer caught remaining stale phrases, second pass completed cleanup. Clean recovery.
+- Full-suite ConfigError cascade is pre-existing tech debt — identical root cause to what this task fixed for its own file. Informational only.
+- Commits verified: `96db667a` (fixture + partial wording), `ef9fc0f3` (remaining wording cleanup). Both properly formatted with `#1140` reference.
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 96db667a | test | serve/kanban/tests/test_engine_crash_safety_1101.py | #1140 |
+| ef9fc0f3 | test | serve/kanban/tests/test_engine_crash_safety_1101.py | #1140 |
+| 93c331d7 | chore | .owlbear/kanban/tasks/1140-*.md | #1140 |

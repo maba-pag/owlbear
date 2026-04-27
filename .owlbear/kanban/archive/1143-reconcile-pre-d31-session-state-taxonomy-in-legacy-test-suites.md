@@ -1,10 +1,10 @@
 ---
 id: 1143
 title: Reconcile pre-D31 session-state taxonomy in legacy test suites
-status: done
+status: archived
 priority: important
 created: 2026-04-27T09:14:24.436648+00:00
-updated: 2026-04-27T11:13:02.623858+00:00
+updated: 2026-04-27T11:18:42.407152+00:00
 tags:
 - phase:engine
 - scope:kanban
@@ -13,8 +13,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: rare-mist
-claimed_at: 2026-04-27T11:13:02.623858+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -211,3 +211,43 @@ Original AC covered 6 state assertion lines. Research identified AC gap: actual 
 
 ### Scratch Files Cleaned
 - None (no `1143-*` scratch files found)
+[[2026-04-27]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `completed-pass` → `completed` | test_list_sessions.py:191, :724; test_list_sessions_952.py:234 — exact `== "completed"` | PASS |
+| `completed-fail` → `blocked` | test_list_sessions.py:213, :237, :725 — exact `== "blocked"` | PASS |
+| `completed-rejected` → `rejected` | test_list_sessions.py:261; test_list_sessions_952.py:266 — exact `== "rejected"` | PASS |
+| Outcome labels → classified | test_list_sessions.py:1201 `success`, :1222 `fail`, :1243 `release` | PASS |
+| Negative checks → `!= "blocked"` | test_list_sessions_952.py:249, :281 | PASS |
+| Prose updated to D31 labels | Reviewer static search: no stale `completed-pass|completed-fail|completed-rejected` matches | PASS |
+| `failed-or-rejected` alias preserved | test_list_sessions.py:487, :509 filter values intact; engine.py:338 | PASS |
+| Method rename optional | Names unchanged, AC permits | PASS |
+| Both legacy suites pass | quality-runner full run: 0 failures in task files | PASS |
+| No regressions in related suites | quality-runner full run: 0 failures in test_engine_activity.py, test_engine_cockpit_view_1078.py | PASS |
+
+### Test Results
+- pytest (full suite): 2619 passed, 120 failed, 4 skipped — all 120 failures in unrelated suites (corruption, storage_io, mcp-knowledge, cockpit_react_compiler, etc.)
+- ruff (full workspace): 8 violations — all in unrelated files (knowledge, mcp-knowledge, mcp-memory, orchestrator)
+- Task scope: 0 failures, 0 lint violations
+
+### Architect Quality: 5/5
+Specific, complete, clean implementation path. AC covered full 10-assertion scope with explicit line references, outcome mapping table, scope boundaries, and `failed-or-rejected` exclusion. Research-grounded with 6 sources studied.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines with no specific evidence: 0 (all 10 verified) → 0
+- Lint violations in task scope: 0 → 0
+- AC quality ≤ 3: no (5/5) → 0
+- Missing reviewer evidence: no (detailed PASS at .92) → 0
+- Full-suite failures in task scope: 0 → 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 8c20bfb1 | test | test_list_sessions.py, test_list_sessions_952.py | #1143 |
+| d267bdff | chore | kanban task file | #1143 |
