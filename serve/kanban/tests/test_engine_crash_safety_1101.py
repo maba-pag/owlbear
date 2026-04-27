@@ -222,7 +222,7 @@ class TestFromAC_EngineCrashSafety:
         ) as spy:
             task = engine.create_task("regression-task")
 
-        # --- Basic contract --- (these assertions pass even without the refactor)
+        # --- Basic contract --- (core create_task behavior remains stable)
         assert task.id == 1001
         assert task.title == "regression-task"
 
@@ -234,8 +234,8 @@ class TestFromAC_EngineCrashSafety:
             f"config.next_id must be 1002 after create_task; got {config_after.next_id}"
         )
 
-        # --- Routing assertion (fails in RED) ---
+        # --- Routing assertion ---
         assert spy.call_count == 1, (
             f"AC-3 regression: create_task must route through allocate_next_id "
-            f"(call_count=1), got {spy.call_count}. Refactor not yet applied."
+            f"(call_count=1), got {spy.call_count}."
         )
