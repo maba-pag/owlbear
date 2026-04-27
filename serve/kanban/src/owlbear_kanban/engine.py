@@ -1525,7 +1525,7 @@ class KanbanEngine:
     # Maintenance
     # ------------------------------------------------------------------
 
-    def sweep(self) -> list[int]:
+    def sweep(self) -> list[int]:  # noqa: C901
         """Release expired claims and return list of released task IDs.
 
         Only handles ``claimed_at``-based timeouts (Brief C §1.5, AC-C23).
@@ -1562,7 +1562,16 @@ class KanbanEngine:
                     # Clear claimed_at and update timestamp
                     record.claimed_at = None
                     record.updated = datetime.now(tz=UTC).isoformat()
-                    write_task(record, self._kanban_dir)
+                    try:
+                        storage.write_task_if_unchanged(
+                            record,
+                            original.updated,
+                            self._kanban_dir,
+                        )
+                    except ConcurrencyError as exc:
+                        if exc.code == "ERR_STALE":
+                            continue
+                        raise
                     try:
                         self._emit_event(
                             "sweep-release", record.id, "expired claim released"
@@ -3144,6 +3153,7 @@ class CockpitView:
         task_id: int,
         *,
         expected_updated: str,
+        title: str | None = None,
         body: str = "",
         append_body: str = "",
         timestamp: bool = False,
@@ -3162,6 +3172,8 @@ class CockpitView:
             "expected_updated": expected_updated,
             "source": "cockpit",
         }
+        if title is not None:
+            kwargs["title"] = title
         if body:
             kwargs["body"] = body
         if append_body:
