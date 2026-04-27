@@ -1114,3 +1114,22 @@ class TestFromAC_ActivityEventSource:
         events = list_activity_events(kanban_dir, action="move", task_id=1)
         assert len(events) == 1
         assert events[0].source == "agent"
+
+    def test_agent_view_end_work_emits_source_agent(self, tmp_path: Path) -> None:
+        """AgentView.end_work emits ActivityEvent with source='agent'.
+
+        KanbanEngine.end_work calls _emit_event without source='agent', so the
+        emitted event currently has source='engine' — this test FAILS (RED).
+        The GREEN builder must thread source='agent' through the delegation.
+        """
+        from owlbear_kanban.activity_store import list_activity_events
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        engine = KanbanEngine(kanban_dir)
+        av = engine.agent_view()
+        av.start_work(1)
+        av.end_work(1, outcome="success", note="test")
+        events = list_activity_events(kanban_dir, action="end_work", task_id=1)
+        assert len(events) == 1
+        assert events[0].source == "agent"
