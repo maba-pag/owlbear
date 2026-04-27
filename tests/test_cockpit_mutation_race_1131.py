@@ -137,20 +137,21 @@ _TASK_DETAIL_KEYS = frozenset({
 
 
 # ---------------------------------------------------------------------------
-# AC1 — Edit TOCTOU: engine.edit_task never receives expected_updated
+# AC1 / AC4 — Edit CAS engagement: engine.edit_task receives expected_updated
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_EditTOCTOU:
-    """AC1: Edit route precheck-only TOCTOU — engine CAS never engaged (gap G1)."""
+    """AC1 (updated for #1134 AC4): Edit route CAS engaged — expected_updated forwarded."""
 
-    def test_edit_route_does_not_pass_expected_updated_to_engine(
+    def test_edit_route_passes_expected_updated_to_engine(
         self, client, engine: KanbanEngine
     ) -> None:
-        """Wraps engine.edit_task to inspect kwargs; expected_updated must be absent.
+        """Wraps engine.edit_task to inspect kwargs; expected_updated must be present.
 
-        Proves the route performs only a precheck (req.updated != str(task.updated))
-        and never forwards expected_updated to the engine's CAS mechanism.
+        Updated for #1134 AC4: inverts the original gap proof.  The route must now
+        forward expected_updated=req.updated to engine.edit_task, engaging the
+        engine's CAS mechanism (not just the route-level precheck).
         """
         task = engine.show_task("1")
         with mock.patch.object(engine, "edit_task", wraps=engine.edit_task) as mocked:
@@ -161,8 +162,8 @@ class TestFromAC_EditTOCTOU:
         assert response.status_code == 200
         assert mocked.called, "engine.edit_task must have been called"
         call_kwargs = mocked.call_args.kwargs
-        assert "expected_updated" not in call_kwargs, (
-            "Edit route must not pass expected_updated to engine (gap G1 — precheck only)"
+        assert "expected_updated" in call_kwargs, (
+            "Edit route must pass expected_updated to engine (AC1/#1134 — CAS engaged)"
         )
 
 
