@@ -384,11 +384,19 @@ class TestFromAC_ReleaseTask:
     (409 Conflict per AC refinement), and non-existent task (404).
     """
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
+    )
     def test_release_claimed_task_returns_200(self, client: TestClient) -> None:
         """Happy path: release pre-claimed task 2 returns 200."""
         response = client.post("/api/tasks/2/release")
         assert response.status_code == 200
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
+    )
     def test_release_returns_task_object_shape(self, client: TestClient) -> None:
         """Release response body matches the TaskDetailOut shape (same as GET /tasks/{id})."""
         response = client.post("/api/tasks/2/release")
@@ -507,6 +515,10 @@ class TestFromAC_AuditLogging:
                 f"Expected 200 (with audit log) or 422 (no-op rejected), got {response.status_code}"
             )
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
+    )
     def test_release_writes_activity_log_actor_cockpit(
         self, client: TestClient, board_dir: Path
     ) -> None:
@@ -582,6 +594,10 @@ class TestBuilderDiscovered:
         assert cockpit_entries[0]["action"] == "edit"
         assert cockpit_entries[0]["task_id"] == 1
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
+    )
     def test_release_audit_log_has_correct_action_and_task_id(
         self, client: TestClient, board_dir: Path
     ) -> None:

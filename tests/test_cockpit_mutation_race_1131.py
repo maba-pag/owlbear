@@ -14,7 +14,7 @@ These tests document CURRENT (broken) behavior in the cockpit mutation HTTP rout
     route always returns 409 on new-schema boards regardless of actual claim state.
 
 Tests pass against current code without production changes.  Follow-up fix tasks
-#1134 (edit CAS fix), #1135 (move re-evaluation), #1136 (release ownership check).
+#1134 (edit CAS fix), #1133 (release engine CAS), #1132 (route wiring through CockpitView).
 
 AC coverage:
   - AC1: engine.edit_task never receives expected_updated kwarg (gap G1)
