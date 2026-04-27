@@ -283,7 +283,7 @@ class TestFromAC_CockpitViewReleaseTask:
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, claimed_at='"2026-01-01T09:00:00+00:00"')
         cv = _make_cockpit_view(kanban_dir)
-        result = cv.release_task(1)
+        result = cv.release_task(1, expected_updated="2026-01-01T10:00:00+00:00")
         assert isinstance(result, SingleTaskResponse)
         assert result.claimed_at is None
 
@@ -295,7 +295,7 @@ class TestFromAC_CockpitViewReleaseTask:
         original_updated = "2026-01-01T10:00:00+00:00"
         _write_task(kanban_dir, 1, updated=original_updated, claimed_at="null")
         cv = _make_cockpit_view(kanban_dir)
-        result = cv.release_task(1)
+        result = cv.release_task(1, expected_updated=original_updated)
         assert isinstance(result, SingleTaskResponse)
         # updated must NOT be advanced — no mutation occurred
         assert result.updated == original_updated
@@ -305,7 +305,7 @@ class TestFromAC_CockpitViewReleaseTask:
         kanban_dir = _make_board(tmp_path)
         cv = _make_cockpit_view(kanban_dir)
         with pytest.raises(NotFoundError) as exc_info:
-            cv.release_task(999)
+            cv.release_task(999, expected_updated="2026-01-01T10:00:00+00:00")
         assert exc_info.value.code == "ERR_NOT_FOUND"
 
     def test_release_task_unclaimed_returns_single_task_response(
@@ -315,8 +315,19 @@ class TestFromAC_CockpitViewReleaseTask:
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, claimed_at="null")
         cv = _make_cockpit_view(kanban_dir)
-        result = cv.release_task(1)
+        result = cv.release_task(1, expected_updated="2026-01-01T10:00:00+00:00")
         assert isinstance(result, SingleTaskResponse)
+
+    def test_release_task_stale_expected_updated_raises_concurrency_error(
+        self, tmp_path: Path
+    ) -> None:
+        """release_task with a stale expected_updated raises ConcurrencyError(ERR_STALE)."""
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00", claimed_at="null")
+        cv = _make_cockpit_view(kanban_dir)
+        with pytest.raises(ConcurrencyError) as exc_info:
+            cv.release_task(1, expected_updated="2025-01-01T00:00:00+00:00")  # stale token
+        assert exc_info.value.code == "ERR_STALE"
 
 
 # ---------------------------------------------------------------------------
@@ -931,7 +942,7 @@ class TestFromAC_ActivityEventSource:
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, 1, claimed_at='"2026-01-01T09:00:00+00:00"')
         cv = _make_cockpit_view(kanban_dir)
-        cv.release_task(1)
+        cv.release_task(1, expected_updated="2026-01-01T10:00:00+00:00")
         events = list_activity_events(kanban_dir, action="release", task_id=1)
         assert len(events) == 1
         assert events[0].source == "cockpit"
