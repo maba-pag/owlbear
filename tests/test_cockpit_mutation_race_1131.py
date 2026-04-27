@@ -229,6 +229,11 @@ class TestFromAC_ReleaseGuardBroken:
         """
         # Write claimed_at to disk via engine
         engine.claim_task("1")
+        # Precondition: prove the task is genuinely claimed on disk before the POST
+        claimed_task = engine.show_task("1")
+        assert claimed_task.claimed_at is not None, (
+            "Precondition: engine.claim_task must have written claimed_at to disk"
+        )
 
         # Release route reads claimed_by (always None) → guard fires → 409
         response = client.post("/api/tasks/1/release")
