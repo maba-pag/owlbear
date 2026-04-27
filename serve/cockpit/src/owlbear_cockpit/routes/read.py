@@ -29,6 +29,27 @@ class CockpitListTasksResponse(ListTasksResponse):
     mtime: int
 
 
+def _filter_cached_tasks(
+    tasks: list,
+    *,
+    status: str,
+    priority: str,
+    tag: str,
+    blocked: bool | None,
+) -> list:
+    """Apply the subset of list filters supported on the cache-hit path."""
+    filtered = tasks
+    if status:
+        filtered = [task for task in filtered if task.status == status]
+    if priority:
+        filtered = [task for task in filtered if task.priority == priority]
+    if tag:
+        filtered = [task for task in filtered if tag in task.tags]
+    if blocked is not None:
+        filtered = [task for task in filtered if task.blocked is blocked]
+    return filtered
+
+
 @router.get("/board", response_model=BoardOut)
 def get_board(engine: _Engine) -> BoardOut:
     """Return board config: statuses, priorities, and valid_transitions map."""
@@ -54,15 +75,38 @@ def list_tasks(  # noqa: PLR0913
     blocked: bool | None = None,  # noqa: FBT001
 ) -> CockpitListTasksResponse:
     """Return canonical list-tasks envelope for cockpit clients."""
-    envelope = view.list_tasks(
+    mtime = cache.scan()
+
+    if cache.has_changed() or not cache.tasks:
+        envelope = view.list_tasks()
+        cache.tasks = envelope.tasks
+        tasks = _filter_cached_tasks(
+            cache.tasks,
+            status=status,
+            priority=priority,
+            tag=tag,
+            blocked=blocked,
+        )
+        return CockpitListTasksResponse(
+            tasks=tasks,
+            guidance=envelope.guidance,
+            missing_ids=envelope.missing_ids,
+            mtime=mtime,
+        )
+
+    tasks = _filter_cached_tasks(
+        cache.tasks,
         status=status,
         priority=priority,
         tag=tag,
         blocked=blocked,
     )
-    payload = envelope.model_dump()
-    payload["mtime"] = cache.scan()
-    return CockpitListTasksResponse.model_validate(payload)
+    return CockpitListTasksResponse(
+        tasks=tasks,
+        guidance=[],
+        missing_ids=None,
+        mtime=mtime,
+    )
 
 
 @router.get("/tasks/{task_id}", response_model=ShowTaskResponse)
