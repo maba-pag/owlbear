@@ -1,10 +1,10 @@
 ---
 id: 1140
 title: Fix test_engine_crash_safety_1101.py routing drift — 4 failures
-status: review
+status: done
 priority: needed
 created: 2026-04-26T16:56:45.310009+00:00
-updated: 2026-04-27T03:32:53.841742+00:00
+updated: 2026-04-27T04:26:26.900783+00:00
 tags:
 - scope:kanban,phase:engine,tdd:fix
 - test
@@ -12,8 +12,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: sharp-hive
+claimed_at: 2026-04-27T04:26:26.900783+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -201,3 +201,109 @@ See `.owlbear/research/1140-crash-safety-suite-drift.md` §3. Low effort — sin
 - Workaround applied: cleared stale pytest processes and reran quality-runner for clean evidence.
 - Pattern discovered: review-only wording AC can false-green in runtime tests; direct string inspection is required.
 - Quality gap: scoped runtime gates do not automatically validate textual cleanup ACs.
+[[2026-04-27]]
+## Review Evidence
+### Test Results
+- quality-runner scoped run: 4 passed, 0 failed, 0 skipped for [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py).
+
+### Lint
+- quality-runner scoped lint: clean for [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py).
+
+### Coverage
+- quality-runner scoped coverage: overall 22%; [owlbear_kanban.engine](serve/kanban/src/owlbear_kanban/engine.py) 14%.
+- Coverage note: this remains informational because the reviewed change is test-only in [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py); no production-file edit evidence was present in the task body or latest builder notes.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test / Check | Would Fail If AC Violated? | Verdict |
+|---------|---------------------|----------------------------|---------|
+| `_CONFIG_YAML` fixture updated to current `BoardConfig` schema, including all 7 statuses, `entry_status`, `terminal_status`, full `agent_map`, and `next_id: 1001` | Live fixture inspection at [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L23), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L38), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L41), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L55), plus green pytest on the file | Yes. Missing schema fields would fail engine init before the test assertions ran. | COVERED |
+| All 4 named tests pass green | quality-runner scoped pytest: `test_ac1_crash_after_id_allocation_burns_id`, `test_ac2_config_saved_before_write_task_executes`, `test_ac2_create_task_routes_through_allocate_next_id`, and `test_ac3_create_task_contract_preserved_with_new_routing` all passed | Yes. Any regression in those protected behaviors would fail the scoped run. | COVERED |
+| Stale RED-phase language removed from module docstring, per-test docstrings, and assertion failure messages | Live file inspection at [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L1), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L77), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L210), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L239), plus a targeted zero-match sweep for `Currently FAILS|refactor required|Current engine allocates IDs inline|fails in RED|Refactor not yet applied|even without the refactor` in [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py) | Yes. The direct file read and zero-match string sweep would fail this AC immediately if stale wording remained. | COVERED |
+| No regressions in the file | quality-runner scoped pytest is green across all four task-owned tests in [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L84), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L144), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L180), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L207) | Yes for the task-owned crash-safety and routing behaviors under review. | COVERED |
+| ruff clean | quality-runner scoped lint on [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py) | Yes. Any lint error in the file would fail the scoped lint run. | COVERED |
+
+#### Security Review
+- No issues found. The reviewed file is a local test-only fixture and tmp-path board setup in [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L23) and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L62) with no shell, SQL, template, eval, or deserialization surface.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `TestFromAC_EngineCrashSafety` task-owned assertions | Current snapshot still uses exact OSError matching, exact `next_id` assertions, exact empty burned-file checks, exact `len(task_files) == 1`, and exact `spy.call_count == 1` assertions at [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L112), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L119), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L127), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L169), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L196), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L239) | PRESERVED |
+
+#### Test Quality
+- Assertion specificity: STRONG. Assertions are exact-value and mutation-sensitive throughout [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L119), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L127), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L169), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L196), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L239).
+- Negative and error-path coverage: STRONG. AC-1 directly forces and verifies the write-time OSError path at [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L112).
+- Manual mutation reasoning: ADEQUATE. Reordering persistence or bypassing `allocate_next_id` would be caught by the persisted `next_id` and routing assertions in [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L119), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L169), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L196), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L239).
+- Test independence: STRONG. Each test uses a fresh tmp-path board via [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L62).
+- Descriptive names: STRONG. The four test names remain AC-specific at [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L84), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L144), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L180), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L207).
+- No WEAK ratings found.
+
+#### Data Safety
+- No issues found. All filesystem activity is confined to per-test temporary directories in [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L62).
+
+#### Implementation-Aware Gaps
+- No significant untested path found within task scope. The file exercises the crash path, write-time ordering, allocate-next-id routing, and post-refactor regression contract in the four task-owned tests.
+
+#### Necessity Check
+- Not applicable. No dependency, integration, tool, or external capability was added.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Prior `## Review Evidence` sections before this review | 1 |
+| `## Builder Notes` sections | 2 |
+| Approach variation | Yes |
+| Assessment | CLEAN |
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `_CONFIG_YAML` matches current `BoardConfig` schema and preserves `next_id: 1001` | Live fixture contains all seven statuses, `entry_status`, `terminal_status`, full `agent_map`, and `next_id: 1001` at [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L23), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L38), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L41), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L55) | The four task-owned crash-safety tests | PASS |
+| All 4 named tests pass green | quality-runner scoped run reported 4 passed, 0 failed, 0 skipped for [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py) | `test_ac1_crash_after_id_allocation_burns_id`, `test_ac2_config_saved_before_write_task_executes`, `test_ac2_create_task_routes_through_allocate_next_id`, `test_ac3_create_task_contract_preserved_with_new_routing` | PASS |
+| Stale RED-phase language removed from module/per-test docstrings and assertion messages | Current wording is aligned in the module header and AC-3 block at [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L1), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L77), [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L210), and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L239); targeted grep found no matches for the stale phrases from the prior fail in [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py) | Review-only direct inspection | PASS |
+| No regressions in the file | The scoped pytest run is green across the full task-owned file, and the exact-value assertions remain intact in the AC-1 through AC-3 tests | Same four tests | PASS |
+| ruff clean | quality-runner scoped lint reported clean for [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py) | N/A | PASS |
+
+### Pass 2 - INFORMATIONAL
+- Coverage remains low at the package/module level because the task is a narrow test-maintenance fix. No production edit evidence means this does not block the gate.
+- The routing proofs patch [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L191) and [serve/kanban/tests/test_engine_crash_safety_1101.py](serve/kanban/tests/test_engine_crash_safety_1101.py#L220), which is mildly brittle to import-style refactors but not a false-green in the current snapshot.
+
+### Deductions
+- None.
+
+### Verdict
+- Confidence: 0.97
+- PASS
+- Action: Advance to `docs`.
+
+### Post-task Reflection
+- Pattern confirmed: review-only wording ACs can false-green unless the reviewer reads the artifact directly in addition to running scoped pytest and lint.
+- Workaround applied: paired the quality-runner report with a targeted zero-match sweep for the exact stale phrases from the prior fail.
+- Quality note: this task recovered cleanly on the second builder pass without weakening any task-owned assertions.
+[[2026-04-27]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Test-only fix; no behavior/API/config change. No IN-scope prose docs (README, etc.) reference this test file. |
+| 2 | Module docstrings | Yes | Verified | Builder removed all stale RED-phase language from test docstrings and assertion messages per AC. Reviewer confirmed with zero-match sweep for stale phrases in second review pass (AC compliance PASS). No further update needed. |
+| 3 | External attribution | No | N/A | Research used codebase-only sources (5 studied, all codebase); no external patterns. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1140-crash-safety-suite-drift.md` exists (file_search confirmed). Linked from task body. Follow-up tasks: none (task correctly scoped). |
+| 5 | Diagram maintenance (describes match) | No | N/A | doc-index describes entry `serve/kanban/src/**, serve/mcp-kanban/src/**, .owlbear/kanban/**` does not match `serve/kanban/tests/**`. No diagram describes-match found. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. Builder modified only `serve/kanban/tests/test_engine_crash_safety_1101.py`. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/kanban/tests/test_engine_crash_safety_1101.py | IN (docstrings) | Verified — already updated by builder, confirmed by reviewer |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1140-*` scratch files found)
