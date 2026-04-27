@@ -52,6 +52,8 @@ Return one structured table row per package with exactly these columns:
 | Package | Depth (deep/shallow) | Leverage (caller count) | Locality (self-contained/leaky) | Seam status (real/hypothetical/none) | Deletion Test result (earning-keep/pass-through/candidate-for-removal) | Evidence | Recommendation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 
+Within `Evidence`, explicitly include the dependency classification label (`in-process`, `local-substitutable`, `remote-but-owned`, or `true-external`) and the concrete caller/dependency proof supporting that label.
+
 After the table, add a short summary:
 
 - Top 3 candidates for deepening or consolidation
