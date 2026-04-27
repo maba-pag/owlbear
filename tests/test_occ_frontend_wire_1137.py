@@ -5,7 +5,7 @@ RED phase — all tests must fail until implementation in GREEN.
 AC coverage:
   - AC0: TaskSummary (kanban models.py) includes ``updated: str`` field;
          docstring no longer claims it excludes ``updated``
-  - AC1: TaskSummaryOut (cockpit models.py) includes ``updated: str`` field
+    - AC1: Cockpit task responses include ``updated: str`` field
   - AC2: GET /api/tasks response includes ``updated`` (ISO string) for each task
   - AC3: Task interface in useBoard.ts includes ``updated: string``
   - AC4: handleTransitionClick in KanbanBoard.tsx includes ``updated`` in POST body

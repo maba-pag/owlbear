@@ -495,7 +495,7 @@ class TestFromAC_MtimeCache:
 
 
 # ---------------------------------------------------------------------------
-# AC: block_reason and claimed fields on TaskSummaryOut (#954)
+# AC: block_reason and claimed fields on task summaries (#954)
 # ---------------------------------------------------------------------------
 
 
@@ -503,8 +503,8 @@ class TestFromAC_TaskSummaryFields:
     """Tests that GET /api/tasks exposes block_reason and claimed per task.
 
     Covers:
-    - TaskSummaryOut includes block_reason: str | None = None  (AC#1)
-    - TaskSummaryOut includes claimed: bool = False            (AC#1)
+    - Task summary response includes block_reason: str | None = None  (AC#1)
+    - Task summary response includes claimed: bool = False            (AC#1)
     - Adapter maps block_reason and claimed from engine TaskSummary (AC#2)
     - GET /api/tasks response includes both fields per task     (AC#4)
     - Correct values: block_reason for blocked task, claimed for claimed task (AC arch-review)
@@ -584,7 +584,7 @@ class TestFromAC_TaskSummaryFields:
 
 
 # ---------------------------------------------------------------------------
-# AC: claimed and claimed_by fields on TaskDetailOut (#972)
+# AC: claimed and claimed_by fields on task detail response (#972)
 # ---------------------------------------------------------------------------
 
 
@@ -592,7 +592,7 @@ class TestFromAC_TaskDetailClaimedFields:
     """Tests for claimed-field behavior on the GET /api/tasks/{id} response.
 
     Covers:
-    - TaskDetailOut includes claimed: bool = False            (AC#1)
+    - Task detail response includes claimed: bool = False     (AC#1)
     - GET /api/tasks/{id} excludes claimed_by per Brief B D11
     - Unclaimed task (task 1): claimed=False
     - Claimed task (task 4): claimed=True
