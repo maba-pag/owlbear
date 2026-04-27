@@ -881,12 +881,20 @@ class TestFromAC_CockpitViewRepairStorage:
 
     def test_repair_storage_phase1_quarantines_corrupt_file(self, tmp_path: Path) -> None:
         """repair_storage phase-1 calls scan_and_fix → quarantines corrupt files."""
+        from unittest.mock import patch
+
+        from owlbear_kanban.corruption import scan_and_fix as real_scan_and_fix
+
         kanban_dir = _make_board(tmp_path)
         (kanban_dir / "tasks" / "99-corrupt.md").write_text(
             "no yaml here", encoding="utf-8"
         )
         cv = _make_cockpit_view(kanban_dir)
-        outcomes = cv.repair_storage()
+        with patch("owlbear_kanban.corruption.scan_and_fix", wraps=real_scan_and_fix) as mock_sf:
+            outcomes = cv.repair_storage()
+        mock_sf.assert_called_once()
+        call_args = mock_sf.call_args
+        assert call_args[0][0] == kanban_dir
         quarantined = [o for o in outcomes if o.action == "quarantined"]
         assert len(quarantined) >= 1
 
