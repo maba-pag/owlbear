@@ -21,6 +21,7 @@ class MtimeScanCache:
         self._tasks_dir = tasks_dir
         self._last_mtime: int = -1  # -1 = never scanned
         self._cached_tasks: list[Any] = []
+        self._has_cached_tasks = False
 
     def scan(self) -> int:
         """Return max ``st_mtime_ns`` across all files in the directory.
@@ -60,3 +61,9 @@ class MtimeScanCache:
     @tasks.setter
     def tasks(self, value: list[Any]) -> None:
         self._cached_tasks = value
+        self._has_cached_tasks = True
+
+    @property
+    def has_cached_tasks(self) -> bool:
+        """Return whether tasks have been cached at least once."""
+        return self._has_cached_tasks

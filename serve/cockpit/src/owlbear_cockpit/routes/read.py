@@ -77,7 +77,7 @@ def list_tasks(  # noqa: PLR0913
     """Return canonical list-tasks envelope for cockpit clients."""
     mtime = cache.scan()
 
-    if cache.has_changed() or not cache.tasks:
+    if cache.has_changed() or not cache.has_cached_tasks:
         envelope = view.list_tasks()
         cache.tasks = envelope.tasks
         tasks = _filter_cached_tasks(
