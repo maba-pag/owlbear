@@ -23,6 +23,7 @@ The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goe
 | `board_config()` | Statuses and priorities for column rendering |
 | `valid_transitions(status)` | Validates move targets; also used by `move_task` route |
 | `list_sessions(**kwargs)` | Work session data for the activity tab |
+| `list_activity(**kwargs)` | Activity events for the audit trail tab |
 
 ### Mutation routes
 
@@ -35,6 +36,7 @@ All mutation routes go through the `CockpitView` facade.
 | `view.engine.show_task()` + `view.move_task()` | `POST /tasks/{id}/move` | OCC token precheck, then `valid_transitions` check, then move through CockpitView with `expected_updated`; `ConcurrencyError` → 409 |
 | `view.show_task()` + `view.release_task()` | `POST /tasks/{id}/release` | Claimed check (409 if unclaimed), release through CockpitView with `expected_updated`; `ConcurrencyError` → 409 |
 | `view.show_task()` + `view.edit_task()` | `POST /tasks/{id}/edit` | Pre-fetches task when `tags`, `depends_on`, or `block_reason` is set (for diff and D21 block:user lifecycle); diffs tags/deps, restores block:user; edit with `expected_updated`; `ConcurrencyError` → 409 |
+| `view.sweep()` | `POST /tasks/sweep` | Releases expired claims; returns list of released task IDs |
 
 ### Excluded methods — why
 
@@ -42,7 +44,6 @@ All mutation routes go through the `CockpitView` facade.
 |--------|----------------|
 | `create_task()` | Pipeline agents create tasks, not the UI |
 | `claim_task()` / `start_work()` / `end_work()` | Agent lifecycle operations |
-| `sweep()` | Background maintenance — not user-triggered |
 | `refresh_config()` | Managed internally by the engine |
 
 ## Work Sessions Model
