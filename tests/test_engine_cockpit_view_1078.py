@@ -201,6 +201,18 @@ class TestFromAC_CockpitViewOCC:
             "CockpitView.edit_task must require expected_updated (OCC token)"
         )
 
+    def test_edit_task_expected_updated_is_required_no_default(
+        self, tmp_path: Path
+    ) -> None:
+        """CockpitView.edit_task.expected_updated must be mandatory (no default)."""
+        cv = _make_cockpit_view(_make_board(tmp_path))
+        sig = inspect.signature(cv.edit_task)
+        param = sig.parameters.get("expected_updated")
+        assert param is not None, "expected_updated param missing"
+        assert param.default is inspect.Parameter.empty, (
+            "CockpitView.edit_task.expected_updated must be required (no default)"
+        )
+
     def test_edit_task_stale_expected_updated_raises_concurrency_error(
         self, tmp_path: Path
     ) -> None:
@@ -238,6 +250,18 @@ class TestFromAC_CockpitViewOCC:
         sig = inspect.signature(cv.move_task)
         assert "expected_updated" in sig.parameters, (
             "CockpitView.move_task must require expected_updated (OCC token)"
+        )
+
+    def test_move_task_expected_updated_is_required_no_default(
+        self, tmp_path: Path
+    ) -> None:
+        """CockpitView.move_task.expected_updated must be mandatory (no default)."""
+        cv = _make_cockpit_view(_make_board(tmp_path))
+        sig = inspect.signature(cv.move_task)
+        param = sig.parameters.get("expected_updated")
+        assert param is not None, "expected_updated param missing"
+        assert param.default is inspect.Parameter.empty, (
+            "CockpitView.move_task.expected_updated must be required (no default)"
         )
 
     def test_move_task_stale_expected_updated_raises_concurrency_error(
@@ -463,11 +487,43 @@ class TestFromAC_CockpitViewListActivity:
         events = cv.list_activity(since="2026-01-01T12:00:00+00:00")
         assert len(events) == 2
 
+    def test_list_activity_since_returns_only_events_within_window_exact_identity(
+        self, tmp_path: Path
+    ) -> None:
+        """since filter returns events with exact task_id and action identity, not just count."""
+        # Board has 4 events: task1 start_work@10h, task1 end_work@11h,
+        # task2 start_work@12h, task2 release@13h.
+        # since=12h must return only the task2 events (start_work, release).
+        _, cv = self._board_with_events(tmp_path)
+        events = cv.list_activity(since="2026-01-01T12:00:00+00:00")
+        task_ids = {e.task_id for e in events}
+        actions = {e.action for e in events}
+        assert task_ids == {2}, "since filter must exclude task1 events (before window)"
+        assert actions == {"start_work", "release"}, (
+            "since filter must return exactly task2 start_work and release events"
+        )
+
     def test_list_activity_filter_by_until(self, tmp_path: Path) -> None:
         """list_activity(until=...) returns only events at or before that timestamp."""
         _, cv = self._board_with_events(tmp_path)
         events = cv.list_activity(until="2026-01-01T11:00:00+00:00")
         assert len(events) == 2
+
+    def test_list_activity_until_returns_only_events_within_window_exact_identity(
+        self, tmp_path: Path
+    ) -> None:
+        """until filter returns events with exact task_id and action identity, not just count."""
+        # Board has 4 events: task1 start_work@10h, task1 end_work@11h,
+        # task2 start_work@12h, task2 release@13h.
+        # until=11h must return only the task1 events (start_work, end_work).
+        _, cv = self._board_with_events(tmp_path)
+        events = cv.list_activity(until="2026-01-01T11:00:00+00:00")
+        task_ids = {e.task_id for e in events}
+        actions = {e.action for e in events}
+        assert task_ids == {1}, "until filter must exclude task2 events (after window)"
+        assert actions == {"start_work", "end_work"}, (
+            "until filter must return exactly task1 start_work and end_work events"
+        )
 
     def test_list_activity_on_empty_log_returns_empty_list(self, tmp_path: Path) -> None:
         """list_activity on a board with no activity.jsonl returns []."""
