@@ -91,6 +91,29 @@ def _task_to_single(task: Any) -> SingleTaskResponse:  # noqa: ANN401
     )
 
 
+def _serialize_scan_item(item: Any) -> dict[str, Any]:  # noqa: ANN401
+    """Normalize corruption scan items into JSON-serializable dictionaries."""
+    if isinstance(item, dict):
+        return {
+            "code": item.get("code"),
+            "detail": item.get("detail"),
+            "file_path": item.get("file_path"),
+        }
+
+    file_path = getattr(item, "file_path", None)
+    if file_path is None:
+        path = getattr(item, "path", None)
+        file_path = str(path) if path is not None else None
+
+    detail = getattr(item, "detail", None) or getattr(item, "user_message", None) or str(item)
+
+    return {
+        "code": getattr(item, "code", None),
+        "detail": detail,
+        "file_path": file_path,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -312,7 +335,7 @@ def sweep_tasks(view: _View) -> list[int]:
 @router.post("/tasks/scan", response_model=list[dict[str, Any]])
 def scan_corruption(view: _View) -> list[dict[str, Any]]:
     """Run read-only corruption scan for tasks and archive directories."""
-    return view.scan_corruption()
+    return [_serialize_scan_item(item) for item in view.scan_corruption()]
 
 
 @router.post("/tasks/repair", response_model=list[RepairOutcome])
