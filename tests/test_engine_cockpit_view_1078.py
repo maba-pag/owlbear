@@ -441,30 +441,50 @@ class TestFromAC_CockpitViewSweepCAS:
 
         Setup: one expired-claim task.
         Mock: write_task_if_unchanged raises ConcurrencyError(ERR_STALE).
-        Assert: task NOT in released list, no exception propagated.
+        Asserts (cycle 7 binding directive):
+          1. CAS path exercised: mock called at least once.
+          2. Task NOT in released return list.
+          3. Persisted state: claimed_at still set (no disk mutation occurred).
+          4. Activity log: no sweep-release event emitted for the stale task.
 
         RED: current sweep calls write_task (plain), so mock never fires →
              expired task IS released → assertion fails (correct RED behaviour).
         GREEN: sweep calls write_task_if_unchanged → mock fires → task skipped
-               → released == [] → assertion passes.
+               → released == [] → assertions pass.
         """
         from unittest.mock import patch
 
         kanban_dir = _make_board(tmp_path)
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
-        _write_task(kanban_dir, 1, claimed_at=f'"{expired_ts}"')
+        task_path = _write_task(kanban_dir, 1, claimed_at=f'"{expired_ts}"')
         cv = _make_cockpit_view(kanban_dir)
 
         stale_error = ConcurrencyError("ERR_STALE", "Task modified concurrently")
         with patch(
             "owlbear_kanban.storage.write_task_if_unchanged",
             side_effect=stale_error,
-        ):
+        ) as mock_cas:
             released = cv.sweep()  # must NOT raise even when CAS signals ERR_STALE
 
+        # 1. CAS path was actually exercised (closes mutation gap).
+        mock_cas.assert_called_once()
+
+        # 2. Return-list: stale task not in released IDs.
         assert 1 not in released, (
             "AC-NEW-23: sweep must skip the task that triggers ERR_STALE from CAS. "
             "Brief B §5: per-task CAS, skip on ERR_STALE."
+        )
+
+        # 3. Persisted-state: claimed_at still present on disk (no silent plain write).
+        raw = task_path.read_text(encoding="utf-8")
+        assert "claimed_at: null" not in raw, (
+            "AC-NEW-23: stale-skip must NOT clear claimed_at on disk."
+        )
+
+        # 4. Activity log: no false sweep-release event emitted for the stale task.
+        sweep_events = cv.list_activity(task_id=1, action="sweep-release")
+        assert sweep_events == [], (
+            "AC-NEW-23: stale-skip must NOT emit a sweep-release activity event."
         )
 
 
