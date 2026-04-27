@@ -339,3 +339,101 @@ class TestFromAC_CommentRefs1082Clean:
             "test_cockpit_kanban_routes_1082.py still references 'SessionOut' — "
             "update the stale comment (AC3)"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC3 (Cycle 2): _TASK_DETAIL_KEYS constant in test_cockpit_mutation_race_1131.py
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_TaskDetailKeysConstantFix:
+    """AC3 (Cycle 2): _TASK_DETAIL_KEYS must drop claimed_by and update the '14' count.
+
+    SingleTaskResponse explicitly excludes claimed_by (Field(exclude=True) + pop in
+    owlbear_kanban/models.py).  The frozenset that encodes the expected response keys
+    must reflect the live 13-key contract; the adjacent comment must say '13', not '14'.
+    """
+
+    def test_task_detail_keys_does_not_contain_claimed_by(self) -> None:
+        """_TASK_DETAIL_KEYS frozenset must not include 'claimed_by'."""
+        source = (_TESTS_DIR / "test_cockpit_mutation_race_1131.py").read_text(encoding="utf-8")
+        start = source.find("_TASK_DETAIL_KEYS = frozenset({")
+        assert start != -1, "_TASK_DETAIL_KEYS constant not found in test_cockpit_mutation_race_1131.py"
+        end = source.find("})", start)
+        constant_block = source[start : end + 2]
+        assert '"claimed_by"' not in constant_block, (
+            '_TASK_DETAIL_KEYS still contains "claimed_by" — remove it; '
+            "SingleTaskResponse excludes claimed_by per owlbear_kanban/models.py (AC3)"
+        )
+        assert "'claimed_by'" not in constant_block, (
+            "_TASK_DETAIL_KEYS still contains 'claimed_by' — remove it; "
+            "SingleTaskResponse excludes claimed_by per owlbear_kanban/models.py (AC3)"
+        )
+
+    def test_task_detail_keys_preceding_comment_does_not_reference_14(self) -> None:
+        """The comment immediately before _TASK_DETAIL_KEYS must not say '14'."""
+        source = (_TESTS_DIR / "test_cockpit_mutation_race_1131.py").read_text(encoding="utf-8")
+        idx = source.find("_TASK_DETAIL_KEYS = frozenset")
+        assert idx != -1, "_TASK_DETAIL_KEYS not found in test_cockpit_mutation_race_1131.py"
+        # Walk back one newline to find the preceding line.
+        line_end = idx - 1  # position just before the definition line
+        preceding_line_start = source.rfind("\n", 0, line_end) + 1
+        preceding_line = source[preceding_line_start:line_end]
+        assert "14" not in preceding_line, (
+            f"Comment before _TASK_DETAIL_KEYS still references '14': {preceding_line!r}\n"
+            "— update to '13' (AC3)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3 (Cycle 2): residual 'TaskSummaryOut' in test_occ_frontend_wire_1137.py docstring
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CommentRefs1137DocstringClean:
+    """AC3 (Cycle 2): test_occ_frontend_wire_1137.py module docstring must not name TaskSummaryOut.
+
+    The module docstring's AC1 bullet still references 'TaskSummaryOut (cockpit models.py)'
+    which is a dead model after #1146.  The reference must be removed or reworded.
+    """
+
+    def test_1137_module_docstring_no_task_summary_out(self) -> None:
+        """Module docstring of test_occ_frontend_wire_1137.py must not contain 'TaskSummaryOut'."""
+        source = (_TESTS_DIR / "test_occ_frontend_wire_1137.py").read_text(encoding="utf-8")
+        # Extract the module docstring (everything up to and including the closing triple-quote).
+        doc_end = source.find('"""', 3)
+        module_doc = source[: doc_end + 3]
+        assert "TaskSummaryOut" not in module_doc, (
+            "Module docstring of test_occ_frontend_wire_1137.py still references "
+            "'TaskSummaryOut' — remove or rephrase the AC1 bullet (AC3)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3 (Cycle 2): residual 'TaskSummaryOut' / 'TaskDetailOut' in test_cockpit_read_api.py
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CommentRefsReadApiClean:
+    """AC3 (Cycle 2): test_cockpit_read_api.py must not reference removed model names.
+
+    Section comments and class docstrings at lines ~498, ~506-507, ~587, ~595 still
+    cite 'TaskSummaryOut' and 'TaskDetailOut' as context for existing tests.
+    Those references are stale after model removal and must be updated.
+    """
+
+    def test_read_api_no_task_summary_out_in_comments(self) -> None:
+        """test_cockpit_read_api.py must not reference 'TaskSummaryOut'."""
+        source = (_TESTS_DIR / "test_cockpit_read_api.py").read_text(encoding="utf-8")
+        assert "TaskSummaryOut" not in source, (
+            "test_cockpit_read_api.py still references 'TaskSummaryOut' in comments or "
+            "docstrings — update section headers and class docstrings (AC3)"
+        )
+
+    def test_read_api_no_task_detail_out_in_comments(self) -> None:
+        """test_cockpit_read_api.py must not reference 'TaskDetailOut'."""
+        source = (_TESTS_DIR / "test_cockpit_read_api.py").read_text(encoding="utf-8")
+        assert "TaskDetailOut" not in source, (
+            "test_cockpit_read_api.py still references 'TaskDetailOut' in comments or "
+            "docstrings — update section headers and class docstrings (AC3)"
+        )
