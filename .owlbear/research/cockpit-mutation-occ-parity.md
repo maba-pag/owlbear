@@ -5,7 +5,7 @@
 
 ## 1. Context and Question
 
-The Cockpit HTTP routes (`mutation.py`) bypass the OCC-aware `CockpitView` facade and call raw `KanbanEngine` methods directly. This creates TOCTOU (time-of-check-to-time-of-use) windows where a concurrent writer can modify a task between the route's `show_task` read and its subsequent mutation call. The engine already supports per-task CAS via `expected_updated` + `write_task_if_unchanged`, and `CockpitView` wraps it with required OCC signatures — but the routes don't use either.
+The Cockpit HTTP routes (`mutation.py`) still call raw `KanbanEngine` methods instead of consistently using the OCC-aware `CockpitView` facade. Live code already enforces OCC on `POST /move`, but `POST /edit` still performs a route-level precheck without passing `expected_updated` into the write, and `POST /release` remains last-writer-wins. The engine already supports per-task CAS via `expected_updated` + `write_task_if_unchanged`, and `CockpitView` wraps it with required OCC signatures for move/edit.
 
 **Question:** What is the minimal change to close these TOCTOU windows?
 
@@ -28,7 +28,7 @@ The Cockpit HTTP routes (`mutation.py`) bypass the OCC-aware `CockpitView` facad
 
 | Endpoint | OCC token required? | CAS write? | TOCTOU window? |
 |----------|---------------------|------------|-----------------|
-| `POST /move` | No — `MoveRequest` has no `updated` field | No — calls `engine.move_task()` without `expected_updated` | **Yes** — show → move gap |
+| `POST /move` | Yes — `MoveRequest.updated` is required | Yes — passes `expected_updated` to `engine.move_task()` and maps stale conflicts | No stale-write window (pattern gap only: route bypasses CockpitView) |
 | `POST /edit` | Yes — `EditRequest.updated` is required | **Route-level only** — checks `req.updated != task.updated`, then calls `engine.edit_task()` without `expected_updated` | **Yes** — check-vs-write gap |
 | `POST /release` | No | No — calls `engine.release_task()` (LWW) | **Yes** — show → release gap; fresh claim can be cleared by stale UI |
 
@@ -48,7 +48,7 @@ The Cockpit HTTP routes (`mutation.py`) bypass the OCC-aware `CockpitView` facad
 | Option | Description | Pros | Cons | Complexity |
 |--------|-------------|------|------|------------|
 | **A: Route through CockpitView** | Inject `CockpitView` instead of `KanbanEngine` in routes; map CockpitView exceptions to HTTP | Cleanest separation; CockpitView already tested; single DI change | Requires new DI provider; release still LWW; CockpitView returns `SingleTaskResponse` not `Task` — adapter needs adjustment | Medium |
-| **B: Pass expected_updated directly** | Keep raw engine calls; add `expected_updated` to move/edit routes; catch `ConcurrencyError` → 409 | Minimal diff; no DI change; routes already handle 409 for edit | Duplicates OCC wiring that CockpitView already provides; still no release CAS | Low |
+| **B: Pass expected_updated directly** | Keep raw engine calls; pass `expected_updated` for edit and release routes; catch `ConcurrencyError` → 409 | Minimal diff; no DI change; preserves current move behavior | Duplicates OCC wiring that CockpitView already provides; keeps facade bypass | Low |
 | **C: Add expected_updated to engine.release_task** | Extend engine `release_task` with OCC param + route changes | Full CAS coverage including release | Engine API change; may over-engineer release (claim owner identity check may suffice) | Medium-High |
 
 ### Risk Assessment
@@ -66,10 +66,11 @@ Rationale: `CockpitView` already exists, is tested (#1078), enforces OCC on edit
 
 The route layer changes become:
 1. Replace `get_engine` DI with `get_cockpit_view` (returns `CockpitView(engine)`)
-2. Add `updated` field to `MoveRequest`
+2. Keep move behavior OCC-equivalent while routing through `CockpitView.move_task()` (pattern consistency)
 3. Add `updated` field to a new `ReleaseRequest` body model
-4. Catch `ConcurrencyError` → 409, `NotFoundError` → 404, `ValidationError` → 422
-5. Add `expected_updated` param to `engine.release_task`
+4. Pass `req.updated` through `CockpitView.edit_task(..., expected_updated=...)` and `CockpitView.release_task(..., expected_updated=...)`
+5. Catch `ConcurrencyError` → 409, `NotFoundError` → 404, `ValidationError` → 422
+6. Add `expected_updated` param to `engine.release_task`
 
 Challenge: proceed — confidence in original: 0.82. The CockpitView facade exists specifically for this purpose and is already tested; not using it is the architectural gap.
 

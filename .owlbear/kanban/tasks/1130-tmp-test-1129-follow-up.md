@@ -4,7 +4,7 @@ title: Implement cockpit mutation OCC parity (move/edit/release)
 status: done
 priority: important
 created: 2026-04-26T15:37:49.084530+00:00
-updated: 2026-04-27T03:31:55.312618+00:00
+updated: 2026-04-27T03:47:23.127527+00:00
 tags:
 - cockpit
 - research
@@ -12,8 +12,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: sharp-hive
+claimed_at: 2026-04-27T03:47:23.127527+00:00
 archival_reason:
 archival_refs: []
 ---
