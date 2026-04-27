@@ -295,6 +295,56 @@ class TestFromAC_CockpitViewOCC:
         )
         assert isinstance(result, SingleTaskResponse)
 
+    def test_edit_task_success_path_routes_through_write_task_if_unchanged(
+        self, tmp_path: Path
+    ) -> None:
+        """Refined AC: edit_task success path persists via storage.write_task_if_unchanged.
+
+        Mutation guard: intercepting write_task_if_unchanged with side_effect=ERR_STALE
+        proves the CAS helper is called on the success path. If edit_task used plain
+        write_task instead, the mock would never fire and assert_called_once() would FAIL.
+        """
+        from unittest.mock import patch
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
+        cv = _make_cockpit_view(kanban_dir)
+
+        stale = ConcurrencyError("ERR_STALE", "CAS intercepted by spy")
+        with (
+            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale) as mock_cas,
+            pytest.raises(ConcurrencyError),
+        ):
+            cv.edit_task(
+                1,
+                expected_updated="2026-01-01T10:00:00+00:00",
+                append_body="note",
+            )
+        mock_cas.assert_called_once()
+
+    def test_move_task_success_path_routes_through_write_task_if_unchanged(
+        self, tmp_path: Path
+    ) -> None:
+        """Refined AC: move_task success path persists via storage.write_task_if_unchanged.
+
+        Mutation guard: intercepting write_task_if_unchanged with side_effect=ERR_STALE
+        proves the CAS helper is called on the success path. If move_task used plain
+        write_task instead, the mock would never fire and assert_called_once() would FAIL.
+        """
+        from unittest.mock import patch
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1, updated="2026-01-01T10:00:00+00:00")
+        cv = _make_cockpit_view(kanban_dir)
+
+        stale = ConcurrencyError("ERR_STALE", "CAS intercepted by spy")
+        with (
+            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale) as mock_cas,
+            pytest.raises(ConcurrencyError),
+        ):
+            cv.move_task(1, "backlog", expected_updated="2026-01-01T10:00:00+00:00")
+        mock_cas.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # AC: rel-claimed, rel-noop, rel-miss — CockpitView.release_task
@@ -829,6 +879,81 @@ class TestFromAC_CockpitViewListSessions:
         result = cv.list_sessions(filter="all")
         assert result == []
 
+    def test_list_sessions_canonical_claim_action_opens_session(
+        self, tmp_path: Path
+    ) -> None:
+        """Refined AC: list_sessions handles canonical 'claim' action as session open event.
+
+        The engine's primary codepath emits action='claim' (not the 'start_work'
+        compatibility alias). This test exercises the canonical claim path to prove
+        the primary codepath is recognised by _collect_task_sessions.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        fresh_ts = (datetime.now(tz=UTC) - timedelta(minutes=5)).isoformat()
+        _write_activity_event(
+            kanban_dir, task_id=1, action="claim", source="agent",
+            detail="claimed", timestamp=fresh_ts,
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        sessions = cv.list_sessions(filter="active")
+        active = [s for s in sessions if s.task_id == 1]
+        assert len(active) == 1
+        assert active[0].state == "running"
+
+    def test_list_sessions_canonical_blocked_colon_detail_creates_blocked_session(
+        self, tmp_path: Path
+    ) -> None:
+        """Refined AC: canonical 'blocked: {reason}' detail (engine shape) → state='blocked'.
+
+        The engine emits detail='blocked: {reason}' for outcome='block' (line 1539).
+        This test exercises the canonical engine-emitted shape rather than the legacy
+        'block:' alias used by earlier tests.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        _write_activity_event(
+            kanban_dir, task_id=1, action="claim", source="agent",
+            detail="claimed", timestamp="2026-01-01T10:00:00+00:00",
+        )
+        _write_activity_event(
+            kanban_dir, task_id=1, action="end_work", source="agent",
+            detail="blocked: needs external clarification",  # canonical engine shape
+            timestamp="2026-01-01T11:00:00+00:00",
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        sessions = cv.list_sessions(filter="blocked-or-rejected")
+        blocked = [s for s in sessions if s.task_id == 1]
+        assert len(blocked) == 1
+        assert blocked[0].state == "blocked"
+
+    def test_list_sessions_canonical_outcome_fail_detail_creates_blocked_session(
+        self, tmp_path: Path
+    ) -> None:
+        """Refined AC: canonical 'outcome=fail' detail → state='blocked', outcome='fail'.
+
+        The engine emits detail='outcome=fail' for end_work(outcome='fail') (line 1538).
+        This detail is distinct from 'blocked: {reason}' and maps to outcome='fail'
+        via _classify_end_work_outcome.
+        """
+        kanban_dir = _make_board(tmp_path)
+        _write_task(kanban_dir, 1)
+        _write_activity_event(
+            kanban_dir, task_id=1, action="claim", source="agent",
+            detail="claimed", timestamp="2026-01-01T10:00:00+00:00",
+        )
+        _write_activity_event(
+            kanban_dir, task_id=1, action="end_work", source="agent",
+            detail="outcome=fail",  # canonical engine shape for fail outcome
+            timestamp="2026-01-01T11:00:00+00:00",
+        )
+        cv = _make_cockpit_view(kanban_dir)
+        sessions = cv.list_sessions(filter="blocked-or-rejected")
+        blocked = [s for s in sessions if s.task_id == 1]
+        assert len(blocked) == 1
+        assert blocked[0].state == "blocked"
+        assert blocked[0].outcome == "fail"
+
 
 # ---------------------------------------------------------------------------
 # AC: scan-clean, scan-corrupt, scan-ro, scan-archive — CockpitView.scan_corruption
@@ -988,6 +1113,37 @@ class TestFromAC_CockpitViewRepairStorage:
         quarantine_dir = kanban_dir / "quarantine"
         assert quarantine_dir.exists(), (
             "Explicit repair_storage() must quarantine corrupt files"
+        )
+
+    def test_repair_storage_phase2_ar_creation_uses_engine_create_task_method(
+        self, tmp_path: Path
+    ) -> None:
+        """Refined AC: repair_storage phase-2 AR creation goes through engine.create_task.
+
+        Spy on KanbanEngine.create_task via the unbound call path used by the implementation
+        (type(self).create_task). A raw file write bypassing the engine method would NOT
+        trigger this spy, proving the engine-mediated path is required.
+        """
+        from unittest.mock import patch
+
+        kanban_dir = _make_board(tmp_path)
+        (kanban_dir / "tasks" / "99-corrupt.md").write_text(
+            "no yaml here", encoding="utf-8"
+        )
+        engine = KanbanEngine(kanban_dir)
+        cv = CockpitView(engine)
+
+        original_create_task = KanbanEngine.create_task
+        with patch.object(
+            KanbanEngine, "create_task", wraps=original_create_task
+        ) as mock_create:
+            outcomes = cv.repair_storage()
+
+        quarantined = [o for o in outcomes if o.action == "quarantined"]
+        assert len(quarantined) >= 1, "precondition: at least one file must be quarantined"
+        mock_create.assert_called_once()
+        assert "type:user-action" in mock_create.call_args.kwargs.get("tags", []), (
+            "repair_storage phase-2 must call engine.create_task with tag type:user-action"
         )
 
 
