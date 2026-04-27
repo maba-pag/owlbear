@@ -14,7 +14,8 @@ Architecture:
   - move_task() changes status; "archived" moves file to archive/.
   - claim_task() marks a task as claimed by this engine's agent_name; rejects
     blocked tasks and rival claims within the configured timeout window.
-  - release_task() clears claimed_by and claimed_at fields unconditionally; appends a timestamped note to the body when ``note`` is provided.
+    - release_task() clears claimed_by and claimed_at fields unconditionally;
+        appends a timestamped note to the body when ``note`` is provided.
   - board_config() returns a defensive copy of the current BoardConfig.
   - refresh_config() reloads config from disk, updating all derived state.
   - valid_transitions(status) returns the set of all statuses except the given one.
@@ -428,6 +429,7 @@ class KanbanEngine:
         self,
         kanban_dir: Path,
         *,
+        agent_name: str | None = None,
         activity_log: bool | None = None,
     ) -> None:
         self._kanban_dir = kanban_dir
@@ -435,7 +437,11 @@ class KanbanEngine:
         _validate_engine_config(self._config)
         self._tasks_dir = kanban_dir / self._config.tasks_dir
         self._archive_dir = kanban_dir / self._config.archive_dir
-        self._agent_name: str = f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+        self._agent_name: str = (
+            agent_name
+            if agent_name is not None
+            else f"{random.choice(ADJECTIVES)}-{random.choice(NOUNS)}"  # noqa: S311
+        )
         effective_activity_log = (
             activity_log if activity_log is not None else self._config.activity_log
         )
@@ -1266,6 +1272,7 @@ class KanbanEngine:
         self,
         task_id: str,
         *,
+        expected_updated: str | None = None,
         source: str = "engine",
         note: str | None = None,
     ) -> Task:
@@ -1275,6 +1282,7 @@ class KanbanEngine:
 
         Args:
             task_id: Numeric task ID as a string.
+            expected_updated: Optional OCC token for compare-and-swap release.
             source:  Activity event source label (agent, cockpit, engine).
             note:    Optional note text appended with an ISO-8601 timestamp.
 
@@ -1290,6 +1298,11 @@ class KanbanEngine:
         now = datetime.now(tz=UTC)
 
         if record.claimed_at is None:
+            if expected_updated is not None and record.updated != expected_updated:
+                raise ConcurrencyError(
+                    code="ERR_STALE",
+                    user_message=f"task {record.id} changed since read; reload and retry",
+                )
             return record
 
         self._append_timestamped_note(record, note, now)
@@ -1297,7 +1310,14 @@ class KanbanEngine:
         record.claimed_at = None
         record.claimed_by = None
         record.updated = now.isoformat()
-        write_task(record, self._kanban_dir)
+        if expected_updated is not None:
+            storage.write_task_if_unchanged(
+                record,
+                expected_updated,
+                self._kanban_dir,
+            )
+        else:
+            write_task(record, self._kanban_dir)
         try:
             self._emit_event(
                 "release",
@@ -1381,6 +1401,7 @@ class KanbanEngine:
         move_to: str | None = "research",
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
+        expected_updated: str | None = None,
     ) -> Task:
         """Finalise a work session: append note, update task state, release claim.
 
@@ -1395,6 +1416,7 @@ class KanbanEngine:
             move_to:      Target status when *outcome* is ``"reject"`` (default ``"research"``).
             archival_reason: Archival reason used when ``reject`` moves to ``"archived"``.
             archival_refs: Archival references used when ``reject`` moves to ``"archived"``.
+            expected_updated: Optional OCC token for compare-and-swap writes.
 
         Returns:
             Updated :class:`Task` reflecting the new state.
@@ -1450,7 +1472,14 @@ class KanbanEngine:
         record.updated = now.isoformat()
 
         # --- Single write ---
-        write_task(record, self._kanban_dir)
+        if expected_updated is not None:
+            storage.write_task_if_unchanged(
+                record,
+                expected_updated,
+                self._kanban_dir,
+            )
+        else:
+            write_task(record, self._kanban_dir)
 
         # --- Archive move (only after successful write) ---
         dest = self._archive_dir / task_path.name
@@ -2798,9 +2827,8 @@ class AgentView:
 
         Args:
             task_id:         Numeric task ID.
-            outcome:         One of ``"success"``, ``"reject"``, ``"block"``,
-                             or ``"release"``.  ``"fail"`` raises
-                             :class:`ValidationError` at this layer.
+            outcome:         One of ``"success"``, ``"fail"``, ``"reject"``,
+                             ``"block"``, or ``"release"``.
             note:            Text appended with an ISO-8601 timestamp prefix.
                              Ignored for ``"release"`` on an unclaimed task.
             move_to:         Required when *outcome* is ``"reject"``; target
@@ -2986,9 +3014,26 @@ class AgentView:
                     move_to=move_to,
                     archival_reason=archival_reason,
                     archival_refs=effective_archival_refs,
+                    expected_updated=before.updated,
                 )
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
+        except ConcurrencyError as exc:
+            if exc.code == "ERR_STALE":
+                latest = self.engine.show_task(str(task_id))
+                if outcome in {"success", "fail", "reject", "block"} and latest.claimed_at is None:
+                    raise ValidationError(
+                        code="ERR_NOT_CLAIMED",
+                        user_message=(
+                            "Task must be claimed before ending work with "
+                            f"outcome='{outcome}'"
+                        ),
+                    ) from exc
+                raise ConcurrencyError(
+                    code="ERR_STALE",
+                    user_message=f"Task '{task_id}' changed concurrently; reload and retry",
+                ) from exc
+            raise
         except ValueError as exc:
             msg = str(exc)
             if "already claimed" in msg:
@@ -3170,18 +3215,19 @@ class CockpitView:
             raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
         return self._to_single_response(task)
 
-    def release_task(self, task_id: int) -> SingleTaskResponse:
+    def release_task(
+        self,
+        task_id: int,
+        *,
+        expected_updated: str,
+    ) -> SingleTaskResponse:
         """Release claim on task; unclaimed tasks are returned unchanged."""
         try:
-            task = self.engine.show_task(str(task_id))
-        except FileNotFoundError as exc:
-            raise self._not_found(task_id) from exc
-
-        if task.claimed_at is None:
-            return self._to_single_response(task)
-
-        try:
-            released = self.engine.release_task(str(task_id), source="cockpit")
+            released = self.engine.release_task(
+                str(task_id),
+                expected_updated=expected_updated,
+                source="cockpit",
+            )
         except FileNotFoundError as exc:
             raise self._not_found(task_id) from exc
         return self._to_single_response(released)
