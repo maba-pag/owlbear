@@ -5,8 +5,8 @@ AC coverage:
   2. end_work(outcome="reject") writes detail f"reject: {old} -> {target}"
   3. end_work(outcome="fail") / end_work(outcome="block") details unchanged
   4. Existing _classify_end_work() works without modification
-  5. Integration: end_work(success) → list_sessions(filter="all") returns completed-pass
-  6. Integration: end_work(reject) → list_sessions(filter="all") returns completed-rejected
+    5. Integration: end_work(success) → list_sessions(filter="all") returns completed
+    6. Integration: end_work(reject) → list_sessions(filter="all") returns rejected
 
 AC1/AC2/AC5/AC6 tests FAIL in RED phase — end_work() writes unprefixed detail strings.
 AC3 tests exercise already-correct behaviour (fail/block were never changed) and PASS
@@ -218,12 +218,12 @@ class TestFromAC_EndWorkDetailPrefix:
             f"Expected 'reject: in-progress -> backlog' but got: {detail!r}"
         )
 
-    # ------------------------------------------------------------------ AC5: integration success → completed-pass
+    # ------------------------------------------------------------------ AC5: integration success → completed
 
     def test_integration_end_work_success_classifies_as_completed_pass(
         self, board: Path, engine: KanbanEngine
     ) -> None:
-        """Integration: start_work → end_work(success) → list_sessions returns completed-pass."""
+        """Integration: start_work → end_work(success) → list_sessions returns completed."""
         _write_task(board, 7, status="todo")
         engine.start_work("7")
         engine.end_work("7", note="done", outcome="success")
@@ -231,14 +231,14 @@ class TestFromAC_EndWorkDetailPrefix:
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 7]
         assert task_sessions, "No session found for task 7"
-        assert task_sessions[-1].state == "completed-pass", (
-            f"Expected 'completed-pass' but got: {task_sessions[-1].state!r}"
+        assert task_sessions[-1].state == "completed", (
+            f"Expected 'completed' but got: {task_sessions[-1].state!r}"
         )
 
     def test_integration_end_work_success_not_misclassified_as_completed_fail(
         self, board: Path, engine: KanbanEngine
     ) -> None:
-        """Regression: end_work(success) must NOT produce completed-fail."""
+        """Regression: end_work(success) must NOT produce blocked."""
         _write_task(board, 8, status="todo")
         engine.start_work("8")
         engine.end_work("8", note="done", outcome="success")
@@ -246,16 +246,16 @@ class TestFromAC_EndWorkDetailPrefix:
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 8]
         assert task_sessions, "No session found for task 8"
-        assert task_sessions[-1].state != "completed-fail", (
-            "end_work(success) was misclassified as completed-fail — prefix missing"
+        assert task_sessions[-1].state != "blocked", (
+            "end_work(success) was misclassified as blocked"
         )
 
-    # ------------------------------------------------------------------ AC6: integration reject → completed-rejected
+    # ------------------------------------------------------------------ AC6: integration reject → rejected
 
     def test_integration_end_work_reject_classifies_as_completed_rejected(
         self, board: Path, engine: KanbanEngine
     ) -> None:
-        """Integration: start_work → end_work(reject) → list_sessions returns completed-rejected."""
+        """Integration: start_work → end_work(reject) → list_sessions returns rejected."""
         _write_task(board, 9, status="todo")
         engine.start_work("9")
         engine.end_work("9", note="rejected", outcome="reject", move_to="research")
@@ -263,14 +263,14 @@ class TestFromAC_EndWorkDetailPrefix:
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 9]
         assert task_sessions, "No session found for task 9"
-        assert task_sessions[-1].state == "completed-rejected", (
-            f"Expected 'completed-rejected' but got: {task_sessions[-1].state!r}"
+        assert task_sessions[-1].state == "rejected", (
+            f"Expected 'rejected' but got: {task_sessions[-1].state!r}"
         )
 
     def test_integration_end_work_reject_not_misclassified_as_completed_fail(
         self, board: Path, engine: KanbanEngine
     ) -> None:
-        """Regression: end_work(reject) must NOT produce completed-fail."""
+        """Regression: end_work(reject) must NOT produce blocked."""
         _write_task(board, 10, status="todo")
         engine.start_work("10")
         engine.end_work("10", note="rejected", outcome="reject", move_to="research")
@@ -278,8 +278,8 @@ class TestFromAC_EndWorkDetailPrefix:
         sessions = engine.list_sessions(filter="all")
         task_sessions = [s for s in sessions if s.task_id == 10]
         assert task_sessions, "No session found for task 10"
-        assert task_sessions[-1].state != "completed-fail", (
-            "end_work(reject) was misclassified as completed-fail — prefix missing"
+        assert task_sessions[-1].state != "blocked", (
+            "end_work(reject) was misclassified as blocked"
         )
 
     # ------------------------------------------------------------------ AC3: fail/block details unchanged

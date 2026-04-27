@@ -2,10 +2,10 @@
 
 AC coverage:
   1.  One session per claim cycle (claim → close event)
-  2.  Session state: completed-pass  (end_work success)
-  3.  Session state: completed-fail  (end_work fail)
-  4.  Session state: completed-fail  (end_work block → maps to completed-fail)
-  5.  Session state: completed-rejected (end_work reject)
+    2.  Session state: completed  (end_work success)
+    3.  Session state: blocked  (end_work fail)
+    4.  Session state: blocked  (end_work block)
+    5.  Session state: rejected (end_work reject)
   6.  Session state: released (release event)
   7.  Session state: running (open claim, age < timeout)
   8.  Session state: stuck  (open claim, age ≥ timeout, no recent activity)
@@ -13,7 +13,7 @@ AC coverage:
   10. sweep-release: release + sweep-release pair closes exactly one session (no phantom)
   11. Filter: active-only (default) returns running + stuck only
   12. Filter: all returns every session regardless of state
-  13. Filter: failed-or-rejected returns completed-fail + completed-rejected
+    13. Filter: failed-or-rejected returns blocked + rejected
   14. Filter: released returns released sessions only
   15. Empty activity log returns empty list
   16. Missing activity log returns empty list (no crash)
@@ -166,12 +166,12 @@ class TestFromAC_ListSessions:
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert len(task_sessions) == 1
 
-    # ------------------------------------------------------------------ AC 2: completed-pass
+    # ------------------------------------------------------------------ AC 2: completed
 
     def test_end_work_success_state_is_completed_pass(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """end_work with success detail prefix produces state=completed-pass."""
+        """end_work with success detail prefix produces state=completed."""
         _write_log(
             log_path,
             [
@@ -188,14 +188,14 @@ class TestFromAC_ListSessions:
         )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 1]
-        assert states == ["completed-pass"]
+        assert states == ["completed"]
 
-    # ------------------------------------------------------------------ AC 3: completed-fail (fail)
+    # ------------------------------------------------------------------ AC 3: blocked (fail)
 
     def test_end_work_fail_state_is_completed_fail(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """end_work with 'outcome=fail' detail produces state=completed-fail."""
+        """end_work with 'outcome=fail' detail produces state=blocked."""
         _write_log(
             log_path,
             [
@@ -210,14 +210,14 @@ class TestFromAC_ListSessions:
         )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 2]
-        assert states == ["completed-fail"]
+        assert states == ["blocked"]
 
-    # ------------------------------------------------------------------ AC 4: completed-fail (block)
+    # ------------------------------------------------------------------ AC 4: blocked (block)
 
     def test_end_work_block_maps_to_completed_fail(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """end_work with 'blocked:' detail maps to completed-fail (no 7th state for block)."""
+        """end_work with 'blocked:' detail maps to blocked state."""
         _write_log(
             log_path,
             [
@@ -234,14 +234,14 @@ class TestFromAC_ListSessions:
         )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 3]
-        assert states == ["completed-fail"]
+        assert states == ["blocked"]
 
-    # ------------------------------------------------------------------ AC 5: completed-rejected
+    # ------------------------------------------------------------------ AC 5: rejected
 
     def test_end_work_reject_state_is_completed_rejected(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """end_work with 'reject:' detail prefix produces state=completed-rejected."""
+        """end_work with 'reject:' detail prefix produces state=rejected."""
         _write_log(
             log_path,
             [
@@ -258,7 +258,7 @@ class TestFromAC_ListSessions:
         )
         sessions = engine.list_sessions(filter="all")
         states = [s.state for s in sessions if s.task_id == 4]
-        assert states == ["completed-rejected"]
+        assert states == ["rejected"]
 
     # ------------------------------------------------------------------ AC 6: released
 
@@ -402,7 +402,7 @@ class TestFromAC_ListSessions:
                     detail="test-agent",
                     ts=_ts(timedelta(hours=-3)),
                 ),
-                # completed-pass (must be excluded)
+                # completed (must be excluded)
                 _entry(
                     action="claim",
                     task_id=12,
@@ -419,7 +419,7 @@ class TestFromAC_ListSessions:
         assert 10 in returned_ids, "running session must be in active-only results"
         assert 11 in returned_ids, "stuck session must be in active-only results"
         assert 12 not in returned_ids, (
-            "completed-pass session must not appear in active-only"
+            "completed session must not appear in active-only"
         )
 
     def test_active_only_excludes_released(
@@ -484,7 +484,7 @@ class TestFromAC_ListSessions:
     def test_filter_failed_or_rejected_includes_fail_and_reject(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """filter='failed-or-rejected' includes completed-fail and completed-rejected sessions."""
+        """filter='failed-or-rejected' includes blocked and rejected sessions."""
         _write_log(
             log_path,
             [
@@ -508,13 +508,13 @@ class TestFromAC_ListSessions:
         )
         sessions = engine.list_sessions(filter="failed-or-rejected")
         returned_ids = {s.task_id for s in sessions}
-        assert 30 in returned_ids, "completed-fail must be in failed-or-rejected"
-        assert 31 in returned_ids, "completed-rejected must be in failed-or-rejected"
+        assert 30 in returned_ids, "blocked state must be in failed-or-rejected"
+        assert 31 in returned_ids, "rejected state must be in failed-or-rejected"
 
     def test_filter_failed_or_rejected_excludes_pass_and_released(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """filter='failed-or-rejected' excludes completed-pass and released sessions."""
+        """filter='failed-or-rejected' excludes completed and released sessions."""
         _write_log(
             log_path,
             [
@@ -539,7 +539,7 @@ class TestFromAC_ListSessions:
         sessions = engine.list_sessions(filter="failed-or-rejected")
         returned_ids = {s.task_id for s in sessions}
         assert 32 not in returned_ids, (
-            "completed-pass must be excluded from failed-or-rejected"
+            "completed must be excluded from failed-or-rejected"
         )
         assert 33 not in returned_ids, (
             "released must be excluded from failed-or-rejected"
@@ -721,8 +721,8 @@ class TestFromAC_ListSessions:
         )
         sessions = engine.list_sessions(filter="all")
         by_task = {s.task_id: s for s in sessions}
-        assert by_task[80].state == "completed-pass"
-        assert by_task[81].state == "completed-fail"
+        assert by_task[80].state == "completed"
+        assert by_task[81].state == "blocked"
 
 
 # ---------------------------------------------------------------------------
@@ -830,7 +830,7 @@ class TestFromAC_WorkSessionFields:
       AC3 - agent derived from claim event detail (not actor)
       AC4 - started_at derived from claim event timestamp
       AC5 - duration = close_ts - claim_ts in seconds; None for open/superseded
-      AC6 - outcome = raw end_work detail; "released" for release; None for open/superseded
+    AC6 - outcome = classified label from end_work/release; "release" for release; None for open/superseded
       AC9 - WorkSession exported from owlbear_kanban.__init__
       New - superseded claim carries agent and started_at from original claim
     """
@@ -1185,7 +1185,7 @@ class TestFromAC_WorkSessionFields:
     def test_outcome_is_raw_end_work_detail_for_success(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """Session.outcome is the raw end_work detail string (not a classified label)."""
+        """Session.outcome is the classified end_work outcome label."""
         detail = "success: todo -> in-progress"
         _write_log(
             log_path,
@@ -1201,12 +1201,12 @@ class TestFromAC_WorkSessionFields:
         )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 240)
-        assert s.outcome == detail
+        assert s.outcome == "success"
 
     def test_outcome_is_raw_end_work_detail_for_fail(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """Session.outcome is the raw end_work detail string for a completed-fail session."""
+        """Session.outcome is the classified fail label for a blocked session."""
         detail = "outcome=fail"
         _write_log(
             log_path,
@@ -1222,12 +1222,12 @@ class TestFromAC_WorkSessionFields:
         )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 241)
-        assert s.outcome == detail
+        assert s.outcome == "fail"
 
     def test_outcome_is_released_string_for_release_event(
         self, engine: KanbanEngine, log_path: Path
     ) -> None:
-        """Session.outcome is the literal string 'released' when closed by a release event."""
+        """Session.outcome is the literal string 'release' when closed by a release event."""
         _write_log(
             log_path,
             [
@@ -1242,7 +1242,7 @@ class TestFromAC_WorkSessionFields:
         )
         sessions = engine.list_sessions(filter="all")
         s = next(s for s in sessions if s.task_id == 242)
-        assert s.outcome == "released"
+        assert s.outcome == "release"
 
     def test_outcome_is_none_for_running_session(
         self, engine: KanbanEngine, log_path: Path
