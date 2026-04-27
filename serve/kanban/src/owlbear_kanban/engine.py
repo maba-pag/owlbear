@@ -232,6 +232,19 @@ def _task_body_as_text(body: object) -> str:
     return body if isinstance(body, str) else ""
 
 
+def _restore_snapshot_if_unchanged(
+    original: Task,
+    expected_updated: str,
+    kanban_dir: Path,
+) -> None:
+    """Best-effort rollback that never overwrites a newer concurrent update."""
+    try:
+        storage.write_task_if_unchanged(original, expected_updated, kanban_dir)
+    except ConcurrencyError as exc:
+        if exc.code != "ERR_STALE":
+            raise
+
+
 def _state_from_age(ref_ts: str, timeout: timedelta, now: datetime) -> str:
     """Return 'running' or 'stuck' based on whether *ref_ts* is within *timeout* of *now*."""
     ref_dt = datetime.fromisoformat(ref_ts)
@@ -1065,7 +1078,11 @@ class KanbanEngine:
             self._emit_event("edit", record.id, "task edited", source=source)
         except OSError:
             with contextlib.suppress(Exception):
-                write_task(original, self._kanban_dir, target_dir=target_dir)
+                _restore_snapshot_if_unchanged(
+                    original,
+                    record.updated,
+                    self._kanban_dir,
+                )
             raise
         self._revision += 1
         return record
@@ -1129,7 +1146,11 @@ class KanbanEngine:
                 _move_file(task_path, dest)
             except OSError:
                 with contextlib.suppress(Exception):
-                    write_task(original, self._kanban_dir)
+                    _restore_snapshot_if_unchanged(
+                        original,
+                        record.updated,
+                        self._kanban_dir,
+                    )
                 raise
             self._task_cache.pop(task_path.name, None)
             self._id_to_filename.pop(record.id, None)
@@ -1157,7 +1178,11 @@ class KanbanEngine:
             with contextlib.suppress(Exception):
                 if archived and dest.exists():
                     _move_file(dest, task_path)
-                write_task(original, self._kanban_dir)
+                _restore_snapshot_if_unchanged(
+                    original,
+                    record.updated,
+                    self._kanban_dir,
+                )
             raise
         self._revision += 1
         return record
@@ -1336,7 +1361,11 @@ class KanbanEngine:
             )
         except OSError:
             with contextlib.suppress(Exception):
-                write_task(original, self._kanban_dir)
+                _restore_snapshot_if_unchanged(
+                    original,
+                    record.updated,
+                    self._kanban_dir,
+                )
             raise
         self._revision += 1
         return record
@@ -1582,7 +1611,11 @@ class KanbanEngine:
                         )
                     except OSError:
                         with contextlib.suppress(Exception):
-                            write_task(original, self._kanban_dir)
+                            _restore_snapshot_if_unchanged(
+                                original,
+                                record.updated,
+                                self._kanban_dir,
+                            )
                         continue
                     released.append(record.id)
 
