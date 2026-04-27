@@ -93,7 +93,7 @@ Build a comparison matrix from returned approaches across the split criteria. Se
 
 After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE, optional for REFINE, skip for SPLIT/REJECT.
 
-Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, and research-doc reference.
+Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
 
 | Challenger output | Architect action |
 |-------------------|------------------|
@@ -163,7 +163,7 @@ Append to task body before advancing:
 | Codepath | Failure Mode | Exception | Handled? | User Impact |
 
 ### Design Diverge (optional)
-- Trigger: {triggered / skipped with reason / fallback}
+- Trigger: {triggered with reason / skipped with reason / fallback}
 - Approach summaries: {1-2 lines per approach}
 - Comparison matrix:
 
