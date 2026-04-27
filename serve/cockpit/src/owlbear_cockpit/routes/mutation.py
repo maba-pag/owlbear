@@ -2,23 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_cockpit import adapter
-from owlbear_cockpit.deps import get_engine, get_view
-from owlbear_cockpit.models import TaskDetailOut
+from owlbear_cockpit.deps import get_view
 from owlbear_kanban.engine import CockpitView
-from owlbear_kanban.errors import ConcurrencyError, NotFoundError, ValidationError
-
-if TYPE_CHECKING:
-    from owlbear_kanban import KanbanEngine
+from owlbear_kanban.errors import ConcurrencyError, ConfigError, NotFoundError, ValidationError
+from owlbear_kanban.models import SingleTaskResponse
 
 router = APIRouter()
 
-_Engine = Annotated["KanbanEngine", Depends(get_engine)]
 _View = Annotated[CockpitView, Depends(get_view)]
 
 
@@ -68,14 +64,15 @@ class ReleaseRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
+def _task_to_single(task: Any) -> SingleTaskResponse:  # noqa: ANN401
     if hasattr(task, "model_dump"):
         payload = task.model_dump()
         if payload.get("body") is None:
             payload["body"] = ""
-        return TaskDetailOut.model_validate(payload)
+        payload["guidance"] = payload.get("guidance") or []
+        return SingleTaskResponse.model_validate(payload)
 
-    return TaskDetailOut(
+    return SingleTaskResponse(
         id=task.id,
         title=task.title,
         status=task.status,
@@ -90,6 +87,7 @@ def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
         depends_on=task.depends_on or [],
         claimed_at=getattr(task, "claimed_at", None),
         claimed_by=getattr(task, "claimed_by", None),
+        guidance=[],
     )
 
 
@@ -98,8 +96,8 @@ def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
 # ---------------------------------------------------------------------------
 
 
-@router.post("/tasks/{task_id}/move", response_model=TaskDetailOut)
-def move_task(task_id: int, req: MoveRequest, view: _View) -> TaskDetailOut:
+@router.post("/tasks/{task_id}/move", response_model=SingleTaskResponse)
+def move_task(task_id: int, req: MoveRequest, view: _View) -> SingleTaskResponse:
     """Move task to a new status. Validates OCC token then valid_transitions."""
     try:
         task = view.engine.show_task(str(task_id))
@@ -138,11 +136,11 @@ def move_task(task_id: int, req: MoveRequest, view: _View) -> TaskDetailOut:
             status_code=409,
             detail="Task was modified since your last load (stale snapshot)",
         ) from None
-    return _task_to_detail(updated_task)
+    return _task_to_single(updated_task)
 
 
-def _build_edit_kwargs(req: EditRequest, task: Any) -> dict[str, Any]:  # noqa: ANN401
-    """Translate EditRequest fields into engine.edit_task keyword arguments."""
+def _build_edit_kwargs(req: EditRequest, task: Any | None = None) -> dict[str, Any]:  # noqa: ANN401
+    """Translate EditRequest fields into CockpitView.edit_task keyword arguments."""
     fields = req.model_fields_set - {"updated"}
     kwargs: dict[str, Any] = {}
 
@@ -158,48 +156,24 @@ def _build_edit_kwargs(req: EditRequest, task: Any) -> dict[str, Any]:  # noqa: 
     _apply_list_diff(
         kwargs,
         "tags",
-        "add_tags",
-        "remove_tags",
-        task.tags or [],
+        "add_tag",
+        "remove_tag",
+        (task.tags if task is not None else []) or [],
         req.tags if "tags" in fields else None,
     )
     _apply_list_diff(
         kwargs,
         "depends_on",
-        "add_deps",
-        "remove_deps",
-        task.depends_on or [],
+        "add_dep",
+        "remove_dep",
+        (task.depends_on if task is not None else []) or [],
         req.depends_on if "depends_on" in fields else None,
     )
 
     if "block_reason" in fields:
-        _apply_block_kwargs(kwargs, req, task)
+        kwargs["block_reason"] = req.block_reason
 
     return kwargs
-
-
-def _apply_block_kwargs(kwargs: dict[str, Any], req: EditRequest, task: Any) -> None:  # noqa: ANN401
-    """Apply block_reason and block:user tag changes to kwargs."""
-    current_tags = set(task.tags or [])
-    if req.block_reason is not None:
-        kwargs["blocked"] = True
-        kwargs["block_reason"] = req.block_reason
-        # Strip block:user from remove_tags (conflict: tag-diff may have put it there)
-        remove_tags: list[str] = kwargs.get("remove_tags") or []
-        kwargs["remove_tags"] = [t for t in remove_tags if t != "block:user"]
-        if "block:user" not in current_tags:
-            add_tags: list[str] = kwargs.get("add_tags") or []
-            if "block:user" not in add_tags:
-                kwargs["add_tags"] = [*add_tags, "block:user"]
-    else:
-        kwargs["blocked"] = False
-        # Strip block:user from add_tags (conflict: tag-diff may have put it there)
-        add_tags = kwargs.get("add_tags") or []
-        kwargs["add_tags"] = [t for t in add_tags if t != "block:user"]
-        if "block:user" in current_tags:
-            remove_tags = kwargs.get("remove_tags") or []
-            if "block:user" not in remove_tags:
-                kwargs["remove_tags"] = [*remove_tags, "block:user"]
 
 
 def _apply_list_diff(
@@ -223,43 +197,46 @@ def _apply_list_diff(
         kwargs[remove_key] = remove
 
 
-@router.post("/tasks/{task_id}/edit", response_model=TaskDetailOut)
-def edit_task(task_id: int, req: EditRequest, engine: _Engine) -> TaskDetailOut:
+@router.post("/tasks/{task_id}/edit", response_model=SingleTaskResponse)
+def edit_task(task_id: int, req: EditRequest, view: _View) -> SingleTaskResponse:
     """Edit allowlisted task fields with D9 optimistic-lock check."""
-    try:
-        task = engine.show_task(str(task_id))
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=404, detail=f"Task {task_id} not found"
-        ) from None
-
-    if req.updated != str(task.updated):
-        raise HTTPException(
-            status_code=409,
-            detail="Task was modified since your last load (stale snapshot)",
-        )
+    task = None
+    fields = req.model_fields_set
+    if "tags" in fields or "depends_on" in fields:
+        try:
+            task = view.show_task(task_id)
+        except NotFoundError:
+            raise HTTPException(
+                status_code=404, detail=f"Task {task_id} not found"
+            ) from None
 
     kwargs = _build_edit_kwargs(req, task)
     if not kwargs:
         raise HTTPException(status_code=422, detail="No editable fields provided")
     try:
-        updated_task = engine.edit_task(
-            str(task_id),
+        updated_task = view.edit_task(
+            task_id,
             expected_updated=req.updated,
             **kwargs,
         )
+    except NotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found"
+        ) from None
     except ConcurrencyError:
         raise HTTPException(
             status_code=409,
             detail="Task was modified since your last load (stale snapshot)",
         ) from None
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _task_to_detail(updated_task)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.user_message) from exc
+    except ConfigError:
+        raise HTTPException(status_code=500, detail="Invalid board configuration") from None
+    return _task_to_single(updated_task)
 
 
-@router.post("/tasks/{task_id}/release", response_model=TaskDetailOut)
-def release_task(task_id: int, req: ReleaseRequest, view: _View) -> TaskDetailOut:
+@router.post("/tasks/{task_id}/release", response_model=SingleTaskResponse)
+def release_task(task_id: int, req: ReleaseRequest, view: _View) -> SingleTaskResponse:
     """Release claim on a task. 409 if task is not currently claimed."""
     try:
         task = view.show_task(task_id)
@@ -285,4 +262,10 @@ def release_task(task_id: int, req: ReleaseRequest, view: _View) -> TaskDetailOu
             detail="Task was modified since your last load (stale snapshot)",
         ) from None
 
-    return _task_to_detail(updated_task)
+    return _task_to_single(updated_task)
+
+
+@router.post("/tasks/sweep", response_model=list[int])
+def sweep_tasks(view: _View) -> list[int]:
+    """Release expired claims and return released task IDs."""
+    return view.sweep()
