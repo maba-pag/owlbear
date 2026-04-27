@@ -3,10 +3,10 @@
 Covers:
   - D65: BoardConfig.terminal_status must be a declared field with default "done"
   - D37: BoardConfig.archival_reasons must be a frozenset (not list)
-  - AgentView method stubs: list_tasks, show_task, pick_tasks, create_task,
-    edit_task, start_work, end_work — each raises NotImplementedError
+    - AgentView method stubs: list_tasks, show_task, pick_tasks, create_task,
+        edit_task, start_work, end_work — each raises NotImplementedError
     - CockpitView method surface: list_tasks, show_task, edit_task, move_task,
-        release_task, board_config — methods are available on the cockpit facade
+                release_task, board_config — methods are implemented on the cockpit facade
 
 These RED tests established initial contracts for init/config behavior and
 role-view method surfaces in owlbear_kanban.engine / owlbear_kanban.models.
