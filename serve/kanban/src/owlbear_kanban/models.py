@@ -204,6 +204,17 @@ class BoardConfig(BaseModel):
         if "entry_status" not in data and isinstance(defaults, dict):
             data["entry_status"] = defaults.get("status", "research")
 
+        # Legacy boards often omit agent_map entirely; derive a permissive
+        # status-complete map only in that case so explicit {} still fails.
+        if "agent_map" not in data and (
+            "version" in data or "board" in data or isinstance(defaults, dict)
+        ):
+            statuses = data.get("statuses")
+            if isinstance(statuses, list):
+                data["agent_map"] = {
+                    status: [] for status in statuses if isinstance(status, str)
+                }
+
         # Legacy tasks_dir/archive_dir passthrough (already present in dict; just keep)
         return data
 
@@ -279,7 +290,7 @@ class Task(BaseModel):
 class TaskSummary(BaseModel):
     """Lightweight task summary for list operations.
 
-    Excludes ``body``, ``created``, and ``updated`` from the full Task schema.
+    Excludes ``body`` and ``created`` from the full Task schema.
     ``claimed`` is derived from ``claimed_at`` and ``dep_status`` is a
     read-time projection from dependency state. Dict-style read access
     (``summary["field"]``) is supported for MCP serialisation consumers.
@@ -291,6 +302,7 @@ class TaskSummary(BaseModel):
     title: str
     status: str
     priority: str
+    updated: str
     tags: list[str] = Field(default_factory=list)
     blocked: bool = False
     block_reason: str | None = None

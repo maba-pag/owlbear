@@ -12,6 +12,7 @@ class TaskSummaryOut(BaseModel):
     title: str
     status: str
     priority: str
+    updated: str
     tags: list[str] = Field(default_factory=list)
     blocked: bool = False
     block_reason: str | None = None

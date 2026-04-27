@@ -132,6 +132,7 @@ export function Column({
 interface ContextMenuState {
   taskId: number
   taskStatus: string
+  taskUpdated: string
   x: number
   y: number
 }
@@ -168,7 +169,13 @@ export default function KanbanBoard() {
     const transitions = board?.valid_transitions[task.status] ?? []
     if (transitions.length === 0) return
     setMoveError(null)
-    setContextMenu({ taskId: task.id, taskStatus: task.status, x: e.clientX, y: e.clientY })
+    setContextMenu({
+      taskId: task.id,
+      taskStatus: task.status,
+      taskUpdated: task.updated,
+      x: e.clientX,
+      y: e.clientY,
+    })
   }
 
   const handleDragStart = (status: string) => {
@@ -195,14 +202,14 @@ export default function KanbanBoard() {
     )
   }
 
-  async function handleTransitionClick(taskId: number, targetStatus: string) {
+  async function handleTransitionClick(taskId: number, targetStatus: string, updated: string) {
     setContextMenu(null)
     setMoveError(null)
     try {
       const res = await fetch(`/api/tasks/${taskId}/move`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: targetStatus }),
+        body: JSON.stringify({ status: targetStatus, updated }),
       })
       if (!res.ok) {
         setMoveError(`Move failed: ${res.status}`)
@@ -250,7 +257,7 @@ export default function KanbanBoard() {
               data-testid="transition-item"
               data-status={target}
               role="menuitem"
-              onClick={() => void handleTransitionClick(contextMenu.taskId, target)}
+              onClick={() => void handleTransitionClick(contextMenu.taskId, target, contextMenu.taskUpdated)}
             >
               → {target}
             </div>

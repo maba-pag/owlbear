@@ -17,6 +17,7 @@ export interface Task {
   title: string
   status: string
   priority: string
+  updated: string
   tags: string[]
   blocked: boolean
   block_reason: string | null
