@@ -1,10 +1,10 @@
 ---
 id: 1080
 title: 'B-12: GREEN — end_work'
-status: done
+status: archived
 priority: important
 created: 2026-04-21 10:50:32.621365+00:00
-updated: 2026-04-26T16:02:46.390399+00:00
+updated: 2026-04-26T16:07:05.580652+00:00
 tags:
 - phase:engine
 - brief:b
@@ -15,8 +15,8 @@ depends_on:
 - 1077
 blocked: false
 block_reason:
-claimed_by: near-frost
-claimed_at: 2026-04-26T16:02:46.390399+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -261,3 +261,43 @@ Advance to docs.
 
 ### Scratch Files Cleaned
 - None found (`1080-*` pattern: no matches)
+[[2026-04-26]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All RED tests from B-11 (#1077) pass | scoped run: 132 passed, 0 failed (includes 1077 suite) | PASS |
+| 4 outcomes dispatched correctly | test_engine_end_work_1077.py, test_engine_end_work_fail_1125.py, test_engine_release_note_1127.py all green | PASS |
+| Forbidden-parameter matrix | test_engine_end_work_1077.py, test_engine_end_work_fail_1125.py green | PASS |
+| success: auto-advance / terminal archive | test_engine_end_work_1077.py, test_engine_end_work_1080.py green | PASS |
+| reject: move_to required / D37 validation | test_engine_end_work_1077.py, shared archival suites green | PASS |
+| release: idempotent on unclaimed | test_engine_end_work_1077.py, test_engine_release_note_1127.py green | PASS |
+| block: block_reason required / optional move_to | test_engine_end_work_1077.py green | PASS |
+| mutations atomic (rollback fields) | test_engine_end_work_1080.py (3 new rollback proofs), test_engine_atomicity_1104.py green | PASS |
+| Note prepended with ISO 8601 timestamp | test_engine_end_work_1077.py, test_engine_release_note_1127.py green | PASS |
+| Guidance emitted for block/skip-transition | test_engine_end_work_1080.py exact-list assertions green | PASS |
+
+### Test Results
+- pytest (scoped task+regression): 132 passed, 0 failed
+- pytest (full suite): 2251 passed, 173 failed, 209 errors — all failures from pre-existing `KanbanEngine.__init__(agent_name=...)` fixture mismatch in cockpit/session tests, NOT introduced by 1080
+- ruff: clean
+
+### Architect Quality: 4/5
+AC was specific across all 10 lines. Loop-breaker refinement of AC line 8 (explicit rollback field list) was appropriate and effective. Minor gap: original AC didn't specify I/O-failure rollback fields, requiring a loop-breaker cycle to close.
+
+### Deduction Breakdown
+- Uncommitted deliverables (3 proof tests + banner fix not committed by upstream): -.02
+- Full-suite pre-existing failures (not task-introduced): no deduction
+- Reviewer evidence present and detailed (PASS at 0.91): no deduction
+- AC quality 4/5: no deduction
+- All 10 AC lines have specific evidence: no deduction
+
+### Confidence: 0.98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 3976bdfd | test | tests/test_engine_end_work_1080.py | #1080 |
+| 039e7f40 | docs | serve/kanban/README.md | #1080 |
+| bbf0be93 | test | tests/test_engine_end_work_1080.py | #1080 |

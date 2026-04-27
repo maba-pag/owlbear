@@ -1,10 +1,10 @@
 ---
 id: 1124
 title: 'Research: reconcile end-work outcome contract'
-status: backlog
+status: archived
 priority: important
 created: 2026-04-25 17:19:08.063026+00:00
-updated: 2026-04-26T02:18:32.192769+00:00
+updated: 2026-04-26T13:55:01.521205+00:00
 tags:
 - research
 parent:
@@ -229,3 +229,172 @@ Tagged `research` — task produces no testable Python code; pass-through in pip
 - The task is legitimately non-implementation, so artifact integrity was the gate rather than test execution.
 - The research conclusion may still be sound; the blocking defect is the stale follow-up mapping inside the artifact claimed as complete.
 - The fix is surgical because the child tasks already encode the correct split; the parent research artifact just needs to be reconciled to them.
+[[2026-04-26]]
+## Architecture Review (v3 — post-reviewer FAIL)
+
+### Reviewer Feedback Resolution
+The reviewer (confidence 0.85) identified one defect: research doc Section 5 listed 2 follow-up tasks instead of 3, collapsing D2 (release-note fix) into T-A (#1125) when it was actually split into #1127.
+
+**Fix applied:** Updated `.owlbear/research/reconcile-end-work-outcome-contract-v2.md` Section 5:
+- T-A (#1125): Removed release-note scope — now scoped to `fail` restoration + model alignment only
+- T-B (#1126): Unchanged — dead fallback cleanup
+- T-C (#1127): Added — release-note defect per D52 (was missing entirely)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Research umbrella for one topic |
+| Interface clarity | N/A | Research task — no implementation AC |
+| Dependency correctness | PASS | No deps; follow-ups are independent |
+| Module layering | N/A | Research only |
+| TDD compliance | N/A | Tagged `research` for pass-through |
+| KISS/YAGNI | PASS | Focused scope, 3-task follow-up set |
+| Premise challenge | PASS | DR resolved, 9/11 layer analysis sound |
+| Pattern consistency | PASS | Follows research umbrella conventions |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | Kanban engine domain |
+
+### Challenge Results
+- Challenger: proceed (confidence: 0.88)
+- Key note: validation pass "No stale findings" is a chronological journal entry, not a living assertion — cosmetic concern only
+- Architect response: accepted
+
+### Non-implementation tagging
+Tagged `research` — pass-through confirmed.
+
+### Verdict: APPROVE
+### Action Taken: Fixed stale follow-up mapping in research doc Section 5, advanced to todo.
+[[2026-04-26]]
+## Test-Writer Notes
+- Retry cycle — tagged `research`, no testable Python interfaces.
+- Reviewer FAIL was artifact integrity (stale follow-up map in research doc, missing #1127). Not a missing-tests finding.
+- Architect v3 applied the fix (added T-C/#1127 to Section 5 of research doc).
+- Pass-through confirmed per Step 1b: reviewer did not cite missing tests.
+[[2026-04-26]]
+## Builder Notes
+- Non-implementation task (tagged `research`) — no code changes needed.
+- Verified latest `## Test-Writer Notes` indicates pass-through (no missing test coverage cited).
+- Passing through to review.
+[[2026-04-26]]
+## Review Evidence
+### Test Results
+- N/A. Task `#1124` remains a `research` pass-through task. The current review gate is artifact integrity, not executable behavior.
+
+### Lint
+- N/A. No runtime source or task-owned test artifact is under review in this cycle.
+
+### Coverage
+- N/A. No touched Python module is owned by this umbrella research task.
+
+### Pass 1 - CRITICAL
+#### Research Deliverable Integrity
+| Claim | Evidence | Status |
+|---|---|---|
+| The prior reviewer defect was explicitly addressed | Task `#1124` records the prior defect at `.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md:236`, then records the fix at `:238-241`, and records the action taken at `:266`. | PASS |
+| The research doc now carries the required three-task split | `.owlbear/research/reconcile-end-work-outcome-contract-v2.md:114-116` now lists T-A `#1125`, T-B `#1126`, and T-C `#1127`. | PASS |
+| The resolved authority decision still matches the research recommendation | `.owlbear/decisions/resolved/1124-end-work-outcome-authority.md:3` records decision `A: Ratify the live 5-outcome contract`, and `:53` restates Option A as the approved direction. | PASS |
+| The three follow-up records match the research doc | `show_task(1125)` returns title `Restore fail outcome to AgentView end_work and align MCP model`; `list_tasks(archived=true, search="1126")` returns archived task `1126` titled `Remove dead try/except TypeError fallback chain in MCP server end_work`; `show_task(1127)` returns title `Fix release outcome to append notes per Brief B D52`. | PASS |
+
+#### Deliverable Compliance
+| Deliverable | Evidence | Status |
+|---|---|---|
+| Research doc v2 is current relative to the last review finding | The specific stale-follow-up defect from the prior review is resolved by the Section 5 update at `.owlbear/research/reconcile-end-work-outcome-contract-v2.md:114-116`. | PASS |
+| The parent task documents the resolution clearly | The v3 architecture review explains the correction and the resulting three-task split at `.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md:235-241`. | PASS |
+| Review routing is clean | There is one prior `## Review Evidence` section at `.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md:190`; this retry resolves that single finding without evidence of a loop. | PASS |
+
+#### Security Review
+- No issues. This cycle validates research artifacts and kanban records only.
+
+#### Test Integrity
+- Not applicable. No `TestFromAC_*` artifact is owned by this research umbrella task.
+
+#### Test Quality
+- Not applicable. No executable test proof is required for this `research` pass-through review.
+
+#### Data Safety
+- No issues. No data-path mutation or runtime contract changed in this task cycle.
+
+#### Implementation-Aware Test Gaps
+- Not applicable. No implementation artifact is under review.
+
+#### Necessity Check
+- Not applicable. No dependency, integration, or external capability was added.
+
+#### Builder Process Quality
+- CLEAN. This is the second review cycle, the retry addressed the exact prior finding, and there is no repeated failed approach pattern.
+
+### AC Compliance
+| Review Gate | Evidence | Status |
+|---|---|---|
+| Research artifact accurately reflects the approved downstream split | `.owlbear/research/reconcile-end-work-outcome-contract-v2.md:114-116` matches the v3 fix recorded in task `#1124` at `.owlbear/kanban/tasks/1124-b-xx-reconcile-mcp-end-work-outcome-contract-with-agentview-validation.md:238-241`. | PASS |
+| Decision authority remains resolved and aligned | `.owlbear/decisions/resolved/1124-end-work-outcome-authority.md:3` and `:53`. | PASS |
+| Follow-up tasks exist and map to the three-way split | `show_task(1125)`, `list_tasks(archived=true, search="1126")`, and `show_task(1127)` match the T-A / T-B / T-C mapping. | PASS |
+
+### Informational
+- Historical journal entries in task `#1124` still contain older intermediate status claims, but the v3 architecture review explicitly frames those as chronological history rather than live assertions. No current artifact contradiction remains.
+
+### Deductions
+- -0.02 Historical journal-style entries remain in the parent task body, which creates minor reading noise even though the latest review section resolves the contradiction explicitly.
+
+### Verdict
+- Confidence: 0.96
+- PASS
+- Action: Advance to docs. The prior research-artifact integrity defect is resolved, and the current parent artifact is consistent with the approved DR and the live follow-up task split.
+
+### Post-task Reflection
+- The gating issue was not the research conclusion; it was stale artifact bookkeeping.
+- Verifying archived child tasks required checking archived kanban listings, not only active task reads.
+- For research umbrella tasks, the correct review target is artifact consistency across the parent task body, research doc, DR, and child task records.
+[[2026-04-26]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Research-only task; no README/setup/share docs reference this engine-internal topic |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | All 16 sources are codebase-internal (confirmed in research doc §2) |
+| 4 | Research doc | Yes | PASS | `.owlbear/research/reconcile-end-work-outcome-contract-v2.md` exists; Section 5 now lists T-A (#1125), T-B (#1126), T-C (#1127) — correct three-task split verified |
+| 5 | Diagram maintenance | Yes | Updated | `project-overview.excalidraw` describes `.owlbear/**` → matches research doc. Footer updated: `Last verified: 2026-04-26 (7cf1ddd2)` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Files Updated
+- `.owlbear/research/reconcile-end-work-outcome-contract-v2.md` — committed v3 Section 5 fix (T-C/#1127 added); was in working tree, not yet committed
+- `share/diagrams/project-overview.excalidraw` — footer updated to `2026-04-26 (7cf1ddd2)`
+
+### Commit
+`067a23fa` — docs: update research doc follow-up map and diagram footer (#1124, doc-writer)
+
+### Scratch Files
+None — no `1124-*` scratch files found.
+
+### Child Tasks
+None created.
+[[2026-04-26]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Research doc v2 with 16-source analysis | `.owlbear/research/reconcile-end-work-outcome-contract-v2.md` — Section 5 lists T-A (#1125), T-B (#1126), T-C (#1127) | PASS |
+| DR resolved | `.owlbear/decisions/resolved/1124-end-work-outcome-authority.md` — Option A: ratify live 5-outcome contract | PASS |
+| Follow-up tasks created with AC | #1125 (in-progress, AC1-AC5), #1126 (archived), #1127 (todo, AC1-AC4) | PASS |
+| Research doc matches downstream task split | Section 5 three-task mapping confirmed against live task records | PASS |
+
+### Test Results
+- pytest: 0 failures, exit code 0 (full suite)
+- ruff: pre-existing violations in unrelated modules (knowledge, mcp-knowledge, mcp-memory, orchestrator) — none attributable to this research task
+
+### Architect Quality: 4/5
+V1 rejection caught D52 authority gap, T1/T3 misclassification, and missing two-option analysis — substantially improved research quality. Minor: implicit research deliverable AC relied on pipeline convention rather than written AC lines.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC evidence gaps: none (all 4 deliverables verified)
+- Lint: pre-existing, unrelated — no deduction
+- AC quality 4/5: no deduction
+- Reviewer evidence: present, detailed, PASS at 0.96 — no deduction
+- Full-suite test failures: none — no deduction
+- Historical journal noise in task body: -.01
+
+### Confidence: 0.99
+### Action: archive

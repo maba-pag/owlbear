@@ -1,17 +1,17 @@
 ---
 id: 1127
 title: Fix release outcome to append notes per Brief B D52
-status: done
+status: archived
 priority: important
 created: 2026-04-25 18:07:12.599139+00:00
-updated: 2026-04-26T15:15:29.371826+00:00
+updated: 2026-04-26T15:19:14.979798+00:00
 tags: []
 parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: near-frost
-claimed_at: 2026-04-26T15:15:29.371826+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -669,3 +669,40 @@ Post-task reflection:
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1127-*` files existed)
+[[2026-04-26]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: claimed release appends timestamped note | `engine.py:1295` calls shared helper before claim clear; tests at `test_engine_release_note_1127.py:160,:177,:195` prove in-memory, on-disk, and compound behavior | PASS |
+| AC2: unclaimed release no persistent side effects | Engine early-return at `engine.py:1292`; AgentView early-return at `engine.py:2952`; tests at `test_engine_release_note_1127.py:353,:373,:639,:708,:733` cover persisted state, NL fixtures, and direct-engine path | PASS |
+| AC3: same timestamped format as other outcomes | Shared `_append_timestamped_note` helper at `engine.py:1254` uses `now.replace(microsecond=0).isoformat()`; format parity test at `test_engine_release_note_1127.py:285` | PASS |
+| AC4: activity event unchanged | Emit at `engine.py:1302-1305`; exact-detail equality at `test_engine_release_note_1127.py:474` | PASS |
+
+### Test Results
+- pytest (full suite via quality-runner): 2249 passed, 173 failed, 209 errors — all failures pre-existing (KanbanEngine signature mismatch in legacy tests, ConfigError in guidance tests); none in task scope
+- pytest (task-scoped spot-check): 54 passed, 0 failed
+- ruff (full suite): 8 violations, all pre-existing in unrelated files
+
+### Architect Quality: 3/5
+AC1/AC3/AC4 were specific and mechanically testable. AC2's "pure no-op" wording was ambiguous enough to cause 3 review cycles and a loop-breaker before architecture refinement scoped it to D55's persisted-state definition. Original implementation notes ("returns early unchanged — no code change needed") contradicted the pre-existing rstrip normalization.
+
+### Deduction Breakdown
+- AC lines: all 4 verified with specific evidence → no deduction
+- Full-suite failures: all pre-existing, none task-scoped → no deduction
+- Lint violations: all pre-existing, none task-scoped → no deduction
+- AC quality score 3/5 → -0.03
+- Reviewer evidence: present, detailed, 4 cycles → no deduction
+
+### Confidence: 0.97
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 5bb6e3fa | test | tests/test_engine_release_note_1127.py | #1127 |
+| efb42fae | test | serve/kanban/tests/test_engine_end_work_1077.py | #1127 |
+| 6c544184 | fix | serve/kanban/src/owlbear_kanban/engine.py | #1127 |
+| 051a1ad1 | test | tests/test_engine_release_note_1127.py | #1127 |
+| c234aaa6 | docs | serve/kanban/README.md, engine.py docstring | #1127 |
+| 56a1b6bd | chore | kanban task file | #1127 |
