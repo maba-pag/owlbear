@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict
 from owlbear_cockpit import adapter
 from owlbear_cockpit.deps import get_engine
 from owlbear_cockpit.models import TaskDetailOut
-from owlbear_kanban.errors import ConcurrencyError
+from owlbear_kanban.models import ConcurrencyError
 
 if TYPE_CHECKING:
     from owlbear_kanban import KanbanEngine
@@ -218,7 +218,16 @@ def edit_task(task_id: int, req: EditRequest, engine: _Engine) -> TaskDetailOut:
     if not kwargs:
         raise HTTPException(status_code=422, detail="No editable fields provided")
     try:
-        updated_task = engine.edit_task(str(task_id), **kwargs)
+        updated_task = engine.edit_task(
+            str(task_id),
+            expected_updated=req.updated,
+            **kwargs,
+        )
+    except ConcurrencyError:
+        raise HTTPException(
+            status_code=409,
+            detail="Task was modified since your last load (stale snapshot)",
+        ) from None
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return _task_to_detail(updated_task)
