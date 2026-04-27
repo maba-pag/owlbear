@@ -184,13 +184,13 @@ class TestFromAC_CockpitRoutes:
     ) -> None:
         """GET /api/tasks must include 'guidance' in the response body.
 
-        happy — ListTasksResponse has guidance; current TaskListOut does not.
+        happy — ListTasksResponse has guidance; current legacy list response does not.
         FAIL: 'guidance' key absent from current response.
         """
         response = client.get("/api/tasks")
         assert response.status_code == 200
         body = response.json()
-        assert "guidance" in body  # FAIL: TaskListOut has no guidance field
+        assert "guidance" in body  # FAIL: legacy list response has no guidance field
 
     def test_list_tasks_envelope_has_no_mtime_field(
         self, client: TestClient
@@ -211,26 +211,26 @@ class TestFromAC_CockpitRoutes:
     ) -> None:
         """GET /api/tasks/{id} must include 'guidance' in the response body.
 
-        happy — ShowTaskResponse has guidance; current TaskDetailOut does not.
+        happy — ShowTaskResponse has guidance; current legacy detail response does not.
         FAIL: 'guidance' key absent from current response.
         """
         response = client.get("/api/tasks/1")
         assert response.status_code == 200
         body = response.json()
-        assert "guidance" in body  # FAIL: TaskDetailOut has no guidance
+        assert "guidance" in body  # FAIL: legacy detail response has no guidance
 
     def test_show_task_response_has_missing_sections_field(
         self, client: TestClient
     ) -> None:
         """GET /api/tasks/{id} must include 'missing_sections' in the response body.
 
-        happy — ShowTaskResponse has missing_sections; current TaskDetailOut does not.
+        happy — ShowTaskResponse has missing_sections; current legacy detail response does not.
         FAIL: 'missing_sections' key absent from current response.
         """
         response = client.get("/api/tasks/1")
         assert response.status_code == 200
         body = response.json()
-        assert "missing_sections" in body  # FAIL: TaskDetailOut has no missing_sections
+        assert "missing_sections" in body  # FAIL: legacy detail response has no missing_sections
 
     # ===================================================================
     # AC: GET /api/activity returns filtered activity events
@@ -284,13 +284,13 @@ class TestFromAC_CockpitRoutes:
     ) -> None:
         """GET /api/sessions must return a flat JSON array, not a wrapped envelope.
 
-        boundary — current route returns SessionListOut: {'sessions': [...]}.
+        boundary — current route returns a wrapped envelope: {'sessions': [...]}.
         FAIL: response.json() is a dict with 'sessions' key, not a list.
         """
         response = client.get("/api/sessions")
         assert response.status_code == 200
         # Expected: [...] (flat list of SessionRecord)
-        # Current:  {"sessions": [...]} (SessionListOut envelope)
+        # Current:  {"sessions": [...]} (wrapped envelope)
         assert isinstance(response.json(), list)  # FAIL: returns dict
 
     def test_sessions_record_has_task_status_at_start_field(
@@ -298,7 +298,7 @@ class TestFromAC_CockpitRoutes:
     ) -> None:
         """Session records must include 'task_status_at_start' (SessionRecord field).
 
-        happy — current SessionOut model does not expose task_status_at_start.
+        happy — current session response does not expose task_status_at_start.
         FAIL: response is a dict (not a list); even if list, field is absent.
         """
         engine.claim_task("1")
@@ -308,7 +308,7 @@ class TestFromAC_CockpitRoutes:
         sessions = response.json()
         assert isinstance(sessions, list), "sessions must be a flat list (not wrapped)"  # FAIL
         assert len(sessions) >= 1
-        assert "task_status_at_start" in sessions[0]  # FAIL: not in current SessionOut
+        assert "task_status_at_start" in sessions[0]  # FAIL: not in current session payload
 
     # ===================================================================
     # AC: POST /api/tasks/sweep returns list of released task IDs
@@ -348,7 +348,7 @@ class TestFromAC_CockpitRoutes:
     ) -> None:
         """POST /api/tasks/{id}/release must return 'guidance' field (SingleTaskResponse).
 
-        happy — current route returns TaskDetailOut which has no guidance.
+        happy — current route returns a legacy detail response with no guidance.
         FAIL: 'guidance' key absent from current release response.
         """
         task = engine.show_task("2")  # task 2 is pre-claimed
@@ -358,7 +358,7 @@ class TestFromAC_CockpitRoutes:
         )
         assert response.status_code == 200
         body = response.json()
-        assert "guidance" in body  # FAIL: TaskDetailOut has no guidance
+        assert "guidance" in body  # FAIL: legacy detail response has no guidance
 
     # ===================================================================
     # AC: OCC mutations pass expected_updated to CockpitView / SingleTaskResponse
@@ -369,7 +369,7 @@ class TestFromAC_CockpitRoutes:
     ) -> None:
         """POST /api/tasks/{id}/move must return 'guidance' field (SingleTaskResponse).
 
-        happy — current route returns TaskDetailOut which has no guidance.
+        happy — current route returns a legacy detail response with no guidance.
         FAIL: 'guidance' key absent from current move response.
         """
         task = engine.show_task("1")
@@ -379,7 +379,7 @@ class TestFromAC_CockpitRoutes:
         )
         assert response.status_code == 200
         body = response.json()
-        assert "guidance" in body  # FAIL: TaskDetailOut has no guidance
+        assert "guidance" in body  # FAIL: legacy detail response has no guidance
 
     # ===================================================================
     # AC: edit route delegates to CockpitView (not KanbanEngine directly)

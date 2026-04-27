@@ -163,36 +163,6 @@ class TestFromAC_TaskSummaryUpdatedField:
 
 
 # ---------------------------------------------------------------------------
-# AC1: TaskSummaryOut.updated field
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_TaskSummaryOutUpdatedField:
-    """AC1: cockpit TaskSummaryOut must include ``updated: str`` field."""
-
-    def test_task_summary_out_has_updated_in_model_fields(self) -> None:
-        """Structural: 'updated' must appear in TaskSummaryOut.model_fields."""
-        from owlbear_cockpit.models import TaskSummaryOut  # noqa: PLC0415
-
-        assert "updated" in TaskSummaryOut.model_fields, (
-            "TaskSummaryOut.model_fields does not include 'updated' — AC1 not implemented"
-        )
-
-    def test_task_summary_out_preserves_updated_on_construct(self) -> None:
-        """Happy path: TaskSummaryOut constructed with updated preserves the value."""
-        from owlbear_cockpit.models import TaskSummaryOut  # noqa: PLC0415
-
-        out = TaskSummaryOut(
-            id=1,
-            title="T",
-            status="todo",
-            priority="important",
-            updated="2026-04-27T10:00:00+00:00",
-        )
-        assert out.updated == "2026-04-27T10:00:00+00:00"
-
-
-# ---------------------------------------------------------------------------
 # AC2: GET /api/tasks response includes updated
 # ---------------------------------------------------------------------------
 

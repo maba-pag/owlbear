@@ -395,7 +395,7 @@ class TestFromAC_ReleaseTask:
     def test_release_returns_task_object_shape(
         self, client: TestClient, engine: KanbanEngine
     ) -> None:
-        """Release response body matches the TaskDetailOut shape (same as GET /tasks/{id})."""
+        """Release response body matches the task-detail shape (same as GET /tasks/{id})."""
         task = engine.show_task("2")
         response = client.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200

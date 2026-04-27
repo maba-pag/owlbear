@@ -573,7 +573,7 @@ class TestFromAC_ReleaseClaim:
     def test_release_claimed_task_response_has_required_fields(
         self, client: TestClient, engine: KanbanEngine
     ) -> None:
-        """Release 200 response has all required TaskDetailOut fields."""
+        """Release 200 response has all required task-detail fields."""
         task = engine.show_task("2")
         response = client.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200

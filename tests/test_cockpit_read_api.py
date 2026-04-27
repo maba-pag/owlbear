@@ -674,21 +674,3 @@ class TestFromAC_TaskDetailClaimedFields:
             assert "claimed_by" not in body, (
                 f"claimed_by must be absent for task {task_id}, got keys {list(body.keys())}"
             )
-
-    def test_task_detail_out_model_has_claimed_field(
-        self, client: TestClient
-    ) -> None:
-        """Task detail response keeps claimed as a bool for claimed tasks."""
-        response = client.get("/api/tasks/4")
-        assert response.status_code == 200
-        detail = response.json()
-        assert detail["claimed"] is True
-
-    def test_task_detail_out_model_null_claimed_by_yields_claimed_false(
-        self, client: TestClient
-    ) -> None:
-        """Task detail response keeps claimed as a bool for unclaimed tasks."""
-        response = client.get("/api/tasks/1")
-        assert response.status_code == 200
-        detail = response.json()
-        assert detail["claimed"] is False

@@ -154,21 +154,9 @@ class TestFromAC_NewModulesImportable:
         """owlbear_cockpit.cache.MtimeScanCache is importable."""
         from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415, F401
 
-    def test_models_task_summary_out_importable(self) -> None:
-        """owlbear_cockpit.models.TaskSummaryOut is importable."""
-        from owlbear_cockpit.models import TaskSummaryOut  # noqa: PLC0415, F401
-
-    def test_models_task_detail_out_importable(self) -> None:
-        """owlbear_cockpit.models.TaskDetailOut is importable."""
-        from owlbear_cockpit.models import TaskDetailOut  # noqa: PLC0415, F401
-
     def test_models_board_out_importable(self) -> None:
         """owlbear_cockpit.models.BoardOut is importable."""
         from owlbear_cockpit.models import BoardOut  # noqa: PLC0415, F401
-
-    def test_models_session_out_importable(self) -> None:
-        """owlbear_cockpit.models.SessionOut is importable."""
-        from owlbear_cockpit.models import SessionOut  # noqa: PLC0415, F401
 
     def test_routes_read_router_importable(self) -> None:
         """owlbear_cockpit.routes.read exposes a FastAPI APIRouter named router."""
@@ -191,39 +179,12 @@ class TestFromAC_PydanticResponseModels:
     Covers AC item: 'Pydantic response models for all endpoints'.
     """
 
-    def test_task_summary_out_is_pydantic_model(self) -> None:
-        """TaskSummaryOut is a pydantic BaseModel subclass."""
-        from pydantic import BaseModel  # noqa: PLC0415
-        from owlbear_cockpit.models import TaskSummaryOut  # noqa: PLC0415
-
-        assert issubclass(TaskSummaryOut, BaseModel), (
-            "TaskSummaryOut must be a pydantic BaseModel"
-        )
-
-    def test_task_detail_out_is_pydantic_model(self) -> None:
-        """TaskDetailOut is a pydantic BaseModel subclass."""
-        from pydantic import BaseModel  # noqa: PLC0415
-        from owlbear_cockpit.models import TaskDetailOut  # noqa: PLC0415
-
-        assert issubclass(TaskDetailOut, BaseModel), (
-            "TaskDetailOut must be a pydantic BaseModel"
-        )
-
     def test_board_out_is_pydantic_model(self) -> None:
         """BoardOut is a pydantic BaseModel subclass."""
         from pydantic import BaseModel  # noqa: PLC0415
         from owlbear_cockpit.models import BoardOut  # noqa: PLC0415
 
         assert issubclass(BoardOut, BaseModel), "BoardOut must be a pydantic BaseModel"
-
-    def test_session_out_is_pydantic_model(self) -> None:
-        """SessionOut is a pydantic BaseModel subclass."""
-        from pydantic import BaseModel  # noqa: PLC0415
-        from owlbear_cockpit.models import SessionOut  # noqa: PLC0415
-
-        assert issubclass(SessionOut, BaseModel), (
-            "SessionOut must be a pydantic BaseModel"
-        )
 
 
 # ---------------------------------------------------------------------------

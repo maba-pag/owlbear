@@ -25,8 +25,8 @@ AC coverage:
   - AC4a: edit with stale updated → 409 "Task was modified since your last load
           (stale snapshot)"
   - AC4b: release on unclaimed task → 409 "Task {id} is not currently claimed"
-  - AC5a: move 200 response has all 14 TaskDetailOut keys
-  - AC5b: edit 200 response has all 14 TaskDetailOut keys
+    - AC5a: move 200 response has all 14 task-detail keys
+    - AC5b: edit 200 response has all 14 task-detail keys
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def client(engine: KanbanEngine):
         app.dependency_overrides.clear()
 
 
-# Expected 14-key schema for TaskDetailOut
+# Expected 14-key schema for task detail responses
 _TASK_DETAIL_KEYS = frozenset({
     "id", "title", "status", "priority", "body",
     "updated", "created", "tags", "blocked", "block_reason",
@@ -269,12 +269,12 @@ class TestFromAC_409DetailStrings:
 
 
 # ---------------------------------------------------------------------------
-# AC5 — Schema baseline: all 14 TaskDetailOut keys present in 200 responses
+# AC5 — Schema baseline: all 14 task-detail keys present in 200 responses
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_SchemaBaseline:
-    """AC5: All 14 TaskDetailOut keys present in move and edit 200 responses.
+    """AC5: All 14 task-detail keys present in move and edit 200 responses.
 
     No release 200 test — the release 200 path is unreachable on new-schema
     boards due to gap G3 (AC3 above).
@@ -283,7 +283,7 @@ class TestFromAC_SchemaBaseline:
     def test_move_200_response_has_all_14_taskdetailout_keys(
         self, client, engine: KanbanEngine
     ) -> None:
-        """Move 200 response body contains all 14 TaskDetailOut keys."""
+        """Move 200 response body contains all 14 task-detail keys."""
         task = engine.show_task("1")
         response = client.post(
             "/api/tasks/1/move",
@@ -291,12 +291,12 @@ class TestFromAC_SchemaBaseline:
         )
         assert response.status_code == 200
         missing = _TASK_DETAIL_KEYS - set(response.json().keys())
-        assert not missing, f"Missing TaskDetailOut keys in move response: {missing}"
+        assert not missing, f"Missing task-detail keys in move response: {missing}"
 
     def test_edit_200_response_has_all_14_taskdetailout_keys(
         self, client, engine: KanbanEngine
     ) -> None:
-        """Edit 200 response body contains all 14 TaskDetailOut keys."""
+        """Edit 200 response body contains all 14 task-detail keys."""
         task = engine.show_task("1")
         response = client.post(
             "/api/tasks/1/edit",
@@ -304,4 +304,4 @@ class TestFromAC_SchemaBaseline:
         )
         assert response.status_code == 200
         missing = _TASK_DETAIL_KEYS - set(response.json().keys())
-        assert not missing, f"Missing TaskDetailOut keys in edit response: {missing}"
+        assert not missing, f"Missing task-detail keys in edit response: {missing}"
