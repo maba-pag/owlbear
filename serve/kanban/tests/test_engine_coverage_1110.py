@@ -497,7 +497,7 @@ class TestFromAC_EngineListSessionsSpecialActions:
         sessions = engine.list_sessions(filter="released")
         assert len(sessions) == 1
         assert sessions[0].state == "released"
-        assert sessions[0].outcome == "released"
+        assert sessions[0].outcome == "release"
 
     def test_sweep_release_action_produces_expired_session(
         self, tmp_path: Path
