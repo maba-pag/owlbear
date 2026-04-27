@@ -18,7 +18,7 @@ AC coverage:
   - POST /api/tasks/{id}/release unclaims claimed task → 200 with updated task
   - POST /api/tasks/{id}/release on unclaimed task → 409 Conflict
   - POST /api/tasks/{id}/release for non-existent task → 404
-  - All mutations write entry to activity.jsonl with actor='cockpit'
+    - All mutations write entry to activity.jsonl with source='cockpit'
 """
 
 from __future__ import annotations
@@ -421,7 +421,7 @@ class TestFromAC_ReleaseTask:
 
 
 # ---------------------------------------------------------------------------
-# AC: All mutations write activity.jsonl with actor='cockpit'
+# AC: All mutations write activity.jsonl with source='cockpit'
 # ---------------------------------------------------------------------------
 
 
@@ -429,14 +429,14 @@ class TestFromAC_AuditLogging:
     """Tests verifying that every mutation endpoint writes an activity log entry.
 
     Each mutation must produce at least one entry in activity.jsonl with
-    actor='cockpit'. Engine is constructed with agent_name='cockpit' and
+    source='cockpit'. Engine is constructed with agent_name='cockpit' and
     activity_log=True so entries are written at all.
     """
 
-    def test_move_writes_activity_log_actor_cockpit(
+    def test_move_writes_activity_log_source_cockpit(
         self, client: TestClient, engine: KanbanEngine, board_dir: Path
     ) -> None:
-        """Move mutation writes activity.jsonl entry with actor='cockpit'."""
+        """Move mutation writes activity.jsonl entry with source='cockpit'."""
         task = engine.show_task("1")
         client.post(
             "/api/tasks/1/move",
@@ -449,15 +449,15 @@ class TestFromAC_AuditLogging:
             for line in activity_file.read_text().splitlines()
             if line.strip()
         ]
-        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert len(cockpit_entries) >= 1, (
-            "At least one activity entry must have actor='cockpit'"
+            "At least one activity entry must have source='cockpit'"
         )
 
-    def test_edit_writes_activity_log_actor_cockpit(
+    def test_edit_writes_activity_log_source_cockpit(
         self, client: TestClient, engine: KanbanEngine, board_dir: Path
     ) -> None:
-        """Edit mutation writes activity.jsonl entry with actor='cockpit'."""
+        """Edit mutation writes activity.jsonl entry with source='cockpit'."""
         task = engine.show_task("1")
         client.post(
             "/api/tasks/1/edit",
@@ -470,18 +470,18 @@ class TestFromAC_AuditLogging:
             for line in activity_file.read_text().splitlines()
             if line.strip()
         ]
-        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert len(cockpit_entries) >= 1, (
-            "At least one activity entry must have actor='cockpit'"
+            "At least one activity entry must have source='cockpit'"
         )
 
-    def test_edit_noop_only_updated_writes_activity_log_actor_cockpit(
+    def test_edit_noop_only_updated_writes_activity_log_source_cockpit(
         self, client: TestClient, engine: KanbanEngine, board_dir: Path
     ) -> None:
         """AC6: edit with only 'updated' (no other fields) must still write activity log.
 
         The empty-kwargs path currently bypasses engine.edit_task entirely, which
-        silently skips the audit log. AC6 states all mutations must log actor='cockpit'.
+        silently skips the audit log. AC6 states all mutations must log source='cockpit'.
         Either the endpoint must reject no-op edits (422) or must call engine.edit_task
         to ensure the audit trail is written.
         """
@@ -493,7 +493,7 @@ class TestFromAC_AuditLogging:
         # A valid 200 response without an audit log entry violates AC6.
         # The endpoint must either: (a) call engine.edit_task producing an audit entry,
         # or (b) reject the no-op with 422 (no mutation = no log needed).
-        # If 200 is returned, an activity log entry with actor='cockpit' MUST exist.
+        # If 200 is returned, an activity log entry with source='cockpit' MUST exist.
         if response.status_code == 200:
             activity_file = board_dir / "activity.jsonl"
             assert activity_file.exists(), (
@@ -504,10 +504,10 @@ class TestFromAC_AuditLogging:
                 for line in activity_file.read_text().splitlines()
                 if line.strip()
             ]
-            cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+            cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
             assert len(cockpit_entries) >= 1, (
                 "POST /edit with only 'updated' returned 200 but wrote no activity log "
-                "entry — AC6 requires actor='cockpit' for all mutations (empty-kwargs path)"
+                "entry — AC6 requires source='cockpit' for all mutations (empty-kwargs path)"
             )
         else:
             # 422 is also acceptable — a no-op edit is not a mutation, so no log needed.
@@ -519,10 +519,10 @@ class TestFromAC_AuditLogging:
         strict=True,
         reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
     )
-    def test_release_writes_activity_log_actor_cockpit(
+    def test_release_writes_activity_log_source_cockpit(
         self, client: TestClient, board_dir: Path
     ) -> None:
-        """Release mutation writes activity.jsonl entry with actor='cockpit'."""
+        """Release mutation writes activity.jsonl entry with source='cockpit'."""
         client.post("/api/tasks/2/release")  # task 2 is pre-claimed
         activity_file = board_dir / "activity.jsonl"
         assert activity_file.exists(), (
@@ -533,9 +533,9 @@ class TestFromAC_AuditLogging:
             for line in activity_file.read_text().splitlines()
             if line.strip()
         ]
-        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert len(cockpit_entries) >= 1, (
-            "At least one activity entry must have actor='cockpit'"
+            "At least one activity entry must have source='cockpit'"
         )
 
 
@@ -572,7 +572,7 @@ class TestBuilderDiscovered:
             for line in (board_dir / "activity.jsonl").read_text().splitlines()
             if line.strip()
         ]
-        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert cockpit_entries[0]["action"] == "move"
         assert cockpit_entries[0]["task_id"] == 1
 
@@ -590,7 +590,7 @@ class TestBuilderDiscovered:
             for line in (board_dir / "activity.jsonl").read_text().splitlines()
             if line.strip()
         ]
-        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert cockpit_entries[0]["action"] == "edit"
         assert cockpit_entries[0]["task_id"] == 1
 
@@ -608,7 +608,7 @@ class TestBuilderDiscovered:
             for line in (board_dir / "activity.jsonl").read_text().splitlines()
             if line.strip()
         ]
-        cockpit_entries = [e for e in entries if e.get("actor") == "cockpit"]
+        cockpit_entries = [e for e in entries if e.get("source") == "cockpit"]
         assert cockpit_entries[0]["action"] == "release"
         assert cockpit_entries[0]["task_id"] == 2
 
