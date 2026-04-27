@@ -417,12 +417,27 @@ class TestFromAC_Sessions:
             assert isinstance(session["task_id"], int)
             assert isinstance(session["state"], str)
 
-    def test_sessions_active_is_default_filter(self, client: TestClient) -> None:
+    def test_sessions_active_is_default_filter(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """GET /api/sessions (no filter param) defaults to active and returns HTTP 200."""
+        from owlbear_kanban.engine import CockpitView
+
+        called_filter: str | None = None
+        original = CockpitView.list_sessions
+
+        def _spy_list_sessions(self: CockpitView, filter: str = "active"):  # noqa: A002
+            nonlocal called_filter
+            called_filter = filter
+            return original(self, filter=filter)
+
+        monkeypatch.setattr(CockpitView, "list_sessions", _spy_list_sessions)
+
         response = client.get("/api/sessions")
         assert response.status_code == 200
         body = response.json()
         assert isinstance(body, list)
+        assert called_filter == "active"
 
 
 # ---------------------------------------------------------------------------
