@@ -384,22 +384,20 @@ class TestFromAC_ReleaseTask:
     (409 Conflict per AC refinement), and non-existent task (404).
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
-    )
-    def test_release_claimed_task_returns_200(self, client: TestClient) -> None:
+    def test_release_claimed_task_returns_200(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Happy path: release pre-claimed task 2 returns 200."""
-        response = client.post("/api/tasks/2/release")
+        task = engine.show_task("2")
+        response = client.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
-    )
-    def test_release_returns_task_object_shape(self, client: TestClient) -> None:
+    def test_release_returns_task_object_shape(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Release response body matches the TaskDetailOut shape (same as GET /tasks/{id})."""
-        response = client.post("/api/tasks/2/release")
+        task = engine.show_task("2")
+        response = client.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200
         body = response.json()
         assert body["id"] == 2
@@ -408,14 +406,20 @@ class TestFromAC_ReleaseTask:
         assert "priority" in body
         assert "updated" in body
 
-    def test_release_unclaimed_task_returns_409(self, client: TestClient) -> None:
+    def test_release_unclaimed_task_returns_409(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Releasing an unclaimed task is a state conflict → 409 (AC refinement #1)."""
-        response = client.post("/api/tasks/1/release")  # task 1 is unclaimed
+        task = engine.show_task("1")
+        response = client.post("/api/tasks/1/release", json={"updated": task.updated})
         assert response.status_code == 409
 
-    def test_release_nonexistent_task_returns_404(self, client: TestClient) -> None:
+    def test_release_nonexistent_task_returns_404(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Non-existent task ID returns 404 with ID in detail."""
-        response = client.post("/api/tasks/999/release")
+        token = engine.show_task("1").updated
+        response = client.post("/api/tasks/999/release", json={"updated": token})
         assert response.status_code == 404
         assert "999" in response.json()["detail"]
 
@@ -515,15 +519,12 @@ class TestFromAC_AuditLogging:
                 f"Expected 200 (with audit log) or 422 (no-op rejected), got {response.status_code}"
             )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
-    )
     def test_release_writes_activity_log_source_cockpit(
-        self, client: TestClient, board_dir: Path
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
     ) -> None:
         """Release mutation writes activity.jsonl entry with source='cockpit'."""
-        client.post("/api/tasks/2/release")  # task 2 is pre-claimed
+        task = engine.show_task("2")
+        client.post("/api/tasks/2/release", json={"updated": task.updated})
         activity_file = board_dir / "activity.jsonl"
         assert activity_file.exists(), (
             "activity.jsonl must be created by release mutation"
@@ -594,15 +595,12 @@ class TestBuilderDiscovered:
         assert cockpit_entries[0]["action"] == "edit"
         assert cockpit_entries[0]["task_id"] == 1
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="G3: release route guard uses claimed_by (Field(exclude=True), never persisted) instead of claimed_at — always 409 on new-schema boards. Fix: #1133 + #1132",
-    )
     def test_release_audit_log_has_correct_action_and_task_id(
-        self, client: TestClient, board_dir: Path
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
     ) -> None:
         """Release audit log entry has action='release' and task_id matching the mutated task."""
-        client.post("/api/tasks/2/release")  # task 2 is pre-claimed
+        task = engine.show_task("2")
+        client.post("/api/tasks/2/release", json={"updated": task.updated})
         entries = [
             json.loads(line)
             for line in (board_dir / "activity.jsonl").read_text().splitlines()

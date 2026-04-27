@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from owlbear_cockpit import adapter
-from owlbear_cockpit.deps import get_engine
+from owlbear_cockpit.deps import get_engine, get_view
 from owlbear_cockpit.models import TaskDetailOut
-from owlbear_kanban.models import ConcurrencyError
+from owlbear_kanban.engine import CockpitView
+from owlbear_kanban.errors import ConcurrencyError, NotFoundError, ValidationError
 
 if TYPE_CHECKING:
     from owlbear_kanban import KanbanEngine
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 router = APIRouter()
 
 _Engine = Annotated["KanbanEngine", Depends(get_engine)]
+_View = Annotated[CockpitView, Depends(get_view)]
 
 
 # ---------------------------------------------------------------------------
@@ -53,12 +55,26 @@ class EditRequest(BaseModel):
     body: str | None = None
 
 
+class ReleaseRequest(BaseModel):
+    """Request body for POST /tasks/{id}/release."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    updated: str
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
+    if hasattr(task, "model_dump"):
+        payload = task.model_dump()
+        if payload.get("body") is None:
+            payload["body"] = ""
+        return TaskDetailOut.model_validate(payload)
+
     return TaskDetailOut(
         id=task.id,
         title=task.title,
@@ -72,7 +88,8 @@ def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
         block_reason=task.block_reason,
         parent=task.parent,
         depends_on=task.depends_on or [],
-        claimed_by=task.claimed_by,
+        claimed_at=getattr(task, "claimed_at", None),
+        claimed_by=getattr(task, "claimed_by", None),
     )
 
 
@@ -82,10 +99,10 @@ def _task_to_detail(task: Any) -> TaskDetailOut:  # noqa: ANN401
 
 
 @router.post("/tasks/{task_id}/move", response_model=TaskDetailOut)
-def move_task(task_id: int, req: MoveRequest, engine: _Engine) -> TaskDetailOut:
+def move_task(task_id: int, req: MoveRequest, view: _View) -> TaskDetailOut:
     """Move task to a new status. Validates OCC token then valid_transitions."""
     try:
-        task = engine.show_task(str(task_id))
+        task = view.engine.show_task(str(task_id))
     except FileNotFoundError:
         raise HTTPException(
             status_code=404, detail=f"Task {task_id} not found"
@@ -97,7 +114,7 @@ def move_task(task_id: int, req: MoveRequest, engine: _Engine) -> TaskDetailOut:
             detail="Task was modified since your last load (stale snapshot)",
         )
 
-    transitions = adapter.valid_transitions(engine, task.status)
+    transitions = adapter.valid_transitions(view.engine, task.status)
     if req.status not in transitions:
         raise HTTPException(
             status_code=422,
@@ -105,9 +122,17 @@ def move_task(task_id: int, req: MoveRequest, engine: _Engine) -> TaskDetailOut:
         )
 
     try:
-        updated_task = engine.move_task(
-            str(task_id), req.status, expected_updated=req.updated
+        updated_task = view.move_task(
+            task_id,
+            req.status,
+            expected_updated=req.updated,
         )
+    except NotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found"
+        ) from None
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.user_message) from exc
     except ConcurrencyError:
         raise HTTPException(
             status_code=409,
@@ -234,19 +259,30 @@ def edit_task(task_id: int, req: EditRequest, engine: _Engine) -> TaskDetailOut:
 
 
 @router.post("/tasks/{task_id}/release", response_model=TaskDetailOut)
-def release_task(task_id: int, engine: _Engine) -> TaskDetailOut:
+def release_task(task_id: int, req: ReleaseRequest, view: _View) -> TaskDetailOut:
     """Release claim on a task. 409 if task is not currently claimed."""
     try:
-        task = engine.show_task(str(task_id))
-    except FileNotFoundError:
+        task = view.show_task(task_id)
+    except (FileNotFoundError, NotFoundError):
         raise HTTPException(
             status_code=404, detail=f"Task {task_id} not found"
         ) from None
 
-    if not task.claimed_by:
+    if not task.claimed:
         raise HTTPException(
             status_code=409, detail=f"Task {task_id} is not currently claimed"
         )
 
-    updated_task = engine.release_task(str(task_id))
+    try:
+        updated_task = view.release_task(task_id, expected_updated=req.updated)
+    except NotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"Task {task_id} not found"
+        ) from None
+    except ConcurrencyError:
+        raise HTTPException(
+            status_code=409,
+            detail="Task was modified since your last load (stale snapshot)",
+        ) from None
+
     return _task_to_detail(updated_task)

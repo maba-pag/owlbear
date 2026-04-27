@@ -211,22 +211,14 @@ class TestFromAC_MoveOCCContrast:
 
 
 class TestFromAC_ReleaseGuardBroken:
-    """AC3: Release route returns 409 even for genuinely claimed tasks (gap G3).
+    """AC3: Release route behavior after CockpitView wiring (#1132)."""
 
-    The release route (mutation.py L~227) guards with ``if not task.claimed_by``.
-    Because Task.claimed_by has Field(exclude=True), it is never written to the
-    YAML file.  After any disk round-trip, show_task() always returns
-    claimed_by=None — so the guard always fires and the route always returns 409,
-    making the release endpoint unreachable on new-schema boards.
-    """
-
-    def test_release_returns_409_even_when_task_is_genuinely_claimed(
+    def test_release_returns_200_when_task_is_genuinely_claimed(
         self, client, engine: KanbanEngine
     ) -> None:
-        """Claim task 1 via engine (writes claimed_at to disk); release route → 409.
+        """Claim task 1 via engine (writes claimed_at to disk); release route → 200.
 
-        No mocking: proves the live route behavior when claimed_at IS on disk
-        but claimed_by is None due to Field(exclude=True).
+        No mocking: proves the live route behavior when claimed_at IS on disk.
         """
         # Write claimed_at to disk via engine
         engine.claim_task("1")
@@ -235,20 +227,15 @@ class TestFromAC_ReleaseGuardBroken:
         assert claimed_task.claimed_at is not None, (
             "Precondition: engine.claim_task must have written claimed_at to disk"
         )
-        assert claimed_task.claimed_by is None, (
-            "Proof: claimed_by is Field(exclude=True) — never persisted to disk, "
-            "always None after round-trip even though claimed_at is set. "
-            "This is the exact persistence hole the release guard (mutation.py L~237) falls into."
+
+        response = client.post(
+            "/api/tasks/1/release",
+            json={"updated": claimed_task.updated},
         )
 
-        # Release route reads claimed_by (always None) → guard fires → 409
-        response = client.post("/api/tasks/1/release")
-
-        assert response.status_code == 409, (
-            "Release route must return 409 even when task is claimed (gap G3 — "
-            "claimed_by guard always fires because claimed_by is never persisted)"
+        assert response.status_code == 200, (
+            "Release route must return 200 when task is genuinely claimed"
         )
-        assert response.json()["detail"] == "Task 1 is not currently claimed"
 
 
 # ---------------------------------------------------------------------------
@@ -270,10 +257,13 @@ class TestFromAC_409DetailStrings:
             "Task was modified since your last load (stale snapshot)"
         )
 
-    def test_release_unclaimed_task_exact_detail_string(self, client) -> None:
+    def test_release_unclaimed_task_exact_detail_string(
+        self, client, engine: KanbanEngine
+    ) -> None:
         """Release on unclaimed task 1 → 409 with exact 'Task {id} is not currently claimed'."""
         # Task 1 is unclaimed in the fixture
-        response = client.post("/api/tasks/1/release")
+        task = engine.show_task("1")
+        response = client.post("/api/tasks/1/release", json={"updated": task.updated})
         assert response.status_code == 409
         assert response.json()["detail"] == "Task 1 is not currently claimed"
 

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from fastapi import Depends
 
 from owlbear_cockpit.cache import MtimeScanCache
+from owlbear_kanban.engine import CockpitView
 
 if TYPE_CHECKING:
     from owlbear_kanban import KanbanEngine
@@ -41,3 +42,8 @@ def get_cache(engine=Depends(get_engine)) -> MtimeScanCache:  # noqa: ANN001, B0
     if engine not in _engine_caches:
         _engine_caches[engine] = MtimeScanCache(engine._tasks_dir)  # noqa: SLF001
     return _engine_caches[engine]
+
+
+def get_view(engine=Depends(get_engine)) -> CockpitView:  # noqa: ANN001, B008
+    """Return a CockpitView facade bound to the request engine."""
+    return CockpitView(engine)
