@@ -234,6 +234,11 @@ class TestFromAC_ReleaseGuardBroken:
         assert claimed_task.claimed_at is not None, (
             "Precondition: engine.claim_task must have written claimed_at to disk"
         )
+        assert claimed_task.claimed_by is None, (
+            "Proof: claimed_by is Field(exclude=True) — never persisted to disk, "
+            "always None after round-trip even though claimed_at is set. "
+            "This is the exact persistence hole the release guard (mutation.py L~237) falls into."
+        )
 
         # Release route reads claimed_by (always None) → guard fires → 409
         response = client.post("/api/tasks/1/release")
