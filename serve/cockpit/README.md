@@ -26,7 +26,7 @@ The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goe
 
 ### Mutation routes
 
-Move and release are routed through the `CockpitView` facade; edit calls the engine directly.
+All mutation routes go through the `CockpitView` facade.
 
 #### Via CockpitView facade
 
@@ -34,12 +34,7 @@ Move and release are routed through the `CockpitView` facade; edit calls the eng
 |--------|-------|-------|
 | `view.engine.show_task()` + `view.move_task()` | `POST /tasks/{id}/move` | OCC token precheck, then `valid_transitions` check, then move through CockpitView with `expected_updated`; `ConcurrencyError` → 409 |
 | `view.show_task()` + `view.release_task()` | `POST /tasks/{id}/release` | Claimed check (409 if unclaimed), release through CockpitView with `expected_updated`; `ConcurrencyError` → 409 |
-
-#### Direct engine calls (edit only)
-
-| Method | Route | Notes |
-|--------|-------|-------|
-| `engine.show_task()` + `engine.edit_task()` | `POST /tasks/{id}/edit` | OCC token precheck, diffs tags and deps, then edit with `expected_updated`; `ConcurrencyError` → 409 |
+| `view.show_task()` + `view.edit_task()` | `POST /tasks/{id}/edit` | Pre-fetches task when `tags`, `depends_on`, or `block_reason` is set (for diff and D21 block:user lifecycle); diffs tags/deps, restores block:user; edit with `expected_updated`; `ConcurrencyError` → 409 |
 
 ### Excluded methods — why
 
