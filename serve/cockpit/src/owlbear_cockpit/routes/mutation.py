@@ -11,7 +11,7 @@ from owlbear_cockpit import adapter
 from owlbear_cockpit.deps import get_view
 from owlbear_kanban.engine import CockpitView
 from owlbear_kanban.errors import ConcurrencyError, ConfigError, NotFoundError, ValidationError
-from owlbear_kanban.models import SingleTaskResponse
+from owlbear_kanban.models import ActivityCompactionResult, RepairOutcome, SingleTaskResponse
 
 router = APIRouter()
 
@@ -307,3 +307,21 @@ def release_task(task_id: int, req: ReleaseRequest, view: _View) -> SingleTaskRe
 def sweep_tasks(view: _View) -> list[int]:
     """Release expired claims and return released task IDs."""
     return view.sweep()
+
+
+@router.post("/tasks/scan", response_model=list[dict[str, Any]])
+def scan_corruption(view: _View) -> list[dict[str, Any]]:
+    """Run read-only corruption scan for tasks and archive directories."""
+    return view.scan_corruption()
+
+
+@router.post("/tasks/repair", response_model=list[RepairOutcome])
+def repair_storage(view: _View) -> list[RepairOutcome]:
+    """Run storage repair and return one outcome per affected file."""
+    return view.repair_storage()
+
+
+@router.post("/tasks/compact-activity", response_model=ActivityCompactionResult)
+def compact_activity(view: _View) -> ActivityCompactionResult:
+    """Compact activity log and return byte and record deltas."""
+    return view.compact_activity()
