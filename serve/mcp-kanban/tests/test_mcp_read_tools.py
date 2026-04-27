@@ -106,6 +106,7 @@ def _make_task_summary(**overrides: object) -> TaskSummary:
         "title": "Alpha",
         "status": "todo",
         "priority": "important",
+        "updated": "2026-01-01T00:00:00+00:00",
         "tags": [],
         "depends_on": [],
         "blocked": False,

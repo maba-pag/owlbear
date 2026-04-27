@@ -432,6 +432,7 @@ class TestFromAC_EngineSummaryProjectionFields:
             title="T",
             status="archived",
             priority="needed",
+            updated="2026-01-01T00:00:00+00:00",
             archival_reason="deprecated",
             archival_refs=[42, 99],
         )
@@ -450,7 +451,12 @@ class TestFromAC_EngineSummaryProjectionFields:
         from owlbear_kanban.models import TaskSummary
 
         s = TaskSummary(
-            id=1, title="T", status="todo", priority="needed", depends_on=[]
+            id=1,
+            title="T",
+            status="todo",
+            priority="needed",
+            updated="2026-01-01T00:00:00+00:00",
+            depends_on=[],
         )
         assert s.dep_status is None
 
