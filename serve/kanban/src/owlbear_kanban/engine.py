@@ -1278,7 +1278,13 @@ class KanbanEngine:
     ) -> Task:
         """Release the claim on a task, clearing ``claimed_at``.
 
-        This operation is a no-op if the task is not currently claimed.
+        When the task is not currently claimed:
+
+        - If ``expected_updated`` is ``None``, this is a silent no-op and the
+          unchanged record is returned.
+        - If ``expected_updated`` is provided, the token is verified against
+          ``record.updated``; a stale token raises :class:`ConcurrencyError`
+          (``ERR_STALE``); a matching token returns the unchanged record.
 
         Args:
             task_id: Numeric task ID as a string.
@@ -1287,10 +1293,13 @@ class KanbanEngine:
             note:    Optional note text appended with an ISO-8601 timestamp.
 
         Returns:
-            Updated :class:`Task` with claim fields cleared.
+            :class:`Task` with claim fields cleared when the task was claimed,
+            or the unchanged record when the task was already unclaimed.
 
         Raises:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
+            ConcurrencyError: ``expected_updated`` was provided but does not
+                match the stored ``updated`` timestamp (code ``ERR_STALE``).
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
         record = read_task(task_path)
@@ -3221,7 +3230,13 @@ class CockpitView:
         *,
         expected_updated: str,
     ) -> SingleTaskResponse:
-        """Release claim on task; unclaimed tasks are returned unchanged."""
+        """Release claim on task using OCC compare-and-swap.
+
+        ``expected_updated`` is required; raises :class:`ConcurrencyError`
+        (``ERR_STALE``) if the token does not match the stored ``updated``
+        timestamp. Unclaimed tasks with a fresh token are returned unchanged
+        without advancing ``updated``.
+        """
         try:
             released = self.engine.release_task(
                 str(task_id),
