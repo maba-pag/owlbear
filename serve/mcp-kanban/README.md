@@ -24,7 +24,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `move_task` | Move a task to a new status |
 | `edit_task` | Edit task fields (body, title, priority, tags, depends_on) |
 | `start_work` | Claim a task and advance it to `in-progress` |
-| `end_work` | Append an outcome note and advance/reject/block the task |
+| `end_work` | Append an outcome note and apply outcome (success, fail, reject, block, or release) |
 | `pick_tasks` | Select the top dispatchable tasks from the board |
 
 ## Configuration
