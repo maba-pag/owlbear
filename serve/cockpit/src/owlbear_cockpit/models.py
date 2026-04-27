@@ -1,4 +1,4 @@
-"""Pydantic response models for the cockpit read API."""
+"""Pydantic response model for the cockpit GET /api/board endpoint."""
 
 from __future__ import annotations
 
