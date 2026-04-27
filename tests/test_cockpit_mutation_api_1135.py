@@ -15,6 +15,7 @@ AC coverage:
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from unittest import mock
 
@@ -166,6 +167,19 @@ class TestFromAC_MoveRequestUpdatedField:
         )
         assert response.status_code == 404
         assert "999" in response.json()["detail"]
+
+    def test_move_with_null_updated_returns_422(self, client) -> None:
+        """Move request with null 'updated' value → 422 validation error.
+
+        AC1 specifies 'updated' must be str (required). A null value is not a
+        valid string and must be rejected by Pydantic type validation before
+        the handler body runs. This is an AC1 non-string boundary case.
+        """
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": None},
+        )
+        assert response.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -397,3 +411,74 @@ class TestFromAC_MoveSharedSuiteContract:
             "Move POST calls in test_cockpit_mutation_api.py missing 'updated' OCC token"
             " (AC4 — builder must update all move payloads):\n" + "\n".join(violations)
         )
+
+    def test_shared_suite_move_posts_source_updated_from_engine_show_task(self) -> None:
+        """Stronger AC4 guard: every /move POST in test_cockpit_mutation_api.py
+        sources 'updated' dynamically from engine.show_task (not hardcoded).
+
+        The weaker guard (test_shared_suite_move_posts_all_include_updated_token)
+        only checks that the 'updated' key is present in the payload window.
+        This test additionally verifies 'task.updated' appears nearby, proving
+        the token is sourced dynamically — not from a hardcoded or stale value.
+
+        Fails if any /move POST payload uses a hardcoded 'updated' value
+        instead of one derived from engine.show_task().updated.
+        """
+        source = Path("tests/test_cockpit_mutation_api.py").read_text(encoding="utf-8")
+        lines = source.splitlines()
+        violations: list[str] = []
+
+        for i, line in enumerate(lines):
+            if "/move" not in line:
+                continue
+            start = max(0, i - 8)
+            end = min(len(lines), i + 5)
+            window = "\n".join(lines[start:end])
+            if "client.post" not in window:
+                continue
+            # Skip if 'updated' key is absent (already caught by the weak guard)
+            if '"updated"' not in window and "'updated'" not in window:
+                continue
+            # Stronger: verify 'updated' value is sourced from task.updated
+            if "task.updated" not in window:
+                violations.append(
+                    f"  line {i + 1}: /move POST has 'updated' key but no "
+                    f"'task.updated' source (may be hardcoded): {line.strip()!r}"
+                )
+
+        assert not violations, (
+            "Move POST payloads in test_cockpit_mutation_api.py must source 'updated' from "
+            "engine.show_task().updated (not hardcoded) per AC4:\n"
+            + "\n".join(violations)
+        )
+
+    def test_shared_suite_config_is_engine_compatible(self, tmp_path: Path) -> None:
+        """AC4: The _CONFIG_YAML in test_cockpit_mutation_api.py can initialize
+        KanbanEngine without ConfigError.
+
+        The shared move tests cannot execute when their board fixture raises
+        ConfigError at KanbanEngine init. This test proves the shared suite's
+        config format satisfies current engine validation requirements,
+        including agent_map for every declared status.
+
+        Fails when test_cockpit_mutation_api.py uses a stale config format
+        that is missing agent_map — causing 37 setup errors that prevent AC4
+        from being verified by executable regression of the named suite.
+        """
+        module_path = Path("tests/test_cockpit_mutation_api.py")
+        spec = importlib.util.spec_from_file_location("_shared_suite_probe", module_path)
+        assert spec is not None
+        assert spec.loader is not None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)  # defines _CONFIG_YAML and imports
+        config_yaml: str = mod._CONFIG_YAML
+
+        kanban_dir = tmp_path / "shared-board"
+        kanban_dir.mkdir()
+        (kanban_dir / "config.yml").write_text(config_yaml, encoding="utf-8")
+        (kanban_dir / "tasks").mkdir()
+        (kanban_dir / "archive").mkdir()
+
+        # Must not raise ConfigError — failure here proves the shared suite
+        # is setup-blocked and AC4 cannot be confirmed by executable regression
+        KanbanEngine(kanban_dir, agent_name="probe")
