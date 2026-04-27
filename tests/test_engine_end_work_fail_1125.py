@@ -377,24 +377,40 @@ class TestFromAC_SkillDocReleaseRow:
         )
 
     def test_skill_doc_release_row_exact_behavior_text(self) -> None:
-        """AC5: release row contains the exact corrected behavior string.
+        """AC5: release row behavior cell exactly equals the corrected AC5 text.
 
         Corrected (retry cycle 7): prior text 'without note' contradicted live
         release_task behavior which appends notes when provided (engine.py:1296).
-        Required text (AC5 corrected):
+        Required text (AC5 final, cycle 8 — no trailing period):
           'Release claim, no status change (note appended if provided; no-op when unclaimed)'
 
-        FAIL reason: handbook still contains stale text 'without note or status change
-        (idempotent on unclaimed)' — builder must update the release row in
-        share/skills/h-mcp-kanban/SKILL.md.
+        Uses exact cell extraction (==) rather than substring containment (in)
+        to prevent false-green on trailing punctuation drift (cycle 8 fix).
+
+        FAIL reason: handbook release row in share/skills/h-mcp-kanban/SKILL.md
+        has a trailing period — builder must remove it so the cell text exactly
+        matches the AC5 string without trailing punctuation.
         """
-        content = self._SKILL_PATH.read_text(encoding="utf-8")
-        assert (
+        expected = (
             "Release claim, no status change (note appended if provided; no-op when unclaimed)"
-            in content
-        ), (
-            "h-mcp-kanban/SKILL.md release row does not contain the corrected AC5 behavior "
-            "text 'Release claim, no status change (note appended if provided; no-op when unclaimed)'"
+        )
+        content = self._SKILL_PATH.read_text(encoding="utf-8")
+        release_cell: str | None = None
+        for line in content.splitlines():
+            if not line.strip().startswith("|"):
+                continue
+            cells = line.strip().split("|")
+            # cells[0]='', cells[1]=outcome col, cells[2]=behavior col, cells[3]=''
+            if len(cells) >= 3 and cells[1].strip() in ("`release`", "release"):
+                release_cell = cells[2].strip()
+                break
+        assert release_cell is not None, (
+            "No '| release |' or '| `release` |' row found in outcome table"
+        )
+        assert release_cell == expected, (
+            f"Release row behavior cell mismatch.\n"
+            f"  Expected: {expected!r}\n"
+            f"  Got:      {release_cell!r}"
         )
 
 
