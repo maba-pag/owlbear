@@ -18,6 +18,7 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 - Apply anchor-recall only on synthesis and decision turns.
 - Treat Critic output as adversarial stress input, not truth.
 - Offer the Brief walkthrough before showing any Brief content in chat.
+- Explore before asking: for Phase 2 brownfield or pattern questions, check the codebase first with `Explore` subagent, `read_file`, `semantic_search`, or `grep_search`.
 
 ## Critic Validation (O15)
 
@@ -70,7 +71,7 @@ Use the lightest disclosure level that still supports a good decision. Never hid
 **Entry criteria:** A discovery handoff exists.
 **Exit criteria:** Phase 2 has a stable artifact base.
 
-## Step 1 — M3: Landscape Presentation and Research Follow-Up
+## Step 1 — M3: Landscape — "What exists, what's possible?"
 
 1. Present the landscape from `research-notes.md` as a synthesis turn: what is verified, what is still uncertain, and what tensions matter.
 2. If Phase 1 flagged meaningful research gaps, request targeted deep-dive research before moving on.
@@ -80,16 +81,17 @@ Use the lightest disclosure level that still supports a good decision. Never hid
 ## Step 2 — Late Domain Panel Orchestration
 
 1. Tell the user which late-domain panelists you are invoking and why.
-2. Invoke the relevant domain panelists in parallel by default:
+2. Select panelists using the selection matrix in `h-ideation-panel` (problem signal → panelist combination). State the signal and selected roster explicitly.
+3. Invoke the relevant domain panelists in parallel by default:
    - `ideation-architect`
    - `ideation-data`
    - `ideation-enduser`
    - `ideation-security`
-3. Use sequential deep-dive only when panel interdependence makes the parallel pass misleading.
-4. After domain panelists finish, invoke `ideation-pragmatist` in `converge` mode to write `synthesis.md`.
-5. Read `synthesis.md` only. Do not read raw debate logs unless the user asks for drill-in and the decision depends on exact wording.
+4. Use sequential deep-dive only when panel interdependence makes the parallel pass misleading.
+5. After domain panelists finish, invoke `ideation-pragmatist` in `converge` mode to write `synthesis.md`.
+6. Read `synthesis.md` only. Do not read raw debate logs unless the user asks for drill-in and the decision depends on exact wording.
 
-## Step 3 — M4: Decision Support
+## Step 3 — M4: Decision — "What are we doing and why?"
 
 1. Present the late-panel findings in plain language with attribution.
 2. Separate convergences from disagreements.
@@ -100,7 +102,7 @@ Use the lightest disclosure level that still supports a good decision. Never hid
 
 Apply O15 to every Critic pass. See the Critic Validation section above for the full procedure.
 
-## Step 5 — M5: Brief Drafting
+## Step 5 — M5: The Brief — "Here's the plan"
 
 1. Before showing any Brief content in chat, offer the walkthrough choice.
 2. Draft the Brief from `context.md`, `decisions.md`, `research-notes.md`, and `synthesis.md`.
@@ -108,7 +110,7 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 4. If the user chooses a walkthrough, present each chunk inline before asking for approval.
 5. Write `brief.md` only after user approval.
 
-## Step 6 — M6: Handoff
+## Step 6 — M6: Handoff — "Go"
 
 1. Create the parent kanban task from the approved Brief.
 2. Invoke `planner` with the canonical prefix: `Plan and create: #{parent_id} — {brief summary}`.

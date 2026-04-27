@@ -17,6 +17,7 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 - Challenge user framing by default. Agreement must be earned.
 - Confirm project type early: `net-new`, `existing-feature/refactor`, or `uncertain`.
 - Do not lock approach decisions in Phase 1. Phase 1 sharpens the problem and the outcomes; Phase 2 owns approach choice.
+- Explore before asking: if a question is answerable from the codebase, run a targeted lookup first using `Explore` subagent, `read_file`, `semantic_search`, or `grep_search`.
 
 ## Conditional Denoise
 
@@ -34,7 +35,7 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 **Entry criteria:** User has invoked the discovery phase.
 **Exit criteria:** Working Directory exists and the project type is explicit.
 
-## Step 1 — M1: Understanding
+## Step 1 — M1: Understanding — "What's really going on?"
 
 1. Restate the user's request in plain language and check understanding.
 2. Probe for trigger, breakage, affected user, cost of inaction, and hidden assumptions.
@@ -42,12 +43,23 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 4. Record the current problem statement in `context.md` once it is stable enough for subagent use.
 5. Record the explicit project type in `decisions.md`.
 6. Run only a lightweight brownfield suspicion check in M1. Do not trigger a full research pass yet.
+7. Lightweight Critic check: once the problem statement is written to `context.md`, briefly validate it: is it actually a problem statement, not a disguised solution? Is the scope narrow enough? If not, probe further before proceeding.
 
 **M1 turn shape:** concise status quo, what is still unclear, the next focused probe, and why that probe matters now.
 
 **Exit criteria:** `context.md` contains a narrow problem snapshot; `decisions.md` records the project type.
 
-## Step 2 — M2: Outcomes and Early Challenge Lane
+## Step 1.5 — Investment Tier Check
+
+Between M1 and M2, propose an Investment Tier from the table in `h-ideation` (Scratch / Tool / Shared / Production). Present the 4 tiers as askQuestions options with your recommended tier marked. Record the confirmed tier in `decisions.md`.
+
+The tier calibrates all subsequent moments:
+- **Scratch:** Lightweight M2, skip panel, thin Brief.
+- **Tool:** Standard M2, selective panel, full Brief.
+- **Shared:** Full panel, research bridge required.
+- **Production:** Full panel + Critic at every moment boundary.
+
+## Step 2 — M2: Outcomes — "What does winning look like?"
 
 1. Shift from the problem to the desired future state.
 2. Define the best realistic outcome, the minimum viable win, and any obvious scope boundaries.
@@ -59,7 +71,8 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 5. Keep early challenger output bounded. The goal is better framing and scope control, not a second design panel.
 6. If the combined early-challenger output is actually redundant or noisy, invoke `ideation-pragmatist` in `denoise` mode to write `synthesis-idea-panel.md`.
 7. If challenger output is already compact, skip denoise and read the challenger stances directly.
-8. Update `context.md` with the locked outcomes and the latest active tensions.
+8. Lightweight Critic check: once the outcomes are written, validate: are these outcomes measurable? Do they describe end-state, not implementation steps? Is the scope boundary real or aspirational?
+9. Update `context.md` with the locked outcomes and the latest active tensions.
 
 **Exit criteria:** `context.md` contains the current outcomes; the early challenge lane has either produced direct challenger stances or an optional `synthesis-idea-panel.md` digest.
 
@@ -115,6 +128,7 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 ## Verification Checklist
 
 - [ ] Project type recorded before deep research.
+- [ ] Investment Tier confirmed and recorded in `decisions.md` between M1 and M2.
 - [ ] `context.md` stays narrow enough for subagent read use.
 - [ ] `decisions.md` records rejected options where a real choice occurred.
 - [ ] Early challengers ran with the default set and conditional outsider logic.
