@@ -494,3 +494,229 @@ class TestFromAC_CockpitRoutes:
             json={"updated": task.updated, "title": "New title"},
         )
         assert response.status_code == 500  # FAIL: view mock not triggered → 200
+
+    # ===================================================================
+    # AC-NEW-24 (refined): before-engine rejection proof
+    # ===================================================================
+
+    def test_edit_status_field_rejected_before_cockpit_view(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """POST /api/tasks/{id}/edit with status in body → 422 AND view NOT called.
+
+        AC-NEW-24 stronger proof: Pydantic rejects extra fields BEFORE the route
+        handler runs. The CockpitView mock must NOT be consulted at all.
+        FAIL: view_mock.edit_task.assert_not_called() raises (handler reached)
+              OR response.status_code != 422.
+        """
+        task = engine.show_task("1")
+        response = mock_client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "status": "done"},  # 'status' is extra
+        )
+        assert response.status_code == 422
+        body = response.json()
+        # FastAPI Pydantic validation error: detail is a list of error objects
+        assert isinstance(body.get("detail"), list)
+        # CockpitView must NOT be reached when Pydantic rejects the body
+        view_mock.edit_task.assert_not_called()
+
+    # ===================================================================
+    # AC: OCC mutations pass exact expected_updated value to CockpitView
+    # ===================================================================
+
+    def test_edit_passes_exact_expected_updated_to_cockpit_view(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """edit route MUST forward exact expected_updated kwarg to CockpitView.edit_task.
+
+        OCC proof: assert_called_once alone does not prove the token is forwarded.
+        FAIL: 'expected_updated' absent from call_args, or does not equal request value.
+        """
+        task = engine.show_task("1")
+        expected_updated = task.updated
+        view_mock.edit_task.return_value = _single_task_response(engine, "1")
+        response = mock_client.post(
+            "/api/tasks/1/edit",
+            json={"updated": expected_updated, "title": "Proof title"},
+        )
+        assert response.status_code == 200
+        call_kwargs = view_mock.edit_task.call_args.kwargs
+        assert "expected_updated" in call_kwargs, "expected_updated not forwarded to CockpitView.edit_task"
+        assert call_kwargs["expected_updated"] == expected_updated
+
+    def test_move_passes_exact_expected_updated_to_cockpit_view(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """move route MUST forward exact expected_updated kwarg to CockpitView.move_task.
+
+        OCC proof: verifies the OCC token reaches the view delegation call.
+        FAIL: 'expected_updated' absent from call_args, or does not equal request value.
+        """
+        view_mock.engine = engine  # real engine for pre-delegation OCC/transition checks
+        task = engine.show_task("1")
+        expected_updated = task.updated
+        view_mock.move_task.return_value = _single_task_response(engine, "1")
+        response = mock_client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": expected_updated},
+        )
+        assert response.status_code == 200
+        call_kwargs = view_mock.move_task.call_args.kwargs
+        assert "expected_updated" in call_kwargs, "expected_updated not forwarded to CockpitView.move_task"
+        assert call_kwargs["expected_updated"] == expected_updated
+
+    def test_release_passes_exact_expected_updated_to_cockpit_view(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """release route MUST forward exact expected_updated kwarg to CockpitView.release_task.
+
+        OCC proof: verifies the OCC token reaches the view delegation call.
+        FAIL: 'expected_updated' absent from call_args, or does not equal request value.
+        """
+        view_mock.show_task.return_value.claimed = True
+        task = engine.show_task("2")
+        expected_updated = task.updated
+        view_mock.release_task.return_value = _single_task_response(engine, "2")
+        response = mock_client.post(
+            "/api/tasks/2/release",
+            json={"updated": expected_updated},
+        )
+        assert response.status_code == 200
+        call_kwargs = view_mock.release_task.call_args.kwargs
+        assert "expected_updated" in call_kwargs, "expected_updated not forwarded to CockpitView.release_task"
+        assert call_kwargs["expected_updated"] == expected_updated
+
+    # ===================================================================
+    # AC: ERR_STALE → 409 for ALL delegated routes (move, release)
+    # ===================================================================
+
+    def test_move_stale_token_from_cockpit_view_returns_409(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """ConcurrencyError from CockpitView.move_task → HTTP 409.
+
+        error — proves ERR_STALE propagates from the delegated move call, not just edit.
+        FAIL: ConcurrencyError from view.move_task does not yield 409.
+        """
+        view_mock.engine = engine
+        task = engine.show_task("1")
+        view_mock.move_task.side_effect = ConcurrencyError(
+            code="ERR_STALE", user_message="Stale snapshot"
+        )
+        response = mock_client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
+        assert response.status_code == 409
+
+    def test_release_stale_token_from_cockpit_view_returns_409(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """ConcurrencyError from CockpitView.release_task → HTTP 409.
+
+        error — proves ERR_STALE propagates from the delegated release call, not just edit.
+        FAIL: ConcurrencyError from view.release_task does not yield 409.
+        """
+        view_mock.show_task.return_value.claimed = True
+        view_mock.release_task.side_effect = ConcurrencyError(
+            code="ERR_STALE", user_message="Stale snapshot"
+        )
+        task = engine.show_task("2")
+        response = mock_client.post(
+            "/api/tasks/2/release",
+            json={"updated": task.updated},
+        )
+        assert response.status_code == 409
+
+    # ===================================================================
+    # AC: ERR_NOT_FOUND → 404 for ALL delegated routes (move, release)
+    # ===================================================================
+
+    def test_move_not_found_from_cockpit_view_returns_404(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """NotFoundError from CockpitView.move_task → HTTP 404.
+
+        error — proves ERR_NOT_FOUND propagates from the delegated move call, not just edit.
+        FAIL: NotFoundError from view.move_task does not yield 404.
+        """
+        view_mock.engine = engine
+        task = engine.show_task("1")
+        view_mock.move_task.side_effect = NotFoundError(
+            code="ERR_NOT_FOUND", user_message="Task '1' not found"
+        )
+        response = mock_client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
+        assert response.status_code == 404
+
+    def test_release_not_found_from_cockpit_view_returns_404(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """NotFoundError from CockpitView.release_task → HTTP 404.
+
+        error — proves ERR_NOT_FOUND propagates from the delegated release call, not just edit.
+        FAIL: NotFoundError from view.release_task does not yield 404.
+        """
+        view_mock.show_task.return_value.claimed = True
+        view_mock.release_task.side_effect = NotFoundError(
+            code="ERR_NOT_FOUND", user_message="Task '2' not found"
+        )
+        task = engine.show_task("2")
+        response = mock_client.post(
+            "/api/tasks/2/release",
+            json={"updated": task.updated},
+        )
+        assert response.status_code == 404
+
+    # ===================================================================
+    # AC: ValidationError → 422 for move route
+    # ===================================================================
+
+    def test_move_validation_error_from_cockpit_view_returns_422(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """ValidationError from CockpitView.move_task → HTTP 422.
+
+        error — proves ValidationError propagates from the delegated move call, not just edit.
+        FAIL: ValidationError from view.move_task does not yield 422.
+        """
+        view_mock.engine = engine
+        task = engine.show_task("1")
+        view_mock.move_task.side_effect = ValidationError(
+            code="ERR_INVALID_STATUS", user_message="invalid transition"
+        )
+        response = mock_client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
+        assert response.status_code == 422
