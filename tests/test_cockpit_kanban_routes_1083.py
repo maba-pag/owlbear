@@ -78,6 +78,17 @@ def _make_board(base_dir: Path) -> Path:
     return kanban_dir
 
 
+def _inject_corrupt_task_file(kanban_dir: Path) -> Path:
+    """Write a task .md file with no YAML frontmatter delimiters into tasks/.
+
+    This triggers ERR_CORRUPT_DELIMITERS in engine.scan_corruption().
+    Returns the path of the created corrupt file.
+    """
+    corrupt_path = kanban_dir / "tasks" / "9999-corrupt-sentinel.md"
+    corrupt_path.write_text("no frontmatter delimiters here\njust plain text\n", encoding="utf-8")
+    return corrupt_path
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -460,3 +471,141 @@ class TestFromAC_AdminRoutes:
             assert response.status_code == 200  # FAIL: 404
         finally:
             app.dependency_overrides.clear()
+
+    # ===================================================================
+    # Retry fixes — scan / repair wire-shape proofs and stronger DI tests
+    # ===================================================================
+
+    def test_scan_real_corrupt_board_returns_nonempty_list(
+        self, board_dir: Path
+    ) -> None:
+        """POST /api/tasks/scan on a board with a real corrupt file returns non-empty list.
+
+        edge — real engine, real corrupt file (no mocked view).
+        FAIL: engine.scan_corruption() returns CorruptionError objects; the route's
+        response_model=list[dict[str, Any]] cannot serialize them → 500, not 200.
+        """
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+        _inject_corrupt_task_file(board_dir)
+        corrupt_engine = KanbanEngine(board_dir, agent_name="scan-real")
+        app.dependency_overrides[get_engine] = lambda: corrupt_engine
+        try:
+            client = TestClient(app)
+            response = client.post("/api/tasks/scan")
+            assert response.status_code == 200  # FAIL: 500 (CorruptionError not serializable)
+            data = response.json()
+            assert len(data) >= 1
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_scan_real_corrupt_board_item_has_code_detail_file_path(
+        self, board_dir: Path
+    ) -> None:
+        """Scan result items from a real corrupt board must have code, detail, file_path.
+
+        boundary — proves the scan wire contract for real (non-mocked) corruption items.
+        FAIL: engine.scan_corruption() returns CorruptionError objects;
+        route cannot serialize them as list[dict[str, Any]] → 500.
+        """
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+        _inject_corrupt_task_file(board_dir)
+        corrupt_engine = KanbanEngine(board_dir, agent_name="scan-shape")
+        app.dependency_overrides[get_engine] = lambda: corrupt_engine
+        try:
+            client = TestClient(app)
+            response = client.post("/api/tasks/scan")
+            assert response.status_code == 200  # FAIL: 500
+            data = response.json()
+            assert len(data) >= 1
+            item = data[0]
+            assert "code" in item
+            assert "detail" in item
+            assert "file_path" in item
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_di_scan_observes_overridden_board_not_default(
+        self, tmp_path: Path
+    ) -> None:
+        """DI get_engine override for scan must route to the overridden board, not default.
+
+        boundary — two separate boards: alt has a corrupt file, primary is clean.
+        Overriding to alt engine must make scan detect alt board's corruption.
+        FAIL: engine returns CorruptionError objects → route cannot serialize → 500,
+        so the 200 + non-empty assertion fails. Proves that (a) DI override routes
+        correctly and (b) route serialization handles real CorruptionError items.
+        """
+        from fastapi.testclient import TestClient  # noqa: PLC0415
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+        alt_dir = _make_board(tmp_path / "alt")
+        _inject_corrupt_task_file(alt_dir)
+        alt_engine = KanbanEngine(alt_dir, agent_name="alt-scan")
+
+        app.dependency_overrides[get_engine] = lambda: alt_engine
+        try:
+            client = TestClient(app)
+            response = client.post("/api/tasks/scan")
+            assert response.status_code == 200  # FAIL: 500
+            data = response.json()
+            assert len(data) >= 1  # clean primary board → 0 items if DI is broken
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_scan_mock_item_includes_all_required_fields(
+        self,
+        mock_client: TestClient,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """Scan response items must include code, detail, and file_path with correct values.
+
+        happy — regression guard: mock returns a full dict; route must forward all fields.
+        Addresses fix requirement #3: tighten scan item-shape assertion beyond len check.
+        """
+        view_mock.scan_corruption.return_value = [
+            {
+                "code": "ERR_CORRUPT_DELIMITERS",
+                "detail": "file does not start with ---",
+                "file_path": "tasks/9999-corrupt-sentinel.md",
+            }
+        ]
+        response = mock_client.post("/api/tasks/scan")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        item = data[0]
+        assert item["code"] == "ERR_CORRUPT_DELIMITERS"
+        assert item["detail"] == "file does not start with ---"
+        assert item["file_path"] == "tasks/9999-corrupt-sentinel.md"
+
+    def test_repair_response_item_includes_detail_field(
+        self,
+        mock_client: TestClient,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """Repair response items must include the detail field from RepairOutcome.
+
+        happy — regression guard: verifies full wire contract including detail field.
+        Addresses fix requirement #2: assert detail present and correct in repair response.
+        """
+        from owlbear_kanban.models import RepairOutcome as _RepairOutcome  # noqa: PLC0415
+
+        view_mock.repair_storage.return_value = [
+            _RepairOutcome(
+                task_id=1,
+                file_path="tasks/001.md",
+                code="ERR_CORRUPT_MISSING_FIELD",
+                action="quarantined",
+                detail="required field 'id' absent",
+            )
+        ]
+        response = mock_client.post("/api/tasks/repair")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        item = data[0]
+        assert item["detail"] == "required field 'id' absent"
