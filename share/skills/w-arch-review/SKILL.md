@@ -112,7 +112,7 @@ The architect retains final authority.
 |---------|------|--------|
 | **APPROVE** | AC precise, architecture sound | Advance via `end_work` (moves to `todo` + releases claim) |
 | **REFINE** | Good concept, AC needs tightening | Use temp-file pattern to rewrite body via `edit_task`, then approve |
-| **SPLIT** | Multiple responsibilities | Create new tasks via `create_task`, update deps, edit/delete original, then release |
+| **SPLIT** | Multiple responsibilities | Delegate to planner with `Plan and create: #{id} — {split scope}` for decomposition, then update deps, edit/delete original, and release |
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
 | **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
 | **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via scribe (`Scribe: task_id={id}, mode=check-or-create`), tag task `type:user-action` if missing, `end_work(outcome="block")` |

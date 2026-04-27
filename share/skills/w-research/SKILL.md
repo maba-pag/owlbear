@@ -116,7 +116,7 @@ Classify every finding before acting:
 
 ### Create Follow-Up Tasks
 
-Generate follow-up tasks at `research` status via `create_task`. For findings requiring user decisions, use the scribe to check/create a decision request.
+Delegate follow-up task creation to planner via `Plan and create:` using single-task or decomposition mode as needed, and set status to `research`. For findings requiring user decisions, use the scribe to check/create a decision request.
 
 ## Step 6 — Deliverables
 

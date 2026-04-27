@@ -30,6 +30,22 @@ If the parent task body contains a `## Brief` or `## Problem` section (Brief art
 
 Announce: "Decomposing: {name}. Expected: {N} tasks in {M} layers."
 
+## Step 1a — Single-Task Shortcut
+
+Before decomposition, detect whether the request is exactly one follow-up task with no dependency graph or TDD-paired implementation split required.
+
+If yes, use the shortcut flow:
+
+- Skip Steps 2–4 and Step 7.
+- Continue with Steps 5, 5a, and 6 only.
+- Preserve caller metadata verbatim where provided: title, parent ID, tags, and requested status.
+- Status routing: caller should specify target status (for example, "at backlog" or "at research"). Default is `backlog`; researcher follow-ups use `research`.
+- Naming: no phase-based `P{phase}-{nn}` prefix in shortcut mode. Use caller-provided title directly.
+- TDD pairing is not required in shortcut mode (single follow-up tasks are not feature implementation decompositions).
+- Return the created task ID explicitly in your response message (for downstream linking and parent-child follow-up operations).
+
+Typical shortcut cases: "fix off-by-one", "delete stale docs", "architect calibration".
+
 ## Step 2 — Check Board State
 
 Read the current board via `list_tasks` to note: highest existing ID, existing dependencies, and current phase landscape.
@@ -50,6 +66,15 @@ Ordering heuristic:
 2. Test tasks before their implementation counterparts
 3. Integration tests after unit components
 4. CLI/UI tasks last (depend on core logic)
+
+## Durability Principles
+
+When drafting AC for planned tasks:
+
+- AC defines behaviors and interfaces, not file paths or implementation details.
+- AC must be understandable without reading the codebase first.
+- Every task must include explicit scope boundaries (in-scope and out-of-scope).
+- No implementation prescriptions: describe WHAT must be true, not HOW to code it.
 
 ## Step 4 — Build Dependency Graph
 
@@ -97,11 +122,18 @@ Call `askQuestions` with two options:
 
 ## Step 6 — Create Tasks
 
-**Naming convention:** `P{phase}-{nn}: {Title}` — phase inherited from plan, sequence `nn` zero-padded, unique within phase.
+**Decomposition naming convention only:** `P{phase}-{nn}: {Title}` — phase inherited from plan, sequence `nn` zero-padded, unique within phase.
 
-Create each task via `create_task` with title, priority, status `research`, tags, depends_on, and body containing AC.
+**Shortcut naming:** preserve the caller-provided title verbatim (no phase prefix).
+
+Create each task via `create_task` with title, priority, status, tags, depends_on, and body containing AC.
+
+- Decomposition mode default status: `research`.
+- Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups).
 
 Group by dependency layer (independent first, then dependents). Record created task IDs for the report.
+
+In shortcut mode, report the created task ID as a top-level result line (for example, `Created follow-up task: #{id}`).
 
 If dispatched with a parent task ID, include the planning summary in your `end_work` note.
 
@@ -138,15 +170,17 @@ Append to parent task body (if dispatched with parent ID):
 ## Verification Checklist
 
 - [ ] Announced decomposition plan and expected count
-- [ ] Every impl task has a preceding test task with dependency
+- [ ] Every impl task has a preceding test task with dependency (decomposition mode only)
 - [ ] No task has multiple responsibilities
-- [ ] Sequence numbers unique and zero-padded
+- [ ] Sequence numbers unique and zero-padded (decomposition mode only)
 - [ ] Priority reflects blocking potential
 - [ ] Tags include `phase-{n}` + category
 - [ ] No cycles in dependency graph
-- [ ] Mermaid diagram matches task list
+- [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
 - [ ] AC describes "done", not "how"
+- [ ] AC meets durability principles (behavior/interface-first, codebase-independent clarity, explicit scope boundaries, no HOW prescriptions)
+- [ ] Shortcut mode returns created task ID in response message
 - [ ] No `TEMP-*` titles or empty bodies created
 
 ## Known Pitfalls

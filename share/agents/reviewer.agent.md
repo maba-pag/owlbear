@@ -6,8 +6,8 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.4 (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [code-reader, scribe, quality-runner]
+  [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+agents: [code-reader, scribe, quality-runner, planner]
 hooks:
   PreToolUse:
     - type: command
@@ -69,6 +69,7 @@ the builder can fix it without guessing.
 | quality-runner | Implementation reviews requiring test/lint/coverage evidence | `agentName: quality-runner / mode: scoped, task_id: 42, test_paths: [...], coverage_modules: [...], lint_paths: [...]` |
 | code-reader | Complex reviews needing deep code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
 | scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="naming convention choice has team-wide implications"` |
+| planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Harden assertion coverage"` |
 
 </agents>
 
