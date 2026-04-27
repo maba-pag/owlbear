@@ -4315,3 +4315,10 @@ External repos and resources studied during OwlBear development.
 | React Compiler installation | <https://react.dev/learn/react-compiler/installation> | Vite integration guide, ESLint plugin, verification steps | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
 | babel-plugin-react-compiler npm | <https://www.npmjs.com/package/babel-plugin-react-compiler> | v1.0.0 stable, 7.6M weekly downloads, MIT license | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
 | react-compiler-runtime npm | <https://www.npmjs.com/package/react-compiler-runtime> | v1.0.0, 0 dependencies, React 19 compat shim | .owlbear/research/969-react-compiler-evaluation.md | 2026-04-18 |
+
+## Arch Review Design-Diverge (Task #1149)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Ousterhout — Philosophy of Software Design (Pragmatic Engineer) | <https://newsletter.pragmaticengineer.com/p/the-philosophy-of-software-design> | "Design It Twice" concept — generate multiple radically different designs, compare | .owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
+| mattpocock/design-an-interface (SkillsMP) | <https://skillsmp.com/skills/mattpocock-skills-design-an-interface-skill-md> | VS Code skill: 3+ parallel sub-agents with constraint-driven design prompts, 17.6K stars | .owlbear/research/1149-arch-review-design-diverge.md | 2026-04-27 |
