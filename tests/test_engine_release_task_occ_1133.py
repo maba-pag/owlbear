@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -292,6 +293,56 @@ class TestFromAC_EngineReleaseOCC:
         result = engine.release_task("1", expected_updated=original_updated)
         assert result.updated == original_updated, (
             "No-op release must not advance updated timestamp"
+        )
+
+    # -- ac2-cas-helper: CAS path calls write_task_if_unchanged, not write_task --
+
+    def test_engine_release_task_cas_path_calls_write_task_if_unchanged(
+        self, tmp_path: Path
+    ) -> None:
+        """AC2: claimed + fresh token → write_task_if_unchanged called (not write_task)."""
+        from owlbear_kanban import storage
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            1,
+            updated="2026-01-01T10:00:00+00:00",
+            claimed_at='"2026-01-01T09:00:00+00:00"',
+        )
+        engine = _make_engine(kanban_dir)
+        with mock.patch.object(
+            storage,
+            "write_task_if_unchanged",
+            wraps=storage.write_task_if_unchanged,
+        ) as mock_cas:
+            engine.release_task("1", expected_updated="2026-01-01T10:00:00+00:00")
+        assert mock_cas.called, (
+            "release_task must call write_task_if_unchanged (CAS) when expected_updated is set"
+        )
+
+    def test_engine_release_task_lww_path_does_not_call_write_task_if_unchanged(
+        self, tmp_path: Path
+    ) -> None:
+        """AC4: expected_updated=None → write_task_if_unchanged must NOT be called (LWW path)."""
+        from owlbear_kanban import storage
+
+        kanban_dir = _make_board(tmp_path)
+        _write_task(
+            kanban_dir,
+            1,
+            updated="2026-01-01T10:00:00+00:00",
+            claimed_at='"2026-01-01T09:00:00+00:00"',
+        )
+        engine = _make_engine(kanban_dir)
+        with mock.patch.object(
+            storage,
+            "write_task_if_unchanged",
+            wraps=storage.write_task_if_unchanged,
+        ) as mock_cas:
+            engine.release_task("1", expected_updated=None)
+        assert not mock_cas.called, (
+            "release_task must NOT call write_task_if_unchanged when expected_updated is None (LWW)"
         )
 
 
