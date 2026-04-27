@@ -23,6 +23,12 @@ _Cache = Annotated[MtimeScanCache, Depends(get_cache)]
 _View = Annotated[CockpitView, Depends(get_view)]
 
 
+class CockpitListTasksResponse(ListTasksResponse):
+    """Cockpit envelope for GET /api/tasks with tasks-dir mtime metadata."""
+
+    mtime: int
+
+
 @router.get("/board", response_model=BoardOut)
 def get_board(engine: _Engine) -> BoardOut:
     """Return board config: statuses, priorities, and valid_transitions map."""
@@ -38,22 +44,25 @@ def get_board(engine: _Engine) -> BoardOut:
     )
 
 
-@router.get("/tasks", response_model=ListTasksResponse)
-def list_tasks(
+@router.get("/tasks", response_model=CockpitListTasksResponse)
+def list_tasks(  # noqa: PLR0913
     view: _View,
-    _cache: _Cache,
+    cache: _Cache,
     status: str = "",
     priority: str = "",
     tag: str = "",
     blocked: bool | None = None,  # noqa: FBT001
-) -> ListTasksResponse:
+) -> CockpitListTasksResponse:
     """Return canonical list-tasks envelope for cockpit clients."""
-    return view.list_tasks(
+    envelope = view.list_tasks(
         status=status,
         priority=priority,
         tag=tag,
         blocked=blocked,
     )
+    payload = envelope.model_dump()
+    payload["mtime"] = cache.scan()
+    return CockpitListTasksResponse.model_validate(payload)
 
 
 @router.get("/tasks/{task_id}", response_model=ShowTaskResponse)

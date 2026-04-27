@@ -172,6 +172,11 @@ def _build_edit_kwargs(req: EditRequest, task: Any | None = None) -> dict[str, A
 
     if "block_reason" in fields:
         kwargs["block_reason"] = req.block_reason
+        _apply_block_kwargs(
+            kwargs,
+            (task.tags if task is not None else []) or [],
+            req.block_reason,
+        )
 
     return kwargs
 
@@ -197,12 +202,45 @@ def _apply_list_diff(
         kwargs[remove_key] = remove
 
 
+def _apply_block_kwargs(
+    kwargs: dict[str, Any],
+    current_tags: list[str],
+    block_reason: str | None,
+) -> None:
+    """Enforce D21 block:user lifecycle and resolve tag-diff conflicts."""
+    if block_reason is None:
+        _remove_tag_op(kwargs, "add_tag", "block:user")
+        if "block:user" in current_tags:
+            _add_tag_op(kwargs, "remove_tag", "block:user")
+        return
+
+    _remove_tag_op(kwargs, "remove_tag", "block:user")
+    if "block:user" not in current_tags:
+        _add_tag_op(kwargs, "add_tag", "block:user")
+
+
+def _add_tag_op(kwargs: dict[str, Any], key: str, tag: str) -> None:
+    """Add a tag operation without duplicating entries."""
+    values = [value for value in kwargs.get(key, []) if value != tag]
+    values.append(tag)
+    kwargs[key] = values
+
+
+def _remove_tag_op(kwargs: dict[str, Any], key: str, tag: str) -> None:
+    """Remove a tag operation and clear empty operation lists."""
+    values = [value for value in kwargs.get(key, []) if value != tag]
+    if values:
+        kwargs[key] = values
+    else:
+        kwargs.pop(key, None)
+
+
 @router.post("/tasks/{task_id}/edit", response_model=SingleTaskResponse)
 def edit_task(task_id: int, req: EditRequest, view: _View) -> SingleTaskResponse:
     """Edit allowlisted task fields with D9 optimistic-lock check."""
     task = None
     fields = req.model_fields_set
-    if "tags" in fields or "depends_on" in fields:
+    if "tags" in fields or "depends_on" in fields or "block_reason" in fields:
         try:
             task = view.show_task(task_id)
         except NotFoundError:
