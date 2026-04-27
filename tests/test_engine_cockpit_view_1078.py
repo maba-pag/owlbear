@@ -43,6 +43,7 @@ AC coverage:
   src-cockpit  — CockpitView mutations emit ActivityEvent.source='cockpit'
   src-engine   — sweep() emits ActivityEvent.source='engine'
   sweep-cas    — sweep skips stale task on CAS ERR_STALE, no error (AC-NEW-23)
+  sweep-cas-continue — stale task skipped while later eligible expired task is still released (AC-NEW-23)
 
 All tests FAIL (RED phase).
 """
@@ -485,6 +486,57 @@ class TestFromAC_CockpitViewSweepCAS:
         sweep_events = cv.list_activity(task_id=1, action="sweep-release")
         assert sweep_events == [], (
             "AC-NEW-23: stale-skip must NOT emit a sweep-release activity event."
+        )
+
+    def test_sweep_cas_stale_task_skipped_and_later_eligible_task_still_released(
+        self, tmp_path: Path
+    ) -> None:
+        """AC-NEW-23: sweep continues after ERR_STALE — later eligible task is still released.
+
+        Setup: two expired-claim tasks (task 1 and task 2).
+        Mock: write_task_if_unchanged raises ERR_STALE for the FIRST CAS call (task 1)
+              and succeeds (returns None) for the SECOND call (task 2).
+        Asserts:
+          1. CAS called twice — both tasks were attempted.
+          2. Task 1 NOT in released — stale skip was applied.
+          3. Task 2 IS in released — sweep continued after the skip.
+          4. No exception raised — sweep never propagates ERR_STALE.
+
+        This is the missing mixed-batch proof: a regression that aborts the
+        sweep loop after the first ERR_STALE would pass tests that only check
+        a single stale task but would FAIL here because task 2 would not appear
+        in the released list.
+        """
+        from unittest.mock import patch
+
+        kanban_dir = _make_board(tmp_path)
+        expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
+        _write_task(kanban_dir, 1, claimed_at=f'"{expired_ts}"')
+        _write_task(kanban_dir, 2, title="Task Two", claimed_at=f'"{expired_ts}"')
+        cv = _make_cockpit_view(kanban_dir)
+
+        stale_error = ConcurrencyError("ERR_STALE", "Task modified concurrently")
+        # First CAS call (task 1) raises ERR_STALE; second (task 2) returns None (success).
+        with patch(
+            "owlbear_kanban.storage.write_task_if_unchanged",
+            side_effect=[stale_error, None],
+        ) as mock_cas:
+            released = cv.sweep()  # must NOT raise
+
+        # 1. Both tasks were attempted via CAS.
+        assert mock_cas.call_count == 2, (
+            f"AC-NEW-23: expected 2 CAS calls (one per expired task), got {mock_cas.call_count}."
+        )
+
+        # 2. Stale task (task 1) is NOT in the released list.
+        assert 1 not in released, (
+            "AC-NEW-23: sweep must skip the stale task — it must not appear in released IDs."
+        )
+
+        # 3. Later eligible task (task 2) IS in the released list.
+        assert 2 in released, (
+            "AC-NEW-23: sweep must continue after ERR_STALE and release the next eligible task. "
+            "A loop that aborts on first stale would fail here."
         )
 
 
