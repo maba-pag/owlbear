@@ -720,3 +720,428 @@ class TestFromAC_CockpitRoutes:
             json={"status": "in-progress", "updated": task.updated},
         )
         assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_RouteGuardBranches
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RouteGuardBranches:
+    """Coverage tests for guard/non-happy branches in cockpit route handlers.
+
+    The builder's implementation is complete; these tests prove existing
+    guard branches not previously exercised by TestFromAC_CockpitRoutes.
+
+    Categories:
+      error    — pre-delegation guard failures (not-found, stale, invalid-transition,
+                 not-claimed, no-editable-fields)
+      happy    — read route entry points and cache-hit path
+    """
+
+    # ===================================================================
+    # move_task pre-delegation guards
+    # ===================================================================
+
+    def test_move_task_pre_check_not_found_returns_404(
+        self,
+        mock_client: TestClient,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """move_task must return 404 when view.engine.show_task raises FileNotFoundError.
+
+        error — pre-delegation guard: FileNotFoundError before OCC check or delegation.
+        """
+        view_mock.engine.show_task.side_effect = FileNotFoundError()
+        response = mock_client.post(
+            "/api/tasks/99/move",
+            json={"status": "in-progress", "updated": "any-token"},
+        )
+        assert response.status_code == 404
+
+    def test_move_task_pre_check_stale_token_returns_409(
+        self,
+        client: TestClient,
+    ) -> None:
+        """move_task must return 409 when req.updated does not match the stored token.
+
+        error — pre-delegation stale guard (line: if req.updated != str(task.updated)).
+        Uses real engine; sends deliberately wrong updated value.
+        """
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": "stale-token"},
+        )
+        assert response.status_code == 409
+        detail = response.json().get("detail", "")
+        assert "stale" in detail.lower() or "modified" in detail.lower()
+
+    def test_move_task_pre_check_invalid_transition_returns_422(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """move_task must return 422 when req.status is not a valid transition.
+
+        error — pre-delegation transition guard (line: if req.status not in transitions).
+        Uses real engine; sends real updated value so stale check passes.
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "nonexistent-status", "updated": task.updated},
+        )
+        assert response.status_code == 422
+        detail = response.json().get("detail", "")
+        assert "Cannot move" in detail or "nonexistent" in detail
+
+    # ===================================================================
+    # edit_task guard branches
+    # ===================================================================
+
+    def test_edit_no_editable_fields_returns_422(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """edit_task must return 422 when request has no editable fields.
+
+        error — guard: if not kwargs: raise HTTPException(422, "No editable fields").
+        Sends only 'updated' — model_fields_set - {'updated'} is empty.
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated},
+        )
+        assert response.status_code == 422
+        assert "No editable fields" in response.json().get("detail", "")
+
+    def test_edit_tags_field_show_task_not_found_returns_404(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """edit_task must return 404 when tags field triggers show_task and it raises NotFoundError.
+
+        error — early guard: when tags/depends_on/block_reason in fields,
+        view.show_task() is called first; NotFoundError → 404 before delegation.
+        """
+        view_mock.show_task.side_effect = NotFoundError(
+            code="ERR_NOT_FOUND", user_message="Task '1' not found"
+        )
+        task = engine.show_task("1")
+        response = mock_client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "tags": ["new-tag"]},
+        )
+        assert response.status_code == 404
+
+    def test_edit_title_field_updates_task(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """edit_task with title field must return 200 and updated task title.
+
+        happy — exercises _build_edit_kwargs title branch and view.edit_task delegation.
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "title": "Coverage Title"},
+        )
+        assert response.status_code == 200
+        assert response.json()["title"] == "Coverage Title"
+
+    # ===================================================================
+    # release_task guard branch
+    # ===================================================================
+
+    def test_release_unclaimed_task_returns_409(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """release_task must return 409 when the task is not currently claimed.
+
+        error — guard: if not task.claimed: raise HTTPException(409, "not currently claimed").
+        Task 1 is unclaimed in the fixture.
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/release",
+            json={"updated": task.updated},
+        )
+        assert response.status_code == 409
+        assert "not currently claimed" in response.json().get("detail", "")
+
+    # ===================================================================
+    # read.py — get_board, get_task 404, list_tasks cache-hit, list_sessions filter
+    # ===================================================================
+
+    def test_get_board_returns_statuses_and_priorities(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/board must return statuses and priorities from board config.
+
+        happy — exercises get_board route which is not covered by TestFromAC_CockpitRoutes.
+        """
+        response = client.get("/api/board")
+        assert response.status_code == 200
+        body = response.json()
+        assert "statuses" in body
+        assert "priorities" in body
+        assert isinstance(body["statuses"], list)
+        assert len(body["statuses"]) > 0
+
+    def test_get_task_not_found_returns_404(self, client: TestClient) -> None:
+        """GET /api/tasks/{id} must return 404 for a non-existent task.
+
+        error — get_task NotFoundError guard; exercises the except NotFoundError → 404 branch.
+        """
+        response = client.get("/api/tasks/9999")
+        assert response.status_code == 404
+
+    def test_list_tasks_cache_hit_path_returns_tasks(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/tasks on second call must use the cache-hit path.
+
+        happy — first call populates per-engine cache; second call has_changed()=False
+        and has_cached_tasks=True, exercising the cache-hit branch in list_tasks.
+        """
+        # First call: cache miss — populates cache
+        first = client.get("/api/tasks")
+        assert first.status_code == 200
+        # Second call: cache hit (mtime unchanged between calls)
+        second = client.get("/api/tasks")
+        assert second.status_code == 200
+        body = second.json()
+        assert "tasks" in body
+        assert isinstance(body["tasks"], list)
+
+    def test_list_tasks_cache_hit_with_status_filter(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/tasks?status=todo on cache-hit path must return only todo tasks.
+
+        happy — exercises _filter_cached_tasks on the cache-hit branch with status filter.
+        """
+        # Warm the cache
+        client.get("/api/tasks")
+        # Cache-hit call with filter
+        response = client.get("/api/tasks?status=todo")
+        assert response.status_code == 200
+        body = response.json()
+        assert all(t["status"] == "todo" for t in body["tasks"])
+
+    def test_list_sessions_filter_all_returns_list(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """GET /api/sessions?filter=all must return a flat list including completed sessions.
+
+        happy — exercises list_sessions with filter='all' (vs default 'active').
+        """
+        engine.claim_task("1")
+        engine.end_work("1", note="done", outcome="success")
+        response = client.get("/api/sessions?filter=all")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) >= 1
+
+    def test_list_activity_with_limit_filter(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """GET /api/activity?limit=1 must return at most one event.
+
+        happy — exercises list_activity route with limit parameter.
+        """
+        engine.claim_task("1")
+        response = client.get("/api/activity?limit=1")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) <= 1
+
+    # ===================================================================
+    # _build_edit_kwargs field branches (priority, body, parent)
+    # ===================================================================
+
+    def test_edit_priority_field_builds_kwargs(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """edit_task with priority field must return 200 (exercises _build_edit_kwargs priority branch).
+
+        happy — line 150: kwargs['priority'] = req.priority.
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "priority": "critical"},
+        )
+        assert response.status_code == 200
+        assert response.json()["priority"] == "critical"
+
+    def test_edit_body_field_builds_kwargs(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """edit_task with body field must return 200 (exercises _build_edit_kwargs body branch).
+
+        happy — line 154: kwargs['body'] = req.body.
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "body": "## Coverage\n- added by test"},
+        )
+        assert response.status_code == 200
+        assert "Coverage" in response.json().get("body", "")
+
+    def test_edit_parent_field_builds_kwargs(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """edit_task with parent field must forward parent to CockpitView.edit_task.
+
+        happy — line 152: kwargs['parent'] = req.parent.
+        Uses mock to avoid engine parent-validation constraints.
+        """
+        view_mock.edit_task.return_value = _single_task_response(engine, "1")
+        task = engine.show_task("1")
+        response = mock_client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "parent": None},
+        )
+        assert response.status_code == 200
+        call_kwargs = view_mock.edit_task.call_args.kwargs
+        assert "parent" in call_kwargs
+
+    # ===================================================================
+    # _apply_list_diff — tags add and remove paths
+    # ===================================================================
+
+    def test_edit_tags_add_new_tag_via_list_diff(
+        self,
+        client: TestClient,
+        engine: KanbanEngine,
+    ) -> None:
+        """edit_task with tags=[new] must add tag (exercises _apply_list_diff add path).
+
+        happy — lines 195-200: desired is not None, desired_set - current_set = [new].
+        """
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "tags": ["phase:test"]},
+        )
+        assert response.status_code == 200
+        assert "phase:test" in response.json().get("tags", [])
+
+    def test_edit_tags_remove_existing_tag_via_list_diff(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """edit_task with tags=[] when task has a tag must compute remove set.
+
+        happy — line 201: if remove: kwargs[remove_key] = remove.
+        Uses mock so view.show_task returns a task with an existing tag.
+        """
+        view_mock.show_task.return_value.tags = ["existing-tag"]
+        view_mock.edit_task.return_value = _single_task_response(engine, "1")
+        task = engine.show_task("1")
+        response = mock_client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "tags": []},
+        )
+        assert response.status_code == 200
+        call_kwargs = view_mock.edit_task.call_args.kwargs
+        assert "remove_tag" in call_kwargs
+        assert "existing-tag" in call_kwargs["remove_tag"]
+
+    # ===================================================================
+    # _apply_block_kwargs and tag-op helpers (lines 211-235)
+    # ===================================================================
+
+    def test_edit_block_reason_set_triggers_block_user_tag(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """edit_task with block_reason (non-None) must add block:user tag via _apply_block_kwargs.
+
+        happy — lines 174-175, 217-219, 224-226, 231: block_reason field processed,
+        _apply_block_kwargs called with non-None reason, _add_tag_op called, _remove_tag_op called.
+        """
+        view_mock.show_task.return_value.tags = []
+        view_mock.edit_task.return_value = _single_task_response(engine, "1")
+        task = engine.show_task("1")
+        response = mock_client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "block_reason": "waiting for dependency"},
+        )
+        assert response.status_code == 200
+        call_kwargs = view_mock.edit_task.call_args.kwargs
+        assert "block_reason" in call_kwargs
+        assert "add_tag" in call_kwargs
+        assert "block:user" in call_kwargs["add_tag"]
+
+    def test_edit_block_reason_none_removes_block_user_tag(
+        self,
+        mock_client: TestClient,
+        engine: KanbanEngine,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """edit_task with block_reason=null on a blocked task must remove block:user tag.
+
+        happy — lines 211-215, 231-235: _apply_block_kwargs None branch;
+        block:user in current_tags → _add_tag_op for remove_tag → _remove_tag_op clears add_tag.
+        """
+        view_mock.show_task.return_value.tags = ["block:user"]
+        view_mock.edit_task.return_value = _single_task_response(engine, "1")
+        task = engine.show_task("1")
+        response = mock_client.post(
+            "/api/tasks/1/edit",
+            json={"updated": task.updated, "block_reason": None},
+        )
+        assert response.status_code == 200
+        call_kwargs = view_mock.edit_task.call_args.kwargs
+        assert "remove_tag" in call_kwargs
+        assert "block:user" in call_kwargs["remove_tag"]
+
+    # ===================================================================
+    # release_task show_task not-found guard (lines 281-282)
+    # ===================================================================
+
+    def test_release_task_show_task_not_found_returns_404(
+        self,
+        mock_client: TestClient,
+        view_mock: mock.MagicMock,
+    ) -> None:
+        """release_task must return 404 when view.show_task raises NotFoundError.
+
+        error — lines 281-282: except (FileNotFoundError, NotFoundError) → HTTPException 404.
+        """
+        view_mock.show_task.side_effect = NotFoundError(
+            code="ERR_NOT_FOUND", user_message="Task '99' not found"
+        )
+        response = mock_client.post(
+            "/api/tasks/99/release",
+            json={"updated": "any-token"},
+        )
+        assert response.status_code == 404
