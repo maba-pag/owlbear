@@ -40,31 +40,38 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 _CONFIG_YAML = """\
-version: 10
-board:
-  name: TestBoard
-tasks_dir: tasks
 statuses:
-- name: research
-- name: backlog
-- name: todo
-- name: in-progress
-- name: review
-- name: docs
-- name: done
+    - research
+    - backlog
+    - todo
+    - in-progress
+    - review
+    - docs
+    - done
 priorities:
-- someday
-- nice-to-have
-- important
-- needed
-- critical
-defaults:
-  status: research
-  priority: important
+    - someday
+    - nice-to-have
+    - important
+    - needed
+    - critical
+entry_status: research
+terminal_status: done
+wave_size: 4
+agent_map:
+    research: researcher
+    backlog: architect
+    todo: test-writer
+    in-progress: builder
+    review: reviewer
+    docs: doc-writer
+    done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: [research, docs]
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
 claim_timeout: 1h
 next_id: 1
-archive_dir: archive
-activity_log: false
 """
 
 
@@ -134,14 +141,26 @@ class TestFromAC_MoveTask:
     invalid target (422), same-status boundary (422), non-existent task (404).
     """
 
-    def test_move_happy_path_returns_200(self, client: TestClient) -> None:
+    def test_move_happy_path_returns_200(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Happy path: move task 1 from 'todo' to 'in-progress' returns 200."""
-        response = client.post("/api/tasks/1/move", json={"status": "in-progress"})
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         assert response.status_code == 200
 
-    def test_move_returns_updated_task_object(self, client: TestClient) -> None:
+    def test_move_returns_updated_task_object(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Response body is a task object with the new status applied."""
-        response = client.post("/api/tasks/1/move", json={"status": "review"})
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "review", "updated": task.updated},
+        )
         assert response.status_code == 200
         body = response.json()
         assert body["id"] == 1
@@ -149,10 +168,14 @@ class TestFromAC_MoveTask:
         assert "title" in body
         assert "priority" in body
 
-    def test_move_invalid_target_status_returns_422(self, client: TestClient) -> None:
+    def test_move_invalid_target_status_returns_422(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Unknown status string not in valid_transitions → 422."""
+        task = engine.show_task("1")
         response = client.post(
-            "/api/tasks/1/move", json={"status": "not-a-real-status"}
+            "/api/tasks/1/move",
+            json={"status": "not-a-real-status", "updated": task.updated},
         )
         assert response.status_code == 422
 
@@ -161,12 +184,21 @@ class TestFromAC_MoveTask:
     ) -> None:
         """Moving to current status is excluded from valid_transitions → 422."""
         task = engine.show_task("1")
-        response = client.post("/api/tasks/1/move", json={"status": task.status})
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": task.status, "updated": task.updated},
+        )
         assert response.status_code == 422
 
-    def test_move_nonexistent_task_returns_404(self, client: TestClient) -> None:
+    def test_move_nonexistent_task_returns_404(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
         """Non-existent task ID returns 404 with ID in detail."""
-        response = client.post("/api/tasks/999/move", json={"status": "in-progress"})
+        task = engine.show_task("1")
+        response = client.post(
+            "/api/tasks/999/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         assert response.status_code == 404
         assert "999" in response.json()["detail"]
 
@@ -394,10 +426,14 @@ class TestFromAC_AuditLogging:
     """
 
     def test_move_writes_activity_log_actor_cockpit(
-        self, client: TestClient, board_dir: Path
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
     ) -> None:
         """Move mutation writes activity.jsonl entry with actor='cockpit'."""
-        client.post("/api/tasks/1/move", json={"status": "in-progress"})
+        task = engine.show_task("1")
+        client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         activity_file = board_dir / "activity.jsonl"
         assert activity_file.exists(), "activity.jsonl must be created by move mutation"
         entries = [
@@ -511,10 +547,14 @@ class TestBuilderDiscovered:
         assert response.status_code == 422
 
     def test_move_audit_log_has_correct_action_and_task_id(
-        self, client: TestClient, board_dir: Path
+        self, client: TestClient, engine: KanbanEngine, board_dir: Path
     ) -> None:
         """Move audit log entry has action='move' and task_id matching the mutated task."""
-        client.post("/api/tasks/1/move", json={"status": "in-progress"})
+        task = engine.show_task("1")
+        client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": task.updated},
+        )
         entries = [
             json.loads(line)
             for line in (board_dir / "activity.jsonl").read_text().splitlines()
