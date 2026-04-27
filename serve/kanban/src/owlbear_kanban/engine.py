@@ -1411,6 +1411,7 @@ class KanbanEngine:
         archival_reason: str | None = None,
         archival_refs: list[int] | None = None,
         expected_updated: str | None = None,
+        source: str = "engine",
     ) -> Task:
         """Finalise a work session: append note, update task state, release claim.
 
@@ -1426,6 +1427,7 @@ class KanbanEngine:
             archival_reason: Archival reason used when ``reject`` moves to ``"archived"``.
             archival_refs: Archival references used when ``reject`` moves to ``"archived"``.
             expected_updated: Optional OCC token for compare-and-swap writes.
+            source:       Activity source label for emitted ``end_work`` event.
 
         Returns:
             Updated :class:`Task` reflecting the new state.
@@ -1510,7 +1512,9 @@ class KanbanEngine:
             "release": "release",
         }
         try:
-            self._emit_event("end_work", record.id, _end_work_details[outcome])
+            self._emit_event(
+                "end_work", record.id, _end_work_details[outcome], source=source
+            )
         except OSError:
             with contextlib.suppress(Exception):
                 if needs_archive and dest.exists():
@@ -3033,6 +3037,7 @@ class AgentView:
                     archival_reason=archival_reason,
                     archival_refs=effective_archival_refs,
                     expected_updated=before.updated,
+                    source="agent",
                 )
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
