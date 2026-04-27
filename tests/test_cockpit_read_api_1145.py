@@ -116,6 +116,53 @@ def cache_client(engine: KanbanEngine, cache: MtimeScanCache) -> TestClient:
 
 
 # ---------------------------------------------------------------------------
+# Fixtures — empty board (no tasks) for empty-board cache-hit regression guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def empty_board_dir(tmp_path: Path) -> Path:
+    """Minimal board with no tasks — exercises the cached-empty-list branch."""
+    base = tmp_path / "empty"
+    base.mkdir()
+    return _make_board(base)
+
+
+@pytest.fixture
+def empty_engine(empty_board_dir: Path) -> KanbanEngine:
+    """KanbanEngine pointed at the empty board."""
+    return KanbanEngine(empty_board_dir, agent_name="test-cockpit-empty")
+
+
+@pytest.fixture
+def empty_cache(empty_board_dir: Path) -> MtimeScanCache:
+    """Known MtimeScanCache instance for the empty board's tasks directory."""
+    from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+    return MtimeScanCache(empty_board_dir / "tasks")
+
+
+@pytest.fixture
+def empty_cache_client(empty_engine: KanbanEngine, empty_cache: MtimeScanCache) -> TestClient:
+    """TestClient with get_engine and get_cache overridden for the empty board.
+
+    Overriding get_cache ensures tests inspect the exact same MtimeScanCache
+    instance the route handler uses — required for empty-board cache-hit proof.
+    """
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from owlbear_cockpit.deps import get_cache  # noqa: PLC0415
+    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+    app.dependency_overrides[get_engine] = lambda: empty_engine
+    app.dependency_overrides[get_cache] = lambda: empty_cache
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ---------------------------------------------------------------------------
 # AC: MtimeScanCache.has_changed() gates engine.list_tasks() calls
 # ---------------------------------------------------------------------------
 
@@ -343,4 +390,41 @@ class TestFromAC_CacheHitShortCircuit:
         assert len(cache.tasks) > 0, (
             "cache.tasks must be populated after first GET /api/tasks — "
             "the route must store engine results in cache.tasks on cache miss"
+        )
+
+    def test_empty_board_second_request_skips_engine_call(
+        self,
+        empty_cache_client: TestClient,
+        empty_engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """engine.list_tasks() NOT called on 2nd unchanged request when cached result is [].
+
+        Regression guard: distinguishes 'cache never populated' from 'cached empty list'.
+        A route that uses `or not cache.tasks` instead of `or not cache.has_cached_tasks`
+        would call engine.list_tasks() on every empty-board request — this test catches that.
+        """
+        # First request: cache populated with empty task list
+        r1 = empty_cache_client.get("/api/tasks")
+        assert r1.status_code == 200
+        assert r1.json()["tasks"] == [], "Empty board must return empty task list"
+
+        # Monkeypatch AFTER first request so only second-request calls are counted
+        call_count = 0
+        original = empty_engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(empty_engine, "list_tasks", counting)
+
+        # Second request: file mtime unchanged — must use cached [] without engine call
+        r2 = empty_cache_client.get("/api/tasks")
+        assert r2.status_code == 200
+        assert r2.json()["tasks"] == [], "Second empty-board response must also be empty"
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on second unchanged "
+            f"empty-board request — cached [] must be treated as a valid cache hit"
         )
