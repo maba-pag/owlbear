@@ -21,7 +21,7 @@ AC coverage:
   sess-records — list_sessions returns list[SessionRecord]
   sess-running — open claim with no close event → state='running'
   sess-all     — list_sessions(filter='all') includes completed sessions
-  sess-released — list_sessions(filter='released') returns release-outcome sessions
+  sess-released — list_sessions(filter='released') returns released-state sessions per Brief B flat labels
   sess-empty   — list_sessions on empty log returns []
   scan-clean   — scan_corruption on clean board returns empty list
   scan-corrupt — scan_corruption with corrupt file returns list[CorruptionError]
@@ -671,6 +671,7 @@ class TestFromAC_CockpitViewListSessions:
         sessions = cv.list_sessions(filter="released")
         assert len(sessions) == 1
         assert sessions[0].outcome == "release"
+        assert sessions[0].state == "released"
 
     def test_list_sessions_completed_end_work_has_state_completed_and_outcome_success(
         self, tmp_path: Path
