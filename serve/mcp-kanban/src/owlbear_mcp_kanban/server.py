@@ -316,6 +316,70 @@ async def _invoke_engine_end_work(  # noqa: PLR0913
     )
 
 
+def _invoke_view_end_work(  # noqa: PLR0913
+    view: object | None,
+    *,
+    task_id: str,
+    outcome: str,
+    move_to: str | None,
+    note: str | None,
+    block_reason: str | None,
+    archival_reason: str | None,
+    archival_refs: list[int] | None,
+) -> SingleTaskResponse | None:
+    """Call view.end_work when available; return None when unsupported."""
+    if view is None or not hasattr(view, "end_work"):
+        return None
+    try:
+        record = view.end_work(
+            int(task_id),
+            outcome=outcome,
+            move_to=move_to,
+            note=note,
+            block_reason=block_reason,
+            archival_reason=archival_reason,
+            archival_refs=archival_refs,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+    except NotImplementedError:
+        return None
+    task = _to_single_task_response(record)
+    if outcome in {"success", "block", "fail"}:
+        with contextlib.suppress(Exception):
+            if not task.guidance:
+                task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
+    return task
+
+
+def _extract_task_id_compat(legacy: dict[str, object]) -> str | None:
+    """Extract optional legacy task_id kwarg from compatibility arguments."""
+    legacy_task_id = legacy.pop("task_id", None)
+    if legacy_task_id is None:
+        return None
+    if not isinstance(legacy_task_id, str | int):
+        msg = "task_id must be a string or integer"
+        raise ToolError(msg)
+    return _coerce_to_str(legacy_task_id)
+
+
+def _resolve_tool_id(
+    id_value: str | None,
+    legacy_task_id: str | None,
+    *,
+    tool: str,
+) -> str:
+    """Resolve canonical id with legacy task_id compatibility for mutation tools."""
+    if id_value is not None and legacy_task_id is not None and id_value != legacy_task_id:
+        msg = f"{tool} received conflicting id and task_id values"
+        raise ToolError(msg)
+    resolved = id_value if id_value is not None else legacy_task_id
+    if resolved is None:
+        msg = "id is required"
+        raise ToolError(msg)
+    return resolved
+
+
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def show_task(
     ctx: Context,
@@ -341,8 +405,8 @@ async def create_task(  # noqa: PLR0913
     title: str,
     body: str = "",
     depends_on: list[int] | None = None,
-    parent: int = 0,
-    priority: str = "",
+    parent: int | None = None,
+    priority: str = "needed",
     tags: list[str] | None = None,
 ) -> SingleTaskResponse:
     """Create a new kanban task."""
@@ -353,7 +417,7 @@ async def create_task(  # noqa: PLR0913
             body=body,
             priority=priority,
             tags=tags,
-            parent=parent if parent > 0 else None,
+            parent=parent,
             depends_on=depends_on,
         )
     except KanbanError as exc:
@@ -363,17 +427,24 @@ async def create_task(  # noqa: PLR0913
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
 async def move_task(
     ctx: Context,
-    task_id: StrId,
-    status: str,
+    id: StrId | None = None,  # noqa: A002
+    status: str | None = None,
     archival_reason: str | None = None,
     archival_refs: list[int] | None = None,
+    **legacy: object,
 ) -> SingleTaskResponse:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    legacy_task_id = _extract_task_id_compat(legacy)
+    legacy.clear()
+    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="move_task")
+    if status is None:
+        msg = "status is required"
+        raise ToolError(msg)
 
     view_result = _invoke_view_move_task(
         _agent_view_for(app_ctx.engine),
-        task_id=task_id,
+        task_id=resolved_id,
         status=status,
         archival_reason=archival_reason,
         archival_refs=archival_refs,
@@ -383,7 +454,7 @@ async def move_task(
 
     canonical_result = _invoke_view_move_task(
         _canonical_agent_view_for(app_ctx.engine),
-        task_id=task_id,
+        task_id=resolved_id,
         status=status,
         archival_reason=archival_reason,
         archival_refs=archival_refs,
@@ -391,11 +462,11 @@ async def move_task(
     if canonical_result is not None:
         return canonical_result
 
-    pre_task = await _show_validated(app_ctx, task_id)
+    pre_task = await _show_validated(app_ctx, resolved_id)
     try:
         record = await asyncio.to_thread(
             app_ctx.engine.move_task,
-            task_id,
+            resolved_id,
             status,
             archival_reason=archival_reason,
             archival_refs=archival_refs,
@@ -418,7 +489,7 @@ async def move_task(
 async def edit_task(  # noqa: PLR0912, PLR0913, C901
     ctx: Context,
     *,
-    task_id: StrId,
+    id: StrId | None = None,  # noqa: A002
     body: str = "",
     append_body: str = "",
     timestamp: bool = False,
@@ -431,10 +502,15 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     block_reason: str | None = None,
     archival_reason: str = "",
     archival_refs: list[int] | None = None,
+    **legacy: object,
 ) -> SingleTaskResponse:
     """Edit task fields."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    legacy_task_id = _extract_task_id_compat(legacy)
+    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="edit_task")
     kwargs: dict[str, object] = {}
+    title = legacy.pop("title", None)
+    legacy.clear()
     if body:
         kwargs["body"] = body
     if append_body:
@@ -459,21 +535,35 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["archival_reason"] = archival_reason
     if archival_refs is not None:
         kwargs["archival_refs"] = archival_refs
+    if title and "body" not in kwargs and "append_body" not in kwargs:
+        kwargs["append_body"] = str(title)
     try:
-        return app_ctx.engine.agent_view().edit_task(int(task_id), **kwargs)
+        response = app_ctx.engine.agent_view().edit_task(int(resolved_id), **kwargs)
     except KanbanError as exc:
         _map_kanban_error(exc)
+    result = _to_single_task_response(response)
+    with contextlib.suppress(Exception):
+        if not result.guidance:
+            result.guidance = collect_guidance("edit_task", None, result)
+    return result
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
-async def start_work(ctx: Context, task_id: StrId) -> SingleTaskResponse:
+async def start_work(
+    ctx: Context,
+    id: StrId | None = None,  # noqa: A002
+    **legacy: object,
+) -> SingleTaskResponse:
     """Claim a task and return its full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    legacy_task_id = _extract_task_id_compat(legacy)
+    legacy.clear()
+    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="start_work")
 
     view = _agent_view_for(app_ctx.engine)
     if view is not None and hasattr(view, "start_work"):
         try:
-            record = view.start_work(int(task_id))
+            record = view.start_work(int(resolved_id))
             return _to_single_task_response(record)
         except KanbanError as exc:
             _map_kanban_error(exc)
@@ -483,7 +573,7 @@ async def start_work(ctx: Context, task_id: StrId) -> SingleTaskResponse:
     canonical_view = _canonical_agent_view_for(app_ctx.engine)
     if canonical_view is not None and hasattr(canonical_view, "start_work"):
         try:
-            record = canonical_view.start_work(int(task_id))
+            record = canonical_view.start_work(int(resolved_id))
             return _to_single_task_response(record)
         except KanbanError as exc:
             _map_kanban_error(exc)
@@ -491,7 +581,7 @@ async def start_work(ctx: Context, task_id: StrId) -> SingleTaskResponse:
             pass
 
     try:
-        record = app_ctx.engine.start_work(task_id)
+        record = app_ctx.engine.start_work(resolved_id)
     except KanbanError as exc:
         _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
@@ -506,57 +596,51 @@ async def start_work(ctx: Context, task_id: StrId) -> SingleTaskResponse:
 async def end_work(  # noqa: PLR0913
     ctx: Context,
     *,
-    task_id: StrId,
+    id: StrId | None = None,  # noqa: A002
     note: str | None = None,
-    outcome: Literal["success", "fail", "block", "reject", "release"] = "success",
+    outcome: Literal["success", "block", "reject", "release"] = "success",
     block_reason: str | None = None,
     move_to: str | None = None,
     archival_reason: str | None = None,
     archival_refs: list[int] | None = None,
+    **legacy: object,
 ) -> SingleTaskResponse:
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
+    legacy_task_id = _extract_task_id_compat(legacy)
+    legacy.clear()
+    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="end_work")
 
-    view = _agent_view_for(app_ctx.engine)
-    if view is not None and hasattr(view, "end_work"):
-        try:
-            record = view.end_work(
-                int(task_id),
-                outcome=outcome,
-                move_to=move_to,
-                note=note,
-                block_reason=block_reason,
-                archival_reason=archival_reason,
-                archival_refs=archival_refs,
-            )
-            return _to_single_task_response(record)
-        except KanbanError as exc:
-            _map_kanban_error(exc)
-        except NotImplementedError:
-            pass
+    view_result = _invoke_view_end_work(
+        _agent_view_for(app_ctx.engine),
+        task_id=resolved_id,
+        outcome=outcome,
+        move_to=move_to,
+        note=note,
+        block_reason=block_reason,
+        archival_reason=archival_reason,
+        archival_refs=archival_refs,
+    )
+    if view_result is not None:
+        return view_result
 
-    canonical_view = _canonical_agent_view_for(app_ctx.engine)
-    if canonical_view is not None and hasattr(canonical_view, "end_work"):
-        try:
-            record = canonical_view.end_work(
-                int(task_id),
-                outcome=outcome,
-                move_to=move_to,
-                note=note,
-                block_reason=block_reason,
-                archival_reason=archival_reason,
-                archival_refs=archival_refs,
-            )
-            return _to_single_task_response(record)
-        except KanbanError as exc:
-            _map_kanban_error(exc)
-        except NotImplementedError:
-            pass
+    canonical_result = _invoke_view_end_work(
+        _canonical_agent_view_for(app_ctx.engine),
+        task_id=resolved_id,
+        outcome=outcome,
+        move_to=move_to,
+        note=note,
+        block_reason=block_reason,
+        archival_reason=archival_reason,
+        archival_refs=archival_refs,
+    )
+    if canonical_result is not None:
+        return canonical_result
 
     try:
         record = await _invoke_engine_end_work(
             app_ctx.engine,
-            task_id=task_id,
+            task_id=resolved_id,
             note=note,
             outcome=outcome,
             block_reason=block_reason,
@@ -569,8 +653,10 @@ async def end_work(  # noqa: PLR0913
     except (ValueError, FileNotFoundError) as exc:
         raise ToolError(str(exc)) from exc
     task = _to_single_task_response(record)
-    with contextlib.suppress(Exception):
-        task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
+    if outcome in {"success", "block", "fail"}:
+        with contextlib.suppress(Exception):
+            if not task.guidance:
+                task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
     return task
 
 
