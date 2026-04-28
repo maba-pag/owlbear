@@ -214,6 +214,42 @@ def _agent_view_for(engine: KanbanEngine) -> object | None:
     return max(candidates, key=_score)
 
 
+def _canonical_agent_view_for(engine: KanbanEngine) -> object | None:
+    """Resolve the authoritative engine AgentView instance when available."""
+    candidate = getattr(engine, "agent_view", None)
+    if candidate is None:
+        return None
+    if callable(candidate):
+        with contextlib.suppress(Exception):
+            return candidate()
+    return candidate
+
+
+def _invoke_view_move_task(
+    view: object | None,
+    *,
+    task_id: str,
+    status: str,
+    archival_reason: str | None,
+    archival_refs: list[int] | None,
+) -> SingleTaskResponse | None:
+    """Call view.move_task when available; return None when unsupported."""
+    if view is None or not hasattr(view, "move_task"):
+        return None
+    try:
+        record = view.move_task(
+            int(task_id),
+            status,
+            archival_reason=archival_reason,
+            archival_refs=archival_refs,
+        )
+        return _to_single_task_response(record)
+    except KanbanError as exc:
+        raise ToolError(exc.user_message) from exc
+    except NotImplementedError:
+        return None
+
+
 async def _show_validated(app_ctx: AppContext, task_id: str) -> KanbanTask:
     """Retrieve a task from the engine and return a validated KanbanTask."""
     try:
@@ -272,20 +308,32 @@ async def move_task(
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
 
-    view = _agent_view_for(app_ctx.engine)
-    if view is not None and hasattr(view, "move_task"):
-        try:
-            record = view.move_task(
-                int(task_id),
-                status,
-                archival_reason=archival_reason,
-                archival_refs=archival_refs,
-            )
-            return _to_single_task_response(record)
-        except KanbanError as exc:
-            raise ToolError(exc.user_message) from exc
-        except NotImplementedError:
-            pass
+    view_result = _invoke_view_move_task(
+        _agent_view_for(app_ctx.engine),
+        task_id=task_id,
+        status=status,
+        archival_reason=archival_reason,
+        archival_refs=archival_refs,
+    )
+    if view_result is not None:
+        return view_result
+
+    canonical_result = _invoke_view_move_task(
+        _canonical_agent_view_for(app_ctx.engine),
+        task_id=task_id,
+        status=status,
+        archival_reason=archival_reason,
+        archival_refs=archival_refs,
+    )
+    if canonical_result is not None:
+        return canonical_result
+
+    if status == "archived" and not archival_reason:
+        msg = "archival_reason is required when status='archived'"
+        raise ToolError(msg)
+    if status != "archived" and (archival_reason is not None or archival_refs is not None):
+        msg = "archival fields are only allowed when status='archived'"
+        raise ToolError(msg)
 
     pre_task = await _show_validated(app_ctx, task_id)
     try:
@@ -293,6 +341,8 @@ async def move_task(
             app_ctx.engine.move_task,
             task_id,
             status,
+            archival_reason=archival_reason,
+            archival_refs=archival_refs,
         )
     except KanbanError as exc:
         raise ToolError(exc.user_message) from exc
@@ -374,6 +424,16 @@ async def start_work(ctx: Context, task_id: StrId) -> SingleTaskResponse:
         except NotImplementedError:
             pass
 
+    canonical_view = _canonical_agent_view_for(app_ctx.engine)
+    if canonical_view is not None and hasattr(canonical_view, "start_work"):
+        try:
+            record = canonical_view.start_work(int(task_id))
+            return _to_single_task_response(record)
+        except KanbanError as exc:
+            raise ToolError(exc.user_message) from exc
+        except NotImplementedError:
+            pass
+
     try:
         record = app_ctx.engine.start_work(task_id)
     except KanbanError as exc:
@@ -409,6 +469,24 @@ async def end_work(  # noqa: PLR0913
                 outcome=outcome,
                 move_to=move_to,
                 note=note,
+                block_reason=block_reason,
+                archival_reason=archival_reason,
+                archival_refs=archival_refs,
+            )
+            return _to_single_task_response(record)
+        except KanbanError as exc:
+            raise ToolError(exc.user_message) from exc
+        except NotImplementedError:
+            pass
+
+    canonical_view = _canonical_agent_view_for(app_ctx.engine)
+    if canonical_view is not None and hasattr(canonical_view, "end_work"):
+        try:
+            record = canonical_view.end_work(
+                int(task_id),
+                outcome=outcome,
+                move_to=move_to,
+                note=note or "",
                 block_reason=block_reason,
                 archival_reason=archival_reason,
                 archival_refs=archival_refs,
