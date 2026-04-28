@@ -341,15 +341,39 @@ class TestFromAC_EndWorkAdapter:
         self, ctx: MagicMock, mock_av: MagicMock
     ) -> None:
         """outcome='block' without block_reason → ToolError; message from KanbanError.user_message."""
-        # Configure AgentView to raise the engine-level error:
+        # Configure AgentView to raise the engine-level error (no machine code in user_message per §7):
         mock_av.end_work.side_effect = ValidationError(
             code="ERR_BLOCK_REASON_REQUIRED",
-            user_message="ERR_BLOCK_REASON_REQUIRED: block_reason is required when outcome=block",
+            user_message="block_reason is required when outcome=block",
         )
         with pytest.raises(ToolError) as exc_info:
             await end_work(ctx, task_id="42", outcome="block", block_reason=None, note=None)
-        # ToolError message must carry the KanbanError.user_message (not a hardcoded adapter string)
-        assert "ERR_BLOCK_REASON_REQUIRED" in str(exc_info.value)
+        # ToolError message must carry the KanbanError.user_message verbatim (§7: no ERR_ codes on wire)
+        assert "block_reason is required when outcome=block" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_end_work_forwards_non_null_archival_fields(
+        self, ctx: MagicMock, mock_av: MagicMock
+    ) -> None:
+        """Non-null archival_reason/archival_refs forwarded to AgentView verbatim."""
+        await end_work(
+            ctx,
+            task_id="42",
+            outcome="fail",
+            note=None,
+            block_reason=None,
+            archival_reason="completed",
+            archival_refs=[100],
+        )
+        mock_av.end_work.assert_called_once_with(
+            42,
+            outcome="fail",
+            move_to=None,
+            note=None,
+            block_reason=None,
+            archival_reason="completed",
+            archival_refs=[100],
+        )
 
     @pytest.mark.asyncio
     async def test_end_work_note_is_optional(
@@ -536,4 +560,21 @@ class TestFromAC_EndWorkForbiddenMatrix:
         with pytest.raises(ToolError, match="block_reason is forbidden"):
             await end_work(
                 ctx, task_id="42", outcome="release", block_reason="oops", note=None
+            )
+
+    @pytest.mark.asyncio
+    async def test_fail_with_block_reason_raises_tool_error(
+        self, ctx: MagicMock, mock_av: MagicMock
+    ) -> None:
+        """outcome='fail' + block_reason → ToolError (ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK).
+
+        'fail' is a valid non-block outcome (server.py L485) and must also reject block_reason.
+        """
+        mock_av.end_work.side_effect = ValidationError(
+            code="ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK",
+            user_message="block_reason is forbidden when outcome is not block",
+        )
+        with pytest.raises(ToolError, match="block_reason is forbidden"):
+            await end_work(
+                ctx, task_id="42", outcome="fail", block_reason="oops", note=None
             )
