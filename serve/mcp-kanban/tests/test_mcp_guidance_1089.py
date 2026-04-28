@@ -105,7 +105,7 @@ Second audit entry.
 """
 
 _BODY_SIZE_WARNING = "⚠️ Task body is large (>100 KB); consider splitting."
-_SECTION_OCCURRENCE_MSG = "Section 'Audit' matched 2 occurrences; returning the first section."
+_SECTION_OCCURRENCE_MSG = "Section 'Audit' matched 2 occurrences."
 _PICK_DISPATCH_HINT = "Dispatch hints: 3 task(s) across 1 wave(s)."
 
 _SKIP_MOVE_WARNING = (
@@ -352,6 +352,7 @@ class TestFromAC_GuidancePassthrough:
         path; collect_guidance returns [] for 'reject'; result.guidance == [] ≠ expected
         skip warning — assertion fails.
         """
+        app_ctx.engine.claim_task("1")
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
