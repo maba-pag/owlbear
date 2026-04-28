@@ -223,7 +223,7 @@ class TestFromAC_GuidancePassthrough:
         kwarg) or NotImplementedError — the call propagates before the assertion.
         """
         ctx = _make_ctx(app_ctx_with_section_task)
-        result = await show_task(ctx, task_id="1", section="Audit")
+        result = await show_task(ctx, id=1, section="Audit")
         assert result.guidance == [_SECTION_OCCURRENCE_MSG], (
             f"Expected exact occurrence-count guidance {[_SECTION_OCCURRENCE_MSG]!r}; "
             f"got {result.guidance!r}"
@@ -251,7 +251,7 @@ class TestFromAC_GuidancePassthrough:
         payload["missing_sections"] = None
         sentinel_response = ShowTaskResponse.model_validate(payload)
         with patch.object(AgentView, "show_task", return_value=sentinel_response):
-            result = await show_task(ctx, task_id="1")
+            result = await show_task(ctx, id=1)
         assert result.guidance == sentinel_guidance, (
             f"Adapter must pass guidance through unmodified; got {result.guidance!r}"
         )
@@ -441,7 +441,7 @@ class TestFromAC_ErrorMapping:
         """
         ctx = _make_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await show_task(ctx, task_id="9999")
+            await show_task(ctx, id=9999)
         assert str(exc_info.value) == "Task '9999' not found", (
             f"ToolError must pass exact user_message; got {exc_info.value!r}"
         )
