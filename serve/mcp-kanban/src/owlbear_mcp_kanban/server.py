@@ -143,19 +143,21 @@ async def list_tasks(  # noqa: PLR0913
     """List kanban tasks with optional filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
-        params = ListTasksParams.model_construct(
-            status=status,
-            tag=tag,
-            priority=priority,
-            archival_reason=archival_reason,
-            ids=ids,
-            parent=parent,
-            search=search,
-            sort=sort,
-            unclaimed=unclaimed,
-            limit=limit,
-            reverse=reverse,
-            blocked=blocked,
+        params = ListTasksParams.model_validate(
+            {
+                "status": status,
+                "tag": tag,
+                "priority": priority,
+                "archival_reason": archival_reason,
+                "ids": ids,
+                "parent": parent,
+                "search": search,
+                "sort": sort,
+                "unclaimed": unclaimed,
+                "limit": limit,
+                "reverse": reverse,
+                "blocked": blocked,
+            }
         )
         return app_ctx.engine.agent_view().list_tasks(
             status=params.status,
@@ -325,22 +327,13 @@ async def show_task(
     ctx: Context,
     id: int = 0,  # noqa: A002
     section: str = "",
-    **legacy_kwargs: object,
 ) -> ShowTaskResponse:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    resolved_id = legacy_kwargs.pop("task_id", id)
-    if legacy_kwargs:
-        unknown = ", ".join(sorted(legacy_kwargs))
-        msg = f"Unknown arguments: {unknown}"
-        raise ToolError(msg)
     try:
-        params = ShowTaskParams.model_validate({"id": resolved_id, "section": section})
+        params = ShowTaskParams.model_validate({"id": id, "section": section})
         view = app_ctx.engine.agent_view()
-        try:
-            return view.show_task(id=params.id, section=params.section)
-        except TypeError:
-            return view.show_task(task_id=params.id, section=params.section)
+        return view.show_task(id=params.id, section=params.section)
     except KanbanError as exc:
         _map_kanban_error(exc)
     except PydanticValidationError as exc:
