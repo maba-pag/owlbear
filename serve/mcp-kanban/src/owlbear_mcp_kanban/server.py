@@ -15,6 +15,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
+from pydantic import ValidationError as PydanticValidationError
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.errors import KanbanError
@@ -25,7 +26,12 @@ from owlbear_kanban.models import (
     SingleTaskResponse,
 )
 from owlbear_mcp_kanban.guidance import collect_guidance
-from owlbear_mcp_kanban.models import KanbanTask
+from owlbear_mcp_kanban.models import (
+    KanbanTask,
+    ListTasksParams,
+    PickTasksParams,
+    ShowTaskParams,
+)
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -121,14 +127,15 @@ mcp = FastMCP("owlbear-kanban", lifespan=app_lifespan)
 async def list_tasks(  # noqa: PLR0913
     ctx: Context,
     *,
-    status: str = "",
-    tag: str = "",
-    priority: str = "",
+    status: str | None = None,
+    tag: str | None = None,
+    priority: str | None = None,
+    archival_reason: str | None = None,
     ids: list[int] | None = None,
-    search: str = "",
-    sort: str = "",
+    parent: int | None = None,
+    search: str | None = None,
+    sort: str | None = None,
     unclaimed: bool = False,
-    archived: bool = False,
     limit: int = 0,
     reverse: bool = False,
     blocked: bool | None = None,
@@ -136,21 +143,38 @@ async def list_tasks(  # noqa: PLR0913
     """List kanban tasks with optional filters."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
-        return app_ctx.engine.agent_view().list_tasks(
+        params = ListTasksParams.model_construct(
             status=status,
             tag=tag,
             priority=priority,
+            archival_reason=archival_reason,
             ids=ids,
+            parent=parent,
             search=search,
             sort=sort,
             unclaimed=unclaimed,
-            archived=archived,
             limit=limit,
             reverse=reverse,
             blocked=blocked,
         )
+        return app_ctx.engine.agent_view().list_tasks(
+            status=params.status,
+            tag=params.tag,
+            priority=params.priority,
+            archival_reason=params.archival_reason,
+            ids=params.ids,
+            parent=params.parent,
+            search=params.search,
+            sort=params.sort,
+            unclaimed=params.unclaimed,
+            limit=params.limit,
+            reverse=params.reverse,
+            blocked=params.blocked,
+        )
     except KanbanError as exc:
         _map_kanban_error(exc)
+    except PydanticValidationError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 # Set outputSchema for list_tasks (lean task array)
@@ -297,14 +321,30 @@ async def _invoke_engine_end_work(  # noqa: PLR0913
 
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
-async def show_task(ctx: Context, task_id: StrId, section: str = "") -> ShowTaskResponse:
+async def show_task(
+    ctx: Context,
+    id: int = 0,  # noqa: A002
+    section: str = "",
+    **legacy_kwargs: object,
+) -> ShowTaskResponse:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    section_arg: str | None = section or None
+    resolved_id = legacy_kwargs.pop("task_id", id)
+    if legacy_kwargs:
+        unknown = ", ".join(sorted(legacy_kwargs))
+        msg = f"Unknown arguments: {unknown}"
+        raise ToolError(msg)
     try:
-        return app_ctx.engine.agent_view().show_task(task_id=task_id, section=section_arg)
+        params = ShowTaskParams.model_validate({"id": resolved_id, "section": section})
+        view = app_ctx.engine.agent_view()
+        try:
+            return view.show_task(id=params.id, section=params.section)
+        except TypeError:
+            return view.show_task(task_id=params.id, section=params.section)
     except KanbanError as exc:
         _map_kanban_error(exc)
+    except PydanticValidationError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -576,12 +616,20 @@ async def pick_tasks(
     """
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
+        params = PickTasksParams.model_validate(
+            {
+                "wave_size": wave_size,
+                "max_waves": max_waves,
+            }
+        )
         return app_ctx.engine.agent_view().pick_tasks(
-            wave_size=wave_size,
-            max_waves=max_waves,
+            wave_size=params.wave_size,
+            max_waves=params.max_waves,
         )
     except KanbanError as exc:
         _map_kanban_error(exc)
+    except PydanticValidationError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 # Override outputSchema for mutation/lifecycle tools that return
