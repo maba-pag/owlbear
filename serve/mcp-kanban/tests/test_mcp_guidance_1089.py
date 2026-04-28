@@ -420,12 +420,11 @@ class TestFromAC_ErrorMapping:
         ctx = _make_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await create_task(ctx, title="")
-        error_text = str(exc_info.value)
-        assert "title" in error_text.lower() or "invalid" in error_text.lower() or "empty" in error_text.lower(), (
-            f"ToolError must describe the validation failure; got {exc_info.value!r}"
+        assert str(exc_info.value) == "title must not be empty", (
+            f"ToolError must pass exact user_message; got {exc_info.value!r}"
         )
-        assert not any(word.startswith("ERR_") for word in error_text.split()), (
-            f"ToolError must not expose machine error code on wire; got {error_text!r}"
+        assert not any(word.startswith("ERR_") for word in str(exc_info.value).split()), (
+            f"ToolError must not expose machine error code on wire; got {str(exc_info.value)!r}"
         )
 
     @pytest.mark.asyncio
@@ -443,9 +442,8 @@ class TestFromAC_ErrorMapping:
         ctx = _make_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await show_task(ctx, task_id="9999")
-        error_text = str(exc_info.value).lower()
-        assert "9999" in error_text or "not found" in error_text, (
-            f"ToolError must reference the missing task; got {exc_info.value!r}"
+        assert str(exc_info.value) == "Task '9999' not found", (
+            f"ToolError must pass exact user_message; got {exc_info.value!r}"
         )
 
     @pytest.mark.asyncio
@@ -464,16 +462,12 @@ class TestFromAC_ErrorMapping:
         ConcurrencyError-specific phrase 'by another agent' — assertion fails.
         """
         ctx = _make_ctx(app_ctx_claimed)
-        code = "ERR_ALREADY_CLAIMED"
-        user_msg_fragment = "by another agent"
         with pytest.raises(ToolError) as exc_info:
             await start_work(ctx, task_id="1")
         error_text = str(exc_info.value)
-        assert user_msg_fragment in error_text, (
-            f"ToolError must contain ConcurrencyError user_message fragment "
-            f"{user_msg_fragment!r}; got {error_text!r}"
+        assert error_text.startswith("Task '1' is already claimed by another agent"), (
+            f"ToolError must start with exact prefix; got {error_text!r}"
         )
-        assert code not in error_text, (
-            f"ToolError must NOT expose machine code on wire; "
-            f"found {code!r} in {error_text!r}"
+        assert "ERR_ALREADY_CLAIMED" not in error_text, (
+            f"ToolError must NOT expose machine code on wire; got {error_text!r}"
         )
