@@ -20,7 +20,7 @@ Note every AC line from the task body — each will be verified individually.
 
 ## Step 1 — Check Source Control Changes
 
-Use `get_changed_files` (with `sourceControlState: ["staged", "unstaged"]`) to list files changed by the builder. Record the changed file list — use it to scope subsequent steps.
+Use `git diff --name-only <commit>~1 <commit>` (with the builder's commit hash from the task body to scope the diff) to list files changed by the builder. If no commit hash is available, reconsturct the changed-file list from the builder notes, task scope, and direct file inspection. Record the changed file list — use it to scope subsequent steps.
 
 For any changed function or class signatures, use `vscode_listCodeUsages` to trace all callers and assess downstream impact.
 
