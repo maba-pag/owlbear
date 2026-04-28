@@ -224,4 +224,54 @@ describe('TestFromAC_useScanPolling', () => {
       expect(fetchMock.mock.calls.length).toBe(callsAfterMount)
     })
   })
+
+  // ─── Overlap guard (deferred-fetch proof) ────────────────────────────────────────────────────
+
+  describe('Overlap guard: in-flight request prevents double-fetch', () => {
+    it('does not start a second in-flight fetch when the first interval poll is already running', async () => {
+      let resolveSlowPoll!: (value: unknown) => void
+      const slowPollPromise = new Promise<unknown>((res) => { resolveSlowPoll = res })
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })
+        .mockImplementationOnce(() =>
+          slowPollPromise.then(() => ({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })),
+        )
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      renderHook(() => useScanPolling({ intervalMs: 5_000 }))
+      await act(async () => {})              // mount fetch resolves (call 1)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      act(() => { vi.advanceTimersByTime(5_000) }) // first interval tick → slow fetch starts (call 2, in-flight)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      act(() => { vi.advanceTimersByTime(5_000) }) // second interval tick fires while call 2 is still in-flight
+      expect(fetchMock).toHaveBeenCalledTimes(2)   // guard: no third fetch started
+
+      await act(async () => { resolveSlowPoll(undefined) }) // settle slow fetch to avoid timer leaks
+    })
+
+    it('queues exactly one repoll after the in-flight request settles when a tick was skipped', async () => {
+      let resolveSlowPoll!: (value: unknown) => void
+      const slowPollPromise = new Promise<unknown>((res) => { resolveSlowPoll = res })
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })
+        .mockImplementationOnce(() =>
+          slowPollPromise.then(() => ({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })),
+        )
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      renderHook(() => useScanPolling({ intervalMs: 5_000 }))
+      await act(async () => {})              // mount fetch resolves (call 1)
+
+      act(() => { vi.advanceTimersByTime(5_000) }) // first interval tick → slow fetch (call 2, in-flight)
+      act(() => { vi.advanceTimersByTime(5_000) }) // second tick skipped → pendingPoll queued
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      await act(async () => { resolveSlowPoll(undefined) }) // slow fetch settles → queued repoll fires (call 3)
+      expect(fetchMock).toHaveBeenCalledTimes(3)            // exactly one queued repoll, not more
+    })
+  })
 })
