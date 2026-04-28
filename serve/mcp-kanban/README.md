@@ -22,7 +22,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 | `show_task` | Fetch full task detail by ID |
 | `create_task` | Create a new task with title, body, priority, tags, and dependencies |
 | `move_task` | Move a task to a new status |
-| `edit_task` | Edit task fields (body, title, priority, tags, depends_on) |
+| `edit_task` | Edit task fields (body, append_body, priority, parent, tags, dependencies, block_reason, archival fields) |
 | `start_work` | Claim a task and advance it to `in-progress` |
 | `end_work` | Append an outcome note and apply outcome (success, fail, reject, block, or release) |
 | `pick_tasks` | Select the top dispatchable tasks from the board |
