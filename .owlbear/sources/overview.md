@@ -2,6 +2,12 @@
 
 External repos and resources studied during OwlBear development.
 
+## Version Field Semantics (Task #1170)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Docker Compose Spec — Version top-level element (obsolete) | <https://docs.docker.com/reference/compose-file/version-and-name/> | Precedent for deprecating config version field in favor of structure-based detection | `.owlbear/research/1170-version-field-semantics.md` | 2026-04-29 |
+
 ## Arch-Audit Prompt (Task #1150)
 
 | Source | URL | What | Where Used | Date |
