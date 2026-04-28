@@ -372,7 +372,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     remove_dep: list[int] | None = None,
     add_tag: list[str] | None = None,
     remove_tag: list[str] | None = None,
-    block_reason: str = "",
+    block_reason: str | None = None,
     archival_reason: str = "",
     archival_refs: list[int] | None = None,
 ) -> SingleTaskResponse:
@@ -397,7 +397,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["add_tag"] = add_tag
     if remove_tag is not None:
         kwargs["remove_tag"] = remove_tag
-    if block_reason:
+    if block_reason is not None:
         kwargs["block_reason"] = block_reason
     if archival_reason:
         kwargs["archival_reason"] = archival_reason
@@ -461,6 +461,52 @@ async def end_work(  # noqa: PLR0913
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
 
+    status_values = app_ctx.engine.board_config().statuses
+    valid_statuses = set(status_values)
+    if outcome == "success":
+        if move_to is not None:
+            raise ToolError("move_to is forbidden when outcome='success'")
+        if archival_reason is not None or archival_refs is not None:
+            raise ToolError("archival fields are forbidden when outcome='success'")
+        if block_reason is not None:
+            raise ToolError("block_reason is only allowed when outcome='block'")
+    elif outcome == "fail":
+        if move_to is not None:
+            raise ToolError("move_to is forbidden when outcome='fail'")
+        if archival_reason is not None or archival_refs is not None:
+            raise ToolError("archival fields are forbidden when outcome='fail'")
+        if block_reason is not None:
+            raise ToolError("block_reason is only allowed when outcome='block'")
+    elif outcome == "reject":
+        if block_reason is not None:
+            raise ToolError("block_reason is only allowed when outcome='block'")
+        if move_to is None:
+            raise ToolError("move_to is required when outcome='reject'")
+        valid_reject_statuses = set(valid_statuses)
+        valid_reject_statuses.add("archived")
+        if move_to not in valid_reject_statuses:
+            raise ToolError(f"move_to must be one of {sorted(valid_reject_statuses)}")
+        if move_to == "archived" and not archival_reason:
+            raise ToolError("archival_reason is required when move_to='archived'")
+        if move_to != "archived" and (archival_reason is not None or archival_refs is not None):
+            raise ToolError("archival fields are only allowed when move_to='archived'")
+    elif outcome == "block":
+        if archival_reason is not None or archival_refs is not None:
+            raise ToolError("archival fields are forbidden when outcome='block'")
+        if block_reason is None or not block_reason.strip():
+            raise ToolError("block_reason is required when outcome='block'")
+        if move_to is not None and move_to not in valid_statuses:
+            raise ToolError(f"move_to must be one of {sorted(valid_statuses)}")
+    elif outcome == "release":
+        if move_to is not None:
+            raise ToolError("move_to is forbidden when outcome='release'")
+        if archival_reason is not None or archival_refs is not None:
+            raise ToolError("archival fields are forbidden when outcome='release'")
+        if block_reason is not None:
+            raise ToolError("block_reason is only allowed when outcome='block'")
+    else:
+        raise ToolError(f"Unknown outcome: {outcome!r}")
+
     view = _agent_view_for(app_ctx.engine)
     if view is not None and hasattr(view, "end_work"):
         try:
@@ -498,14 +544,23 @@ async def end_work(  # noqa: PLR0913
             pass
 
     try:
-        record = await asyncio.to_thread(
-            app_ctx.engine.end_work,
-            task_id,
-            note=note or "",
-            outcome=outcome,
-            block_reason=block_reason or "",
-            move_to=move_to or "research",
-        )
+        if outcome == "release":
+            record = await asyncio.to_thread(
+                app_ctx.engine.release_task,
+                task_id,
+                note=note,
+            )
+        else:
+            record = await asyncio.to_thread(
+                app_ctx.engine.end_work,
+                task_id,
+                note=note or "",
+                outcome=outcome,
+                block_reason=block_reason or "",
+                move_to=move_to,
+                archival_reason=archival_reason,
+                archival_refs=archival_refs,
+            )
     except KanbanError as exc:
         raise ToolError(exc.user_message) from exc
     except (ValueError, FileNotFoundError) as exc:
@@ -546,9 +601,9 @@ async def pick_tasks(
         raise ToolError(exc.user_message) from exc
 
 
-# Override outputSchema for tools that return KanbanTask. This ensures the
-# advertised schema matches what structuredContent actually contains.
-_kanbantask_schema = KanbanTask.model_json_schema()
+# Override outputSchema for mutation/lifecycle tools that return
+# SingleTaskResponse. This ensures advertised schema matches tool output.
+_single_task_schema = SingleTaskResponse.model_json_schema()
 for _tool_name in (
     "move_task",
     "edit_task",
@@ -559,7 +614,7 @@ for _tool_name in (
     _tool_obj = next(
         t for t in mcp._tool_manager._tools.values() if t.name == _tool_name  # noqa: SLF001
     )
-    _tool_obj.fn_metadata.output_schema = _kanbantask_schema
+    _tool_obj.fn_metadata.output_schema = _single_task_schema
 
 
 # ---------------------------------------------------------------------------
