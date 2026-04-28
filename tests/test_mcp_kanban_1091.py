@@ -18,6 +18,7 @@ Already satisfied (no failing test possible):
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -231,4 +232,26 @@ class TestFromAC_MutationToolErrorHelper:
             "edit_task must call _map_kanban_error(exc) for KanbanError (AC6). "
             "Inline 'raise ToolError(exc.user_message) from exc' does not use the "
             "shared helper — refactor to _map_kanban_error(exc)."
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_EditTaskSignature
+# AC5: edit_task must NOT accept a status parameter
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_EditTaskSignature:
+    """AC5: edit_task must not expose a 'status' parameter (engine controls status).
+
+    Symmetric with test_create_task_has_no_status_parameter in the 1087 suite (AC3).
+    Added in retry cycle — architect required executable inspect.signature proof.
+    """
+
+    def test_edit_task_has_no_status_parameter(self) -> None:
+        """edit_task must not accept a status parameter — engine controls task status."""
+        params = inspect.signature(edit_task).parameters
+        assert "status" not in params, (
+            "edit_task must not expose a 'status' parameter; "
+            f"got params: {list(params)}"
         )
