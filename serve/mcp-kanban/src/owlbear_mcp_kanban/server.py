@@ -363,7 +363,7 @@ async def create_task(  # noqa: PLR0913
             depends_on=depends_on,
         )
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
@@ -475,7 +475,7 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     try:
         return app_ctx.engine.agent_view().edit_task(int(task_id), **kwargs)
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
