@@ -260,8 +260,9 @@ class TestFromAC_CreateTaskAdapter:
         mock_av.create_task.return_value = expected
         ctx = _make_mcp_ctx(app_ctx)
         result = await create_task(ctx, title="New Task")
-        assert isinstance(result, SingleTaskResponse), (
-            f"Expected SingleTaskResponse, got {type(result).__name__}"
+        assert result is expected, (
+            "create_task must return the unmodified SingleTaskResponse from AgentView — "
+            f"passthrough fidelity required; got {type(result).__name__}"
         )
 
     def test_create_task_has_no_status_parameter(self) -> None:
@@ -372,8 +373,9 @@ class TestFromAC_EditTaskAdapter:
         mock_av.edit_task.return_value = expected
         ctx = _make_mcp_ctx(app_ctx)
         result = await edit_task(ctx, task_id="1", priority="critical")
-        assert isinstance(result, SingleTaskResponse), (
-            f"Expected SingleTaskResponse, got {type(result).__name__}"
+        assert result is expected, (
+            "edit_task must return the unmodified SingleTaskResponse from AgentView — "
+            f"passthrough fidelity required; got {type(result).__name__}"
         )
 
     @pytest.mark.asyncio
