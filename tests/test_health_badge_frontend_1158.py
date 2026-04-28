@@ -82,3 +82,14 @@ class TestFromAC_HealthBadgeStructure:
         assert any(v in content for v in variants), (
             'HealthBadge.tsx must include data-testid="health-badge" on the root badge element.'
         )
+
+    # AC 7 (refined cycle 2): Component must NOT wrap itself in PorscheDesignSystemProvider.
+    # App.tsx provides the provider at root — nested providers are a defect.
+    def test_component_file_does_not_import_pds_provider(self) -> None:
+        assert COMPONENT_PATH.exists(), "Component file missing."
+        content = COMPONENT_PATH.read_text(encoding="utf-8")
+        assert "PorscheDesignSystemProvider" not in content, (
+            "HealthBadge.tsx must NOT import or instantiate PorscheDesignSystemProvider. "
+            "App.tsx provides it at root — HealthBadge must rely on the app-level provider, "
+            "not nest its own. Remove the import and wrapper from HealthBadge.tsx."
+        )
