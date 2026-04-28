@@ -1,4 +1,4 @@
-"""Cockpit mutation API routes — move, edit, release, sweep."""
+"""Cockpit mutation API routes — move, edit, release, sweep, scan, repair, compact-activity."""
 
 from __future__ import annotations
 
