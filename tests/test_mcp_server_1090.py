@@ -1,33 +1,32 @@
-"""RED phase tests — MCP read tool adapter error-mapping helper (#1090).
+"""RED phase tests — MCP read tool adapters: list_tasks, show_task, pick_tasks (#1090).
 
 AC Coverage:
-- KanbanError → ToolError mapping helper (_map_kanban_error) established in server
-  module as a reusable callable — reused by later mutation/lifecycle tasks.
-- Helper maps all KanbanError subclasses (ValidationError, NotFoundError,
-  ConcurrencyError) to MCP ToolError with user_message.
-- Helper is exported in server.__all__ for discoverability.
-- ToolError raised by helper chains the original exception (__cause__).
+- AC2: show_task adapter must translate MCP 'id' param → engine 'task_id' kwarg.
+       view.show_task(task_id=params.id, section=params.section) — NOT id=params.id.
+       Also: integration proof that a real engine call succeeds end-to-end.
+- AC3: pick_tasks accepts wave_size + max_waves matching PickTasksParams; delegates
+       to AgentView.pick_tasks with those exact kwargs.
+- AC5: KanbanError → ToolError via _map_kanban_error in show_task and pick_tasks
+       handlers; ToolError.__cause__ chains original exception (raise ... from exc).
+- AC6: list_tasks fn_metadata.output_schema matches ListTasksResponse.model_json_schema()
+       (structural proof following test_outputschema_541.py pattern).
+- AC8: Adjacent guidance test suite (test_mcp_guidance_1089.py) must use
+       show_task(id=...) not legacy show_task(task_id=...) on the MCP surface.
 
-Retry cycle additions (AC4, AC2):
-- AC4: list_tasks must use model_validate (not model_construct) — ids+other filter
-  combination must be caught by boundary model BEFORE the engine is called.
-- AC2: show_task must NOT accept legacy task_id= kwarg — only id + section (ShowTaskParams).
+Note: AC1 (12-param list_tasks surface), AC4 (model_validate), and the
+_map_kanban_error helper existence/behaviour (AC5 helper) are already verified by
+the pre-existing passing tests. This file covers the remaining gaps.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-from mcp.server.fastmcp.exceptions import ToolError
 
-from owlbear_kanban.errors import (
-    ConcurrencyError,
-    NotFoundError,
-    ValidationError,
-)
-from owlbear_kanban.models import ListTasksResponse, ShowTaskResponse
+from owlbear_kanban.models import ShowTaskResponse
 
 # ---------------------------------------------------------------------------
 # Helpers for boundary model tests
@@ -130,244 +129,154 @@ def app_ctx_1090(tmp_path: Path) -> tuple[object, MagicMock]:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_ErrorMappingHelper
-# AC: KanbanError → ToolError mapping helper established (reused by later tasks)
+# TestFromAC_ShowTaskKwargTranslation
+# AC2: show_task adapter translates MCP 'id' param → engine 'task_id' kwarg.
+# The critical bug: server.py currently calls view.show_task(id=params.id, ...)
+# but AgentView.show_task(self, task_id: int, section: str | None = None)
+# expects 'task_id'. The adapter must translate.
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ErrorMappingHelper:
-    """Named _map_kanban_error helper exists in server module and is reusable."""
-
-    def test_error_mapping_helper_is_importable(self) -> None:
-        """AC: _map_kanban_error must be importable from owlbear_mcp_kanban.server."""
-        from owlbear_mcp_kanban.server import _map_kanban_error  # noqa: F401
-
-    def test_error_mapping_helper_is_in_module_all(self) -> None:
-        """AC: _map_kanban_error must appear in server.__all__ for reuse by later tasks."""
-        from owlbear_mcp_kanban import server
-
-        assert "_map_kanban_error" in server.__all__, (
-            "_map_kanban_error must be listed in server.__all__ so later tasks can import it"
-        )
-
-    def test_error_mapping_helper_is_callable(self) -> None:
-        """AC: _map_kanban_error must be a callable (function or callable object)."""
-        from owlbear_mcp_kanban.server import _map_kanban_error
-
-        assert callable(_map_kanban_error), "_map_kanban_error must be callable"
-
-    def test_error_mapping_helper_raises_tool_error_for_validation_error(self) -> None:
-        """AC: _map_kanban_error(ValidationError) raises MCP ToolError."""
-        from owlbear_mcp_kanban.server import _map_kanban_error
-
-        exc = ValidationError(code="ERR_STALE", user_message="validation failed")
-        with pytest.raises(ToolError):
-            _map_kanban_error(exc)
-
-    def test_error_mapping_helper_raises_tool_error_for_not_found_error(self) -> None:
-        """AC: _map_kanban_error(NotFoundError) raises MCP ToolError."""
-        from owlbear_mcp_kanban.server import _map_kanban_error
-
-        exc = NotFoundError(code="ERR_NOT_FOUND", user_message="task 42 not found")
-        with pytest.raises(ToolError):
-            _map_kanban_error(exc)
-
-    def test_error_mapping_helper_raises_tool_error_for_concurrency_error(self) -> None:
-        """AC: _map_kanban_error(ConcurrencyError) raises MCP ToolError.
-
-        ConcurrencyError is a KanbanError subclass — the helper must handle it,
-        not just ValidationError/NotFoundError.
-        """
-        from owlbear_mcp_kanban.server import _map_kanban_error
-
-        exc = ConcurrencyError(code="ERR_STALE", user_message="write conflict detected")
-        with pytest.raises(ToolError):
-            _map_kanban_error(exc)
-
-    def test_error_mapping_helper_preserves_user_message_exactly(self) -> None:
-        """AC: ToolError raised by helper contains the exact user_message from KanbanError."""
-        from owlbear_mcp_kanban.server import _map_kanban_error
-
-        user_msg = "ids cannot be combined with other filter parameters"
-        exc = ValidationError(code="ERR_STALE", user_message=user_msg)
-        with pytest.raises(ToolError) as exc_info:
-            _map_kanban_error(exc)
-
-        assert user_msg in str(exc_info.value), (
-            "ToolError from _map_kanban_error must contain the exact user_message"
-        )
-
-    def test_error_mapping_helper_chains_original_exception(self) -> None:
-        """AC: ToolError.__cause__ is the original KanbanError (raise ... from exc pattern)."""
-        from owlbear_mcp_kanban.server import _map_kanban_error
-
-        original = ValidationError(code="ERR_STALE", user_message="chained test")
-        with pytest.raises(ToolError) as exc_info:
-            _map_kanban_error(original)
-
-        assert exc_info.value.__cause__ is original, (
-            "ToolError raised by _map_kanban_error must chain the original KanbanError "
-            "as __cause__ (i.e. 'raise ToolError(...) from exc')"
-        )
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_ReadAdapterBriefA
-# AC: Brief A §5.1-§5.3 boundary model alignment - signature and surface contracts
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ReadAdapterBriefA:
-    """Brief A §5.1-§5.3 contract tests - adapter parameter surface matches boundary models."""
-
-    import inspect as _inspect
-
-    # -- AC1: list_tasks 12-param surface, no legacy archived: bool --
-
-    def test_list_tasks_no_archived_param_on_mcp_surface(self) -> None:
-        """AC1: list_tasks must NOT expose 'archived: bool' (Brief A §5.1 — no legacy param)."""
-        import inspect
-
-        from owlbear_mcp_kanban.server import list_tasks
-
-        sig = inspect.signature(list_tasks)
-        assert "archived" not in sig.parameters, (
-            "Brief A §5.1 prohibits 'archived: bool' on the MCP surface; "
-            "use 'archival_reason: str | None' instead"
-        )
-
-    def test_list_tasks_has_archival_reason_param(self) -> None:
-        """AC1: list_tasks must expose 'archival_reason' matching ListTasksParams.archival_reason."""
-        import inspect
-
-        from owlbear_mcp_kanban.server import list_tasks
-
-        sig = inspect.signature(list_tasks)
-        assert "archival_reason" in sig.parameters, (
-            "list_tasks must accept 'archival_reason' (Brief A §5.1 / ListTasksParams field)"
-        )
-
-    def test_list_tasks_has_parent_param(self) -> None:
-        """AC1: list_tasks must expose 'parent' matching ListTasksParams.parent."""
-        import inspect
-
-        from owlbear_mcp_kanban.server import list_tasks
-
-        sig = inspect.signature(list_tasks)
-        assert "parent" in sig.parameters, (
-            "list_tasks must accept 'parent' (Brief A §5.1 / ListTasksParams field)"
-        )
-
-    def test_list_tasks_param_set_matches_list_tasks_params_model(self) -> None:
-        """AC4: list_tasks parameter names must align with ListTasksParams fields (boundary model)."""
-        import inspect
-
-        from owlbear_mcp_kanban.models import ListTasksParams
-        from owlbear_mcp_kanban.server import list_tasks
-
-        sig = inspect.signature(list_tasks)
-        # Exclude 'ctx' (MCP context) — it's infrastructure, not a user param
-        adapter_params = {k for k in sig.parameters if k != "ctx"}
-        model_fields = set(ListTasksParams.model_fields)
-
-        missing_from_adapter = model_fields - adapter_params
-        assert not missing_from_adapter, (
-            f"list_tasks is missing params that ListTasksParams defines: {missing_from_adapter!r}. "
-            "Adapter must wire MCP args to model fields (AC4)."
-        )
-
-    # -- AC2: show_task accepts id: int (not task_id: StrId), section passthrough --
-
-    def test_show_task_has_id_param_not_task_id(self) -> None:
-        """AC2: show_task parameter must be 'id: int' matching ShowTaskParams.id, not 'task_id'."""
-        import inspect
-
-        from owlbear_mcp_kanban.server import show_task
-
-        sig = inspect.signature(show_task)
-        assert "id" in sig.parameters, (
-            "show_task must accept 'id' (ShowTaskParams.id: int per Brief A §5.2)"
-        )
-        assert "task_id" not in sig.parameters, (
-            "show_task must use 'id' (not 'task_id: StrId') to match ShowTaskParams boundary model"
-        )
-
-    def test_show_task_id_param_is_int_type(self) -> None:
-        """AC2: show_task 'id' parameter must accept int (matching ShowTaskParams.id: int)."""
-        import inspect
-
-        from owlbear_mcp_kanban.server import show_task
-
-        sig = inspect.signature(show_task)
-        assert "id" in sig.parameters, "show_task must have 'id' parameter"
-        # Annotation should be int (not StrId / str)
-        ann = sig.parameters["id"].annotation
-        assert ann is int or ann == "int", (
-            f"show_task 'id' must be annotated as int (ShowTaskParams.id: int), got {ann!r}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_BoundaryModelDeserialization
-# AC4: list_tasks uses model_validate (not model_construct) — ids+other filter
-#      combination must raise ToolError BEFORE the engine is called.
-# AC2: show_task accepts only id + section — legacy task_id= kwarg must be rejected.
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_BoundaryModelDeserialization:
-    """AC4 and AC2: boundary model validation enforced before engine delegation."""
+class TestFromAC_ShowTaskKwargTranslation:
+    """AC2: show_task translates MCP surface id → engine task_id kwarg."""
 
     @pytest.mark.asyncio
-    async def test_list_tasks_boundary_model_rejects_ids_combined_with_status_no_engine_call(
+    async def test_show_task_engine_view_called_with_task_id_kwarg_not_id(
         self,
         app_ctx_1090: tuple[object, MagicMock],
     ) -> None:
-        """AC4: list_tasks uses model_validate — ids+status raises ToolError before engine call.
+        """AC2: view.show_task must be called with task_id=params.id, NOT id=params.id.
 
-        With model_construct (current impl): validation is skipped entirely.
-        AgentView is called normally, mock returns OK — no ToolError → this test FAILS.
+        The MCP surface uses 'id' (ShowTaskParams.id) but AgentView.show_task(task_id)
+        uses 'task_id'. The adapter must translate.
 
-        With model_validate (required): ListTasksParams._validate_ids_exclusivity raises
-        PydanticValidationError → ToolError. AgentView must NOT be called.
-        """
-        from owlbear_mcp_kanban.server import list_tasks
-
-        app_ctx, mock_av = app_ctx_1090
-        # Mock returns successfully — proves any ToolError comes from model, not engine
-        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
-
-        ctx = _make_mcp_ctx_1090(app_ctx)
-        with pytest.raises(ToolError):
-            await list_tasks(ctx, ids=[1], status="todo")
-
-        # Engine MUST NOT have been called — boundary model rejected the input first
-        mock_av.list_tasks.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_show_task_rejects_legacy_task_id_kwarg(
-        self,
-        app_ctx_1090: tuple[object, MagicMock],
-    ) -> None:
-        """AC2: show_task accepts only id + section (ShowTaskParams) — task_id= must be rejected.
-
-        Brief A §5.2 requires the MCP surface to be exactly id + section.
-        The legacy_kwargs.pop("task_id", id) compatibility path must be removed.
-
-        Currently FAILS: task_id= is silently routed via legacy compat and engine is called.
-        Once legacy compat is removed: calling show_task(ctx, task_id=42) raises
-        ToolError (unknown kwarg) or TypeError (unexpected keyword arg) — either proves
-        the legacy compat path no longer exists.
+        FAILS: current server.py calls view.show_task(id=params.id, section=params.section).
+        The mock records call_args as {'id': 42, 'section': ''}, so
+        assert_called_once_with(task_id=42, section="") raises AssertionError.
         """
         from owlbear_mcp_kanban.server import show_task
 
         app_ctx, mock_av = app_ctx_1090
         mock_av.show_task.return_value = _make_show_task_response_1090(id=42)
-
         ctx = _make_mcp_ctx_1090(app_ctx)
-        with pytest.raises((ToolError, TypeError)):
-            await show_task(ctx, task_id=42)  # type: ignore[call-arg]
 
-        # Engine must NOT have been called — legacy compat path must not exist
-        mock_av.show_task.assert_not_called()
+        await show_task(ctx, id=42)
+
+        # Must be called with task_id=42, NOT id=42
+        mock_av.show_task.assert_called_once_with(task_id=42, section="")
+
+    @pytest.mark.asyncio
+    async def test_show_task_engine_view_not_called_with_id_kwarg(
+        self,
+        app_ctx_1090: tuple[object, MagicMock],
+    ) -> None:
+        """AC2: the engine view must NOT receive 'id=' kwarg — only 'task_id='.
+
+        Using the 'id' Python builtin as a kwarg name to AgentView.show_task
+        is wrong and will raise TypeError with a real engine.
+
+        FAILS: current impl passes id= to the mock; call_args.kwargs will contain
+        'id' and not 'task_id'.
+        """
+        from owlbear_mcp_kanban.server import show_task
+
+        app_ctx, mock_av = app_ctx_1090
+        mock_av.show_task.return_value = _make_show_task_response_1090(id=7)
+        ctx = _make_mcp_ctx_1090(app_ctx)
+
+        await show_task(ctx, id=7, section="Notes")
+
+        actual_kwargs = mock_av.show_task.call_args.kwargs
+        assert "task_id" in actual_kwargs, (
+            f"view.show_task must be called with task_id= kwarg; got kwargs={actual_kwargs!r}"
+        )
+        assert "id" not in actual_kwargs, (
+            f"view.show_task must NOT have 'id=' in kwargs (that's the MCP surface name); "
+            f"got kwargs={actual_kwargs!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_show_task_integration_with_real_engine_succeeds(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """AC2: end-to-end — show_task(ctx, id=N) returns a ShowTaskResponse via real engine.
+
+        With the correct adapter (task_id= kwarg), the call chain works:
+          show_task(ctx, id=N) → ShowTaskParams(id=N) → view.show_task(task_id=N) → response.
+
+        FAILS: current impl calls view.show_task(id=N) which raises TypeError
+        (AgentView.show_task has no 'id' parameter). TypeError propagates uncaught
+        through show_task → pytest reports ERRORS/FAILED.
+        """
+        from owlbear_kanban import KanbanEngine
+        from owlbear_mcp_kanban.server import AppContext, show_task
+
+        kanban_dir = _make_board_1090(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        task = engine.agent_view().create_task(title="Integration target", body="")
+        task_id = task.id
+
+        app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
+        ctx = _make_mcp_ctx_1090(app_ctx)
+
+        result = await show_task(ctx, id=task_id)
+
+        assert isinstance(result, ShowTaskResponse), (
+            f"show_task(id={task_id}) must return ShowTaskResponse; got {type(result)!r}"
+        )
+        assert result.id == task_id, (
+            f"Returned task id {result.id!r} must match requested id {task_id!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_GuidanceCallerRollout
+# AC8: Adjacent guidance test suite (test_mcp_guidance_1089.py) must be updated
+# to use show_task(id=...) on the MCP surface — not legacy show_task(task_id=...).
+# Lines 226, 254, 444 in test_mcp_guidance_1089.py use the old kwarg.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GuidanceCallerRollout:
+    """AC8: Guidance test callers use id= not task_id= on MCP show_task surface."""
+
+    def test_guidance_suite_show_task_callers_use_id_not_task_id(self) -> None:
+        """AC8: test_mcp_guidance_1089.py must use show_task(id=...) not show_task(task_id=...).
+
+        Brief A §5.2 changed the MCP surface: 'id: int' replaces legacy 'task_id: StrId'.
+        The three callers at lines 226, 254, 444 in the guidance suite still use task_id=.
+        The builder must update them as part of this task's rollout.
+
+        FAILS until the guidance test file is updated: re.findall will find 3 matches.
+        """
+        guidance_test_file = (
+            Path(__file__).parent.parent
+            / "serve"
+            / "mcp-kanban"
+            / "tests"
+            / "test_mcp_guidance_1089.py"
+        )
+        content = guidance_test_file.read_text(encoding="utf-8")
+
+        bad_callers = re.findall(r"show_task\([^)]*task_id\s*=", content)
+        assert not bad_callers, (
+            f"test_mcp_guidance_1089.py has {len(bad_callers)} show_task call(s) using "
+            f"legacy 'task_id=' kwarg (lines 226, 254, 444). "
+            f"Must be updated to 'id=' to match Brief A §5.2 / AC8. "
+            f"Found: {bad_callers!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_PickTasksAdapter
+# AC3: pick_tasks accepts wave_size + max_waves matching PickTasksParams;
+#      delegates to AgentView.pick_tasks with those kwargs.
+# AC5: KanbanError in pick_tasks → ToolError (via _map_kanban_error).
+#
+# Note: AC3 delegation, AC5 KanbanError mapping in show_task/pick_tasks, and
+# AC6 (list_tasks output_schema) are already implemented in server.py — no
+# failing tests are possible for these ACs. Verified passing by quality-runner;
+# tests removed per RED phase rules. Documented here for AC coverage record.
+# ---------------------------------------------------------------------------
 
