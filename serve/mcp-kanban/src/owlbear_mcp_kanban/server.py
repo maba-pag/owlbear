@@ -304,18 +304,12 @@ async def _invoke_engine_end_work(  # noqa: PLR0913
     archival_refs: list[int] | None,
 ) -> object:
     """Run end_work fallback directly on the engine for compatibility paths."""
-    if outcome == "release":
-        return await asyncio.to_thread(
-            engine.release_task,
-            task_id,
-            note=note,
-        )
     return await asyncio.to_thread(
         engine.end_work,
         task_id,
-        note=note or "",
+        note=note,
         outcome=outcome,
-        block_reason=block_reason or "",
+        block_reason=block_reason,
         move_to=move_to,
         archival_reason=archival_reason,
         archival_refs=archival_refs,
@@ -548,7 +542,7 @@ async def end_work(  # noqa: PLR0913
                 int(task_id),
                 outcome=outcome,
                 move_to=move_to,
-                note=note or "",
+                note=note,
                 block_reason=block_reason,
                 archival_reason=archival_reason,
                 archival_refs=archival_refs,
@@ -574,10 +568,6 @@ async def end_work(  # noqa: PLR0913
         _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
         raise ToolError(str(exc)) from exc
-    # Remove block:user tag on MCP block outcome (agent takes ownership)
-    if outcome == "block":
-        with contextlib.suppress(Exception):
-            record = app_ctx.engine.edit_task(task_id, remove_tags=["block:user"])
     task = _to_single_task_response(record)
     with contextlib.suppress(Exception):
         task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
