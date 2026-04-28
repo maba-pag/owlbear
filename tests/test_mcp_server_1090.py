@@ -7,9 +7,17 @@ AC Coverage:
   ConcurrencyError) to MCP ToolError with user_message.
 - Helper is exported in server.__all__ for discoverability.
 - ToolError raised by helper chains the original exception (__cause__).
+
+Retry cycle additions (AC4, AC2):
+- AC4: list_tasks must use model_validate (not model_construct) — ids+other filter
+  combination must be caught by boundary model BEFORE the engine is called.
+- AC2: show_task must NOT accept legacy task_id= kwarg — only id + section (ShowTaskParams).
 """
 
 from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
@@ -19,6 +27,106 @@ from owlbear_kanban.errors import (
     NotFoundError,
     ValidationError,
 )
+from owlbear_kanban.models import ListTasksResponse, ShowTaskResponse
+
+# ---------------------------------------------------------------------------
+# Helpers for boundary model tests
+# ---------------------------------------------------------------------------
+
+_CONFIG_YAML = """\
+version: 10
+board:
+  name: TestBoard
+tasks_dir: tasks
+statuses:
+- name: research
+- name: backlog
+- name: todo
+- name: in-progress
+- name: review
+- name: docs
+- name: done
+priorities:
+- someday
+- nice-to-have
+- important
+- needed
+- critical
+defaults:
+  status: research
+  priority: important
+claim_timeout: 1h
+next_id: 1
+archive_dir: archive
+activity_log: false
+agent_map:
+  research: researcher
+  backlog: architect
+  todo: test-writer
+  in-progress: builder
+  review: reviewer
+  docs: doc-writer
+  done: auditor
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+status_predicates: {}
+"""
+
+
+def _make_board_1090(base_dir: Path) -> Path:
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
+
+
+def _make_mcp_ctx_1090(app_ctx: object) -> MagicMock:
+    ctx = MagicMock()
+    ctx.request_context.lifespan_context = app_ctx
+    return ctx
+
+
+def _make_show_task_response_1090(**overrides: object) -> ShowTaskResponse:
+    defaults: dict[str, object] = {
+        "id": 42,
+        "title": "Show me",
+        "status": "todo",
+        "priority": "important",
+        "tags": [],
+        "depends_on": [],
+        "blocked": False,
+        "block_reason": None,
+        "claimed": False,
+        "claimed_at": None,
+        "archival_reason": None,
+        "archival_refs": [],
+        "dep_status": None,
+        "created": "2026-01-01T00:00:00+00:00",
+        "updated": "2026-01-01T00:00:00+00:00",
+        "body": "## Notes\n\nHello",
+        "missing_sections": None,
+        "guidance": [],
+    }
+    defaults.update(overrides)
+    return ShowTaskResponse.model_validate(defaults)
+
+
+@pytest.fixture
+def app_ctx_1090(tmp_path: Path) -> tuple[object, MagicMock]:
+    """AppContext with mock AgentView for boundary model tests."""
+    from owlbear_kanban import KanbanEngine
+    from owlbear_mcp_kanban.server import AppContext
+
+    kanban_dir = _make_board_1090(tmp_path)
+    engine = KanbanEngine(kanban_dir)
+    mock_av = MagicMock()
+    engine._agent_view = mock_av  # noqa: SLF001
+    app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
+    return app_ctx, mock_av
 
 
 # ---------------------------------------------------------------------------
@@ -197,3 +305,69 @@ class TestFromAC_ReadAdapterBriefA:
         assert ann is int or ann == "int", (
             f"show_task 'id' must be annotated as int (ShowTaskParams.id: int), got {ann!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_BoundaryModelDeserialization
+# AC4: list_tasks uses model_validate (not model_construct) — ids+other filter
+#      combination must raise ToolError BEFORE the engine is called.
+# AC2: show_task accepts only id + section — legacy task_id= kwarg must be rejected.
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_BoundaryModelDeserialization:
+    """AC4 and AC2: boundary model validation enforced before engine delegation."""
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_boundary_model_rejects_ids_combined_with_status_no_engine_call(
+        self,
+        app_ctx_1090: tuple[object, MagicMock],
+    ) -> None:
+        """AC4: list_tasks uses model_validate — ids+status raises ToolError before engine call.
+
+        With model_construct (current impl): validation is skipped entirely.
+        AgentView is called normally, mock returns OK — no ToolError → this test FAILS.
+
+        With model_validate (required): ListTasksParams._validate_ids_exclusivity raises
+        PydanticValidationError → ToolError. AgentView must NOT be called.
+        """
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_1090
+        # Mock returns successfully — proves any ToolError comes from model, not engine
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx_1090(app_ctx)
+        with pytest.raises(ToolError):
+            await list_tasks(ctx, ids=[1], status="todo")
+
+        # Engine MUST NOT have been called — boundary model rejected the input first
+        mock_av.list_tasks.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_show_task_rejects_legacy_task_id_kwarg(
+        self,
+        app_ctx_1090: tuple[object, MagicMock],
+    ) -> None:
+        """AC2: show_task accepts only id + section (ShowTaskParams) — task_id= must be rejected.
+
+        Brief A §5.2 requires the MCP surface to be exactly id + section.
+        The legacy_kwargs.pop("task_id", id) compatibility path must be removed.
+
+        Currently FAILS: task_id= is silently routed via legacy compat and engine is called.
+        Once legacy compat is removed: calling show_task(ctx, task_id=42) raises
+        ToolError (unknown kwarg) or TypeError (unexpected keyword arg) — either proves
+        the legacy compat path no longer exists.
+        """
+        from owlbear_mcp_kanban.server import show_task
+
+        app_ctx, mock_av = app_ctx_1090
+        mock_av.show_task.return_value = _make_show_task_response_1090(id=42)
+
+        ctx = _make_mcp_ctx_1090(app_ctx)
+        with pytest.raises((ToolError, TypeError)):
+            await show_task(ctx, task_id=42)  # type: ignore[call-arg]
+
+        # Engine must NOT have been called — legacy compat path must not exist
+        mock_av.show_task.assert_not_called()
+

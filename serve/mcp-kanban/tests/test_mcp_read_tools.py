@@ -515,7 +515,12 @@ class TestFromAC_ListTasksAdapter:
     async def test_list_tasks_forwards_all_twelve_params_exact(
         self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
     ) -> None:
-        """AC1: all 12 Brief A §5.1 params forwarded to AgentView — no legacy archived: bool."""
+        """AC1: 11 non-ids Brief A §5.1 params forwarded to AgentView — no legacy archived: bool.
+
+        NOTE: ids= cannot be combined with other filter params per ListTasksParams validator
+        (AC15 exclusivity). This test verifies the 11 non-ids params forwarded together.
+        ids forwarding proven by test_list_tasks_forwards_ids_param.
+        """
         from owlbear_mcp_kanban.server import list_tasks
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
@@ -530,7 +535,6 @@ class TestFromAC_ListTasksAdapter:
             tag="phase-2",
             priority="critical",
             archival_reason="completed",
-            ids=[1, 2],
             unclaimed=True,
             blocked=True,
             parent=5,
@@ -538,6 +542,7 @@ class TestFromAC_ListTasksAdapter:
             sort="priority",
             reverse=True,
             limit=5,
+            # ids omitted: cannot be combined with other filter params (ListTasksParams)
         )
 
         kw = mock_av.list_tasks.call_args.kwargs
@@ -545,7 +550,6 @@ class TestFromAC_ListTasksAdapter:
         assert kw["tag"] == "phase-2"
         assert kw["priority"] == "critical"
         assert kw["archival_reason"] == "completed"
-        assert kw["ids"] == [1, 2]
         assert kw["unclaimed"] is True
         assert kw["blocked"] is True
         assert kw["parent"] == 5
@@ -1172,7 +1176,7 @@ class TestFromAC_ErrorMapping:
 
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await show_task(ctx, task_id="42", section="")
+            await show_task(ctx, id=42, section="")
 
         assert user_msg in str(exc_info.value), (
             "ValidationError.user_message must be preserved exactly in ToolError for show_task"
