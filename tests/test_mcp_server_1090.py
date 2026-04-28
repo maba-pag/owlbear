@@ -1,21 +1,20 @@
-"""RED phase tests — MCP read tool adapters: list_tasks, show_task, pick_tasks (#1090).
+"""RED phase tests — MCP read tool adapters: show_task unconditional call + suite rollout (#1090).
 
-AC Coverage:
-- AC2: show_task adapter must translate MCP 'id' param → engine 'task_id' kwarg.
-       view.show_task(task_id=params.id, section=params.section) — NOT id=params.id.
-       Also: integration proof that a real engine call succeeds end-to-end.
-- AC3: pick_tasks accepts wave_size + max_waves matching PickTasksParams; delegates
-       to AgentView.pick_tasks with those exact kwargs.
-- AC5: KanbanError → ToolError via _map_kanban_error in show_task and pick_tasks
-       handlers; ToolError.__cause__ chains original exception (raise ... from exc).
-- AC6: list_tasks fn_metadata.output_schema matches ListTasksResponse.model_json_schema()
-       (structural proof following test_outputschema_541.py pattern).
-- AC8: Adjacent guidance test suite (test_mcp_guidance_1089.py) must use
-       show_task(id=...) not legacy show_task(task_id=...) on the MCP surface.
+AC Coverage (failing tests):
+- AC2+AC7: show_task makes single unconditional call view.show_task(task_id=params.id,
+           section=params.section). When section=None, None passes through — NOT "".
+           The Mock-specific branch (isinstance(view, Mock) → section="") violates AC2+AC7.
+- AC7:     No isinstance(view, Mock) check in show_task handler source. Structural proof.
+- AC8(b):  test_mcp_read_tools.py ~L807 kw.get("id") must be kw.get("task_id").
+           Durable test asserts wrong kwarg name; builder must correct it.
 
-Note: AC1 (12-param list_tasks surface), AC4 (model_validate), and the
-_map_kanban_error helper existence/behaviour (AC5 helper) are already verified by
-the pre-existing passing tests. This file covers the remaining gaps.
+Already implemented (no failing test possible):
+- AC1: 12-param list_tasks surface (no legacy archived: bool) — verified by durable suite.
+- AC3: pick_tasks delegates to AgentView.pick_tasks — verified by durable suite.
+- AC4: model_validate rejects type-invalid input → ToolError — model_validate already in use.
+- AC5: KanbanError → ToolError via _map_kanban_error — verified by durable suite.
+- AC6: list_tasks output_schema = ListTasksResponse.model_json_schema() — already set.
+- AC8(a): test_mcp_guidance_1089.py uses id= not task_id= — already fixed.
 """
 
 from __future__ import annotations
@@ -129,30 +128,33 @@ def app_ctx_1090(tmp_path: Path) -> tuple[object, MagicMock]:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_ShowTaskKwargTranslation
-# AC2: show_task adapter translates MCP 'id' param → engine 'task_id' kwarg.
-# The critical bug: server.py currently calls view.show_task(id=params.id, ...)
-# but AgentView.show_task(self, task_id: int, section: str | None = None)
-# expects 'task_id'. The adapter must translate.
+# TestFromAC_ShowTaskUnconditionalCall
+# AC2+AC7: show_task must make a single unconditional call:
+#   view.show_task(task_id=params.id, section=params.section)
+# When section=None, it must be passed as None — NOT converted to "".
+# The current Mock branch (isinstance(view, Mock) → section="") violates AC2+AC7.
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ShowTaskKwargTranslation:
-    """AC2: show_task translates MCP surface id → engine task_id kwarg."""
+class TestFromAC_ShowTaskUnconditionalCall:
+    """AC2+AC7: show_task passes section=None through as None, no Mock branching."""
 
     @pytest.mark.asyncio
-    async def test_show_task_engine_view_called_with_task_id_kwarg_not_id(
+    async def test_section_none_passes_through_as_none_not_empty_string(
         self,
         app_ctx_1090: tuple[object, MagicMock],
     ) -> None:
-        """AC2: view.show_task must be called with task_id=params.id, NOT id=params.id.
+        """AC2+AC7: When no section is provided, view.show_task receives section=None.
 
-        The MCP surface uses 'id' (ShowTaskParams.id) but AgentView.show_task(task_id)
-        uses 'task_id'. The adapter must translate.
+        AC2 mandates a single unconditional call: view.show_task(task_id=params.id,
+        section=params.section). When section is omitted, params.section is None —
+        it must be forwarded as None, not coerced to "".
 
-        FAILS: current server.py calls view.show_task(id=params.id, section=params.section).
-        The mock records call_args as {'id': 42, 'section': ''}, so
-        assert_called_once_with(task_id=42, section="") raises AssertionError.
+        The current Mock-specific branch sets view_section="" whenever the view is a
+        Mock instance and section is None (server.py:337-338). This violates both
+        AC2 (unconditional call) and AC7 (no isinstance(view, Mock)).
+
+        FAILS: kw.get("section") == "" because the Mock branch is still active.
         """
         from owlbear_mcp_kanban.server import show_task
 
@@ -162,121 +164,79 @@ class TestFromAC_ShowTaskKwargTranslation:
 
         await show_task(ctx, id=42)
 
-        # Must be called with task_id=42, NOT id=42
-        mock_av.show_task.assert_called_once_with(task_id=42, section="")
+        kw = mock_av.show_task.call_args.kwargs
+        assert kw.get("section") is None, (
+            f"AC2: view.show_task must receive section=None when no section is provided; "
+            f"got section={kw.get('section')!r}. "
+            f"The isinstance(view, Mock) branch at server.py:337-338 must be removed (AC7)."
+        )
 
-    @pytest.mark.asyncio
-    async def test_show_task_engine_view_not_called_with_id_kwarg(
-        self,
-        app_ctx_1090: tuple[object, MagicMock],
-    ) -> None:
-        """AC2: the engine view must NOT receive 'id=' kwarg — only 'task_id='.
+    def test_show_task_source_has_no_isinstance_mock_check(self) -> None:
+        """AC7: No isinstance(view, Mock) check in show_task handler source.
 
-        Using the 'id' Python builtin as a kwarg name to AgentView.show_task
-        is wrong and will raise TypeError with a real engine.
+        The Mock-specific branch at server.py:337-338 reads:
+          if view_section is None and isinstance(view, Mock): view_section = ""
+        This branch must be removed. The Mock import at module level may stay
+        (used by _agent_view_for), but isinstance(view, Mock) must not appear
+        in the show_task function body.
 
-        FAILS: current impl passes id= to the mock; call_args.kwargs will contain
-        'id' and not 'task_id'.
+        FAILS: inspect.getsource(show_task) contains "isinstance(view, Mock)".
         """
+        import inspect
+
         from owlbear_mcp_kanban.server import show_task
 
-        app_ctx, mock_av = app_ctx_1090
-        mock_av.show_task.return_value = _make_show_task_response_1090(id=7)
-        ctx = _make_mcp_ctx_1090(app_ctx)
-
-        await show_task(ctx, id=7, section="Notes")
-
-        actual_kwargs = mock_av.show_task.call_args.kwargs
-        assert "task_id" in actual_kwargs, (
-            f"view.show_task must be called with task_id= kwarg; got kwargs={actual_kwargs!r}"
-        )
-        assert "id" not in actual_kwargs, (
-            f"view.show_task must NOT have 'id=' in kwargs (that's the MCP surface name); "
-            f"got kwargs={actual_kwargs!r}"
-        )
-
-    @pytest.mark.asyncio
-    async def test_show_task_integration_with_real_engine_succeeds(
-        self,
-        tmp_path: Path,
-    ) -> None:
-        """AC2: end-to-end — show_task(ctx, id=N) returns a ShowTaskResponse via real engine.
-
-        With the correct adapter (task_id= kwarg), the call chain works:
-          show_task(ctx, id=N) → ShowTaskParams(id=N) → view.show_task(task_id=N) → response.
-
-        FAILS: current impl calls view.show_task(id=N) which raises TypeError
-        (AgentView.show_task has no 'id' parameter). TypeError propagates uncaught
-        through show_task → pytest reports ERRORS/FAILED.
-        """
-        from owlbear_kanban import KanbanEngine
-        from owlbear_mcp_kanban.server import AppContext, show_task
-
-        kanban_dir = _make_board_1090(tmp_path)
-        engine = KanbanEngine(kanban_dir)
-        task = engine.agent_view().create_task(title="Integration target", body="")
-        task_id = task.id
-
-        app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
-        ctx = _make_mcp_ctx_1090(app_ctx)
-
-        result = await show_task(ctx, id=task_id)
-
-        assert isinstance(result, ShowTaskResponse), (
-            f"show_task(id={task_id}) must return ShowTaskResponse; got {type(result)!r}"
-        )
-        assert result.id == task_id, (
-            f"Returned task id {result.id!r} must match requested id {task_id!r}"
+        source = inspect.getsource(show_task)
+        assert "isinstance(view, Mock)" not in source, (
+            "AC7: show_task handler must not contain isinstance(view, Mock) check. "
+            "Remove the Mock-specific section-handling branch at server.py:337-338."
         )
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_GuidanceCallerRollout
-# AC8: Adjacent guidance test suite (test_mcp_guidance_1089.py) must be updated
-# to use show_task(id=...) on the MCP surface — not legacy show_task(task_id=...).
-# Lines 226, 254, 444 in test_mcp_guidance_1089.py use the old kwarg.
+# TestFromAC_DurableSuiteRollout
+# AC8(b): test_mcp_read_tools.py ~L807 asserts kw.get("id") == 77.
+# The adapter correctly uses task_id= kwarg; the durable test assertion is wrong.
+# Builder must update the assertion to kw.get("task_id") == 77.
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_GuidanceCallerRollout:
-    """AC8: Guidance test callers use id= not task_id= on MCP show_task surface."""
+class TestFromAC_DurableSuiteRollout:
+    """AC8(b): Durable read-tools suite uses kw.get("task_id") for engine kwarg assertion."""
 
-    def test_guidance_suite_show_task_callers_use_id_not_task_id(self) -> None:
-        """AC8: test_mcp_guidance_1089.py must use show_task(id=...) not show_task(task_id=...).
+    def test_read_tools_suite_show_task_id_assertion_uses_task_id_kwarg(self) -> None:
+        """AC8(b): test_mcp_read_tools.py must assert kw.get("task_id"), not kw.get("id").
 
-        Brief A §5.2 changed the MCP surface: 'id: int' replaces legacy 'task_id: StrId'.
-        The three callers at lines 226, 254, 444 in the guidance suite still use task_id=.
-        The builder must update them as part of this task's rollout.
+        The adapter calls view.show_task(task_id=params.id, ...). The durable suite
+        test_show_task_id_forwarded_exact (test_mcp_read_tools.py ~L807) still asserts
+        kw.get("id") == 77, which is the WRONG kwarg name for the engine call.
+        The assertion must be updated to kw.get("task_id") == 77.
 
-        FAILS until the guidance test file is updated: re.findall will find 3 matches.
+        FAILS: test_mcp_read_tools.py contains 'kw.get("id") ==' at ~L807.
         """
-        guidance_test_file = (
+        read_tools_file = (
             Path(__file__).parent.parent
             / "serve"
             / "mcp-kanban"
             / "tests"
-            / "test_mcp_guidance_1089.py"
+            / "test_mcp_read_tools.py"
         )
-        content = guidance_test_file.read_text(encoding="utf-8")
+        content = read_tools_file.read_text(encoding="utf-8")
 
-        bad_callers = re.findall(r"show_task\([^)]*task_id\s*=", content)
-        assert not bad_callers, (
-            f"test_mcp_guidance_1089.py has {len(bad_callers)} show_task call(s) using "
-            f"legacy 'task_id=' kwarg (lines 226, 254, 444). "
-            f"Must be updated to 'id=' to match Brief A §5.2 / AC8. "
-            f"Found: {bad_callers!r}"
+        bad_assertions = re.findall(r'kw\.get\("id"\)\s*==', content)
+        assert not bad_assertions, (
+            f"test_mcp_read_tools.py has {len(bad_assertions)} wrong kwarg assertion(s) "
+            f'using kw.get("id"). '
+            f'Must be updated to kw.get("task_id") to match the adapter\'s engine call. '
+            f"See test_show_task_id_forwarded_exact (~L807). "
+            f"Found: {bad_assertions!r}"
         )
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_PickTasksAdapter
-# AC3: pick_tasks accepts wave_size + max_waves matching PickTasksParams;
-#      delegates to AgentView.pick_tasks with those kwargs.
-# AC5: KanbanError in pick_tasks → ToolError (via _map_kanban_error).
-#
-# Note: AC3 delegation, AC5 KanbanError mapping in show_task/pick_tasks, and
-# AC6 (list_tasks output_schema) are already implemented in server.py — no
-# failing tests are possible for these ACs. Verified passing by quality-runner;
-# tests removed per RED phase rules. Documented here for AC coverage record.
+# Notes: already implemented — no failing tests possible
+# AC3: pick_tasks delegates to AgentView.pick_tasks — verified by durable suite.
+# AC5: KanbanError → ToolError via _map_kanban_error — verified by durable suite.
+# AC6: list_tasks output_schema = ListTasksResponse.model_json_schema() — already set.
 # ---------------------------------------------------------------------------
 
