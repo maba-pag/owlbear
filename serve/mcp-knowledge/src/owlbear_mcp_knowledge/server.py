@@ -274,7 +274,7 @@ async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:  #
                 from owlbear_knowledge.copilot_auth import (
                     detect_editor_versions,
                     get_copilot_token,
-                )  # noqa: PLC0415
+                )
                 from owlbear_knowledge.llm_extractor import LLMExtractor  # noqa: PLC0415
 
                 copilot_token = await get_copilot_token()

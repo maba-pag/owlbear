@@ -30,7 +30,7 @@ class HelloWorldClient(Client):
 
     async def session_update(
         self, _session_id: str, update: Any, **_kwargs: object
-    ) -> None:  # noqa: ANN401
+    ) -> None:
         if isinstance(update, AgentMessageChunk) and update.content.type == "text":
             print(update.content.text, end="", flush=True)
 
