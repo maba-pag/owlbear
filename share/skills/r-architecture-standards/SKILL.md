@@ -26,6 +26,33 @@ serve/knowledge/          (core library: graph, vector, ingest, query)
 
 Each MCP server is a standalone FastMCP application. Core libraries live in separate packages. Cross-package imports are enforced by `tests/test_package_boundary.py`.
 
+## Module Quality Vocabulary
+
+Shared terminology for evaluating module quality across the pipeline (derived from Ousterhout's *A Philosophy of Software Design*).
+
+| Concept       | Definition                                                  | Diagnostic                                                                           |
+| ------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Depth**     | Ratio of implementation complexity to interface complexity   | Deep modules do a lot behind a simple interface. Shallow modules expose everything.  |
+| **Leverage**  | How many callers benefit from a module                      | High leverage = change once, benefit everywhere.                                     |
+| **Locality**  | How much context you need to understand a change            | Good locality = changes are contained within one module boundary.                    |
+| **Seam**      | A boundary where you can substitute implementations         | Real seam: 2+ implementations. Hypothetical seam: 1 adapter = speculative.           |
+| **Adapter**   | Translates between two interfaces at a seam                 | One adapter = hypothetical seam. Two adapters = real seam earning its keep.           |
+
+### Deletion Test
+
+Imagine deleting a module entirely. If the complexity it managed **vanishes** (callers become simpler), the module was a pure pass-through — inline it or delete it. If the complexity **reappears across N callers**, the module is earning its keep.
+
+Apply when evaluating new abstractions, adapters, and wrapper modules. A module that fails the Deletion Test is a candidate for removal or deepening (absorbing more responsibility behind a simpler interface).
+
+### Dependency Classification
+
+| Type                       | Example                      | Seam needed? |
+| -------------------------- | ---------------------------- | ------------ |
+| In-process                 | Direct function call          | Rarely       |
+| Local-substitutable        | File-system adapter           | Maybe        |
+| Remote-but-owned           | Our MCP server                | Yes          |
+| True-external              | Third-party API               | Yes          |
+
 ## MCP Server Conventions
 
 All custom MCP servers (`mcp-kanban`, `mcp-knowledge`, `mcp-memory`) follow these conventions:
