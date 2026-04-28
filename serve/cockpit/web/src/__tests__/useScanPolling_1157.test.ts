@@ -337,5 +337,71 @@ describe('TestFromAC_useScanPolling', () => {
       await act(async () => { resolveSlow(undefined) })
       expect(result.current.items).toEqual(SCAN_ITEMS)
     })
+
+    // ─── AC7a: no additional fetch starts on rerender while in-flight ──────────────────────────
+
+    it('does not start an additional fetch on rerender when a request is already in-flight (AC7a)', async () => {
+      let resolveSlow!: (value: unknown) => void
+      const slowPromise = new Promise<unknown>((res) => { resolveSlow = res })
+      const fetchMock = vi.fn()
+        .mockImplementationOnce(() =>
+          slowPromise.then(() => ({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(SCAN_ITEMS),
+          })),
+        )
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { rerender } = renderHook(
+        ({ ms }: { ms: number }) => useScanPolling({ intervalMs: ms }),
+        { initialProps: { ms: 5_000 } },
+      )
+      expect(fetchMock).toHaveBeenCalledTimes(1) // mount call in-flight
+
+      // Rerender while call 1 is in-flight — the new effect's immediate poll() must hit the guard
+      rerender({ ms: 10_000 })
+
+      // Fetch count must not increase: the rerender's poll() call hits inFlightRef guard
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      // Clean up: settle slow request to avoid timer leaks
+      await act(async () => { resolveSlow(undefined) })
+    })
+
+    // ─── AC7c: cadence restarts at new intervalMs after settle ────────────────────────────────────
+
+    it('restarts polling at the new intervalMs cadence after the in-flight request settles (AC7c)', async () => {
+      let resolveSlow!: (value: unknown) => void
+      const slowPromise = new Promise<unknown>((res) => { resolveSlow = res })
+      const fetchMock = vi.fn()
+        .mockImplementationOnce(() =>
+          slowPromise.then(() => ({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(SCAN_ITEMS),
+          })),
+        )
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(SCAN_ITEMS) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { rerender } = renderHook(
+        ({ ms }: { ms: number }) => useScanPolling({ intervalMs: ms }),
+        { initialProps: { ms: 5_000 } },
+      )
+      expect(fetchMock).toHaveBeenCalledTimes(1) // mount call in-flight
+
+      // Rerender with new interval while call 1 is in-flight
+      rerender({ ms: 10_000 })
+
+      // Settle the slow request — triggers queued repoll (pendingPoll flush)
+      await act(async () => { resolveSlow(undefined) })
+      const callsAfterSettle = fetchMock.mock.calls.length
+
+      // Advance fake time by the NEW interval — exactly one additional fetch must fire
+      await act(async () => { vi.advanceTimersByTime(10_000) })
+      expect(fetchMock.mock.calls.length).toBe(callsAfterSettle + 1)
+    })
   })
 })
