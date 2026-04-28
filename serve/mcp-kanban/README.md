@@ -1,6 +1,6 @@
 # owlbear-mcp-kanban — Kanban MCP Server
 
-MCP server that exposes `KanbanEngine` operations as tools for pipeline agents. Registered in VS Code's MCP configuration as `owlbear-kanban`. Consumed by all pipeline agents to read and write the task board.
+MCP server that exposes `KanbanEngine` operations as tools for pipeline agents. Registered in VS Code's MCP configuration as `ob-kanban`. Consumed by all pipeline agents to read and write the task board.
 
 → Parent: [README.md](../../README.md)
 
