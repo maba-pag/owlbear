@@ -119,7 +119,7 @@ Then call `askQuestions` with two options:
 
 On approve, proceed to Step 6. On reject, stop without creating tasks.
 
-Present the planned breakdown inline in the chat:
+In decomposition mode, present the planned breakdown inline in the chat:
 
 - Task list table (title, priority, dependencies, tags)
 - Dependency graph (Mermaid)
