@@ -286,7 +286,8 @@ class TestFromAC_CreateTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await create_task(ctx, title="T", depends_on=[99999])
-        assert "99999" in str(exc_info.value) or "not found" in str(exc_info.value), (
+        mock_av.create_task.assert_called_once()
+        assert "dependency 99999 not found" in str(exc_info.value), (
             "ToolError must carry the user_message from ValidationError"
         )
 
@@ -391,7 +392,8 @@ class TestFromAC_EditTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, task_id="1", body="replace", append_body="append")
-        assert "append_body" in str(exc_info.value) or "exclusive" in str(exc_info.value), (
+        mock_av.edit_task.assert_called_once()
+        assert "body and append_body cannot both be set" in str(exc_info.value), (
             "ToolError must carry the ERR_BODY_EXCLUSIVE user_message"
         )
 
@@ -408,7 +410,8 @@ class TestFromAC_EditTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, task_id="1", archival_reason="dropped")
-        assert "archival" in str(exc_info.value).lower(), (
+        mock_av.edit_task.assert_called_once()
+        assert "archival_reason can only be set on archived tasks" in str(exc_info.value), (
             "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
         )
 
@@ -425,7 +428,8 @@ class TestFromAC_EditTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, task_id="1", archival_refs=[42])
-        assert "archival" in str(exc_info.value).lower(), (
+        mock_av.edit_task.assert_called_once()
+        assert "archival_refs can only be set on archived tasks" in str(exc_info.value), (
             "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
         )
 
@@ -442,7 +446,8 @@ class TestFromAC_EditTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, task_id="1")
-        assert "no" in str(exc_info.value).lower() or "op" in str(exc_info.value).lower(), (
+        mock_av.edit_task.assert_called_once()
+        assert "no fields would change" in str(exc_info.value), (
             "ToolError must carry the ERR_NO_OP user_message"
         )
 
