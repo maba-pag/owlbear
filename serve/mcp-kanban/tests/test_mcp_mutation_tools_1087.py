@@ -444,6 +444,43 @@ class TestFromAC_EditTaskAdapter:
             "ToolError must carry the ERR_NO_OP user_message"
         )
 
+    def test_edit_task_block_reason_default_is_none(self) -> None:
+        """block_reason param must default to None (not '') to distinguish omission from explicit unblock (D53).
+
+        AgentView.edit_task uses _BLOCK_REASON_UNSET sentinel to tell 'not supplied' from
+        'explicitly empty'.  The MCP adapter must mirror that by defaulting block_reason to
+        None and forwarding it only when it is not None — so block_reason='' signals unblock
+        while a missing block_reason leaves the block state untouched.
+        """
+        params = inspect.signature(edit_task).parameters
+        assert params["block_reason"].default is None, (
+            "edit_task block_reason must default to None (not ''); "
+            "current default allows no distinction between omission and explicit unblock. "
+            f"Got: {params['block_reason'].default!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_edit_task_empty_block_reason_forwarded_to_unblock(
+        self, app_ctx_with_mock_agent_view: tuple[AppContext, MagicMock]
+    ) -> None:
+        """Explicit block_reason='' must be forwarded to AgentView to clear the block (D53).
+
+        AgentView.edit_task interprets an explicit empty string as 'clear block flag'.
+        The adapter must not drop the value with a truthy check; it must forward it so the
+        engine can apply the unblock mutation.
+        """
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        ctx = _make_mcp_ctx(app_ctx)
+        await edit_task(ctx, task_id="1", block_reason="")
+        _, kwargs = mock_av.edit_task.call_args
+        assert "block_reason" in kwargs, (
+            "block_reason='' must be forwarded to AgentView (signals unblock via D53); "
+            "adapter must not silently drop it with `if block_reason:`"
+        )
+        assert kwargs["block_reason"] == "", (
+            f"Forwarded block_reason must be '' (the unblock sentinel); got {kwargs['block_reason']!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_KanbanErrorMapping
