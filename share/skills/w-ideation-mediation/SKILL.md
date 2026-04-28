@@ -78,29 +78,55 @@ Use the lightest disclosure level that still supports a good decision. Never hid
 3. Keep attribution visible: separate verified findings from tentative implications.
 4. Do not collapse the research bridge into an approach choice.
 
-## Step 2 — Late Domain Panel Orchestration
+## Step 1.5 — M3.5: Conditional Proposal Round (Design It Twice)
 
-1. Tell the user which late-domain panelists you are invoking and why.
-2. Select panelists using the selection matrix in `h-ideation-panel` (problem signal → panelist combination). State the signal and selected roster explicitly.
-3. Invoke the relevant domain panelists in parallel by default:
+1. Evaluate the M3 landscape for ambiguity before selecting the panel path.
+2. Trigger M3.5 only when there are at least two viable approaches and no dominant option.
+3. If one approach is clearly dominant, skip M3.5 and continue to Step 2 unchanged.
+4. When M3.5 triggers, skip Step 2 entirely. M3.5 and Step 2 are mutually exclusive paths to `synthesis.md`.
+5. Tell the user you are switching to a proposal comparison path.
+6. Dispatch all four late domain panelists in parallel regardless of the selection matrix:
    - `ideation-architect`
    - `ideation-data`
    - `ideation-enduser`
    - `ideation-security`
-4. Use sequential deep-dive only when panel interdependence makes the parallel pass misleading.
-5. After domain panelists finish, invoke `ideation-pragmatist` in `converge` mode to write `synthesis.md`.
-6. Read `synthesis.md` only. Do not read raw debate logs unless the user asks for drill-in and the decision depends on exact wording.
+7. Pass a PROPOSE-mode directive in each `runSubagent` prompt payload (behavioral directive, not agent config) instructing each panelist to write a complete design proposal shaped by its domain emphasis.
+8. Collect `stances/{name}-proposal.md` outputs from all four panelists.
+9. Dispatch `ideation-pragmatist` with `mode=compare` so it reads proposal files plus `context.md` and `decisions.md`, then writes `synthesis.md` with:
+   - divergence-only comparison matrix columns: Decision Point, architect, data, enduser, security, Tension Level
+   - common ground summary
+   - open questions
+
+## Step 2 — Late Domain Panel Orchestration (Stance Path)
+
+1. Run this step only when Step 1.5 did not trigger.
+2. Tell the user which late-domain panelists you are invoking and why.
+3. Select panelists using the selection matrix in `h-ideation-panel` (problem signal → panelist combination). State the signal and selected roster explicitly.
+4. Invoke the relevant domain panelists in parallel by default:
+   - `ideation-architect`
+   - `ideation-data`
+   - `ideation-enduser`
+   - `ideation-security`
+5. Use sequential deep-dive only when panel interdependence makes the parallel pass misleading.
+6. After domain panelists finish, invoke `ideation-pragmatist` in `converge` mode to write `synthesis.md`.
+7. Read `synthesis.md` only. Do not read raw debate logs unless the user asks for drill-in and the decision depends on exact wording.
 
 ## Step 3 — M4: Decision — "What are we doing and why?"
 
-1. Present the late-panel findings in plain language with attribution.
-2. Separate convergences from disagreements.
-3. When the user is making a real choice, switch to a decision turn with the full structure from `h-ideation`.
-4. Record chosen and rejected options with rationale in `decisions.md`.
+1. Present `synthesis.md` in plain language with attribution.
+2. For comparison-path outputs, present proposal divergences and common ground before asking for a decision.
+3. Support direction choice or hybridization: the user may select one proposal or combine elements from multiple proposals.
+4. When the user is making a real choice, switch to a decision turn with the full structure from `h-ideation`.
+5. Record chosen and rejected options with rationale in `decisions.md`.
 
 ## Step 4 — Critic Validation Pass
 
 Apply O15 to every Critic pass. See the Critic Validation section above for the full procedure.
+
+1. After hybridization (or equivalent final direction selection), run two sequential `ideation-critic` passes:
+   - Pass 1 (synthesis critic): read the hybridized `synthesis.md` and challenge internal consistency of the combined elements.
+   - Pass 2 (result critic): read the updated `synthesis.md` plus `decisions.md` and challenge the final design on its own merits.
+2. Apply O15 to both passes. See the Critic Validation section above for the full procedure.
 
 ## Step 5 — M5: The Brief — "Here's the plan"
 
@@ -127,3 +153,9 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 - [ ] No bulk Critic acceptance appears in the mediation flow.
 - [ ] The Disclosure Ladder is visible in user-facing translation.
 - [ ] `brief.md` is approved before handoff.
+- [ ] Step 1.5 gate evaluated ambiguity (`>=2` viable approaches, no dominant option).
+- [ ] M3.5 and Step 2 were treated as mutually exclusive paths to `synthesis.md`.
+- [ ] When M3.5 triggered, all four late domain panelists were dispatched in parallel with PROPOSE-mode prompt directives.
+- [ ] Proposal artifacts were produced at `stances/{name}-proposal.md` with the required sections.
+- [ ] Pragmatist `mode=compare` produced `synthesis.md` with divergence matrix, common ground summary, and open questions.
+- [ ] Post-hybridization dual Critic passes were executed and both were triaged with O15.

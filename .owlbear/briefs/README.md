@@ -14,15 +14,19 @@ Each ideation session lives in a named Working Directory:
   research-notes.md         ← First substantial research bridge
   stances/
     architect.md
+    architect-proposal.md
     data.md
+    data-proposal.md
     enduser.md
+    enduser-proposal.md
     firstprinciples.md
     outsider.md
     security.md
+    security-proposal.md
     simplifier.md
     *-debate.md             ← Present only for agents that ran an embedded Critic loop
   synthesis-idea-panel.md   ← Optional denoised digest of the early challenge lane
-  synthesis.md              ← Late-domain panel synthesis
+  synthesis.md              ← Late-domain panel synthesis (converge or compare path)
   brief.md                  ← Final approved Brief
 ```
 
@@ -52,6 +56,8 @@ Must separate:
 
 Contains both early-challenger and late-domain stance files. The invoker must name the active stance set for each synthesis call so unrelated old stances are not swept into the current pass.
 
+Late-domain proposal files (`*-proposal.md`) are optional and appear only when the mediator runs the conditional M3.5 proposal round.
+
 ### `synthesis-idea-panel.md`
 
 Optional. Written only when the early challenge lane needs denoise.
@@ -67,8 +73,8 @@ Written by the Pragmatist after the late-domain panel.
 | **Discovery agent** | `input/*`, `context.md`, `decisions.md`, optional `synthesis-idea-panel.md` | `context.md`, `decisions.md`, `research-notes.md` |
 | **Research subagent** | `context.md`, `input/*`, codebase and ecosystem sources | `research-notes.md` |
 | **Early challenger** | `context.md`, `decisions.md`, optional `research-notes.md` | `stances/{name}.md` |
-| **Late domain panelist** | `context.md`, `decisions.md`, optional `research-notes.md` | `stances/{name}.md`, `stances/{name}-debate.md` |
-| **Pragmatist** | `context.md`, `decisions.md`, active `stances/*.md` set | `synthesis-idea-panel.md` or `synthesis.md` |
+| **Late domain panelist** | `context.md`, `decisions.md`, optional `research-notes.md` | `stances/{name}.md`, `stances/{name}-debate.md`, or `stances/{name}-proposal.md` |
+| **Pragmatist** | `context.md`, `decisions.md`, active `stances/*.md` set or `stances/*-proposal.md` set | `synthesis-idea-panel.md` or `synthesis.md` |
 | **Critic** | `context.md`, current position supplied by invoker | no file writes |
 | **Mediation agent** | `context.md`, `decisions.md`, `research-notes.md`, optional `synthesis-idea-panel.md`, `synthesis.md` | `decisions.md`, `brief.md` |
 | **Planner** | `brief.md` | kanban tasks |

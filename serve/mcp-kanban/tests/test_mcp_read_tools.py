@@ -365,6 +365,175 @@ class TestFromAC_ListTasksAdapter:
             "missing_ids from engine response must appear in returned envelope"
         )
 
+    # -- Retry: exact-kwargs tests for 7 params with no prior TestFromAC coverage --
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_search_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: search= forwarded to AgentView.list_tasks — exact kwarg check."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, search="hello world")
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("search") == "hello world", (
+            "search='hello world' must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_sort_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: sort= forwarded to AgentView.list_tasks — exact kwarg check."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, sort="priority")
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("sort") == "priority", (
+            "sort='priority' must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_unclaimed_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: unclaimed= forwarded to AgentView.list_tasks — exact kwarg check."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, unclaimed=True)
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("unclaimed") is True, (
+            "unclaimed=True must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_archived_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: archived= forwarded to AgentView.list_tasks — exact kwarg check."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, archived=True)
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("archived") is True, (
+            "archived=True must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_limit_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: limit= forwarded to AgentView.list_tasks — exact kwarg check."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, limit=10)
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("limit") == 10, (
+            "limit=10 must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_reverse_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: reverse= forwarded to AgentView.list_tasks — exact kwarg check."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, reverse=True)
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("reverse") is True, (
+            "reverse=True must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_blocked_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: blocked= forwarded to AgentView.list_tasks — exact kwarg check."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, blocked=True)
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("blocked") is True, (
+            "blocked=True must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_all_eleven_params_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: all 11 list_tasks params forwarded to AgentView with correct exact kwargs."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(
+            tasks=[], guidance=[], missing_ids=[]
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(
+            ctx,
+            status="todo",
+            tag="phase-2",
+            priority="critical",
+            ids=[1, 2],
+            search="hello",
+            sort="priority",
+            unclaimed=True,
+            archived=True,
+            limit=5,
+            reverse=True,
+            blocked=True,
+        )
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw["status"] == "todo"
+        assert kw["tag"] == "phase-2"
+        assert kw["priority"] == "critical"
+        assert kw["ids"] == [1, 2]
+        assert kw["search"] == "hello"
+        assert kw["sort"] == "priority"
+        assert kw["unclaimed"] is True
+        assert kw["archived"] is True
+        assert kw["limit"] == 5
+        assert kw["reverse"] is True
+        assert kw["blocked"] is True
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ShowTaskAdapter
@@ -548,6 +717,60 @@ class TestFromAC_ShowTaskAdapter:
 
         assert "section" in str(exc_info.value).lower() or "empty" in str(exc_info.value).lower()
 
+    @pytest.mark.asyncio
+    async def test_show_task_empty_section_normalized_to_none(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC3: show_task normalizes section='' to None before forwarding to AgentView."""
+        from owlbear_mcp_kanban.server import show_task
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.show_task.return_value = _make_show_task_response()
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await show_task(ctx, task_id="42", section="")
+
+        kw = mock_av.show_task.call_args.kwargs
+        assert kw.get("section") is None, (
+            "adapter must normalize section='' to section=None before forwarding"
+        )
+
+    @pytest.mark.asyncio
+    async def test_show_task_nonempty_section_forwarded_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC3: non-empty section= forwarded as exact kwarg to AgentView.show_task."""
+        from owlbear_mcp_kanban.server import show_task
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.show_task.return_value = _make_show_task_response()
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await show_task(ctx, task_id="42", section="Builder Notes")
+
+        kw = mock_av.show_task.call_args.kwargs
+        assert kw.get("section") == "Builder Notes", (
+            "section='Builder Notes' must be forwarded as exact kwarg to AgentView.show_task"
+        )
+
+    @pytest.mark.asyncio
+    async def test_show_task_task_id_forwarded_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC3: task_id= forwarded to AgentView.show_task as exact kwarg."""
+        from owlbear_mcp_kanban.server import show_task
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.show_task.return_value = _make_show_task_response(id=77)
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await show_task(ctx, task_id="77")
+
+        kw = mock_av.show_task.call_args.kwargs
+        assert kw.get("task_id") == "77", (
+            "task_id='77' must be forwarded as exact kwarg to AgentView.show_task"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_PickTasksAdapter
@@ -708,6 +931,63 @@ class TestFromAC_PickTasksAdapter:
             "ToolError must carry user_message about invalid max_waves"
         )
 
+    # -- Retry: exact-kwargs forwarding tests for pick_tasks --
+
+    @pytest.mark.asyncio
+    async def test_pick_tasks_forwards_wave_size_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC5/AC22: wave_size= forwarded to AgentView.pick_tasks as exact kwarg."""
+        from owlbear_mcp_kanban.server import pick_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.pick_tasks.return_value = PickTasksResponse(waves=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await pick_tasks(ctx, wave_size=4)
+
+        kw = mock_av.pick_tasks.call_args.kwargs
+        assert kw.get("wave_size") == 4, (
+            "wave_size=4 must be forwarded as exact kwarg to AgentView.pick_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_pick_tasks_forwards_max_waves_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC5/AC23: max_waves= forwarded to AgentView.pick_tasks as exact kwarg."""
+        from owlbear_mcp_kanban.server import pick_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.pick_tasks.return_value = PickTasksResponse(waves=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await pick_tasks(ctx, max_waves=7)
+
+        kw = mock_av.pick_tasks.call_args.kwargs
+        assert kw.get("max_waves") == 7, (
+            "max_waves=7 must be forwarded as exact kwarg to AgentView.pick_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_pick_tasks_wave_size_none_forwarded_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC5: wave_size=None (default) forwarded to AgentView with exact None kwarg."""
+        from owlbear_mcp_kanban.server import pick_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.pick_tasks.return_value = PickTasksResponse(waves=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await pick_tasks(ctx)
+
+        kw = mock_av.pick_tasks.call_args.kwargs
+        assert "wave_size" in kw, "wave_size kwarg must be present even when None"
+        assert kw["wave_size"] is None, (
+            "wave_size=None must be forwarded as exact None kwarg to AgentView.pick_tasks"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ErrorMapping
@@ -778,3 +1058,89 @@ class TestFromAC_ErrorMapping:
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError):
             await pick_tasks(ctx)
+
+    # -- Retry: exact user_message preservation tests --
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_not_found_user_message_preserved_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC7: list_tasks NotFoundError.user_message preserved exactly in ToolError."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        user_msg = "task 99 not found"
+        mock_av.list_tasks.side_effect = NotFoundError(
+            code="ERR_NOT_FOUND", user_message=user_msg
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await list_tasks(ctx, ids=[99])
+
+        assert user_msg in str(exc_info.value), (
+            "NotFoundError.user_message must be preserved in ToolError for list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_pick_tasks_not_found_user_message_preserved_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC7: pick_tasks NotFoundError.user_message preserved in ToolError (exact check)."""
+        from owlbear_mcp_kanban.server import pick_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        user_msg = "internal dependency not found"
+        mock_av.pick_tasks.side_effect = NotFoundError(
+            code="ERR_NOT_FOUND", user_message=user_msg
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await pick_tasks(ctx)
+
+        assert user_msg in str(exc_info.value), (
+            "NotFoundError.user_message must be preserved in ToolError for pick_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_pick_tasks_validation_error_user_message_preserved_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC6: pick_tasks ValidationError.user_message preserved exactly in ToolError."""
+        from owlbear_mcp_kanban.server import pick_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        user_msg = "wave_size must be >= 1"
+        mock_av.pick_tasks.side_effect = ValidationError(
+            code="ERR_INVALID_WAVE_PARAM", user_message=user_msg
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await pick_tasks(ctx, wave_size=0)
+
+        assert user_msg in str(exc_info.value), (
+            "ValidationError.user_message must be preserved exactly in ToolError for pick_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_show_task_validation_error_user_message_preserved_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC6: show_task ValidationError.user_message preserved exactly in ToolError."""
+        from owlbear_mcp_kanban.server import show_task
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        user_msg = "section must not be an empty string"
+        mock_av.show_task.side_effect = ValidationError(
+            code="ERR_SECTION_EMPTY", user_message=user_msg
+        )
+
+        ctx = _make_mcp_ctx(app_ctx)
+        with pytest.raises(ToolError) as exc_info:
+            await show_task(ctx, task_id="42", section="")
+
+        assert user_msg in str(exc_info.value), (
+            "ValidationError.user_message must be preserved exactly in ToolError for show_task"
+        )
