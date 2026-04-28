@@ -49,6 +49,7 @@ __all__ = [
     "AppContext",
     "StrId",
     "_apply_tool_exclusions",
+    "_map_kanban_error",
     "_show_validated",
     "app_lifespan",
     "create_task",
@@ -63,6 +64,11 @@ __all__ = [
 ]
 
 _DEFAULT_KANBAN_DIR = Path(".owlbear/kanban")
+
+
+def _map_kanban_error(exc: KanbanError) -> None:
+    """Raise MCP ToolError with the user-facing message from a KanbanError."""
+    raise ToolError(exc.user_message) from exc
 
 
 @dataclass
@@ -144,7 +150,7 @@ async def list_tasks(  # noqa: PLR0913
             blocked=blocked,
         )
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
 
 
 # Set outputSchema for list_tasks (lean task array)
@@ -298,7 +304,7 @@ async def show_task(ctx: Context, task_id: StrId, section: str = "") -> ShowTask
     try:
         return app_ctx.engine.agent_view().show_task(task_id=task_id, section=section_arg)
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
@@ -575,7 +581,7 @@ async def pick_tasks(
             max_waves=max_waves,
         )
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
 
 
 # Override outputSchema for mutation/lifecycle tools that return
