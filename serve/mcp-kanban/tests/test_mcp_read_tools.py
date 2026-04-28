@@ -422,21 +422,39 @@ class TestFromAC_ListTasksAdapter:
         )
 
     @pytest.mark.asyncio
-    async def test_list_tasks_forwards_archived_exact(
+    async def test_list_tasks_forwards_archival_reason_exact(
         self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
     ) -> None:
-        """AC1: archived= forwarded to AgentView.list_tasks — exact kwarg check."""
+        """AC1: archival_reason= forwarded to AgentView.list_tasks — no legacy archived: bool."""
         from owlbear_mcp_kanban.server import list_tasks
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
 
         ctx = _make_mcp_ctx(app_ctx)
-        await list_tasks(ctx, archived=True)
+        await list_tasks(ctx, archival_reason="completed")
 
         kw = mock_av.list_tasks.call_args.kwargs
-        assert kw.get("archived") is True, (
-            "archived=True must be forwarded as exact kwarg to AgentView.list_tasks"
+        assert kw.get("archival_reason") == "completed", (
+            "archival_reason='completed' must be forwarded as exact kwarg to AgentView.list_tasks"
+        )
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_forwards_parent_exact(
+        self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
+    ) -> None:
+        """AC1: parent= forwarded to AgentView.list_tasks — Brief A §5.1 field."""
+        from owlbear_mcp_kanban.server import list_tasks
+
+        app_ctx, mock_av = app_ctx_with_mock_agent_view
+        mock_av.list_tasks.return_value = ListTasksResponse(tasks=[], guidance=[])
+
+        ctx = _make_mcp_ctx(app_ctx)
+        await list_tasks(ctx, parent=7)
+
+        kw = mock_av.list_tasks.call_args.kwargs
+        assert kw.get("parent") == 7, (
+            "parent=7 must be forwarded as exact kwarg to AgentView.list_tasks"
         )
 
     @pytest.mark.asyncio
@@ -494,10 +512,10 @@ class TestFromAC_ListTasksAdapter:
         )
 
     @pytest.mark.asyncio
-    async def test_list_tasks_forwards_all_eleven_params_exact(
+    async def test_list_tasks_forwards_all_twelve_params_exact(
         self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
     ) -> None:
-        """AC1: all 11 list_tasks params forwarded to AgentView with correct exact kwargs."""
+        """AC1: all 12 Brief A §5.1 params forwarded to AgentView — no legacy archived: bool."""
         from owlbear_mcp_kanban.server import list_tasks
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
@@ -511,28 +529,33 @@ class TestFromAC_ListTasksAdapter:
             status="todo",
             tag="phase-2",
             priority="critical",
+            archival_reason="completed",
             ids=[1, 2],
+            unclaimed=True,
+            blocked=True,
+            parent=5,
             search="hello",
             sort="priority",
-            unclaimed=True,
-            archived=True,
-            limit=5,
             reverse=True,
-            blocked=True,
+            limit=5,
         )
 
         kw = mock_av.list_tasks.call_args.kwargs
         assert kw["status"] == "todo"
         assert kw["tag"] == "phase-2"
         assert kw["priority"] == "critical"
+        assert kw["archival_reason"] == "completed"
         assert kw["ids"] == [1, 2]
+        assert kw["unclaimed"] is True
+        assert kw["blocked"] is True
+        assert kw["parent"] == 5
         assert kw["search"] == "hello"
         assert kw["sort"] == "priority"
-        assert kw["unclaimed"] is True
-        assert kw["archived"] is True
-        assert kw["limit"] == 5
         assert kw["reverse"] is True
-        assert kw["blocked"] is True
+        assert kw["limit"] == 5
+        assert "archived" not in kw, (
+            "legacy archived: bool must NOT appear on the MCP surface (Brief A §5.1)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -557,7 +580,7 @@ class TestFromAC_ShowTaskAdapter:
         mock_av.show_task.return_value = expected
 
         ctx = _make_mcp_ctx(app_ctx)
-        result = await show_task(ctx, task_id="42")
+        result = await show_task(ctx, id=42)
 
         assert isinstance(result, ShowTaskResponse), (
             "show_task must return ShowTaskResponse, not KanbanTask"
@@ -574,7 +597,7 @@ class TestFromAC_ShowTaskAdapter:
         mock_av.show_task.return_value = _make_show_task_response()
 
         ctx = _make_mcp_ctx(app_ctx)
-        await show_task(ctx, task_id="42")
+        await show_task(ctx, id=42)
 
         mock_av.show_task.assert_called_once()
 
@@ -589,7 +612,7 @@ class TestFromAC_ShowTaskAdapter:
         mock_av.show_task.return_value = _make_show_task_response(id=42)
 
         ctx = _make_mcp_ctx(app_ctx)
-        await show_task(ctx, task_id="42")
+        await show_task(ctx, id=42)
 
         # id 42 must appear in the call arguments
         assert "42" in str(mock_av.show_task.call_args) or 42 in str(
@@ -609,7 +632,7 @@ class TestFromAC_ShowTaskAdapter:
         )
 
         ctx = _make_mcp_ctx(app_ctx)
-        await show_task(ctx, task_id="42", section="Notes")
+        await show_task(ctx, id=42, section="Notes")
 
         assert "Notes" in str(mock_av.show_task.call_args), (
             "section='Notes' must be forwarded to AgentView.show_task"
@@ -629,7 +652,7 @@ class TestFromAC_ShowTaskAdapter:
         mock_av.show_task.return_value = expected
 
         ctx = _make_mcp_ctx(app_ctx)
-        result = await show_task(ctx, task_id="42")
+        result = await show_task(ctx, id=42)
 
         assert result is expected or result == expected, (
             "show_task must return ShowTaskResponse envelope unmodified"
@@ -649,7 +672,7 @@ class TestFromAC_ShowTaskAdapter:
         mock_av.show_task.return_value = expected
 
         ctx = _make_mcp_ctx(app_ctx)
-        result = await show_task(ctx, task_id="42", section="NonExistentSection")
+        result = await show_task(ctx, id=42, section="NonExistentSection")
 
         assert isinstance(result, ShowTaskResponse)
         assert result.missing_sections == ["NonExistentSection"], (
@@ -672,7 +695,7 @@ class TestFromAC_ShowTaskAdapter:
 
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError):
-            await show_task(ctx, task_id="999")
+            await show_task(ctx, id=999)
 
         # The error must originate from AgentView.show_task, not engine.show_task.
         mock_av.show_task.assert_called_once()
@@ -692,7 +715,7 @@ class TestFromAC_ShowTaskAdapter:
 
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await show_task(ctx, task_id="999")
+            await show_task(ctx, id=999)
 
         assert user_msg in str(exc_info.value), (
             "user_message from NotFoundError must appear in ToolError"
@@ -713,40 +736,50 @@ class TestFromAC_ShowTaskAdapter:
 
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await show_task(ctx, task_id="42", section="")
+            await show_task(ctx, id=42, section="")
 
         assert "section" in str(exc_info.value).lower() or "empty" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
-    async def test_show_task_empty_section_normalized_to_none(
+    async def test_show_task_empty_section_not_normalized_passthrough(
         self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
     ) -> None:
-        """AC3: show_task normalizes section='' to None before forwarding to AgentView."""
+        """AC2: section='' must be passed through to engine unmodified — engine raises ValidationError.
+
+        Brief A §5.2: adapter must NOT normalize section='' to None. Engine is the authority
+        on what section values are valid; ValidationError from engine → ToolError.
+        """
         from owlbear_mcp_kanban.server import show_task
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
-        mock_av.show_task.return_value = _make_show_task_response()
+        mock_av.show_task.side_effect = ValidationError(
+            code="ERR_SECTION_EMPTY",
+            user_message="section must not be an empty string",
+        )
 
         ctx = _make_mcp_ctx(app_ctx)
-        await show_task(ctx, task_id="42", section="")
+        with pytest.raises(ToolError):
+            await show_task(ctx, id=42, section="")
 
+        # Engine was called with section="" not section=None — no adapter normalization
         kw = mock_av.show_task.call_args.kwargs
-        assert kw.get("section") is None, (
-            "adapter must normalize section='' to section=None before forwarding"
+        assert kw.get("section") == "", (
+            "adapter must forward section='' to engine as-is (Brief A §5.2); "
+            "engine raises ValidationError, not adapter"
         )
 
     @pytest.mark.asyncio
     async def test_show_task_nonempty_section_forwarded_exact(
         self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
     ) -> None:
-        """AC3: non-empty section= forwarded as exact kwarg to AgentView.show_task."""
+        """AC2: non-empty section= forwarded as exact kwarg to AgentView.show_task."""
         from owlbear_mcp_kanban.server import show_task
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         mock_av.show_task.return_value = _make_show_task_response()
 
         ctx = _make_mcp_ctx(app_ctx)
-        await show_task(ctx, task_id="42", section="Builder Notes")
+        await show_task(ctx, id=42, section="Builder Notes")
 
         kw = mock_av.show_task.call_args.kwargs
         assert kw.get("section") == "Builder Notes", (
@@ -754,21 +787,21 @@ class TestFromAC_ShowTaskAdapter:
         )
 
     @pytest.mark.asyncio
-    async def test_show_task_task_id_forwarded_exact(
+    async def test_show_task_id_forwarded_exact(
         self, app_ctx_with_mock_agent_view: tuple[object, MagicMock]
     ) -> None:
-        """AC3: task_id= forwarded to AgentView.show_task as exact kwarg."""
+        """AC2: id= forwarded to AgentView.show_task matching ShowTaskParams.id: int."""
         from owlbear_mcp_kanban.server import show_task
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         mock_av.show_task.return_value = _make_show_task_response(id=77)
 
         ctx = _make_mcp_ctx(app_ctx)
-        await show_task(ctx, task_id="77")
+        await show_task(ctx, id=77)
 
         kw = mock_av.show_task.call_args.kwargs
-        assert kw.get("task_id") == "77", (
-            "task_id='77' must be forwarded as exact kwarg to AgentView.show_task"
+        assert kw.get("id") == 77, (
+            "id=77 must be forwarded as exact kwarg to AgentView.show_task (ShowTaskParams field is 'id')"
         )
 
 
@@ -1033,7 +1066,7 @@ class TestFromAC_ErrorMapping:
 
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await show_task(ctx, task_id="42")
+            await show_task(ctx, id=42)
 
         err_str = str(exc_info.value)
         assert user_msg in err_str, "ToolError must contain the user_message"
