@@ -23,9 +23,10 @@ export interface TaskDetail {
 export interface DetailTabProps {
   task: TaskDetail | null
   onTaskUpdated?: (task: TaskDetail) => void
+  onSelectTask?: (taskId: number, subtab?: string) => void
 }
 
-export default function DetailTab({ task }: DetailTabProps) {
+export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
   const [editBody, setEditBody] = useState(false)
   const [showConflict, setShowConflict] = useState(false)
   const [confirmType, setConfirmType] = useState<null | 'move-backward' | 'unblock' | 'unclaim'>(null)
@@ -140,7 +141,7 @@ export default function DetailTab({ task }: DetailTabProps) {
       )}
 
       {/* History subtab */}
-      {showHistory && <HistorySubtab sessions={taskSessions} />}
+      {showHistory && <HistorySubtab sessions={taskSessions} onSelectTask={onSelectTask} />}
 
       {/* Conflict modal */}
       {showConflict && (

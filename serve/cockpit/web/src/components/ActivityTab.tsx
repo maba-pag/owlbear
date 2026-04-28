@@ -1,28 +1,45 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
+import { type Session } from './HistorySubtab'
 
 export interface ActivityTabProps {
   onSelectTask?: (taskId: number, subtab?: string) => void
 }
 
-interface Session {
-  task_id: number
-  state: string
-  agent: string
-  started_at: string
-  duration: number | null
-  outcome: string | null
-}
+type FilterType = 'all' | 'active' | 'blocked' | 'stuck' | 'released'
 
-type FilterType = 'all' | 'active' | 'failed' | 'released'
+function rowStyleForState(state: string): CSSProperties {
+  if (state === 'blocked' || state === 'rejected') {
+    return {
+      cursor: 'pointer',
+      borderLeft: '4px solid var(--pds-theme-light-notification-error)',
+      backgroundColor: 'var(--pds-theme-light-notification-error-soft)',
+    }
+  }
+
+  if (state === 'stuck') {
+    return {
+      cursor: 'pointer',
+      borderLeft: '4px solid var(--pds-theme-light-notification-warning)',
+      backgroundColor: 'var(--pds-theme-light-notification-warning-soft)',
+    }
+  }
+
+  return {
+    cursor: 'pointer',
+    borderLeft: '4px solid var(--pds-theme-light-contrast-low)',
+  }
+}
 
 function applyFilter(sessions: Session[], filter: FilterType): Session[] {
   switch (filter) {
     case 'all':
       return sessions
     case 'active':
-      return sessions.filter((s) => s.state === 'in-progress' || s.state === 'stuck')
-    case 'failed':
-      return sessions.filter((s) => s.outcome === 'fail' || s.outcome === 'rejected')
+      return sessions.filter((s) => s.state === 'running' || s.state === 'stuck')
+    case 'blocked':
+      return sessions.filter((s) => s.state === 'blocked' || s.state === 'rejected')
+    case 'stuck':
+      return sessions.filter((s) => s.state === 'stuck')
     case 'released':
       return sessions.filter((s) => s.state === 'released')
   }
@@ -35,7 +52,7 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch('/api/sessions', { method: 'GET' })
+        const res = await fetch('/api/sessions?filter=all', { method: 'GET' })
         if (res.ok) {
           const data = (await res.json()) as { sessions: Session[] }
           setSessions(data.sessions)
@@ -57,8 +74,11 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
         <button data-testid="filter-all" onClick={() => setFilter('all')}>
           All
         </button>
-        <button data-testid="filter-failed" onClick={() => setFilter('failed')}>
-          Failed
+        <button data-testid="filter-blocked" onClick={() => setFilter('blocked')}>
+          Blocked
+        </button>
+        <button data-testid="filter-stuck" onClick={() => setFilter('stuck')}>
+          Stuck
         </button>
         <button data-testid="filter-released" onClick={() => setFilter('released')}>
           Released
@@ -69,8 +89,9 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
           <div
             key={i}
             data-testid="session-row"
+            data-state={s.state}
             onClick={() => onSelectTask?.(s.task_id, 'history')}
-            style={{ cursor: 'pointer' }}
+            style={rowStyleForState(s.state)}
           >
             <span data-testid="session-agent">{s.agent}</span>
             <span data-testid="session-task">{s.task_id}</span>
