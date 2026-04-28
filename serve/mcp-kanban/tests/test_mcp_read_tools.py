@@ -804,8 +804,8 @@ class TestFromAC_ShowTaskAdapter:
         await show_task(ctx, id=77)
 
         kw = mock_av.show_task.call_args.kwargs
-        assert kw.get("id") == 77, (
-            "id=77 must be forwarded as exact kwarg to AgentView.show_task (ShowTaskParams field is 'id')"
+        assert kw.get("task_id") == 77, (
+            "id=77 must be forwarded as task_id kwarg to AgentView.show_task"
         )
 
 

@@ -326,14 +326,14 @@ async def _invoke_engine_end_work(  # noqa: PLR0913
 async def show_task(
     ctx: Context,
     id: int = 0,  # noqa: A002
-    section: str = "",
+    section: str | None = None,
 ) -> ShowTaskResponse:
     """Show a single task by ID with full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
         params = ShowTaskParams.model_validate({"id": id, "section": section})
         view = app_ctx.engine.agent_view()
-        return view.show_task(id=params.id, section=params.section)
+        return view.show_task(task_id=params.id, section=params.section)
     except KanbanError as exc:
         _map_kanban_error(exc)
     except PydanticValidationError as exc:
