@@ -134,7 +134,7 @@ async def _async_run_interactive(client: object) -> tuple[bool, int, int, int]:
             try:
                 choice = (
                     input("Approve (a), Reject (r), Skip (s/Enter)? ").strip().lower()
-                )  # noqa: ASYNC250
+                )
             except EOFError:
                 choice = ""
             if choice in ("a", "r", "s", ""):
