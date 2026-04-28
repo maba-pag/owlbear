@@ -30,6 +30,7 @@ FAIL paths summary:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,12 +38,13 @@ import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import ShowTaskResponse
+from owlbear_kanban.models import ListTasksResponse, ShowTaskResponse, SingleTaskResponse
 from owlbear_mcp_kanban.server import (
     AppContext,
     create_task,
     edit_task,
     end_work,
+    list_tasks,
     move_task,
     pick_tasks,
     show_task,
@@ -425,6 +427,82 @@ class TestFromAC_ErrorMapping:
         )
         assert not any(word.startswith("ERR_") for word in str(exc_info.value).split()), (
             f"ToolError must not expose machine error code on wire; got {str(exc_info.value)!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_GuidanceProofRepair (AC-FIX-1, AC-FIX-2, AC-FIX-3)
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GuidanceProofRepair:
+    """Proof-repair tests: exact-value guidance field assertions for list_tasks, start_work, end_work(success).
+
+    These tests address proof gaps identified in the cycle-1 review:
+    - AC-FIX-1: list_tasks guidance exact field comparison (not envelope identity)
+    - AC-FIX-2: start_work guidance sentinel passthrough (AgentView branch)
+    - AC-FIX-3: end_work(outcome='success') guidance sentinel passthrough (AgentView branch)
+    """
+
+    _SENTINEL: ClassVar[list[str]] = ["__AC_FIX_SENTINEL_GUIDANCE__"]
+
+    @pytest.mark.asyncio
+    async def test_list_tasks_guidance_exact_field_value(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC-FIX-1: list_tasks.guidance field matches sentinel from AgentView.list_tasks.
+
+        The prior assertion (`result is expected or result == expected`) can false-green
+        when the adapter mutates the envelope in-place and returns the same object.
+        This test asserts the guidance field directly to catch any in-place mutation.
+        """
+        expected_response = ListTasksResponse(
+            tasks=[], guidance=self._SENTINEL, missing_ids=None
+        )
+        ctx = _make_ctx(app_ctx)
+        with patch.object(AgentView, "list_tasks", return_value=expected_response):
+            result = await list_tasks(ctx)
+        assert result.guidance == self._SENTINEL, (
+            f"list_tasks must return guidance field unchanged; got {result.guidance!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_start_work_guidance_sentinel_passthrough(
+        self, app_ctx: AppContext
+    ) -> None:
+        """AC-FIX-2: start_work returns guidance from AgentView.start_work unmodified.
+
+        Existing suite only asserts isinstance(result, SingleTaskResponse); guidance
+        content is not checked. This test proves the adapter does not strip or
+        transform the guidance field on the AgentView (primary) branch.
+        """
+        task_data = app_ctx.engine.show_task("1").model_dump()
+        task_data["guidance"] = self._SENTINEL
+        sentinel_response = SingleTaskResponse.model_validate(task_data)
+        ctx = _make_ctx(app_ctx)
+        with patch.object(AgentView, "start_work", return_value=sentinel_response):
+            result = await start_work(ctx, task_id="1")
+        assert result.guidance == self._SENTINEL, (
+            f"start_work must pass AgentView guidance through unchanged; got {result.guidance!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_end_work_success_guidance_sentinel_passthrough(
+        self, app_ctx_claimed: AppContext
+    ) -> None:
+        """AC-FIX-3: end_work(outcome='success') returns guidance from AgentView.end_work.
+
+        No prior test covered end_work(success) guidance. This test proves the
+        adapter's AgentView (primary) branch does not strip the guidance field.
+        """
+        task_data = app_ctx_claimed.engine.show_task("1").model_dump()
+        task_data["guidance"] = self._SENTINEL
+        sentinel_response = SingleTaskResponse.model_validate(task_data)
+        ctx = _make_ctx(app_ctx_claimed)
+        with patch.object(AgentView, "end_work", return_value=sentinel_response):
+            result = await end_work(ctx, task_id="1", outcome="success", note="done")
+        assert result.guidance == self._SENTINEL, (
+            f"end_work(success) must pass AgentView guidance unchanged; got {result.guidance!r}"
         )
 
     @pytest.mark.asyncio
