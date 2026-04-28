@@ -1,10 +1,10 @@
 ---
 id: 1086
 title: 'A-03: RED — read tool adapter tests'
-status: todo
+status: done
 priority: needed
-created: '2026-04-21 10:53:39.529461+00:00'
-updated: '2026-04-24 17:56:56.742898+00:00'
+created: 2026-04-21 10:53:39.529461+00:00
+updated: 2026-04-28T02:42:10.405090+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -16,7 +16,8 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_at:
+claimed_by: quiet-shade
+claimed_at: 2026-04-28T02:42:10.405090+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -202,3 +203,160 @@ Post-task reflection:
 ### Verdict: FAIL
 ### Action
 - Reject to todo. Implementation currently looks correct, but the TestFromAC suite does not yet provide strong AC proof for all forwarded kwargs and user_message contracts.
+
+[[2026-04-28]]
+## Test-Writer Notes (retry 2)
+
+**Context:** Second retry — reviewer cited missing TestFromAC proof for 7 list_tasks params (search/sort/unclaimed/archived/limit/reverse/blocked) and lax string-based forwarding assertions across all three adapters plus partial user_message preservation.
+
+**Changes:** Added 18 new tests to `serve/mcp-kanban/tests/test_mcp_read_tools.py`.
+
+- Test file: `serve/mcp-kanban/tests/test_mcp_read_tools.py`
+- Classes: `TestFromAC_ListTasksAdapter` (+8), `TestFromAC_ShowTaskAdapter` (+3), `TestFromAC_PickTasksAdapter` (+3), `TestFromAC_ErrorMapping` (+4)
+- Tests per category added: happy/forwarding 14, edge 2, error 4 (exact user_message), boundary 0
+- **Total: 48 tests (30 existing + 18 new), all PASS**
+- ruff: clean
+
+**Note on GREEN state:** Implementation is already correct (builder's GREEN from prior cycle). New tests use exact `call_args.kwargs[param]` inspection rather than `str(call_args)` substring matching — they PASS immediately because implementation correctly forwards all kwargs. This is expected in a retry cycle post-implementation.
+
+AC coverage table (new tests):
+| AC line | New tests |
+|---|---|
+| list_tasks: all params forwarded (AC1) | test_list_tasks_forwards_{search,sort,unclaimed,archived,limit,reverse,blocked}_exact + test_list_tasks_forwards_all_eleven_params_exact |
+| show_task: id + section forwarded (AC3) | test_show_task_empty_section_normalized_to_none, test_show_task_nonempty_section_forwarded_exact, test_show_task_task_id_forwarded_exact |
+| pick_tasks: wave_size + max_waves forwarded (AC5) | test_pick_tasks_forwards_wave_size_exact, test_pick_tasks_forwards_max_waves_exact, test_pick_tasks_wave_size_none_forwarded_exact |
+| Error mapping: ValidationError → ToolError with user_message (AC6) | test_pick_tasks_validation_error_user_message_preserved_exact, test_show_task_validation_error_user_message_preserved_exact |
+| Error mapping: NotFoundError → ToolError with user_message (AC7) | test_list_tasks_not_found_user_message_preserved_exact, test_pick_tasks_not_found_user_message_preserved_exact |
+[[2026-04-28]]
+## Builder Notes
+- Implementation: no code changes in this builder pass; validated existing adapter implementation in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`.
+- Tests: 48 `TestFromAC_*` tests passed in `serve/mcp-kanban/tests/test_mcp_read_tools.py`.
+- Coverage: `owlbear_mcp_kanban.server` at 31% in scoped/full quality-runner evidence for this task-owned suite.
+- ruff: clean for scoped task paths.
+- Approach: verification-only GREEN closeout after test-writer retry strengthened AC-proof assertions (exact kwargs + exact `user_message` checks).
+
+Post-task reflection:
+- Problem faced: quality-runner coverage for this task remains low at module scope because `server.py` contains many unrelated tool paths outside the read-adapter contract.
+- Workaround applied: used canonical quality-runner scoped and full invocations to capture reproducible evidence for this task handoff.
+- Pattern discovered: for large adapter modules, task-owned suites can be fully green while module-level coverage stays low unless suites are partitioned by endpoint family.
+- Quality gap: function-level coverage gating is not directly expressible via current quality-runner contract, so module-level % overstates uncovered unrelated code.
+- Time sink: repeated historical retries on fixture/test-proof quality before reaching stable verification state.
+[[2026-04-28]]
+## Review Evidence
+### Test Results
+- pytest: 48 passed, 0 failed, 0 skipped (independent quality-runner, scoped to `serve/mcp-kanban/tests/test_mcp_read_tools.py`)
+
+### Lint: not clean
+- Ruff reported 39 violations in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, all in `end_work` at line 480+.
+- None of those violations are in the reviewed adapter paths for this task: `list_tasks` (`server.py:115-147`), `show_task` (`server.py:294-301`), or `pick_tasks` (`server.py:561-578`).
+- Treating this as pre-existing same-file debt / regression context, not task-local gate evidence for task 1086.
+
+### Coverage: `owlbear_mcp_kanban.server` 27%
+- Module-level coverage is below 90%, but this file contains many unrelated MCP tools.
+- Task-local proof is strong for the three reviewed read adapters via exact kwarg and exact `user_message` assertions in the task-owned suite.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| `list_tasks`: all params forwarded to `AgentView.list_tasks`; `ListTasksResponse` returned | `test_list_tasks_returns_list_tasks_response` (`test_mcp_read_tools.py:178`), `test_list_tasks_forwards_all_eleven_params_exact` (`:497`) | Yes — exact kwarg assertions would fail on omitted or misnamed forwarding | COVERED |
+| `list_tasks`: `ids` exclusivity enforced; adapter maps to `ToolError` | `test_list_tasks_validation_error_message_preserved` (`:327`) | Yes — exact `user_message` must appear in `ToolError` | COVERED |
+| `show_task`: id + section forwarded; `ShowTaskResponse` returned including `missing_sections` case | `test_show_task_returns_show_task_response` (`:549`), `test_show_task_missing_sections_case_preserved` (`:639`), `test_show_task_empty_section_normalized_to_none` (`:721`), `test_show_task_nonempty_section_forwarded_exact` (`:739`), `test_show_task_task_id_forwarded_exact` (`:757`) | Yes — exact task_id/section forwarding and missing_sections preservation are asserted directly | COVERED |
+| `show_task`: missing id/task maps to `ToolError` via `NotFoundError` | `test_show_task_not_found_user_message_in_tool_error` (`:681`) | Yes — exact `user_message` must appear in `ToolError` | COVERED |
+| `pick_tasks`: `wave_size` + `max_waves` forwarded; `PickTasksResponse` with waves returned | `test_pick_tasks_returns_pick_tasks_response` (`:785`), `test_pick_tasks_envelope_returned_unmodified` (`:852`), `test_pick_tasks_forwards_wave_size_exact` (`:937`), `test_pick_tasks_forwards_max_waves_exact` (`:955`), `test_pick_tasks_wave_size_none_forwarded_exact` (`:973`) | Yes — exact kwarg assertions and response-envelope checks would fail on broken forwarding | COVERED |
+| Error mapping: engine `ValidationError` -> MCP `ToolError` with `user_message` | `test_list_tasks_validation_error_message_preserved` (`:327`), `test_pick_tasks_validation_error_user_message_preserved_exact` (`:1107`), `test_show_task_validation_error_user_message_preserved_exact` (`:1128`) | Yes — exact `user_message` preservation is asserted across adapters | COVERED |
+| Error mapping: engine `NotFoundError` -> MCP `ToolError` with `user_message` | `test_show_task_not_found_user_message_in_tool_error` (`:681`), `test_list_tasks_not_found_user_message_preserved_exact` (`:1065`), `test_pick_tasks_not_found_user_message_preserved_exact` (`:1086`) | Yes — exact `user_message` preservation is asserted across adapters | COVERED |
+| All tests fail (RED phase) | Historical phase note only | Not independently reproducible after implementation exists | N/A |
+
+#### Security Review
+- No issues in the reviewed adapter code. The task scope is mechanical `AgentView` delegation plus `KanbanError -> ToolError(exc.user_message)` mapping in `server.py:133-147`, `server.py:297-301`, and `server.py:573-578`.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `TestFromAC_*` suite in `serve/mcp-kanban/tests/test_mcp_read_tools.py` | Retry additions at `:368`, `:934`, and `:1062` add exact kwarg and exact `user_message` assertions | STRENGTHENED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | AC-critical forwarding and error-mapping checks are now exact at `:497`, `:721`, `:739`, `:757`, `:937`, `:955`, `:973`, `:1065`, `:1086`, `:1107`, `:1128` |
+| Negative/error-path coverage | STRONG | ValidationError and NotFoundError paths are exercised across all three adapters |
+| Manual mutation resistance | ADEQUATE | Omitting/misnaming forwarded kwargs or dropping `user_message` propagation would now fail exact tests |
+| Test independence | STRONG | Fresh fixture and `MagicMock` `AgentView` per test |
+| Descriptive naming | STRONG | Test names remain AC-oriented and specific |
+
+#### Data Safety
+- No issues.
+
+#### Implementation-Aware Gaps
+- No significant untested path in the reviewed adapter code. Each tool has a success path plus generic `KanbanError` mapping, and both branches are exercised by the task-owned suite.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 4 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- `test_tool_error_carries_user_message_not_code` (`test_mcp_read_tools.py:1022`) has a partially vacuous second assertion; non-gating because exact `user_message` preservation is already proved elsewhere.
+- `test_pick_tasks_max_waves_validation_error_mapped` (`test_mcp_read_tools.py:914`) still uses substring matching; non-gating because AC-level `ValidationError -> ToolError(user_message)` behavior is already proved exactly for the adapter.
+- The file header still says `RED phase tests`; that label is stale relative to current workspace state.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `list_tasks`: all params forwarded; `ListTasksResponse` returned | `server.py:133-145` forwards 11 kwargs; exact all-params proof at `test_mcp_read_tools.py:497`; response type proof at `:178` | `test_list_tasks_returns_list_tasks_response`; `test_list_tasks_forwards_all_eleven_params_exact` | PASS |
+| `list_tasks`: `ids` exclusivity enforced; adapter maps to `ToolError` | Generic mapping at `server.py:147`; exact message preservation at `test_mcp_read_tools.py:327` | `test_list_tasks_validation_error_message_preserved` | PASS |
+| `show_task`: id + section forwarded; `ShowTaskResponse` returned including `missing_sections` | `server.py:297-301` normalizes `section` then forwards; exact forwarding at `test_mcp_read_tools.py:721`, `:739`, `:757`; envelope/missing_sections at `:549`, `:639` | `test_show_task_*` exact forwarding and envelope tests | PASS |
+| `show_task`: missing id/task -> `ToolError` | Generic mapping at `server.py:301`; exact `NotFoundError.user_message` proof at `test_mcp_read_tools.py:681` | `test_show_task_not_found_user_message_in_tool_error` | PASS |
+| `pick_tasks`: `wave_size` + `max_waves` forwarded; `PickTasksResponse` with waves returned | `server.py:573-576` forwards both kwargs; exact forwarding at `test_mcp_read_tools.py:937`, `:955`, `:973`; envelope proof at `:785`, `:852` | `test_pick_tasks_*` exact forwarding and envelope tests | PASS |
+| Error mapping: engine `ValidationError` -> MCP `ToolError` with `user_message` | Generic mapping at `server.py:147`, `:301`, `:578`; exact message assertions at `test_mcp_read_tools.py:327`, `:1107`, `:1128` | ValidationError message-preservation tests | PASS |
+| Error mapping: engine `NotFoundError` -> MCP `ToolError` with `user_message` | Generic mapping at `server.py:147`, `:301`, `:578`; exact message assertions at `test_mcp_read_tools.py:681`, `:1065`, `:1086` | NotFoundError message-preservation tests | PASS |
+| All tests fail (RED phase) | Historical task phase only; not scored against current implemented workspace state | Task body history | N/A |
+
+### Deductions
+- -0.03 unrelated whole-file ruff debt in `server.py:end_work`
+- -0.02 module-level coverage is low because `server.py` contains many unrelated tools
+- -0.02 residual supplemental test weakness in two non-AC-critical assertions (`:914`, `:1022`)
+
+### Confidence: .93
+### Verdict: PASS
+### Action
+- Advance to docs.
+
+### Post-task Reflection
+- Problem faced: scoped quality evidence included same-file lint debt outside the reviewed adapter paths.
+- Workaround applied: separated task-local adapter evidence from unrelated `end_work` violations before gating.
+- Pattern discovered: exact `call_args.kwargs[...]` and exact `user_message` assertions are what turned this suite from lax proof into reliable AC coverage.
+- Quality gap: one cross-cutting “not raw code” assertion is still partially vacuous, but it does not undermine the task contract.
+[[2026-04-28]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A (no update needed) | serve/mcp-kanban/README.md Tools table references list_tasks/show_task/pick_tasks. Brief descriptions remain accurate — task changed internal AgentView delegation, not external tool names or purpose. list_tasks description ("optional status, priority, tag, blocked, limit filters") is an unexhaustive representative subset, not inaccurate. No update required. |
+| 2 | Module docstrings | Yes | N/A (no update needed) | list_tasks: "List kanban tasks with optional filters." — accurate. show_task: "Show a single task by ID with full details." — accurate. pick_tasks: "Pick dispatchable tasks from AgentView and return wave envelopes. wave_size defaults to engine configuration when omitted." — accurate and specific. No changes needed. |
+| 3 | External attribution | No | N/A | No external patterns cited in task body or builder/test-writer notes. |
+| 4 | Research doc | No | N/A | No .owlbear/research/ doc produced or linked. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | kanban.excalidraw (describes: serve/mcp-kanban/src/**) and mcp-topology.excalidraw (describes: serve/mcp-*/src/**) both match changed file serve/mcp-kanban/src/owlbear_mcp_kanban/server.py. Footer updated to "Last verified: 2026-04-28 (afe44251)" in both diagrams. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/mcp-kanban/src/owlbear_mcp_kanban/server.py | IN (py docstrings) | Verified — docstrings accurate, no update |
+| serve/mcp-kanban/tests/test_mcp_read_tools.py | OUT (test file, no prose doc reference) | N/A |
+| share/diagrams/kanban.excalidraw | IN | Footer updated |
+| share/diagrams/mcp-topology.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/kanban.excalidraw — footer: Last verified: 2026-04-28 (afe44251)
+- share/diagrams/mcp-topology.excalidraw — footer: Last verified: 2026-04-28 (afe44251)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no .owlbear/scratch/1086-* files found)
