@@ -1,10 +1,10 @@
 ---
 id: 1086
 title: 'A-03: RED — read tool adapter tests'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21 10:53:39.529461+00:00
-updated: 2026-04-28T02:42:10.405090+00:00
+updated: 2026-04-28T02:45:16.142673+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -16,8 +16,8 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T02:42:10.405090+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -360,3 +360,39 @@ Post-task reflection:
 
 ### Scratch Files Cleaned
 - None (no .owlbear/scratch/1086-* files found)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| list_tasks: all params forwarded; ListTasksResponse returned | server.py:133-145 forwards 11 kwargs; exact proof at test_mcp_read_tools.py:497 (all_eleven_params_exact); return type at :178 | PASS |
+| list_tasks: ids exclusivity enforced; adapter maps to ToolError | Mapping at server.py:147; exact user_message at test:327 | PASS |
+| show_task: id + section forwarded; ShowTaskResponse + missing_sections | server.py:297-301; exact forwarding at test:721,739,757; envelope at :549,:639 | PASS |
+| show_task: missing id maps to ToolError | Mapping at server.py:301; exact user_message at test:681 | PASS |
+| pick_tasks: wave_size + max_waves forwarded; PickTasksResponse | server.py:573-576; exact kwargs at test:937,955,973; envelope at :785,:852 | PASS |
+| Error mapping: ValidationError mapped to ToolError with user_message | server.py:147,301,578; exact assertions at test:327,1107,1128 | PASS |
+| Error mapping: NotFoundError mapped to ToolError with user_message | server.py:147,301,578; exact assertions at test:681,1065,1086 | PASS |
+| All tests fail (RED phase) | Historical phase; N/A post-implementation | N/A |
+
+### Test Results
+- pytest (full suite): 291 passed, 3 failed (pre-existing #1015 react-compiler, unrelated), 4 skipped
+- ruff (full): task-scoped files clean; 8 pre-existing violations in unrelated packages
+
+### Architect Quality: 4/5
+AC lines are specific and verifiable (methods, params, return types, error mappings named). Minor gap: "all params" required enumerating 11 kwargs which the test-writer initially missed, but the phrase is unambiguous. Edge cases covered (missing id, ids exclusivity, missing_sections).
+
+### Deduction Breakdown
+- AC lines: 0 deductions (all 7 functional lines have specific evidence)
+- Lint: 0 (task-scoped files clean)
+- AC quality: 0 (score 4/5, above threshold)
+- Reviewer evidence: 0 (present, detailed, PASS with line references)
+- Full-suite failures: 0 (3 failures are pre-existing #1015, outside task scope)
+
+### Confidence: .98
+### Action: archive
+
+### Commits verified
+- f9ce692a test: add failing tests for MCP read tool adapters (#1086, test-writer)
+- e3f2e9f9 test: strengthen read adapter AC proof -- exact kwargs + user_message (#1086, retry, test-writer)
+- d3a9666c docs: update diagram footers for mcp-kanban read adapters (#1086, doc-writer)
+- Builder implementation landed in 2491e258 (general fix commit)

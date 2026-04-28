@@ -1,10 +1,10 @@
 ---
 id: 1089
 title: 'A-09: RED — guidance + error mapping tests'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21 10:54:09.278833+00:00
-updated: 2026-04-28T04:17:06.467967+00:00
+updated: 2026-04-28T04:21:16.990266+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -16,8 +16,8 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T04:17:06.467967+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -262,3 +262,39 @@ Both files are OUT of IN-scope: test files are not IN-scope; `server.py` was not
 
 ### Scratch Files Cleaned
 - None (no `1089-*` scratch files found)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Guidance passthrough | `test_show_task_guidance_passes_through_unmodified` — sentinel-patched AgentView + exact list equality (`test_mcp_guidance_1089.py:248-256`) | PASS |
+| show_task occurrence-count guidance | `test_show_task_section_occurrence_count_guidance` — exact equality (`test_mcp_guidance_1089.py:213-232`) | PASS |
+| pick_tasks dispatch hints | `test_pick_tasks_dispatch_hints_guidance` — exact equality (`test_mcp_guidance_1089.py:260-278`) | PASS |
+| create/edit body-size warning | `test_create_task_body_size_warning_guidance`, `test_edit_task_body_size_warning_guidance` — exact warning equality (`test_mcp_guidance_1089.py:279-316`) | PASS |
+| move_task / end_work reject skip warning | `test_move_task_skip_transition_warning_guidance`, `test_end_work_reject_skip_transition_warning_guidance` — sentinel-backed + exact equality (`test_mcp_guidance_1089.py:317-364`) | PASS |
+| end_work(block) AR/DR hint | `test_end_work_block_action_request_hint_guidance` — sentinel-patched exact equality (`test_mcp_guidance_1089.py:370-396`) | PASS |
+| ValidationError exact user_message; no code | `test_validation_error_maps_to_tool_error` — `str(exc_info.value) == "title must not be empty"` + ERR_ absence guard (`test_mcp_guidance_1089.py:423-430`) | PASS |
+| NotFoundError exact user_message | `test_not_found_error_maps_to_tool_error` — `str(exc_info.value) == "Task '9999' not found"` (`test_mcp_guidance_1089.py:445`) | PASS |
+| ConcurrencyError prefix + no code | `test_concurrency_error_maps_to_tool_error_user_message_only` — prefix assertion + ERR_ALREADY_CLAIMED absence (`test_mcp_guidance_1089.py:468-473`) | PASS |
+
+### Test Results
+- pytest (full suite): 2756 passed, 137 failed, 4 skipped. **0 failures in task scope** (11/11 pass). 137 failures are pre-existing (115) + other tasks (#1086, #1090: 22 new).
+- ruff: 8 findings, **0 in task scope**. All in unrelated modules (knowledge, memory, orchestrator).
+
+### Architect Quality: 4/5
+AC required 2 loop-breaker passes before reaching adequate specificity — original error mapping AC was too loose, reviewer correctly flagged it repeatedly. Final AC is specific with exact expected strings and concrete test fixes. Effective root-cause diagnosis and refinement, but iteration cost was avoidable with stricter initial AC.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 → no deduction
+- Lint violations in scope: 0 → no deduction
+- AC quality ≤ 3: No (4/5) → no deduction
+- Missing reviewer evidence: No (detailed, PASS @ 0.94) → no deduction
+- Full-suite failures in task scope: 0 → no deduction
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 614764ba | chore(kanban) | 1089 task file | #1089 |

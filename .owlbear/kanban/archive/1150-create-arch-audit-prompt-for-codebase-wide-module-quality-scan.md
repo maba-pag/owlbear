@@ -1,10 +1,10 @@
 ---
 id: 1150
 title: Create arch-audit prompt for codebase-wide module quality scan
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-27T21:51:43.242550+00:00
-updated: 2026-04-27T23:57:04.733977+00:00
+updated: 2026-04-28T00:03:44.714715+00:00
 tags:
 - quality
 - arch
@@ -12,8 +12,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: noble-quill
-claimed_at: 2026-04-27T23:57:04.733977+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -344,3 +344,39 @@ Post-task reflection:
 
 ### Scratch Files Cleaned
 - None found for task 1150
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| File created at `share/prompts/arch-audit.prompt.md` with YAML frontmatter (`description:` field) | File exists with `description:` at lines 1-3 | PASS |
+| Prompt instructs executing agent to load `r-architecture-standards` § Module Quality Vocabulary before scanning | Step 1 at lines 9-17 loads SKILL.md + subsections | PASS |
+| Each `serve/` package evaluated against all 5 vocabulary dimensions | Step 3 (L30-38) enumerates all 5; Step 4 (L55) binds dep classification into Evidence column | PASS |
+| Deletion Test applied with explicit evidence | Step 3 (L40-46) requires removal assumption + caller complexity evidence | PASS |
+| Output format is structured table with required columns | Step 4 (L50-52) exact columns; L55 supplements Evidence cell with dep classification | PASS |
+
+### Test Results
+- pytest: 2739 passed, 117 failed, 4 skipped — all failures pre-existing (react compiler, mode6, corruption, atomicity); none task-scoped
+- ruff: 8 violations all in unrelated packages (knowledge, mcp-knowledge, mcp-memory, orchestrator); none in task scope
+
+### Architect Quality: 4/5
+AC rewritten after challenger REFINE with 5 mechanically verifiable lines. Minor ambiguity in dependency-classification reporting path (AC3 vs AC5 interaction) caused one builder iteration, but AC was adequate post-refinement.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (-.00)
+- Lint violations in scope: 0 (-.00)
+- AC quality ≤ 3: No (-.00)
+- Missing reviewer evidence: No (-.00)
+- Task-scoped test failures: 0 (-.00)
+- Conservative: no executable guardrail for prompt-contract drift (-.02)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| decb611e | feat | share/prompts/arch-audit.prompt.md | #1150 |
+| a14038d2 | fix | share/prompts/arch-audit.prompt.md | #1150 |
+| b9644c17 | docs | .owlbear/sources/overview.md, share/diagrams/project-overview.excalidraw | #1150 |
+| 123df7a7 | chore | .owlbear/kanban/tasks/1150-*.md | #1150 |

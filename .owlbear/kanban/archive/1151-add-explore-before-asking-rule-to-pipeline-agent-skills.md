@@ -1,10 +1,10 @@
 ---
 id: 1151
 title: Add "Explore Before Asking" rule to pipeline agent skills
-status: done
+status: archived
 priority: important
 created: 2026-04-27T22:10:07.559936+00:00
-updated: 2026-04-27T23:57:04.943109+00:00
+updated: 2026-04-28T00:06:45.819642+00:00
 tags:
 - agent
 - pipeline
@@ -15,8 +15,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: noble-quill
-claimed_at: 2026-04-27T23:57:04.943109+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -277,3 +277,36 @@ No docs impact — all changed files are OUT-scope agent-executable SKILL.md fil
 
 ### Scratch Files Cleaned
 - None (no 1151-* scratch files found)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| w-ideation-discovery Working Rules includes Explore Before Asking rule | `share/skills/w-ideation-discovery/SKILL.md:20` — single-line rule in existing `## Working Rules` | PASS |
+| w-ideation-mediation Working Rules includes adapted Phase 2 rule | `share/skills/w-ideation-mediation/SKILL.md:21` — brownfield/pattern variant in `## Working Rules` | PASS |
+| w-arch-review Step 1 includes the rule | `share/skills/w-arch-review/SKILL.md:31` — item 3 in `## Step 1 — Analyze Codebase Context` | PASS |
+| Rule text is concise (1-3 lines) and actionable | Each insertion is a single imperative line | PASS |
+| References concrete tools: Explore subagent, read_file, semantic_search, grep_search | All three rules explicitly name all four tools | PASS |
+
+### Test Results
+- pytest: 2739 passed, 117 failed, 4 skipped — all failures pre-existing in kanban/storage/mcp-knowledge packages, none in task scope (markdown-only edits)
+- ruff: 8 violations, none in task scope
+
+### Architect Quality: 5/5
+Specific file paths, exact sections, clear scope boundaries, helpful builder guidance (Phase 1 tension, placement). AC well-specified for a markdown-only task.
+
+### Deduction Breakdown
+- AC lines: 5/5 PASS → 0
+- Lint in scope: none → 0
+- AC quality: 5/5 → 0
+- Reviewer evidence: present, detailed, two rounds (caught initial builder no-op at 0.08, second pass PASS at 0.94) → 0
+- Full-suite failures in task scope: 0 → 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| bdbb86a8 | docs | w-ideation-discovery/SKILL.md, w-ideation-mediation/SKILL.md, w-arch-review/SKILL.md | #1151 |
+| 82b5a42a | chore(kanban) | tasks/1151-*.md | #1151 |

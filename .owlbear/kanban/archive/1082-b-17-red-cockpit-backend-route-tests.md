@@ -1,10 +1,10 @@
 ---
 id: 1082
 title: 'B-17: RED — cockpit backend route tests'
-status: todo
+status: archived
 priority: needed
 created: 2026-04-21 10:50:43.401807+00:00
-updated: 2026-04-27T20:33:03.188873+00:00
+updated: 2026-04-27T21:53:27.680048+00:00
 tags:
 - phase:engine
 - brief:b
@@ -17,8 +17,8 @@ depends_on:
 - 1144
 blocked: false
 block_reason:
-claimed_by: rare-mist
-claimed_at: 2026-04-27T20:33:03.188873+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -276,3 +276,289 @@ These refinements specify what test proofs must demonstrate. The test-writer sho
 
 ### Verdict: REFINE → todo
 ### Action Taken: Tightened 6 AC lines for explicit test-proof requirements (argument assertions, multi-route error coverage, before-engine proof). Created dependency task #1144 for durable suite reconciliation. Scoped out maintenance routes as separate follow-up.
+[[2026-04-27]]
+## Test-Writer Notes (retry)
+
+**Test file:** `tests/test_cockpit_kanban_routes_1082.py`
+**Class:** `TestFromAC_CockpitRoutes`
+**Total:** 27 tests (18 original + 9 new)
+**Lint:** ruff clean
+
+### Retry context
+Architecture Review (final section of task body) refined the AC with 6 stronger proof requirements for before-engine rejection, exact OCC call_args, and multi-route error-path coverage. This retry adds 9 new tests for those gaps. The builder's previous implementation already satisfies all refined AC behaviors; all 27 tests pass.
+
+### New tests (9) by category
+
+| Category | Count | Tests |
+|----------|-------|-------|
+| AC-NEW-24 before-engine proof | 1 | test_edit_status_field_rejected_before_cockpit_view |
+| OCC exact call_args | 3 | test_edit/move/release_passes_exact_expected_updated_to_cockpit_view |
+| ERR_STALE → 409 (move, release) | 2 | test_move/release_stale_token_from_cockpit_view_returns_409 |
+| ERR_NOT_FOUND → 404 (move, release) | 2 | test_move/release_not_found_from_cockpit_view_returns_404 |
+| ValidationError → 422 (move) | 1 | test_move_validation_error_from_cockpit_view_returns_422 |
+
+### Refined AC coverage
+
+| Refined AC | Test |
+|-----------|------|
+| AC-NEW-24: view NOT called when status in body | test_edit_status_field_rejected_before_cockpit_view |
+| OCC exact expected_updated for edit | test_edit_passes_exact_expected_updated_to_cockpit_view |
+| OCC exact expected_updated for move | test_move_passes_exact_expected_updated_to_cockpit_view |
+| OCC exact expected_updated for release | test_release_passes_exact_expected_updated_to_cockpit_view |
+| ERR_STALE → 409 for move | test_move_stale_token_from_cockpit_view_returns_409 |
+| ERR_STALE → 409 for release | test_release_stale_token_from_cockpit_view_returns_409 |
+| ERR_NOT_FOUND → 404 for move | test_move_not_found_from_cockpit_view_returns_404 |
+| ERR_NOT_FOUND → 404 for release | test_release_not_found_from_cockpit_view_returns_404 |
+| ValidationError → 422 for move | test_move_validation_error_from_cockpit_view_returns_422 |
+
+### Process note
+All 27 tests pass because the builder's prior implementation correctly handles all refined AC behaviors. New tests provide the explicit proof assertions the reviewer and architect required. Move delegation tests use `view_mock.engine = engine` to bypass local pre-delegation OCC/transition checks. Release delegation tests rely on `view_mock.show_task.return_value.claimed = True` to pass the claimed guard. Builder phase is a verification pass-through.
+[[2026-04-27]]
+## Builder Notes
+- Implementation: no additional source changes in this retry cycle; prior builder implementation already satisfies refined functional AC assertions.
+- Verification (quality-runner, scoped): 27 passed, 0 failed in tests/test_cockpit_kanban_routes_1082.py; ruff clean on route modules and task-owned test file.
+- Coverage: owlbear_cockpit.routes.mutation = 71%, owlbear_cockpit.routes.read = 78%.
+- Gate result: builder completion gate not met because required coverage >= 90% on touched modules was not achieved.
+- Routing reason: rejecting to test-writer for additional task-owned TestFromAC coverage to raise route-module coverage to >= 90% without changing functional contract.
+
+### Test-writer follow-up needed
+- Add targeted TestFromAC cases for currently uncovered branches in route handlers (especially mutation route error/guard branches and read route non-happy paths) until both modules reach >= 90% in scoped quality-runner output for this task.
+- Keep existing refined AC assertions intact; this is a coverage-completeness delta, not a contract change.
+
+### Reflection
+- Retry cycle was pass-through on functionality: strengthened tests now prove refined AC behavior.
+- Remaining blocker is quantitative coverage threshold, not failing behavior.
+- Fastest path is expanding task-owned tests for uncovered route branches rather than modifying already-correct source paths.
+[[2026-04-27]]
+## Test-Writer Notes (coverage retry)
+
+**Test file:** `tests/test_cockpit_kanban_routes_1082.py`
+**Classes:** `TestFromAC_CockpitRoutes` (27 tests), `TestFromAC_RouteGuardBranches` (21 tests)
+**Total:** 48 tests — all PASS (coverage retry; implementation was already complete)
+**Lint:** ruff clean
+
+### Coverage achieved (scoped pytest run)
+| Module | Before | After |
+|--------|--------|-------|
+| `owlbear_cockpit.routes.mutation` | 71% | **98%** |
+| `owlbear_cockpit.routes.read` | 78% | **95%** |
+
+### New tests added (21) by category
+| Category | Tests |
+|----------|-------|
+| error (move pre-delegation guards) | not-found/stale-token/invalid-transition → 404/409/422 |
+| error (edit guards) | no-editable-fields → 422, tags-path show_task NotFoundError → 404 |
+| error (release guards) | unclaimed → 409, show_task NotFoundError → 404 |
+| happy (_build_edit_kwargs branches) | priority, body, parent fields |
+| happy (_apply_list_diff) | tags add path (195-200), tags remove path (201) |
+| happy (_apply_block_kwargs + tag ops) | block_reason=non-None adds block:user (174-175, 217-219, 224-226, 231), block_reason=null removes block:user (211-215, 231-235) |
+| happy (read routes) | get_board, get_task 404, list_tasks cache-hit, cache-hit+filter, list_sessions filter=all, list_activity with limit |
+
+### Remaining uncovered lines (2)
+- `mutation.py` lines 71, 75: `_task_to_single` else-branch for non-Pydantic task objects — not reachable via real view returns; not worth a fragile low-value mock test.
+[[2026-04-27]]
+## Builder Notes
+- Implementation: no additional source edits in this pass; existing route implementation in `serve/cockpit/src/owlbear_cockpit/routes/read.py` and `serve/cockpit/src/owlbear_cockpit/routes/mutation.py` already satisfies refined AC behavior validated by task-owned tests.
+- Verification (fresh quality-runner scoped run): `tests/test_cockpit_kanban_routes_1082.py` = 48 passed, 0 failed, 0 skipped.
+- Lint (fresh quality-runner scoped run): ruff clean for `serve/cockpit/src/owlbear_cockpit/routes/read.py`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py`, and `tests/test_cockpit_kanban_routes_1082.py`.
+- Coverage evidence: latest `## Test-Writer Notes (coverage retry)` in this task body reports `owlbear_cockpit.routes.mutation` 98% and `owlbear_cockpit.routes.read` 95% for task-scoped run; quality-runner currently cannot emit these module percentages due coverage source package configuration, but functional/lint verification is green.
+- Evidence summary: builder gate conditions for this task are satisfied with passing task-owned suite, clean lint, and documented >=90% route-module coverage.
+
+### Reflection
+- Main friction was coverage-reporting mismatch between task-scoped direct run output and quality-runner module extraction.
+- No new code changes were needed after test-writer’s coverage retry; this pass was verification-focused.
+- Keeping verification strictly scoped to task-owned tests avoided reintroducing unrelated durable-suite drift.
+- Residual risk is tooling-level visibility (coverage reporting config), not route behavior correctness.
+[[2026-04-27]]
+## Review Evidence
+### Test Results
+- Quality-runner scoped run on task-owned plus overlapping durable cockpit suites: 141 passed, 0 failed, 0 skipped.
+- tests/test_cockpit_kanban_routes_1082.py: 48 passed.
+- tests/test_cockpit_routes_1144.py: 9 passed.
+- tests/test_cockpit_read_api.py: 53 passed.
+- tests/test_cockpit_mutation_api.py: 31 passed.
+
+### Lint
+- Ruff clean on serve/cockpit/src/owlbear_cockpit/routes/read.py, serve/cockpit/src/owlbear_cockpit/routes/mutation.py, tests/test_cockpit_kanban_routes_1082.py, tests/test_cockpit_routes_1144.py, tests/test_cockpit_read_api.py, and tests/test_cockpit_mutation_api.py.
+
+### Coverage
+- owlbear_cockpit.routes.read: 100%
+- owlbear_cockpit.routes.mutation: 98%
+- Combined scoped coverage: 98.5%
+- Remaining uncovered mutation lines: 71, 75, 233
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If Violated? | Verdict |
+|---------|-------------|-------------------------|---------|
+| Edit rejects status in body before CockpitView | tests/test_cockpit_kanban_routes_1082.py:502 | Yes. Asserts HTTP 422, FastAPI validation shape, and no CockpitView edit call. | COVERED |
+| edit, move, and release forward exact expected_updated | tests/test_cockpit_kanban_routes_1082.py:531, 554, 578 | Yes. Asserts exact kwarg equality for all three delegated routes. | COVERED |
+| edit, move, and release stale conflicts map to 409 | tests/test_cockpit_kanban_routes_1082.py:410, 606, 628 | Yes. | COVERED |
+| edit, move, and release not found cases map to 404 | tests/test_cockpit_kanban_routes_1082.py:432, 654, 676 | Yes. | COVERED |
+| edit and move validation failures map to 422 | tests/test_cockpit_kanban_routes_1082.py:454, 702 | Yes. | COVERED |
+| edit config failure maps to 500 | tests/test_cockpit_kanban_routes_1082.py:476 | Yes. | COVERED |
+| GET /api/tasks returns cockpit list envelope with tasks and guidance, with mtime preserved | tests/test_cockpit_kanban_routes_1082.py:182, 195 and tests/test_cockpit_routes_1144.py:139, 163 | Yes for the refined AC. Guidance and mtime regressions would fail. | COVERED |
+| GET /api/tasks/{id} returns ShowTaskResponse envelope | tests/test_cockpit_kanban_routes_1082.py:209, 222 and tests/test_cockpit_read_api.py:601, 610 | Yes. Guidance, missing_sections, and claimed-field contract are exercised. | COVERED |
+| GET /api/activity returns filtered activity events | tests/test_cockpit_kanban_routes_1082.py:239, 250, 263 | Yes. | COVERED |
+| GET /api/sessions returns a flat SessionRecord list | tests/test_cockpit_kanban_routes_1082.py:282, 296 and tests/test_cockpit_read_api.py:387 | Yes. | COVERED |
+| POST /api/tasks/{id}/release returns SingleTaskResponse | tests/test_cockpit_kanban_routes_1082.py:346 | Yes for route envelope shape; exact OCC forwarding and error mapping are separately asserted above. | COVERED |
+| POST /api/tasks/sweep returns a list of released task ids | tests/test_cockpit_kanban_routes_1082.py:317, 328 | Partially. The route contract is proved as a list[int] pass-through, but not with exact-id equality. | LAX |
+| RED phase evidence exists | Task body Test-Writer Notes sections | Historical only, but adequately documented in the task body. | COVERED |
+| No durable cockpit regressions remain after dependency reconciliation | Quality-runner: 141 passed, 0 failed across task-owned and overlapping durable suites | Yes. Durable overlap is currently green. | COVERED |
+
+#### Security Review
+- No issues found. Request bodies use extra=forbid, and the changed handlers only delegate to in-process engine or view methods.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| Task-owned TestFromAC suite in tests/test_cockpit_kanban_routes_1082.py | Added stronger proofs for before-engine rejection, exact OCC forwarding, delegated error mapping, guard branches, and route coverage | STRENGTHENED |
+| Durable cockpit overlap suites | Mtime injection and block:user lifecycle assertions remain present and passing | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | ADEQUATE | Refined AC proofs are exact for no-call validation and OCC forwarding. Sweep remains wire-shape oriented. |
+| Negative and error-path coverage | STRONG | edit, move, and release stale and not-found branches, move validation, guard branches, sessions filter, and activity limit paths are exercised. |
+| Manual mutation reasoning | ADEQUATE | Removing expected_updated forwarding or delegated error mapping would fail. Replacing sweep with the wrong integer ids would not. |
+| Test independence | STRONG | Fixture isolation and dependency override cleanup keep state local per test. |
+| Descriptive names | STRONG | Test names remain explicit and behavior-oriented. |
+
+#### Data Safety
+- No issues found. OCC forwarding and stale-write rejection are implemented and exercised across edit, move, and release.
+
+#### Implementation-Aware Gaps
+- No blocking untested changed-code path remains.
+- Non-blocking residuals:
+  - list_tasks cache-hit normalization for guidance=[] and missing_ids=None is not asserted directly.
+  - sweep route proof is limited to list[int] wire shape; exact released-id semantics rely on lower-layer engine and view suites.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 3 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 - INFORMATIONAL
+- The latest Architecture Review refinement is the binding gate for this loop. The earlier failed review is stale; the current implementation satisfies the refined scope.
+- Overlapping durable cockpit suites now agree with the route behavior. The prior cross-suite contract drift is no longer present in live execution.
+- Two test names are stale but non-blocking: tests/test_cockpit_kanban_routes_1082.py:195 now asserts mtime presence despite the name, and tests/test_cockpit_read_api.py:610 asserts claimed_by absence despite the name.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC-NEW-24 before-engine rejection | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:35-52 rejects extra fields before edit_task runs; tests/test_cockpit_kanban_routes_1082.py:502 asserts 422 and no CockpitView call | test_edit_status_field_rejected_before_cockpit_view | PASS |
+| Exact expected_updated forwarding | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:123, 255, 292 forward req.updated; tests/test_cockpit_kanban_routes_1082.py:531, 554, 578 assert exact kwarg equality | exact expected_updated trio | PASS |
+| Stale maps to 409 across delegated routes | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:134, 264, 297; tests/test_cockpit_kanban_routes_1082.py:410, 606, 628 | stale mapping trio | PASS |
+| Not found maps to 404 across delegated routes | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:128, 260, 293; tests/test_cockpit_kanban_routes_1082.py:432, 654, 676 | not found mapping trio | PASS |
+| ValidationError maps to 422 where applicable | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:132, 269; tests/test_cockpit_kanban_routes_1082.py:454, 702 | validation mapping tests | PASS |
+| ConfigError maps to 500 on edit | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:271; tests/test_cockpit_kanban_routes_1082.py:476 | edit config error test | PASS |
+| GET /api/tasks list envelope | serve/cockpit/src/owlbear_cockpit/routes/read.py:69-107; tests/test_cockpit_kanban_routes_1082.py:182, 195; tests/test_cockpit_routes_1144.py:139, 163 | list envelope tests | PASS |
+| GET /api/tasks/{id} show envelope | serve/cockpit/src/owlbear_cockpit/routes/read.py:113-120; tests/test_cockpit_kanban_routes_1082.py:209, 222 | show envelope tests | PASS |
+| GET /api/activity filtered list | serve/cockpit/src/owlbear_cockpit/routes/read.py:124-141; tests/test_cockpit_kanban_routes_1082.py:239, 250, 263 | activity tests | PASS |
+| GET /api/sessions flat SessionRecord list | serve/cockpit/src/owlbear_cockpit/routes/read.py:145-147; tests/test_cockpit_kanban_routes_1082.py:282, 296; tests/test_cockpit_read_api.py:387 | sessions tests | PASS |
+| POST /api/tasks/{id}/release SingleTaskResponse | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:277-299; tests/test_cockpit_kanban_routes_1082.py:346 | release envelope test | PASS |
+| POST /api/tasks/sweep list of released ids | serve/cockpit/src/owlbear_cockpit/routes/mutation.py:307-309; tests/test_cockpit_kanban_routes_1082.py:317, 328 | sweep endpoint tests | PASS |
+| RED evidence exists in task history | Task body Test-Writer Notes | historical evidence | PASS |
+| No durable cockpit regressions | Quality-runner 141 passed, 0 failed across overlapping cockpit suites | scoped durable rerun | PASS |
+
+### Deductions
+- 0.03: sweep proof at the route layer is wire-shape heavy rather than exact-id equality.
+- 0.02: list_tasks cache-hit normalization fields are not directly asserted.
+
+### Verdict
+- PASS. Confidence: .95.
+- Routing: docs.
+
+### Action
+- Advance to docs.
+- Optional future cleanup: rename the two stale test names and add one direct assertion for cache-hit normalization or exact sweep ids if a tighter proof bar is desired.
+
+### Reflection
+- Fresh quality-runner evidence superseded the stale failed review and showed the adjacent durable cockpit suites are now green.
+- The strongest proof upgrades are the no-call validation test, exact OCC forwarding assertions, and the delegated error-mapping matrix.
+- Remaining gaps are proof-tightness nits, not failing behavior or live regressions.
+[[2026-04-27]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/cockpit/README.md`: removed `sweep()` from Excluded methods, added `POST /tasks/sweep` to mutation routes table, added `list_activity(**kwargs)` to read routes table. |
+| 2 | Module docstrings | Yes | Updated | `mutation.py` module docstring updated to include `sweep` in the route list. `read.py` function docstrings were already accurate. |
+| 3 | External attribution | No | N/A | Task used no external patterns. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` doc was produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` `describes: serve/cockpit/src/**` matched changed route files. Footer updated from `6f1509ce` to `984259bf` (same date 2026-04-27). |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/cockpit/src/owlbear_cockpit/routes/read.py` | IN (docstrings) | Verified accurate — no changes needed |
+| `serve/cockpit/src/owlbear_cockpit/routes/mutation.py` | IN (docstrings) | Module docstring updated to include sweep |
+| `tests/test_cockpit_kanban_routes_1082.py` | OUT | N/A |
+| `serve/cockpit/README.md` | IN | Updated (activity endpoint, sweep route, excluded-methods row removed) |
+| `share/diagrams/cockpit.excalidraw` | IN | Footer updated |
+
+### Files Updated
+- `serve/cockpit/README.md`
+- `serve/cockpit/src/owlbear_cockpit/routes/mutation.py` (docstring only)
+- `share/diagrams/cockpit.excalidraw` (footer only)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1082-*` files found)
+[[2026-04-27]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC-NEW-24: status rejected before engine | test_edit_status_field_rejected_before_cockpit_view:L502 asserts 422 + view_mock.edit_task.assert_not_called() | PASS |
+| OCC exact expected_updated forwarding | test_edit/move/release_passes_exact_expected_updated:L531,554,578 assert kwarg equality | PASS |
+| ERR_STALE to 409 (edit, move, release) | tests at L410, L606, L628 assert 409 for all 3 delegated routes | PASS |
+| ERR_NOT_FOUND to 404 (edit, move, release) | tests at L432, L654, L676 assert 404 for all 3 delegated routes | PASS |
+| ValidationError to 422 (edit, move) | tests at L454, L702 | PASS |
+| ConfigError to 500 (edit) | test at L476 | PASS |
+| GET /api/tasks ListTasksResponse | tests at L182, L195 plus durable tests/test_cockpit_routes_1144.py:L139,L163 | PASS |
+| GET /api/tasks/{id} ShowTaskResponse | tests at L209, L222 | PASS |
+| GET /api/activity filtered events | tests at L239, L250, L263 | PASS |
+| GET /api/sessions flat SessionRecord list | tests at L282, L296 plus durable tests/test_cockpit_read_api.py:L387 | PASS |
+| POST /release SingleTaskResponse | test at L346 | PASS |
+| POST /sweep list of released IDs | tests at L317, L328 | PASS |
+| RED phase evidence | Task body Test-Writer Notes: 18 tests failing before builder | PASS |
+| No durable cockpit regressions | Reviewer ran 141 passed, 0 failed across overlapping suites | PASS |
+
+### Test Results
+- Full suite (quality-runner mode=full): 2714 passed, 117 failed, 4 skipped
+- 0 failures in cockpit route scope; 3 cockpit failures in unrelated test_cockpit_react_compiler_1015.py (pre-existing)
+- 114 remaining failures in kanban engine, MCP, knowledge packages (pre-existing, unrelated)
+- Task-owned suite: 48 passed, 0 failed
+- ruff: clean on all task-scoped files; 8 violations in unrelated packages
+
+### Architect Quality: 4/5
+Original AC was adequate but needed one refinement cycle after the first review exposed proof gaps (before-engine semantics, OCC call_args, multi-route error coverage). The refined AC was specific, complete, and drove successful completion. Dependency on 1144 for durable suite reconciliation was correctly identified. Minor gap: original AC underspecified proof requirements, costing one full review/retry loop.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 14 PASS)
+- Lint violations in scope: 0
+- AC quality: 4/5 (above threshold)
+- Reviewer evidence section: present, detailed, PASS at .95
+- Full-suite task-scope failures: 0
+- Sweep proof is wire-shape only (list[int] not exact IDs): -.01
+
+### Confidence: .99
+### Action: archive
+
+### Upstream Commits Verified
+| Commit | Type | Scope |
+|--------|------|-------|
+| 7064d054 | docs | README, diagram, docstring |
+| 7b1ce085 | test | coverage expansion to >=90% |
+| 6f1509ce | test | proof test strengthening |
+| e67468fa | feat | route alignment with CockpitView |
+
+All 4 commits reference #1082. No uncommitted task deliverables.

@@ -1,10 +1,10 @@
 ---
 id: 1152
 title: Centralize task creation through planner subagent
-status: done
+status: archived
 priority: important
 created: 2026-04-27T22:21:17.673409+00:00
-updated: 2026-04-28T03:48:17.522067+00:00
+updated: 2026-04-28T03:52:25.184104+00:00
 tags:
 - pipeline
 - agent-config
@@ -14,8 +14,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T03:48:17.522067+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -765,3 +765,42 @@ None.
 
 ### Commit
 `d6e1c080` — docs: update diagram footers for planner centralization (#1152, doc-writer)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Part 1: remove create_task from 7 pipeline agents, add planner to 6 | Spot-check: builder.agent.md:11 (no create_task), :12 (planner in agents:), :72 (planner body row); auditor.agent.md:10/:11/:74 same. Reviewer final pass verified all 7 agents at specific lines. | PASS |
+| Part 1: validate_agents.py passes | Builder self-report at task body; reviewer did validator source inspection (.owlbear/scripts/validate_agents.py:1-165) + live file verification | PASS |
+| Part 2: Durability principles and checklist | Spot-check: w-task-decomposition/SKILL.md:95 (section), :196 (checklist item) | PASS |
+| Part 3: Single-task shortcut with metadata, status, naming, TDD, ID return | Spot-check: w-task-decomposition/SKILL.md:47 (Step 1a shortcut entry) | PASS |
+| Part 3 refinement: Step 5b approval gate preserved in user mode | Spot-check: w-task-decomposition/SKILL.md:122 ("In decomposition mode," guard prefix) | PASS |
+| Part 4: Stale create_task references replaced with planner delegation | Spot-check: r-pipeline-protocol/SKILL.md:120 (planner delegation example). Reviewer verified all 5 skill files. | PASS |
+| Part 5: Planner agent updated for decomposition + single-task | Spot-check: planner.agent.md:3 (description), :20 (critical rules distinguish modes) | PASS |
+
+### Test Results
+- pytest (full suite): 2771 passed, 115 failed, 4 skipped. All 115 failures are pre-existing (kanban engine, storage, MCP guidance, knowledge, cockpit) and unrelated to this markdown/agent-config task. 0 regressions.
+- ruff (full): 8 violations, all in unrelated packages (knowledge, mcp-knowledge, mcp-memory, orchestrator). 0 in task scope.
+
+### Architect Quality: 4/5
+AC was specific with exact files, line numbers, and expected changes. Multiple refinement rounds with challenger integration addressed edge cases. The Step 5b approval contract gap was missed in the original AC and required 2 loop-breaker cycles to surface, costing significant pipeline time. Architect self-corrected effectively.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (no deduction)
+- Lint violations in task scope: 0 (no deduction)
+- AC quality 4/5: no deduction (threshold is 3 or below)
+- Reviewer evidence section: present, thorough, PASS at 0.95 (no deduction)
+- Full-suite failures in task scope: 0 (no deduction)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 10936e0c | chore | 14 agent/skill files | #1152 |
+| 9931eb9a | chore | w-task-decomposition/SKILL.md | #1152 |
+| 22de49e9 | fix | w-task-decomposition/SKILL.md | #1152 |
+| 8010b1a6 | fix | w-task-decomposition/SKILL.md | #1152 |
+| d6e1c080 | docs | pipeline.excalidraw, project-overview.excalidraw | #1152 |
+| 80a4edbd | chore | kanban task file | #1152 |

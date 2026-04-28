@@ -1,10 +1,10 @@
 ---
 id: 1083
 title: 'B-18: GREEN — cockpit backend routes'
-status: done
+status: archived
 priority: important
 created: 2026-04-21 10:50:53.767229+00:00
-updated: 2026-04-28T01:00:15.342010+00:00
+updated: 2026-04-28T01:04:22.539877+00:00
 tags:
 - phase:engine
 - brief:b
@@ -16,8 +16,8 @@ depends_on:
 - 1082
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T01:00:15.342010+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -507,3 +507,36 @@ The compact DI test uses `mock.patch("owlbear_cockpit.deps.CockpitView", side_ef
 
 ### Scratch Files Cleaned
 - None (no `1083-*` scratch files found)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All RED tests from B-17 pass | quality-runner full suite: 0 failures in 1082+1083 suites (73 passed) | PASS |
+| AC-NEW-24 edit schema excludes status | mutation.py:35 extra=forbid, no status field; 1082 test line 502 | PASS |
+| Error mapping 404/422/409 | mutation.py:151,283,316 handlers; 1082 error-mapping tests green | PASS |
+| OCC forwards expected_updated | mutation.py:149,280,315; 1082 tests 531,554,578 | PASS |
+| Read routes return envelopes | 1082 tests 182,209,222 | PASS |
+| Activity routes and sessions | 1082 tests 263,282,296 | PASS |
+| Admin routes scan/repair/compact | mutation.py:330-350; 1083 suite 153-399,479-611 | PASS |
+| DI pattern maintained | 1083 tests 531 (scan board-observable), 617 (repair two-board), 649 (compact spy identity) | PASS |
+
+### Test Results
+- pytest full suite: 117 failures, all in unrelated modules (kanban engine config, mcp-knowledge, react-compiler, mode6 rename). Zero failures in task scope.
+- ruff full suite: violations in unrelated modules only. Task scope clean.
+
+### Architect Quality: 4/5
+AC was specific (8 testable lines). Minor friction from stale module path (routes/kanban.py vs routes/mutation.py) in brief, but recoverable. DI/wire-shape gaps caught by reviewer as intended.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines without evidence: 0 (-.00)
+- Lint violations in task scope: 0 (-.00)
+- AC quality <=3: no (-.00)
+- Missing reviewer evidence: no, 3 detailed review sections (-.00)
+- Full-suite failures in task scope: 0 (-.00)
+- Reviewer required 3 cycles: informational, no deduction (gaps were test-quality, not implementation)
+- Coverage config workaround needed: -.02
+
+### Confidence: 0.98
+### Action: archive

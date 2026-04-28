@@ -1,18 +1,18 @@
 ---
 id: 1153
 title: Add static coverage for ideation M3.5 proposal-round contracts
-status: done
+status: archived
 priority: important
 created: 2026-04-28T00:56:29.501550+00:00
-updated: 2026-04-28T02:55:58.669096+00:00
+updated: 2026-04-28T02:59:41.620425+00:00
 tags:
 - research
 parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T02:55:58.669096+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -175,3 +175,35 @@ All 7 contract surfaces confirmed present:
 
 ### Scratch Files Cleaned
 - None (no `1153-*` scratch files existed)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Research doc identifies missing M3.5 proposal-round coverage with concrete test shape | `.owlbear/research/1153-m3-5-static-coverage.md` exists (4634 bytes), enumerates 7 contract surfaces, recommends `TestFromAC_ProposalRoundContracts` class (~10 tests) | PASS |
+| Follow-up task exists at research-or-higher referencing the research doc | #1154 at `todo`, body references `.owlbear/research/1153-m3-5-static-coverage.md` at lines 19 and 21 | PASS |
+| Follow-up aligned with live source state | Reviewer verified all 15 contract needles still present in 8 source files; `tests/test_ideation_overhaul_static.py` still has zero M3.5 coverage | PASS |
+
+### Test Results
+- pytest: 2761 passed, 115 failed, 4 skipped — all 115 failures are pre-existing (kanban corruption/storage, cockpit react compiler, mode6 rename, mcp-knowledge schema). Zero regressions from this task (no code changes).
+- ruff: 8 pre-existing violations in knowledge, memory, orchestrator packages. Zero from this task.
+
+### Architect Quality: 4/5
+Research task with clear scope (identify missing M3.5 coverage), clear deliverable (research doc + follow-up task), and appropriate pass-through tagging. Minor gap: follow-up #1154 body has literal `\n` formatting defect, but this is a creation artifact not an architect quality issue — will be caught in #1154's own pipeline.
+
+### Deduction Breakdown
+- No AC lines without evidence: -0.00
+- No lint violations from task: -0.00
+- AC quality 4/5 (above ≤3 threshold): -0.00
+- Reviewer evidence present and detailed (PASS at .94): -0.00
+- No full-suite regressions in task scope: -0.00
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 7cc18b3b | research | `.owlbear/research/1153-m3-5-static-coverage.md` | #1153 |
+| 6d0cfe33 | docs | `share/diagrams/project-overview.excalidraw` | #1153 |
+| 3f574d6b | chore | kanban task files 1153, 1154 | #1153 |

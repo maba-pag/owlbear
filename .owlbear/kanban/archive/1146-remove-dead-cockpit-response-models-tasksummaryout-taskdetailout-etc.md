@@ -1,10 +1,10 @@
 ---
 id: 1146
 title: Remove dead cockpit response models (TaskSummaryOut, TaskDetailOut, etc.)
-status: done
+status: archived
 priority: someday
 created: 2026-04-27T18:30:12.019145+00:00
-updated: 2026-04-27T23:49:33.058390+00:00
+updated: 2026-04-27T23:53:33.440163+00:00
 tags:
 - scope:cockpit
 parent:
@@ -12,8 +12,8 @@ depends_on:
 - 1144
 blocked: false
 block_reason: 'reviewer crashed twice: no response returned'
-claimed_by: noble-quill
-claimed_at: 2026-04-27T23:49:33.058390+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -459,3 +459,36 @@ Add task-owned proof for the new comment-reference files:
 
 ### Scratch Files Cleaned
 - None (no 1146-* scratch files found)
+[[2026-04-27]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 Remove unused models; keep BoardOut only; remove Field/model_validator | models.py:1-13 contains only BaseModel import and BoardOut class. No Field, no model_validator. Task suite 29/29 green. | PASS |
+| AC2 Remove dead test imports/classes in listed files | Reviewer verified dead imports removed from test_cockpit_read_api_930.py, test_cockpit_read_api.py, test_occ_frontend_wire_1137.py. Task suite structural scans confirm. | PASS |
+| AC3 Update stale comments/docstrings/constants (expanded cycle 2) | _TASK_DETAIL_KEYS excludes claimed_by, 14 changed to 13, dead model names removed from all scoped comment/docstring files. 5 cycle-2 proof tests pass. | PASS |
+| AC4 All tests pass after removal | Reviewer impacted-suite: 236 passed, 0 failed. Full suite: 2737 passed; ~110 failures all pre-existing background debt (kanban corruption/storage, mcp-kanban, mcp-knowledge, react compiler) with zero cockpit-domain failures. | PASS |
+
+### Test Results
+- pytest (full suite): 2737 passed, ~110 failed (all pre-existing, none in task scope)
+- ruff: clean on all cockpit files; 8 violations in non-cockpit packages (pre-existing)
+
+### Architect Quality: 4/5
+Cycle 1 AC was well-structured with impact matrix and exact file/test targets. AC3 scoping was initially too narrow (missed _TASK_DETAIL_KEYS constant and additional comment files), requiring cycle 2 refinement. Cycle 2 addressed all reviewer feedback comprehensively. Minor gap filled by iteration.
+
+### Deduction Breakdown
+- -0.01 reviewer needed targeted rerun to resolve stale evidence (inherited verification friction)
+- -0.01 cycle 2 required due to initial AC3 scope gap (architect iteration overhead, resolved)
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| e222d4e8 | test | test_cockpit_models_1146.py | #1146 |
+| f498330a | refactor | models.py, test files | #1146 |
+| 984259bf | test | test_cockpit_models_1146.py | #1146 |
+| 90778b1b | test | mutation_race, 1137, read_api | #1146 |
+| a6179d77 | docs | models.py, cockpit.excalidraw | #1146 |
+| 3d69d846 | chore | kanban task file | #1146 |

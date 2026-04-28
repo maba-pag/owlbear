@@ -1,18 +1,18 @@
 ---
 id: 1145
 title: Restore cockpit cache-hit short-circuit for list_tasks
-status: review
+status: archived
 priority: nice-to-have
 created: 2026-04-27T18:29:56.708569+00:00
-updated: 2026-04-27T20:33:31.952881+00:00
+updated: 2026-04-27T20:57:24.736480+00:00
 tags:
 - scope:cockpit
 parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: rare-mist
-claimed_at: 2026-04-27T20:33:31.952881+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -307,3 +307,139 @@ All 10 tests PASS. New test passes because the builder's second fix (`has_cached
   - Workaround applied: treated this pass as verification-only and validated AC via quality-runner + git history rather than introducing redundant edits.
   - Pattern discovered: retry loops can leave tasks in in-progress even when implementation is already complete; builder should validate state before touching code.
   - Quality gap: none in current AC scope after scoped quality-runner verification.
+[[2026-04-27]]
+## Review Evidence
+### Test Results
+- pytest (quality-runner scoped): 94 passed, 0 failed, 0 skipped, 0 errors across `tests/test_cockpit_read_api_1145.py`, `tests/test_cockpit_read_api_930.py`, `tests/test_cockpit_read_api.py`, and `tests/test_cockpit_routes_1144.py`
+
+### Lint
+- ruff: clean on `serve/cockpit/src/owlbear_cockpit/cache.py`, `serve/cockpit/src/owlbear_cockpit/routes/read.py`, and the scoped cockpit read-route suites
+
+### Coverage
+- Requested cockpit-module coverage was not measurable in quality-runner because root `pyproject.toml` `[tool.coverage.run].source_pkgs` includes `owlbear_kanban` but not `owlbear_cockpit`
+- This is a workspace coverage-config limitation, not a task regression; line-level source review carried the remaining proof burden
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+| --- | --- | --- | --- |
+| `MtimeScanCache.has_changed()` gates `engine.list_tasks()` calls — cache hit returns cached tasks without engine call | `tests/test_cockpit_read_api_1145.py:179`, `:324`, `:354`, `:382`, `:395`; `tests/test_cockpit_read_api_930.py:451` | Yes. `serve/cockpit/src/owlbear_cockpit/routes/read.py:80` now reloads only when `cache.has_changed()` or `not cache.has_cached_tasks`. `serve/cockpit/src/owlbear_cockpit/cache.py:24`, `:64`, `:67` distinguish uncached state from cached `[]`. Reverting to `or not cache.tasks` would fail `test_empty_board_second_request_skips_engine_call` at `tests/test_cockpit_read_api_1145.py:395`. Reintroducing engine calls on unchanged hits would fail the populated-board and legacy zero-call guards at `tests/test_cockpit_read_api_1145.py:179` and `tests/test_cockpit_read_api_930.py:451`. | COVERED |
+| `test_cockpit_read_api_930.py` cache-hit test passes | `tests/test_cockpit_read_api_930.py:451` | Yes. Quality-runner executed the 930 suite in the scoped run and returned 94 passed, 0 failed overall, so the named legacy regression test is green in the current revision. | COVERED |
+
+#### Security Review
+- No issues found in scope. The change only updates in-memory cache state and performs in-memory filtering over already materialized task summaries.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+| --- | --- | --- |
+| `TestFromAC_CacheHitShortCircuit` in `tests/test_cockpit_read_api_1145.py` and the legacy regression guard in `tests/test_cockpit_read_api_930.py:451` | No weakening observed in the current workspace snapshot; the task-owned suite adds the previously missing empty-board second-request guard | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+| --- | --- | --- |
+| Assertion specificity | ADEQUATE | Zero-call assertions at `tests/test_cockpit_read_api_1145.py:179` and `tests/test_cockpit_read_api_930.py:451` are exact, `tests/test_cockpit_read_api_1145.py:395` asserts both empty second-response payload and zero engine calls, and `tests/test_cockpit_read_api_1145.py:324` proves cache-hit filtering returns only matching tasks |
+| Negative/error-path coverage | ADEQUATE | The task scope is cache-hit gating rather than exception handling; the suite covers populated-board hits, repeated hits, filter hits, and the previously missing cached-empty-list branch |
+| Manual mutation reasoning | ADEQUATE | Removing `has_changed()` breaks `tests/test_cockpit_read_api_1145.py:200`; reverting to `or not cache.tasks` breaks `tests/test_cockpit_read_api_1145.py:395`; removing cache assignment breaks `tests/test_cockpit_read_api_1145.py:382`; reintroducing engine calls on cache hits breaks `tests/test_cockpit_read_api_1145.py:179` and `tests/test_cockpit_read_api_930.py:451` |
+| Test independence | STRONG | tmp-path board fixtures and dependency overrides isolate board, engine, and cache state between tests |
+| Descriptive names | STRONG | The task-owned tests name the guarded behavior directly |
+
+#### Data Safety
+- No task-scoped issue found. The reviewed change does not introduce a new persistence boundary, unbounded input, or shared-state mutation beyond the existing cache object.
+
+#### Implementation-Aware Gaps
+- No significant task-scoped gap remains. The prior review failure was the empty-board cache-hit branch; that is now directly covered by `tests/test_cockpit_read_api_1145.py:395`.
+- The cache-hit branch returns `guidance=[]` and `missing_ids=None`, but live `AgentView.list_tasks()` returns `guidance=[]` on the non-`ids` path and only populates `missing_ids` when `ids` is used. `GET /api/tasks` does not expose `ids`, so this asymmetry is not a contract miss in this route shape.
+
+#### Builder Process Quality
+| Metric | Value |
+| --- | --- |
+| Builder Notes sections | 3 |
+| Approach variation | Yes |
+| Assessment | FRICTION |
+
+### Pass 2 — INFORMATIONAL
+- Root coverage config omits `owlbear_cockpit` from `[tool.coverage.run].source_pkgs`, so cockpit module percentages from the builder notes were not independently reproducible through quality-runner in this workspace configuration.
+- A future hardening improvement could add an explicit second-request populated-board body-equality assertion, but current AC proof is sufficient because the hit path now consists of a direct cached-list pass-through plus task-owned filter correctness checks.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+| --- | --- | --- | --- |
+| `MtimeScanCache.has_changed()` gates `engine.list_tasks()` calls — cache hit returns cached tasks without engine call | `serve/cockpit/src/owlbear_cockpit/routes/read.py:80` gates reload on `cache.has_changed()` or `not cache.has_cached_tasks`; `serve/cockpit/src/owlbear_cockpit/cache.py:24`, `:64`, `:67` preserve cached-empty state; `tests/test_cockpit_read_api_1145.py:179`, `:354`, and `:395` prove unchanged populated and empty-board requests do not call the engine | `tests/test_cockpit_read_api_1145.py:179`; `tests/test_cockpit_read_api_1145.py:395`; `tests/test_cockpit_read_api_930.py:451` | PASS |
+| `tests/test_cockpit_read_api_930.py` cache-hit test passes | quality-runner scoped run returned 94 passed, 0 failed with `tests/test_cockpit_read_api_930.py` included; the named regression test at `tests/test_cockpit_read_api_930.py:451` remains green | `tests/test_cockpit_read_api_930.py:451` | PASS |
+
+### Deductions
+- -0.04 cockpit coverage percentages not independently measurable from quality-runner because of root coverage config
+- -0.01 process friction: two retries after the initial builder pass, with varied approaches
+- Confidence: 0.95
+
+### Verdict
+- PASS -> docs
+- Action: advance to docs; no blocking implementation or test-quality defect remains in task 1145 scope
+
+### Reflection
+- Problem faced: quality-runner could not measure cockpit modules because root coverage config tracks kanban packages only
+- Workaround applied: verified the changed route and cache lines directly against the scoped green test suites
+- Pattern discovered: cache validity and cache payload emptiness need separate state signals; the empty-board second-request guard is the decisive proof for this class of bug
+- Quality gap: an extra populated-board body-equality assertion could strengthen future mutation resistance, but it is not required to satisfy the current AC
+[[2026-04-27]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/cockpit/README.md` covers engine surface/allowlist; `MtimeScanCache` cache-hit optimization is an internal implementation detail not described in any IN-scope prose doc. No update needed. |
+| 2 | Module docstrings | Yes | Verified | `cache.py`: module docstring, `MtimeScanCache` class, `scan()`, `has_changed()`, `last_mtime`, `tasks`, `has_cached_tasks` — all public items have accurate docstrings. `routes/read.py`: module docstring, `CockpitListTasksResponse`, `_filter_cached_tasks`, `get_board()`, `list_tasks()`, `get_task()` — all accurate. No edits needed. |
+| 3 | External attribution | No | N/A | Research sources: 6 studied, all internal (live code + git history). No external patterns used. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1145-cockpit-cache-hit-short-circuit.md` exists and is linked in task body. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**` — matches `cache.py` and `routes/read.py`. Footer updated from `3550bc79` → `6f1509ce`. Committed at `884e5707`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/src/owlbear_cockpit/cache.py | IN (docstrings) | Verified — no edits needed |
+| serve/cockpit/src/owlbear_cockpit/routes/read.py | IN (docstrings) | Verified — no edits needed |
+| tests/test_cockpit_read_api_930.py | OUT (test file) | N/A |
+| tests/test_cockpit_read_api_1145.py | OUT (test file) | N/A |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw (footer: Last verified: 2026-04-27 (6f1509ce))
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (.owlbear/scratch/1145-* — no matches)
+[[2026-04-27]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| MtimeScanCache.has_changed() gates engine.list_tasks() calls — cache hit returns cached tasks without engine call | `routes/read.py:80` gates on `cache.has_changed() or not cache.has_cached_tasks`; `cache.py:24,64,67` separates uncached from cached-empty; tests at `test_cockpit_read_api_1145.py:179,395` and `test_cockpit_read_api_930.py:451` assert zero engine calls on cache hits (populated and empty boards) | PASS |
+| test_cockpit_read_api_930.py cache-hit test passes | Quality-runner full run: 2686 passed, 119 failed (none in task scope); 930 suite green | PASS |
+
+### Test Results
+- pytest (full): 2686 passed, 119 failed (pre-existing in kanban/storage/mcp modules — none in cockpit read-API scope), 4 skipped
+- ruff: clean on cache.py, routes/read.py, test_cockpit_read_api_1145.py
+
+### Architect Quality: 4/5
+AC was specific and testable (named gating method, condition, expected behavior). Minor gap: didn't anticipate empty-board edge case, but builder/reviewer resolved it within scope. No architect calibration follow-up needed.
+
+### Deduction Breakdown
+- AC lines: both PASS with specific evidence — no deduction
+- Lint: clean — no deduction
+- AC quality 4/5: no deduction (threshold is ≤3)
+- Reviewer section: present, detailed, PASS at 0.95 — no deduction
+- Full suite: no task-scope failures — no deduction
+- Cockpit coverage not measurable via quality-runner (root config omits owlbear_cockpit from source_pkgs): -.02
+
+### Confidence: 0.98
+### Action: archive
+
+### Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 74380a30 | feat | routes/read.py | #1145 |
+| 3550bc79 | fix | cache.py, routes/read.py | #1145 |
+| 5163b53f | test | test_cockpit_read_api_1145.py | #1145 |
+| 884e5707 | docs | cockpit.excalidraw | #1145 |
