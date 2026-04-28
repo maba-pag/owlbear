@@ -277,7 +277,7 @@ def _invoke_view_move_task(
         )
         return _to_single_task_response(record)
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
     except NotImplementedError:
         return None
 
@@ -397,13 +397,6 @@ async def move_task(
     if canonical_result is not None:
         return canonical_result
 
-    if status == "archived" and not archival_reason:
-        msg = "archival_reason is required when status='archived'"
-        raise ToolError(msg)
-    if status != "archived" and (archival_reason is not None or archival_refs is not None):
-        msg = "archival fields are only allowed when status='archived'"
-        raise ToolError(msg)
-
     pre_task = await _show_validated(app_ctx, task_id)
     try:
         record = await asyncio.to_thread(
@@ -414,7 +407,7 @@ async def move_task(
             archival_refs=archival_refs,
         )
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
     except (FileNotFoundError, ValueError) as exc:
         msg = str(exc)
         raise ToolError(msg) from exc
@@ -489,7 +482,7 @@ async def start_work(ctx: Context, task_id: StrId) -> SingleTaskResponse:
             record = view.start_work(int(task_id))
             return _to_single_task_response(record)
         except KanbanError as exc:
-            raise ToolError(exc.user_message) from exc
+            _map_kanban_error(exc)
         except NotImplementedError:
             pass
 
@@ -499,14 +492,14 @@ async def start_work(ctx: Context, task_id: StrId) -> SingleTaskResponse:
             record = canonical_view.start_work(int(task_id))
             return _to_single_task_response(record)
         except KanbanError as exc:
-            raise ToolError(exc.user_message) from exc
+            _map_kanban_error(exc)
         except NotImplementedError:
             pass
 
     try:
         record = app_ctx.engine.start_work(task_id)
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
         raise ToolError(str(exc)) from exc
     result = _to_single_task_response(record)
@@ -544,7 +537,7 @@ async def end_work(  # noqa: PLR0913
             )
             return _to_single_task_response(record)
         except KanbanError as exc:
-            raise ToolError(exc.user_message) from exc
+            _map_kanban_error(exc)
         except NotImplementedError:
             pass
 
@@ -562,7 +555,7 @@ async def end_work(  # noqa: PLR0913
             )
             return _to_single_task_response(record)
         except KanbanError as exc:
-            raise ToolError(exc.user_message) from exc
+            _map_kanban_error(exc)
         except NotImplementedError:
             pass
 
@@ -578,7 +571,7 @@ async def end_work(  # noqa: PLR0913
             archival_refs=archival_refs,
         )
     except KanbanError as exc:
-        raise ToolError(exc.user_message) from exc
+        _map_kanban_error(exc)
     except (ValueError, FileNotFoundError) as exc:
         raise ToolError(str(exc)) from exc
     # Remove block:user tag on MCP block outcome (agent takes ownership)
