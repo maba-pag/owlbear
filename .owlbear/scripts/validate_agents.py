@@ -127,18 +127,16 @@ def _fm_agents(fm_lines: list[str]) -> list[str]:
             if stripped.startswith("- "):
                 agents.append(stripped[2:].strip())
                 continue
-            else:
-                in_agents = False
+            in_agents = False
         if line.startswith("agents:"):
             _, _, val = line.partition(":")
             val = val.strip()
             if val.startswith("[") and val.endswith("]"):
                 inner = val[1:-1]
                 return [a.strip() for a in inner.split(",") if a.strip()]
-            elif val == "[]":
+            if val == "[]":
                 return []
-            else:
-                in_agents = True
+            in_agents = True
     return agents
 
 
