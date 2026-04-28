@@ -478,7 +478,7 @@ async def move_task(
         raise ToolError(msg) from exc
     result = _to_single_task_response(record)
     with contextlib.suppress(Exception):
-        status_names = [s["name"] for s in app_ctx.engine.board_config().statuses]
+        status_names = list(app_ctx.engine.board_config().statuses)
         result.guidance = collect_guidance(
             "move", before=pre_task, after=result, status_names=status_names
         )
