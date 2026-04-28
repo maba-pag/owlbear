@@ -445,3 +445,177 @@ class TestFromAC_CriticExclusion:
             "the explicit exclusion clause belongs in h-ideation-panel/SKILL.md"
         )
 
+
+import pytest  # noqa: E402
+
+
+_PANELIST_AGENTS = [
+    ("architect", "share/agents/ideation-architect.agent.md"),
+    ("data", "share/agents/ideation-data.agent.md"),
+    ("enduser", "share/agents/ideation-enduser.agent.md"),
+    ("security", "share/agents/ideation-security.agent.md"),
+]
+
+
+class TestFromAC_ProposalRoundContracts:
+    """M3.5 proposal-round contract surfaces — panel handbook, agent files, mediation skill."""
+
+    # --- C1: Propose Mode section in panel handbook ---
+
+    def test_panel_handbook_has_propose_mode_section(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert "### Propose Mode (M3.5 Path)" in text, (
+            "Panel handbook missing '### Propose Mode (M3.5 Path)' section"
+        )
+
+    def test_propose_mode_requires_five_proposal_sections(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        for section in [
+            "Design Summary",
+            "Key Structural Choices",
+            "Trade-offs",
+            "Domain Rationale",
+            "Confidence",
+        ]:
+            assert section in text, (
+                f"Panel handbook Propose Mode missing required proposal section: {section}"
+            )
+
+    def test_propose_mode_names_stances_proposal_output(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert "stances/{name}-proposal.md" in text, (
+            "Panel handbook Propose Mode missing 'stances/{name}-proposal.md' output reference"
+        )
+
+    # --- C2: Critic skip in propose mode ---
+
+    def test_propose_mode_skips_critic_loop(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert (
+            "In propose mode, panelists skip the embedded Critic loop" in text
+        ), (
+            "Panel handbook missing Critic-skip rule for propose mode"
+        )
+
+    # --- C3: Pragmatist mode=compare in panel handbook ---
+
+    def test_pragmatist_has_compare_mode(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert "### `mode=compare`" in text, (
+            "Panel handbook missing '### `mode=compare`' section for pragmatist"
+        )
+
+    def test_compare_mode_defines_output_structure(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        for needle in [
+            "divergence-only comparison matrix",
+            "common ground summary",
+            "open questions",
+        ]:
+            assert needle in text, (
+                f"Panel handbook mode=compare missing output-structure element: {needle}"
+            )
+
+    def test_compare_mode_reads_proposal_files(self) -> None:
+        text = _read("share/skills/h-ideation-panel/SKILL.md")
+        assert "reads `stances/*-proposal.md`" in text, (
+            "Panel handbook mode=compare missing 'reads `stances/*-proposal.md`' contract"
+        )
+
+    # --- C4: Step 1.5 gate in mediation skill ---
+
+    def test_mediation_has_m35_gate(self) -> None:
+        text = _read("share/skills/w-ideation-mediation/SKILL.md")
+        assert "## Step 1.5" in text, (
+            "Mediation skill missing '## Step 1.5' gate section"
+        )
+
+    def test_m35_gate_requires_two_viable_approaches(self) -> None:
+        text = _read("share/skills/w-ideation-mediation/SKILL.md")
+        assert "at least two viable approaches and no dominant option" in text, (
+            "Mediation skill Step 1.5 gate missing two-viable-approaches condition"
+        )
+
+    # --- C5: Mutual exclusivity of M3.5 and Step 2 ---
+
+    def test_m35_and_step2_mutually_exclusive(self) -> None:
+        text = _read("share/skills/w-ideation-mediation/SKILL.md")
+        assert "M3.5 and Step 2 are mutually exclusive" in text, (
+            "Mediation skill missing explicit M3.5 / Step 2 mutual-exclusivity rule"
+        )
+
+    # --- C6: PROPOSE mode in each of the four panelist agent files ---
+
+    @pytest.mark.parametrize(("name", "path"), _PANELIST_AGENTS)
+    def test_panelist_agents_support_propose_mode(self, name: str, path: str) -> None:
+        text = _read(path)
+        assert "PROPOSE mode" in text, (
+            f"{path} missing PROPOSE mode contract"
+        )
+        assert f"stances/{name}-proposal.md" in text, (
+            f"{path} missing stances/{name}-proposal.md output reference"
+        )
+        assert "skip embedded Critic" in text, (
+            f"{path} missing Critic-skip rule for PROPOSE mode"
+        )
+
+    # --- C7: Pragmatist agent has mode=compare ---
+
+    def test_pragmatist_agent_has_compare_mode(self) -> None:
+        text = _read("share/agents/ideation-pragmatist.agent.md")
+        assert "mode=compare" in text, (
+            "ideation-pragmatist.agent.md missing mode=compare contract"
+        )
+        assert "stances/*-proposal.md" in text, (
+            "ideation-pragmatist.agent.md missing stances/*-proposal.md reference for mode=compare"
+        )
+
+    def test_pragmatist_agent_compare_output_has_required_sections(self) -> None:
+        text = _read("share/agents/ideation-pragmatist.agent.md")
+        for section in ["Divergence Matrix", "Common Ground", "Open Questions"]:
+            assert section in text, (
+                f"ideation-pragmatist.agent.md mode=compare missing output section: {section}"
+            )
+
+    # --- Blackboard proposal artifacts in briefs README ---
+
+    def test_blackboard_documents_proposal_artifacts(self) -> None:
+        text = _read(".owlbear/briefs/README.md")
+        for needle in [
+            "architect-proposal.md",
+            "data-proposal.md",
+            "enduser-proposal.md",
+            "security-proposal.md",
+        ]:
+            assert needle in text, (
+                f"Briefs README missing blackboard proposal artifact: {needle}"
+            )
+
+    def test_blackboard_marks_proposal_files_as_conditional(self) -> None:
+        text = _read(".owlbear/briefs/README.md")
+        assert "*-proposal.md" in text, (
+            "Briefs README missing '*-proposal.md' wildcard reference for M3.5 artifacts"
+        )
+        assert "optional" in text, (
+            "Briefs README must mark proposal files as optional (M3.5-triggered)"
+        )
+
+    def test_blackboard_proposal_conditionality_tied_to_m35_round(self) -> None:
+        """Tighter proof: the specific M3.5 conditionality sentence must exist.
+
+        The sentence uniquely combines *-proposal.md, optional, and 'conditional
+        M3.5 proposal round' — so it cannot be satisfied by unrelated Optional
+        references elsewhere in the file.
+        """
+        text = _read(".owlbear/briefs/README.md")
+        assert "conditional M3.5 proposal round" in text, (
+            "Briefs README must state that *-proposal.md files appear only when the "
+            "mediator runs the 'conditional M3.5 proposal round' (specific phrase required)"
+        )
+        # Combined assertion: the exact conditionality sentence must tie the wildcard
+        # to the M3.5 round — not merely have both words somewhere in the document.
+        assert "*-proposal.md`) are optional and appear only when" in text, (
+            "Briefs README must contain the exact M3.5 conditionality statement: "
+            "'*-proposal.md`) are optional and appear only when'"
+        )
+
