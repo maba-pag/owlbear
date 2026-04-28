@@ -12,24 +12,81 @@ For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
 ## Tool Summary
 
-| Tool | Description |
-|------|-------------|
-| `list_tasks` | List tasks with optional filters |
-| `show_task` | Show full task details by ID |
-| `create_task` | Create a new task |
-| `move_task` | Move task to a status column, or archive it (status="archived") |
-| `edit_task` | Edit task fields |
-| `start_work` | Claim task and return full details |
-| `end_work` | Append note, advance or resolve status, release claim |
-| `pick_tasks` | Gate-filtered dispatch list, sorted by priority/status, capped at `limit` |
+Exactly 8 tools are exposed:
 
-Parameter names, types, defaults, descriptions, and allowed values are exposed via the MCP tool schema. Use `list_tools` or inspect the schema directly — do not rely on this document for parameter details.
+| Tool | Signature |
+|------|-----------|
+| `list_tasks` | `list_tasks(status=None, tag=None, priority=None, archival_reason=None, ids=None, parent=None, search=None, sort=None, unclaimed=False, limit=0, reverse=False, blocked=None)` |
+| `show_task` | `show_task(id, section=None)` |
+| `pick_tasks` | `pick_tasks(wave_size=None, max_waves=3)` |
+| `create_task` | `create_task(title, body="", depends_on=None, parent=0, priority="", tags=None)` |
+| `edit_task` | `edit_task(task_id, body="", append_body="", timestamp=False, priority="", parent=0, add_dep=None, remove_dep=None, add_tag=None, remove_tag=None, block_reason=None, archival_reason="", archival_refs=None)` |
+| `move_task` | `move_task(task_id, status, archival_reason=None, archival_refs=None)` |
+| `start_work` | `start_work(task_id)` |
+| `end_work` | `end_work(task_id, note=None, outcome="success", block_reason=None, move_to=None, archival_reason=None, archival_refs=None)` |
+
+Removed from the surface: `block_task`, `unblock_task`, `release_task`.
+
+### Filter and Retrieval Additions
+
+- `list_tasks.ids`: direct ID lookup list. Must not be combined with other filter fields.
+- `list_tasks.archival_reason`: filter archived tasks by reason.
+- `show_task.section`: case-insensitive body-section extraction by heading; when missing, returns `body=None` and `missing_sections=[section]`.
+
+## Projection Schemas
+
+The engine projects task data through explicit MCP-facing envelopes.
+
+### TaskSummary
+
+List projection with dependency and archival context.
+
+- Core: `id`, `title`, `status`, `priority`, `updated`
+- Optional/context: `tags`, `blocked`, `block_reason`, `claimed_at`, `claimed`
+- Archival fields: `archival_reason`, `archival_refs`
+- Dependency projection: `dep_status` in `{ok, redirect, blocked}` (or `None` when no dependencies)
+
+### TaskFull
+
+Full projection for show/update operations.
+
+- Inherits `TaskSummary`
+- Adds `created`, `body`
+
+### DispatchEntry
+
+Dispatch projection used by `pick_tasks` waves.
+
+- `id`, `status`, `priority`, `title`, `tags`, `agent`
+
+### Wave
+
+Dispatch wave envelope.
+
+- `index` (0-based)
+- `tasks: list[DispatchEntry]`
+
+## Archival Semantics
+
+`archival_reason` enum:
+
+- `completed`
+- `deprecated`
+- `dropped`
+- `duplicate`
+- `wontfix`
+
+`archival_refs` rules:
+
+- Required for `deprecated` and `duplicate`
+- Forbidden for `completed`, `dropped`, and `wontfix`
+- Used only when the operation archives a task (`move_task(status="archived")` or `end_work(..., move_to="archived", ...)`)
 
 ## Response: Guidance Field
 
-Every `KanbanTask` returned by `edit_task`, `end_work`, and `move_task` includes a `guidance: list[str]` field. It is the **first** key in the JSON payload (Pydantic v2 declaration-order serialization).
+Mutation and lifecycle responses include `guidance: list[str]`.
 
-`guidance` is advisory — the tool call always succeeds regardless of its value. An empty list means no guidance applies.
+`guidance` is advisory. An empty list means no guidance applies.
 
 | Operation | When populated |
 |-----------|---------------|
@@ -58,13 +115,14 @@ On failure: raises `ToolError` (MCP `isError: true`).
 
 Counterpart to `start_work`. Appends a timestamped note, resolves the task based on `outcome`, and releases the claim.
 
+Required outcomes to use in agent workflows:
+
 | Outcome | Behaviour |
 |---------|----------|
 | `success` | Advance to next status. If already at last status, archive. |
-| `fail` | Keep current status, release claim. |
-| `release` | Release claim, no status change (note appended if provided; no-op when unclaimed) |
-| `block` | Mark blocked with `block_reason` (required), release claim. |
-| `reject` | Move to `move_to` status (default: `research`), release claim. |
+| `reject` | Move to `move_to` status, release claim. |
+| `release` | Release claim, keep status unchanged. |
+| `block` | Mark blocked with `block_reason`, release claim. |
 
 On failure: raises `ToolError` (MCP `isError: true`).
 
