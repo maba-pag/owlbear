@@ -16,16 +16,14 @@ Exactly 8 tools are exposed:
 
 | Tool | Signature |
 |------|-----------|
-| `list_tasks` | `list_tasks(status=None, tag=None, priority=None, archival_reason=None, ids=None, parent=None, search=None, sort=None, unclaimed=False, limit=0, reverse=False, blocked=None)` |
-| `show_task` | `show_task(id, section=None)` |
+| `list_tasks` | `list_tasks(status: str | None = None, priority: str | None = None, tag: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, unclaimed: bool = False, blocked: bool | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, reverse: bool = False, limit: int = 0)` |
+| `show_task` | `show_task(id: int, section: str | None = None)` |
 | `pick_tasks` | `pick_tasks(wave_size=None, max_waves=3)` |
-| `create_task` | `create_task(title, body="", depends_on=None, parent=0, priority="", tags=None)` |
-| `edit_task` | `edit_task(task_id, body="", append_body="", timestamp=False, priority="", parent=0, add_dep=None, remove_dep=None, add_tag=None, remove_tag=None, block_reason=None, archival_reason="", archival_refs=None)` |
-| `move_task` | `move_task(task_id, status, archival_reason=None, archival_refs=None)` |
-| `start_work` | `start_work(task_id)` |
-| `end_work` | `end_work(task_id, note=None, outcome="success", block_reason=None, move_to=None, archival_reason=None, archival_refs=None)` |
-
-Removed from the surface: `block_task`, `unblock_task`, `release_task`.
+| `create_task` | `create_task(title: str, body: str = "", priority: str = "needed", tags: list[str] | None = None, parent: int | None = None, depends_on: list[int] | None = None)` |
+| `edit_task` | `edit_task(id: int, body: str | None = None, append_body: str | None = None, timestamp: bool = False, priority: str | None = None, parent: int | None = None, add_dep: list[int] | None = None, remove_dep: list[int] | None = None, add_tag: list[str] | None = None, remove_tag: list[str] | None = None, block_reason: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
+| `move_task` | `move_task(id: int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
+| `start_work` | `start_work(id: int)` |
+| `end_work` | `end_work(id: int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
 
 ### Filter and Retrieval Additions
 
@@ -90,7 +88,7 @@ Mutation and lifecycle responses include `guidance: list[str]`.
 
 | Operation | When populated |
 |-----------|---------------|
-| `edit_task(block=...)` | After blocking (DR-required message) |
+| `edit_task(block_reason=...)` | After blocking (DR-required message) |
 | `end_work(outcome="block")` | After blocking (DR-required message) |
 | `end_work(outcome="success")` | Always (commit-pushed reminder) |
 | `move_task` to a status > 1 slot ahead | Forward-skip warning |
@@ -101,7 +99,7 @@ Mutation and lifecycle responses include `guidance: list[str]`.
 
 Blocks initiated by a human via the Cockpit carry the `block:user` tag. When `block:user` is present on the after-state task, the block guidance rule fires with an **empty list** — the agent does not need to create a DR for user-driven blocks.
 
-When an MCP agent calls `edit_task(block=...)` or `end_work(outcome="block")`, the server automatically removes any stale `block:user` tag — the agent takes ownership of the block.
+When an MCP agent calls `edit_task(block_reason=...)` or `end_work(outcome="block")`, the server automatically removes any stale `block:user` tag — the agent takes ownership of the block.
 
 ## Compound Tools
 
@@ -132,12 +130,12 @@ Every pipeline agent follows a 2-call MCP lifecycle per task:
 
 ```python
 # 1. Claim + read
-task = start_work(task_id="480")
+task = start_work(id=480)
 
 # 2. (do the actual work)
 
 # 3. Append agent notes + advance + release — all in one call
-end_work(task_id="480", note="## Builder Notes\n- Files changed: ...\n\n12 tests passed, ruff clean", outcome="success")
+end_work(id=480, note="## Builder Notes\n- Files changed: ...\n\n12 tests passed, ruff clean", outcome="success")
 ```
 
 > **Anti-pattern:** Do NOT call `show_task` before `start_work`. `start_work` already returns the full task body — a preceding `show_task` is a redundant read. Use `show_task` only for secondary lookups (dependencies, parent briefs, re-reads).
