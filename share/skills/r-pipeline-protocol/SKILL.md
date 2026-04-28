@@ -114,9 +114,10 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 
 - Every follow-up task requires concrete acceptance criteria. Single-responsibility. List affected files.
 - Target `backlog` status. Exception: researchers create follow-up tasks at `research`.
-- Simple follow-up: create directly. Complex decomposition (multiple interdependent subtasks): write `Needs decomposition: {reason}` in the task body — the orchestrator will route the task to the planner.
+- Simple follow-up: delegate to planner via `Plan and create:` using the single-task shortcut. Include status (`backlog` by default, `research` for researcher), title, tags, and optional parent ID.
+- Complex decomposition (multiple interdependent subtasks): delegate to planner via `Plan and create:` with decomposition context (for example, `Needs decomposition: {reason}`) so planner applies the full decomposition workflow.
 
-Use `create_task(title="...", status="backlog", ...)` to create follow-up tasks (see `h-mcp-kanban`).
+Use planner delegation, for example: `Plan and create: #42 — create one follow-up at backlog titled "Tighten AC for retry boundary" with tags pipeline,quality`.
 
 ## 3. Communication
 

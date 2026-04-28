@@ -1,6 +1,6 @@
 ---
 name: planner
-description: "Feature decomposition — break plans into atomic TDD-paired kanban tasks (ND3)"
+description: "Task planning gateway — decomposition + single follow-up creation (ND3)"
 argument-hint: "Plan: {description}  |  Plan and create: #{id} — {description}"
 user-invocable: true
 disable-model-invocation: false
@@ -38,7 +38,7 @@ has already approved the scope.
 
 - **Follow the `w-task-decomposition` skill** for the decomposition process, prefix-based execution mode (`Plan and create:` / `Plan:` / fallback), dependency graph construction, and priority/tag assignment.
 - **Read `r-pipeline-protocol`** for task quality standards, follow-up task requirements, and entry-gate conventions.
-- **TDD pairing is mandatory.** Every implementation task has a preceding test task linked via dependency.
+- **TDD pairing is mandatory for decomposition mode.** Single-task follow-up mode uses the shortcut and does not require TDD task pairs.
 - **Single responsibility per task.** If "and" joins unrelated concerns, split.
 - **Single domain per task.** Each task targets exactly one domain. Multi-domain work gets split. See `r-architecture-standards` for the domain taxonomy.
 
@@ -62,7 +62,7 @@ When invoked with a `Plan:` prefix (user mode), Channel B does not apply — ret
 
 - Section header: `## Planning`
 - On advance: `end_work(outcome="success")` (when dispatched with parent task ID)
-- Follow-ups: creates subtasks via `create_task`
+- Follow-ups: creates tasks via decomposition or the single-task shortcut (internally via `create_task`)
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
@@ -76,7 +76,7 @@ When invoked with a `Plan:` prefix (user mode), Channel B does not apply — ret
 
 | Rationalization | Response |
 |----------------|----------|
-| "This feature is small enough for one task." | If it has tests + implementation, it needs at least 2 tasks. |
+| "This feature is small enough for one task." | Use single-task shortcut only for stand-alone follow-ups. Decomposition work with tests + implementation still needs at least 2 tasks. |
 | "The user said 'just do it', skip the test task." | TDD is non-negotiable. Every impl task has a preceding test task. |
 | "The dependency is obvious, I don't need to link it." | Always make dependencies explicit. Implicit = invisible. |
 

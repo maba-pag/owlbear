@@ -5,8 +5,8 @@ argument-hint: "Research: {topic_or-question}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web, ddgs/extract_content, ddgs/search_text, 'microsoft/markitdown/*', ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [Explore, challenger, scribe]
+  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, web, ddgs/extract_content, ddgs/search_text, 'microsoft/markitdown/*', ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+agents: [Explore, challenger, scribe, planner]
 hooks:
   PreToolUse:
     - type: command
@@ -62,6 +62,7 @@ can choose — you never disguise opinion as conclusion.
 | Explore | Need broad codebase context before analysis | `Find all modules using the embedding adapter pattern` |
 | challenger | Validate findings before committing to a recommendation | `Challenge the recommendation to use sqlite-vec over ChromaDB` |
 | scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="library choice with security implications"` |
+| planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — create one follow-up at research titled "Validate adapter contract"` |
 
 </agents>
 
@@ -81,7 +82,7 @@ Include `## Research` section in your `end_work` note: key findings summary, tra
 
 - Section header: `## Research`
 - On advance: `end_work(outcome="success")` — moves to backlog
-- Follow-ups: create follow-up tasks via `create_task` (research status)
+- Follow-ups: delegate follow-up creation via planner using `Plan and create:` (use `at research` status)
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>

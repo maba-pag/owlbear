@@ -28,10 +28,11 @@ Verify the task is in `backlog` status. If the task references a research doc (`
 
 1. Search for related modules, interfaces, and patterns.
 2. Read existing code the task will touch via `read_file`.
-3. Check `depends_on` — are dependencies actually `done`? Use `show_task` for each dependency if needed.
-4. Identify: existing patterns to follow, interfaces to respect, invariants to maintain.
-5. Check the task body for prior architecture notes, research pointers, and reviewer feedback from previous cycles.
-6. **Brief context (when parent is set):** If the task has a `parent` field, call `show_task(parent_id)` and scan for Brief sections (`## Brief`, `## Problem`, `## Outcomes`, `## Approach`, `## Scope`, `## Investment Tier`). When present, use this context to inform AC evaluation and builder guidance.
+3. Before asking the user, resolve answerable codebase questions first using `Explore` subagent, `read_file`, `semantic_search`, or `grep_search`.
+4. Check `depends_on` — are dependencies actually `done`? Use `show_task` for each dependency if needed.
+5. Identify: existing patterns to follow, interfaces to respect, invariants to maintain.
+6. Check the task body for prior architecture notes, research pointers, and reviewer feedback from previous cycles.
+7. **Brief context (when parent is set):** If the task has a `parent` field, call `show_task(parent_id)` and scan for Brief sections (`## Brief`, `## Problem`, `## Outcomes`, `## Approach`, `## Scope`, `## Investment Tier`). When present, use this context to inform AC evaluation and builder guidance.
 
 ## Step 2 — Evaluate Architecture
 
@@ -42,7 +43,7 @@ Assess the task against `r-architecture-standards` and general architectural pri
 3. **Dependency correctness** — all listed? Any missing?
 4. **Module layering** — respect dependency direction from `r-architecture-standards`? No upward imports.
 5. **TDD compliance** — preceding test task exists?
-6. **KISS/YAGNI** — minimal scope? No hypothetical requirements?
+6. **KISS/YAGNI** — minimal scope? No hypothetical requirements? **Deletion Test (conditional):** If the task introduces a new abstraction (module, interface, adapter, wrapper), apply the Deletion Test from `r-architecture-standards` — if deleting the abstraction would make its callers simpler, it's a pass-through. Reject or propose inlining.
 7. **Premise challenge** — should this task exist? Does the capability already exist in: (a) IDE features, (b) runtime/stdlib, (c) existing tooling, or (d) extensions? If so, reject with evidence.
 8. **Pattern consistency** — follows existing codebase patterns (protocols, error taxonomy, MCP conventions, config via pydantic-settings)?
 9. **Security surface** — new system boundaries (user input, external APIs, file I/O)? If so, AC must include input validation requirements.
@@ -60,11 +61,40 @@ Assess the task against `r-architecture-standards` and general architectural pri
     - **Signals (S) — ≥1 required:** (S1) AC uses physical-action verbs (Open, Click, Navigate, Configure via GUI, Deploy manually); (S2) AC names external systems (Teams, Azure portal, GitHub UI, browser, dashboards); (S3) AC lists manual steps the user must physically perform
     - **Outcome:** no counter-signal AND M1+M2 AND ≥1 S → `type:user-action` detected → use BLOCK verdict (Step 3)
 
+## Step 2.3 — Conditional Design Diverge
+
+Run this step only when all trigger conditions are met:
+
+- Step 2 reveals at least 2 valid approaches.
+- Criteria are split across approaches (for example: approach A passes some criteria while approach B passes different criteria, and neither dominates).
+- The architect cannot resolve the trade-off without deeper analysis.
+
+If any trigger condition is not met, skip Step 2.3 entirely (zero overhead).
+
+When triggered, dispatch 2-3 `General Purpose` subagents in parallel. Each prompt must include:
+
+- Task context and AC lines.
+- Codebase patterns identified in Step 1.
+- One explicit optimization axis (for example: "Design optimizing for minimal interface surface").
+- Instruction to return the 5-section output contract below.
+
+Required subagent output contract (exactly 5 sections):
+
+1. `Approach summary` (1-2 sentences)
+2. `Structural choices` (bulleted list)
+3. `Trade-offs` (pros and cons)
+4. `Failure modes` (what can go wrong, with impact)
+5. `Codebase fit` (alignment with Step 1 patterns)
+
+Build a comparison matrix from returned approaches across the split criteria. Select one approach or a hybrid approach, then document rationale in the architecture review output.
+
+**Fallback:** If any subagent call fails (timeout, crash, exception), skip design-diverge and continue with single-pass evaluation. Record: `Design-diverge: FALLBACK — {reason}`.
+
 ## Step 2.5 — Challenge Proposed Verdict
 
-Before deciding in Step 3, challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE, optional for REFINE, skip for SPLIT/REJECT.
+After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE, optional for REFINE, skip for SPLIT/REJECT.
 
-Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, and research-doc reference.
+Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
 
 | Challenger output | Architect action |
 |-------------------|------------------|
@@ -82,7 +112,7 @@ The architect retains final authority.
 |---------|------|--------|
 | **APPROVE** | AC precise, architecture sound | Advance via `end_work` (moves to `todo` + releases claim) |
 | **REFINE** | Good concept, AC needs tightening | Use temp-file pattern to rewrite body via `edit_task`, then approve |
-| **SPLIT** | Multiple responsibilities | Create new tasks via `create_task`, update deps, edit/delete original, then release |
+| **SPLIT** | Multiple responsibilities | Delegate to planner with `Plan and create: #{id} — {split scope}` for decomposition, then update deps, edit/delete original, and release |
 | **MERGE** | Two tasks = one logical change | Edit one task, delete redundant, release |
 | **REJECT** | Missing prerequisite or unclear | Move to `research` via `end_work(outcome="reject")`, appending findings |
 | **BLOCK** | `type:user-action` detected (Step 2 criterion 13) | Create AR via scribe (`Scribe: task_id={id}, mode=check-or-create`), tag task `type:user-action` if missing, `end_work(outcome="block")` |
@@ -133,6 +163,19 @@ Append to task body before advancing:
 ### Failure Mode Map (if applicable)
 | Codepath | Failure Mode | Exception | Handled? | User Impact |
 
+### Design Diverge (optional)
+- Trigger: {triggered with reason / skipped with reason / fallback}
+- Approach summaries: {1-2 lines per approach}
+- Comparison matrix:
+
+    | Criterion | Approach A | Approach B | Approach C (optional) |
+    |-----------|------------|------------|------------------------|
+    | {criterion} | PASS/FAIL | PASS/FAIL | PASS/FAIL |
+
+- Selection rationale: {chosen or hybrid approach and why}
+
+If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
+
 ### Challenge Results
 - Challenger: {proceed/reconsider/reject} (or FALLBACK)
 - Architect response: {accepted/rebutted/revised}
@@ -147,6 +190,7 @@ Append to task body before advancing:
 - [ ] Searched codebase for related patterns
 - [ ] Checked task body for prior context (architecture notes, reviewer feedback)
 - [ ] All 13 Step 2 criteria evaluated
+- [ ] Design-diverge evaluated (triggered / skipped with reason / fallback noted)
 - [ ] Challenger invoked for APPROVE verdicts (or fallback noted)
 - [ ] `type:user-action` tasks blocked (BLOCK verdict) rather than approved
 - [ ] Non-impl tasks tagged with pass-through tag before approving

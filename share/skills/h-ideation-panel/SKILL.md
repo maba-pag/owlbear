@@ -17,7 +17,7 @@ Ideation now has two panel surfaces.
 | Early challenge lane        | Phase 1 — Discovery                               | `ideation-simplifier`, `ideation-firstprinciples`                              | Pressure-test framing, scope, and hidden assumptions before approach choice      |
 | Conditional early challenge | Phase 1 — Discovery                               | `ideation-outsider`                                                            | Break tunnel vision when the current framing is trapped inside local assumptions |
 | Late domain panel           | Phase 2 — Mediation                               | `ideation-architect`, `ideation-data`, `ideation-enduser`, `ideation-security` | Evaluate viable approaches through domain lenses                                 |
-| Shared synthesis role       | Phase 1 or 2                                      | `ideation-pragmatist`                                                          | Denoise early challenges or converge late-domain stances                         |
+| Shared synthesis role       | Phase 1 or 2                                      | `ideation-pragmatist`                                                          | Denoise early challenges, converge late-domain stances, or compare proposals     |
 | Shared adversarial role     | Phase 2 by default, embedded in late domain loops | `ideation-critic`                                                              | Stress-test positions without proposing alternatives                             |
 
 ## Early Challenge Lane
@@ -90,9 +90,33 @@ Mediator -> ideation-pragmatist (mode=converge) -> synthesis.md
 
 Use sequential invocation only when later panelists need earlier stance outputs to evaluate the real trade-off.
 
+### Propose Mode (M3.5 Path)
+
+Use this mode only when the mediator's M3.5 gate detects real ambiguity (at least two viable approaches, no dominant option).
+
+- The mediator dispatches all four late domain panelists in parallel, overriding the selection matrix for maximum design diversity.
+- Each panelist receives M3 landscape synthesis plus an explicit PROPOSE-mode directive in the prompt payload.
+- Panelists produce complete designs shaped by domain emphasis, not domain-only slices.
+- Panelists write `stances/{name}-proposal.md` with these sections:
+  - `Design Summary`
+  - `Key Structural Choices`
+  - `Trade-offs`
+  - `Domain Rationale`
+  - `Confidence`
+- In propose mode, panelists skip the embedded Critic loop. Adversarial validation occurs later through post-hybridization Critic passes in mediation.
+
+```text
+Mediator -> [parallel batch, propose mode]
+  ideation-architect -> stances/architect-proposal.md
+  ideation-data      -> stances/data-proposal.md
+  ideation-enduser   -> stances/enduser-proposal.md
+  ideation-security  -> stances/security-proposal.md
+Mediator -> ideation-pragmatist (mode=compare) -> synthesis.md
+```
+
 ## Critic Loop Protocol
 
-The late-domain panelists use the embedded Critic loop by default.
+The late-domain panelists use the embedded Critic loop by default for stance mode.
 
 ### Stance Reasoning Cycle
 
@@ -110,6 +134,8 @@ Panelist invoked by Mediator:
   7. Write stances/{name}.md
   8. Write stances/{name}-debate.md
 ```
+
+Propose mode is the exception: panelists write `stances/{name}-proposal.md` directly and skip the embedded Critic loop.
 
 ### Exit Conditions
 
@@ -143,6 +169,23 @@ Use after the Phase 2 late domain panel completes.
 - writes `synthesis.md`
 - identifies convergences and disagreements with attribution
 - may recommend only where convergence justifies it
+
+### `mode=compare`
+
+Use after M3.5 proposal collection in Phase 2.
+
+- reads `context.md` and `decisions.md`
+- reads `stances/*-proposal.md`
+- writes `synthesis.md`
+- outputs a divergence-only comparison matrix with columns:
+  - Decision Point
+  - architect
+  - data
+  - enduser
+  - security
+  - Tension Level
+- includes common ground summary
+- includes open questions
 
 ## Disagreement Resolution
 

@@ -6,8 +6,8 @@ user-invocable: false
 disable-model-invocation: true
 model: [GPT-5.3-Codex (copilot), Claude Sonnet 4.6 (copilot)]
 tools:
-  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [scribe, fix-attempt, quality-runner]
+  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, edit/rename, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+agents: [scribe, fix-attempt, quality-runner, planner]
 hooks:
   SessionStart:
     - type: command
@@ -70,6 +70,7 @@ infeasible, you escalate — you don't silently reshape the contract.
 | quality-runner | Run test suite and lint for GREEN verification | `quality-runner: mode=full, task_id=42` |
 | fix-attempt | Fresh-context retry when local fixes fail | `Fix: task_id=42 test_file=tests/test_foo.py source_files=src/foo.py` |
 | scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="retry strategy has UX implications"` |
+| planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Tighten AC wording"` |
 
 </agents>
 

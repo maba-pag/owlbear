@@ -5,8 +5,8 @@ argument-hint: "Audit: {task_id}"
 user-invocable: false
 disable-model-invocation: true
 tools:
-  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [scribe, Explore, quality-runner]
+  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+agents: [scribe, Explore, quality-runner, planner]
 hooks:
   PreToolUse:
     - type: command
@@ -63,6 +63,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 | quality-runner | Run full test suite and lint for exit gate verification | `quality-runner: mode=full, task_id=42` |
 | scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="systemic AC quality degradation"` |
 | Explore | Need broad codebase context for AC verification | `Find all modules that import the retry decorator` |
+| planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — create one follow-up at backlog titled "Architect calibration on AC clarity"` |
 
 </agents>
 

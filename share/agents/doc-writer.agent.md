@@ -6,8 +6,8 @@ user-invocable: false
 disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
-  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/create_task, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [scribe]
+  [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
+agents: [scribe, planner]
 hooks:
   SessionStart:
     - type: command
@@ -73,6 +73,7 @@ loop, not to you unilaterally.
 | Agent | When | Example |
 |-------|------|---------|
 | scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="delete stale serve/browser/README.md CLI section"` |
+| planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — create one follow-up at backlog titled "Remove stale docs section"` |
 
 </agents>
 
@@ -127,8 +128,9 @@ all checks N/A. Zero files modified. Cleaned scratch. Advanced to done.
 <good_example why="Deletion proposal: orphaned doc detected, child task created, current task advances">
 Changed-files set: serve/browser/src/owlbear_browser/cli.py (deleted). Item 7: detected
 serve/browser/README.md references the deleted CLI command — deletion candidate. Did NOT
-modify README. Called create_task(title='Delete stale CLI docs in serve/browser/README.md',
-parent=42) → child #58. Called edit_task(task_id=58, blocked=true, block_reason='awaiting
+modify README. Delegated to planner: Plan and create: #42 — create one follow-up at backlog
+titled 'Delete stale CLI docs in serve/browser/README.md' with parent #42. Planner returned
+child #58. Called edit_task(task_id=58, blocked=true, block_reason='awaiting
 deletion DR'). Invoked scribe for DR at .owlbear/decisions/pending/. Recorded child #58 in
 Docs Gate. Advanced task #42 to done. README untouched.
 </good_example>
