@@ -1,10 +1,10 @@
 ---
 id: 1089
 title: 'A-09: RED — guidance + error mapping tests'
-status: review
+status: done
 priority: needed
-created: '2026-04-21 10:54:09.278833+00:00'
-updated: '2026-04-24 19:34:10.309435+00:00'
+created: 2026-04-21 10:54:09.278833+00:00
+updated: 2026-04-28T04:17:06.467967+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -16,7 +16,8 @@ depends_on:
 - 1085
 blocked: false
 block_reason:
-claimed_at:
+claimed_by: quiet-shade
+claimed_at: 2026-04-28T04:17:06.467967+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -32,336 +33,232 @@ Test guidance field passthrough and the KanbanError → MCP ToolError error-mapp
 - [ ] show_task section occurrence count guidance (AC12) passes through
 - [ ] pick_tasks dispatch hints pass through
 - [ ] create_task/edit_task body size warning (>100 KB) passes through
-- [ ] move_task / end_work skip-transition warning passes through (AC-NEW-5)
+- [ ] move_task / end_work skip-transition warning passes through (AC-NEW-5); reject path requires a claimed task precondition per engine.py:3031-3035
 - [ ] end_work(outcome="block") Action-Request/Decision-Request hint passes through (AC-NEW-4)
-- [ ] Error mapping: ValidationError → ToolError (user_message only, no code on wire per §7)
-- [ ] Error mapping: NotFoundError → ToolError
-- [ ] Error mapping: ConcurrencyError → ToolError (e.g. already-claimed)
-- [ ] All tests fail (RED phase)
-[[2026-04-24]]
+- [ ] Error mapping: ValidationError → ToolError with exact `user_message` passthrough ("title must not be empty"); no code on wire per §7
+- [ ] Error mapping: NotFoundError → ToolError with exact `user_message` passthrough ("Task '{id}' not found")
+- [ ] Error mapping: ConcurrencyError → ToolError with `user_message` prefix "Task '{id}' is already claimed by another agent"; no code on wire
+
+## Architecture Review (loop-breaker pass 2)
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Guidance passthrough + error mapping for one MCP adapter layer |
+| Interface clarity | PASS | AC now explicit about exact user_message assertions |
+| Dependency correctness | PASS | #1083, #1085 archived (done) |
+| Module layering | PASS | Tests MCP adapter → engine boundary correctly |
+| TDD compliance | PASS | This IS the RED phase task; RED was met historically (test-writer notes) |
+| KISS/YAGNI | PASS | Minimal scope |
+| Premise challenge | PASS | Guidance and error mapping are needed MCP surface features |
+| Pattern consistency | PASS | Follows TestFromAC pattern |
+| Security surface | PASS | No new security boundaries |
+| Single domain | PASS | MCP adapter domain only |
+
+### Loop-Breaker Diagnosis (pass 2)
+
+Four review FAILs all cite the same root cause: error mapping assertions are too loose. The prior loop-breaker fixed two concrete test-file bugs (stale constant, unclaimed fixture) but did not address assertion specificity for error mapping. The reviewer has been consistent about this since review 1.
+
+Root cause: the original AC said "ValidationError → ToolError (user_message only, no code on wire per §7)" without specifying exact equality. The test-writer wrote loose substring/keyword checks that technically satisfy the AC but don't prove exact passthrough. The reviewer correctly identifies this as false-green-prone.
+
+Fix: refine error mapping AC lines to require exact `user_message` assertions. This removes ambiguity and gives the test-writer a clear bar.
+
+Additionally, the AC line "All tests fail (RED phase)" has been removed. This was a one-time test-writer requirement that was met (11 failing tests recorded before builder work). The reviewer was counting it as FAIL because the current state is GREEN, which is expected after builder implementation. The `tdd:red` tag remains as the task-type marker.
+
+### AC Refinement Summary
+1. Error mapping AC lines 7-9: added "exact user_message passthrough" requirement with specific expected strings.
+2. ConcurrencyError: specified prefix-match instead of exact equality (the `claimed_at_hint` suffix is dynamic and depends on the rival claim's timestamp).
+3. Removed "All tests fail (RED phase)" AC line — historical requirement already met.
+
+### Concrete Defect Fixes (test-writer: apply all three)
+
+**Fix 1 — ValidationError exact equality (line 424):**
+Replace the loose keyword check with exact equality:
+```python
+assert str(exc_info.value) == "title must not be empty"
+```
+Keep the `ERR_` absence check as a belt-and-suspenders guard.
+
+**Fix 2 — NotFoundError exact equality (line 447):**
+Replace the broad message check with exact equality:
+```python
+assert str(exc_info.value) == "Task '9999' not found"
+```
+
+**Fix 3 — ConcurrencyError prefix-match (line 472):**
+Replace the fragment check with a prefix assertion (claimed_at_hint is dynamic):
+```python
+error_text = str(exc_info.value)
+assert error_text.startswith("Task '1' is already claimed by another agent")
+```
+Keep the `ERR_ALREADY_CLAIMED not in error_text` check.
+
+### Non-blocking notes
+- Reject-path sentinel: the current test implicitly proves AgentView is the source (adapter fallback returns [] for reject), so the sentinel patch is pattern-consistency nice-to-have, not a blocker.
+- Sibling suite `test_mcp_lifecycle_tools.py:348` mocks `user_message="ERR_BLOCK_REASON_REQUIRED: ..."` — this is a mock setup bug in another task, not a wire contract contradiction. The real engine uses a clean user_message. Out of scope for #1089.
+- Test file docstring header "All tests must FAIL (RED phase)" and per-test "FAIL path (RED)" narratives are historical documentation. Non-blocking — update if desired.
+
+### Challenge Results
+- Challenger: block (confidence 0.37)
+- Architect response: REBUTTED
+  - "Speculative approval": standard REFINE → APPROVE pattern. Architect provides guidance, test-writer applies it. That's how loop-breakers work.
+  - "RED contract drift": ACCEPTED — removed the AC line and clarified the `tdd:red` tag is a type marker.
+  - "ConcurrencyError exact equality underspecified": ACCEPTED — changed to prefix-match to handle dynamic claimed_at_hint.
+  - "Sibling suite contradiction": REBUTTED — mock bug in another suite, not a real wire contract conflict.
+  - "Reject sentinel misprioritized": ACCEPTED — downgraded to non-blocking.
+
+### Verdict: REFINE → APPROVE
+### Action Taken: Refined 3 error mapping AC lines with exact user_message requirements. Removed stale RED AC line. Added 3 concrete test fixes. Advancing to todo.
+[[2026-04-28]]
+Architecture review complete (loop-breaker pass 2). Refined 3 error mapping AC lines with exact user_message requirements: ValidationError exact equality, NotFoundError exact equality, ConcurrencyError prefix-match (dynamic claimed_at_hint). Removed stale "All tests fail (RED phase)" AC line — historical requirement already met. Added 3 concrete test fixes. Challenger rebutted (block @ 0.37). Advancing to todo.
+[[2026-04-28]]
 ## Test-Writer Notes
 - Test file: serve/mcp-kanban/tests/test_mcp_guidance_1089.py
 - Classes: TestFromAC_GuidancePassthrough, TestFromAC_ErrorMapping
-- Tests per category: happy 2, edge 3, error 3, boundary 3
-- Total: 11 tests, all FAIL
+- Retry: applied 3 architect-directed assertion fixes (loop-breaker pass 2)
+  - Fix 1: ValidationError → exact equality `str(exc_info.value) == "title must not be empty"` + ERR_ guard
+  - Fix 2: NotFoundError → exact equality `str(exc_info.value) == "Task '9999' not found"`
+  - Fix 3: ConcurrencyError → prefix-match `error_text.startswith("Task '1' is already claimed by another agent")` + ERR_ALREADY_CLAIMED guard
+- Total: 11 tests, all PASS (GREEN — builder already implemented; architect removed "all tests fail" AC line as historical requirement already met)
 - ruff: clean
-
-**AC coverage table:**
-
-| AC | Test |
-|---|---|
-| Guidance passthrough (base) | test_show_task_guidance_passes_through_unmodified |
-| show_task section occurrence count (AC12) | test_show_task_section_occurrence_count_guidance |
-| pick_tasks dispatch hints | test_pick_tasks_dispatch_hints_guidance |
-| create_task body size warning >100 KB | test_create_task_body_size_warning_guidance |
-| edit_task body size warning >100 KB | test_edit_task_body_size_warning_guidance |
-| move_task skip-transition warning (AC-NEW-5) | test_move_task_skip_transition_warning_guidance |
-| end_work(reject) skip-transition warning (AC-NEW-5) | test_end_work_reject_skip_transition_warning_guidance |
-| end_work(block) AR/DR hint (AC-NEW-4) | test_end_work_block_action_request_hint_guidance |
-| ValidationError → ToolError (user_message only) | test_validation_error_maps_to_tool_error |
-| NotFoundError → ToolError | test_not_found_error_maps_to_tool_error |
-| ConcurrencyError → ToolError, no code on wire | test_concurrency_error_maps_to_tool_error_user_message_only |
-
-**Failure modes:**
-- Guidance tests: server calls engine.show_task/create_task/etc. directly; never calls engine.agent_view(); returns guidance=[] instead of AgentView envelope guidance
-- Error mapping tests: KanbanError subclasses (ValidationError, NotFoundError, ConcurrencyError) propagate uncaught — adapter only catches ValueError and FileNotFoundError
-
-**Commit:** f02635ee
-[[2026-04-24]]
+- AC coverage: all 9 AC lines covered
+[[2026-04-28]]
 ## Builder Notes
-- Verdict: REJECT to test-writer due interface-contract mismatch in TestFromAC suite.
-- RED evidence: quality-runner reports all 11 tests in `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` fail at fixture setup with `ConfigError: agent_map missing status entries` during `KanbanEngine(...)` init.
-- Blocking mismatch #1 (interface): `test_validation_error_maps_to_tool_error` invokes `create_task(ctx, title="Test task", status="flying")`, but MCP `create_task` intentionally has no `status` parameter (D50).
-- Corroborating contract evidence:
-  - `serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py` asserts `create_task` must not accept `status`.
-  - `serve/mcp-kanban/tests/test_mcp_models_1084.py` asserts `CreateTaskParams` has no `status` field.
-  - `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` defines `create_task(title, body, depends_on, parent, priority, tags)` only.
-- Blocking mismatch #2 (test setup): inline legacy config in `test_mcp_guidance_1089.py` omits `agent_map`; current engine/model validation rejects this at initialization, so guidance/error assertions never execute.
-- Test-writer: please rewrite RED tests to align with the approved MCP contract:
-  - Remove any `create_task(..., status=...)` expectation.
-  - Avoid fixture setup paths that fail before assertions (either provide an engine-initializable config or use a pure mocked context when engine behavior is not under test).
-  - Keep scope on AC #1089: guidance passthrough from AgentView envelopes and `KanbanError -> ToolError(user_message)` mapping without changing create_task surface.
-
-[[2026-04-24]]
-## Test-Writer Notes (retry)
-- Test file: `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`
-- Classes: `TestFromAC_GuidancePassthrough`, `TestFromAC_ErrorMapping`
-- Total: **11 tests, all FAIL** ✓
-- ruff: clean ✓
-- Commit: 1ce9d252
-
-**Builder rejection fixes applied:**
-1. Added full `agent_map` to inline config (all 7 statuses) — resolves `ConfigError: agent_map missing status entries`
-2. Replaced `create_task(ctx, title="Test task", status="flying")` with `create_task(ctx, title="")` — no `status` param, aligns with MCP contract (D50)
-
-**AC coverage table:**
-
-| AC | Test |
-|---|---|
-| Guidance passthrough (base) | test_show_task_guidance_passes_through_unmodified |
-| show_task section occurrence count (AC12) | test_show_task_section_occurrence_count_guidance |
-| pick_tasks dispatch hints | test_pick_tasks_dispatch_hints_guidance |
-| create_task body size warning >100 KB | test_create_task_body_size_warning_guidance |
-| edit_task body size warning >100 KB | test_edit_task_body_size_warning_guidance |
-| move_task skip-transition warning (AC-NEW-5) | test_move_task_skip_transition_warning_guidance |
-| end_work(reject) skip-transition warning (AC-NEW-5) | test_end_work_reject_skip_transition_warning_guidance |
-| end_work(block) AR/DR hint (AC-NEW-4) | test_end_work_block_action_request_hint_guidance |
-| ValidationError → ToolError (user_message only) | test_validation_error_maps_to_tool_error |
-| NotFoundError → ToolError | test_not_found_error_maps_to_tool_error |
-| ConcurrencyError → ToolError, no code on wire | test_concurrency_error_maps_to_tool_error_user_message_only |
-
-**Failure modes (correct RED reasons):**
-- Guidance tests: `AgentView` methods not yet implemented (TypeError on unexpected kwargs `section`, `body`, wave params); adapter fallback sentinel detected instead of AgentView-sourced strings
-- Error mapping tests: `ConcurrencyError` not yet raised (engine raises `ValueError("Task '1' is already claimed")` — no "by another agent" fragment); `ValidationError`/`NotFoundError` not mapped to `ToolError` by adapter
-[[2026-04-24]]
-## Builder Notes
-- Implementation: `serve/kanban/src/owlbear_kanban/engine.py` (implemented `AgentView` methods for MCP-facing envelopes, guidance passthrough, and KanbanError mapping)
-- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`
-- Tests: 11 TestFromAC tests passed in `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`
-- Coverage: not run in final scoped verification pass
-- ruff: clean on `serve/kanban/src/owlbear_kanban/engine.py` and `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`
-- Evidence summary: fixed guidance passthrough for show/create/edit/move/end_work/pick and mapped not-found/validation/concurrency paths to `KanbanError` subclasses so MCP adapter emits `ToolError(user_message)`.
-- Fixes applied:
-  - Replaced `AgentView` stubs with concrete methods returning `ShowTaskResponse`, `SingleTaskResponse`, `PickTasksResponse`, and `ListTasksResponse`
-  - Added section-aware `show_task(..., section=...)` behavior with duplicate-section occurrence guidance
-  - Added oversized-body guidance (>100 KB) for create/edit flows
-  - Added skip-transition guidance for move/reject transitions and block DR hint guidance for end_work(block)
-  - Converted engine `FileNotFoundError`/`ValueError` branches into `NotFoundError`/`ValidationError`/`ConcurrencyError` in AgentView
-- Reflection:
-  - Problem faced: reject skip-count guidance expected different semantics than move guidance.
-  - Workaround applied: used a dedicated `include_target_column` mode for reject guidance to match AC/test contract.
-  - Pattern discovered: MCP adapter tests depend on AgentView being the guidance source; fallback guidance is intentionally patch-detectable.
-  - Quality gap prevented: normalized ValueError pathways to typed `KanbanError` subclasses to avoid raw exception leakage at adapter boundaries.
-[[2026-04-24]]
+- Implementation: no code changes required; validated existing adapter behavior already satisfies refined AC for guidance passthrough and KanbanError -> ToolError user_message mapping.
+- Files changed: none.
+- Tests: 11/11 passed in task-scoped suite (`serve/mcp-kanban/tests/test_mcp_guidance_1089.py`); additional regression sanity: 42/42 passed across guidance + lifecycle suites.
+- Coverage: `owlbear_mcp_kanban.server` measured at 51% (task-scoped) / 53% (with adjacent lifecycle suite).
+- Ruff: clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`, `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`, and `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`.
+- Evidence summary: guidance passthrough and exact/prefix error-message mapping behavior match AC lines 1-9; no fallback-path regression observed in scoped/adjacent verification.
+- Fixes applied: none (existing implementation already GREEN against current AC/tests).
+[[2026-04-28]]
 ## Review Evidence
 ### Test Results
-- Scoped pytest on `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`: 11 passed, 0 failed.
-- Broader engine rerun used only to correct module coverage scope: 478 passed, 36 failed, 220 errors. Those broader failures are background drift and config debt, not the gating evidence for this task.
+- `pytest`: 11 passed, 0 failed (`serve/mcp-kanban/tests/test_mcp_guidance_1089.py`) via quality-runner.
 
 ### Lint
-- Scoped ruff on `serve/kanban/src/owlbear_kanban/engine.py` and `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`: clean.
+- `ruff`: clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` and `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`.
 
 ### Coverage
-- Task-only coverage against the 1089 suite measured 49% for `owlbear_kanban.engine` and undercounted the shared module.
-- Corrected broader engine coverage measured `owlbear_kanban.engine` at 93%, so module coverage is not the blocker.
+- `owlbear_mcp_kanban.server`: 51% on the task-scoped run.
+- Reviewer note: builder reported no source edits; this low whole-module figure is residual context for the large adapter module, not a blocker for this task-owned slice.
 
-### Pass 1 - CRITICAL
+### Pass 1 — CRITICAL
 #### Test-Writer AC Coverage
-| AC Line | Mapped Test | Would fail if AC were violated? | Verdict |
-|---------|-------------|----------------------------------|---------|
-| Guidance passthrough unmodified | `test_show_task_guidance_passes_through_unmodified` | No. The docstring at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:231` says unmodified passthrough, but the assertion at `:241` checks only that guidance is a list. | FAIL |
-| show_task section occurrence count guidance | `test_show_task_section_occurrence_count_guidance` | No. The engine emits a concrete count message at `serve/kanban/src/owlbear_kanban/engine.py:1640`, but the assertion at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:223` only checks for any guidance element containing `2`. | FAIL |
-| pick_tasks dispatch hints | `test_pick_tasks_dispatch_hints_guidance` | No. The engine emits a specific dispatch hint at `serve/kanban/src/owlbear_kanban/engine.py:1686`, but the assertion at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:259` only checks that guidance is non-empty. | FAIL |
-| create_task/edit_task body-size warning | `test_create_task_body_size_warning_guidance`, `test_edit_task_body_size_warning_guidance` | No. Assertions at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:278` and `:297` use substring containment against the warning constant at `serve/kanban/src/owlbear_kanban/engine.py:1522`, so transformed wire strings would still pass. | FAIL |
-| move_task / end_work skip-transition warning | `test_move_task_skip_transition_warning_guidance`, `test_end_work_reject_skip_transition_warning_guidance` | Yes. Exact equality is asserted at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:321` and `:348`. | PASS |
-| end_work(block) DR hint | `test_end_work_block_action_request_hint_guidance` | Yes. Exact equality at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:379` plus the fallback-sentinel patch proves the AgentView path is the source. | PASS |
-| ValidationError maps to ToolError with user_message only | `test_validation_error_maps_to_tool_error` | No. The test checks ToolError at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:405` and generic text at `:408`, but never enforces the no-code-on-wire part of the AC. | FAIL |
-| NotFoundError maps to ToolError | `test_not_found_error_maps_to_tool_error` | No. Only the `show_task` missing-task path is exercised at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:425`; `move_task` and `start_work` missing-task handling are broken in the implementation at `serve/kanban/src/owlbear_kanban/engine.py:1788` and `:1803`. | FAIL |
-| ConcurrencyError maps to ToolError | `test_concurrency_error_maps_to_tool_error_user_message_only` | Yes for the already-claimed path. Assertions at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:450`, `:453`, and `:457` prove user-message-only wire text. | PASS |
-| RED proof recorded before GREEN | Test-Writer retry note in the task body | Historical only. The retry note records 11 failing tests before builder work. | PASS |
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| Guidance passthrough | `test_show_task_guidance_passes_through_unmodified` | Yes — `show_task` returns the AgentView payload directly (`server.py:300`) and the test asserts exact list equality (`test_mcp_guidance_1089.py:233-255`). | COVERED |
+| show_task section occurrence count guidance | `test_show_task_section_occurrence_count_guidance` | Yes — exact equality on the duplicate-section guidance string (`test_mcp_guidance_1089.py:213-232`) against the direct `show_task` path (`server.py:300`). | COVERED |
+| pick_tasks dispatch hints | `test_pick_tasks_dispatch_hints_guidance` | Yes — exact equality on the guidance list (`test_mcp_guidance_1089.py:260-278`) against direct adapter return (`server.py:567`). | COVERED |
+| create_task/edit_task body size warning | `test_create_task_body_size_warning_guidance`, `test_edit_task_body_size_warning_guidance` | Yes — both assert exact warning equality (`test_mcp_guidance_1089.py:279-316`) against direct adapter returns (`server.py:311`, `server.py:398`). | COVERED |
+| move_task / end_work reject skip-transition warning | `test_move_task_skip_transition_warning_guidance`, `test_end_work_reject_skip_transition_warning_guidance` | Yes — `move_task` sentinel-patches fallback guidance (`test_mcp_guidance_1089.py:317-341`); `end_work(reject)` exact-equality proof (`test_mcp_guidance_1089.py:342-364`) is sufficient because fallback guidance is computed at `server.py:557`, and `collect_guidance` only emits block/success/move guidance (`guidance.py:22-55`, `guidance.py:78`). | COVERED |
+| end_work(outcome="block") AR/DR hint | `test_end_work_block_action_request_hint_guidance` | Yes — fallback guidance is sentinel-patched and exact equality is asserted (`test_mcp_guidance_1089.py:370-396`) against `end_work` (`server.py:486`). | COVERED |
+| ValidationError -> ToolError exact `user_message`; no code on wire | `test_validation_error_maps_to_tool_error` | Yes — exact message equality plus `ERR_` absence guard (`test_mcp_guidance_1089.py:409-430`) against `create_task`/`ToolError(exc.user_message)` (`server.py:311`). | COVERED |
+| NotFoundError -> ToolError exact `user_message` | `test_not_found_error_maps_to_tool_error` | Yes — exact message equality (`test_mcp_guidance_1089.py:431-449`) against `show_task` + `_map_kanban_error` (`server.py:69`, `server.py:300`). | COVERED |
+| ConcurrencyError -> ToolError prefix + no code on wire | `test_concurrency_error_maps_to_tool_error_user_message_only` | Yes — required prefix and `ERR_ALREADY_CLAIMED` absence are asserted (`test_mcp_guidance_1089.py:450-473`) against `start_work` mapping (`server.py:449`). | COVERED |
 
 #### Security Review
-- No task-specific security issues found.
+- No issues in scope. The adapter entry points delegate to engine/AgentView and map `KanbanError.user_message` to `ToolError` (`server.py:69`, `server.py:300`, `server.py:311`, `server.py:337`, `server.py:398`, `server.py:449`, `server.py:486`, `server.py:567`). No shell execution, path construction, or unsafe deserialization was found.
 
 #### Test Integrity
 | Original Test | Change Made | Assessment |
 |---------------|-------------|------------|
-| `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` | Builder notes report only `serve/kanban/src/owlbear_kanban/engine.py` changed; I found no evidence of builder weakening the TestFromAC file. | PRESERVED |
-| `test_show_task_guidance_passes_through_unmodified` | Current assertion is weaker than its own stated intent. | CURRENT PROOF WEAK |
-| `test_pick_tasks_dispatch_hints_guidance` | Current assertion is weaker than its own stated intent. | CURRENT PROOF WEAK |
+| `TestFromAC_GuidancePassthrough` | Builder notes report no changed files; current assertions remain exact-equality and sentinel-backed where fallback exists. | PRESERVED |
+| `TestFromAC_ErrorMapping` | Builder notes report no changed files; current assertions remain exact-equality/prefix plus no-`ERR_` guards. | PRESERVED |
 
 #### Test Quality
 | Dimension | Rating | Evidence |
 |-----------|--------|----------|
-| Assertion specificity | WEAK | `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:223`, `:241`, `:259`, `:278`, `:297`, `:408` |
-| Negative/error-path coverage | WEAK | Generic not-found mapping is not proven beyond `show_task`; the hidden bug at `serve/kanban/src/owlbear_kanban/engine.py:1788` and `:1803` survives. |
-| Manual mutation reasoning | WEAK | Any non-empty dispatch hint still passes at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:259`; machine-code leakage on the validation path still passes at `:408`. |
-| Test independence | STRONG | Fresh `tmp_path`-backed `AppContext` fixtures per test. |
-| Descriptive names | STRONG | Test names map clearly to AC clauses. |
+| Assertion specificity | STRONG | Exact equality/prefix/no-`ERR_` assertions across `test_mcp_guidance_1089.py:227`, `:255`, `:273`, `:292`, `:311`, `:336`, `:364`, `:395`, `:423`, `:445`, `:468`. |
+| Negative/error-path coverage | STRONG | Guidance passthrough includes fallback-sensitive cases for move/block/reject; error mapping covers ValidationError, NotFoundError, and ConcurrencyError. |
+| Manual mutation reasoning | STRONG | Wrong guidance source, transformed list, wrong message text, or leaked machine code would fail the task suite. |
+| Test independence | STRONG | Fixtures create fresh temp boards (`test_mcp_guidance_1089.py:136`, `:157`, `:167`, `:182`, `:194`). |
+| Descriptive names | STRONG | Test names map directly to AC behavior and failure mode. |
 
 #### Data Safety
-- No issues found.
+- No issues in scope. The reviewed code adds no new persistence, concurrency control, or unbounded-resource behavior; it delegates to existing engine/view methods.
 
 #### Implementation-Aware Gaps
-- Real implementation defect: `_wrap_not_found` accepts only `task_id` at `serve/kanban/src/owlbear_kanban/engine.py:1563`, but `move_task` and `start_work` call it with an extra exception object at `:1788` and `:1803`. On those missing-task paths the intended `NotFoundError` mapping becomes a `TypeError`.
+- No task-scoped gaps. Code-reader initially flagged `end_work(reject)` passthrough as potentially lax, but reviewer verification showed the fallback cannot synthesize reject skip guidance because `collect_guidance` only handles block/success/move outcomes. A passthrough regression would therefore fail `test_end_work_reject_skip_transition_warning_guidance`.
 
 #### Builder Process Quality
 | Metric | Value |
 |--------|-------|
-| Builder Notes sections | 2 |
-| Approach variation | Yes |
+| Builder Notes sections | 1 |
+| Approach variation | N/A |
 | Assessment | CLEAN |
 
-### Pass 2 - INFORMATIONAL
-- Broader engine coverage is 93%, but the broader rerun also surfaced unrelated drift such as legacy `agent_name=` constructor callers and stale AgentView-stub expectations. I used the scoped 1089 run for task-specific pass/fail and the broader rerun only to correct coverage scope.
-- Divergence note: code-reader treated the weak TestFromAC assertions as an integrity concern. I am scoring that as a test-quality/proof problem, not a builder-immutability violation, because the task body reports only `engine.py` changed in the builder pass.
-- Non-blocking taxonomy issue: empty-title validation uses `ERR_INVALID_STATUS` at `serve/kanban/src/owlbear_kanban/engine.py:1701` for a title problem; the wire contract still hides the code.
+### Pass 2 — INFORMATIONAL
+- `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` still contains stale RED-phase header/docstrings. The executable assertions remain valid.
+- Whole-module coverage remains 51% on the scoped run because `owlbear_mcp_kanban.server` is much larger than this task slice.
 
 ### AC Compliance
 | AC Line | Evidence | Mapped Test | Status |
 |---------|----------|-------------|--------|
-| Guidance passthrough unmodified | `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:231`, `:241` prove only list type, not unmodified wire value. | `test_show_task_guidance_passes_through_unmodified` | FAIL |
-| show_task section occurrence count guidance | Exact message exists at `serve/kanban/src/owlbear_kanban/engine.py:1640`; test at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:223` checks only digit presence. | `test_show_task_section_occurrence_count_guidance` | FAIL |
-| pick_tasks dispatch hints | Exact message exists at `serve/kanban/src/owlbear_kanban/engine.py:1686`; test at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:259` checks only non-empty guidance. | `test_pick_tasks_dispatch_hints_guidance` | FAIL |
-| create_task/edit_task body-size warning | Warning constant at `serve/kanban/src/owlbear_kanban/engine.py:1522`; tests at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:278` and `:297` use substring containment only. | `test_create_task_body_size_warning_guidance`, `test_edit_task_body_size_warning_guidance` | FAIL |
-| move_task / end_work skip-transition warning | Exact equality at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:321` and `:348`. | `test_move_task_skip_transition_warning_guidance`, `test_end_work_reject_skip_transition_warning_guidance` | PASS |
-| end_work(block) DR hint | Exact equality at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:379`. | `test_end_work_block_action_request_hint_guidance` | PASS |
-| ValidationError maps to ToolError with user_message only | Adapter maps `KanbanError` to `ToolError(exc.user_message)` at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:452-453`, but the task test never proves no-code wire behavior on the validation path. | `test_validation_error_maps_to_tool_error` | FAIL |
-| NotFoundError maps to ToolError | Generic not-found contract is broken for `move_task` and `start_work` by `serve/kanban/src/owlbear_kanban/engine.py:1788` and `:1803`. | `test_not_found_error_maps_to_tool_error` | FAIL |
-| ConcurrencyError maps to ToolError | Adapter mapping at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:438-439`; no-code assertion at `serve/mcp-kanban/tests/test_mcp_guidance_1089.py:457`. | `test_concurrency_error_maps_to_tool_error_user_message_only` | PASS |
-| All tests fail in RED phase | Historical Test-Writer evidence in task body shows 11 failing tests before builder work. | Test-Writer retry note | PASS |
+| Guidance passthrough | `show_task` direct return (`server.py:300`) + exact list equality (`test_mcp_guidance_1089.py:233-255`) | `test_show_task_guidance_passes_through_unmodified` | PASS |
+| show_task occurrence-count guidance | Duplicate-section guidance exact equality (`test_mcp_guidance_1089.py:213-232`) | `test_show_task_section_occurrence_count_guidance` | PASS |
+| pick_tasks dispatch hints | Direct adapter return (`server.py:567`) + exact equality (`test_mcp_guidance_1089.py:260-278`) | `test_pick_tasks_dispatch_hints_guidance` | PASS |
+| create/edit body-size warning | Exact warning equality in both task methods (`test_mcp_guidance_1089.py:279-316`) | `test_create_task_body_size_warning_guidance`, `test_edit_task_body_size_warning_guidance` | PASS |
+| move_task / end_work reject skip warning | Sentinel-backed move proof (`test_mcp_guidance_1089.py:317-341`) plus reject-path precondition (`:355`) and exact equality (`:364`); fallback reject guidance absent by helper contract (`guidance.py:22-55`, `guidance.py:78`) | `test_move_task_skip_transition_warning_guidance`, `test_end_work_reject_skip_transition_warning_guidance` | PASS |
+| end_work(block) AR/DR hint | Sentinel-backed exact equality (`test_mcp_guidance_1089.py:370-396`) | `test_end_work_block_action_request_hint_guidance` | PASS |
+| ValidationError exact `user_message`; no code | Exact equality + `ERR_` absence (`test_mcp_guidance_1089.py:409-430`) | `test_validation_error_maps_to_tool_error` | PASS |
+| NotFoundError exact `user_message` | Exact equality (`test_mcp_guidance_1089.py:431-449`) | `test_not_found_error_maps_to_tool_error` | PASS |
+| ConcurrencyError prefix + no code | Prefix + `ERR_ALREADY_CLAIMED` absence (`test_mcp_guidance_1089.py:450-473`) | `test_concurrency_error_maps_to_tool_error_user_message_only` | PASS |
 
-### Confidence: 0.62
-### Verdict: FAIL
-[[2026-04-24]]
-## Builder Notes
-- Implementation: fixed AgentView not-found mapping arity in [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py#L1788) and [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py#L1803) so `move_task`/`start_work` raise `NotFoundError` instead of `TypeError` on missing IDs.
-- Files changed: [serve/kanban/src/owlbear_kanban/engine.py](serve/kanban/src/owlbear_kanban/engine.py)
-- Tests (task-gating scoped): 40 passed, 0 failed
-  - [serve/mcp-kanban/tests/test_mcp_guidance_1089.py](serve/mcp-kanban/tests/test_mcp_guidance_1089.py)
-  - [serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py](serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py)
-- Coverage:
-  - Scoped run: 49% on `owlbear_kanban.engine` (expected undercount from narrow test slice)
-  - Broader package-scoped contextual run: 92% on `owlbear_kanban.engine`
-- Lint: clean (ruff) on touched source and scoped test paths
-- Evidence summary: missing-task branches now consistently map to `NotFoundError` for MCP adapter `ToolError(user_message)` conversion; regression paths covered by lifecycle tool tests remain green.
+### Deductions
+- `-0.04`: whole-module coverage remains 51% on the task-scoped run.
+- `-0.02`: stale RED-phase comments remain in the task test file.
 
-- Reflection:
-  - Problem faced: task `TestFromAC` suite already passed at entry (false-green), while review reported a real uncovered runtime defect.
-  - Workaround applied: patched only the two erroneous arity call sites instead of broad AgentView changes.
-  - Pattern discovered: adapter-level mapping defects can hide behind green task suites when assertion strictness is low.
-  - Quality gap noted: broader package run still has unrelated legacy drift (`KanbanEngine(..., agent_name=...)` fixture usage); treated as non-gating background debt for this builder scope.
-[[2026-04-24]]
-## Review Evidence
-### Test Results
-- quality-runner scoped run on serve/mcp-kanban/tests/test_mcp_guidance_1089.py and serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py: 40 passed, 0 failed, 0 skipped.
-- quality-runner broad run for module coverage: 1788 passed, 205 failed, 2 skipped, 220 setup errors from unrelated background drift. Used only for module coverage context.
+### Verdict
+- PASS
+- Confidence: 0.94
 
-### Lint
-- clean on serve/kanban/src/owlbear_kanban/engine.py plus the two review-scoped test files.
+### Action
+- Advance to `docs`.
 
-### Coverage
-- scoped slice: owlbear_kanban.engine 49%.
-- broad module-level run: owlbear_kanban.engine 92%.
-- coverage is not the blocker.
+### Post-task Reflection
+- Code-reader surfaced a plausible false-green concern on `end_work(reject)`, but the real helper contract in `guidance.py` ruled it out.
+- This review was a test-only slice against an unchanged adapter implementation, so AC proof quality mattered more than diff size.
+- Task-scoped suites on large adapter modules can still show low whole-module coverage; keep that as residual risk rather than inventing unrelated scope.
+[[2026-04-28]]
+## Docs Gate
 
-### Pass 1 - CRITICAL
-#### Test-Writer AC Coverage
-| AC Line | Mapped Test | Would fail if AC were violated? | Verdict |
-|---|---|---|---|
-| Guidance passthrough unmodified | test_show_task_guidance_passes_through_unmodified | No. serve/mcp-kanban/tests/test_mcp_guidance_1089.py:241 only checks list type. | FAIL |
-| show_task section occurrence count guidance | test_show_task_section_occurrence_count_guidance | No. serve/mcp-kanban/tests/test_mcp_guidance_1089.py:223 only checks that some guidance contains `2`; serve/kanban/src/owlbear_kanban/engine.py:1640 builds a concrete message. | FAIL |
-| pick_tasks dispatch hints pass through | test_pick_tasks_dispatch_hints_guidance | No. serve/mcp-kanban/tests/test_mcp_guidance_1089.py:259 only checks non-empty guidance; serve/kanban/src/owlbear_kanban/engine.py:1686 builds a concrete message. | FAIL |
-| create_task/edit_task body-size warning passes through | test_create_task_body_size_warning_guidance; test_edit_task_body_size_warning_guidance | No. serve/mcp-kanban/tests/test_mcp_guidance_1089.py:278 and :297 use substring membership against serve/kanban/src/owlbear_kanban/engine.py:1522. Wrapped or transformed wire text would still pass. | FAIL |
-| move_task/end_work skip-transition warning passes through | test_move_task_skip_transition_warning_guidance; test_end_work_reject_skip_transition_warning_guidance | Yes. Exact equality at serve/mcp-kanban/tests/test_mcp_guidance_1089.py:321 and :348. | PASS |
-| end_work(block) DR hint passes through | test_end_work_block_action_request_hint_guidance | Yes. Exact equality at serve/mcp-kanban/tests/test_mcp_guidance_1089.py:379 against serve/kanban/src/owlbear_kanban/engine.py:1524. | PASS |
-| ValidationError maps to ToolError with user_message only and no code on wire | test_validation_error_maps_to_tool_error | No. serve/mcp-kanban/tests/test_mcp_guidance_1089.py:408 checks only loose wording, while serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:352 still expects ERR_BLOCK_REASON_REQUIRED on wire. | FAIL |
-| NotFoundError maps to ToolError | test_not_found_error_maps_to_tool_error | Yes. Live missing-task path is exercised at serve/mcp-kanban/tests/test_mcp_guidance_1089.py:413 and :428; user message is built at serve/kanban/src/owlbear_kanban/engine.py:1566. | PASS |
-| ConcurrencyError maps to ToolError | test_concurrency_error_maps_to_tool_error_user_message_only | Yes. serve/mcp-kanban/tests/test_mcp_guidance_1089.py:457 proves code absence; user message is built at serve/kanban/src/owlbear_kanban/engine.py:1809. | PASS |
-| All tests fail in RED phase | task body history only | No executable artifact remains in scope beyond task prose. | FAIL |
+### Step 0 Checks
+- Task status: `docs` ✓
+- `## Review Evidence` section: present ✓ (PASS @ 0.94, reviewed by quality-runner)
 
-#### Security Review
-- No task-specific security issues found in AgentView response shaping or MCP ToolError mapping paths.
+### Scope Classification
 
-#### Test Integrity
-| Original Test | Change Made | Assessment |
-|---|---|---|
-| serve/mcp-kanban/tests/test_mcp_guidance_1089.py | No in-scope evidence of builder edits to TestFromAC assertions. Current builder scope was serve/kanban/src/owlbear_kanban/engine.py only. | PRESERVED |
+**Changed-files set (from Builder Notes):**
+- `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` — new test file (builder's only deliverable)
+- `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` — referenced in review but builder explicitly states "Files changed: none"
 
-#### Test Quality
-| Dimension | Rating | Evidence |
-|---|---|---|
-| Assertion specificity | WEAK | serve/mcp-kanban/tests/test_mcp_guidance_1089.py:241, :259, :278, :297, :408 |
-| Negative/error-path coverage | ADEQUATE | validation, not-found, and concurrency paths exist, but the validation wire contract is not proven precisely |
-| Manual mutation resistance | WEAK | duplicate-section, dispatch-hint, and body-warning strings can change materially without failing the task-owned assertions |
-| Test independence | STRONG | tmp_path-backed app_ctx fixtures and isolated mock fixtures in the lifecycle suite |
-| Descriptive names | STRONG | names track AC clauses clearly |
-| Contract consistency | WEAK | serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:352 expects an error code on wire, conflicting with this task's no-code-on-wire contract |
+Both files are OUT of IN-scope: test files are not IN-scope; `server.py` was not modified.
 
-#### Data Safety
-- No issues found.
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` | OUT (test file) | N/A |
+| `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` | OUT (not changed) | N/A |
 
-#### Implementation-Aware Gaps
-- No implementation blocker found in current scope. The prior missing-task mapping defect was fixed, the scoped regression suite is green, and module-level engine coverage is 92.
+### Checklist
 
-#### Builder Process Quality
-| Metric | Value |
-|---|---|
-| Builder Notes sections | 3 |
-| Approach variation | Yes |
-| Assessment | CLEAN |
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Builder: no code changes; no behavior/API/CLI/config change. No IN-scope prose docs reference this test slice. |
+| 2 | Module docstrings | No | N/A | `server.py` not modified; no new Python modules created. |
+| 3 | External attribution | No | N/A | No external patterns cited in task body or review. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/*1089*.md` exists; no research phase noted. |
+| 5 | Diagram maintenance (describes match) | No | N/A | `kanban.excalidraw` describes `serve/mcp-kanban/src/**`; `mcp-topology.excalidraw` describes `serve/mcp-*/src/**`. Neither glob matches `tests/**`. No source files changed, so no describes-match triggers. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
 
-### Pass 2 - INFORMATIONAL
-- Full-suite failures and setup errors in the broad run are existing background drift, not task 1089 gating evidence.
-- The remaining blocker is proof quality: the implementation now appears aligned with the written AC, but several TestFromAC assertions are too loose to enforce that contract.
+**No docs impact.** All items resolve to N/A.
 
-### AC Compliance
-| AC Line | Evidence | Mapped Test | Status |
-|---|---|---|---|
-| Guidance passthrough unmodified | serve/mcp-kanban/tests/test_mcp_guidance_1089.py:241 proves only list type, not unmodified wire content | test_show_task_guidance_passes_through_unmodified | FAIL |
-| show_task section occurrence count guidance | serve/mcp-kanban/tests/test_mcp_guidance_1089.py:223 checks only digit presence; serve/kanban/src/owlbear_kanban/engine.py:1640 constructs the exact message | test_show_task_section_occurrence_count_guidance | FAIL |
-| pick_tasks dispatch hints pass through | serve/mcp-kanban/tests/test_mcp_guidance_1089.py:259 checks only non-empty guidance; serve/kanban/src/owlbear_kanban/engine.py:1686 constructs the exact message | test_pick_tasks_dispatch_hints_guidance | FAIL |
-| create_task/edit_task body size warning passes through | serve/mcp-kanban/tests/test_mcp_guidance_1089.py:278 and :297 use substring matches against serve/kanban/src/owlbear_kanban/engine.py:1522 | test_create_task_body_size_warning_guidance; test_edit_task_body_size_warning_guidance | FAIL |
-| move_task/end_work skip-transition warning passes through | exact equality at serve/mcp-kanban/tests/test_mcp_guidance_1089.py:321 and :348 | test_move_task_skip_transition_warning_guidance; test_end_work_reject_skip_transition_warning_guidance | PASS |
-| end_work(block) DR hint passes through | exact equality at serve/mcp-kanban/tests/test_mcp_guidance_1089.py:379 | test_end_work_block_action_request_hint_guidance | PASS |
-| ValidationError maps to ToolError with user_message only and no code on wire | serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:453 maps KanbanError.user_message, but serve/mcp-kanban/tests/test_mcp_guidance_1089.py:408 does not prove code absence and serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:352 contradicts the AC | test_validation_error_maps_to_tool_error | FAIL |
-| NotFoundError maps to ToolError | live ToolError expectation at serve/mcp-kanban/tests/test_mcp_guidance_1089.py:425 and message check at :428 | test_not_found_error_maps_to_tool_error | PASS |
-| ConcurrencyError maps to ToolError | user phrase check and code absence at serve/mcp-kanban/tests/test_mcp_guidance_1089.py:450 and :457 | test_concurrency_error_maps_to_tool_error_user_message_only | PASS |
-| All tests fail in RED phase | task body contains only historical prose, not a retained failing run artifact | historical Test-Writer notes | FAIL |
+### Files Updated
+- None
 
-### Confidence: 0.78
-### Verdict: FAIL
+### Child Tasks Created
+- None
 
-Action: return to todo. The implementation appears corrected, but the TestFromAC proof still does not enforce multiple AC lines strongly enough.
-[[2026-04-24]]
-## Test-Writer Notes (retry 2)
-- Test file: `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`
-- Classes: `TestFromAC_GuidancePassthrough`, `TestFromAC_ErrorMapping`
-- Total: **11 tests, all PASS** (implementation is green; assertions now prove AC exactly)
-- ruff: clean ✓
-
-**Changes from reviewer FAIL (retry 2):**
-Reviewer cited 5 weak-assertion AC lines and returned to todo. All 5 tightened:
-
-1. `test_show_task_section_occurrence_count_guidance`: `any("2" in g...)` → exact equality `["Section 'Audit' matched 2 occurrences; returning the first section."]`
-2. `test_show_task_guidance_passes_through_unmodified`: `isinstance(list)` → `patch.object(AgentView, "show_task", return_value=sentinel)` + exact equality proving no adapter transformation
-3. `test_pick_tasks_dispatch_hints_guidance`: `len > 0` → exact equality `["Dispatch hints: 3 task(s) across 1 wave(s)."]`
-4. `test_create/edit_task_body_size_warning_guidance`: `any(warning in g...)` → exact equality `[_BODY_SIZE_WARNING]`
-5. `test_validation_error_maps_to_tool_error`: added `assert not any(word.startswith("ERR_") for word in error_text.split())` — proves no machine code on wire per §7
-
-**New imports added:** `AgentView` from `owlbear_kanban.engine`, `ShowTaskResponse` from `owlbear_kanban.models`
-**New module-level constants:** `_SECTION_OCCURRENCE_MSG`, `_PICK_DISPATCH_HINT`
-
-**AC coverage table:**
-
-| AC | Test | Assertion strength |
-|---|---|---|
-| Guidance passthrough unmodified | test_show_task_guidance_passes_through_unmodified | sentinel mock + exact equality |
-| show_task section occurrence count (AC12) | test_show_task_section_occurrence_count_guidance | exact string equality |
-| pick_tasks dispatch hints | test_pick_tasks_dispatch_hints_guidance | exact string equality |
-| create_task body size warning >100 KB | test_create_task_body_size_warning_guidance | exact list equality |
-| edit_task body size warning >100 KB | test_edit_task_body_size_warning_guidance | exact list equality |
-| move_task skip-transition warning (AC-NEW-5) | test_move_task_skip_transition_warning_guidance | exact equality (unchanged) |
-| end_work(reject) skip-transition warning | test_end_work_reject_skip_transition_warning_guidance | exact equality (unchanged) |
-| end_work(block) AR/DR hint (AC-NEW-4) | test_end_work_block_action_request_hint_guidance | exact equality (unchanged) |
-| ValidationError → ToolError (user_message only, no ERR_ code) | test_validation_error_maps_to_tool_error | phrase check + ERR_* absence |
-| NotFoundError → ToolError | test_not_found_error_maps_to_tool_error | ToolError raised + message check |
-| ConcurrencyError → ToolError, no code on wire | test_concurrency_error_maps_to_tool_error_user_message_only | phrase + code absence |
-[[2026-04-24]]
-## Builder Notes
-- Implementation: no code changes required in this retry; verification-only pass after test-writer tightened assertions.
-- Files changed: none.
-- Tests (quality-runner, scoped):
-  - `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`: 11 passed, 0 failed
-  - Additional regression scope: `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` + `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py` + `serve/kanban/tests/test_engine_activity.py`: 67 passed, 0 failed
-- Lint: clean on `serve/kanban/src/owlbear_kanban/engine.py`, `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`, and `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`.
-- Coverage evidence:
-  - Narrow task-only slice undercounts shared module coverage (`owlbear_kanban.engine` 49% in single-file run; 64% in 3-file scoped regression run).
-  - Prior module-level contextual evidence recorded in task history remains `owlbear_kanban.engine` 92% for broader package scope.
-- Evidence summary: tightened assertions (exact equality and ERR_* absence checks) hold on current implementation; no regressions observed in the related lifecycle/activity slices.
-
-- Reflection:
-  - Problem faced: task-owned assertion hardening improved proof quality but narrowed slice still under-represents shared-module coverage.
-  - Workaround applied: ran a second scoped regression batch on adjacent lifecycle/activity suites for stronger GREEN confidence.
-  - Pattern discovered: adapter-contract tasks often require dual evidence (strict task tests + broader contextual coverage) to avoid false confidence from narrow slices.
-  - Quality gap noted: full-suite background drift remains outside this task scope and should stay non-gating for scoped builder verification.
+### Scratch Files Cleaned
+- None (no `1089-*` scratch files found)
