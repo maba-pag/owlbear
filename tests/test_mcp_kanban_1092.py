@@ -309,3 +309,59 @@ class TestFromAC_LifecycleToolAdapters:
             "Found 'archival_reason is required when status' in server.py — "
             "this guard belongs in the engine, not the adapter."
         )
+
+    def test_end_work_adapter_no_param_normalization_in_source(self) -> None:
+        """AC7 (end_work): adapter must not normalize note or block_reason before forwarding.
+
+        Guard test (loop-breaker closure, 3rd review cycle): implementation is currently
+        correct.  This test extends AC7 source-inspection coverage from move_task to
+        end_work per architecture review builder guidance.
+
+        Would FAIL if normalization patterns like ``note or ""`` or
+        ``block_reason or ""`` were reintroduced into the end_work adapter.
+        Currently PASSES because those patterns are absent.
+        """
+        source = inspect.getsource(end_work)
+        assert 'note or ""' not in source, (
+            "AC7: end_work adapter must not normalize note before forwarding. "
+            "Found 'note or \"\"' in end_work — adapter must forward note verbatim."
+        )
+        assert "block_reason or" not in source, (
+            "AC7: end_work adapter must not normalize block_reason before forwarding."
+        )
+
+    def test_end_work_adapter_no_tag_mutation_in_source(self) -> None:
+        """AC7 (end_work): adapter must not mutate block:user tag after engine call.
+
+        Guard test (loop-breaker closure, 3rd review cycle): the block:user cleanup
+        was moved to engine._apply_outcome.  This test ensures the adapter-side
+        tag-mutation path (``edit_task(remove_tags=["block:user"])``) is not
+        reintroduced in the end_work adapter.
+
+        Currently PASSES because block:user references are absent from end_work.
+        Would FAIL if adapter-owned tag mutation returned.
+        """
+        source = inspect.getsource(end_work)
+        assert "block:user" not in source, (
+            "AC7: end_work adapter must not reference 'block:user' tag. "
+            "Tag lifecycle belongs in engine._apply_outcome, not the adapter."
+        )
+
+    def test_start_work_adapter_no_business_logic_in_source(self) -> None:
+        """AC7 (start_work): adapter must forward id only, with no local business logic.
+
+        Guard test (loop-breaker closure, 3rd review cycle): extends AC7
+        source-inspection coverage to start_work per architecture review guidance.
+        start_work is a simple claim delegation — no parameter normalization or
+        predicate checks belong in the adapter.
+
+        Currently PASSES because no forbidden patterns exist in start_work.
+        Would FAIL if business logic were introduced into the adapter.
+        """
+        source = inspect.getsource(start_work)
+        assert 'or ""' not in source, (
+            "AC7: start_work adapter must not perform parameter normalization."
+        )
+        assert "claim_timeout" not in source, (
+            "AC7: start_work adapter must not contain claim-state business logic."
+        )
