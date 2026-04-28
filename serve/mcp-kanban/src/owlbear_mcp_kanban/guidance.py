@@ -15,7 +15,7 @@ _DR_REQUIRED_MSG = (
     " (see w-decision-routing). Blocks without a DR are invisible to the pipeline."
 )
 _COMMIT_REMINDER_MSG = (
-    "Reminder: verify your changes are committed and pushed before this task advances."
+    "Reminder: verify your changes are committed before this task advances."
 )
 
 
