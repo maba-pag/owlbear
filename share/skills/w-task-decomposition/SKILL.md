@@ -37,7 +37,7 @@ Before decomposition, detect whether the request is exactly one follow-up task w
 If yes, use the shortcut flow:
 
 - Skip Steps 2–4 and Step 7.
-- Continue with Steps 5, 5a, and 6 only.
+- Continue with Steps 5, 5a, 5b (user mode only), and 6.
 - Preserve caller metadata verbatim where provided: title, parent ID, tags, and requested status.
 - Status routing: caller should specify target status (for example, "at backlog" or "at research"). Default is `backlog`; researcher follow-ups use `research`.
 - Naming: no phase-based `P{phase}-{nn}` prefix in shortcut mode. Use caller-provided title directly.
@@ -106,6 +106,18 @@ If a planned task fails: refine the title and body or stop. Never create a place
 ## Step 5b — Approval (user mode only)
 
 Skip this step if invoked in dispatch mode (`Plan and create:` prefix) — proceed directly to Step 6.
+
+In shortcut mode, present a simplified single-task approval payload inline:
+
+- One follow-up summary line: title, priority, status, tags
+- No task table, no Mermaid dependency graph, no phase summary (decomposition-only artifacts)
+
+Then call `askQuestions` with two options:
+
+- "Approve — create follow-up task"
+- "Reject — cancel"
+
+On approve, proceed to Step 6. On reject, stop without creating tasks.
 
 Present the planned breakdown inline in the chat:
 
