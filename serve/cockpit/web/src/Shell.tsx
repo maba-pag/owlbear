@@ -1,11 +1,19 @@
 import { useRef, useEffect } from 'react'
 import { Routes, Route } from 'react-router'
 import KanbanBoard from './KanbanBoard'
+import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import { usePolling } from './hooks/usePolling'
+import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
 import './Shell.css'
+
+function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
+  return item.code !== null && item.detail !== null && item.file_path !== null
+}
 
 function Shell() {
   const { health } = usePolling('/health')
+  const { items: scanItems, isLoading } = useScanPolling()
+  const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
@@ -27,6 +35,7 @@ function Shell() {
       <header className="shell__status-bar" data-region="status-bar">
         <span data-testid="traffic-light" data-health={health} />
         <span data-testid="task-count" />
+        {!isLoading ? <HealthBadge items={normalizedItems} /> : null}
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
         <button data-surface="kanban" aria-current="page">
