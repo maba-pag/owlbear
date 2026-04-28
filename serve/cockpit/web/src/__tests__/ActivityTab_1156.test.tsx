@@ -631,3 +631,94 @@ describe('TestFromAC_FilterTypeAlignment', () => {
   // AC4: Session interface shared — HistorySubtab accepts same session fields as ActivityTab
 
 })
+
+describe('TestFromAC_CoverageProof', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  // Covers: HistorySubtab duration ?? '—' — non-null branch
+  it('HistorySubtab renders numeric duration when duration is not null', () => {
+    const session = {
+      task_id: 10,
+      state: 'released',
+      agent: 'builder',
+      started_at: '2026-04-28T09:00:00+00:00',
+      duration: 120.5,
+      outcome: 'success',
+    }
+    const { container } = renderHistorySubtab([session])
+    const el = container.querySelector('[data-testid="session-duration"]')
+    expect(el).not.toBeNull()
+    expect(el!.textContent).toBe('120.5')
+  })
+
+  // Covers: HistorySubtab onSelectTask?.() — undefined branch
+  it('HistorySubtab row click does not throw when onSelectTask is not provided', () => {
+    const { container } = renderHistorySubtab([SESSION_RUNNING])
+    const row = container.querySelector('[data-testid="history-session-row"]')
+    expect(row).not.toBeNull()
+    expect(() => fireEvent.click(row!)).not.toThrow()
+  })
+
+  // Covers: HistorySubtab empty sessions array
+  it('HistorySubtab renders empty container when sessions is empty', () => {
+    const { container } = renderHistorySubtab([])
+    expect(container.querySelector('[data-testid="history-view"]')).not.toBeNull()
+    expect(container.querySelectorAll('[data-testid="history-session-row"]').length).toBe(0)
+  })
+
+  // Covers: DetailTab if (!task) return null
+  it('DetailTab renders nothing when task is null', () => {
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={null} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.querySelector('[data-testid="history-tab"]')).toBeNull()
+  })
+
+  // Covers: t.blocked && <input data-field="block_reason">
+  it('DetailTab shows block_reason input when task is blocked', () => {
+    const blocked = { ...BASE_TASK, blocked: true, block_reason: 'Waiting on dep' }
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={blocked} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.querySelector('[data-field="block_reason"]')).not.toBeNull()
+  })
+
+  // Covers: t.blocked && <button data-testid="unblock-action">
+  it('DetailTab shows unblock-action button when task is blocked', () => {
+    const blocked = { ...BASE_TASK, blocked: true, block_reason: 'Waiting on dep' }
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={blocked} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.querySelector('[data-testid="unblock-action"]')).not.toBeNull()
+  })
+
+  // Covers: block_reason not shown when NOT blocked
+  it('DetailTab does NOT show block_reason when task is not blocked', () => {
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={BASE_TASK} />
+      </PorscheDesignSystemProvider>,
+    )
+    expect(container.querySelector('[data-field="block_reason"]')).toBeNull()
+  })
+
+  // Covers: block_reason defaultValue
+  it('DetailTab block_reason input shows the block reason text', () => {
+    const blocked = { ...BASE_TASK, blocked: true, block_reason: 'Blocked by #50' }
+    const { container } = render(
+      <PorscheDesignSystemProvider>
+        <DetailTab task={blocked} />
+      </PorscheDesignSystemProvider>,
+    )
+    const input = container.querySelector('[data-field="block_reason"]') as HTMLInputElement | null
+    expect(input?.defaultValue).toBe('Blocked by #50')
+  })
+})

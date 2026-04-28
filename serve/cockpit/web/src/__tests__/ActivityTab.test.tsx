@@ -14,7 +14,7 @@ import ActivityTab from '../components/ActivityTab'
 
 const SESSION_RUNNING = {
   task_id: 1,
-  state: 'in-progress',
+  state: 'running',
   agent: 'builder',
   started_at: '2026-04-18T09:00:00+00:00',
   duration: null,
@@ -46,6 +46,15 @@ const SESSION_RELEASED_OK = {
   started_at: '2026-04-18T06:00:00+00:00',
   duration: 45.0,
   outcome: 'success',
+}
+
+const SESSION_BLOCKED_OLD = {
+  task_id: 5,
+  state: 'blocked',
+  agent: 'architect',
+  started_at: '2026-04-18T05:00:00+00:00',
+  duration: null,
+  outcome: null,
 }
 
 const ALL_SESSIONS = {
@@ -123,9 +132,9 @@ describe('TestFromAC_ActivityTab', () => {
       expect(container.querySelector('[data-testid="filter-all"]')).not.toBeNull()
     })
 
-    it('failed-or-rejected filter switch is present', () => {
+    it('blocked filter switch is present', () => {
       const { container } = renderActivity()
-      expect(container.querySelector('[data-testid="filter-failed"]')).not.toBeNull()
+      expect(container.querySelector('[data-testid="filter-blocked"]')).not.toBeNull()
     })
 
     it('released filter switch is present', () => {
@@ -148,16 +157,16 @@ describe('TestFromAC_ActivityTab', () => {
       )
     })
 
-    it('clicking failed-or-rejected filter shows only failed/rejected sessions', async () => {
-      stubFetchSessions(ALL_SESSIONS)
+    it('clicking blocked filter shows only blocked sessions', async () => {
+      stubFetchSessions({ sessions: [SESSION_RUNNING, SESSION_BLOCKED_OLD] })
       const { container } = renderActivity()
-      const failBtn = container.querySelector('[data-testid="filter-failed"]') as HTMLElement | null
-      expect(failBtn).not.toBeNull()
-      fireEvent.click(failBtn!)
+      const blockedBtn = container.querySelector('[data-testid="filter-blocked"]') as HTMLElement | null
+      expect(blockedBtn).not.toBeNull()
+      fireEvent.click(blockedBtn!)
       await waitFor(
         () => {
           const rows = container.querySelectorAll('[data-testid="session-row"]')
-          // Only SESSION_RELEASED_FAIL has outcome=fail in ALL_SESSIONS
+          // Only SESSION_BLOCKED_OLD matches the blocked filter
           expect(rows.length).toBe(1)
         },
         { timeout: 500 },
@@ -230,7 +239,7 @@ describe('TestFromAC_ActivityTab', () => {
         () => {
           const row = container.querySelector('[data-testid="session-row"]')
           expect(row).not.toBeNull()
-          expect((row as HTMLElement).querySelector('[data-testid="session-state"]')?.textContent).toBe('in-progress')
+          expect((row as HTMLElement).querySelector('[data-testid="session-state"]')?.textContent).toBe('running')
         },
         { timeout: 500 },
       )
