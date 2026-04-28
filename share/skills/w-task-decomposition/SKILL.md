@@ -89,7 +89,8 @@ Build an explicit dependency graph:
 ## Step 5 — Assign Priority and Tags
 
 - **Priority:** count dependents (critical if 3+, needed if 1-2, important otherwise)
-- **Tags:** always `phase-{n}` + `scope:{domain}` + at least one category tag
+- **Tags (decomposition mode):** always `phase-{n}` + `scope:{domain}` + at least one category tag
+- **Tags (shortcut mode):** preserve caller-provided tags verbatim; do not add phase tags unless the caller explicitly provided them
 
 See `r-project-standards` for the full priority scheme and tag taxonomy.
 
@@ -126,7 +127,7 @@ Call `askQuestions` with two options:
 
 **Shortcut naming:** preserve the caller-provided title verbatim (no phase prefix).
 
-Create each task via `create_task` with title, priority, status, tags, depends_on, and body containing AC.
+Create each task via `create_task` with title, priority, status, tags, depends_on, body containing AC, and `parent` when provided by the caller (shortcut mode).
 
 - Decomposition mode default status: `research`.
 - Shortcut mode status: caller-provided status, default `backlog` (or `research` for researcher follow-ups).
@@ -174,7 +175,7 @@ Append to parent task body (if dispatched with parent ID):
 - [ ] No task has multiple responsibilities
 - [ ] Sequence numbers unique and zero-padded (decomposition mode only)
 - [ ] Priority reflects blocking potential
-- [ ] Tags include `phase-{n}` + category
+- [ ] Tags include `phase-{n}` + category (decomposition mode only)
 - [ ] No cycles in dependency graph
 - [ ] Mermaid diagram matches task list (decomposition mode only)
 - [ ] Total 20 tasks or fewer
