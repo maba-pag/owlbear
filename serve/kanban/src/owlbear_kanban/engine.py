@@ -1416,6 +1416,8 @@ class KanbanEngine:
         elif outcome == "block":
             record.blocked = True
             record.block_reason = block_reason
+            # Agent-owned blocking should clear any prior user-owned block tag.
+            record.tags = [tag for tag in record.tags if tag != "block:user"]
             if move_to:
                 record.status = move_to
         elif outcome == "reject":
