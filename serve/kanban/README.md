@@ -72,7 +72,7 @@ for wave in response.waves:
 
 ## Migration
 
-To migrate an existing board from the legacy schema to the Brief-C canonical schema:
+To migrate an existing board from the legacy schema to the grouped canonical schema (``schema: grouped``):
 
 ```bash
 uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all] [--kanban-dir PATH]

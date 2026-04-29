@@ -188,10 +188,17 @@ class PolicyConfig(BaseModel):
 class BoardConfig(BaseModel):
     """Schema for .owlbear/kanban/config.yml.
 
-    Accepts both the legacy schema (version/board/tasks_dir/statuses as list[dict])
-    and the new Brief-C schema (flat statuses as list[str], entry_status, wave_size,
-    etc.). A ``model_validator`` normalises legacy data to the new shape before
-    field assignment. Unknown/vendor fields are preserved via extra='allow'.
+    Accepts three schema variants, all normalised before field assignment:
+
+    - **Grouped** (canonical): ``schema: grouped`` with nested sub-model sections
+      (``paths``, ``pipeline``, ``agents``, ``policy``).
+    - **Flat** (transitional): string statuses with flat top-level keys such as
+      ``tasks_dir``, ``entry_status``, and ``wave_size``.
+    - **Legacy**: dict-based ``statuses`` list (``[{name: ...}]``) from the old
+      board schema.
+
+    A ``model_validator`` normalises all variants to the grouped shape before
+    field assignment. Unknown/vendor fields are preserved via ``extra='allow'``.
     """
 
     model_config = ConfigDict(extra="allow")

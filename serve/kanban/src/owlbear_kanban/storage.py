@@ -217,8 +217,9 @@ _TS_RE = re.compile(
 def load_config(kanban_dir: Path) -> BoardConfig:
     """Load ``config.yml`` from *kanban_dir* and return a :class:`BoardConfig`.
 
-    Accepts both legacy schema (dict statuses) and new Brief-C schema
-    (string statuses) via the ``BoardConfig._normalise_legacy`` validator.
+    Accepts legacy (dict statuses), flat Brief-C (string statuses with flat
+    top-level keys), and grouped (``schema: grouped`` with sub-model sections)
+    variants via the ``BoardConfig._normalise_legacy`` validator.
     Validates ``claim_timeout`` format and raises :class:`ConfigError` on
     invalid values (AC-C50).
 
@@ -237,7 +238,8 @@ def load_config(kanban_dir: Path) -> BoardConfig:
 def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     """Write *config* to ``config.yml`` in *kanban_dir* using atomic write.
 
-    Writes the config in Brief-C new schema format.
+    Writes the config in grouped schema format (``schema: grouped``) with
+    nested ``paths``, ``pipeline``, ``agents``, and ``policy`` sub-sections.
 
     Args:
         config:     :class:`BoardConfig` to write.
