@@ -1,7 +1,7 @@
-"""kanban-migrate: migration script for owlbear-kanban boards (Brief C §5).
+"""kanban-migrate: migration script for owlbear-kanban boards.
 
 Migrates task files, archive files, and config.yml from the legacy schema
-to the Brief-C canonical schema.
+to the grouped canonical schema (schema: grouped).
 
 Usage:
     uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all]
@@ -364,7 +364,7 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
     *,
     dry_run: bool = False,
 ) -> tuple[str, str | None]:
-    """Migrate config.yml to Brief-C schema."""
+    """Migrate config.yml to grouped schema (schema: grouped); idempotent on already-migrated configs."""
     config_path = kanban_dir / "config.yml"
     if not config_path.exists():
         return "failed", "config.yml not found"
