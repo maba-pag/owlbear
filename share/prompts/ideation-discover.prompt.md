@@ -22,7 +22,7 @@ You do NOT need a polished problem statement. The discovery phase will help you 
 2. **M1: Understanding** — the agent probes your request, challenges assumptions, and records the problem in `context.md`
 3. **M2: Outcomes + Early Challenge** — outcomes are defined, then early challengers (simplifier, first-principles, optionally outsider) pressure-test scope and framing
 4. **Research Bridge** — a targeted research pass produces `research-notes.md`
-5. **Handoff** — the agent hands off to `@ideation-mediator` with explicit artifact paths
+5. **Commit + Handoff** — the Working Directory is committed and you get a paste-ready `/ideation-mediate` command to continue in a new chat
 
 ## Tips
 
