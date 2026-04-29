@@ -355,6 +355,24 @@ class TestFromAC_AgentViewHelpers:
         result = _agent_view_for(engine)
         assert result is not None
 
+    def test_agent_view_for_returns_exact_highest_scored_candidate(self) -> None:
+        """_agent_view_for returns the exact higher-scored candidate, not just non-None.
+
+        Setup: engine.agent_view = av (MagicMock with boosted move_task return_value).
+        candidates = [av, av()] — av scores 10 (non-Mock return_value → +2 bonus),
+        av() scores 8 (all plain Mocks, no bonus). max() must return av specifically.
+
+        FAILS: if max() is removed or the wrong candidate is selected.
+        """
+        engine = MagicMock()
+        av = MagicMock()
+        # av.move_task.return_value is SingleTaskResponse (not a Mock) → +2 bonus
+        av.move_task.return_value = _make_single_task_response()
+        engine.agent_view = av
+        result = _agent_view_for(engine)
+        # Must be the exact av object, not av() (its call return value)
+        assert result is av
+
     def test_canonical_agent_view_for_none_attr_returns_none(self) -> None:
         """_canonical_agent_view_for returns None when agent_view is None (line 281).
 
@@ -953,6 +971,66 @@ class TestFromAC_EditTaskCoverage:
         _, kwargs = av.edit_task.call_args
         assert kwargs.get("timestamp") is True
 
+    @pytest.mark.asyncio
+    async def test_parent_nonzero_forwarded_to_engine(self) -> None:
+        """edit_task: parent > 0 forwarded to agent_view().edit_task.
+
+        FAILS: if the `if parent > 0` branch is removed or parent not forwarded.
+        """
+        av = MagicMock()
+        av.edit_task.return_value = _make_single_task_response()
+        engine = MagicMock()
+        engine.agent_view.return_value = av
+        ctx = _make_ctx_from_engine(engine)
+        await edit_task(ctx, id="42", parent=7)
+        _, kwargs = av.edit_task.call_args
+        assert kwargs.get("parent") == 7
+
+    @pytest.mark.asyncio
+    async def test_remove_tag_forwarded_to_engine(self) -> None:
+        """edit_task: remove_tag list forwarded when not None.
+
+        FAILS: if the `if remove_tag is not None` branch is removed.
+        """
+        av = MagicMock()
+        av.edit_task.return_value = _make_single_task_response()
+        engine = MagicMock()
+        engine.agent_view.return_value = av
+        ctx = _make_ctx_from_engine(engine)
+        await edit_task(ctx, id="42", remove_tag=["phase-1", "scope:old"])
+        _, kwargs = av.edit_task.call_args
+        assert kwargs.get("remove_tag") == ["phase-1", "scope:old"]
+
+    @pytest.mark.asyncio
+    async def test_archival_reason_nonempty_forwarded_to_engine(self) -> None:
+        """edit_task: non-empty archival_reason forwarded to engine.
+
+        FAILS: if the `if archival_reason` branch is removed.
+        """
+        av = MagicMock()
+        av.edit_task.return_value = _make_single_task_response()
+        engine = MagicMock()
+        engine.agent_view.return_value = av
+        ctx = _make_ctx_from_engine(engine)
+        await edit_task(ctx, id="42", archival_reason="superseded by #99")
+        _, kwargs = av.edit_task.call_args
+        assert kwargs.get("archival_reason") == "superseded by #99"
+
+    @pytest.mark.asyncio
+    async def test_archival_refs_forwarded_to_engine(self) -> None:
+        """edit_task: archival_refs list forwarded when not None.
+
+        FAILS: if the `if archival_refs is not None` branch is removed.
+        """
+        av = MagicMock()
+        av.edit_task.return_value = _make_single_task_response()
+        engine = MagicMock()
+        engine.agent_view.return_value = av
+        ctx = _make_ctx_from_engine(engine)
+        await edit_task(ctx, id="42", archival_refs=[98, 99])
+        _, kwargs = av.edit_task.call_args
+        assert kwargs.get("archival_refs") == [98, 99]
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_StartWorkFallbackPaths — lines 627-660
@@ -1172,3 +1250,16 @@ class TestFromAC_MoveTaskFallbackPath:
         with pytest.raises(ToolError, match="status is required"):
             await move_task(ctx, id="42")
         engine.move_task.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_engine_value_error_mapped_to_tool_error(self) -> None:
+        """move_task engine fallback: ValueError → ToolError (server.py:476).
+
+        FAILS: if the ValueError branch is removed from the engine exception handler.
+        """
+        engine = _make_engine_mock(agent_view=None)
+        engine.move_task.side_effect = ValueError("invalid status value")
+        app_ctx = _make_app_ctx(engine)
+        ctx = _make_ctx_from_app_ctx(app_ctx)
+        with pytest.raises(ToolError, match="invalid status value"):
+            await move_task(ctx, id="42", status="not-a-real-status")
