@@ -16,10 +16,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 import pydantic
 
 from owlbear_kanban.errors import ConfigError
+from owlbear_kanban.migrate import _migrate_config
 from owlbear_kanban.models import (
     AgentsConfig,
     PathsConfig,
@@ -41,6 +43,8 @@ statuses:
 priorities:
   - important
   - critical
+next_id: 1
+activity_log: true
 paths:
   tasks_dir: tasks
   archive_dir: archive
@@ -56,8 +60,8 @@ agents:
     done: []
   agent_types: {}
   agent_compatibility: {}
-  non_impl_tags: []
 policy:
+  non_impl_tags: []
   archival_reasons:
     - completed
     - deprecated
@@ -65,7 +69,6 @@ policy:
     - duplicate
     - wontfix
   status_predicates: {}
-  activity_log: true
 """
 
 _FLAT_CONFIG_YAML = """\
@@ -154,12 +157,11 @@ class TestFromAC_SubModelValidation:
     # AgentsConfig
 
     def test_agents_config_accepts_valid_fields(self) -> None:
-        """AgentsConfig instantiates with agent_map, agent_types, compatibility, non_impl_tags."""
+        """AgentsConfig instantiates with agent_map, agent_types, and agent_compatibility."""
         cfg = AgentsConfig(
             agent_map={"research": [], "done": []},
             agent_types={},
             agent_compatibility={},
-            non_impl_tags=[],
         )
         assert cfg.agent_map == {"research": [], "done": []}
 
@@ -171,18 +173,18 @@ class TestFromAC_SubModelValidation:
     # PolicyConfig
 
     def test_policy_config_accepts_valid_fields(self) -> None:
-        """PolicyConfig instantiates with archival_reasons, status_predicates, activity_log."""
+        """PolicyConfig instantiates with non_impl_tags, archival_reasons, status_predicates."""
         cfg = PolicyConfig(
+            non_impl_tags=["type:test"],
             archival_reasons={"completed", "dropped"},
             status_predicates={},
-            activity_log=True,
         )
-        assert cfg.activity_log is True
+        assert "completed" in cfg.archival_reasons
 
     def test_policy_config_rejects_unknown_fields(self) -> None:
         """PolicyConfig rejects unknown fields — extra='forbid' catches typos."""
         with pytest.raises(pydantic.ValidationError):
-            PolicyConfig(archival_reasons={"completed"}, bad_field=True)
+            PolicyConfig(non_impl_tags=[], archival_reasons={"completed"}, bad_field=True)
 
 
 # ---------------------------------------------------------------------------
@@ -341,12 +343,11 @@ agents:
     done: []
   agent_types: {}
   agent_compatibility: {}
-  non_impl_tags: []
 policy:
+  non_impl_tags: []
   archival_reasons:
     - completed
   status_predicates: {}
-  activity_log: true
 """
         kanban_dir = _make_board(tmp_path, yaml_with_explicit_schema)
         # schema: grouped is authoritative — must not raise
@@ -508,3 +509,110 @@ class TestFromAC_SaveConfigGroupedFormat:
         save_config(config, kanban_dir)
         reloaded = load_config(kanban_dir)
         assert reloaded.pipeline.default_priority == config.pipeline.default_priority
+
+    def test_save_config_no_flat_tasks_dir_at_root(self, tmp_path: Path) -> None:
+        """AC8 (negative): save_config must NOT write tasks_dir as a flat root key."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_CONFIG_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        assert "tasks_dir" not in data, "tasks_dir must not leak as a flat root key in grouped output"
+
+    def test_save_config_no_flat_archive_dir_at_root(self, tmp_path: Path) -> None:
+        """AC8 (negative): save_config must NOT write archive_dir as a flat root key."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_CONFIG_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        assert "archive_dir" not in data, "archive_dir must not leak as a flat root key in grouped output"
+
+    def test_save_config_grouped_output_has_nested_paths_keys(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8 (structural): YAML output has paths.tasks_dir and paths.archive_dir as nested keys."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_CONFIG_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        assert isinstance(data.get("paths"), dict)
+        assert "tasks_dir" in data["paths"]
+        assert "archive_dir" in data["paths"]
+
+    def test_round_trip_full_model_dump_equality(self, tmp_path: Path) -> None:
+        """AC9: save_config → load_config model_dump equals original for all persisted fields."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_CONFIG_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        reloaded = load_config(kanban_dir)
+        # Exclude legacy 'defaults' field — not preserved in grouped round-trip
+        exclude = {"defaults"}
+        assert reloaded.model_dump(exclude=exclude) == config.model_dump(exclude=exclude)
+
+
+# ---------------------------------------------------------------------------
+# AC7 (extend): migrate._migrate_config converts defaults.priority → default_priority
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MigrateConfigDefaultsPriority:
+    """AC7 — migrate._migrate_config explicitly transfers defaults.priority to default_priority."""
+
+    def test_migrate_config_writes_default_priority_from_legacy(
+        self, tmp_path: Path
+    ) -> None:
+        """_migrate_config on legacy board writes default_priority from defaults.priority."""
+        kanban_dir = _make_board(tmp_path, _LEGACY_CONFIG_YAML)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "migrated"
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        # _LEGACY_CONFIG_YAML has defaults.priority: critical
+        assert data.get("default_priority") == "critical" or (
+            isinstance(data.get("pipeline"), dict)
+            and data["pipeline"].get("default_priority") == "critical"
+        ), "migrate must write default_priority value from defaults.priority"
+
+    def test_migrate_config_explicit_value_not_pydantic_default(
+        self, tmp_path: Path
+    ) -> None:
+        """_migrate_config uses the actual defaults.priority value, not a model default."""
+        yaml_non_default = """\
+version: 10
+board:
+  name: Test Board
+statuses:
+  - name: research
+  - name: done
+priorities:
+  - someday
+  - important
+defaults:
+  status: research
+  priority: someday
+tasks_dir: tasks
+archive_dir: archive
+"""
+        kanban_dir = _make_board(tmp_path, yaml_non_default)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "migrated"
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        # Must be "someday" (the actual value), not whatever PipelineConfig defaults to
+        actual_priority = data.get("default_priority") or (
+            data.get("pipeline") or {}
+        ).get("default_priority")
+        assert actual_priority == "someday", (
+            f"Expected 'someday', got {actual_priority!r} — migration must be explicit"
+        )
+
+    def test_migrate_config_round_trip_no_data_loss(
+        self, tmp_path: Path
+    ) -> None:
+        """AC9 (migrate): _migrate_config output can be re-loaded; model_dump matches."""
+        kanban_dir = _make_board(tmp_path, _LEGACY_CONFIG_YAML)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "migrated"
+        # After migration, load_config must succeed and expose expected fields
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        reloaded = load_config(kanban_dir)
+        exclude = {"defaults"}
+        assert reloaded.model_dump(exclude=exclude) == config.model_dump(exclude=exclude)

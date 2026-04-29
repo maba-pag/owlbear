@@ -31,6 +31,7 @@ from owlbear_kanban.models import (
     PipelineConfig,
     PolicyConfig,
 )
+from owlbear_kanban.migrate import _migrate_config
 from owlbear_kanban.storage import load_config, save_config
 
 # ---------------------------------------------------------------------------
@@ -475,3 +476,110 @@ class TestFromAC_SaveConfigGrouped:
         save_config(config, kanban_dir)
         reloaded = load_config(kanban_dir)
         assert reloaded.pipeline.default_priority == config.pipeline.default_priority
+
+    def test_save_config_no_flat_tasks_dir_at_root(self, tmp_path: Path) -> None:
+        """AC8 (negative): grouped save_config must NOT write tasks_dir as flat root key."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        assert "tasks_dir" not in data, "tasks_dir must not leak as flat root key in grouped output"
+
+    def test_save_config_no_flat_archive_dir_at_root(self, tmp_path: Path) -> None:
+        """AC8 (negative): grouped save_config must NOT write archive_dir as flat root key."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        assert "archive_dir" not in data, "archive_dir must not leak as flat root key in grouped output"
+
+    def test_save_config_grouped_nested_paths_structural(self, tmp_path: Path) -> None:
+        """AC8 (structural): YAML-parsed output has nested paths dict with tasks_dir and archive_dir."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        assert isinstance(data.get("paths"), dict)
+        assert "tasks_dir" in data["paths"]
+        assert "archive_dir" in data["paths"]
+
+    def test_round_trip_full_model_dump_equality(self, tmp_path: Path) -> None:
+        """AC9: save_config → load_config model_dump equals original for all persisted fields."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        reloaded = load_config(kanban_dir)
+        # Exclude legacy 'defaults' field — not preserved in grouped round-trip
+        exclude = {"defaults"}
+        assert reloaded.model_dump(exclude=exclude) == config.model_dump(exclude=exclude)
+
+
+# ---------------------------------------------------------------------------
+# AC7 (extend): migrate._migrate_config converts defaults.priority → default_priority
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MigrateConfigDefaultsPriority:
+    """AC7 — migrate._migrate_config explicitly transfers defaults.priority to default_priority."""
+
+    def test_migrate_config_writes_default_priority_from_legacy(
+        self, tmp_path: Path
+    ) -> None:
+        """_migrate_config on legacy board writes default_priority from defaults.priority."""
+        kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "migrated"
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        # _LEGACY_YAML has defaults.priority: important
+        assert data.get("default_priority") == "important" or (
+            isinstance(data.get("pipeline"), dict)
+            and data["pipeline"].get("default_priority") == "important"
+        ), "migrate must write default_priority value from defaults.priority"
+
+    def test_migrate_config_explicit_value_not_pydantic_default(
+        self, tmp_path: Path
+    ) -> None:
+        """_migrate_config uses the actual defaults.priority value, not a model default."""
+        legacy_with_critical = """\
+version: 10
+board:
+  name: TestBoard
+statuses:
+  - name: research
+  - name: backlog
+  - name: done
+priorities:
+  - important
+  - critical
+defaults:
+  status: research
+  priority: critical
+claim_timeout: 1h
+next_id: 1
+tasks_dir: tasks
+archive_dir: archive
+"""
+        kanban_dir = _make_board(tmp_path, legacy_with_critical)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "migrated"
+        data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
+        actual_priority = data.get("default_priority") or (
+            data.get("pipeline") or {}
+        ).get("default_priority")
+        assert actual_priority == "critical", (
+            f"Expected 'critical', got {actual_priority!r} — migration must be explicit"
+        )
+
+    def test_migrate_config_round_trip_no_data_loss(
+        self, tmp_path: Path
+    ) -> None:
+        """AC9 (migrate): _migrate_config output can be re-loaded; model_dump matches."""
+        kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "migrated"
+        # After migration, load_config must succeed
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        reloaded = load_config(kanban_dir)
+        exclude = {"defaults"}
+        assert reloaded.model_dump(exclude=exclude) == config.model_dump(exclude=exclude)
