@@ -364,7 +364,7 @@ def _config_requires_manual_action(kanban_dir: Path) -> bool:
     return _has_unresolved_config_stubs(plain_loaded)
 
 
-def _migrate_config(  # noqa: C901, PLR0911
+def _migrate_config(  # noqa: C901, PLR0911, PLR0915
     kanban_dir: Path,
     *,
     dry_run: bool = False,
@@ -416,6 +416,7 @@ def _migrate_config(  # noqa: C901, PLR0911
     new_cfg["priorities"] = plain_raw.get("priorities", [])
     new_cfg["claim_timeout"] = plain_raw.get("claim_timeout", "1h")
     new_cfg["next_id"] = plain_raw.get("next_id", 1)
+    new_cfg["schema"] = "grouped"
 
     # entry_status from defaults.status or first status
     defaults = plain_raw.get("defaults", {})
@@ -446,6 +447,31 @@ def _migrate_config(  # noqa: C901, PLR0911
         "wontfix",
     ]
     new_cfg["status_predicates"] = {}
+
+    # Emit canonical grouped sections while keeping flat compatibility keys.
+    tasks_dir = plain_raw.get("tasks_dir", "tasks")
+    archive_dir = plain_raw.get("archive_dir", "archive")
+    new_cfg["paths"] = {
+        "tasks_dir": tasks_dir,
+        "archive_dir": archive_dir,
+    }
+    new_cfg["pipeline"] = {
+        "entry_status": new_cfg["entry_status"],
+        "terminal_status": plain_raw.get("terminal_status", "done"),
+        "wave_size": new_cfg["wave_size"],
+        "claim_timeout": new_cfg["claim_timeout"],
+        "default_priority": new_cfg["default_priority"],
+    }
+    new_cfg["agents"] = {
+        "agent_map": new_cfg["agent_map"],
+        "agent_types": new_cfg["agent_types"],
+        "agent_compatibility": new_cfg["agent_compatibility"],
+    }
+    new_cfg["policy"] = {
+        "non_impl_tags": new_cfg["non_impl_tags"],
+        "archival_reasons": new_cfg["archival_reasons"],
+        "status_predicates": new_cfg["status_predicates"],
+    }
 
     y_rt2 = _make_yaml_rt()
     cm = CommentedMap(new_cfg)
