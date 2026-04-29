@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
 import KanbanBoard from './KanbanBoard'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
@@ -14,9 +14,16 @@ function Shell() {
   const { health } = usePolling('/health')
   const { items: scanItems, isLoading, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
+  const [hasLoadedScan, setHasLoadedScan] = useState(false)
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!isLoading) {
+      setHasLoadedScan(true)
+    }
+  }, [isLoading])
 
   useEffect(() => {
     const tabs = tabsRef.current
@@ -35,7 +42,7 @@ function Shell() {
       <header className="shell__status-bar" data-region="status-bar">
         <span data-testid="traffic-light" data-health={health} />
         <span data-testid="task-count" />
-        {!isLoading ? (
+        {hasLoadedScan ? (
           <HealthBadge
             items={normalizedItems}
             corruptionCount={normalizedItems.length}
