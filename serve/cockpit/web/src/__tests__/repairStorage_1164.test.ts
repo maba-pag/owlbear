@@ -1,27 +1,21 @@
 /**
- * Failing tests for #1164: RF-02 repairStorage API client (Test AC - edge cases)
+ * Tests for #1164: RF-02 repairStorage API client (edge cases + retry strengthening)
  *
  * Context: api/repair.ts was implemented in #1163 builder run — all happy-path
  * and standard error AC lines are GREEN in repairStorage_1163.test.ts.
  *
- * This file targets the ONE remaining gap: non-Error network rejections.
- * AC4 says "network error rejects with Error (td:2)". At td:2, edge cases
- * include non-Error rejection values (strings, numbers, plain objects). The
- * current implementation does NOT wrap these — they propagate as-is, failing
- * `rejects.toBeInstanceOf(Error)`.
+ * This file covers:
+ *   - AC4 edge: non-Error network rejections (existing, GREEN after builder added catch wrapper)
+ *   - AC3 proof: HTTP error message contains numeric status code (Test AC line 41 — missing outright per reviewer)
+ *   - AC4 proof: native Error is rethrown unchanged (same object reference)
+ *   - AC4 proof: non-Error rejections wrapped with descriptive message (beyond Error instance)
+ *   - AC5 proof: RepairOutcome.action literal-union compile-time guard
  *
- * Covered by this file:
- *   - AC4 edge: string rejection → must be an Error instance (FAIL)
- *   - AC4 edge: numeric rejection → must be an Error instance (FAIL)
- *   - AC4 edge: plain-object rejection → must be an Error instance (FAIL)
- *
- * AC1/AC2/AC3/AC5 happy paths are already covered by repairStorage_1163.test.ts.
- *
- * Builder action required: move this file to
- *   serve/cockpit/web/src/__tests__/repairStorage_1164.test.ts
+ * Retry (reviewer pass 1): Added groups 2–5 per required additions in ## Review Evidence.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { repairStorage } from '../api/repair'
+import type { RepairOutcome } from '../api/repair'
 
 // ---------------------------------------------------------------------------
 
@@ -30,9 +24,8 @@ describe('TestFromAC_repairStorage_1164', () => {
     vi.unstubAllGlobals()
   })
 
-  // AC4: network error rejects with Error — non-Error rejection edge cases
-  // The implementation currently lacks a catch wrapper that normalises
-  // non-Error values to Error instances; these three tests all FAIL.
+  // --- AC4 edge: non-Error network rejection must resolve as Error instance ---
+  // Existing tests — GREEN after builder added catch wrapper.
 
   describe('AC4 edge: non-Error network rejection must resolve as Error instance', () => {
     it('wraps string network rejection in an Error', async () => {
@@ -48,6 +41,96 @@ describe('TestFromAC_repairStorage_1164', () => {
     it('wraps plain-object network rejection in an Error', async () => {
       vi.stubGlobal('fetch', vi.fn(() => Promise.reject({ code: 'ECONNREFUSED' })))
       await expect(repairStorage()).rejects.toBeInstanceOf(Error)
+    })
+  })
+
+  // --- AC3: HTTP error message contains the numeric status code (Test AC line 41) ---
+  // Reviewer: "Test AC line 41 is missing outright; the status-code requirement is
+  // implemented but unproven." These tests lock the status code into the message contract.
+
+  describe('AC3: HTTP error message contains the numeric status code', () => {
+    it('error message for non-ok 500 response contains "500"', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) })),
+      )
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      expect(error.message).toContain('500')
+    })
+
+    it('error message for non-ok 422 response contains "422"', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: false, status: 422, json: () => Promise.resolve({}) })),
+      )
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      expect(error.message).toContain('422')
+    })
+  })
+
+  // --- AC4: native Error is rethrown unchanged (same object identity) ---
+  // Reviewer: "Assert native Error rejection is rethrown unchanged or preserves
+  // original message or identity per the AC intent."
+
+  describe('AC4: native Error rethrown unchanged', () => {
+    it('rethrows a native Error as the exact same object (reference identity)', async () => {
+      const originalError = new Error('original network error')
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(originalError)))
+      const thrown = await repairStorage().catch((e: unknown) => e)
+      expect(thrown).toBe(originalError)
+    })
+
+    it('rethrown native Error message is preserved unchanged', async () => {
+      const originalError = new Error('specific error message abc123')
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(originalError)))
+      const thrown = await repairStorage().catch((e: unknown) => e as Error)
+      expect(thrown.message).toBe('specific error message abc123')
+    })
+  })
+
+  // --- AC4: non-Error rejections produce a descriptive wrapped message ---
+  // Reviewer: "Assert wrapped non-Error rejections produce a descriptive message,
+  // not just an Error instance."
+
+  describe('AC4: non-Error rejection wrapped with descriptive message', () => {
+    it('wrapped string rejection message contains original string value', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject('network timeout')))
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      expect(error.message).toContain('network timeout')
+    })
+
+    it('wrapped numeric rejection message contains numeric value as string', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(408)))
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      expect(error.message).toContain('408')
+    })
+
+    it('wrapped plain-object rejection preserves original value on cause property', async () => {
+      const originalCause = { code: 'ECONNREFUSED' }
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(originalCause)))
+      const error = await repairStorage().catch(
+        (e: unknown) => e as Error & { cause?: unknown },
+      )
+      expect(error.cause).toEqual(originalCause)
+    })
+  })
+
+  // --- AC5: RepairOutcome.action is a literal union — compile-time guard ---
+  // Reviewer: "Add a compile-time or equivalent binding check that fails if
+  // RepairOutcome.action widens beyond 'fixed' | 'quarantined' | 'failed'."
+  //
+  // Mechanism: AssertEqual<T, U> resolves to `true` iff T and U are mutually assignable.
+  // If action widens to `string`, AssertEqual resolves to `false` and the assignment
+  // `const _guard: false = true` fails to compile, preventing the test suite from running.
+
+  describe('AC5: RepairOutcome.action literal-union compile-time guard', () => {
+    it('action type is exactly the literal union — compile error if widened to string', () => {
+      type ActionValues = RepairOutcome['action']
+      type AssertEqual<T, U> = [T] extends [U] ? ([U] extends [T] ? true : false) : false
+      const _guard: AssertEqual<ActionValues, 'fixed' | 'quarantined' | 'failed'> = true
+      void _guard
+      // Runtime always passes; TypeScript catches widening at compile time.
+      expect(true).toBe(true)
     })
   })
 })
