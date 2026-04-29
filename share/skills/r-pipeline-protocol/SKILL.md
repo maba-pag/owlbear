@@ -95,8 +95,8 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 | Agent | Threshold | Meaning |
 |-------|-----------|---------|
 | Reviewer | ≥ .90 | PASS |
-| Reviewer | < .90, 1st–2nd FAIL | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
-| Reviewer | < .90, 3rd+ FAIL | FAIL — always backlog (loop-breaker) |
+| Reviewer | < .90, 1st FAIL | FAIL — reviewer chooses target (in-progress, todo, or backlog) based on issue type |
+| Reviewer | < .90, 2nd+ FAIL | FAIL — always backlog (loop-breaker) |
 | Auditor | ≥ .95 | Archive |
 | Auditor | < .95 | Reject to backlog |
 | Challenger | ≥ 0.80 | `proceed` — caller continues with original verdict |
@@ -109,6 +109,26 @@ The pipeline uses three lines of defense. Trust upstream lines' detailed work; f
 - **State confidence at decision points.** Score 0.0–1.0. When multiple valid approaches exist, present trade-offs using `(bp:)` for best-practice and `(rec:)` for recommendation.
 - **Deliverables are kanban tasks and working code, not documents.** Research docs are supporting artifacts. After research, always create follow-up tasks.
 - **Verify subagent output.** After a subagent reports completion, verify deliverables exist and match AC. Run tests yourself.
+
+### Test-Depth Convention
+
+The architect annotates each AC line with a `(td:N)` suffix during Architecture Review (see `w-arch-review` Step 2.1). This controls test-writer scope, reviewer depth, and subagent dispatch.
+
+| Depth | Suffix | Meaning | Test-writer action |
+|-------|--------|---------|-------------------|
+| 0 | `(td:0)` | No test needed | Skip this AC line |
+| 1 | `(td:1)` | Smoke test | 1 assertion per line |
+| 2 | `(td:2)` | Full TDD | Multiple paths/edges (default) |
+
+**Pipeline routing by max depth** (highest td across all AC lines):
+
+| Max depth | Test-writer | Challenger | Code-reader | Reviewer scope |
+|-----------|------------|------------|-------------|----------------|
+| td:0 | SKIP (pass-through) | skip | skip | lint only |
+| td:1 | writes smoke tests | yes | skip | scoped tests + lint |
+| td:2 | full coverage | yes | yes | full (tests + code-reader + lint) |
+
+AC lines without `(td:N)` annotations default to td:2.
 
 ### Follow-up Task Quality
 

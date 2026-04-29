@@ -23,9 +23,10 @@ From the task body retrieved by `start_work`:
 <!-- NON_IMPL_TAGS: Authoritative list at w-arch-review (agent dispatch table). -->
 
 1. Check if this is a **non-implementation task** (tagged `research`, `docs`, `type:config`, `type:docs`, `test`, `type:test`, `agent`, `quality`, or `type:user-action`). If so, go to **Step 1a — Pass-through**.
-2. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
-3. Identify referenced source files, modules, and interfaces in the AC.
-4. Do NOT move task status yet — movement happens in Step 7 after verification.
+2. **Test-depth gate:** Check if ALL AC lines are annotated `(td:0)`. If so, go to **Step 1c — Depth-zero pass-through**.
+3. Check if this is a **retry cycle** (body contains both `## Test-Writer Notes` and `## Review Evidence`). If so, go to **Step 1b — Retry-cycle handling**.
+4. Identify referenced source files, modules, and interfaces in the AC.
+5. Do NOT move task status yet — movement happens in Step 7 after verification.
 
 ### Step 1a — Pass-Through for Non-Implementation Tasks
 
@@ -46,6 +47,14 @@ If the body contains both `## Test-Writer Notes` and `## Review Evidence`, this 
 5. Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
 6. **Stop here.**
 
+### Step 1c — Depth-Zero Pass-Through
+
+All AC lines are annotated `(td:0)` — no tests needed for this task.
+
+1. Advance via `end_work(note="## Test-Writer Notes\n- All AC lines are (td:0) — test-writer skipped.\n- Passing through to builder.")` (moves to `in-progress` + releases claim).
+2. Return: `DONE #{id} -> in-progress | all AC td:0, no tests needed`
+3. **Stop here.**
+
 ## Step 2 — Search Codebase
 
 Find interfaces, types, and existing patterns referenced in the AC:
@@ -65,7 +74,11 @@ Run this only if Step 2 found no testable interfaces:
 
 ## Step 3 — Plan Test Categories
 
-Map each AC line to test categories:
+**Skip `(td:0)` AC lines entirely** — do not plan or write tests for them.
+
+For `(td:1)` lines, plan a single smoke test per line (one assertion, happy path only).
+
+For `(td:2)` lines (or lines without annotation — default to td:2), map each AC line to test categories:
 
 - **Happy path** — expected behavior works correctly
 - **Edge cases** — empty inputs, boundary values, concurrent access

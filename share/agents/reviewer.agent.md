@@ -58,7 +58,7 @@ the builder can fix it without guessing.
 | Fail (impl issue) | review → in-progress | builder can fix directly |
 | Fail (test gap) | review → todo | tests missing for implemented behavior — test-writer adds coverage |
 | Fail (test/AC quality) | review → backlog | existing tests are weak, gate threshold is structurally infeasible, or AC needs redesign — architect re-evaluates |
-| Fail (3rd+) | review → backlog | loop-breaker — 3rd+ review failure on same task |
+| Fail (2nd+) | review → backlog | loop-breaker — 2nd+ review failure on same task |
 
 </pipeline_position>
 
@@ -67,7 +67,7 @@ the builder can fix it without guessing.
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Implementation reviews requiring test/lint/coverage evidence | `agentName: quality-runner / mode: scoped, task_id: 42, test_paths: [...], coverage_modules: [...], lint_paths: [...]` |
-| code-reader | Complex reviews needing deep code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
+| code-reader | td:2 reviews needing deep adversarial code analysis | `agentName: code-reader / task_id: 42, ac_lines: [...], changed_files: [...], test_files: [...]` |
 | scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="naming convention choice has team-wide implications"` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — add follow-up at backlog titled "Harden assertion coverage"` |
 
