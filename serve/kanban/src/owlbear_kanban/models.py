@@ -213,8 +213,13 @@ class BoardConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _normalise_legacy(cls, data: object) -> object:  # noqa: C901, PLR0912
-        """Convert legacy schema to new schema before field assignment."""
+    def _normalise_legacy(cls, data: object) -> object:  # noqa: C901, PLR0912, PLR0915
+        """Convert legacy schema to new schema before field assignment.
+
+        Root-level ``statuses`` and ``priorities`` are authoritative. In grouped
+        config input, explicit ``pipeline.statuses``/``pipeline.priorities``
+        must match root-level values; conflicts are rejected.
+        """
         if not isinstance(data, dict):
             return data
         data = dict(data)
@@ -300,8 +305,35 @@ class BoardConfig(BaseModel):
                     "default_priority": data.get("default_priority", "important"),
                 }
             else:
+                had_pipeline_statuses = "statuses" in pipeline
+                had_pipeline_priorities = "priorities" in pipeline
                 pipeline.setdefault("statuses", data.get("statuses", []))
                 pipeline.setdefault("priorities", data.get("priorities", []))
+
+                root_statuses = data.get("statuses")
+                if had_pipeline_statuses and pipeline.get("statuses") != root_statuses:
+                    raise ConfigError(
+                        code="ERR_CONFLICT_STATUS",
+                        user_message=(
+                            "config.pipeline.statuses conflicts with config.statuses: "
+                            f"pipeline.statuses={pipeline.get('statuses')!r}, "
+                            f"config.statuses={root_statuses!r}"
+                        ),
+                    )
+
+                root_priorities = data.get("priorities")
+                if (
+                    had_pipeline_priorities
+                    and pipeline.get("priorities") != root_priorities
+                ):
+                    raise ConfigError(
+                        code="ERR_CONFLICT_STATUS",
+                        user_message=(
+                            "config.pipeline.priorities conflicts with config.priorities: "
+                            f"pipeline.priorities={pipeline.get('priorities')!r}, "
+                            f"config.priorities={root_priorities!r}"
+                        ),
+                    )
 
             agents = data.get("agents")
             if not isinstance(agents, dict):
