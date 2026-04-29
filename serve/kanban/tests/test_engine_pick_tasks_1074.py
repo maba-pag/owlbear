@@ -26,6 +26,7 @@ from owlbear_kanban.models import PickTasksResponse
 # Priorities listed HIGH→LOW so rank 0 = "critical" = highest urgency.
 # This matches the Brief B spec: "priority_rank ASC, 0 = highest" → critical first.
 _BASE_CONFIG = """\
+schema: grouped
 statuses:
   - research
   - backlog
@@ -39,33 +40,40 @@ priorities:
   - important
   - nice-to-have
   - someday
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  in-progress: builder
-  review: reviewer
-  done: auditor
-agent_types:
-  researcher: research
-  architect: design
-  builder: impl
-  reviewer: review
-  auditor: audit
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        in-progress: builder
+        review: reviewer
+        done: auditor
+    agent_types:
+        researcher: research
+        architect: design
+        builder: impl
+        reviewer: review
+        auditor: audit
+    agent_compatibility: {}
+policy:
+    non_impl_tags: [research, docs]
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
 """
 
 # Config where impl bucket (builder) and review bucket (reviewer) are incompatible.
 # Symmetry: impl does NOT list review, review does NOT list impl.
 _COMPAT_CONFIG = """\
+schema: grouped
 statuses:
   - research
   - backlog
@@ -79,33 +87,39 @@ priorities:
   - important
   - nice-to-have
   - someday
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  in-progress: builder
-  review: reviewer
-  done: auditor
-agent_types:
-  researcher: research
-  architect: design
-  builder: impl
-  reviewer: review
-  auditor: audit
-agent_compatibility:
-  research: [research, design, impl, audit]
-  design: [design, impl, review, research, audit]
-  impl: [impl, research, design, audit]
-  review: [review, design, audit]
-  audit: [audit, impl, review, design, research]
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        in-progress: builder
+        review: reviewer
+        done: auditor
+    agent_types:
+        researcher: research
+        architect: design
+        builder: impl
+        reviewer: review
+        auditor: audit
+    agent_compatibility:
+        research: [research, design, impl, audit]
+        design: [design, impl, review, research, audit]
+        impl: [impl, research, design, audit]
+        review: [review, design, audit]
+        audit: [audit, impl, review, design, research]
+policy:
+    non_impl_tags: [research, docs]
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
 """
 
 _TASK_TMPL = """\

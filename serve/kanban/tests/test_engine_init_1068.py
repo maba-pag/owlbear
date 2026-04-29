@@ -20,13 +20,14 @@ import pytest
 
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView, CockpitView
-from owlbear_kanban.models import BoardConfig
+from owlbear_kanban.models import AgentsConfig, BoardConfig
 
 # ---------------------------------------------------------------------------
 # Board helpers
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
+schema: grouped
 statuses:
   - research
   - backlog
@@ -36,25 +37,32 @@ priorities:
   - someday
   - needed
   - critical
-claim_timeout: 1h
 next_id: 1
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: []
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        done: auditor
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: []
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
 """
 
 # Same config but without the entry_status key — should default to "research"
 _BASE_CONFIG_NO_ENTRY_STATUS = """\
+schema: grouped
 statuses:
   - research
   - backlog
@@ -64,24 +72,31 @@ priorities:
   - someday
   - needed
   - critical
-claim_timeout: 1h
 next_id: 1
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: []
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        done: auditor
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: []
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
 """
 
 # Same config but without the terminal_status key — should default to "done"
 _BASE_CONFIG_NO_TERMINAL_STATUS = """\
+schema: grouped
 statuses:
   - research
   - backlog
@@ -91,20 +106,26 @@ priorities:
   - someday
   - needed
   - critical
-claim_timeout: 1h
 next_id: 1
-entry_status: research
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: []
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        done: auditor
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: []
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
 """
 
 
@@ -149,7 +170,7 @@ class TestFromAC_EntryStatusDefault:
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
-            agent_map={"research": "r", "backlog": "b", "done": "d"},
+            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
         )
         assert cfg.entry_status == "research", (
             f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.entry_status!r}"
@@ -184,7 +205,7 @@ class TestFromAC_TerminalStatusField:
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
-            agent_map={"research": "r", "backlog": "b", "done": "d"},
+            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
         )
         assert cfg.terminal_status == "done"
 
@@ -224,7 +245,7 @@ class TestFromAC_ArchivalReasonsFrozenSet:
         cfg = BoardConfig(
             statuses=["research", "done"],
             priorities=["needed"],
-            agent_map={"research": "r", "done": "d"},
+            agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
         )
         assert isinstance(cfg.archival_reasons, frozenset)
 
@@ -395,7 +416,7 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "done"],
                 priorities=["needed"],
-                agent_map={"research": "r", "done": "d"},
+                agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
                 entry_status="missing",
             )
         assert "ERR_ENTRY_STATUS_INVALID" in exc_info.value.code
@@ -408,7 +429,7 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "todo", "done"],
                 priorities=["needed"],
-                agent_map={"research": "r", "todo": "b", "done": "d"},
+                agents=AgentsConfig(agent_map={"research": "r", "todo": "b", "done": "d"}),
                 terminal_status="todo",  # not last
             )
         assert "ERR_TERMINAL_STATUS_INVALID" in exc_info.value.code
@@ -421,7 +442,7 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "backlog", "done"],
                 priorities=["needed"],
-                agent_map={"research": "r", "done": "d"},  # "backlog" missing
+                agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),  # "backlog" missing
             )
 
     def test_boardconfig_invalid_claim_timeout_raises(self) -> None:
@@ -432,7 +453,7 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "done"],
                 priorities=["needed"],
-                agent_map={"research": "r", "done": "d"},
+                agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
                 claim_timeout="bad_format",
             )
         assert "ERR_INVALID_CLAIM_TIMEOUT" in exc_info.value.code
@@ -445,6 +466,8 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "done"],
                 priorities=["needed"],
-                agent_map={"research": "r", "done": "d"},
-                agent_compatibility={"builder": ["reviewer"]},  # reviewer not reciprocating
+                agents=AgentsConfig(
+                    agent_map={"research": "r", "done": "d"},
+                    agent_compatibility={"builder": ["reviewer"]},  # reviewer not reciprocating
+                ),
             )

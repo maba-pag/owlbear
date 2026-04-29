@@ -34,6 +34,7 @@ from owlbear_kanban.models import NotFoundError, ShowTaskResponse, ValidationErr
 # ---------------------------------------------------------------------------
 
 _BASE_CONFIG = """\
+schema: grouped
 statuses:
   - research
   - backlog
@@ -47,23 +48,29 @@ priorities:
   - important
   - needed
   - critical
-entry_status: research
-terminal_status: done
-wave_size: 4
-agent_map:
-  research: researcher
-  backlog: architect
-  todo: builder
-  in-progress: builder
-  review: reviewer
-  done: auditor
-agent_types: {}
-agent_compatibility: {}
-non_impl_tags: [research, docs]
-archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
-status_predicates: {}
-claim_timeout: 1h
 next_id: 1
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map:
+        research: researcher
+        backlog: architect
+        todo: builder
+        in-progress: builder
+        review: reviewer
+        done: auditor
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: [research, docs]
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
 """
 
 _TASK_TMPL = """\
