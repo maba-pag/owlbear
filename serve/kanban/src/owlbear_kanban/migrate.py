@@ -50,16 +50,12 @@ _NEW_CONFIG_KEYS = frozenset(
     {
         "statuses",
         "priorities",
-        "entry_status",
-        "wave_size",
-        "agent_map",
-        "agent_types",
-        "agent_compatibility",
-        "non_impl_tags",
-        "archival_reasons",
-        "status_predicates",
-        "claim_timeout",
         "next_id",
+        "schema",
+        "paths",
+        "pipeline",
+        "agents",
+        "policy",
     }
 )
 _LEGACY_CONFIG_KEYS = frozenset(
@@ -414,21 +410,21 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
         new_cfg["statuses"] = []
 
     new_cfg["priorities"] = plain_raw.get("priorities", [])
-    new_cfg["claim_timeout"] = plain_raw.get("claim_timeout", "1h")
     new_cfg["next_id"] = plain_raw.get("next_id", 1)
     new_cfg["schema"] = "grouped"
 
     # entry_status from defaults.status or first status
     defaults = plain_raw.get("defaults", {})
-    new_cfg["entry_status"] = defaults.get(
+    entry_status = defaults.get(
         "status", new_cfg["statuses"][0] if new_cfg["statuses"] else "research"
     )
-    new_cfg["default_priority"] = defaults.get("priority", "important")
-    new_cfg["wave_size"] = 4
-    new_cfg["agent_map"] = {status: [] for status in new_cfg["statuses"]}
-    new_cfg["agent_types"] = {}
-    new_cfg["agent_compatibility"] = {}
-    new_cfg["non_impl_tags"] = [
+    default_priority = defaults.get("priority", "important")
+    wave_size = 4
+    claim_timeout = plain_raw.get("claim_timeout", "1h")
+    agent_map = {status: [] for status in new_cfg["statuses"]}
+    agent_types: dict[str, Any] = {}
+    agent_compatibility: dict[str, Any] = {}
+    non_impl_tags = [
         "research",
         "docs",
         "type:config",
@@ -439,16 +435,16 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
         "quality",
         "type:user-action",
     ]
-    new_cfg["archival_reasons"] = [
+    archival_reasons = [
         "completed",
         "deprecated",
         "dropped",
         "duplicate",
         "wontfix",
     ]
-    new_cfg["status_predicates"] = {}
+    status_predicates: dict[str, Any] = {}
 
-    # Emit canonical grouped sections while keeping flat compatibility keys.
+    # Emit canonical grouped sections only.
     tasks_dir = plain_raw.get("tasks_dir", "tasks")
     archive_dir = plain_raw.get("archive_dir", "archive")
     new_cfg["paths"] = {
@@ -456,21 +452,21 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
         "archive_dir": archive_dir,
     }
     new_cfg["pipeline"] = {
-        "entry_status": new_cfg["entry_status"],
+        "entry_status": entry_status,
         "terminal_status": plain_raw.get("terminal_status", "done"),
-        "wave_size": new_cfg["wave_size"],
-        "claim_timeout": new_cfg["claim_timeout"],
-        "default_priority": new_cfg["default_priority"],
+        "wave_size": wave_size,
+        "claim_timeout": claim_timeout,
+        "default_priority": default_priority,
     }
     new_cfg["agents"] = {
-        "agent_map": new_cfg["agent_map"],
-        "agent_types": new_cfg["agent_types"],
-        "agent_compatibility": new_cfg["agent_compatibility"],
+        "agent_map": agent_map,
+        "agent_types": agent_types,
+        "agent_compatibility": agent_compatibility,
     }
     new_cfg["policy"] = {
-        "non_impl_tags": new_cfg["non_impl_tags"],
-        "archival_reasons": new_cfg["archival_reasons"],
-        "status_predicates": new_cfg["status_predicates"],
+        "non_impl_tags": non_impl_tags,
+        "archival_reasons": archival_reasons,
+        "status_predicates": status_predicates,
     }
 
     y_rt2 = _make_yaml_rt()
