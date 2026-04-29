@@ -271,7 +271,7 @@ describe('TestFromAC_useRepairFlow', () => {
       const { result } = renderHook(() => useRepairFlow())
       act(() => { result.current.requestRepair(1) })
       await act(async () => { result.current.confirmRepair() })
-      expect(result.current.error).toContain('Storage failure')
+      expect(result.current.error).toBe('Storage failure')
     })
 
     it('error is a non-empty string in error state', async () => {
@@ -279,8 +279,7 @@ describe('TestFromAC_useRepairFlow', () => {
       const { result } = renderHook(() => useRepairFlow())
       act(() => { result.current.requestRepair(1) })
       await act(async () => { result.current.confirmRepair() })
-      expect(typeof result.current.error).toBe('string')
-      expect((result.current.error as string).length).toBeGreaterThan(0)
+      expect(result.current.error).toBe('Something went wrong')
     })
 
     it('results remain null in error state', async () => {
@@ -297,8 +296,7 @@ describe('TestFromAC_useRepairFlow', () => {
       act(() => { result.current.requestRepair(1) })
       await act(async () => { result.current.confirmRepair() })
       expect(result.current.phase).toBe('error')
-      expect(typeof result.current.error).toBe('string')
-      expect((result.current.error as string).length).toBeGreaterThan(0)
+      expect(result.current.error).toBe('plain string rejection')
     })
   })
 
