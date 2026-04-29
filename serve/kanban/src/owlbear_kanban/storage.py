@@ -203,6 +203,7 @@ _CANONICAL_FIELDS: list[str] = [
 
 _CANONICAL_FIELD_SET: frozenset[str] = frozenset(_CANONICAL_FIELDS)
 _TS_FIELDS: frozenset[str] = frozenset({"created", "updated", "claimed_at"})
+_CONFIG_WRITE_EXCLUDE: frozenset[str] = frozenset({"board", "version"})
 _TS_RE = re.compile(
     r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})((?:\.\d+)?)([+-]\d{2}:\d{2}|Z)?$"
 )
@@ -245,20 +246,26 @@ def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     config_path = kanban_dir / "config.yml"
-    data = config.model_dump()
-    # Remove legacy-only output noise
-    for legacy_key in ("board", "version", "defaults", "activity_log"):
-        data.pop(legacy_key, None)
-
-    # Convert frozenset to list for YAML serialization (archival_reasons)
-    if "archival_reasons" in data and isinstance(data["archival_reasons"], frozenset):
-        data["archival_reasons"] = sorted(data["archival_reasons"])
+    data = _yaml_safe_value(config.model_dump(exclude=_CONFIG_WRITE_EXCLUDE))
 
     y = make_yaml(explicit_start=True)
     cm = CommentedMap(data)
     stream = io.StringIO()
     y.dump(cm, stream)
     atomic_write(config_path, stream.getvalue())
+
+
+def _yaml_safe_value(value: object) -> object:
+    """Recursively convert non-YAML-safe values emitted by model_dump()."""
+    if isinstance(value, frozenset):
+        return sorted(value)
+    if isinstance(value, dict):
+        return {k: _yaml_safe_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_yaml_safe_value(v) for v in value]
+    if isinstance(value, tuple):
+        return [_yaml_safe_value(v) for v in value]
+    return value
 
 
 # ---------------------------------------------------------------------------
