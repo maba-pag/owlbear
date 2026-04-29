@@ -65,6 +65,7 @@ export function useScanPolling(options?: UseScanPollingOptions): UseScanPollingR
   }
 
   useEffect(() => {
+    isMountedRef.current = true
     return () => {
       isMountedRef.current = false
     }
