@@ -76,9 +76,9 @@ Run this only if Step 2 found no testable interfaces:
 
 **Skip `(td:0)` AC lines entirely** — do not plan or write tests for them.
 
-For `(td:1)` lines, plan a single smoke test per line (one assertion, happy path only).
+For `(td:1)` lines (or lines without annotation — default to td:1), plan a single smoke test per line (one assertion, happy path only).
 
-For `(td:2)` lines (or lines without annotation — default to td:2), map each AC line to test categories:
+For `(td:2)` lines, map each AC line to test categories:
 
 - **Happy path** — expected behavior works correctly
 - **Edge cases** — empty inputs, boundary values, concurrent access

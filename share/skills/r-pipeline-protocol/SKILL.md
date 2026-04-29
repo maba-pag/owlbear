@@ -128,7 +128,7 @@ The architect annotates each AC line with a `(td:N)` suffix during Architecture 
 | td:1 | writes smoke tests | yes | skip | scoped tests + lint |
 | td:2 | full coverage | yes | yes | full (tests + code-reader + lint) |
 
-AC lines without `(td:N)` annotations default to td:2.
+AC lines without `(td:N)` annotations default to td:1.
 
 ### Follow-up Task Quality
 
