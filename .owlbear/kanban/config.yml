@@ -24,7 +24,7 @@ claim_timeout: 1h
 tui:
   title_lines: 2
   hide_empty_columns: true
-next_id: 1176
+next_id: 1171
 archive_dir: archive
 activity_log: false
 entry_status: research
