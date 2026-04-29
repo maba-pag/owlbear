@@ -1,7 +1,6 @@
 """Config loader for .owlbear/kanban/config.yml using ruamel.yaml round-trip mode.
 
-Provides load_config for reading board configuration while preserving parser
-stability constraints.
+Provides load_config for parsing and validating board configuration.
 
 Timestamp resolver is disabled so that date-like strings (e.g. "2026-04-09",
 ISO 8601 datetimes, duration strings like "1h") are never auto-coerced to
