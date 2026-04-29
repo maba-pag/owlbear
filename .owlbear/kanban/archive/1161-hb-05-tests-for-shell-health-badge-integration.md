@@ -4,7 +4,7 @@ title: 'HB-05: Tests for Shell health badge integration'
 status: archived
 priority: important
 created: 2026-04-28T17:35:08.979042+00:00
-updated: 2026-04-28T22:41:39.622172+00:00
+updated: 2026-04-29T02:28:08.389673+00:00
 tags:
 - phase:cockpit
 - scope:cockpit-frontend
@@ -72,38 +72,34 @@ The test/build decomposition pattern (separate #1161 for tests, #1162 for implem
 3. All 4 test AC lines incorporated into #1162 alongside implementation AC
 4. Removed #1162's dependency on #1161
 5. #1162 scope expanded: "Shell integration tests (merged from #1161)" added to in-scope
-[[2026-04-28]]
+[[2026-04-29]]
 ## Audit
 
 ### AC Verification (merge execution)
 
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| Test: Shell renders HealthBadge in status bar | #1162 AC1: "HealthBadge rendered inside [data-region='status-bar']" | PASS |
-| Test: HealthBadge receives scan results from useScanPolling | #1162 AC2: includes ScanItem normalisation requirement | PASS |
-| Test: badge updates when scan poll returns new results | #1162 AC3: "Badge reflects updated scan results when poll returns new data" | PASS |
-| Test: badge is absent or inert before first poll completes | #1162 AC4: refined to "not rendered while isLoading is true" (ambiguity resolved) | PASS |
+| Test: Shell renders HealthBadge in status bar | #1162 AC1 absorbs this; #1162 archived with 26/26 tests passing (Shell_1162.test.tsx AC1 block) | PASS |
+| Test: HealthBadge receives scan results from useScanPolling | #1162 AC2 absorbs this with null-filter refinement; #1162 archived (Shell_1162.test.tsx AC2 block) | PASS |
+| Test: badge updates when scan poll returns new results | #1162 AC3 absorbs this; #1162 archived (Shell_1162.test.tsx AC3 block) | PASS |
+| Test: badge is absent or inert before first poll completes | #1162 AC4 absorbs this — refined from ambiguous "absent or inert" to "not rendered while isLoading is true"; #1162 archived (Shell_1162.test.tsx AC4 block) | PASS |
 
-Merge verified: #1162 context references merge from #1161, scope includes "Shell integration tests (merged from #1161)", dependency on #1161 removed.
+Merge verified: #1162 context references merge from #1161, scope includes "Shell integration tests (merged from #1161)", dependency on #1161 removed, #1162 fully archived.
 
 ### Test Results
-- pytest: 2813 passed, 114 failed (all pre-existing in kanban/storage/config domains, none in task scope), 4 skipped
+- pytest: 2834 passed, 117 failed (pre-existing in kanban/storage/config domains, none in task scope), 4 skipped
+- Task-scope tests: 14/14 passed (test_shell_integration_1162.py + test_health_badge_frontend_1158.py)
 - ruff: 4 violations (copilot_auth, mcp-knowledge server, mcp-memory approve, orchestrator example), none in task scope
 
 ### Architect Quality: 5/5
-Identified structural double pass-through flaw for type:test tasks in TDD pipeline. Accepted challenger block (confidence 0.18). Took clear corrective action: merge with AC refinement, AC4 ambiguity resolved, ScanItem normalisation made explicit.
+Identified structural pipeline flaw (type:test double pass-through — test-writer + builder both skip, tests never written). Accepted challenger block (confidence 0.18). Took clear corrective action: merged with AC refinement, AC4 ambiguity resolved, ScanItem normalisation made explicit.
 
 ### Deduction Breakdown
-- AC evidence gaps: 0 (all 4 lines absorbed into #1162 with refinements)
+- AC evidence gaps: 0 (all 4 lines absorbed into #1162, which is archived with full test evidence)
 - Lint in scope: 0
 - AC quality: 5/5 (no deduction)
-- Reviewer evidence: architecture review section thorough (merge task, not code task)
+- Reviewer evidence: merge task — architecture review section serves as review evidence, thorough
 - Full-suite failures in scope: 0
 
 ### Confidence: 1.00
 ### Action: archive
-
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| 79967865 | chore | kanban task 1161 | #1161 |
