@@ -393,3 +393,165 @@ class TestFromAC_MigrateLoadSaveNoFlatKeyLeak:
             f"Flat-duplicate keys must not survive migrate → load → save. "
             f"Leaked: {sorted(leaked)!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# AC9 (REFINED) — idempotency on grouped config with activity_log
+# ---------------------------------------------------------------------------
+
+# A fully-grouped config with activity_log: false and non-default pipeline values.
+# All NEW_CONFIG_KEYS are present; no legacy root-level keys except activity_log
+# (which is erroneously listed in _LEGACY_CONFIG_KEYS, breaking idempotency).
+_GROUPED_WITH_ACTIVITY_LOG_YAML = """\
+schema: grouped
+statuses:
+  - research
+  - backlog
+  - done
+priorities:
+  - someday
+  - important
+  - critical
+next_id: 1
+activity_log: false
+paths:
+  tasks_dir: tasks
+  archive_dir: archive
+pipeline:
+  entry_status: research
+  terminal_status: archived
+  wave_size: 8
+  claim_timeout: 2h
+  default_priority: critical
+agents:
+  agent_map:
+    research: []
+    backlog: []
+    done: []
+  agent_types: {}
+  agent_compatibility: {}
+policy:
+  non_impl_tags:
+    - research
+    - docs
+  archival_reasons:
+    - completed
+    - deprecated
+    - dropped
+    - duplicate
+    - wontfix
+  status_predicates: {}
+"""
+
+
+class TestFromAC_MigrateIdempotencyAndPreservation:
+    """AC9 (REFINED) — _migrate_config must be idempotent on grouped configs with
+    activity_log, and must not reset non-default nested pipeline values.
+
+    Root cause: activity_log is listed in _LEGACY_CONFIG_KEYS, so
+    _is_config_migrated returns False for any grouped config that includes
+    activity_log (even though it is a live, non-legacy field).  This triggers
+    a full re-migration which reads pipeline sub-values from flat root keys
+    that do not exist in grouped format — resetting claim_timeout, terminal_status,
+    default_priority, and wave_size to their hardcoded defaults.
+
+    ALL tests MUST FAIL until the builder removes "activity_log" from
+    _LEGACY_CONFIG_KEYS so that _is_config_migrated returns True for grouped
+    configs that contain activity_log.
+    """
+
+    def test_grouped_with_activity_log_returns_already(self, tmp_path: Path) -> None:
+        """_migrate_config on an already-grouped config with activity_log must return
+        "already", not "migrated".
+
+        MUST FAIL: _is_config_migrated returns False because activity_log ∈
+        _LEGACY_CONFIG_KEYS, so the function falls through to a full re-migration
+        and returns "migrated" instead of "already".
+        """
+        kanban_dir = _make_board(tmp_path, _GROUPED_WITH_ACTIVITY_LOG_YAML)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "already", (
+            f"_migrate_config must return 'already' for a fully-grouped config "
+            f"that contains activity_log; got {result!r}. "
+            f"activity_log is a live runtime field, not a legacy sentinel — "
+            f"it must be removed from _LEGACY_CONFIG_KEYS."
+        )
+
+    def test_grouped_with_activity_log_claim_timeout_preserved(
+        self, tmp_path: Path
+    ) -> None:
+        """pipeline.claim_timeout must not be reset after _migrate_config on a grouped
+        config with activity_log.
+
+        MUST FAIL: re-migration reads claim_timeout via plain_raw.get("claim_timeout",
+        "1h") which finds no flat root key in grouped format, so the value is reset
+        from "2h" to the default "1h".
+        """
+        kanban_dir = _make_board(tmp_path, _GROUPED_WITH_ACTIVITY_LOG_YAML)
+        _migrate_config(kanban_dir)
+        data = _read_yaml(kanban_dir / "config.yml")
+        assert data.get("pipeline", {}).get("claim_timeout") == "2h", (
+            f"pipeline.claim_timeout must remain '2h' after _migrate_config; "
+            f"got {data.get('pipeline', {}).get('claim_timeout')!r}. "
+            f"Re-migration resets it to '1h' because the grouped pipeline.claim_timeout "
+            f"key is not read from the nested section."
+        )
+
+    def test_grouped_with_activity_log_terminal_status_preserved(
+        self, tmp_path: Path
+    ) -> None:
+        """pipeline.terminal_status must not be reset after _migrate_config on a grouped
+        config with activity_log.
+
+        MUST FAIL: re-migration reads terminal_status via plain_raw.get(
+        "terminal_status", "done") which finds no flat root key in grouped format,
+        so the value is reset from "archived" to the default "done".
+        """
+        kanban_dir = _make_board(tmp_path, _GROUPED_WITH_ACTIVITY_LOG_YAML)
+        _migrate_config(kanban_dir)
+        data = _read_yaml(kanban_dir / "config.yml")
+        assert data.get("pipeline", {}).get("terminal_status") == "archived", (
+            f"pipeline.terminal_status must remain 'archived' after _migrate_config; "
+            f"got {data.get('pipeline', {}).get('terminal_status')!r}. "
+            f"Re-migration resets it to 'done' because the grouped pipeline.terminal_status "
+            f"key is not read from the nested section."
+        )
+
+    def test_grouped_with_activity_log_default_priority_preserved(
+        self, tmp_path: Path
+    ) -> None:
+        """pipeline.default_priority must not be reset after _migrate_config on a
+        grouped config with activity_log.
+
+        MUST FAIL: re-migration reads default_priority from defaults.get("priority",
+        "important") where defaults={} in grouped format, so the value is reset
+        from "critical" to the default "important".
+        """
+        kanban_dir = _make_board(tmp_path, _GROUPED_WITH_ACTIVITY_LOG_YAML)
+        _migrate_config(kanban_dir)
+        data = _read_yaml(kanban_dir / "config.yml")
+        assert data.get("pipeline", {}).get("default_priority") == "critical", (
+            f"pipeline.default_priority must remain 'critical' after _migrate_config; "
+            f"got {data.get('pipeline', {}).get('default_priority')!r}. "
+            f"Re-migration resets it to 'important' because the grouped pipeline "
+            f"section is not read during re-migration."
+        )
+
+    def test_grouped_with_activity_log_wave_size_preserved(
+        self, tmp_path: Path
+    ) -> None:
+        """pipeline.wave_size must not be reset after _migrate_config on a grouped
+        config with activity_log.
+
+        MUST FAIL: re-migration hardcodes wave_size=4, so any non-default value
+        in the grouped pipeline section is silently overwritten.
+        """
+        kanban_dir = _make_board(tmp_path, _GROUPED_WITH_ACTIVITY_LOG_YAML)
+        _migrate_config(kanban_dir)
+        data = _read_yaml(kanban_dir / "config.yml")
+        assert data.get("pipeline", {}).get("wave_size") == 8, (
+            f"pipeline.wave_size must remain 8 after _migrate_config; "
+            f"got {data.get('pipeline', {}).get('wave_size')!r}. "
+            f"Re-migration hardcodes wave_size=4 regardless of the grouped "
+            f"pipeline.wave_size value."
+        )
