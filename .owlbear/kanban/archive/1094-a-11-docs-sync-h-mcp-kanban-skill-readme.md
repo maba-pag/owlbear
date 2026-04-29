@@ -1,10 +1,10 @@
 ---
 id: 1094
 title: 'A-11: docs sync — h-mcp-kanban skill + README'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21 10:55:00.686129+00:00
-updated: 2026-04-28T20:18:30.574073+00:00
+updated: 2026-04-28T20:23:18.968408+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -15,8 +15,8 @@ depends_on:
 - 1093
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T20:18:30.574073+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -424,3 +424,44 @@ AC copied verbatim from dispatch. No dependencies — standalone docs fix.
 ### Action
 - Advance to `docs`.
 - Follow-up #1169 tracks the README server-label cleanup outside this task's bounded AC.
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| h-mcp-kanban SKILL.md lists exactly 8 tools with correct signatures per Brief A §5 | SKILL.md:19-26 lists 8 tools; pick_tasks typed `wave_size: int | None = None` matches Brief A | PASS |
+| No references to dropped tools: block_task, unblock_task, release_task | grep_search on both target files: no matches | PASS |
+| Projection schemas documented: TaskSummary (dep_status, archival_reason, archival_refs), TaskFull, DispatchEntry, Wave | SKILL.md:38-65, README.md:34-53 | PASS |
+| end_work documents 4 outcomes: success, reject, release, block | SKILL.md:114-123, README.md:76-85 | PASS |
+| guidance field documented | SKILL.md:83-102, README.md:55-57 | PASS |
+| archival_reason enum (5 values) and archival_refs rules documented | SKILL.md:69-80, README.md:61-72 | PASS |
+| serve/mcp-kanban/README.md updated with matching tool list and signatures | README.md:23-30 matches SKILL.md:19-26 | PASS |
+| No stale references to claimed_by, file field, or legacy status param on edit_task | grep_search on both target files: no matches | PASS |
+
+### Test Results
+- pytest (full suite): 2819 passed, 108 failed, 4 skipped
+- All 108 failures in `serve/kanban/tests/test_corruption.py` and `test_engine_coverage_1068.py` — pre-existing, not task-scoped
+- ruff: 4 violations in unrelated packages (knowledge, mcp-knowledge, mcp-memory, orchestrator) — not task-scoped
+
+### Upstream Commits Verified
+- `b09545c3` docs: fix pick_tasks signature typing (#1094, builder)
+- `9add394e` fix: align mcp wrapper id surface (#1094, builder)
+- `f431efda` docs: align mcp-kanban tool docs (#1094, builder)
+- `c7bfff83` docs(mcp-kanban): sync tool surface (#1094, builder)
+
+### Reviewer Evidence
+Present and detailed across 4 review passes. Final pass: PASS at 0.94, 8/8 AC lines passing. Follow-up #1169 created for out-of-scope README server-label.
+
+### Architect Quality: 4/5
+AC checkboxes were individually specific and verifiable. The "correct signatures per Brief A §5" phrase required Architecture Review intervention to clarify authority (Brief A vs live implementation), causing 3 review failures before scope reset. Minor gap, ultimately resolved.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 8 verified) → 0
+- Lint violations in task scope: 0 → 0
+- AC quality score 4/5 (>3): → 0
+- Reviewer evidence: present and detailed → 0
+- Full-suite failures in task scope: 0 → 0
+- Docs-only task, no executable proof binds markdown surface: -0.02
+
+### Confidence: 0.98
+### Action: archive

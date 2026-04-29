@@ -1,10 +1,10 @@
 ---
 id: 1114
 title: 'Research: config.yml schema grouping after Brief A/B/C'
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-04-24 12:00:00+00:00
-updated: 2026-04-28T20:18:30.232246+00:00
+updated: 2026-04-28T20:24:04.003688+00:00
 tags:
 - scope:kanban
 - type:research
@@ -14,8 +14,8 @@ depends_on: []
 blocked: false
 block_reason: Wait for Briefs A, B, C to land — field set may still change. 
   Unblock when all Brief A tasks reach done.
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T20:18:30.232246+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -400,3 +400,43 @@ Follow-up #1155 still not operationally blocked. `depends_on: [1094]` with activ
 
 ### Scratch Files Cleaned
 - None (no `1114-*` scratch files found)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Researcher or architect decides the grouping structure — do not pre-commit to a layout | Research doc presents preliminary grouping without pre-committing (`.owlbear/research/1114-config-yml-schema-grouping.md:65-72`) | PASS |
+| Fields may still change during Brief A/B/C — only start after all three Briefs land | Follow-up #1155 has `blocked: true` with block_reason explaining engine semantics; engine enforces block at claim/pick time | PASS |
+| Must update BoardConfig model, _normalise_legacy validator, all config field accessors, and test fixtures | Carried forward as AC in follow-up #1155 (lines 28-32) | PASS |
+| Must remain yamllint-clean | Carried forward as AC in follow-up #1155 (line 35) | PASS |
+
+### Research Task Verification (Step 1a)
+- Research doc: `.owlbear/research/1114-config-yml-schema-grouping.md` — exists, complete with 7 sources, option matrix, recommendation
+- Follow-up task: #1155 at `research` status, `blocked: true`, references research doc
+- Follow-up references research doc: line 23 of #1155
+
+### Test Results
+- pytest (full suite): 2819 passed, 108 failed, 4 skipped — all 108 failures are pre-existing background debt in kanban/mcp-kanban/mcp-knowledge packages. Zero code changes in this research task; no task-scoped failures.
+- ruff: 4 violations (T201, PLC0415, ASYNC250, ANN401) — all in unrelated packages. Not task-scoped.
+
+### Reviewer Evidence
+Present across 3 review cycles. Final cycle: PASS at 0.96 with detailed AC compliance table, implementation-aware gap analysis, and engine semantics verification. Thorough and evidence-based. The 3-cycle process caught a real gap (dispatch gating semantics for `depends_on` vs `blocked:true`) and ensured it was resolved.
+
+### Architect Quality: 4/5
+AC lines were specific and actionable. Minor gap: mixed research scope (lines 1-2) with implementation scope (lines 3-4), which created ambiguity about what "done" means for the research task itself. The pipeline handled it well — implementation AC correctly deferred to follow-up #1155 — but the 3 review cycles were partially driven by the sequencing constraint (AC line 2) lacking operational specificity about HOW gating should be enforced.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 4 have evidence) → 0.00
+- Lint violations in task scope: 0 → 0.00
+- AC quality score ≤ 3: No (4/5) → 0.00
+- Missing reviewer evidence section: No → 0.00
+- Full-suite test failures in task scope: 0 → 0.00
+
+### Confidence: .98
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 4f1c8b0d | docs(research) | .owlbear/research/1114-config-yml-schema-grouping.md | #1114 |
+| d04148d7 | chore(kanban) | .owlbear/kanban/tasks/1114-*.md, 1155-*.md | #1114 |

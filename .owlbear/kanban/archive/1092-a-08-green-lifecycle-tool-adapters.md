@@ -1,10 +1,10 @@
 ---
 id: 1092
 title: 'A-08: GREEN — lifecycle tool adapters'
-status: done
+status: archived
 priority: critical
 created: 2026-04-21 10:54:37.271169+00:00
-updated: 2026-04-28T14:46:52.932756+00:00
+updated: 2026-04-28T14:51:35.010952+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -16,8 +16,8 @@ depends_on:
 - 1091
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T14:46:52.932756+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -235,3 +235,37 @@ Step 1b applies: reviewer cited proof quality/scope, not missing tests. Passing 
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1092-*` files found)
+[[2026-04-28]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: All RED tests from A-05 pass | Scoped run: 72 passed, 0 failed (includes `test_mcp_lifecycle_tools.py` A-05 suite) | PASS |
+| AC2: `move_task` registered, forwards params | Source `server.py:362-410` — `@mcp.tool`, forwards id/status/archival_reason/archival_refs via AgentView | PASS |
+| AC3: `start_work` registered, forwards id | Source `server.py:468-501` — `@mcp.tool`, forwards task_id to AgentView.start_work | PASS |
+| AC4: `end_work` registered, forwards all 7 params | Source `server.py:504-568` — all 7 params forwarded to AgentView.end_work | PASS |
+| AC5: Forbidden-param matrix enforced by engine | Engine suites green (72 total including engine end_work suites); matrix at `engine.py:2919-3017` | PASS |
+| AC6: Error mapping reuses A-06 helper | `_map_kanban_error` at server.py:75; used at :404,:479,:489,:496,:534,:552,:568 | PASS |
+| AC7: No business logic in adapter entrypoints | Spot-checked all 3 entrypoints — pure forwarding. Guard tests in test_mcp_kanban_1092.py pass (7/7). | PASS |
+
+### Test Results
+- Full suite: 2801 passed, 113 failed (all pre-existing/out-of-scope: config schema, React compiler, knowledge schema)
+- Task-scoped suites: 72 passed, 0 failed (lifecycle tools + engine end_work)
+- Lint: clean (ruff on serve/mcp-kanban/src/, serve/kanban/src/, tests/test_mcp_kanban_1092.py)
+
+### Commits Verified
+- `58c3f198` docs: update diagram footers (#1092, doc-writer)
+- `15af24d4` test: extend AC7 guard coverage (#1092, test-writer)
+- `71455541` fix: align lifecycle end_work adapter forwarding (#1092, builder)
+- `cad8977d` feat: route lifecycle adapter errors via helper (#1092, builder)
+- `1af31007` test: add failing tests for lifecycle tool adapter error routing (#1092, test-writer)
+
+### AC Quality
+Score: 4/5 — Adequate. AC required one architect loop-breaker refinement (AC7 boundary clarification) but final AC was specific and verifiable. Builder/reviewer could map every line.
+
+### Deductions
+- -0.02: Full suite has 113 pre-existing failures in unrelated modules; holistic regression assurance imperfect (no in-scope failures).
+
+### Confidence: 0.98
+### Action: ARCHIVE

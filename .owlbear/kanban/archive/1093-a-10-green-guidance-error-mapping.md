@@ -1,10 +1,10 @@
 ---
 id: 1093
 title: 'A-10: GREEN — guidance + error mapping'
-status: done
+status: archived
 priority: needed
 created: 2026-04-21 10:54:47.282679+00:00
-updated: 2026-04-28T17:15:08.331553+00:00
+updated: 2026-04-28T17:20:13.283582+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -16,8 +16,8 @@ depends_on:
 - 1092
 blocked: false
 block_reason:
-claimed_by: quiet-shade
-claimed_at: 2026-04-28T17:15:08.331553+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -454,3 +454,40 @@ Test passes because the implementation has always handled all `KanbanError` subc
 
 ### Scratch Files Cleaned
 - None (no scratch files existed for task 1093)
+[[2026-04-28]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| All RED tests from A-09 (#1089) pass | Auditor-verified: 15/15 in `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` | PASS |
+| Every tool's MCP response includes `guidance: list[str]` | Field-level assertions for all 8 tools in test_mcp_guidance_1089.py:216-505 | PASS |
+| Guidance NOT modified/filtered/truncated | Exact equality assertions with sentinel values across all tool paths | PASS |
+| Error mapping handles KanbanError base class (all subclasses) | `_map_kanban_error` at server.py:75-77; subclass proof for Validation/NotFound/Concurrency/Config/MigrationRequired | PASS |
+| ToolError user_message only — no code on wire | Exact no-code assertions in guidance suite | PASS |
+| AC12: show_task section occurrence count guidance | Exact equality in test_mcp_guidance_1089.py:216-233 | PASS |
+| AC-NEW-4: end_work(block) AR hint | Exact equality in test_mcp_guidance_1089.py:373-398 | PASS |
+| AC-NEW-5: skip-transition warning | Exact equality in test_mcp_guidance_1089.py:320-369 | PASS |
+| AC-FIX-1: list_tasks exact guidance field comparison | Exact field assertion in test_mcp_guidance_1089.py:451-469 | PASS |
+| AC-FIX-2: start_work sentinel passthrough | Exact field assertion in test_mcp_guidance_1089.py:471-489 | PASS |
+| AC-FIX-3: end_work(success) sentinel passthrough | Exact field assertion in test_mcp_guidance_1089.py:491-505 | PASS |
+
+### Test Results
+- pytest (full suite): 2803 passed, 115 failed, 4 skipped. All 115 failures outside task scope (stale legacy guidance suites, config validation, timestamps, storage/IO). Binding suite: 15/15 pass (auditor-verified independently).
+- ruff: 4 violations, all in unrelated files (knowledge, orchestrator, mcp-memory).
+
+### Architect Quality: 3/5
+Original AC had two inaccuracies ("from engine envelope" incorrect for fallback paths; error subclass enumeration incomplete) requiring a full cycle-2 architecture review with challenger. Refinement was thorough — all 5 challenger concerns accepted and incorporated. The original task description correctly predicted the no-op nature.
+
+### Deduction Breakdown
+- AC quality score 3 → -.03
+- No builder commit hash / SCM diff in task body (historical TestFromAC immutability unverifiable; current snapshot verified via `git log`) → -.02
+
+### Confidence: .95
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 3d7bc7a5 | test | test_mcp_guidance_1089.py | #1093 |
+| 4c9831ab | test | test_mcp_guidance_1089.py | #1093 |
+| d06ed51c | chore | 1093 kanban file | #1093 |
