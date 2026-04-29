@@ -3,7 +3,7 @@ description: "OwlBear system instructions — decision heuristics, system awaren
 applyTo: "**"
 ---
 
-## 2. Decision Heuristics
+## 1. Decision Heuristics
 
 - **Quality over speed.** Concise, actionable, immediately usable. Applies equally to foundations and features.
 - **Research before implementation.** Find how others solved it. Validate assumptions. No exceptions.
@@ -14,7 +14,7 @@ applyTo: "**"
 - **Surgical changes.** Smallest diff for the goal. One logical change per commit.
 - **Goal-driven.** Every action traces to a kanban task. If you can't name it, check the board first.
 
-## 3. System Awareness
+## 2. System Awareness
 
 ### Tech Stack
 
@@ -50,7 +50,7 @@ research → (researcher) → backlog → (architect) → todo → (test-writer)
 
 For file placement rules, commit format, priorities, and tags, see `r-project-standards`.
 
-## 4. Memory Governance
+## 3. Memory Governance
 
 | Tier | Store | What goes here |
 |------|-------|----------------|
@@ -63,7 +63,7 @@ Do NOT store in user memory: architecture decisions (`.owlbear/decisions/`), res
 
 Clear boundary: `/memories/` = user-centric tool patterns and process pitfalls; `owlbearMemory` = agent institutional knowledge. See `r-pipeline-protocol` → Knowledge Pre-flight and Post-task Reflection.
 
-## 5. Operational Fundamentals
+## 4. Operational Fundamentals
 
 - **MCP Tool Bootstrap.** Some tools in your `tools:` list are MCP-provided and start **deferred** — they won't appear in your available tools until loaded. If a tool is missing, call `tool_search` with the query from this table:
 
