@@ -6,6 +6,7 @@
  * (network failure + non-OK HTTP status), and interval cleanup on unmount.
  * All tests are RED (failing) until the builder implements useScanPolling.ts.
  */
+import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useScanPolling } from '../hooks/useScanPolling'
@@ -418,6 +419,23 @@ describe('TestFromAC_useScanPolling', () => {
       // Advance fake time by the NEW interval — exactly one additional fetch must fire
       await act(async () => { vi.advanceTimersByTime(10_000) })
       expect(fetchMock.mock.calls.length).toBe(callsAfterSettle + 1)
+    })
+  })
+
+  // ─── AC_StrictMode: isMountedRef lifecycle ───────────────────────────────────
+
+  describe('AC_StrictMode: isMountedRef survives StrictMode effect replay', () => {
+    it('clears isLoading and populates items after StrictMode mount-cleanup-remount cycle', async () => {
+      // React StrictMode (dev mode) fires effects twice: mount → cleanup → remount.
+      // Without restoring isMountedRef.current=true in the effect body, the remounted
+      // hook's poll() sees isMountedRef=false (set by cleanup) and suppresses all
+      // state updates, leaving isLoading stuck at true and items empty.
+      const fetchMock = makeFetch(SCAN_ITEMS)
+      vi.stubGlobal('fetch', fetchMock)
+      const { result } = renderHook(() => useScanPolling(), { wrapper: React.StrictMode })
+      await act(async () => {})
+      expect(result.current.isLoading).toBe(false)
+      expect(result.current.items).toEqual(SCAN_ITEMS)
     })
   })
 })
