@@ -140,8 +140,8 @@ class TestFromAC_MoveTaskGuidanceIntegration:
     ) -> None:
         """move_task to 'archived' → empty guidance (archived excluded from skip detection)."""
         ctx = _make_ctx(app_ctx)
-        # Task 3 is at "done"; archive it
-        result = await move_task(ctx, task_id="3", status="archived")
+        # Task 3 is at "done"; archive it — archival_reason required by engine contract
+        result = await move_task(ctx, task_id="3", status="archived", archival_reason="completed")
         assert result.guidance == [], (
             f"Expected empty guidance for archive move, got {result.guidance!r}"
         )

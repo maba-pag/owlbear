@@ -74,16 +74,13 @@ def _make_engine_mock(agent_view: MagicMock) -> MagicMock:
     for method_name in ("show_task", "move_task", "start_work", "end_work", "edit_task"):
         getattr(engine, method_name).return_value.model_dump.return_value = task_dict
     engine.board_config.return_value.statuses = [
-        {"name": s}
-        for s in [
-            "research",
-            "backlog",
-            "todo",
-            "in-progress",
-            "review",
-            "docs",
-            "done",
-        ]
+        "research",
+        "backlog",
+        "todo",
+        "in-progress",
+        "review",
+        "docs",
+        "done",
     ]
     return engine
 
