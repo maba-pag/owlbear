@@ -223,57 +223,63 @@ class TestFromAC_ValidateEngineConfig:
 
     def _make_valid_config(self) -> BoardConfig:
         """Return a valid BoardConfig for mutation in subsequent tests."""
-        return BoardConfig(
+        config = BoardConfig(
             statuses=["research", "done"],
             priorities=["needed"],
             agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
         )
+        config.pipeline.statuses = ["research", "done"]
+        config.pipeline.priorities = ["needed"]
+        config.agents.agent_map = {"research": "r", "done": "d"}
+        return config
 
     def test_empty_statuses_raises_config_error(self) -> None:
         config = self._make_valid_config()
-        config.statuses = []
+        config.pipeline.statuses = []
         with pytest.raises(ConfigError, match="statuses"):
             _validate_engine_config(config)
 
     def test_empty_priorities_raises_config_error(self) -> None:
         config = self._make_valid_config()
-        config.priorities = []
+        config.pipeline.priorities = []
         with pytest.raises(ConfigError, match="priorities"):
             _validate_engine_config(config)
 
     def test_entry_status_not_in_statuses_raises(self) -> None:
         config = self._make_valid_config()
-        config.entry_status = "nonexistent"
+        config.pipeline.entry_status = "nonexistent"
         with pytest.raises(ConfigError, match="entry_status"):
             _validate_engine_config(config)
 
     def test_terminal_status_not_last_raises(self) -> None:
         config = self._make_valid_config()
-        config.terminal_status = "research"  # not the last status ("done")
+        config.pipeline.terminal_status = "research"  # not the last status ("done")
         with pytest.raises(ConfigError, match="terminal_status"):
             _validate_engine_config(config)
 
     def test_agent_map_missing_status_raises(self) -> None:
         config = self._make_valid_config()
-        config.agent_map = {"research": "r"}  # missing "done"
+        config.agents.agent_map = {"research": "r"}  # missing "done"
         with pytest.raises(ConfigError, match="agent_map"):
             _validate_engine_config(config)
 
     def test_invalid_claim_timeout_raises(self) -> None:
         config = self._make_valid_config()
-        config.claim_timeout = "bogus"
+        config.pipeline.claim_timeout = "bogus"
         with pytest.raises(ConfigError, match="Invalid claim_timeout"):
             _validate_engine_config(config)
 
     def test_asymmetric_agent_compatibility_raises(self) -> None:
         config = self._make_valid_config()
-        config.agent_compatibility = {"alice": ["bob"]}  # bob does not list alice
+        config.agents.agent_compatibility = {"alice": ["bob"]}  # bob does not list alice
         with pytest.raises(ConfigError):
             _validate_engine_config(config)
 
     def test_agent_compatibility_non_list_peer_raises(self) -> None:
         config = self._make_valid_config()
-        config.agent_compatibility = {"alice": "not-a-list"}  # type: ignore[assignment]
+        config.agents.agent_compatibility = {
+            "alice": "not-a-list"
+        }  # type: ignore[assignment]
         with pytest.raises(ConfigError):
             _validate_engine_config(config)
 
@@ -598,8 +604,8 @@ class TestFromAC_EngineConfigOps:
             "  - done\n",
             "  - done\n  - released\n",
         ).replace(
-            "  done: auditor\n",
-            "  done: auditor\n  released: auditor\n",
+            "        done: auditor\n",
+            "        done: auditor\n        released: auditor\n",
         ).replace(
             "terminal_status: done",
             "terminal_status: released",
