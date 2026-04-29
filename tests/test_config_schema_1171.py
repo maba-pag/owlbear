@@ -45,18 +45,20 @@ statuses:
   - backlog
   - done
 priorities:
+  - someday
   - important
   - critical
 next_id: 1
+activity_log: true
 paths:
-  tasks_dir: tasks
-  archive_dir: archive
+  tasks_dir: custom-tasks
+  archive_dir: custom-archive
 pipeline:
   entry_status: research
   terminal_status: done
   wave_size: 4
   claim_timeout: 1h
-  default_priority: important
+  default_priority: someday
 agents:
   agent_map:
     research: []
@@ -75,12 +77,14 @@ policy:
   status_predicates: {}
 """
 
+# Nondefault tasks_dir/archive_dir prove flat key extraction, not Pydantic defaults.
 _FLAT_YAML = """\
 statuses:
   - research
   - backlog
   - done
 priorities:
+  - someday
   - important
   - critical
 entry_status: research
@@ -88,8 +92,8 @@ terminal_status: done
 wave_size: 4
 claim_timeout: 1h
 next_id: 1
-tasks_dir: tasks
-archive_dir: archive
+tasks_dir: custom-tasks
+archive_dir: custom-archive
 agent_map:
   research: []
   backlog: []
@@ -98,6 +102,7 @@ agent_types: {}
 agent_compatibility: {}
 """
 
+# Nondefault priority/paths prove explicit migrate value transfer, not Pydantic defaults.
 _LEGACY_YAML = """\
 version: 10
 board:
@@ -107,15 +112,16 @@ statuses:
   - name: backlog
   - name: done
 priorities:
+  - someday
   - important
   - critical
 defaults:
   status: research
-  priority: important
+  priority: someday
 claim_timeout: 1h
 next_id: 1
-tasks_dir: tasks
-archive_dir: archive
+tasks_dir: custom-tasks
+archive_dir: custom-archive
 """
 
 # Mixed: has both a flat key (tasks_dir at root) AND a grouped sub-section (paths:)
@@ -284,6 +290,17 @@ class TestFromAC_BoardConfigRootAllow:
         config = BoardConfig.model_validate(data)
         assert config is not None
 
+    def test_vendor_field_survives_save_reload_round_trip(
+        self, tmp_path: Path
+    ) -> None:
+        """AC2: vendor field must survive save_config → load_config round-trip."""
+        yaml_with_vendor = _GROUPED_YAML + "vendor_custom: keep-me\n"
+        kanban_dir = _make_board(tmp_path, yaml_with_vendor)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        reloaded = load_config(kanban_dir)
+        assert reloaded.model_extra.get("vendor_custom") == "keep-me"
+
 
 # ---------------------------------------------------------------------------
 # ACs 3-5 — Detection cascade
@@ -301,13 +318,15 @@ class TestFromAC_DetectionCascade:
         config = load_config(kanban_dir)
         # Grouped config must expose .paths sub-model (not just flat tasks_dir)
         assert hasattr(config, "paths")
-        assert config.paths.tasks_dir == "tasks"
+        # Nondefault value proves actual extraction from grouped YAML, not Pydantic default
+        assert config.paths.tasks_dir == "custom-tasks"
 
     def test_flat_key_set_loads_without_schema_field(self, tmp_path: Path) -> None:
         """Flat Brief-C keys without schema field must load successfully (flat path)."""
         kanban_dir = _make_board(tmp_path, _FLAT_YAML)
         config = load_config(kanban_dir)
-        assert config.tasks_dir == "tasks"
+        # Nondefault value proves flat key extraction, not Pydantic default
+        assert config.tasks_dir == "custom-tasks"
         assert "research" in config.statuses
 
     def test_legacy_keys_load_successfully(self, tmp_path: Path) -> None:
@@ -355,11 +374,22 @@ class TestFromAC_ForwardingProperties:
         config = load_config(kanban_dir)
         assert config.archive_dir == config.paths.archive_dir
 
+    def test_forwarding_property_nondefault_value_matches_yaml(
+        self, tmp_path: Path
+    ) -> None:
+        """config.tasks_dir/archive_dir return nondefault values from grouped YAML."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
+        config = load_config(kanban_dir)
+        # Must match fixture values, not Pydantic defaults "tasks"/"archive"
+        assert config.tasks_dir == "custom-tasks"
+        assert config.archive_dir == "custom-archive"
+
     def test_flat_config_tasks_dir_still_accessible(self, tmp_path: Path) -> None:
         """config.tasks_dir must still work on flat config (no regression)."""
         kanban_dir = _make_board(tmp_path, _FLAT_YAML)
         config = load_config(kanban_dir)
-        assert config.tasks_dir == "tasks"
+        # Nondefault value proves flat key extraction, not Pydantic default
+        assert config.tasks_dir == "custom-tasks"
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +407,8 @@ class TestFromAC_DefaultsPriorityMigration:
         kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
         config = load_config(kanban_dir)
         assert hasattr(config, "pipeline")
-        assert config.pipeline.default_priority == "important"
+        # Nondefault value proves grouped pipeline section is read, not Pydantic default
+        assert config.pipeline.default_priority == "someday"
 
     def test_legacy_defaults_priority_migrates_to_pipeline_default_priority(
         self, tmp_path: Path
@@ -385,19 +416,19 @@ class TestFromAC_DefaultsPriorityMigration:
         """Legacy defaults.priority must be accessible as pipeline.default_priority."""
         kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
         config = load_config(kanban_dir)
-        # After normalisation, pipeline sub-model must expose default_priority
-        assert config.pipeline.default_priority == "important"
+        # _LEGACY_YAML has defaults.priority: someday (nondefault) — proves explicit migration
+        assert config.pipeline.default_priority == "someday"
 
     def test_migration_path_is_explicit_not_pydantic_default(
         self, tmp_path: Path
     ) -> None:
-        """Ruling 2: migration must move the value explicitly, not rely on model default.
+        """Load-time normalisation must move the value explicitly, not rely on model default.
 
-        Verifies that a legacy config with defaults.priority='critical' (non-default)
-        produces pipeline.default_priority='critical', not the Pydantic field default.
+        Uses 'critical' — differs from _LEGACY_YAML's 'someday' AND Pydantic default
+        'important' — so the assertion can only pass if the value is explicitly transferred.
         """
         yaml_with_critical = _LEGACY_YAML.replace(
-            "  priority: important", "  priority: critical"
+            "  priority: someday", "  priority: critical"
         )
         kanban_dir = _make_board(tmp_path, yaml_with_critical)
         config = load_config(kanban_dir)
@@ -430,8 +461,10 @@ class TestFromAC_SaveConfigGrouped:
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = self._read_yaml(kanban_dir / "config.yml")
-        assert "paths" in data
-        assert data["paths"]["tasks_dir"] == "tasks"
+        assert isinstance(data.get("paths"), dict)
+        # Nondefault values prove paths section values are written, not Pydantic defaults
+        assert data["paths"]["tasks_dir"] == "custom-tasks"
+        assert data["paths"]["archive_dir"] == "custom-archive"
 
     def test_save_config_emits_pipeline_sub_section(self, tmp_path: Path) -> None:
         """save_config must write nested pipeline: sub-section."""
@@ -439,8 +472,22 @@ class TestFromAC_SaveConfigGrouped:
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = self._read_yaml(kanban_dir / "config.yml")
-        assert "pipeline" in data
-        assert data["pipeline"]["default_priority"] == "important"
+        assert isinstance(data.get("pipeline"), dict)
+        # Nondefault value proves pipeline section values are written, not Pydantic defaults
+        assert data["pipeline"]["default_priority"] == "someday"
+
+    def test_save_config_emits_agents_and_policy_sub_sections(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8: save_config must emit agents: and policy: as nested sub-sections."""
+        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
+        config = load_config(kanban_dir)
+        save_config(config, kanban_dir)
+        data = self._read_yaml(kanban_dir / "config.yml")
+        assert isinstance(data.get("agents"), dict), "agents: must be nested dict in grouped output"
+        assert isinstance(data.get("policy"), dict), "policy: must be nested dict in grouped output"
+        assert "agent_map" in data["agents"]
+        assert "non_impl_tags" in data["policy"]
 
     def test_round_trip_statuses_preserved(self, tmp_path: Path) -> None:
         """Round-trip: save_config → load_config returns same statuses list."""
@@ -520,26 +567,42 @@ class TestFromAC_SaveConfigGrouped:
 
 
 class TestFromAC_MigrateConfigDefaultsPriority:
-    """AC7 — migrate._migrate_config explicitly transfers defaults.priority to default_priority."""
+    """AC7+AC9 — _migrate_config must produce grouped output; paths preserved.
 
-    def test_migrate_config_writes_default_priority_from_legacy(
+    ALL tests in this class MUST FAIL until #1172 implements grouped migration output.
+    Current _migrate_config writes flat Brief-C keys (default_priority, entry_status
+    at root) — NOT the grouped pipeline: section; also drops tasks_dir/archive_dir.
+    """
+
+    def test_migrate_config_writes_default_priority_grouped(
         self, tmp_path: Path
     ) -> None:
-        """_migrate_config on legacy board writes default_priority from defaults.priority."""
+        """_migrate_config must write default_priority nested under pipeline: section.
+
+        MUST FAIL until #1172: current migrate writes flat new_cfg["default_priority"].
+        'someday' differs from Pydantic default 'important' — proves explicit transfer.
+        """
         kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
         result, _ = _migrate_config(kanban_dir)
         assert result == "migrated"
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        # _LEGACY_YAML has defaults.priority: important
-        assert data.get("default_priority") == "important" or (
-            isinstance(data.get("pipeline"), dict)
-            and data["pipeline"].get("default_priority") == "important"
-        ), "migrate must write default_priority value from defaults.priority"
+        # Require GROUPED format strictly — flat root-level default_priority NOT acceptable
+        assert isinstance(data.get("pipeline"), dict), (
+            f"migrate must write pipeline as nested section; got keys={list(data.keys())!r}"
+        )
+        assert data["pipeline"].get("default_priority") == "someday", (
+            f"migrate must write default_priority='someday' in pipeline section, "
+            f"got pipeline={data.get('pipeline')!r}"
+        )
 
     def test_migrate_config_explicit_value_not_pydantic_default(
         self, tmp_path: Path
     ) -> None:
-        """_migrate_config uses the actual defaults.priority value, not a model default."""
+        """_migrate_config uses the actual defaults.priority value, not a model default.
+
+        MUST FAIL until #1172. Uses 'critical' — differs from both fixture 'someday'
+        and Pydantic default 'important' — ruling out all coincidental passes.
+        """
         legacy_with_critical = """\
 version: 10
 board:
@@ -556,30 +619,57 @@ defaults:
   priority: critical
 claim_timeout: 1h
 next_id: 1
-tasks_dir: tasks
-archive_dir: archive
+tasks_dir: custom-tasks
+archive_dir: custom-archive
 """
         kanban_dir = _make_board(tmp_path, legacy_with_critical)
         result, _ = _migrate_config(kanban_dir)
         assert result == "migrated"
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        actual_priority = data.get("default_priority") or (
-            data.get("pipeline") or {}
-        ).get("default_priority")
-        assert actual_priority == "critical", (
-            f"Expected 'critical', got {actual_priority!r} — migration must be explicit"
+        # Require GROUPED format only
+        assert isinstance(data.get("pipeline"), dict), (
+            "migrate must write pipeline as nested section"
+        )
+        assert data["pipeline"].get("default_priority") == "critical", (
+            f"Expected 'critical' in pipeline.default_priority, got {data.get('pipeline')!r}"
+        )
+
+    def test_migrate_config_preserves_custom_tasks_dir(
+        self, tmp_path: Path
+    ) -> None:
+        """_migrate_config must preserve tasks_dir and archive_dir from legacy config.
+
+        MUST FAIL until #1172: current migrate.py new_cfg does not include tasks_dir or
+        archive_dir, causing silent data loss for boards with custom directory paths.
+        Reload DIRECTLY without save_config to avoid masking the data loss.
+        """
+        kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
+        result, _ = _migrate_config(kanban_dir)
+        assert result == "migrated"
+        # Reload DIRECTLY — no save_config (save_config would normalize and mask loss)
+        config = load_config(kanban_dir)
+        assert config.paths.tasks_dir == "custom-tasks", (
+            f"migrate must preserve tasks_dir='custom-tasks', got {config.paths.tasks_dir!r}"
+        )
+        assert config.paths.archive_dir == "custom-archive", (
+            f"migrate must preserve archive_dir='custom-archive', got {config.paths.archive_dir!r}"
         )
 
     def test_migrate_config_round_trip_no_data_loss(
         self, tmp_path: Path
     ) -> None:
-        """AC9 (migrate): _migrate_config output can be re-loaded; model_dump matches."""
+        """AC9 (migrate): _migrate_config output loads without data loss.
+
+        MUST FAIL until #1172: tasks_dir not preserved; default_priority not in grouped section.
+        Reload DIRECTLY without save_config to avoid masking lossy/noncanonical writes.
+        """
         kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
         result, _ = _migrate_config(kanban_dir)
         assert result == "migrated"
-        # After migration, load_config must succeed
+        # Load DIRECTLY without calling save_config in between
         config = load_config(kanban_dir)
-        save_config(config, kanban_dir)
-        reloaded = load_config(kanban_dir)
-        exclude = {"defaults"}
-        assert reloaded.model_dump(exclude=exclude) == config.model_dump(exclude=exclude)
+        # Nondefault values prove explicit preservation, not Pydantic defaults
+        assert config.paths.tasks_dir == "custom-tasks"
+        assert config.paths.archive_dir == "custom-archive"
+        assert config.pipeline.default_priority == "someday"
+        assert config.statuses == ["research", "backlog", "done"]
