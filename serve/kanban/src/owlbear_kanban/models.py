@@ -85,15 +85,6 @@ def _validate_entry_and_terminal(
         )
 
 
-def _validate_agent_map(statuses: list[str], agent_map: dict[str, Any]) -> None:
-    missing_statuses = [status for status in statuses if status not in agent_map]
-    if missing_statuses:
-        raise ConfigError(
-            code="ERR_INVALID_STATUS",
-            user_message=f"agent_map missing status entries: {missing_statuses}",
-        )
-
-
 def _validate_agent_compatibility(compatibility: dict[str, Any]) -> None:
     compatibility_sets: dict[str, set[str]] = {}
     for agent, peers in compatibility.items():
@@ -437,7 +428,6 @@ class BoardConfig(BaseModel):
         _validate_entry_and_terminal(
             self.statuses, self.entry_status, self.terminal_status
         )
-        _validate_agent_map(self.statuses, self.agent_map)
         _parse_claim_timeout(self.claim_timeout)
         _validate_agent_compatibility(self.agent_compatibility)
 
