@@ -411,6 +411,7 @@ def _migrate_config(  # noqa: C901, PLR0911, PLR0915
 
     new_cfg["priorities"] = plain_raw.get("priorities", [])
     new_cfg["next_id"] = plain_raw.get("next_id", 1)
+    new_cfg["activity_log"] = plain_raw.get("activity_log", True)
     new_cfg["schema"] = "grouped"
 
     # entry_status from defaults.status or first status
