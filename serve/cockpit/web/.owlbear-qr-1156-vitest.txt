@@ -1,0 +1,108 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.5 [39m[90m/Users/markus/Projects/owlbear-dev/serve/cockpit/web[39m
+
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22meditable fields[2m > [22mrenders title as an input field[32m 13[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22meditable fields[2m > [22mtitle input shows the current task title value[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22meditable fields[2m > [22mrenders priority as a select/dropdown control[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22meditable fields[2m > [22mrenders each tag as a chip element[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22meditable fields[2m > [22mrenders depends_on field control[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22meditable fields[2m > [22mrenders parent field control[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22meditable fields[2m > [22mrenders block_reason field control when task is blocked[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mread-only fields[2m > [22mid is shown as static text, not an input[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mread-only fields[2m > [22mid field text contains the task id value[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mread-only fields[2m > [22mcreated is shown as static text, not an input[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mread-only fields[2m > [22mstatus is shown as static text, not an input[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mmarkdown body rendering[2m > [22mrenders body content through the markdown-body container[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mmarkdown body rendering[2m > [22mdoes not inject raw script tags from markdown body (XSS)[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22medit mode toggle for body[2m > [22medit-mode toggle button is present[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22medit mode toggle for body[2m > [22mclicking edit-mode toggle reveals a textarea for body editing[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22msave action[2m > [22msave button is present[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22msave action[2m > [22mclicking save sends POST to /api/tasks/{id}/edit[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22msave action[2m > [22msave request body includes the updated snapshot field[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22m409 conflict detection[2m > [22m409 response from save opens a conflict modal[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22m409 conflict detection[2m > [22mconflict modal offers a refresh (discard local edits) option[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22m409 conflict detection[2m > [22mconflict modal offers an overwrite (force save) option[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mhistory subtab[2m > [22mhistory subtab button is present[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mhistory subtab[2m > [22mclicking history tab fetches GET /api/sessions?filter=all[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mhistory subtab[2m > [22mhistory shows only sessions matching the selected task_id (client-side filter)[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mhistory subtab[2m > [22mhistory session row shows agent name[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mhistory subtab[2m > [22mhistory session row shows duration[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22mhistory subtab[2m > [22mhistory session row shows outcome[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22moppose-the-flow confirmations[2m > [22mbackward move action requires a confirmation dialog[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22moppose-the-flow confirmations[2m > [22munblock action requires a confirmation dialog[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestFromAC_DetailTab[2m > [22moppose-the-flow confirmations[2m > [22munblock confirmation dialog surfaces the existing block_reason[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestBuilderDiscovered[2m > [22munclaim confirm dialog (AC9)[2m > [22munclaim action button is present[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestBuilderDiscovered[2m > [22munclaim confirm dialog (AC9)[2m > [22munclaim action requires a confirmation dialog[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestBuilderDiscovered[2m > [22msave payload includes body (AC6)[2m > [22msave request body includes the edited body textarea content[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_FetchStrategyFix[2m > [22mActivityTab fetches /api/sessions?filter=all on mount[32m 12[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_FetchStrategyFix[2m > [22mActivityTab does NOT fetch /api/sessions without filter param[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_ActiveFilterPredicate[2m > [22mactive filter shows sessions with state=running[32m 7[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_ActiveFilterPredicate[2m > [22mactive filter does NOT show sessions with state=in-progress (stale state name)[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_ActiveFilterPredicate[2m > [22mactive filter includes state=stuck sessions[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_ActiveFilterPredicate[2m > [22mactive filter shows exactly running and stuck sessions (not released/blocked)[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mfilter-blocked button is present[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mfilter-failed button is NOT present (replaced by blocked)[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mfilter-stuck button is present[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mclicking filter-blocked shows sessions with state=blocked[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mclicking filter-blocked shows sessions with state=rejected[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mclicking filter-blocked shows only blocked and rejected sessions[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mclicking filter-blocked does not show running sessions[32m 5[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mclicking filter-stuck shows only stuck sessions[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_NewFilterButtons[2m > [22mclicking filter-stuck does not show blocked or running sessions[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row has data-state attribute matching session state[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row renders data-state="running"[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row renders data-state="stuck"[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row renders data-state="blocked"[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row renders data-state="rejected"[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row renders data-state="released"[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row renders data-state="completed"[32m 4[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mActivityTab session row renders data-state="expired"[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mstuck session row has different data-state than completed row[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mblocked session row has different data-state than completed row[32m 3[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row has data-state attribute matching session state[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row renders data-state="running"[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row renders data-state="stuck"[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row renders data-state="blocked"[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row renders data-state="rejected"[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/DetailTab.test.tsx[2m > [22mTestBuilderDiscovered[2m > [22mforce-save fires API call (AC7)[2m > [22mclicking conflict-overwrite sends a second POST to /api/tasks/{id}/edit[32m 6[2mms[22m[39m
+[90mstderr[2m | src/__tests__/ActivityTab_1156.test.tsx[2m > [22m[2mTestFromAC_FilterTypeAlignment[2m > [22m[2mblocked filter switch does not throw (no unhandled switch branch)
+[22m[39mAn update to ActivityTab inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+[90mstderr[2m | src/__tests__/ActivityTab_1156.test.tsx[2m > [22m[2mTestFromAC_FilterTypeAlignment[2m > [22m[2mstuck filter switch does not throw (no unhandled switch branch)
+[22m[39mAn update to ActivityTab inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row renders data-state="released"[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row renders data-state="completed"[32m 0[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_VisualStateIndicators[2m > [22mHistorySubtab session row renders data-state="expired"[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_HistorySubtabClickThrough[2m > [22mHistorySubtab session rows have cursor:pointer style[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_HistorySubtabClickThrough[2m > [22mclicking HistorySubtab row calls onSelectTask with task_id[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_HistorySubtabClickThrough[2m > [22mclicking HistorySubtab row calls onSelectTask with subtab="history"[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_HistorySubtabClickThrough[2m > [22mclicking second HistorySubtab row calls onSelectTask with that row task_id[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_DetailTabPropThreading[2m > [22mopening history in DetailTab and clicking a row invokes onSelectTask[32m 6[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_FilterTypeAlignment[2m > [22mreleased filter still shows only released sessions (unchanged behavior)[32m 1[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_FilterTypeAlignment[2m > [22mblocked filter switch does not throw (no unhandled switch branch)[32m 2[2mms[22m[39m
+ [32m✓[39m src/__tests__/ActivityTab_1156.test.tsx[2m > [22mTestFromAC_FilterTypeAlignment[2m > [22mstuck filter switch does not throw (no unhandled switch branch)[32m 1[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m75 passed[39m[22m[90m (75)[39m
+[2m   Start at [22m 20:41:37
+[2m   Duration [22m 1.24s[2m (transform 607ms, setup 436ms, import 695ms, tests 224ms, environment 949ms)[22m
+
