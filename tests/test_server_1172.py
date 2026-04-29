@@ -227,3 +227,55 @@ class TestFromAC_StatusNamesDictFormBug:
         assert len(result.guidance) > 0, (
             f"Expected skip guidance for research→review (4 slots), got {result.guidance!r}"
         )
+
+    # -- AC 3 (strict): collect_guidance receives exact board status list ---
+
+    @pytest.mark.asyncio
+    async def test_collect_guidance_receives_exact_board_status_list(
+        self, app_ctx: AppContext
+    ) -> None:
+        """collect_guidance is called with status_names equal to the board's ordered list.
+
+        Uses ``kwargs["status_names"]`` (no default) so the test FAILS if the kwarg
+        is omitted.  Asserts the exact value — not just type — so it FAILS if
+        contents differ or ordering changes.
+        """
+        ctx = _make_ctx(app_ctx)
+        expected = list(app_ctx.engine.board_config().statuses)
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
+        ) as mock_cg:
+            await move_task(ctx, task_id="1", status="todo")
+
+        assert mock_cg.called, (
+            "collect_guidance was never called — fallback path not reached"
+        )
+        _, kwargs = mock_cg.call_args
+        # KeyError here if status_names kwarg was omitted — intentional, no default
+        actual = kwargs["status_names"]
+        assert actual == expected, (
+            f"status_names mismatch: expected {expected!r}, got {actual!r}"
+        )
+
+    # -- AC 4: collect_guidance return value is wired to result.guidance ----
+
+    @pytest.mark.asyncio
+    async def test_collect_guidance_return_value_assigned_to_result_guidance(
+        self, app_ctx: AppContext
+    ) -> None:
+        """result.guidance is set to the return value of collect_guidance.
+
+        Mocks collect_guidance to return a sentinel list and asserts the
+        sentinel propagates to result.guidance.  Fails if the return value
+        is not assigned (e.g. the assignment line is removed or broken).
+        """
+        sentinel = ["sentinel-guidance-item"]
+        ctx = _make_ctx(app_ctx)
+        with patch(
+            "owlbear_mcp_kanban.server.collect_guidance", return_value=sentinel
+        ):
+            result = await move_task(ctx, task_id="1", status="todo")
+
+        assert result.guidance == sentinel, (
+            f"result.guidance should equal sentinel {sentinel!r}, got {result.guidance!r}"
+        )
