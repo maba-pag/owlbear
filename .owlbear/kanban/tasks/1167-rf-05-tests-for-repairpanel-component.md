@@ -4,14 +4,14 @@ title: 'RF-05: Tests for RepairPanel component'
 status: backlog
 priority: nice-to-have
 created: 2026-04-28T17:38:24.640853+00:00
-updated: 2026-04-28T17:40:41.112412+00:00
+updated: 2026-04-29T09:00:28.860054+00:00
 tags:
 - phase:cockpit
 - scope:cockpit-frontend
 - type:test
 parent:
 depends_on:
-- 1166
+- 1165
 blocked: false
 block_reason:
 claimed_by:
