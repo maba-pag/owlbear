@@ -5,14 +5,16 @@
  * and standard error AC lines are GREEN in repairStorage_1163.test.ts.
  *
  * This file covers:
- *   - AC4 edge: non-Error network rejections (existing, GREEN after builder added catch wrapper)
- *   - AC3 proof: HTTP error message contains numeric status code (Test AC line 41 — missing outright per reviewer)
- *   - AC4 proof: native Error is rethrown unchanged (same object reference)
- *   - AC4 proof: non-Error rejections wrapped with descriptive message (beyond Error instance)
- *   - AC5 proof: RepairOutcome.action literal-union compile-time guard
+ *   - AC4 edge: non-Error network rejections (existing, GREEN)
+ *   - AC3 proof: HTTP error message contains numeric status code (existing, GREEN)
+ *   - AC4 proof: native Error is rethrown unchanged (existing, GREEN)
+ *   - AC4 proof: non-Error rejections wrapped with descriptive message (existing, GREEN)
+ *   - AC4 proof: non-serializable (circular) rejection produces wrapped Error (RETRY v4 — RED)
+ *   - AC5 proof: RepairOutcome.action literal-union compile-time guard (existing, GREEN)
  *
  * Retry (reviewer pass 1): Added groups 2–5 per required additions in ## Review Evidence.
  * Retry (reviewer pass 3): Added plain-object message quality tests per refined Test AC line 4.
+ * Retry (reviewer pass 4 / loop-breaker cycle 3): Added circular-object group per final AC refinement.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { repairStorage } from '../api/repair'
@@ -115,10 +117,6 @@ describe('TestFromAC_repairStorage_1164', () => {
       expect(error.cause).toEqual(originalCause)
     })
 
-    // Retry (reviewer pass 3): plain-object message must not degrade to [object Object]
-    // and must surface object content — refined Test AC line 4.
-    // FAIL reason: String({ code: 'ECONNREFUSED' }) === '[object Object]', so the
-    // current message 'Repair request failed: [object Object]' fails both assertions.
     it('wrapped plain-object rejection message does not degrade to [object Object]', async () => {
       vi.stubGlobal('fetch', vi.fn(() => Promise.reject({ code: 'ECONNREFUSED' })))
       const error = await repairStorage().catch((e: unknown) => e as Error)
@@ -129,6 +127,55 @@ describe('TestFromAC_repairStorage_1164', () => {
       vi.stubGlobal('fetch', vi.fn(() => Promise.reject({ code: 'ECONNREFUSED' })))
       const error = await repairStorage().catch((e: unknown) => e as Error)
       expect(error.message).toMatch(/ECONNREFUSED|code/)
+    })
+  })
+
+  // --- AC4: non-serializable (circular) rejection — loop-breaker cycle 3 AC refinement ---
+  // Final AC line 4: non-serializable rejections must still produce a wrapped Error with
+  // cause preserved and a non-empty fallback message — the serialization path must not throw.
+  //
+  // Current gap: repair.ts:22 calls JSON.stringify(error) without a try/catch fallback.
+  // For a circular object, JSON.stringify throws TypeError('Converting circular structure to
+  // JSON') before wrappedError is created, so:
+  //   - error.cause is never set (undefined on the escaped TypeError)
+  //   - error.message exposes JSON internals ("Converting circular structure to JSON")
+  // Tests 1 and 2 below FAIL against the current implementation.
+  // Tests 3 and 4 are regression guards (pass now, must continue to pass after builder fix).
+
+  describe('AC4: non-serializable (circular) rejection produces wrapped Error', () => {
+    it('circular-object rejection preserves original value on cause property', async () => {
+      const circular: Record<string, unknown> = {}
+      circular.self = circular
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(circular)))
+      const error = await repairStorage().catch((e: unknown) => e as Error & { cause?: unknown })
+      // FAIL: current impl lets JSON.stringify throw; the escaped TypeError has no cause set.
+      expect(error.cause).toBe(circular)
+    })
+
+    it('circular-object rejection message does not expose JSON.stringify error internals', async () => {
+      const circular: Record<string, unknown> = {}
+      circular.self = circular
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(circular)))
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      // FAIL: current impl rejects with TypeError('Converting circular structure to JSON').
+      expect(error.message).not.toMatch(/circular structure|cyclic/i)
+    })
+
+    it('circular-object rejection is an Error instance', async () => {
+      const circular: Record<string, unknown> = {}
+      circular.self = circular
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(circular)))
+      // TypeError IS Error — regression guard only (passes currently).
+      await expect(repairStorage()).rejects.toBeInstanceOf(Error)
+    })
+
+    it('circular-object rejection message is non-empty', async () => {
+      const circular: Record<string, unknown> = {}
+      circular.self = circular
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject(circular)))
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      // Regression guard — passes now (TypeError has non-empty message).
+      expect(error.message).toBeTruthy()
     })
   })
 
