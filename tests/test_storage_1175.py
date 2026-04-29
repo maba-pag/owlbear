@@ -217,6 +217,67 @@ class TestFromAC_SaveConfigHardening:
         deep_val = data.get("level_one", {}).get("level_two", {}).get("deep_frozen")
         assert deep_val == ["a", "m", "z"]
 
+    def test_ac3_frozenset_in_list_container_is_converted(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3: frozenset elements inside a list container are recursively converted.
+
+        Exercises the list-branch of _yaml_safe_value(). Removing that branch
+        leaves the frozensets unconverted inside the list, causing ruamel.yaml
+        to raise a RepresenterError on dump (no frozenset representer).
+        """
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        if config.__pydantic_extra__ is None:
+            config.__pydantic_extra__ = {}
+        config.__pydantic_extra__["list_of_frozen"] = [
+            frozenset({"b", "a"}),
+            frozenset({"d", "c"}),
+        ]
+        save_config(config, kanban_dir)
+        data = _read_yaml(kanban_dir / "config.yml")
+        assert data.get("list_of_frozen") == [["a", "b"], ["c", "d"]]
+
+    def test_ac3_frozenset_in_tuple_container_is_converted(
+        self, tmp_path: Path
+    ) -> None:
+        """AC3: frozenset element inside a tuple container is recursively converted.
+
+        Exercises the tuple-branch of _yaml_safe_value(). Without that branch the
+        frozenset inside the tuple is passed to ruamel.yaml unmodified and raises
+        a RepresenterError. With it, the tuple becomes a list and the inner
+        frozenset becomes a sorted list.
+        """
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        if config.__pydantic_extra__ is None:
+            config.__pydantic_extra__ = {}
+        # Tuple with one frozenset element — targets tuple recursion branch.
+        config.__pydantic_extra__["tuple_of_frozen"] = (frozenset({"z", "m", "a"}),)
+        save_config(config, kanban_dir)
+        data = _read_yaml(kanban_dir / "config.yml")
+        # Tuple → list; frozenset element → sorted list.
+        assert data.get("tuple_of_frozen") == [["a", "m", "z"]]
+
+    def test_ac1_new_field_not_in_denylist_is_emitted_automatically(
+        self, tmp_path: Path
+    ) -> None:
+        """AC1: model_dump(exclude=denylist) emits unknown fields automatically.
+
+        Proves the denylist mechanism: a field not in _CONFIG_WRITE_EXCLUDE
+        survives save_config() without any changes to the denylist.  An
+        allowlist-based implementation would silently drop this field.
+        """
+        kanban_dir = _make_board(tmp_path)
+        config = load_config(kanban_dir)
+        if config.__pydantic_extra__ is None:
+            config.__pydantic_extra__ = {}
+        config.__pydantic_extra__["canary_future_field"] = "canary_value"
+        save_config(config, kanban_dir)
+        data = _read_yaml(kanban_dir / "config.yml")
+        assert "canary_future_field" in data
+        assert data["canary_future_field"] == "canary_value"
+
     # -------------------------------------------------------------------------
     # AC4: defaults.priority and activity_log preserved through cycle (td:1)
     # -------------------------------------------------------------------------
