@@ -65,7 +65,6 @@ _LEGACY_CONFIG_KEYS = frozenset(
         "tasks_dir",
         "archive_dir",
         "defaults",
-        "activity_log",
     }
 )
 
