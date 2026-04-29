@@ -16,6 +16,7 @@ export interface UseScanPollingResult {
   items: ScanItem[]
   isLoading: boolean
   error: Error | null
+  refetch: () => void
 }
 
 export function useScanPolling(options?: UseScanPollingOptions): UseScanPollingResult {
@@ -86,5 +87,8 @@ export function useScanPolling(options?: UseScanPollingOptions): UseScanPollingR
     items,
     isLoading,
     error,
+    refetch: () => {
+      void poll()
+    },
   }
 }

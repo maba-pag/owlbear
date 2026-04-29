@@ -33,7 +33,7 @@ import Shell from '../Shell'
 // ─── Stub helpers ─────────────────────────────────────────────────────────────
 
 function stubScan(items: ScanItem[], isLoading = false, error: Error | null = null) {
-  vi.mocked(useScanPolling).mockReturnValue({ items, isLoading, error })
+  vi.mocked(useScanPolling).mockReturnValue({ items, isLoading, error, refetch: vi.fn() })
 }
 
 function stubPolling(health: HealthState = 'green') {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import RepairPanel from './RepairPanel'
 
 export interface ScanItem {
   code: string
@@ -8,9 +9,11 @@ export interface ScanItem {
 
 export interface HealthBadgeProps {
   items: ScanItem[]
+  corruptionCount?: number
+  onRepairSuccess?: () => void
 }
 
-export default function HealthBadge({ items }: HealthBadgeProps) {
+export default function HealthBadge({ items, corruptionCount = 0, onRepairSuccess }: HealthBadgeProps) {
   const [isOpen, setIsOpen] = useState(false)
   const issueCount = items.length
   const isHealthy = issueCount === 0
@@ -45,6 +48,9 @@ export default function HealthBadge({ items }: HealthBadgeProps) {
               ))}
             </ul>
           )}
+          {corruptionCount > 0 ? (
+            <RepairPanel corruptionCount={corruptionCount} onSuccess={onRepairSuccess} />
+          ) : null}
         </div>
       ) : null}
     </div>

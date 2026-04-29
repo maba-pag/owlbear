@@ -12,7 +12,7 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 
 function Shell() {
   const { health } = usePolling('/health')
-  const { items: scanItems, isLoading } = useScanPolling()
+  const { items: scanItems, isLoading, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -35,7 +35,13 @@ function Shell() {
       <header className="shell__status-bar" data-region="status-bar">
         <span data-testid="traffic-light" data-health={health} />
         <span data-testid="task-count" />
-        {!isLoading ? <HealthBadge items={normalizedItems} /> : null}
+        {!isLoading ? (
+          <HealthBadge
+            items={normalizedItems}
+            corruptionCount={normalizedItems.length}
+            onRepairSuccess={refetch}
+          />
+        ) : null}
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
         <button data-surface="kanban" aria-current="page">

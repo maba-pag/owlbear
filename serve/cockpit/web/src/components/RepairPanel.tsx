@@ -1,8 +1,10 @@
 import type { RepairOutcome } from '../api/repair'
+import { PButton, PSpinner, PText } from '@porsche-design-system/components-react'
 import { useRepairFlow } from '../hooks/useRepairFlow'
 
 export interface RepairPanelProps {
   corruptionCount: number
+  onSuccess?: () => void
 }
 
 function renderOutcomeRows(outcomes: RepairOutcome[]) {
@@ -14,7 +16,7 @@ function renderOutcomeRows(outcomes: RepairOutcome[]) {
   ))
 }
 
-export default function RepairPanel({ corruptionCount }: RepairPanelProps) {
+export default function RepairPanel({ corruptionCount, onSuccess }: RepairPanelProps) {
   const {
     phase,
     corruptionCount: requestedCount,
@@ -24,7 +26,7 @@ export default function RepairPanel({ corruptionCount }: RepairPanelProps) {
     confirmRepair,
     cancelRepair,
     dismissResults,
-  } = useRepairFlow()
+  } = useRepairFlow({ onSuccess })
 
   if (phase === 'confirming') {
     return (
@@ -33,25 +35,32 @@ export default function RepairPanel({ corruptionCount }: RepairPanelProps) {
         role="dialog"
         aria-label="Confirm storage repair"
       >
-        <p>Repair {requestedCount} corrupted items?</p>
-        <button
-          type="button"
+        <PText>
+          This will attempt to repair {requestedCount} corrupted files. Fixed files are restored,
+          unfixable files are quarantined. Continue?
+        </PText>
+        <PButton
           data-testid="repair-confirm-btn"
           onClick={() => {
             void confirmRepair()
           }}
         >
           Confirm
-        </button>
-        <button type="button" data-testid="repair-cancel-btn" onClick={cancelRepair}>
+        </PButton>
+        <PButton data-testid="repair-cancel-btn" variant="tertiary" onClick={cancelRepair}>
           Cancel
-        </button>
+        </PButton>
       </div>
     )
   }
 
   if (phase === 'repairing') {
-    return <div data-testid="repair-loading">Repairing...</div>
+    return (
+      <div data-testid="repair-loading">
+        <PSpinner aria={{ 'aria-label': 'Repairing storage' }} />
+        <PText>Repairing...</PText>
+      </div>
+    )
   }
 
   if (phase === 'done') {
@@ -59,20 +68,20 @@ export default function RepairPanel({ corruptionCount }: RepairPanelProps) {
     return (
       <div>
         <section data-testid="repair-results-fixed">
-          <h3>Fixed</h3>
+          <PText weight="semibold">Fixed</PText>
           <ul>{renderOutcomeRows(grouped.fixed)}</ul>
         </section>
         <section data-testid="repair-results-quarantined">
-          <h3>Quarantined</h3>
+          <PText weight="semibold">Quarantined</PText>
           <ul>{renderOutcomeRows(grouped.quarantined)}</ul>
         </section>
         <section data-testid="repair-results-failed">
-          <h3>Failed</h3>
+          <PText weight="semibold">Failed</PText>
           <ul>{renderOutcomeRows(grouped.failed)}</ul>
         </section>
-        <button type="button" data-testid="repair-dismiss-btn" onClick={dismissResults}>
+        <PButton data-testid="repair-dismiss-btn" variant="tertiary" onClick={dismissResults}>
           Dismiss
-        </button>
+        </PButton>
       </div>
     )
   }
@@ -80,10 +89,10 @@ export default function RepairPanel({ corruptionCount }: RepairPanelProps) {
   if (phase === 'error') {
     return (
       <div>
-        <p data-testid="repair-error">{error}</p>
-        <button type="button" data-testid="repair-dismiss-btn" onClick={dismissResults}>
+        <PText data-testid="repair-error">{error}</PText>
+        <PButton data-testid="repair-dismiss-btn" variant="tertiary" onClick={dismissResults}>
           Dismiss
-        </button>
+        </PButton>
       </div>
     )
   }
@@ -93,12 +102,11 @@ export default function RepairPanel({ corruptionCount }: RepairPanelProps) {
   }
 
   return (
-    <button
-      type="button"
+    <PButton
       data-testid="repair-button"
       onClick={() => requestRepair(corruptionCount)}
     >
       Repair
-    </button>
+    </PButton>
   )
 }
