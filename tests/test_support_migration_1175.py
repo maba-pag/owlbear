@@ -25,6 +25,8 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from owlbear_kanban.config_loader import load_config
+
 # ---------------------------------------------------------------------------
 # Minimal config double — no forwarding properties, sub-model structure only.
 # Any code calling config.tasks_dir (forwarding prop) will get AttributeError.
@@ -600,6 +602,35 @@ class TestFromAC_LiveConfigGroupedFormat:
         assert isinstance(paths, dict), (
             f"config.yml 'paths' is {type(paths).__name__!r}, expected dict; "
             "migration to grouped format not done"
+        )
+
+    def test_live_config_loads_via_canonical_loader_with_grouped_submodels(self) -> None:
+        """load_config() on the live config.yml must succeed and return grouped sub-model access.
+
+        Exercises the canonical loader path (config_loader.load_config) and asserts
+        that the returned BoardConfig exposes grouped sub-model fields — proving the
+        live config actually loads correctly, not just that raw YAML markers are present.
+        """
+        config = load_config(_LIVE_KANBAN_DIR)
+        # Grouped sub-model access — any surviving forwarding-property path or
+        # validation failure would prevent these from succeeding.
+        assert isinstance(config.paths.tasks_dir, str), (
+            f"config.paths.tasks_dir must be str, got {type(config.paths.tasks_dir)!r}"
+        )
+        assert isinstance(config.paths.archive_dir, str), (
+            f"config.paths.archive_dir must be str, got {type(config.paths.archive_dir)!r}"
+        )
+        assert isinstance(config.pipeline.terminal_status, str), (
+            "config.pipeline.terminal_status must be a str"
+        )
+        assert isinstance(config.pipeline.entry_status, str), (
+            "config.pipeline.entry_status must be a str"
+        )
+        assert isinstance(config.agents.agent_map, dict), (
+            "config.agents.agent_map must be a dict"
+        )
+        assert isinstance(config.policy.non_impl_tags, list), (
+            "config.policy.non_impl_tags must be a list"
         )
 
 
