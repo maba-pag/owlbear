@@ -602,24 +602,24 @@ class TestFromAC_EndWork:
             f"got {exc_info.value.code!r}"
         )
 
-    def test_success_with_move_to_raises_move_to_forbidden_on_success(
+    def test_success_with_invalid_move_to_raises_move_to_invalid_status(
         self, tmp_path: Path
     ) -> None:
-        """AC-NEW-9: success+move_to raises ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS.
+        """AC-NEW-9: success+move_to with invalid status raises ERR_MOVE_TO_INVALID_STATUS.
 
-        FAIL reason: AgentView passes move_to to engine which ignores it
-        for 'success' outcome — no error is raised.
+        move_to on success is allowed for any valid pipeline status (forward or
+        backward). An invalid status name is rejected.
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
         with pytest.raises(ValidationError) as exc_info:
             view.end_work(
-                1, outcome="success", move_to="backlog", note="Done."
+                1, outcome="success", move_to="nonexistent", note="Done."
             )
 
-        assert exc_info.value.code == "ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS", (
-            f"success+move_to must raise ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS; "
+        assert exc_info.value.code == "ERR_MOVE_TO_INVALID_STATUS", (
+            f"success+invalid move_to must raise ERR_MOVE_TO_INVALID_STATUS; "
             f"got {exc_info.value.code!r}"
         )
 

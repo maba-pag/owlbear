@@ -67,7 +67,7 @@ If ALL of the following are true:
 - No lint or coverage issues detected
 
 Then the builder has no work to do. Advance directly to `review` instead of `in-progress`:
-- `end_work(note="## Test-Writer Notes\n- Retry: added {M} tests for reviewer gaps. All pass against current impl.\n- Builder skip: test-only retry, all tests green.")` with `move_to="review"` outcome.
+- `end_work(outcome="success", move_to="review", note="## Test-Writer Notes\n- Retry: added {M} tests for reviewer gaps. All pass against current impl.\n- Builder skip: test-only retry, all tests green.")`
 - Return: `DONE #{id} -> review | test-only retry, builder skipped`
 - **Stop here.**
 

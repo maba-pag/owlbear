@@ -117,10 +117,12 @@ Required outcomes to use in agent workflows:
 
 | Outcome | Behaviour |
 |---------|----------|
-| `success` | Advance to next status. If already at last status, archive. |
+| `success` | Advance to next status (or to `move_to` if specified). If already at last status, archive. |
 | `reject` | Move to `move_to` status, release claim. |
 | `release` | Release claim, keep status unchanged. |
 | `block` | Mark blocked with `block_reason`, release claim. |
+
+**Forward skip:** `end_work(outcome="success", move_to="review")` advances directly to `review` (skipping intermediate statuses).
 
 On failure: raises `ToolError` (MCP `isError: true`).
 

@@ -449,17 +449,17 @@ class TestFromAC_EndWorkForbiddenMatrix:
     """end_work forbidden-parameter matrix: deterministic ToolError for all forbidden combos."""
 
     @pytest.mark.asyncio
-    async def test_success_with_move_to_raises_tool_error(
+    async def test_success_with_invalid_move_to_raises_tool_error(
         self, ctx: MagicMock, mock_av: MagicMock
     ) -> None:
-        """outcome='success' + move_to → ToolError (ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS)."""
+        """outcome='success' + invalid move_to → ToolError (ERR_MOVE_TO_INVALID_STATUS)."""
         mock_av.end_work.side_effect = ValidationError(
-            code="ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS",
-            user_message="move_to is forbidden when outcome is success",
+            code="ERR_MOVE_TO_INVALID_STATUS",
+            user_message="move_to='nonexistent' is not a valid pipeline status",
         )
-        with pytest.raises(ToolError, match="move_to is forbidden when outcome is success"):
+        with pytest.raises(ToolError, match="is not a valid pipeline status"):
             await end_work(
-                ctx, task_id="42", outcome="success", move_to="in-progress", note=None
+                ctx, task_id="42", outcome="success", move_to="nonexistent", note=None
             )
 
     @pytest.mark.asyncio

@@ -1407,12 +1407,15 @@ class KanbanEngine:
             current_idx = (
                 statuses.index(record.status) if record.status in statuses else -1
             )
-            if current_idx == len(statuses) - 1:
+            if move_to is not None:
+                record.status = move_to
+            elif current_idx == len(statuses) - 1:
                 record.status = "archived"
                 record.archival_reason = "completed"
                 record.archival_refs = []
                 return True
-            record.status = statuses[current_idx + 1]
+            else:
+                record.status = statuses[current_idx + 1]
         elif outcome == "block":
             record.blocked = True
             record.block_reason = block_reason
@@ -2918,10 +2921,15 @@ class AgentView:
 
         if outcome == "success":
             if move_to is not None:
-                raise ValidationError(
-                    code="ERR_MOVE_TO_FORBIDDEN_ON_SUCCESS",
-                    user_message="move_to is forbidden when outcome='success'",
-                )
+                # Validate move_to is a valid pipeline status
+                statuses = list(config.pipeline.statuses)
+                if move_to not in statuses:
+                    raise ValidationError(
+                        code="ERR_MOVE_TO_INVALID_STATUS",
+                        user_message=(
+                            f"move_to={move_to!r} is not a valid pipeline status"
+                        ),
+                    )
             if archival_reason is not None or archival_refs is not None:
                 raise ValidationError(
                     code="ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_SUCCESS",
