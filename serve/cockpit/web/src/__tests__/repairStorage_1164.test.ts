@@ -12,6 +12,7 @@
  *   - AC5 proof: RepairOutcome.action literal-union compile-time guard
  *
  * Retry (reviewer pass 1): Added groups 2–5 per required additions in ## Review Evidence.
+ * Retry (reviewer pass 3): Added plain-object message quality tests per refined Test AC line 4.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { repairStorage } from '../api/repair'
@@ -112,6 +113,22 @@ describe('TestFromAC_repairStorage_1164', () => {
         (e: unknown) => e as Error & { cause?: unknown },
       )
       expect(error.cause).toEqual(originalCause)
+    })
+
+    // Retry (reviewer pass 3): plain-object message must not degrade to [object Object]
+    // and must surface object content — refined Test AC line 4.
+    // FAIL reason: String({ code: 'ECONNREFUSED' }) === '[object Object]', so the
+    // current message 'Repair request failed: [object Object]' fails both assertions.
+    it('wrapped plain-object rejection message does not degrade to [object Object]', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject({ code: 'ECONNREFUSED' })))
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      expect(error.message).not.toContain('[object Object]')
+    })
+
+    it('wrapped plain-object rejection message surfaces object content', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject({ code: 'ECONNREFUSED' })))
+      const error = await repairStorage().catch((e: unknown) => e as Error)
+      expect(error.message).toMatch(/ECONNREFUSED|code/)
     })
   })
 

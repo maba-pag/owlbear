@@ -17,7 +17,11 @@ export async function repairStorage(): Promise<RepairOutcome[]> {
     if (error instanceof Error) {
       throw error
     }
-    const wrappedError = new Error(`Repair request failed: ${String(error)}`) as Error & {
+    const detail =
+      typeof error === 'object' && error !== null
+        ? JSON.stringify(error)
+        : String(error)
+    const wrappedError = new Error(`Repair request failed: ${detail}`) as Error & {
       cause?: unknown
     }
     wrappedError.cause = error
