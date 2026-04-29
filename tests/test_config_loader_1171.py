@@ -295,8 +295,9 @@ class TestFromAC_DetectionCascade:
         """Flat Brief-C config (no schema field) loads and forwarding properties work."""
         kanban_dir = _make_board(tmp_path, _FLAT_YAML)
         config = load_config(kanban_dir)
-        # Nondefault value proves flat key extraction, not Pydantic default
+        # BOTH nondefault values prove flat key extraction, not Pydantic defaults
         assert config.tasks_dir == "custom-tasks"
+        assert config.archive_dir == "custom-archive"
 
     def test_cascade_legacy_keys_load_correctly(self, tmp_path: Path) -> None:
         """Legacy config (version + board keys) is detected and normalised correctly."""
@@ -304,6 +305,9 @@ class TestFromAC_DetectionCascade:
         config = load_config(kanban_dir)
         # _LEGACY_YAML has 3 statuses: research, backlog, done
         assert config.statuses == ["research", "backlog", "done"]
+        # BOTH nondefault values prove legacy key extraction, not Pydantic defaults
+        assert config.tasks_dir == "custom-tasks"
+        assert config.archive_dir == "custom-archive"
 
     def test_cascade_grouped_takes_precedence_over_flat_detection(
         self, tmp_path: Path

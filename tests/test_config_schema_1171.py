@@ -325,8 +325,9 @@ class TestFromAC_DetectionCascade:
         """Flat Brief-C keys without schema field must load successfully (flat path)."""
         kanban_dir = _make_board(tmp_path, _FLAT_YAML)
         config = load_config(kanban_dir)
-        # Nondefault value proves flat key extraction, not Pydantic default
+        # BOTH nondefault values prove flat key extraction, not Pydantic defaults
         assert config.tasks_dir == "custom-tasks"
+        assert config.archive_dir == "custom-archive"
         assert "research" in config.statuses
 
     def test_legacy_keys_load_successfully(self, tmp_path: Path) -> None:
@@ -334,6 +335,9 @@ class TestFromAC_DetectionCascade:
         kanban_dir = _make_board(tmp_path, _LEGACY_YAML)
         config = load_config(kanban_dir)
         assert "research" in config.statuses
+        # BOTH nondefault values prove legacy key extraction, not Pydantic defaults
+        assert config.tasks_dir == "custom-tasks"
+        assert config.archive_dir == "custom-archive"
 
     def test_mixed_flat_and_grouped_without_schema_raises_config_error(
         self, tmp_path: Path
