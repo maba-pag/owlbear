@@ -82,7 +82,7 @@ After VS Code opens, verify the installation loaded correctly:
 | OwlBear agents loaded | Chat Customizations lists agents from the owlbear `agents/` directory |
 | OwlBear skills loaded | Chat Customizations lists skills from the owlbear `skills/` directory |
 | Instructions loaded | Chat Customizations includes `*.instructions.md` files from owlbear |
-| MCP servers running | Command Palette → `MCP: List Servers` — `owlbear-kanban` shows `running` |
+| MCP servers running | Command Palette → `MCP: List Servers` — `ob-kanban` shows `running` |
 
 > If agents or skills do not appear, check that `chat.agentFilesLocations` and
 > `chat.agentSkillsLocations` in `.vscode/settings.json` point to the correct relative

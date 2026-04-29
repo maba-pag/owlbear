@@ -96,7 +96,7 @@ def main() -> None:
                 "--ignore",
                 "INP001",
                 *existing_py,
-            ],  # noqa: S607
+            ],
             capture_output=True,
             text=True,
             check=False,

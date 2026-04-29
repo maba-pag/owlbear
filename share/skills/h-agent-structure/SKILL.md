@@ -8,25 +8,13 @@ user-invocable: false
 
 Structural model for all OwlBear agent, skill, and instruction files. Single source of truth for what belongs where.
 
-## Loading Model
+## Foundation
 
-Content reaches agents through four mechanisms, ordered by reliability:
+For loading mechanisms (copilot-instructions, instructions, skills), two-tier skill loading, belts-and-suspenders, and tier counts with agent names, see [share/README.md](../../README.md).
 
-| Mechanism | Trigger | Reliability | Use for |
-|-----------|---------|-------------|---------|
-| `copilot-instructions.md` | Every interaction | Guaranteed | Universal foundation (80%+ of agents need it) |
-| Agent file body | Agent invocation | Guaranteed | Identity, constraints, `<required_reading>` list |
-| Skills (SKILL.md) | `read_file` via `<required_reading>` or on-demand | High | Procedures, protocol, domain knowledge |
-| Authority instructions (.instructions.md) | `applyTo` glob matches a touched file | High | Full protocol definitions (cross-agent conventions) |
-| Instruction stubs (.instructions.md) | `applyTo` glob matches a touched file | Medium | Safety nets — pointers to skills |
+This skill specifies file structure, required sections, naming grammar, anti-patterns, and instruction file types — the creation-time spec.
 
-**Two-tier skill loading:** Skills listed in an agent's `<required_reading>` are read at session start (mandatory). All other skills are loaded on-demand during the workflow when relevant.
-
-**Belts and suspenders:** For important skills, use both tiers — list in `<required_reading>` (belt) AND provide an `applyTo` instruction stub that fires when the agent touches relevant files (suspenders).
-
-Pipeline agents load `r-pipeline-protocol` via `<required_reading>`, which triggers `pipeline-agents.instructions.md` (applyTo: `share/skills/r-pipeline-protocol/**`).
-
-### File Type Selection
+## File Type Selection
 
 | File type | Choose when |
 |-----------|------------|
@@ -36,7 +24,7 @@ Pipeline agents load `r-pipeline-protocol` via `<required_reading>`, which trigg
 
 Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or co-located resources are needed.
 
-### Boundary Fitness
+## Boundary Fitness
 
 | Condition | Tier |
 |-----------|------|
@@ -45,15 +33,6 @@ Default: user-facing one-shot commands use `.prompt.md` unless auto-loading or c
 | Content applies to a single agent only | Agent file body |
 | Content is a step-by-step procedure invoked on-demand | Workflow skill (SKILL.md) |
 | Content is a file-type safety net pointing to a skill | Instruction stub (`.instructions.md`) |
-
-## Agent Tiers
-
-| Tier | Agents | Pipeline protocol needed? |
-|------|--------|--------------------------|
-| T1 — Orchestrator | orchestrator, ideation-discoverer, ideation-mediator | From agent critical_rules |
-| T2 — Pipeline | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor | Yes — critical_rules reference |
-| T3 — Support | scribe, planner, memory-curator | If applicable — from critical_rules |
-| T4 — Tools | challenger, code-reader, Explore, fix-attempt, quality-runner, test-curator, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier | Not needed |
 
 ## Agent Extraction Markers
 
