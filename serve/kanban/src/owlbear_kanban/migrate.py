@@ -422,8 +422,9 @@ def _migrate_config(  # noqa: C901, PLR0911
     new_cfg["entry_status"] = defaults.get(
         "status", new_cfg["statuses"][0] if new_cfg["statuses"] else "research"
     )
+    new_cfg["default_priority"] = defaults.get("priority", "important")
     new_cfg["wave_size"] = 4
-    new_cfg["agent_map"] = {}
+    new_cfg["agent_map"] = {status: [] for status in new_cfg["statuses"]}
     new_cfg["agent_types"] = {}
     new_cfg["agent_compatibility"] = {}
     new_cfg["non_impl_tags"] = [

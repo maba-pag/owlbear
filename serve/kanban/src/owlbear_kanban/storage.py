@@ -246,7 +246,41 @@ def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     from owlbear_kanban.yaml_rt import make_yaml  # noqa: PLC0415
 
     config_path = kanban_dir / "config.yml"
-    data = _yaml_safe_value(config.model_dump(exclude=_CONFIG_WRITE_EXCLUDE))
+    data = {
+        "schema": "grouped",
+        "statuses": config.statuses,
+        "priorities": config.priorities,
+        "next_id": config.next_id,
+        "activity_log": config.activity_log,
+        "paths": {
+            "tasks_dir": config.paths.tasks_dir,
+            "archive_dir": config.paths.archive_dir,
+        },
+        "pipeline": {
+            "entry_status": config.pipeline.entry_status,
+            "terminal_status": config.pipeline.terminal_status,
+            "wave_size": config.pipeline.wave_size,
+            "claim_timeout": config.pipeline.claim_timeout,
+            "default_priority": config.pipeline.default_priority,
+        },
+        "agents": {
+            "agent_map": config.agents.agent_map,
+            "agent_types": config.agents.agent_types,
+            "agent_compatibility": config.agents.agent_compatibility,
+        },
+        "policy": {
+            "non_impl_tags": config.policy.non_impl_tags,
+            "archival_reasons": config.policy.archival_reasons,
+            "status_predicates": config.policy.status_predicates,
+        },
+    }
+
+    if config.model_extra:
+        for key, value in config.model_extra.items():
+            if key not in data:
+                data[key] = value
+
+    data = _yaml_safe_value(data)
 
     y = make_yaml(explicit_start=True)
     cm = CommentedMap(data)

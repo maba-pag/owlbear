@@ -134,34 +134,42 @@ class BoardDefaults(BaseModel):
     priority: str = "important"
 
 
-class BoardConfig(BaseModel):
-    """Schema for .owlbear/kanban/config.yml.
+class PathsConfig(BaseModel):
+    """Grouped paths sub-model."""
 
-    Accepts both the legacy schema (version/board/tasks_dir/statuses as list[dict])
-    and the new Brief-C schema (flat statuses as list[str], entry_status, wave_size,
-    etc.). A ``model_validator`` normalises legacy data to the new shape before
-    field assignment. Unknown/vendor fields are preserved via extra='allow'.
-    """
+    model_config = ConfigDict(extra="forbid")
 
-    model_config = ConfigDict(extra="allow")
-
-    # Core fields — always present
-    statuses: list[str]
-    priorities: list[str]
-    claim_timeout: str = "1h"
-    next_id: int = 1
-
-    # Directory layout — defaults cover new-schema boards; set from legacy schema
     tasks_dir: str = "tasks"
     archive_dir: str = "archive"
 
-    # New schema fields
+
+class PipelineConfig(BaseModel):
+    """Grouped pipeline sub-model."""
+
+    model_config = ConfigDict(extra="forbid")
+
     entry_status: str = "research"
     terminal_status: str = "done"
     wave_size: int = 4
+    claim_timeout: str = "1h"
+    default_priority: str = "important"
+
+
+class AgentsConfig(BaseModel):
+    """Grouped agents sub-model."""
+
+    model_config = ConfigDict(extra="forbid")
+
     agent_map: dict[str, Any] = Field(default_factory=dict)
     agent_types: dict[str, Any] = Field(default_factory=dict)
     agent_compatibility: dict[str, Any] = Field(default_factory=dict)
+
+
+class PolicyConfig(BaseModel):
+    """Grouped policy sub-model."""
+
+    model_config = ConfigDict(extra="forbid")
+
     non_impl_tags: list[str] = Field(default_factory=list)
     archival_reasons: frozenset[str] = Field(
         default_factory=lambda: frozenset(
@@ -176,17 +184,72 @@ class BoardConfig(BaseModel):
     )
     status_predicates: dict[str, Any] = Field(default_factory=dict)
 
+
+class BoardConfig(BaseModel):
+    """Schema for .owlbear/kanban/config.yml.
+
+    Accepts both the legacy schema (version/board/tasks_dir/statuses as list[dict])
+    and the new Brief-C schema (flat statuses as list[str], entry_status, wave_size,
+    etc.). A ``model_validator`` normalises legacy data to the new shape before
+    field assignment. Unknown/vendor fields are preserved via extra='allow'.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    # Core fields — always present
+    statuses: list[str]
+    priorities: list[str]
+    next_id: int = 1
+
+    # Grouped schema fields
+    paths: PathsConfig = Field(default_factory=PathsConfig)
+    pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
+    agents: AgentsConfig = Field(default_factory=AgentsConfig)
+    policy: PolicyConfig = Field(default_factory=PolicyConfig)
+
     # Legacy fields — kept for read access; not written in new schema
     defaults: BoardDefaults = Field(default_factory=BoardDefaults)
     activity_log: bool = True  # enabled by default for new-schema boards
 
     @model_validator(mode="before")
     @classmethod
-    def _normalise_legacy(cls, data: object) -> object:
+    def _normalise_legacy(cls, data: object) -> object:  # noqa: C901, PLR0912
         """Convert legacy schema to new schema before field assignment."""
         if not isinstance(data, dict):
             return data
         data = dict(data)
+
+        grouped_keys = {"paths", "pipeline", "agents", "policy"}
+        has_grouped_sections = any(key in data for key in grouped_keys)
+        schema_value = data.get("schema")
+        is_grouped_schema = schema_value == "grouped"
+
+        if has_grouped_sections and not is_grouped_schema:
+            has_flat_keys = any(
+                key in data
+                for key in (
+                    "tasks_dir",
+                    "archive_dir",
+                    "entry_status",
+                    "terminal_status",
+                    "wave_size",
+                    "claim_timeout",
+                    "default_priority",
+                    "agent_map",
+                    "agent_types",
+                    "agent_compatibility",
+                    "non_impl_tags",
+                    "archival_reasons",
+                    "status_predicates",
+                )
+            )
+            if has_flat_keys:
+                raise ConfigError(
+                    code="ERR_INVALID_STATUS",
+                    user_message=(
+                        "config.yml mixes flat and grouped keys without schema: grouped"
+                    ),
+                )
 
         # Normalise statuses: [{name: ...}, ...] or [{name: ...}, ...] → [str, ...]
         raw_statuses = data.get("statuses")
@@ -203,6 +266,8 @@ class BoardConfig(BaseModel):
         defaults = data.get("defaults")
         if "entry_status" not in data and isinstance(defaults, dict):
             data["entry_status"] = defaults.get("status", "research")
+        if "default_priority" not in data and isinstance(defaults, dict):
+            data["default_priority"] = defaults.get("priority", "important")
 
         # Legacy boards often omit agent_map entirely; derive a permissive
         # status-complete map only in that case so explicit {} still fails.
@@ -215,8 +280,143 @@ class BoardConfig(BaseModel):
                     status: [] for status in statuses if isinstance(status, str)
                 }
 
+        if is_grouped_schema:
+            paths = data.get("paths")
+            if not isinstance(paths, dict):
+                data["paths"] = {
+                    "tasks_dir": data.get("tasks_dir", "tasks"),
+                    "archive_dir": data.get("archive_dir", "archive"),
+                }
+
+            pipeline = data.get("pipeline")
+            if not isinstance(pipeline, dict):
+                data["pipeline"] = {
+                    "entry_status": data.get("entry_status", "research"),
+                    "terminal_status": data.get("terminal_status", "done"),
+                    "wave_size": data.get("wave_size", 4),
+                    "claim_timeout": data.get("claim_timeout", "1h"),
+                    "default_priority": data.get("default_priority", "important"),
+                }
+
+            agents = data.get("agents")
+            if not isinstance(agents, dict):
+                data["agents"] = {
+                    "agent_map": data.get("agent_map", {}),
+                    "agent_types": data.get("agent_types", {}),
+                    "agent_compatibility": data.get("agent_compatibility", {}),
+                }
+
+            policy = data.get("policy")
+            if not isinstance(policy, dict):
+                data["policy"] = {
+                    "non_impl_tags": data.get("non_impl_tags", []),
+                    "archival_reasons": data.get(
+                        "archival_reasons",
+                        [
+                            "completed",
+                            "deprecated",
+                            "dropped",
+                            "duplicate",
+                            "wontfix",
+                        ],
+                    ),
+                    "status_predicates": data.get("status_predicates", {}),
+                }
+        else:
+            data["paths"] = {
+                "tasks_dir": data.get("tasks_dir", "tasks"),
+                "archive_dir": data.get("archive_dir", "archive"),
+            }
+            data["pipeline"] = {
+                "entry_status": data.get("entry_status", "research"),
+                "terminal_status": data.get("terminal_status", "done"),
+                "wave_size": data.get("wave_size", 4),
+                "claim_timeout": data.get("claim_timeout", "1h"),
+                "default_priority": data.get("default_priority", "important"),
+            }
+            data["agents"] = {
+                "agent_map": data.get("agent_map", {}),
+                "agent_types": data.get("agent_types", {}),
+                "agent_compatibility": data.get("agent_compatibility", {}),
+            }
+            data["policy"] = {
+                "non_impl_tags": data.get("non_impl_tags", []),
+                "archival_reasons": data.get(
+                    "archival_reasons",
+                    ["completed", "deprecated", "dropped", "duplicate", "wontfix"],
+                ),
+                "status_predicates": data.get("status_predicates", {}),
+            }
+
+        data.setdefault("schema", "grouped")
+
         # Legacy tasks_dir/archive_dir passthrough (already present in dict; just keep)
         return data
+
+    @property
+    def tasks_dir(self) -> str:
+        """Backward-compatible forwarding to grouped paths.tasks_dir."""
+        return self.paths.tasks_dir
+
+    @property
+    def archive_dir(self) -> str:
+        """Backward-compatible forwarding to grouped paths.archive_dir."""
+        return self.paths.archive_dir
+
+    @property
+    def entry_status(self) -> str:
+        """Backward-compatible forwarding to grouped pipeline.entry_status."""
+        return self.pipeline.entry_status
+
+    @property
+    def terminal_status(self) -> str:
+        """Backward-compatible forwarding to grouped pipeline.terminal_status."""
+        return self.pipeline.terminal_status
+
+    @property
+    def wave_size(self) -> int:
+        """Backward-compatible forwarding to grouped pipeline.wave_size."""
+        return self.pipeline.wave_size
+
+    @property
+    def claim_timeout(self) -> str:
+        """Backward-compatible forwarding to grouped pipeline.claim_timeout."""
+        return self.pipeline.claim_timeout
+
+    @property
+    def default_priority(self) -> str:
+        """Backward-compatible forwarding to grouped pipeline.default_priority."""
+        return self.pipeline.default_priority
+
+    @property
+    def agent_map(self) -> dict[str, Any]:
+        """Backward-compatible forwarding to grouped agents.agent_map."""
+        return self.agents.agent_map
+
+    @property
+    def agent_types(self) -> dict[str, Any]:
+        """Backward-compatible forwarding to grouped agents.agent_types."""
+        return self.agents.agent_types
+
+    @property
+    def agent_compatibility(self) -> dict[str, Any]:
+        """Backward-compatible forwarding to grouped agents.agent_compatibility."""
+        return self.agents.agent_compatibility
+
+    @property
+    def non_impl_tags(self) -> list[str]:
+        """Backward-compatible forwarding to grouped policy.non_impl_tags."""
+        return self.policy.non_impl_tags
+
+    @property
+    def archival_reasons(self) -> frozenset[str]:
+        """Backward-compatible forwarding to grouped policy.archival_reasons."""
+        return self.policy.archival_reasons
+
+    @property
+    def status_predicates(self) -> dict[str, Any]:
+        """Backward-compatible forwarding to grouped policy.status_predicates."""
+        return self.policy.status_predicates
 
     @property
     def status_names(self) -> list[str]:
