@@ -132,7 +132,7 @@ Orchestrator dispatches waves in returned order. No local re-bucketing or re-ass
 
 Classify agent returns top-to-bottom. First match wins.
 
-**Structured vs crash classification:** A return that starts with a recognized verdict keyword (`DONE`, `FAIL`, `BLOCKED`, `REJECTED`, `ARCHIVED`, `APPROVED`) is a *structured return* — the agent completed its lifecycle and called `end_work`. Any other return (error, empty, unrecognized) is a *crash* — the agent did NOT call `end_work`.
+**Structured vs crash classification:** A return that starts with a recognized verdict keyword (`DONE`, `FAIL`, `PASS`, `REJECT`, `REJECTED`, `ARCHIVED`, `APPROVED`, `REFINE`, `SPLIT`, `MERGE`, `BLOCK`) is a *structured return* — the agent completed its lifecycle and called `end_work`. Any other return (error, empty, unrecognized) is a *crash* — the agent did NOT call `end_work`.
 
 1. **TOOL_UNAVAILABLE** (return contains `TOOL_UNAVAILABLE`):
    - Re-dispatch the same agent on the same task immediately.
@@ -187,6 +187,6 @@ Session complete:
 
 ## Known Pitfalls
 
-- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCKED`, etc.), it called `end_work` and managed its own task state. Never `edit_task(block=...)` or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
+- **Structured return ≠ needs orchestrator cleanup.** When an agent returns a structured verdict (`DONE`, `FAIL`, `BLOCK`, etc.), it called `end_work` and managed its own task state. Never `edit_task(block=...)` or `move_task` on a task whose agent returned a structured signal — that overwrites the agent's intentional state transition.
 - **No dispatch decisions from housekeeping agents.** The orchestrator does not use scribe or curator output for dispatch planning. They modify board state directly; `pick_tasks` reads fresh state each cycle. Informational signals (deferred count, pending DRs) are surfaced to the user only.
 - **Legacy wave planner drift:** Do not reintroduce manual bucket planning in this skill. `pick_tasks` is the single wave-assembly authority.

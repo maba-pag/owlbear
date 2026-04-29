@@ -134,7 +134,7 @@ Standards: `r-pipeline-protocol` § Signal Mapping, `h-agent-structure` § Agent
 | architect | AC wrong                     | ideation      |
 | auditor   | Any rejection                | `backlog`     |
 
-**Rule:** No agent uses `BLOCK`/`BLOCKED` as a verdict. Blocking is reserved for DR-pending tasks (scribe only).
+**Rule:** `BLOCK` is a valid architect verdict only for `type:user-action` / AR blocking as defined by `w-arch-review` and `r-pipeline-protocol` § User-Action Tasks. No other agent uses `BLOCK`/`BLOCKED` as a verdict, and no agent blocks routine gate rejections that should route by status.
 
 **Negative-space probe:** Is there a pipeline status with no agent responsible for it — a dead zone where tasks can stall indefinitely?
 
@@ -217,7 +217,7 @@ After the finding queue is exhausted:
 
 1. **Pipeline trace — impl path:** Walk an implementation task from `research` → `archived`. Name the agent responsible for each status transition. Confirm no dead zones.
 2. **Pipeline trace — non-impl path:** Walk a `type:docs` or `type:config` task through the same pipeline. Verify pass-through behavior at each gate.
-3. **Rejection-routing check:** Confirm no agent uses `BLOCK`/`BLOCKED` as a verdict. Spot-check `builder`, `reviewer`, and `auditor` rejection paths against the D5 table.
+3. **Rejection-routing check:** Confirm `BLOCK` appears only in the architect user-action path, and no agent uses `BLOCKED` as a verdict. Spot-check `builder`, `reviewer`, and `auditor` rejection paths against the D5 table to verify they route by status rather than blocking.
 4. **SNR spot-check:** Pick 3 files at random. Identify any content that an agent will never act on.
 5. **Coverage summary:** State findings found, resolved, and deferred per dimension. Note any dimension with zero findings (possible blind spot or genuinely clean).
 
