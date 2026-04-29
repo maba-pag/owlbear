@@ -141,6 +141,8 @@ class PipelineConfig(BaseModel):
 
     entry_status: str = "research"
     terminal_status: str = "done"
+    statuses: list[str] = Field(default_factory=list)
+    priorities: list[str] = Field(default_factory=list)
     wave_size: int = 4
     claim_timeout: str = "1h"
     default_priority: str = "important"
@@ -291,10 +293,15 @@ class BoardConfig(BaseModel):
                 data["pipeline"] = {
                     "entry_status": data.get("entry_status", "research"),
                     "terminal_status": data.get("terminal_status", "done"),
+                    "statuses": data.get("statuses", []),
+                    "priorities": data.get("priorities", []),
                     "wave_size": data.get("wave_size", 4),
                     "claim_timeout": data.get("claim_timeout", "1h"),
                     "default_priority": data.get("default_priority", "important"),
                 }
+            else:
+                pipeline.setdefault("statuses", data.get("statuses", []))
+                pipeline.setdefault("priorities", data.get("priorities", []))
 
             agents = data.get("agents")
             if not isinstance(agents, dict):
@@ -328,6 +335,8 @@ class BoardConfig(BaseModel):
             data["pipeline"] = {
                 "entry_status": data.get("entry_status", "research"),
                 "terminal_status": data.get("terminal_status", "done"),
+                "statuses": data.get("statuses", []),
+                "priorities": data.get("priorities", []),
                 "wave_size": data.get("wave_size", 4),
                 "claim_timeout": data.get("claim_timeout", "1h"),
                 "default_priority": data.get("default_priority", "important"),

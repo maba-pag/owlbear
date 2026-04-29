@@ -108,8 +108,8 @@ def _parse_duration(s: str) -> timedelta:
 
 def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
     """Validate engine-specific config invariants required at engine init."""
-    statuses = config.statuses
-    priorities = config.priorities
+    statuses = config.pipeline.statuses
+    priorities = config.pipeline.priorities
 
     if not statuses:
         raise ConfigError(
@@ -122,15 +122,15 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
             user_message="config.priorities must contain at least one priority",
         )
 
-    if config.entry_status not in statuses:
+    if config.pipeline.entry_status not in statuses:
         raise ConfigError(
             code="ERR_ENTRY_STATUS_INVALID",
             user_message=(
-                f"entry_status {config.entry_status!r} must be one of statuses: {statuses}"
+                f"entry_status {config.pipeline.entry_status!r} must be one of statuses: {statuses}"
             ),
         )
 
-    terminal_status = config.terminal_status
+    terminal_status = config.pipeline.terminal_status
     if terminal_status not in statuses or terminal_status != statuses[-1]:
         raise ConfigError(
             code="ERR_TERMINAL_STATUS_INVALID",
@@ -139,7 +139,7 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
             ),
         )
 
-    missing_statuses = [status for status in statuses if status not in config.agent_map]
+    missing_statuses = [status for status in statuses if status not in config.agents.agent_map]
     if missing_statuses:
         raise ConfigError(
             code="ERR_INVALID_STATUS",
@@ -147,10 +147,10 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
         )
 
     # Validate timeout format eagerly at engine init.
-    _parse_duration(config.claim_timeout)
+    _parse_duration(config.pipeline.claim_timeout)
 
     compatibility_sets: dict[str, set[str]] = {}
-    for agent, peers in config.agent_compatibility.items():
+    for agent, peers in config.agents.agent_compatibility.items():
         if not isinstance(peers, list):
             raise ConfigError(
                 code="ERR_INVALID_STATUS",
@@ -448,8 +448,8 @@ class KanbanEngine:
         self._kanban_dir = kanban_dir
         self._config: BoardConfig = load_config(kanban_dir)
         _validate_engine_config(self._config)
-        self._tasks_dir = kanban_dir / self._config.tasks_dir
-        self._archive_dir = kanban_dir / self._config.archive_dir
+        self._tasks_dir = kanban_dir / self._config.paths.tasks_dir
+        self._archive_dir = kanban_dir / self._config.paths.archive_dir
         self._agent_name: str = (
             agent_name
             if agent_name is not None
@@ -530,10 +530,10 @@ class KanbanEngine:
     # ------------------------------------------------------------------
 
     def _priority_rank(self) -> dict[str, int]:
-        return {p: i for i, p in enumerate(self._config.priorities)}
+        return {p: i for i, p in enumerate(self._config.pipeline.priorities)}
 
     def _status_rank(self) -> dict[str, int]:
-        statuses = self._config.statuses
+        statuses = self._config.pipeline.statuses
         return {s: i for i, s in enumerate(statuses)}
 
     # ------------------------------------------------------------------
@@ -567,8 +567,8 @@ class KanbanEngine:
         scan and rebuilds the id→filename index.
         """
         self._config = load_config(self._kanban_dir)
-        self._tasks_dir = self._kanban_dir / self._config.tasks_dir
-        self._archive_dir = self._kanban_dir / self._config.archive_dir
+        self._tasks_dir = self._kanban_dir / self._config.paths.tasks_dir
+        self._archive_dir = self._kanban_dir / self._config.paths.archive_dir
         self._task_cache = {}
         self._archive_cache = {}
         self._id_to_filename = {}
@@ -585,7 +585,7 @@ class KanbanEngine:
         Raises:
             ValueError: *status* is not a configured status.
         """
-        valid_statuses = set(self._config.statuses)
+        valid_statuses = set(self._config.pipeline.statuses)
         if status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
@@ -737,7 +737,7 @@ class KanbanEngine:
                         cache.pop(entry.name, None)
                         continue
                     # AC-C19: skip mode 8 (invalid status) silently
-                    _valid_statuses = set(self._config.statuses)
+                    _valid_statuses = set(self._config.pipeline.statuses)
                     if task.status not in _valid_statuses | {"archived"}:
                         continue
                     tasks.append(task)
@@ -918,12 +918,12 @@ class KanbanEngine:
         config: BoardConfig = load_config(self._kanban_dir)
 
         if status:
-            valid_statuses = set(config.statuses)
+            valid_statuses = set(config.pipeline.statuses)
             if status not in valid_statuses:
                 msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
-        if priority and priority not in config.priorities:
-            msg = f"Invalid priority {priority!r}. Valid options: {config.priorities}"
+        if priority and priority not in config.pipeline.priorities:
+            msg = f"Invalid priority {priority!r}. Valid options: {config.pipeline.priorities}"
             raise ValueError(msg)
 
         task_id = storage.allocate_next_id(self._kanban_dir)
@@ -932,8 +932,8 @@ class KanbanEngine:
         record = Task(
             id=task_id,
             title=title,
-            status=status or config.entry_status,
-            priority=priority or config.defaults.priority,
+            status=status or config.pipeline.entry_status,
+            priority=priority or config.pipeline.default_priority,
             created=now,
             updated=now,
             body=body,
@@ -948,8 +948,8 @@ class KanbanEngine:
         write_task(record, self._kanban_dir)
         self._config = load_config(self._kanban_dir)
 
-        self._tasks_dir = self._kanban_dir / self._config.tasks_dir
-        self._archive_dir = self._kanban_dir / self._config.archive_dir
+        self._tasks_dir = self._kanban_dir / self._config.paths.tasks_dir
+        self._archive_dir = self._kanban_dir / self._config.paths.archive_dir
 
         self._revision += 1
         return record
@@ -1006,12 +1006,12 @@ class KanbanEngine:
             ValueError: ``status`` or ``priority`` is not a valid configured value.
         """
         if status is not None:
-            valid_statuses = set(self._config.statuses)
+            valid_statuses = set(self._config.pipeline.statuses)
             if status not in valid_statuses:
                 msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
                 raise ValueError(msg)
-        if priority is not None and priority not in self._config.priorities:
-            msg = f"Invalid priority {priority!r}. Valid options: {self._config.priorities}"
+        if priority is not None and priority not in self._config.pipeline.priorities:
+            msg = f"Invalid priority {priority!r}. Valid options: {self._config.pipeline.priorities}"
             raise ValueError(msg)
 
         task_path = self._find_task_path(task_id, self._tasks_dir, include_archive_fallback=True)
@@ -1114,7 +1114,7 @@ class KanbanEngine:
             FileNotFoundError: No task file matching ``{task_id}-*.md``.
             ValueError:        ``status`` is not valid and is not ``"archived"``.
         """
-        valid_statuses = set(self._config.statuses)
+        valid_statuses = set(self._config.pipeline.statuses)
         if status != "archived" and status not in valid_statuses:
             msg = f"Invalid status {status!r}. Valid options: {sorted(valid_statuses)}"
             raise ValueError(msg)
@@ -1403,7 +1403,7 @@ class KanbanEngine:
         Returns ``True`` when the task should be moved to the archive directory.
         """
         if outcome == "success":
-            statuses = list(self._config.statuses)
+            statuses = list(self._config.pipeline.statuses)
             current_idx = (
                 statuses.index(record.status) if record.status in statuses else -1
             )
@@ -1481,7 +1481,7 @@ class KanbanEngine:
             raise ValueError(msg)
 
         if outcome == "reject" and move_to is not None:
-            valid_statuses = set(self._config.statuses)
+            valid_statuses = set(self._config.pipeline.statuses)
             valid_statuses.add("archived")
             if move_to not in valid_statuses:
                 msg = f"Invalid move_to status {move_to!r}. Valid options: {sorted(valid_statuses)}"
@@ -1814,7 +1814,7 @@ class KanbanEngine:
 
     def _parse_claim_timeout(self) -> timedelta:
         """Parse the ``claim_timeout`` string from config into a :class:`timedelta`."""
-        return _parse_duration(self._config.claim_timeout)
+        return _parse_duration(self._config.pipeline.claim_timeout)
 
     def _find_task_path(
         self,
@@ -1997,12 +1997,12 @@ class AgentView:
                 code="ERR_ARCHIVAL_REASON_REQUIRED",
                 user_message="archival_reason is required when status='archived'",
             )
-        if archival_reason not in config.archival_reasons:
+        if archival_reason not in config.policy.archival_reasons:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REASON_INVALID",
                 user_message=(
                     "archival_reason must be one of "
-                    f"{sorted(config.archival_reasons)}"
+                    f"{sorted(config.policy.archival_reasons)}"
                 ),
             )
         if archival_reason in {"deprecated", "duplicate"} and not archival_refs:
@@ -2053,7 +2053,7 @@ class AgentView:
         if target_status == "archived":
             return
 
-        predicate_spec = config.status_predicates.get(target_status)
+        predicate_spec = config.policy.status_predicates.get(target_status)
         if not isinstance(predicate_spec, dict):
             return
         if predicate_spec.get("type") != "required_sections":
@@ -2127,21 +2127,21 @@ class AgentView:
         """
         config = self.engine.board_config()
 
-        if status and status != "archived" and status not in config.statuses:
+        if status and status != "archived" and status not in config.pipeline.statuses:
             raise ValidationError(
                 code="ERR_INVALID_STATUS",
-                user_message=f"status must be one of {[*config.statuses, 'archived']}",
+                user_message=f"status must be one of {[*config.pipeline.statuses, 'archived']}",
             )
-        if priority and priority not in config.priorities:
+        if priority and priority not in config.pipeline.priorities:
             raise ValidationError(
                 code="ERR_INVALID_PRIORITY",
-                user_message=f"priority must be one of {config.priorities}",
+                user_message=f"priority must be one of {config.pipeline.priorities}",
             )
-        if archival_reason and archival_reason not in config.archival_reasons:
+        if archival_reason and archival_reason not in config.policy.archival_reasons:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REASON_INVALID",
                 user_message=(
-                    f"archival_reason must be one of {sorted(config.archival_reasons)}"
+                    f"archival_reason must be one of {sorted(config.policy.archival_reasons)}"
                 ),
             )
 
@@ -2309,7 +2309,7 @@ class AgentView:
             )
 
         config = self.engine.board_config()
-        effective_wave = wave_size if wave_size is not None else config.wave_size
+        effective_wave = wave_size if wave_size is not None else config.pipeline.wave_size
         if effective_wave < 1:
             raise ValidationError(
                 code="ERR_INVALID_WAVE_PARAM",
@@ -2335,7 +2335,7 @@ class AgentView:
 
         created_rank = {task.id: index for index, task in enumerate(active)}
 
-        priority_rank = {name: idx for idx, name in enumerate(config.priorities)}
+        priority_rank = {name: idx for idx, name in enumerate(config.pipeline.priorities)}
 
         ordered = sorted(
             dispatchable,
@@ -2346,9 +2346,9 @@ class AgentView:
             ),
         )
 
-        status_agents = config.agent_map
-        agent_types = config.agent_types
-        compatibility = config.agent_compatibility
+        status_agents = config.agents.agent_map
+        agent_types = config.agents.agent_types
+        compatibility = config.agents.agent_compatibility
 
         def _dispatch_agent_for_status(status: str) -> str:
             mapped = status_agents.get(status, "")
@@ -2496,8 +2496,8 @@ class AgentView:
             )
 
         config = self.engine.board_config()
-        entry_status = config.entry_status
-        predicate_spec = config.status_predicates.get(entry_status)
+        entry_status = config.pipeline.entry_status
+        predicate_spec = config.policy.status_predicates.get(entry_status)
         if (
             isinstance(predicate_spec, dict)
             and predicate_spec.get("type") == "required_sections"
@@ -2646,12 +2646,12 @@ class AgentView:
             )
             effective_refs = archival_refs if archival_refs_set else list(existing.archival_refs)
 
-            if archival_reason_set and effective_reason not in config.archival_reasons:
+            if archival_reason_set and effective_reason not in config.policy.archival_reasons:
                 raise ValidationError(
                     code="ERR_ARCHIVAL_REASON_INVALID",
                     user_message=(
                         "archival_reason must be one of "
-                        f"{sorted(config.archival_reasons)}"
+                        f"{sorted(config.policy.archival_reasons)}"
                     ),
                 )
 
@@ -2667,7 +2667,7 @@ class AgentView:
                     user_message=f"archival_refs forbidden for archival_reason='{effective_reason}'",
                 )
 
-            if effective_reason == "completed" and existing.status != config.terminal_status:
+            if effective_reason == "completed" and existing.status != config.pipeline.terminal_status:
                 raise ValidationError(
                     code="ERR_COMPLETED_REQUIRES_DONE",
                     user_message="archival_reason='completed' requires terminal status",
@@ -2794,7 +2794,7 @@ class AgentView:
             if status == "archived":
                 self._validate_move_archival_for_archive(
                     task_id=task_id,
-                    can_mark_completed=before.status == config.terminal_status,
+                    can_mark_completed=before.status == config.pipeline.terminal_status,
                     config=config,
                     archival_reason=archival_reason,
                     archival_refs=archival_refs or [],
@@ -2960,6 +2960,7 @@ class AgentView:
                     user_message="move_to is required when outcome='reject'",
                 )
             valid_statuses = set(config.statuses)
+            valid_statuses = set(config.pipeline.statuses)
             valid_statuses.add("archived")
             if move_to not in valid_statuses:
                 raise ValidationError(
@@ -2993,10 +2994,10 @@ class AgentView:
                     code="ERR_BLOCK_REASON_REQUIRED",
                     user_message="block_reason is required when outcome='block'",
                 )
-            if move_to is not None and move_to not in set(config.statuses):
+            if move_to is not None and move_to not in set(config.pipeline.statuses):
                 raise ValidationError(
                     code="ERR_INVALID_STATUS",
-                    user_message=f"move_to must be one of {sorted(config.statuses)}",
+                    user_message=f"move_to must be one of {sorted(config.pipeline.statuses)}",
                 )
         elif outcome == "release":
             if move_to is not None:
@@ -3040,6 +3041,7 @@ class AgentView:
             body = _task_body_as_text(before.body)
             if outcome == "success":
                 statuses = list(config.statuses)
+                statuses = list(config.pipeline.statuses)
                 if before.status in statuses:
                     current_idx = statuses.index(before.status)
                     if current_idx < len(statuses) - 1:
