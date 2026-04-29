@@ -1,9 +1,9 @@
 """deny-src-writes.py — PreToolUse hook for test-only roles.
 
-Allow-list path guard: only writes to `tests/` or `.owlbear/scratch/` are
-permitted. Reads VS Code hook stdin JSON, checks paths for write tools, denies
-writes outside those surfaces. Usage: invoked automatically by VS Code as a
-PreToolUse hook.
+Allow-list path guard: only writes to `tests/`, `__tests__/`, or
+`.owlbear/scratch/` are permitted. Reads VS Code hook stdin JSON, checks paths
+for write tools, denies writes outside those surfaces. Usage: invoked
+automatically by VS Code as a PreToolUse hook.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ _WRITE_TOOLS = {
 }
 
 _TESTS_RE = re.compile(r"(^|/)tests/")
+_DUNDER_TESTS_RE = re.compile(r"(^|/)__tests__/")
 _SCRATCH_RE = re.compile(r"(^|/)\.owlbear/scratch(/|$)")
 
 
@@ -83,15 +84,19 @@ def main() -> None:
 
     for p in paths:
         normalized = p.replace("\\", "/").removeprefix("./")
-        if not (_TESTS_RE.search(normalized) or _SCRATCH_RE.search(normalized)):
+        if not (
+            _TESTS_RE.search(normalized)
+            or _DUNDER_TESTS_RE.search(normalized)
+            or _SCRATCH_RE.search(normalized)
+        ):
             response = {
                 "hookSpecificOutput": {
                     "permissionDecision": "deny",
                     "permissionDecisionReason": (
                         f"test-writer path guard: write target "
                         f"'{normalized}' is outside the allowed "
-                        "directories. Only writes to tests/ or .owlbear/scratch/ "
-                        "are permitted."
+                        "directories. Only writes to tests/, __tests__/, "
+                        "or .owlbear/scratch/ are permitted."
                     ),
                 }
             }
