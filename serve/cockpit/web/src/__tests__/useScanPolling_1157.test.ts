@@ -173,6 +173,14 @@ describe('TestFromAC_useScanPolling', () => {
       await act(async () => {})
       expect(result.current.items).toEqual([])
     })
+
+    it('sets items to [] when the 200 OK response payload is not an array (non-array JSON guard)', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ not: 'an array' }) })))
+      const { result } = renderHook(() => useScanPolling())
+      await act(async () => {})
+      expect(result.current.items).toEqual([])
+      expect(result.current.error).toBeNull()
+    })
   })
 
   // ─── AC5: error paths ────────────────────────────────────────────────────────────────────────────────────
@@ -207,6 +215,14 @@ describe('TestFromAC_useScanPolling', () => {
       const { result } = renderHook(() => useScanPolling())
       await act(async () => {})
       expect(result.current.error).toBeNull()
+    })
+
+    it('wraps a non-Error thrown value in an Error instance for the error state (rejection normalization)', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => Promise.reject('network failure string')))
+      const { result } = renderHook(() => useScanPolling())
+      await act(async () => {})
+      expect(result.current.error).toBeInstanceOf(Error)
+      expect(result.current.items).toEqual([])
     })
   })
 
