@@ -4,7 +4,7 @@ title: Audit and unify config write paths before schema grouping
 status: done
 priority: needed
 created: 2026-04-28T22:52:50.250562+00:00
-updated: 2026-04-29T01:42:46.714084+00:00
+updated: 2026-04-29T02:08:44.032931+00:00
 tags:
 - scope:kanban
 - research
@@ -12,8 +12,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: salt-elk
+claimed_at: 2026-04-29T02:08:44.032931+00:00
 archival_reason:
 archival_refs: []
 ---
