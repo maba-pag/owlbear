@@ -61,6 +61,29 @@ Assess the task against `r-architecture-standards` and general architectural pri
     - **Signals (S) — ≥1 required:** (S1) AC uses physical-action verbs (Open, Click, Navigate, Configure via GUI, Deploy manually); (S2) AC names external systems (Teams, Azure portal, GitHub UI, browser, dashboards); (S3) AC lists manual steps the user must physically perform
     - **Outcome:** no counter-signal AND M1+M2 AND ≥1 S → `type:user-action` detected → use BLOCK verdict (Step 3)
 
+## Step 2.1 — Test-Depth Annotation
+
+Annotate each AC line with a test-depth suffix `(td:N)`:
+
+| Depth | Suffix | Meaning | Examples |
+|-------|--------|---------|----------|
+| 0 | `(td:0)` | No test needed | Mechanical removal, cosmetic fix, "all tests pass", config-only |
+| 1 | `(td:1)` | Smoke test — one assertion proves it | Simple rename, add a field, single happy-path |
+| 2 | `(td:2)` | Full TDD — multiple paths/edges | New logic, error handling, security boundary |
+
+**Procedure:**
+
+1. For each AC line, assign `(td:N)` based on the line's testability, not the task's overall complexity.
+2. Default to `(td:2)` when uncertain — depth can be lowered but never raised after approval.
+3. Append the suffix to the AC line text in the task body via `edit_task`.
+
+**Pipeline routing:**
+
+- If ALL AC lines are `(td:0)`: append `Test-writer: SKIP` to the Architecture Review verdict section. The test-writer will pass through without writing tests.
+- If ANY line is `(td:1)` or `(td:2)`: test-writer processes the task normally, respecting per-line depth.
+
+**Subagent gating:** If ALL AC lines are `(td:0)`, skip the challenger dispatch in Step 2.5.
+
 ## Step 2.3 — Conditional Design Diverge
 
 Run this step only when all trigger conditions are met:
@@ -92,7 +115,7 @@ Build a comparison matrix from returned approaches across the split criteria. Se
 
 ## Step 2.5 — Challenge Proposed Verdict
 
-After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE, optional for REFINE, skip for SPLIT/REJECT.
+After Step 2.3 selection (when triggered), challenge APPROVE verdicts using the **challenger** subagent. This is mandatory for APPROVE (unless all AC lines are td:0 — see Step 2.1), optional for REFINE, skip for SPLIT/REJECT.
 
 Pass: task_id, proposed_verdict, reasoning, ac_lines, codebase_evidence, selected_or_hybrid_design (from Step 2.3), and research-doc reference. When Step 2.3 is skipped, selected_or_hybrid_design should capture the single-pass design being evaluated.
 
@@ -177,8 +200,12 @@ Append to task body before advancing:
 If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 
 ### Challenge Results
-- Challenger: {proceed/reconsider/reject} (or FALLBACK)
+- Challenger: {proceed/reconsider/reject} (or FALLBACK / SKIPPED — all td:0)
 - Architect response: {accepted/rebutted/revised}
+
+### Test Depth
+- Max depth: {0/1/2}
+- Test-writer: {SKIP (all td:0) / PROCEED}
 
 ### Verdict: {APPROVE/REFINE/SPLIT/REJECT}
 ### Action Taken: {description}
@@ -190,6 +217,7 @@ If fallback triggered, include only: `Design-diverge: FALLBACK — {reason}`.
 - [ ] Searched codebase for related patterns
 - [ ] Checked task body for prior context (architecture notes, reviewer feedback)
 - [ ] All 13 Step 2 criteria evaluated
+- [ ] Each AC line annotated with `(td:N)` (Step 2.1)
 - [ ] Design-diverge evaluated (triggered / skipped with reason / fallback noted)
 - [ ] Challenger invoked for APPROVE verdicts (or fallback noted)
 - [ ] `type:user-action` tasks blocked (BLOCK verdict) rather than approved

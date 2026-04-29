@@ -41,9 +41,21 @@ Record: passed/failed counts from the `## Tests` section of the Quality-Runner r
 
 ## Step 2.5 — Parallel Fan-Out Dispatch
 
-For implementation reviews, dispatch **quality-runner** (steps 3–5: tests, lint, coverage) and **code-reader** (steps 6–7: code analysis, AC compliance) in parallel. This is the **default dispatch path** for implementation reviews. Steps 3–7 are the sequential fallback, used only when subagents return execution errors.
+**Depth-aware dispatch:** Check AC lines for `(td:N)` annotations. Determine the task's max depth (highest td value across all AC lines; default td:2 if no annotations).
 
-Dispatch both subagents:
+| Max depth | quality-runner | code-reader | TestFromAC audit (§5.0) | Coverage (Step 4) |
+|-----------|---------------|-------------|------------------------|-------------------|
+| td:0 | lint only | skip | skip | skip |
+| td:1 | scoped tests + lint | skip | yes | yes |
+| td:2 | scoped tests + lint + coverage | yes | yes | yes |
+
+For **td:0 tasks**: dispatch quality-runner with lint only (no test paths, no coverage). Skip code-reader. Skip Steps 3–5 sequential fallback. Proceed directly to Step 8 with lint results.
+
+For **td:1 tasks**: dispatch quality-runner with scoped tests + lint. Skip code-reader. Proceed to Step 8.
+
+For **td:2 tasks** (default): dispatch both subagents as below.
+
+Dispatch quality-runner:
 
 ```
 agentName: quality-runner
@@ -65,6 +77,8 @@ prompt: |
 ```
 
 Collect both reports before continuing to Step 8. If either subagent returns an **execution error** (crash, timeout, exception — not a FAIL verdict), run the full sequential workflow (steps 3–7). Note in Channel B: "Parallel fan-out failed: {reason}. Fell back to sequential."
+
+For td:0/td:1 tasks where code-reader is skipped, proceed to Step 8 with quality-runner results only.
 
 ### Code-Reader Consumer Contract
 
@@ -270,7 +284,7 @@ If Step 2.5 was used, build a unified **AC compliance table** by cross-walking C
 - **Implementation issue** → `in-progress` (builder fixes directly)
 - **Test gap** → `todo` (tests insufficient but implementation is correct — test-writer adds missing coverage)
 - **Test quality or AC interpretation** → `backlog` (architect re-evaluates)
-- **3rd+ review FAIL on same task** → `backlog` (loop-breaker)
+- **2nd+ review FAIL on same task** → `backlog` (loop-breaker)
 
 Check the task body for prior `## Review Evidence` sections to detect repeat failures.
 

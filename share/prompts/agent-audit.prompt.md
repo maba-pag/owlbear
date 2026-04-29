@@ -130,7 +130,7 @@ Standards: `r-pipeline-protocol` § Signal Mapping, `h-agent-structure` § Agent
 | reviewer  | Impl issue                   | `in-progress` |
 | reviewer  | Test gap                     | `todo`        |
 | reviewer  | Test/AC quality              | `backlog`     |
-| reviewer  | 3rd+ FAIL                    | `backlog`     |
+| reviewer  | 2nd+ FAIL                    | `backlog`     |
 | architect | AC wrong                     | ideation      |
 | auditor   | Any rejection                | `backlog`     |
 
