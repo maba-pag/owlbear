@@ -2959,7 +2959,6 @@ class AgentView:
                     code="ERR_REJECT_REQUIRES_MOVE_TO",
                     user_message="move_to is required when outcome='reject'",
                 )
-            valid_statuses = set(config.statuses)
             valid_statuses = set(config.pipeline.statuses)
             valid_statuses.add("archived")
             if move_to not in valid_statuses:
@@ -3040,7 +3039,6 @@ class AgentView:
 
             body = _task_body_as_text(before.body)
             if outcome == "success":
-                statuses = list(config.statuses)
                 statuses = list(config.pipeline.statuses)
                 if before.status in statuses:
                     current_idx = statuses.index(before.status)
