@@ -141,6 +141,15 @@ describe('TestFromAC_HealthBadgePopoverRepair', () => {
     expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
+  // Negative boundary: corruptionCount 0 must not render the repair panel inside the popover
+
+  it('repair panel is absent from popover when corruptionCount is 0', () => {
+    const { container } = renderBadge([ITEM_A], { corruptionCount: 0 })
+    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
+    const popover = container.querySelector('[data-testid="health-badge-popover"]')
+    expect(popover?.querySelector('[data-testid="repair-button"]')).toBeNull()
+  })
+
 })
 
 // ─── AC7: useScanPolling refetch interface ─────────────────────────────────────
@@ -252,5 +261,94 @@ describe('TestFromAC_RepairPanelPDS', () => {
     const { container } = renderPanel(3)
     // PDS PSpinner renders as <p-spinner>. Current impl uses <div data-testid="repair-loading">.
     expect(container.querySelector('p-spinner')).not.toBeNull()
+  })
+
+  // Smoke: confirming state uses p-text for the dialog message
+
+  it('RepairPanel confirming state renders p-text custom element', () => {
+    mockHook({ phase: 'confirming', corruptionCount: 2 })
+    const { container } = renderPanel(2)
+    // PDS PText renders as <p-text>. Proves AC8 p-text coverage explicitly.
+    expect(container.querySelector('p-text')).not.toBeNull()
+  })
+})
+
+// ─── AC7 (integration): HealthBadge → RepairPanel → useRepairFlow callback chain ──
+
+describe('TestFromAC_HealthBadgeRepairPropChain', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+  })
+
+  // Happy path: HealthBadge threads onRepairSuccess all the way into useRepairFlow opts
+
+  it('HealthBadge threads onRepairSuccess into useRepairFlow opts.onSuccess via RepairPanel', () => {
+    let capturedOnSuccess: (() => void) | undefined
+    vi.mocked(useRepairFlow).mockImplementation((opts: { onSuccess?: () => void } | undefined) => {
+      capturedOnSuccess = opts?.onSuccess
+      return hookDefaults()
+    })
+
+    const onRepairSuccessSpy = vi.fn()
+    const { container } = renderBadge([ITEM_A], {
+      corruptionCount: 1,
+      onRepairSuccess: onRepairSuccessSpy,
+    })
+    // Open popover — triggers RepairPanel render, which calls useRepairFlow
+    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
+
+    expect(capturedOnSuccess).toBeDefined()
+    expect(capturedOnSuccess).toBe(onRepairSuccessSpy)
+  })
+
+  // Integration: calling the captured onSuccess propagates back to the original handler
+
+  it('invoking useRepairFlow opts.onSuccess calls the HealthBadge onRepairSuccess handler', () => {
+    let capturedOnSuccess: (() => void) | undefined
+    vi.mocked(useRepairFlow).mockImplementation((opts: { onSuccess?: () => void } | undefined) => {
+      capturedOnSuccess = opts?.onSuccess
+      return hookDefaults()
+    })
+
+    const onRepairSuccessSpy = vi.fn()
+    const { container } = renderBadge([ITEM_A], {
+      corruptionCount: 1,
+      onRepairSuccess: onRepairSuccessSpy,
+    })
+    fireEvent.click(container.querySelector('[data-testid="health-badge"]')!)
+
+    expect(capturedOnSuccess).toBeDefined()
+    capturedOnSuccess!()
+    expect(onRepairSuccessSpy).toHaveBeenCalledOnce()
+  })
+})
+
+// ─── AC2 (exact copy): confirmation dialog verbatim sentence ──────────────────
+
+describe('TestFromAC_RepairConfirmCopyExact', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+  })
+
+  // Contract: the exact sentence is required per AC2 — count-only assertions are insufficient
+
+  it('confirmation dialog contains the verbatim sentence with count interpolated', () => {
+    mockHook({ phase: 'confirming', corruptionCount: 3 })
+    const { container } = renderPanel(3)
+    const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
+    const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
+    expect(text).toContain(
+      'This will attempt to repair 3 corrupted files. Fixed files are restored, unfixable files are quarantined. Continue?',
+    )
+  })
+
+  it('verbatim sentence interpolates the count correctly for a different value', () => {
+    mockHook({ phase: 'confirming', corruptionCount: 42 })
+    const { container } = renderPanel(42)
+    const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
+    const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
+    expect(text).toContain(
+      'This will attempt to repair 42 corrupted files. Fixed files are restored, unfixable files are quarantined. Continue?',
+    )
   })
 })
