@@ -189,22 +189,19 @@ Handle fix-attempt result:
 | `FIXED` | Re-verify with pytest (all tests must pass) and ruff (lint clean). If pass → proceed to Step 7. If still failing → `end_work(outcome="reject")`: diagnose root cause and route to `todo` (test assumptions wrong) or `backlog` (AC/architecture wrong). |
 | `FAILED` | Diagnose root cause: test assumptions wrong → `end_work(outcome="reject", move_to="todo")`; AC/architecture wrong → `end_work(outcome="reject", move_to="backlog")`. Append Channel B notes with same-context retry (Step 6.2) diagnosis and fix-attempt diagnosis — record each source separately. |
 
-## Step 7 — Deliverables
+## Step 7 — Commit & Advance
 
 Include builder notes in your `end_work` note.
 
-Commit per `r-project-standards` → Commit Discipline:
+**Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add serve/{package}/src/{namespace}/{module}.py
-git commit -m "feat: implement {feature} (#{id}, builder)"
+git add serve/{package}/src/{namespace}/{module}.py && git commit -m "feat: implement {feature} (#{id}, builder)"
 ```
 
-Verify only task-related files are staged.
+Stage only files you created or modified. Verify with `git diff --cached --name-only` if uncertain.
 
-## Step 8 — Advance
-
-Advance via `end_work` (moves to `review` + releases claim).
+Then advance via `end_work` (moves to `review` + releases claim).
 
 Return Channel A signal per `r-pipeline-protocol`.
 

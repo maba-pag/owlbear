@@ -141,25 +141,19 @@ in the `## Docs Gate` section and advance — no busywork.
 
 Look for `.owlbear/scratch/{task-id}-*` files and delete any that exist.
 
-## Step 4 — Deliverables
+## Step 4 — Commit & Advance
 
-If you updated any files in Step 2, commit per `r-project-standards` → Commit Discipline:
+If you created or modified files in Step 2, **commit them** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add {updated_files}
-git commit -m "docs: update docs for {feature} (#{id}, doc-writer)"
+git add {updated_files} && git commit -m "docs: update docs for {feature} (#{id}, doc-writer)"
 ```
 
-Verify only documentation files are staged — no application code, no test files. Skip if
-no files were updated.
-
-If you created a new diagram or updated the doc-index, include those files in the commit.
-
-## Step 5 — Advance
+Stage only documentation files — no application code, no test files. Include diagrams and doc-index if updated. Skip commit if no files were changed.
 
 Include the docs gate report in your `end_work` note.
 
-Advance via `end_work` (moves to `done` + releases claim).
+Then advance via `end_work` (moves to `done` + releases claim).
 
 Return Channel A signal per `r-pipeline-protocol`.
 

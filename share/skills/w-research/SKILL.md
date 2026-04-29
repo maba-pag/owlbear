@@ -118,18 +118,20 @@ Classify every finding before acting:
 
 Delegate follow-up task creation to planner via `Plan and create:` using single-task or decomposition mode as needed, and set status to `research`. For findings requiring user decisions, use the scribe to check/create a decision request.
 
-## Step 6 — Deliverables
+## Step 6 — Commit & Advance
 
 1. Add rows to `.owlbear/sources/overview.md` for external sources (see `r-project-standards` → Attribution).
 2. Delete any cloned repos from `.owlbear/scratch/research/`.
 
-Commit per `r-project-standards` → Commit Discipline (if research doc or sources were created).
+If you created or modified files (research doc, sources), **commit them** (see `r-pipeline-protocol` → Who Commits What):
 
-## Step 7 — Advance
+```shell
+git add .owlbear/research/{doc}.md .owlbear/sources/overview.md && git commit -m "docs: research {topic} (#{id}, researcher)"
+```
 
 Include the research summary and challenge results in your `end_work` note.
 
-Advance via `end_work` (moves to `backlog` + releases claim).
+Then advance via `end_work` (moves to `backlog` + releases claim).
 
 Return Channel A signal per `r-pipeline-protocol`.
 

@@ -108,14 +108,17 @@ Append one entry per module to `.owlbear/scratch/curator-log.jsonl`:
 
 **Actions:** `curate` (gaps mined + task-tests removed), `fast_path` (already at target, task-tests removed), `skip` (gate failure, no changes).
 
-## Step 7 — Commit
+## Step 7 — Commit & Advance
 
-Commit per `r-project-standards` → Commit Discipline:
+**Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add tests/
-git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
+git add tests/ && git commit -m "test: curate module tests — {N} task-tests removed, {M} modules improved (test-curator)"
 ```
+
+Then advance via `end_work` (moves to next status + releases claim).
+
+Return Channel A signal per `r-pipeline-protocol`.
 
 ## Output Template
 
