@@ -2,7 +2,8 @@
 
 AC1: save_config and _merge_into are deleted from owlbear_kanban.config_loader
 AC2: load_config still works (regression guard)
-AC3: all existing tests pass (no new tests — existing suites cover it)
+AC3: no new test failures introduced by the deletion — task-scoped suite green and no
+     regressions in serve/kanban/ test surface (td:0; no task-local test mapping required)
 AC4: grep confirms no remaining references to deleted functions in source
 """
 
