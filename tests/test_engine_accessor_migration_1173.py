@@ -16,6 +16,7 @@ config.pipeline.statuses / config.pipeline.priorities access from the engine.
 from __future__ import annotations
 
 import inspect
+import re
 from pathlib import Path
 
 import owlbear_kanban.engine as _engine_mod
@@ -24,6 +25,23 @@ from owlbear_kanban.models import PipelineConfig
 
 # Engine source loaded once at module level — all inspection tests use this.
 _ENGINE_SOURCE = inspect.getsource(_engine_mod)
+
+
+def _strip_string_literals(src: str) -> str:
+    """Return source with string literal contents removed.
+
+    Used to avoid false-positive matches inside user_message strings
+    (e.g. "config.statuses must contain…") when scanning for banned
+    code-level accessor patterns.
+    """
+    out = re.sub(r'""".*?"""', '""""""', src, flags=re.DOTALL)
+    out = re.sub(r"'''.*?'''", "''''''", out, flags=re.DOTALL)
+    out = re.sub(r'"(?:[^"\\]|\\.)*"', '""', out)
+    return re.sub(r"'(?:[^'\\]|\\.)*'", "''", out)
+
+
+# Engine source with string literal contents removed — code-level accessor checks only.
+_CODE_SOURCE = _strip_string_literals(_ENGINE_SOURCE)
 
 # ---------------------------------------------------------------------------
 # Board fixture helpers
@@ -362,4 +380,73 @@ class TestFromAC_NoForwardingProperties:
         assert "config.status_predicates" not in _ENGINE_SOURCE, (
             "engine.py still calls forwarding property 'config.status_predicates' — "
             "migrate all sites to 'config.policy.status_predicates'"
+        )
+
+    # -- missing patterns from prior cycle (AC3 exhaustive list) ------------
+
+    def test_no_raw_default_priority_forwarding_call(self) -> None:
+        """engine.py must not call config.default_priority; use config.pipeline.default_priority."""
+        assert "config.default_priority" not in _ENGINE_SOURCE, (
+            "engine.py contains 'config.default_priority' — "
+            "migrate to 'config.pipeline.default_priority'"
+        )
+
+    def test_no_raw_statuses_forwarding_call(self) -> None:
+        """engine.py must contain ZERO code-level config.statuses calls after migration.
+
+        Uses string-stripped source to exclude the user_message string literal at
+        engine.py line 117 ('config.statuses must contain at least one status').
+        The two remaining code-level reads at lines ~2962 and ~3043 cause this
+        test to FAIL in RED phase.
+        """
+        code_hits = _CODE_SOURCE.count("config.statuses")
+        assert code_hits == 0, (
+            f"engine.py still has {code_hits} code-level 'config.statuses' accessor(s) — "
+            "remove the duplicate dead lines at ~2962 and ~3043 "
+            "(valid_statuses / statuses already reassigned from config.pipeline.statuses)"
+        )
+
+    def test_no_raw_priorities_forwarding_call(self) -> None:
+        """engine.py must contain ZERO code-level config.priorities calls after migration.
+
+        Uses string-stripped source to exclude the user_message string literal
+        ('config.priorities must contain at least one priority').
+        """
+        code_hits = _CODE_SOURCE.count("config.priorities")
+        assert code_hits == 0, (
+            f"engine.py still has {code_hits} code-level 'config.priorities' accessor(s) — "
+            "migrate all sites to 'config.pipeline.priorities'"
+        )
+
+    def test_no_raw_non_impl_tags_forwarding_call(self) -> None:
+        """engine.py must not call config.non_impl_tags; use config.policy.non_impl_tags."""
+        assert "config.non_impl_tags" not in _ENGINE_SOURCE, (
+            "engine.py contains 'config.non_impl_tags' — "
+            "migrate to 'config.policy.non_impl_tags'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC4 — Regression gate: grouped pattern count must stay >= 50
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_GroupedRegressionGate:
+    """AC4 — engine.py must contain >= 50 occurrences of grouped config accessor patterns.
+
+    Prevents a silent mass-revert of the sub-model migration: if every grouped
+    accessor (paths., pipeline., agents., policy.) were reverted, this count
+    would drop well below the threshold.
+
+    Pattern: paths./pipeline./agents./policy. matches any grouped sub-model
+    accessor in the engine source, including string/docstring contexts.
+    """
+
+    def test_grouped_pattern_count_meets_regression_threshold(self) -> None:
+        """Total occurrences of paths./pipeline./agents./policy. in engine source >= 50."""
+        pattern = re.compile(r"(?:paths|pipeline|agents|policy)\.")
+        count = len(pattern.findall(_ENGINE_SOURCE))
+        assert count >= 50, (
+            f"engine.py contains only {count} grouped accessor pattern occurrence(s) — "
+            "expected >= 50; a mass-revert of the sub-model migration may have occurred"
         )
