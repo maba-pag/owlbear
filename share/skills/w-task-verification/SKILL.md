@@ -84,15 +84,21 @@ Thresholds (source of truth in `r-pipeline-protocol` → Confidence Thresholds):
 | ≥ .95 | Archive |
 | < .95 | Reject to backlog — if auditor catches it, the gap is structural |
 
-## Step 4 — Verify commits and commit leftovers
+## Step 4 — Verify commits and commit task files
 
-Upstream agents should have committed their deliverables. Verify and clean up.
+Upstream agents should have committed their deliverables before advancing.
 
-**Verify upstream commits:** For each task's deliverable files, confirm they appear in recent commits via `git log --oneline -5 -- <files>`. Uncommitted deliverables are a quality gap — note in the audit report.
+**Verify upstream commits:** For each task's deliverable files, confirm they appear in recent commits via `git log --oneline -5 -- <files>`. Uncommitted source deliverables are a quality gap — note in the audit report and flag as a process concern (do NOT silently commit other agents' source code).
 
-**Commit leftovers:** Stage and commit remaining files (kanban board changes, orphaned deliverables). Follow commit format in `r-project-standards` → Commit Discipline.
+**Commit kanban state:** After archival, stage and commit kanban board + archived task files:
 
-Before committing: `git status --short` and `git diff --cached` to verify only task-related files are staged. Unstage unexpected files with `git reset HEAD <file>`.
+```shell
+git add .owlbear/kanban/ && git commit -m "chore: archive tasks {list} (auditor)"
+```
+
+Include resolved decision files if they changed state during this audit cycle. Stage only kanban/decision files — never source code or test files belonging to upstream agents.
+
+Before committing: verify with `git diff --cached --name-only` that only kanban/decision paths are staged.
 
 ## Step 5 — Advance
 
@@ -147,7 +153,7 @@ After committing, append commit log:
 - [ ] Full test suite passed (cross-task regressions checked)
 - [ ] Confidence score calculated using deduction rubric (not gut feeling)
 - [ ] Audit section included in `end_work` note
-- [ ] Upstream commits verified; leftover files committed per `r-project-standards`
+- [ ] Upstream commits verified; kanban/decision files committed after archival
 - [ ] Channel A signal returned as final output — nothing after it
 
 ## Known Pitfalls

@@ -163,18 +163,17 @@ Include the test summary in your `end_work` note:
 - ruff: clean
 ```
 
-Commit per `r-project-standards` → Commit Discipline:
+## Step 6 — Commit & Advance
+
+**Commit your deliverables** (see `r-pipeline-protocol` → Who Commits What):
 
 ```shell
-git add tests/test_{module}_{task_id}.py
-git commit -m "test: add failing tests for {feature} (#{id}, test-writer)"
+git add tests/test_{module}_{task_id}.py && git commit -m "test: add failing tests for {feature} (#{id}, test-writer)"
 ```
 
-Verify only test files are staged.
+Stage only test files you created or modified. Verify with `git diff --cached --name-only` if uncertain.
 
-## Step 7 — Advance
-
-Advance via `end_work` (moves to `in-progress` + releases claim).
+Then advance via `end_work` (moves to `in-progress` + releases claim).
 
 Return Channel A signal per `r-pipeline-protocol`.
 

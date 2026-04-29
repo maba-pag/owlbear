@@ -197,14 +197,17 @@ To retrieve the full task body, use `show_task(task_id="{id}")` (see `h-mcp-kanb
 
 | Agent | Commits | When |
 |-------|---------|------|
-| Test-writer | Test files | Before moving to in-progress |
-| Builder | Source code | Before moving to review |
-| Doc-writer | Documentation files | Before moving to done |
-| Auditor | Kanban board files + any uncommitted leftovers | During exit-gate Step 5 |
+| Test-writer | Test files | Before advancing to in-progress |
+| Builder | Source code | Before advancing to review |
+| Doc-writer | Documentation files | Before advancing to done |
+| Auditor | Kanban board + task files for archived tasks | After archival in exit-gate |
 
 Rules:
 
-- Never push. The user pushes manually.
+- **Commit gates advance.** If you created or modified files, commit them BEFORE calling `end_work`. No commit → no advance. If you have no file deliverables (pass-through, reviewer, orchestrator), skip.
+- **Atomic single command.** Run stage + commit as one terminal invocation to prevent interleaving with concurrent agents: `git add <your-files> && git commit -m "type: description (#{id}, role)"`. Never split across separate commands.
+- **Scope to your own files.** Stage only files YOU created or modified in this task. Do not stage files from other agents or unrelated changes. Verify with `git diff --cached --name-only` if uncertain.
+- **Never push.** The user pushes manually.
 - For commit format, types, and git discipline, see `r-project-standards` → Commit Discipline.
 
 ### Post-task Reflection
