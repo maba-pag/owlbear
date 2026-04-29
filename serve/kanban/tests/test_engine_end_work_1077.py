@@ -87,10 +87,10 @@ _PREDICATE_CONFIG = _BASE_CONFIG.replace(
     "status_predicates: {}",
     (
         "status_predicates:\n"
-        "    review:\n"
-        "      type: required_sections\n"
-        "      sections:\n"
-        "        - Test Results"
+        "        review:\n"
+        "          type: required_sections\n"
+        "          sections:\n"
+        "            - Test Results"
     ),
 )
 
