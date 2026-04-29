@@ -7,9 +7,20 @@ export interface RepairOutcome {
 }
 
 export async function repairStorage(): Promise<RepairOutcome[]> {
-  const response = await fetch('/api/tasks/repair', { method: 'POST' })
-  if (!response.ok) {
-    throw new Error(`Repair request failed with status ${response.status}`)
+  try {
+    const response = await fetch('/api/tasks/repair', { method: 'POST' })
+    if (!response.ok) {
+      throw new Error(`Repair request failed with status ${response.status}`)
+    }
+    return (await response.json()) as RepairOutcome[]
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      throw error
+    }
+    const wrappedError = new Error(`Repair request failed: ${String(error)}`) as Error & {
+      cause?: unknown
+    }
+    wrappedError.cause = error
+    throw wrappedError
   }
-  return (await response.json()) as RepairOutcome[]
 }
