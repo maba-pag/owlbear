@@ -89,14 +89,18 @@ The tier calibrates all subsequent moments:
    - ensure `context.md` is a narrow current-state snapshot
    - ensure `decisions.md` contains rejected options and rationale where real choices occurred
    - ensure `research-notes.md` is present and bounded
-6. End Phase 1 with an explicit handoff message that:
-   - names the Phase 2 entrypoint: `@ideation-mediator`
-   - points to `context.md`, `decisions.md`, and `research-notes.md`
+6. Commit the Working Directory: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 1 discovery for {name}"`
+7. End Phase 1 with an explicit handoff message that:
+   - summarises what was discovered (1–3 sentences)
    - explains whether `synthesis-idea-panel.md` exists and why
+   - provides a fenced code block with the exact command to start Phase 2 in a new chat:
+     ```
+     /ideation-mediate .owlbear/briefs/draft-{name}/
+     ```
 
 **Phase boundary rule:** discovery ends after problem/outcomes lock and research curation. It does not continue into landscape presentation or approach choice.
 
-**Exit criteria:** `context.md`, `decisions.md`, and `research-notes.md` are ready for a fresh-context Phase 2 start.
+**Exit criteria:** `context.md`, `decisions.md`, and `research-notes.md` are committed and ready for a fresh-context Phase 2 start.
 
 ## Artifact Contract
 

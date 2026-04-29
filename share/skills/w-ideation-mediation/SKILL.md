@@ -140,8 +140,11 @@ Apply O15 to every Critic pass. See the Critic Validation section above for the 
 
 1. Create the parent kanban task from the approved Brief.
 2. Invoke `planner` with the canonical prefix: `Plan and create: #{parent_id} — {brief summary}`.
-3. Report the handoff result to the user.
-4. Preserve the Working Directory as the audit trail.
+3. Commit the final Working Directory state: `git add .owlbear/briefs/draft-{name}/ && git commit -m "ideation: complete Phase 2 mediation for {name}"`
+4. Report the handoff result to the user:
+   - parent task ID and title
+   - number of child tasks created by planner
+   - what happens next (architect reviews, then pipeline proceeds automatically)
 
 ## Verification Checklist
 
