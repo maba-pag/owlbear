@@ -36,16 +36,40 @@ Some tasks have no testable implementation (research, documentation, config).
 3. Return: `DONE #{id} -> in-progress | non-impl pass-through, no tests needed`
 4. **Stop here.**
 
-### Step 1b — Retry-Cycle Handling
+### Step 1b — Retry-Cycle Handling (Surgical Fill Mode)
 
 If the body contains both `## Test-Writer Notes` and `## Review Evidence`, this is a retry (reviewer FAILed back to `todo`).
 
-1. Read the `## Review Evidence` section to understand the failure reason.
-2. **If reviewer cites missing tests:** Write NEW failing tests addressing gaps. Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class for a distinct AC concern). Do NOT remove or modify existing passing tests. Run pytest to verify: old tests PASS, new tests FAIL.
-3. **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings.
-4. Advance via `end_work(note="## Test-Writer Notes\n- Retry: {summary of changes}")` (moves to `in-progress` + releases claim).
-5. Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
-6. **Stop here.**
+**Reading priority — follow this order before writing any tests:**
+
+1. **Read `## Review Evidence` → "Required Follow-up"** section. This tells you EXACTLY which gaps to fill. Do not re-derive from scratch.
+2. **Read the latest `## Builder Notes`** section. This shows the CURRENT interface state — removed parameters, renamed methods, changed signatures. Your new tests MUST match this reality.
+3. **Check your own prior `## Test-Writer Notes`** — understand what already exists so you don't duplicate.
+4. Reference the original AC only to verify you're targeting the right behavior.
+
+**Writing rules:**
+
+- **If reviewer cites missing tests:** Write NEW failing tests addressing ONLY the specified gaps. Add them to the existing `TestFromAC_{Feature}` class (or a new `TestFromAC_` class for a distinct AC concern). Do NOT remove or modify existing passing tests. Do NOT do a broad coverage uplift — fill only the reviewer's gaps.
+- **If reviewer cites code quality, weak tests, or security (not missing tests):** Pass through — the builder will address the findings.
+- Run pytest to verify: old tests PASS, new tests FAIL (for the new gaps). If all tests pass (implementation already handles the gap), note this and advance — **the builder pass-through is unnecessary** (see Step 1b.1 below).
+
+**Advance:** via `end_work(note="## Test-Writer Notes\n- Retry: {summary of changes}")` (moves to `in-progress` + releases claim).
+
+Return: `DONE #{id} -> in-progress | retry, {N} existing tests preserved{, M new tests added}`
+
+**Stop here.**
+
+#### Step 1b.1 — Direct-to-Review Advance (Test-Only Retry)
+
+If ALL of the following are true:
+- Reviewer's Required Follow-up contained ONLY test-proof gaps (no implementation fixes needed)
+- All NEW tests PASS against current code (implementation already handles them)
+- No lint or coverage issues detected
+
+Then the builder has no work to do. Advance directly to `review` instead of `in-progress`:
+- `end_work(note="## Test-Writer Notes\n- Retry: added {M} tests for reviewer gaps. All pass against current impl.\n- Builder skip: test-only retry, all tests green.")` with `move_to="review"` outcome.
+- Return: `DONE #{id} -> review | test-only retry, builder skipped`
+- **Stop here.**
 
 ### Step 1c — Depth-Zero Pass-Through
 

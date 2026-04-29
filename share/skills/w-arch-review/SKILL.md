@@ -74,7 +74,7 @@ Annotate each AC line with a test-depth suffix `(td:N)`:
 **Procedure:**
 
 1. For each AC line, assign `(td:N)` based on the line's testability, not the task's overall complexity.
-2. Default to `(td:2)` when uncertain — depth can be lowered but never raised after approval.
+2. Default to `(td:1)` when uncertain — depth can be lowered but never raised after approval.
 3. Append the suffix to the AC line text in the task body via `edit_task`.
 
 **Pipeline routing:**

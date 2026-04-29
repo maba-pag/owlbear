@@ -41,7 +41,7 @@ Record: passed/failed counts from the `## Tests` section of the Quality-Runner r
 
 ## Step 2.5 — Parallel Fan-Out Dispatch
 
-**Depth-aware dispatch:** Check AC lines for `(td:N)` annotations. Determine the task's max depth (highest td value across all AC lines; default td:2 if no annotations).
+**Depth-aware dispatch:** Check AC lines for `(td:N)` annotations. Determine the task's max depth (highest td value across all AC lines; default td:1 if no annotations).
 
 | Max depth | quality-runner | code-reader | TestFromAC audit (§5.0) | Coverage (Step 4) |
 |-----------|---------------|-------------|------------------------|-------------------|
@@ -51,9 +51,9 @@ Record: passed/failed counts from the `## Tests` section of the Quality-Runner r
 
 For **td:0 tasks**: dispatch quality-runner with lint only (no test paths, no coverage). Skip code-reader. Skip Steps 3–5 sequential fallback. Proceed directly to Step 8 with lint results.
 
-For **td:1 tasks**: dispatch quality-runner with scoped tests + lint. Skip code-reader. Proceed to Step 8.
+For **td:1 tasks** (default): dispatch quality-runner with scoped tests + lint. Skip code-reader. Proceed to Step 8.
 
-For **td:2 tasks** (default): dispatch both subagents as below.
+For **td:2 tasks**: dispatch both subagents as below.
 
 Dispatch quality-runner:
 
@@ -136,6 +136,8 @@ prompt: |
 ```
 
 Verify touched modules have 90% coverage or higher from the `## Coverage` section.
+
+**Scoping rule:** The 90% gate applies to lines CHANGED by the builder in this task (diff-scoped), not the entire module. If the module has low overall coverage but the builder's changes are fully exercised, that is a PASS. Note module-level coverage as INFORMATIONAL context only — if it's genuinely low, create a follow-up test-curation task rather than rejecting the current task.
 
 ## Step 5 — Pass 1: CRITICAL Checks
 
@@ -274,6 +276,8 @@ Build an evidence table — every AC line needs specific proof:
 ## Step 8 — Produce Verdict
 
 Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thresholds).
+
+**Scope constraint — don't invent requirements:** The reviewer proves what AC declares, including its natural branches and edge cases. The reviewer does NOT invent requirements AC doesn't mention. If you find a gap that is not traceable to any AC line (even by reasonable implication), classify it as INFORMATIONAL — it cannot contribute to a FAIL verdict. Optionally create a follow-up task for genuinely important non-AC findings. Example: AC says "defaults to research, validated in statuses" → testing that validation rejects invalid values is fair (natural branch). Demanding an explicit "omission-path test" for what happens when the field isn't provided at all is an invention (Pydantic handles it implicitly).
 
 If Step 2.5 was used, build a unified **AC compliance table** by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail status per AC line. Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader. Note any divergence between subagent findings and your own analysis.
 
