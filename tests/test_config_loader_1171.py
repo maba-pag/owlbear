@@ -715,3 +715,31 @@ archive_dir: custom-archive
         assert config.paths.archive_dir == "custom-archive"
         assert config.pipeline.default_priority == "someday"
         assert config.statuses == ["research", "backlog", "done"]
+
+
+class TestFromAC_ModelValidationBoundary:
+    """AC11: BoardConfig model construction must not raise ConfigError for empty agent_map.
+
+    The _validate_agent_map call in _validate_semantics is a duplicate of
+    engine.py:_validate_engine_config. It must be removed from the model layer
+    so that minimal/test fixtures with explicit agent_map={} can be constructed.
+    """
+
+    def test_board_config_empty_agent_map_no_exception(self) -> None:
+        """BoardConfig with statuses and explicit empty agent_map must not raise.
+
+        MUST FAIL until _validate_agent_map is removed from _validate_semantics.
+        Currently raises ConfigError: agent_map missing status entries.
+        """
+        from owlbear_kanban.models import BoardConfig
+
+        # Explicit agent_map={} — bypasses auto-fill logic
+        cfg = BoardConfig(
+            statuses=["research", "done"],
+            priorities=["important"],
+            agents={"agent_map": {}, "agent_types": {}, "agent_compatibility": {}},
+        )
+        assert cfg.statuses == ["research", "done"]
+        assert cfg.agents.agent_map == {}
+
+
