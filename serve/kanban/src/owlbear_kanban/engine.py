@@ -27,6 +27,7 @@ from __future__ import annotations
 import contextlib
 import importlib
 import json
+import logging
 import os
 import random
 import re
@@ -77,6 +78,7 @@ from owlbear_kanban.storage import (
 _DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
 _BLOCK_REASON_UNSET = object()
 _MAX_CLAIM_STALE_RETRIES = 4
+LOGGER = logging.getLogger(__name__)
 
 
 def _parse_duration(s: str) -> timedelta:
@@ -2322,9 +2324,11 @@ class AgentView:
                 user_message="wave_size must be >= 1",
             )
 
-        with contextlib.suppress(Exception):
+        try:
             decisions = importlib.import_module("owlbear_kanban.decisions")
             decisions.resolve_pending_drs(self.engine)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.warning("Failed to resolve pending DRs before pick_tasks: %s", exc)
 
         active = self.engine.list_tasks(
             archived=False,
