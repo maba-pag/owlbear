@@ -109,7 +109,7 @@ def _parse_duration(s: str) -> timedelta:
     return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
-def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
+def _validate_engine_config(config: BoardConfig) -> None:
     """Validate engine-specific config invariants required at engine init."""
     statuses = config.pipeline.statuses
     priorities = config.pipeline.priorities
@@ -140,13 +140,6 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
             user_message=(
                 f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
             ),
-        )
-
-    missing_statuses = [status for status in statuses if status not in config.agents.agent_map]
-    if missing_statuses:
-        raise ConfigError(
-            code="ERR_INVALID_STATUS",
-            user_message=f"agent_map missing status entries: {missing_statuses}",
         )
 
     # Validate timeout format eagerly at engine init.
@@ -527,6 +520,16 @@ class KanbanEngine:
     def revision(self) -> int:
         """Per-instance write counter; incremented on every mutating operation."""
         return self._revision
+
+    @property
+    def tasks_dir(self) -> Path:
+        """Configured tasks directory for the active board."""
+        return self._tasks_dir
+
+    @property
+    def kanban_dir(self) -> Path:
+        """Root kanban directory for the active board."""
+        return self._kanban_dir
 
     # ------------------------------------------------------------------
     # Config-derived rank maps
@@ -2322,6 +2325,15 @@ class AgentView:
             raise ValidationError(
                 code="ERR_INVALID_WAVE_PARAM",
                 user_message="wave_size must be >= 1",
+            )
+
+        missing_statuses = [
+            status for status in config.pipeline.statuses if status not in config.agents.agent_map
+        ]
+        if missing_statuses:
+            raise ConfigError(
+                code="ERR_INVALID_STATUS",
+                user_message=f"agent_map missing status entries: {missing_statuses}",
             )
 
         try:
