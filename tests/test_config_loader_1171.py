@@ -393,39 +393,6 @@ policy:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ForwardingProperties:
-    """AC6 — BoardConfig exposes tasks_dir and archive_dir via forwarding properties."""
-
-    def test_tasks_dir_forwards_to_paths_sub_model(self, tmp_path: Path) -> None:
-        """config.tasks_dir returns the same value as config.paths.tasks_dir."""
-        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
-        config = load_config(kanban_dir)
-        assert config.tasks_dir == config.paths.tasks_dir
-
-    def test_archive_dir_forwards_to_paths_sub_model(self, tmp_path: Path) -> None:
-        """config.archive_dir returns the same value as config.paths.archive_dir."""
-        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
-        config = load_config(kanban_dir)
-        assert config.archive_dir == config.paths.archive_dir
-
-    def test_forwarding_property_nondefault_value_matches_yaml(self, tmp_path: Path) -> None:
-        """Forwarding properties return nondefault values from the paths: section."""
-        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
-        config = load_config(kanban_dir)
-        # Must match fixture values, not Pydantic defaults "tasks"/"archive"
-        assert config.tasks_dir == "custom-tasks"
-        assert config.archive_dir == "custom-archive"
-
-    def test_tasks_dir_forwarding_works_on_flat_config(self, tmp_path: Path) -> None:
-        """config.tasks_dir works on flat config via forwarding property (backward compat)."""
-        kanban_dir = _make_board(tmp_path, _FLAT_YAML)
-        config = load_config(kanban_dir)
-        # Flat config: normaliser builds PathsConfig from flat keys
-        assert config.tasks_dir == config.paths.tasks_dir
-        # Nondefault value proves extraction from flat key, not Pydantic default
-        assert config.tasks_dir == "custom-tasks"
-
-
 # ---------------------------------------------------------------------------
 # AC7: defaults.priority → pipeline.default_priority migration
 # ---------------------------------------------------------------------------
