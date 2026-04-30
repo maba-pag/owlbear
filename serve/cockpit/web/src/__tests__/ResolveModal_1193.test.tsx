@@ -1,0 +1,226 @@
+/**
+ * RED phase tests for #1193: P3-05 ResolveModal component
+ *
+ * Covers: markdown DR body rendering, 3-option response selector,
+ * optional notes textarea, POST submit payload assertion, modal close
+ * on success, error state on failure, and cancel-without-mutation guard.
+ *
+ * All tests are RED (failing) until the builder implements ResolveModal.tsx.
+ * Component interface: { dr: PendingDRWithBody | null; onClose: () => void; onResolved: () => void }
+ * API contract:  POST /api/decisions/{id}/resolve  body: { response, notes }
+ */
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, fireEvent, waitFor } from '@testing-library/react'
+import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
+import ResolveModal from '../components/ResolveModal'
+
+// ─── react-markdown mock ──────────────────────────────────────────────────────
+// Factory mock works before the real package is installed and prevents
+// JSDOM parse failures from complex markdown rendering.
+
+vi.mock('react-markdown', () => ({
+  default: ({ children }: { children: string }) => (
+    <div data-testid="markdown-body">{children}</div>
+  ),
+}))
+
+// ─── Fixtures ─────────────────────────────────────────────────────────────────
+// DR fixture includes `body` (full text), not `body_preview`, per builder guidance.
+
+interface PendingDRWithBody {
+  id: string
+  task_id: number
+  agent: string
+  request_type: string
+  created: string
+  title: string
+  body_preview: string
+  body: string
+}
+
+const DR_FIXTURE: PendingDRWithBody = {
+  id: '42-scope-question',
+  task_id: 42,
+  agent: 'builder',
+  request_type: 'decision',
+  created: '2026-04-30T14:30:00+02:00',
+  title: 'Scope question',
+  body_preview: 'Context: Should we include X?',
+  body: '## Context\n\nShould we include X?\n\n## Options\n\n1. Yes\n2. No',
+}
+
+// ─── Render helper ─────────────────────────────────────────────────────────────
+
+function renderModal(
+  dr: PendingDRWithBody | null = DR_FIXTURE,
+  onClose = vi.fn(),
+  onResolved = vi.fn(),
+) {
+  return render(
+    <PorscheDesignSystemProvider>
+      <ResolveModal dr={dr} onClose={onClose} onResolved={onResolved} />
+    </PorscheDesignSystemProvider>,
+  )
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('TestFromAC_ResolveModal', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.resetAllMocks()
+  })
+
+  // ─── AC1: Renders full DR body as markdown ────────────────────────────────
+
+  describe('AC1: renders full DR body as markdown', () => {
+    it('renders a markdown-body element containing the DR body text', () => {
+      const { container } = renderModal()
+      const el = container.querySelector('[data-testid="markdown-body"]')
+      expect(el).not.toBeNull()
+      expect(el?.textContent).toContain('Should we include X?')
+    })
+  })
+
+  // ─── AC2: Response selector offers approved, rejected, needs-info ─────────
+
+  describe('AC2: response selector offers approved, rejected, needs-info', () => {
+    it('renders a response-selector with all three resolution options visible', () => {
+      const { container } = renderModal()
+      const selector = container.querySelector('[data-testid="response-selector"]')
+      expect(selector).not.toBeNull()
+      const text = selector?.textContent?.toLowerCase() ?? ''
+      expect(text).toContain('approved')
+      expect(text).toContain('rejected')
+      expect(text).toContain('needs-info')
+    })
+  })
+
+  // ─── AC3: Optional notes textarea accepts freeform markdown ──────────────
+
+  describe('AC3: optional notes textarea accepts freeform markdown', () => {
+    it('renders an initially-empty notes textarea', () => {
+      const { container } = renderModal()
+      const notes = container.querySelector('[data-testid="resolve-notes"]') as HTMLTextAreaElement | null
+      expect(notes).not.toBeNull()
+      expect(notes?.value).toBe('')
+    })
+  })
+
+  // ─── AC4: Submit calls POST /api/decisions/{id}/resolve with payload ──────
+
+  describe('AC4: submit calls POST /api/decisions/{id}/resolve with response + notes', () => {
+    it('clicking submit sends POST to /api/decisions/{id}/resolve with response and notes in the body', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      const { container } = renderModal()
+
+      // Select a response option (radio button or select element)
+      const radio = container.querySelector(
+        '[data-testid="response-selector"] input[value="approved"]',
+      ) as HTMLInputElement | null
+      const selectEl = container.querySelector(
+        '[data-testid="response-selector"] select',
+      ) as HTMLSelectElement | null
+      if (radio) {
+        fireEvent.click(radio)
+      } else if (selectEl) {
+        fireEvent.change(selectEl, { target: { value: 'approved' } })
+      }
+
+      // Enter notes
+      const notes = container.querySelector('[data-testid="resolve-notes"]') as HTMLTextAreaElement | null
+      expect(notes).not.toBeNull()
+      fireEvent.change(notes!, { target: { value: 'Looks good to me.' } })
+
+      const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
+      expect(submitBtn).not.toBeNull()
+      fireEvent.click(submitBtn!)
+
+      await waitFor(
+        () => {
+          expect(fetchMock).toHaveBeenCalledWith(
+            expect.stringContaining('/api/decisions/42-scope-question/resolve'),
+            expect.objectContaining({ method: 'POST' }),
+          )
+          const [, opts] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+          const payload = JSON.parse(opts.body as string) as Record<string, unknown>
+          expect(payload).toHaveProperty('response')
+          expect(payload).toHaveProperty('notes', 'Looks good to me.')
+        },
+        { timeout: 500 },
+      )
+    })
+  })
+
+  // ─── AC5: Modal closes on successful submission ───────────────────────────
+
+  describe('AC5: modal closes on successful submission', () => {
+    it('calls onResolved and onClose after a successful POST', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) })),
+      )
+      const onClose = vi.fn()
+      const onResolved = vi.fn()
+      const { container } = renderModal(DR_FIXTURE, onClose, onResolved)
+
+      const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
+      expect(submitBtn).not.toBeNull()
+      fireEvent.click(submitBtn!)
+
+      await waitFor(
+        () => {
+          expect(onResolved).toHaveBeenCalledOnce()
+          expect(onClose).toHaveBeenCalledOnce()
+        },
+        { timeout: 500 },
+      )
+    })
+  })
+
+  // ─── AC6: Error state shown on failed submission ──────────────────────────
+
+  describe('AC6: error state shown on failed submission', () => {
+    it('renders a resolve-error element when the POST response is not ok', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }),
+        ),
+      )
+      const { container } = renderModal()
+
+      const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
+      expect(submitBtn).not.toBeNull()
+      fireEvent.click(submitBtn!)
+
+      await waitFor(
+        () => {
+          expect(container.querySelector('[data-testid="resolve-error"]')).not.toBeNull()
+        },
+        { timeout: 500 },
+      )
+    })
+  })
+
+  // ─── AC7: Cancel/close without submitting does not mutate ────────────────
+
+  describe('AC7: cancel/close without submitting does not mutate', () => {
+    it('clicking cancel calls onClose and does NOT call fetch', () => {
+      const fetchMock = vi.fn()
+      vi.stubGlobal('fetch', fetchMock)
+      const onClose = vi.fn()
+      const { container } = renderModal(DR_FIXTURE, onClose)
+
+      const cancelBtn = container.querySelector('[data-testid="resolve-cancel"]') as HTMLElement | null
+      expect(cancelBtn).not.toBeNull()
+      fireEvent.click(cancelBtn!)
+
+      expect(onClose).toHaveBeenCalledOnce()
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+  })
+})
