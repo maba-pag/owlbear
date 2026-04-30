@@ -301,6 +301,38 @@ class TestFromAC_PickTasksValidatesAgentMap:
         with pytest.raises(ConfigError):
             av.pick_tasks()
 
+    def test_pick_tasks_validates_before_list_tasks_is_called(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ordering proof: list_tasks is NOT called when agent_map validation fails.
+
+        If list_tasks is never invoked, the ConfigError must have been raised before
+        the filtering stage — a non-call proof of AC2's placement invariant.
+        """
+        kanban_dir = _make_board(tmp_path, _BASE_CONFIG_COMPLETE)
+        engine = KanbanEngine(kanban_dir)
+        av = engine.agent_view()
+
+        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        engine.refresh_config()
+
+        list_tasks_calls: list[tuple] = []
+        original_list_tasks = engine.list_tasks
+
+        def spy_list_tasks(*args: object, **kwargs: object) -> object:
+            list_tasks_calls.append((args, kwargs))
+            return original_list_tasks(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", spy_list_tasks)
+
+        with pytest.raises(ConfigError):
+            av.pick_tasks()
+
+        assert list_tasks_calls == [], (
+            "list_tasks must NOT be called when agent_map validation raises ConfigError "
+            f"(was called {len(list_tasks_calls)} time(s))"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestFromAC_CockpitInitWithEmptyAgentMap  (AC3)
@@ -394,3 +426,36 @@ class TestFromAC_McpPickTasksRaisesForIncompleteAgentMap:
         assert any(s in error_text for s in ("missing", "agent_map", "todo", "in-progress")), (
             f"ToolError message must reference missing agent_map entries; got: {error_text!r}"
         )
+
+    @pytest.mark.asyncio
+    async def test_mcp_pick_tasks_tool_error_message_names_all_missing_statuses(
+        self, tmp_path: Path
+    ) -> None:
+        """ToolError message must contain ALL four missing status names (exact AC4 contract).
+
+        Partial config has research + backlog in agent_map; todo, in-progress, review,
+        and done are absent.  Every absent status must appear in the propagated message.
+        """
+        from mcp.server.fastmcp.exceptions import ToolError
+
+        from owlbear_mcp_kanban.server import AppContext, pick_tasks
+
+        kanban_dir = _make_board(tmp_path, _BASE_CONFIG_COMPLETE)
+        engine = KanbanEngine(kanban_dir)
+
+        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8")
+        engine.refresh_config()
+
+        app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
+
+        ctx = MagicMock()
+        ctx.request_context.lifespan_context = app_ctx
+
+        with pytest.raises(ToolError) as exc_info:
+            await pick_tasks(ctx)
+        error_text = str(exc_info.value)
+        # All four absent statuses must be individually named in the propagated message
+        for missing_status in ("todo", "in-progress", "review", "done"):
+            assert missing_status in error_text, (
+                f"ToolError must name missing status {missing_status!r}; got: {error_text!r}"
+            )
