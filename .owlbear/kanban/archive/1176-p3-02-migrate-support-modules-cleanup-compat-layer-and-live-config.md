@@ -1,10 +1,10 @@
 ---
 id: 1176
 title: 'P3-02: Migrate support modules, cleanup compat layer, and live config'
-status: in-progress
+status: archived
 priority: nice-to-have
 created: 2026-04-29T07:36:12.009209+00:00
-updated: 2026-04-30T02:50:45.364486+00:00
+updated: 2026-04-30T03:49:11.961407+00:00
 tags:
 - scope:kanban
 - phase-3
@@ -424,3 +424,203 @@ Architecture Review (third re-pass): APPROVE. Added AC10 — delete `TestFromAC_
 - All AC lines are (td:0) — test-writer skipped (third re-pass).
 - Architecture Review verdict: AC10 added (delete `TestFromAC_ForwardingProperties` from `tests/test_config_schema_1171.py`); same Phase 3 supersession authority as AC9. All AC lines td:0.
 - Passing through to builder.
+[[2026-04-30]]
+## Builder Notes
+- Implementation: Removed stale class `TestFromAC_ForwardingProperties` from `tests/test_config_schema_1171.py` to align schema-suite contract with Phase 3 compat-layer removal authority (AC10).
+- Files changed:
+  - `tests/test_config_schema_1171.py`
+- Commit:
+  - `da453abd` — `test: remove stale forwarding schema tests (#1176, builder)`
+
+- Quality verification (quality-runner, scoped):
+  - Test files: `tests/test_config_schema_1171.py`, `tests/test_config_grouped_1172.py`, `tests/test_config_loader_1171.py`, `tests/test_support_migration_1175.py`, `tests/test_support_module_migration_1176.py`
+  - Result: 168 passed, 0 failed, 0 skipped
+  - Lint: ruff clean (no violations)
+  - Coverage modules: `owlbear_kanban.config_loader` 96%, `owlbear_kanban.models` 90%, `owlbear_kanban.corruption` 67%
+
+- Evidence summary:
+  - Remaining stale forwarding-property durable suite is now removed from schema tests.
+  - Combined 5-suite verification is GREEN with zero failures.
+  - AC10 satisfied and prior AC8 blocker resolved in scoped related-suite gate.
+
+- Post-task reflection:
+  - Problem faced: one sibling durable suite still encoded superseded forwarding-property behavior after earlier stale-test cleanup.
+  - Workaround applied: minimal deletion of only the stale schema forwarding class.
+  - Pattern discovered: phased compatibility removals require parity cleanup across parallel durable suites, not just one file.
+  - Quality gap: broad full-suite baseline remains noisy, so scoped related-suite verification is the reliable completion gate for this task.
+[[2026-04-30]]
+## Review Evidence
+### Test Results
+- quality-runner scoped related-suite verification: 168 passed, 0 failed, 0 skipped.
+- Per-file: tests/test_config_schema_1171.py 30 passed; tests/test_config_grouped_1172.py 32 passed; tests/test_config_loader_1171.py 28 passed; tests/test_support_migration_1175.py 44 passed; tests/test_support_module_migration_1176.py 34 passed.
+- This matches the latest Architecture Review re-pass gate for the task: the 5 related grouped-config / compat-removal suites must be green together.
+
+### Lint
+- Ruff clean across the reviewed test and source scope:
+  - tests/test_config_schema_1171.py
+  - tests/test_config_grouped_1172.py
+  - tests/test_config_loader_1171.py
+  - tests/test_support_migration_1175.py
+  - tests/test_support_module_migration_1176.py
+  - serve/kanban/src/owlbear_kanban/models.py
+  - serve/kanban/src/owlbear_kanban/corruption.py
+  - serve/kanban/src/owlbear_kanban/storage.py
+
+### Coverage
+- Skipped by design. Latest architect re-pass marks all AC lines td:0 and the latest builder delta is test-only stale-suite deletion, so this review gates on independent related-suite execution plus direct file inspection rather than coverage.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+- Test-writer skipped on the latest re-pass because all AC lines are td:0. Coverage below therefore uses existing durable suites plus direct file inspection.
+
+| AC Line | Mapped Test / Evidence | Would Fail If AC Violated? | Verdict |
+|---------|-------------------------|---------------------------|---------|
+| AC1 - corruption.py access sites use sub-model paths | tests/test_support_module_migration_1176.py:196 TestFromAC_CorruptionSubmodelMigration; serve/kanban/src/owlbear_kanban/corruption.py:54, :66, :613, :614, :702 show pipeline/paths helpers and call sites | Yes | COVERED |
+| AC2 - storage.py non-save_config access sites use sub-model paths | tests/test_support_module_migration_1176.py:436 TestFromAC_StorageSubmodelPaths; serve/kanban/src/owlbear_kanban/storage.py:415, :479, :480, :507, :523, :546, :547 use config.paths.* in non-save paths | Yes | COVERED |
+| AC3 - remaining test fixtures updated to grouped config format | Independent 5-suite run is green; grouped detection suites remain green in tests/test_config_schema_1171.py:310 and tests/test_config_loader_1171.py:283; grep for class TestFromAC_ForwardingProperties across tests now returns only tests/test_support_module_migration_1176.py:590 (the removal-proof class) | Yes | COVERED |
+| AC4 - live .owlbear/kanban/config.yml migrated to grouped format | tests/test_support_module_migration_1176.py:464 TestFromAC_LiveConfigFlatKeyCleanup; tests/test_support_migration_1175.py:796 TestFromAC_LiveConfigGroupedFormat; .owlbear/kanban/config.yml:1 and :18-29 are grouped | Yes | COVERED |
+| AC5 - terminal_status added to live config.yml | tests/test_support_migration_1175.py:883 TestFromAC_LiveConfigTerminalStatus; .owlbear/kanban/config.yml:23 contains terminal_status: done under pipeline | Yes | COVERED |
+| AC6 - forwarding properties removed from BoardConfig | tests/test_support_migration_1175.py:673 TestFromAC_CompatLayerRemoval; tests/test_support_module_migration_1176.py:590 TestFromAC_ForwardingPropertiesRemoved; serve/kanban/src/owlbear_kanban/models.py has no tasks_dir/archive_dir/etc forwarding property definitions | Yes | COVERED |
+| AC7 - extra='allow' strategy documented | serve/kanban/src/owlbear_kanban/models.py:194 documents unknown/vendor field preservation; :197 sets ConfigDict(extra="allow") | Yes | COVERED |
+| AC8 - all tests pass | quality-runner independent related-suite run: 168 passed, 0 failed, 0 skipped | Yes | COVERED |
+| AC9 - stale forwarding tests deleted from tests/test_config_loader_1171.py | tests/test_config_loader_1171.py:397 starts AC7 and :401 starts TestFromAC_DefaultsPriorityMigration immediately after AC6, with no TestFromAC_ForwardingProperties class remaining | Yes | COVERED |
+| AC10 - stale forwarding tests deleted from tests/test_config_schema_1171.py | tests/test_config_schema_1171.py:367 starts AC7 and :371 starts TestFromAC_DefaultsPriorityMigration immediately after AC6, with no TestFromAC_ForwardingProperties class remaining | Yes | COVERED |
+
+#### Security Review
+- No hardcoded secrets, injection sinks, path traversal regressions, unsafe deserialization, or new dependency risk found in the reviewed scope.
+- Current builder delta is test-only cleanup; direct reads of corruption.py, storage.py, models.py, and live config showed no new boundary changes.
+
+#### Test Integrity
+- The builder deleted a TestFromAC class in tests/test_config_schema_1171.py, but that deletion was explicitly authorized by the latest Architecture Review re-pass AC10 in the task body.
+- No surviving stale grouped-forwarding TestFromAC class remains. A grep across tests for class TestFromAC_ForwardingProperties returned only tests/test_support_module_migration_1176.py:590, which is the removal-proof suite rather than the superseded forwarding contract.
+- No weakening of surviving task-owned TestFromAC assertions found.
+
+#### Test Quality
+- STRONG. Grouped, flat, and legacy detection remain separated cleanly:
+  - tests/test_config_schema_1171.py:313 and tests/test_config_loader_1171.py:286 prove grouped parsing.
+  - tests/test_config_schema_1171.py:329-340 and tests/test_config_loader_1171.py:299-310 still use config.tasks_dir/config.archive_dir only for flat and legacy inputs, which is the correct surviving contract.
+  - Compat-removal proofs remain direct and specific in tests/test_support_migration_1175.py:673 and tests/test_support_module_migration_1176.py:590.
+
+#### Data Safety
+- No data safety issues found.
+
+#### Implementation-Aware Gaps
+- None in the current review scope. The prior false-green vectors were the stale forwarding-property classes in the durable loader/schema suites; both are now removed and the architect-authorised related-suite gate passes independently.
+
+#### Necessity Check
+- Skipped. No new dependencies or external integrations.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections this cycle | 1 |
+| Approach variation | N/A |
+| Assessment | CLEAN |
+
+### Pass 2 - INFORMATIONAL
+- serve/kanban/src/owlbear_kanban/models.py:181-205 still reflects the grouped/flat/legacy normalization contract and documents extra='allow'.
+- .owlbear/kanban/config.yml:1-29 remains in grouped shape with nested paths/pipeline/agents/policy sections and explicit terminal_status.
+- Editor diagnostics reported no errors in the 8 reviewed files.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| corruption.py access sites use sub-model paths | corruption.py:54, :66, :613, :614, :702 show pipeline/paths-based reads; independent suite stayed green | TestFromAC_CorruptionSubmodelMigration | PASS |
+| storage.py access sites (non-save_config) use sub-model paths | storage.py:415, :479, :480, :507, :523, :546, :547 use config.paths.* in non-save functions | TestFromAC_StorageSubmodelPaths | PASS |
+| remaining test fixtures updated to grouped config format | 5 related suites green; no stale grouped-forwarding TestFromAC class remains in tests | Combined related-suite gate plus grep verification | PASS |
+| live .owlbear/kanban/config.yml migrated to grouped format | config.yml:1-29 is grouped and flat-key cleanup suite is green | TestFromAC_LiveConfigFlatKeyCleanup and TestFromAC_LiveConfigGroupedFormat | PASS |
+| terminal_status added to live config.yml | config.yml:23 contains terminal_status: done | TestFromAC_LiveConfigTerminalStatus | PASS |
+| forwarding properties removed from BoardConfig | Compat-removal suite green; models.py has no forwarding property definitions for the removed flat accessors | TestFromAC_CompatLayerRemoval and TestFromAC_ForwardingPropertiesRemoved | PASS |
+| extra='allow' strategy documented | models.py:194 and :197 document and configure extra='allow' | Direct source inspection | PASS |
+| all tests pass | quality-runner independent run: 168 passed, 0 failed, 0 skipped | Combined related-suite gate | PASS |
+| stale forwarding tests deleted from tests/test_config_loader_1171.py | AC7 starts at tests/test_config_loader_1171.py:397 and TestFromAC_DefaultsPriorityMigration starts at :401, leaving no forwarding class in AC6 | Direct file inspection | PASS |
+| stale forwarding tests deleted from tests/test_config_schema_1171.py | AC7 starts at tests/test_config_schema_1171.py:367 and TestFromAC_DefaultsPriorityMigration starts at :371, leaving no forwarding class in AC6 | Direct file inspection | PASS |
+
+### Deductions
+- -0.03 reviewer did not run full-repo pytest because the task body's latest Architecture Review explicitly narrowed completion proof to the 5 related suites and the global baseline is known noisy/unrelated.
+- -0.01 code-reader and coverage were skipped by design because all AC lines are td:0 and the latest builder delta is test-only.
+- Total confidence: 0.96
+
+### Verdict
+- PASS to docs
+- Reason: independent execution of the architect-defined related-suite gate is fully green, the final stale forwarding-property durable class is gone, and direct source/config inspection confirms the previously-reviewed migration state still holds.
+
+### Post-task Reflection
+- Parallel durable suites were the only real remaining false-green risk; checking both loader and schema siblings closed it.
+- The architect re-pass provided enough authority to treat the 5 related suites as the binding completion gate despite unrelated broader suite noise.
+- For td:0 stale-test cleanup, independent suite execution plus direct file inspection is sufficient evidence; deeper fan-out would be redundant.
+[[2026-04-30]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | kanban README has no references to forwarding properties, tasks_dir, archive_dir, or sub-model paths — no prose docs affected by the internal config access change |
+| 2 | Module docstrings | Yes | Verified | corruption.py module docstring accurate; _configured_statuses/_configured_priorities helpers have accurate docstrings; public API unchanged |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | No | N/A | No research phase for this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | kanban.excalidraw (describes serve/kanban/src/**, .owlbear/kanban/**), mcp-topology.excalidraw (describes serve/kanban/src/**), project-overview.excalidraw (describes .owlbear/**) — all three footers updated to 2026-04-30 (42a098d3) |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested |
+| 7 | Deletion detection | No | N/A | Deleted items were test classes in non-IN-scope test files; no IN-scope descriptive docs reference them |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/kanban/src/owlbear_kanban/corruption.py | IN (docstrings) | Verified — docstrings accurate |
+| tests/test_config_loader_1171.py | OUT | N/A |
+| tests/test_config_schema_1171.py | OUT | N/A |
+| .owlbear/kanban/config.yml | OUT (data file) | N/A |
+| share/diagrams/kanban.excalidraw | IN | Footer updated |
+| share/diagrams/mcp-topology.excalidraw | IN | Footer updated |
+| share/diagrams/project-overview.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/kanban.excalidraw (footer: 2026-04-30 (42a098d3))
+- share/diagrams/mcp-topology.excalidraw (footer: 2026-04-30 (42a098d3))
+- share/diagrams/project-overview.excalidraw (footer: 2026-04-30 (42a098d3))
+- Commit: ce28f9bf — docs: update diagram footers for config sub-model migration (#1176, doc-writer)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: 8 corruption.py access sites use sub-model paths | corruption.py:54, :66, :613, :614, :702 show pipeline/paths helpers; task-owned suite green | PASS |
+| AC2: 9 storage.py non-save_config sites use sub-model paths | storage.py:415, :479, :480, :507, :523, :546, :547 use config.paths.*; suite green | PASS |
+| AC3: Remaining test fixtures updated to grouped config format | 5 related suites green (168/0); no stale forwarding TestFromAC class remains (grep confirmed) | PASS |
+| AC4: Live config.yml migrated to grouped format | .owlbear/kanban/config.yml:1 schema: grouped; flat-key cleanup suite green | PASS |
+| AC5: terminal_status added to live config | config.yml:23 contains terminal_status: done under pipeline | PASS |
+| AC6: Forwarding properties removed from BoardConfig | tests/test_support_migration_1175.py:673 compat-removal suite green; models.py has no forwarding defs | PASS |
+| AC7: extra='allow' strategy documented | models.py:194 docstring + :197 ConfigDict(extra="allow") | PASS |
+| AC8: All tests pass | quality-runner scoped 5-suite gate: 168 passed, 0 failed; full-suite 65 failures all pre-existing (verified test_engine_init_1068 fails at current HEAD, _make_yaml removal predates fa59a45c) | PASS |
+| AC9: Stale forwarding tests deleted from test_config_loader_1171.py | Direct inspection: AC6 at line 392, AC7 at :397, no ForwardingProperties class | PASS |
+| AC10: Stale forwarding tests deleted from test_config_schema_1171.py | Direct inspection: AC7 at line 367, TestFromAC_DefaultsPriorityMigration at :371, no ForwardingProperties class | PASS |
+
+### Test Results
+- Full suite (quality-runner mode=full): 3264 passed, 65 failed, 4 skipped
+- 65 failures verified pre-existing/unrelated (test_engine_init_1068 AttributeError on entry_status/terminal_status/archival_reasons predates task; test_corruption.py _make_yaml removed before fa59a45c; others in mcp-knowledge, orchestrator, cockpit-react-compiler domains)
+- Scoped 5-suite gate: 168 passed, 0 failed
+- Lint: 4 ruff violations in unrelated packages (knowledge, mcp-knowledge, mcp-memory, orchestrator)
+
+### Commit Verification
+| Commit | Type | Files |
+|--------|------|-------|
+| fa59a45c | feat | serve/kanban/src/owlbear_kanban/corruption.py |
+| 7139d70d | test | tests/test_config_loader_1171.py |
+| da453abd | test | tests/test_config_schema_1171.py |
+| ce28f9bf | docs | share/diagrams/kanban.excalidraw, mcp-topology.excalidraw, project-overview.excalidraw |
+
+### Architect Quality: 3/5
+Original AC adequate but "All tests pass" without scope definition caused 3 review cycles. Re-passes were responsive and correct, adding AC9/AC10 explicitly. The vague AC8 forced churn that better upfront scoping would have avoided.
+
+### Deduction Breakdown
+- AC quality score 3 (<=3): -0.03
+- No other deductions (all AC lines have specific evidence; full-suite failures pre-existing; reviewer evidence thorough)
+
+### Confidence: 0.97
+### Action: archive
