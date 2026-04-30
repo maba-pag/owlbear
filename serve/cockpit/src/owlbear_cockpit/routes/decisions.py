@@ -125,6 +125,7 @@ def list_pending_decisions(decisions_dir: _DecisionsDir) -> dict[str, object]:
                 "request_type": meta.get("request_type", ""),
                 "created": meta.get("created", ""),
                 "title": _extract_title(body, path.stem),
+                "body": body.strip(),
                 "body_preview": preview,
             }
         )

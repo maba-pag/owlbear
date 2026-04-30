@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router'
 import KanbanBoard from './KanbanBoard'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
+import ResolveModal from './components/ResolveModal'
 import { usePendingDRs } from './hooks/usePendingDRs'
 import { usePolling } from './hooks/usePolling'
 import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
@@ -14,11 +15,12 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 
 function Shell() {
   const { health } = usePolling('/health')
-  const { count: pendingDRCount, items: pendingDRItems } = usePendingDRs()
+  const { count: pendingDRCount, items: pendingDRItems, refetch: refetchPendingDRs } = usePendingDRs()
   const { items: scanItems, isLoading, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
-  const [, setSelectedDRId] = useState<string | null>(null)
+  const [selectedDRId, setSelectedDRId] = useState<string | null>(null)
+  const selectedDR = pendingDRItems.find((item) => item.id === selectedDRId) ?? null
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
@@ -81,6 +83,16 @@ function Shell() {
           </p-tabs-item>
         </p-tabs>
       </aside>
+      {selectedDR ? (
+        <ResolveModal
+          dr={selectedDR}
+          onClose={() => setSelectedDRId(null)}
+          onResolved={() => {
+            void refetchPendingDRs()
+            setSelectedDRId(null)
+          }}
+        />
+      ) : null}
       <div className="shell__contextual" data-region="contextual" />
     </div>
   )

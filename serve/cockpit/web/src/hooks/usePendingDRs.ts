@@ -9,6 +9,7 @@ export interface PendingDR {
   request_type: string
   created: string
   title: string
+  body: string
   body_preview: string
 }
 
@@ -21,6 +22,7 @@ export interface UsePendingDRsResult {
   items: PendingDR[]
   isLoading: boolean
   error: Error | null
+  refetch: () => Promise<void>
 }
 
 interface PendingDRResponse {
@@ -98,5 +100,6 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
     items,
     isLoading,
     error,
+    refetch: poll,
   }
 }

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
 
@@ -47,7 +49,9 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
   return (
     <div data-testid="resolve-modal" role="dialog" aria-label="Resolve decision request">
       <h3>{dr.title}</h3>
-      <ReactMarkdown>{dr.body}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+        {dr.body}
+      </ReactMarkdown>
 
       <fieldset data-testid="response-selector">
         <legend>Response</legend>
