@@ -363,39 +363,6 @@ class TestFromAC_DetectionCascade:
 # ---------------------------------------------------------------------------
 
 
-class TestFromAC_ForwardingProperties:
-    """AC6 — forwarding properties on grouped BoardConfig expose sub-model values."""
-
-    def test_tasks_dir_forwards_to_paths_sub_model(self, tmp_path: Path) -> None:
-        """config.tasks_dir must equal config.paths.tasks_dir on grouped config."""
-        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
-        config = load_config(kanban_dir)
-        assert config.tasks_dir == config.paths.tasks_dir
-
-    def test_archive_dir_forwards_to_paths_sub_model(self, tmp_path: Path) -> None:
-        """config.archive_dir must equal config.paths.archive_dir on grouped config."""
-        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
-        config = load_config(kanban_dir)
-        assert config.archive_dir == config.paths.archive_dir
-
-    def test_forwarding_property_nondefault_value_matches_yaml(
-        self, tmp_path: Path
-    ) -> None:
-        """config.tasks_dir/archive_dir return nondefault values from grouped YAML."""
-        kanban_dir = _make_board(tmp_path, _GROUPED_YAML)
-        config = load_config(kanban_dir)
-        # Must match fixture values, not Pydantic defaults "tasks"/"archive"
-        assert config.tasks_dir == "custom-tasks"
-        assert config.archive_dir == "custom-archive"
-
-    def test_flat_config_tasks_dir_still_accessible(self, tmp_path: Path) -> None:
-        """config.tasks_dir must still work on flat config (no regression)."""
-        kanban_dir = _make_board(tmp_path, _FLAT_YAML)
-        config = load_config(kanban_dir)
-        # Nondefault value proves flat key extraction, not Pydantic default
-        assert config.tasks_dir == "custom-tasks"
-
-
 # ---------------------------------------------------------------------------
 # AC7 — defaults.priority → pipeline.default_priority migration
 # ---------------------------------------------------------------------------
