@@ -93,7 +93,7 @@ Mutation and lifecycle responses include `guidance: list[str]`.
 | `end_work(outcome="success")` | Always (commit-pushed reminder) |
 | `move_task` to a status > 1 slot ahead | Forward-skip warning |
 
-**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the scribe agent).
+**Agent obligation:** If `guidance` is non-empty, read it before proceeding — it may require an immediate follow-up action (e.g., create a Decision Request via the create_dr tool).
 
 ### `block:user` Tag Exemption
 
