@@ -222,6 +222,22 @@ class TestFromAC_GetPendingParsing:
         assert payload["count"] == 3
         assert len(payload["items"]) == 3
 
+    def test_exact_metadata_values_are_forwarded(
+        self, client: TestClient, decisions_dir: Path
+    ) -> None:
+        """Returned item fields match exact frontmatter values, not just key presence."""
+        # _write_dr writes task_id=10, agent="builder", request_type="scope-decision", created="2026-04-30"
+        _write_dr(decisions_dir, stem="10-metadata-exact", task_id=10, body="Need direction.")
+
+        response = client.get("/api/decisions/pending")
+
+        assert response.status_code == 200
+        item = response.json()["items"][0]
+        assert item["task_id"] == 10
+        assert item["agent"] == "builder"
+        assert item["request_type"] == "scope-decision"
+        assert item["created"] == "2026-04-30"
+
 
 class TestFromAC_GetPendingFilter:
     """AC: Only includes items where frontmatter response == "pending" (td:1)."""
@@ -246,6 +262,21 @@ class TestFromAC_GetPendingFilter:
         # Only the item with response == "pending" appears
         assert payload["count"] == 1
         assert payload["items"][0]["id"] == "31-still-pending"
+
+    def test_dr_with_no_response_field_is_excluded(
+        self, client: TestClient, decisions_dir: Path
+    ) -> None:
+        """A DR file with no response field in frontmatter is excluded from pending list."""
+        path = decisions_dir / "pending" / "no-response-field.md"
+        path.write_text(
+            "---\ntask_id: 99\nagent: builder\nrequest_type: scope-decision\ncreated: '2026-04-30'\n---\n\n# No response field\n\nBody text.\n",
+            encoding="utf-8",
+        )
+
+        response = client.get("/api/decisions/pending")
+
+        assert response.status_code == 200
+        assert response.json()["count"] == 0
 
 
 class TestFromAC_GetPendingShape:
@@ -490,6 +521,23 @@ class TestFromAC_PostResolvePersistence:
 
         content = (decisions_dir / "pending" / "83-body-preserved.md").read_text(encoding="utf-8")
         assert unique_marker in content
+
+    def test_response_section_appended_after_original_body(
+        self, client: TestClient, decisions_dir: Path
+    ) -> None:
+        """## Response section appears after original body, not before it."""
+        body_marker = "ORIGINAL-BODY-MARKER-84"
+        _write_dr(decisions_dir, stem="84-ordering-check", task_id=84, body=body_marker)
+
+        client.post(
+            "/api/decisions/84-ordering-check/resolve",
+            json={"response": "approved", "notes": "Ordering check."},
+        )
+
+        content = (decisions_dir / "pending" / "84-ordering-check.md").read_text(encoding="utf-8")
+        assert body_marker in content
+        assert "## Response" in content
+        assert content.index(body_marker) < content.index("## Response")
 
 
 class TestFromAC_PostResolveNotFound:
