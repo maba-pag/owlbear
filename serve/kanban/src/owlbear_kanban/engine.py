@@ -25,6 +25,7 @@ Architecture:
 from __future__ import annotations
 
 import contextlib
+import importlib
 import json
 import os
 import random
@@ -2318,6 +2319,10 @@ class AgentView:
                 code="ERR_INVALID_WAVE_PARAM",
                 user_message="wave_size must be >= 1",
             )
+
+        with contextlib.suppress(Exception):
+            decisions = importlib.import_module("owlbear_kanban.decisions")
+            decisions.resolve_pending_drs(self.engine)
 
         active = self.engine.list_tasks(
             archived=False,
