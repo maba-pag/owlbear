@@ -10,6 +10,7 @@ KANBAN_ERROR_CODES: frozenset[str] = frozenset(
         "ERR_BODY_EXCLUSIVE",
         "ERR_IDS_EXCLUSIVE",
         "ERR_SECTION_EMPTY",
+        "ERR_INVALID_TITLE",
         "ERR_INVALID_STATUS",
         "ERR_CONFLICT_STATUS",
         "ERR_INVALID_PRIORITY",

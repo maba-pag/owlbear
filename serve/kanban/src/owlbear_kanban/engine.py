@@ -2479,7 +2479,7 @@ class AgentView:
             a ``guidance`` warning when ``body`` exceeds 100 KB.
 
         Raises:
-            :class:`ValidationError`: title is empty (``ERR_INVALID_STATUS``),
+            :class:`ValidationError`: title is empty (``ERR_INVALID_TITLE``),
                 body exceeds 500 KB (``ERR_BODY_TOO_LARGE``),
                 parent not found (``ERR_PARENT_NOT_FOUND``),
                 a dependency not found (``ERR_DEP_NOT_FOUND``), or
@@ -2487,7 +2487,7 @@ class AgentView:
         """
         if not title.strip():
             raise ValidationError(
-                code="ERR_INVALID_STATUS",
+                code="ERR_INVALID_TITLE",
                 user_message="title must not be empty",
             )
         self._validate_body_size(body)
