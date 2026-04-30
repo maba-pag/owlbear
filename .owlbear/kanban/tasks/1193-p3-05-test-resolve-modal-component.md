@@ -1,10 +1,10 @@
 ---
 id: 1193
 title: 'P3-05: Test resolve modal component'
-status: review
+status: done
 priority: needed
 created: 2026-04-30T00:52:25.642042+00:00
-updated: 2026-04-30T02:58:40.134373+00:00
+updated: 2026-04-30T04:06:28.865677+00:00
 tags:
 - phase-3
 - scope:cockpit-fe
@@ -13,8 +13,8 @@ parent: 1179
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: dim-stream
-claimed_at: 2026-04-30T02:58:40.134373+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -271,3 +271,272 @@ Re-review after reviewer rejection. Root cause: `type:test` tag triggered non-im
 - Workaround applied: implemented only the task-scoped component contract with required `data-testid` hooks to unblock and satisfy existing TestFromAC coverage.
 - Pattern discovered: task mirrors existing cockpit test conventions (mocked `react-markdown` + fetch assertion + callback verification) and can be implemented with a focused, single-file UI component.
 - Quality gap observed: none blocking for this task after scoped quality-runner verification (tests green, lint clean, coverage >90%).
+[[2026-04-30]]
+## Review Evidence
+### Scope
+- Builder commit hash: none recorded in task body. Changed-file scope reconstructed from the live task-owned files: `serve/cockpit/web/src/components/ResolveModal.tsx` and `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`.
+- Prior `## Review Evidence` sections before this pass: 1 (`.owlbear/kanban/tasks/1193-p3-05-test-resolve-modal-component.md:119`). This is the second review verdict for the task, so a FAIL routes to `backlog` per loop-breaker policy.
+
+### Test Results
+- quality-runner (scoped): 7 passed, 0 failed.
+
+### Lint
+- quality-runner (scoped ESLint on component + task test file): clean.
+
+### Coverage
+- `ResolveModal.tsx`: 92.4% statements, 96.49% branch, 97.77% lines.
+- Uncovered branch: `serve/cockpit/web/src/components/ResolveModal.tsx:39` (`catch` path sets error on thrown fetch failure).
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| Test ResolveModal renders full DR body as markdown | `ResolveModal_1193.test.tsx:77-81` | No. The assertion only checks `toContain('Should we include X?')` at line 81, but the fixture `body_preview` at line 48 already contains that same substring. A component rendering preview/truncated text instead of full body would still pass. | LAX |
+| Test response selector offers: approved, rejected, needs-info | `ResolveModal_1193.test.tsx:88-95` | Yes. Missing option labels would fail. | COVERED |
+| Test optional notes textarea accepts freeform markdown | `ResolveModal_1193.test.tsx:102-106` plus `:136` and `:151` | Yes. The suite proves the textarea exists, accepts input, and forwards notes into the POST body. | COVERED |
+| Test submit calls `POST /api/decisions/{id}/resolve` with selected response + notes | `ResolveModal_1193.test.tsx:113-151` | No. The test only selects `approved` (`:122` / `:130`), which matches the component's default state at `ResolveModal.tsx:17`, and it only asserts that `payload.response` exists at line 150, not that it equals the selected value. A component hardcoding `approved` or ignoring non-default selection would still pass. | LAX |
+| Test modal closes on successful submission | `ResolveModal_1193.test.tsx:161-177` | Yes. Callback assertions would fail if success did not close. | COVERED |
+| Test error state shown on failed submission | `ResolveModal_1193.test.tsx:187-202` | Yes for the non-OK HTTP failure path at `ResolveModal.tsx:32-33`. | COVERED |
+| Test cancel/close without submitting does not mutate | `ResolveModal_1193.test.tsx:212-223` | Yes. The test proves close occurs and `fetch` is not called. | COVERED |
+
+#### Security Review
+- No issues found in `ResolveModal.tsx`. No new dependencies, no secret handling, no unsafe eval/deserialization, and the network call is a same-origin relative POST to `/api/decisions/${dr.id}/resolve`.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| Task-body test map in `.owlbear/kanban/tasks/1193-p3-05-test-resolve-modal-component.md:235-252` | Live `TestFromAC_ResolveModal` still contains the same seven AC-mapped tests and test intent. No weakened or removed `TestFromAC_*` cases were observed. | PRESERVED |
+
+#### Test Quality
+- FAIL: assertion specificity is WEAK.
+- AC1 is false-green: `ResolveModal_1193.test.tsx:81` does not distinguish full `dr.body` from the fixture preview at `:48`, even though the component contract requires full body rendering.
+- AC4 is false-green: `ResolveModal_1193.test.tsx:150` asserts only presence of the `response` field, while the interaction uses only the default `approved` selection (`:122` / `:130`). This does not prove that the selected response value is transmitted.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gap Analysis
+- Additional proof gap: coverage left `ResolveModal.tsx:39` uncovered, so the thrown-fetch branch is not exercised. Current failure-state coverage only proves the `!res.ok` path, not network rejection.
+
+#### Necessity Check
+- N/A. No new dependency or external tool capability introduced.
+
+#### Builder Process Quality
+- FRICTION, not LOOP: there are two `## Builder Notes` sections in the task body (`.owlbear/kanban/tasks/1193-p3-05-test-resolve-modal-component.md:115` and `:262`), and the approach changed after the earlier reviewer rejection. However, because there is already one prior `## Review Evidence` section, this new FAIL is the second review failure and therefore routes to `backlog`.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| Test ResolveModal renders full DR body as markdown | Component renders `dr.body` at `ResolveModal.tsx:50`, but the task-owned proof only checks substring containment at `ResolveModal_1193.test.tsx:81`; fixture overlap at `:48-49` means preview/truncated rendering would still pass. | `ResolveModal_1193.test.tsx:77-81` | FAIL |
+| Test response selector offers: approved, rejected, needs-info | Selector test asserts all three labels at `ResolveModal_1193.test.tsx:93-95`; component exposes the three options at `ResolveModal.tsx:52`, `:58`, `:68`, `:78`. | `ResolveModal_1193.test.tsx:88-95` | PASS |
+| Test optional notes textarea accepts freeform markdown | Test proves textarea presence (`ResolveModal_1193.test.tsx:102-106`), accepts input (`:136`), and forwards the note string into the request payload (`:151`); component updates state at `ResolveModal.tsx:87-89`. | `ResolveModal_1193.test.tsx:102-106`, `:136`, `:151` | PASS |
+| Test submit calls `POST /api/decisions/{id}/resolve` with selected response + notes | Test proves URL/method at `ResolveModal_1193.test.tsx:144-146` and notes forwarding at `:151`, but it never proves that the selected response value is sent exactly; only `payload.response` presence is checked at `:150`, while component default state is already `approved` at `ResolveModal.tsx:17`. | `ResolveModal_1193.test.tsx:113-151` | FAIL |
+| Test modal closes on successful submission | Success test asserts `onResolved` and `onClose` exactly once at `ResolveModal_1193.test.tsx:176-177`; component calls them on success at `ResolveModal.tsx:36-37`. | `ResolveModal_1193.test.tsx:161-177` | PASS |
+| Test error state shown on failed submission | Failure test asserts `resolve-error` renders at `ResolveModal_1193.test.tsx:202`; component sets error on `!res.ok` at `ResolveModal.tsx:32-33`. | `ResolveModal_1193.test.tsx:187-202` | PASS |
+| Test cancel/close without submitting does not mutate | Cancel test proves `onClose` fires and `fetch` is not called at `ResolveModal_1193.test.tsx:222-223`; component cancel button calls `onClose` at `ResolveModal.tsx:100`. | `ResolveModal_1193.test.tsx:212-223` | PASS |
+
+### Deductions
+- -0.20 AC1 false-green: full-body proof is not discriminating.
+- -0.20 AC4 false-green: selected-response proof is missing.
+- -0.05 builder commit hash missing; scope had to be reconstructed from task body and live files.
+- -0.05 thrown-fetch error path remains uncovered.
+
+### Verdict
+- FAIL — confidence 0.60 (< 0.90).
+
+### Action
+- Rejected to `backlog`.
+- Required follow-up:
+  1. Strengthen AC1 proof so the test distinguishes full `dr.body` from `body_preview` or other truncated text.
+  2. Strengthen AC4 proof by selecting a non-default response (`rejected` or `needs-info`) and asserting exact `payload.response` equality.
+  3. Add a thrown-fetch failure test for `ResolveModal.tsx:39`, or explicitly narrow AC6 if network exceptions are intentionally out of scope.
+[[2026-04-30]]
+
+## Architecture Review (3rd pass — test-strengthening)
+
+### Problem
+Reviewer rejected at confidence 0.60 due to two false-green tests and one coverage gap:
+1. **AC1**: `toContain('Should we include X?')` matches both `body` AND `body_preview` fixture fields. Not discriminating.
+2. **AC4**: Selects `approved` (which is the default state at `ResolveModal.tsx:17`), then only asserts `toHaveProperty('response')` without checking the value. Hardcoded default would pass.
+3. **Minor**: `catch` branch at `ResolveModal.tsx:39` (thrown fetch) uncovered.
+
+### Fix Specification (Builder)
+Three surgical test edits in `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`:
+
+**Fix 1 — AC1 (line ~81):** Change assertion to check for content unique to `body` that does NOT appear in `body_preview`. The fixture has `body: '## Context\n\nShould we include X?\n\n## Options\n\n1. Yes\n2. No'` and `body_preview: 'Context: Should we include X?'`. Assert `toContain('## Options')` or `toContain('1. Yes')` — text present only in full body.
+
+**Fix 2 — AC4 (lines ~122-150):** Select a NON-default response (`rejected` or `needs-info`) and assert exact payload value: `expect(payload.response).toBe('rejected')`. This proves the component transmits the selected value, not a hardcoded default.
+
+**Fix 3 — AC6 addition:** Add a second test case in the AC6 describe block that stubs `fetch` to throw (network error), then asserts `resolve-error` renders. This covers the `catch` branch at `ResolveModal.tsx:39`.
+
+### AC Assessment (Unchanged)
+All AC lines remain td:1. No AC text changes needed — the criteria are correct, only the test assertions need strengthening.
+
+### Challenge Results
+- Challenger: SKIPPED — fixes are mechanical test-assertion tightening, no architectural decision involved.
+
+### Verdict: APPROVE (re-approve after reviewer rejection)
+### Action Taken: Provided 3 surgical fix specs for the builder. No AC text changes — criteria are sound. Test weaknesses are assertion-level, not design-level. Advancing to todo.
+
+[[2026-04-30]]
+3rd architecture pass — reviewer rejection was due to 2 false-green test assertions + 1 coverage gap. Provided 3 surgical fix specs: (1) AC1: assert content unique to full body (not in body_preview), (2) AC4: select non-default response + assert exact payload value, (3) AC6: add thrown-fetch test for catch branch. No AC text or architectural changes needed. Re-approved to todo.
+[[2026-04-30]]
+## Test-Writer Notes (Retry 3 — test-strengthening)
+
+### Changes Made
+Three surgical test fixes in `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`:
+
+**Fix 1 — AC1 assertion (false-green):**
+- Old: `toContain('Should we include X?')` — matches both `body` AND `body_preview` fixture fields
+- New: `toContain('## Options')` + `toContain('1. Yes')` — content unique to full `body` only
+
+**Fix 2 — AC4 assertion (false-green):**
+- Old: selects default `approved` radio, asserts only `toHaveProperty('response')`
+- New: selects `rejected` (non-default), asserts `payload.response === 'rejected'` — proves the selected value is transmitted, not a hardcoded default
+
+**Fix 3 — AC6 missing test (catch branch coverage):**
+- Added: `renders a resolve-error element when fetch throws a network error (catch branch)`
+- Stubs `fetch` to `Promise.reject(new Error('Network error'))`, asserts `resolve-error` appears
+- Covers `ResolveModal.tsx:39` catch branch
+
+### AC Coverage
+| AC Line | Test | Status |
+|---------|------|--------|
+| Renders full DR body as markdown | AC1: full-body discriminating assertion | COVERED |
+| Response selector: approved/rejected/needs-info | AC2: all three labels visible | COVERED |
+| Optional notes textarea | AC3: initially-empty textarea | COVERED |
+| Submit calls POST with response + notes | AC4: exact response value `rejected` asserted | COVERED |
+| Modal closes on success | AC5: onResolved + onClose called once | COVERED |
+| Error state on failed submission | AC6a: network throw → resolve-error; AC6b: non-ok → resolve-error | COVERED |
+| Cancel without mutating | AC7: onClose fires, fetch not called | COVERED |
+
+### Test Results
+- 8 tests passed (was 7 before Fix 3), 0 failed
+- ESLint: clean
+- Implementation already handles all cases → Direct-to-Review Advance per Step 1b.1 (no builder work needed)
+[[2026-04-30]]
+## Builder Notes
+- Implementation: no additional source edits were required in this builder cycle; existing `ResolveModal` implementation already satisfied the strengthened TestFromAC suite.
+- Tests: quality-runner scoped run reports 8 passed, 0 failed for `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`.
+- Coverage: `ResolveModal.tsx` at 94.93% statements, 96.49% branches, 71.42% functions, 100% lines.
+- Lint: clean (scoped ESLint on `serve/cockpit/web/src/components/ResolveModal.tsx` and `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`).
+- Approach: validated latest test-writer retry evidence and re-ran scoped quality gates; with no implementation gaps remaining, advanced to review.
+
+### Reflection
+- Problem faced: task had multiple prior passes and rejections, so this cycle required confirmation rather than new implementation.
+- Workaround applied: used scoped quality-runner verification to re-establish executable evidence on the exact task-owned files.
+- Pattern discovered: test-strengthening retries can satisfy acceptance criteria without further builder code changes when implementation is already compliant.
+- Quality gap observed: none blocking in current scope (tests green, lint clean, coverage above gate).
+[[2026-04-30]]
+## Review Evidence
+### Scope
+- Task status on entry: `review`; this pass follows two earlier reviewer sections in `.owlbear/kanban/tasks/1193-p3-05-test-resolve-modal-component.md` at lines 119 and 275.
+- Latest builder cycle recorded no commit hash, so changed-file scope was reconstructed from the live task-owned files:
+  - `serve/cockpit/web/src/components/ResolveModal.tsx`
+  - `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`
+- Max AC depth is `td:1`, so review used the required `quality-runner` scoped test/lint/coverage gate. `code-reader` was skipped per protocol.
+
+### Test Results
+- quality-runner (scoped): 8 passed, 0 failed, 0 skipped.
+- Executed suite: `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx`
+
+### Lint
+- quality-runner (scoped ESLint on component + task test file): clean.
+
+### Coverage
+- `ResolveModal.tsx`: 94.93% statements, 96.49% branches, 100% lines, 71.42% functions.
+- Remaining uncovered lines are `serve/cockpit/web/src/components/ResolveModal.tsx:22` and `:43`, both defensive `!dr` guard paths. They are outside the stated AC and non-blocking for this task.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| Test ResolveModal renders full DR body as markdown | `ResolveModal_1193.test.tsx:79-83` | Yes. The suite now asserts `## Options` and `1. Yes` (`:82-83`), which are present in `body` but not the fixture `body_preview` (`:48-49`). Rendering a preview/truncated string would fail. | COVERED |
+| Test response selector offers: approved, rejected, needs-info | `ResolveModal_1193.test.tsx:90-97` | Yes. Missing option labels inside the selector would fail. | COVERED |
+| Test optional notes textarea accepts freeform markdown | `ResolveModal_1193.test.tsx:104-108`, `:136`, `:154` | Yes. The suite proves the textarea exists, accepts input, and forwards the entered note value into the POST payload. | COVERED |
+| Test submit calls `POST /api/decisions/{id}/resolve` with selected response + notes | `ResolveModal_1193.test.tsx:124-154` | Yes. The suite selects non-default `rejected`, then asserts exact payload equality `payload.response === 'rejected'` and exact notes forwarding. A hardcoded default or dropped value would fail. | COVERED |
+| Test modal closes on successful submission | `ResolveModal_1193.test.tsx:173-180` | Yes. Missing `onResolved()` or `onClose()` on success would fail. | COVERED |
+| Test error state shown on failed submission | `ResolveModal_1193.test.tsx:190-224` | Yes. Both thrown-fetch and non-OK response paths assert `resolve-error` rendering. | COVERED |
+| Test cancel/close without submitting does not mutate | `ResolveModal_1193.test.tsx:234-245` | Yes. The suite proves cancel closes and `fetch` is never called. | COVERED |
+
+#### Security Review
+- No issues found. The component performs a same-origin relative POST to `/api/decisions/${dr.id}/resolve`, introduces no new dependency, and contains no secret handling, eval/deserialization, or path construction risk.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| Latest `TestFromAC_ResolveModal` intent from task body retry spec (`.owlbear/kanban/tasks/1193-p3-05-test-resolve-modal-component.md:384-410`) | Live suite contains all three requested fixes: AC1 discriminates full body vs preview (`ResolveModal_1193.test.tsx:82-83`), AC4 asserts exact selected response value (`:153`), and AC6 adds thrown-fetch coverage (`:190-203`). No weakened or removed `TestFromAC_*` assertions observed. | PRESERVED / STRENGTHENED |
+
+#### Test Quality
+- Assertion specificity: STRONG. Exact payload equality at `ResolveModal_1193.test.tsx:153` and full-body-only markers at `:82-83` eliminate the earlier false-green cases.
+- Negative/error-path coverage: STRONG. Both failure branches in `ResolveModal.tsx` (`:32-39`) are exercised by the live suite (`ResolveModal_1193.test.tsx:190-224`).
+- Manual mutation reasoning: STRONG. Regressions to preview rendering, hardcoded `approved`, missing success callbacks, or accidental cancel mutation would all fail the task-owned suite.
+- Test independence: STRONG. `afterEach` resets globals and mocks in `ResolveModal_1193.test.tsx:66-69`.
+- Descriptive naming: STRONG.
+- Result: no WEAK dimensions.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gap Analysis
+- No significant untested AC-owned path remains.
+- Informational only: defensive null-guard branches at `ResolveModal.tsx:22` and `:43` are still uncovered, but they are not part of the accepted task contract and do not undermine the current AC proof.
+
+#### Necessity Check
+- N/A. No new dependency, integration, tool, or external capability introduced.
+
+#### Builder Process Quality
+- FRICTION, not LOOP. The task required multiple passes, but the latest retry changed approach in direct response to prior reviewer findings and resolved the cited proof gaps.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| Test ResolveModal renders full DR body as markdown | Component passes `dr.body` into `ReactMarkdown` at `ResolveModal.tsx:50`; fixture distinguishes `body_preview` from full `body` at `ResolveModal_1193.test.tsx:48-49`; test asserts full-body-only content at `:82-83`. | `ResolveModal_1193.test.tsx:79-83` | PASS |
+| Test response selector offers: approved, rejected, needs-info | Selector exists at `ResolveModal.tsx:52` with explicit radio options including `rejected` at `:68-70` and `needs-info` at `:78-80`; test asserts all three labels are visible at `ResolveModal_1193.test.tsx:93-97`. | `ResolveModal_1193.test.tsx:90-97` | PASS |
+| Test optional notes textarea accepts freeform markdown | Textarea exists at `ResolveModal.tsx:86-89`; test proves initial empty state at `ResolveModal_1193.test.tsx:104-108`, input change at `:136`, and payload forwarding at `:154`. | `ResolveModal_1193.test.tsx:104-108`, `:136`, `:154` | PASS |
+| Test submit calls POST `/api/decisions/{id}/resolve` with selected response + notes | Component sends `body: JSON.stringify({ response, notes })` at `ResolveModal.tsx:30`; test asserts endpoint/method at `ResolveModal_1193.test.tsx:146-149`, exact selected response equality at `:153`, and notes forwarding at `:154`. | `ResolveModal_1193.test.tsx:124-154` | PASS |
+| Test modal closes on successful submission | Component calls `onResolved()` and `onClose()` on success at `ResolveModal.tsx:36-37`; test asserts both callbacks at `ResolveModal_1193.test.tsx:179-180`. | `ResolveModal_1193.test.tsx:173-180` | PASS |
+| Test error state shown on failed submission | Component sets error on both `!res.ok` and thrown fetch at `ResolveModal.tsx:32-39`; tests assert `resolve-error` renders for network rejection at `ResolveModal_1193.test.tsx:190-203` and non-OK response at `:209-224`. | `ResolveModal_1193.test.tsx:190-224` | PASS |
+| Test cancel/close without submitting does not mutate | Cancel button calls `onClose` at `ResolveModal.tsx:100`; test asserts close occurs and `fetch` is not called at `ResolveModal_1193.test.tsx:244-245`. | `ResolveModal_1193.test.tsx:234-245` | PASS |
+
+### Deductions
+- -0.03 builder commit hash absent from the latest cycle; review scope had to be reconstructed from the live task-owned files and task body.
+- -0.02 non-AC defensive null-guard branches remain uncovered.
+
+### Verdict
+- PASS — confidence 0.95 (>= 0.90 threshold)
+
+### Action
+- Advancing task to `docs`.
+
+### Reflection
+- Scoped quality-runner evidence on the task-owned frontend files was enough to separate the current pass from earlier false-green history.
+- The decisive fixes were discriminating assertions, not new runtime code: unique full-body markers, exact `payload.response` equality, and explicit thrown-fetch coverage.
+- Remaining uncovered branches are defensive guards rather than missing AC proof, so they do not block delivery.
+[[2026-04-30]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are frontend TS/TSX only. `serve/cockpit/README.md` describes backend API surface, not individual frontend components. No IN-scope prose doc references `ResolveModal` at this granularity. |
+| 2 | Module docstrings | No | N/A | Changed files are TypeScript/React, not Python. |
+| 3 | External attribution | No | N/A | Task body states "7 studied (all internal codebase)". No external patterns used. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/resolve-modal-test-strategy.md` exists and is linked in task body. No follow-up tasks required (this task IS the follow-up). |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**` — matches both changed files. Footer updated to `Last verified: 2026-04-30 (76656e53)`. Committed: 6c034f65. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files in changed-files set. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/cockpit/web/src/components/ResolveModal.tsx` | OUT (app source) | Diagram footer updated (describes match) |
+| `serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx` | OUT (test file) | Diagram footer updated (describes match) |
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` (footer: `Last verified: 2026-04-30 (76656e53)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (no `.owlbear/scratch/1193-*` files existed)

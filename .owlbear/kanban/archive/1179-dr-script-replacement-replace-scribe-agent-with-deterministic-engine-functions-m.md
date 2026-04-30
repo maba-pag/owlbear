@@ -1,10 +1,10 @@
 ---
 id: 1179
 title: DR Script Replacement — decomposition parent (tracking)
-status: backlog
+status: archived
 priority: important
 created: 2026-04-30T00:48:49.954557+00:00
-updated: 2026-04-30T02:55:18.877752+00:00
+updated: 2026-04-30T04:12:35.478341+00:00
 tags:
 - quality
 parent:
@@ -236,3 +236,168 @@ Re-review after reviewer rejection. Rewrote decomposition parent as closeout tas
 ### Verdict: FAIL
 ### Action
 - Rejected to backlog. Architect must restore or recreate 1184 and 1186 with parent 1179, or revise the recorded decomposition so the live board matches the closeout contract.
+[[2026-04-30]]
+## Architecture Review (3rd pass — reviewer rejection correction)
+
+### Findings
+Reviewer rejection was based on false negative: `show_task` only searches active tasks directory, and `.owlbear/kanban/archive/` is excluded from default grep patterns. Tasks #1184 and #1186 (and #1189) exist in the archive with `parent: 1179` and status `archived` (completed).
+
+### Evidence
+- Active children (12): #1180, #1181, #1182, #1183, #1185, #1187, #1188, #1190, #1191, #1192, #1193, #1194
+- Archived children (3): #1184, #1186, #1189 (confirmed via `grep parent: 1179` with `includeIgnoredFiles: true` in `.owlbear/kanban/archive/`)
+- Total: 15 children with correct parent references ✓
+- Dependencies to archived tasks (#1184, #1186) are valid satisfied prerequisites ✓
+- Planning section + task list + mermaid graph retained ✓
+
+### AC Compliance
+| AC Line | Status | Evidence |
+|---------|--------|----------|
+| 15 child tasks exist with correct parent references (td:0) | PASS | 12 active + 3 archived = 15, all have `parent: 1179` |
+| Dependency graph wired per Planning section (td:0) | PASS | All edges point to existing tasks (active or archived) |
+| Parent retains decomposition record (td:0) | PASS | Planning, Task List, Dependency Graph sections intact |
+
+### Verdict: APPROVE
+All td:0 AC satisfied. Reviewer tooling gap caused false rejection (archive directory excluded from search). Advancing to todo.
+[[2026-04-30]]
+## Test-Writer Notes
+- Test file: none
+- All AC lines are `(td:0)` — test-writer skipped per Step 1c.
+- Tag `quality` confirms non-implementation pass-through.
+- Architect (3rd pass) verified all 15 children exist (12 active + 3 archived: #1184, #1186, #1189), dependency graph satisfied, decomposition record intact.
+- No tests written. No pytest run required.
+- Passing through to builder.
+[[2026-04-30]]
+## Builder Notes
+- Non-implementation task — no code changes needed.
+- Scope: decomposition parent closeout tracking only; all AC lines are `(td:0)`.
+- Files changed: none.
+- Tests: no task-scoped tests exist for this parent task.
+- Coverage: not applicable (no implementation surface in scope).
+- Lint: no task-scoped lint surface in scope.
+- Evidence summary: task body confirms this is a pass-through tracking parent with child-existence/dependency/traceability AC only; quality-runner invocation completed and reported only unrelated repository baseline failures.
+- Fixes applied: none.
+[[2026-04-30]]
+## Review Evidence
+### Scope
+- Builder changed no repository files on this cycle. Review scope is kanban metadata only.
+- Task is correctly marked as a non-implementation closeout parent with `quality` tag at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L9).
+- All closeout AC lines are `td:0` at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L123-L126); reviewer scope is lint-only for `td:0` tasks per [share/skills/r-pipeline-protocol/SKILL.md](share/skills/r-pipeline-protocol/SKILL.md#L127). Code-reader correctly skipped.
+
+### Test Results
+- quality-runner scoped run: 0 passed, 0 failed, 0 skipped.
+- No pytest, ruff, or coverage commands were applicable because `test_paths`, `lint_paths`, and `coverage_modules` were empty for this td:0 closeout task.
+
+### Lint
+- quality-runner: clean.
+- No lint paths were applicable for this task.
+
+### Coverage
+- Not applicable.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Skipped correctly. All closeout AC lines are `td:0` at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L123-L126). Non-implementation tasks tagged with a pass-through tag still flow through the pipeline per [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md#L156) and [share/skills/w-arch-review/SKILL.md](share/skills/w-arch-review/SKILL.md#L158).
+
+#### Security Review
+- No issues. No code paths, dependencies, or external boundaries changed.
+
+#### Test Integrity
+- Skipped. No `TestFromAC_*` classes or task-scoped tests exist.
+
+#### Test Quality
+- N/A for `td:0`.
+
+#### Data Safety
+- No issues. Review scope is board metadata only.
+
+#### Implementation-Aware Gaps
+- No critical gaps found. The live board now matches the closeout contract.
+- Active child scan found 12 task files with `parent: 1179` under `.owlbear/kanban/tasks/**`.
+- Archive scan found 3 task files with `parent: 1179` under `.owlbear/kanban/archive/**`.
+- `list_tasks(archived=true, search="1184")`, `search="1186"`, and `search="1189"` each returned the expected archived child with `parent: 1179`, matching [.owlbear/kanban/archive/1184-p1-05-test-pick-tasks-resolve-pending-drs-integration.md](.owlbear/kanban/archive/1184-p1-05-test-pick-tasks-resolve-pending-drs-integration.md#L4-L12), [.owlbear/kanban/archive/1186-p2-01-test-dr-skill-replacement-structure.md](.owlbear/kanban/archive/1186-p2-01-test-dr-skill-replacement-structure.md#L4-L12), and [.owlbear/kanban/archive/1189-p3-01-test-decisions-api-endpoints.md](.owlbear/kanban/archive/1189-p3-01-test-decisions-api-endpoints.md#L4-L12).
+
+#### Builder Process Quality
+| Metric | Value |
+|---|---|
+| Builder Notes sections | 3 at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L73), [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L165), and [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L270) |
+| Intervening architecture rewrites | 2 at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L128) and [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L240) |
+| Assessment | FRICTION |
+- This is not a builder loop. Each retry followed a backlog rejection and a substantive architecture correction to the parent contract or evidence basis.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| 15 child tasks (#1180–#1194) exist in kanban with correct parent references (td:0) | Parent enumerates the disputed child IDs at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L34), [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L36), and [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L39). Board scans found 12 active + 3 archived children with `parent: 1179`; archived existence was confirmed both by archive files and archived `list_tasks` lookups. | quality-runner N/A (`td:0`) | PASS |
+| Dependency graph wired per Planning section above (td:0) | The parent planning table and graph retain the dependency record at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L34-L39) and [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L46). Dependent tasks still reference those IDs at [.owlbear/kanban/tasks/1185-p1-06-implement-pick-tasks-resolve-integration.md](.owlbear/kanban/tasks/1185-p1-06-implement-pick-tasks-resolve-integration.md#L15), [.owlbear/kanban/tasks/1187-p2-02-create-h-decision-requests-skill-delete-scribe-and-w-decision-routing.md](.owlbear/kanban/tasks/1187-p2-02-create-h-decision-requests-skill-delete-scribe-and-w-decision-routing.md#L15), [.owlbear/kanban/tasks/1188-p2-03-update-agent-skill-instruction-references-decisions-readme.md](.owlbear/kanban/tasks/1188-p2-03-update-agent-skill-instruction-references-decisions-readme.md#L14-L15), and [.owlbear/kanban/tasks/1190-p3-02-implement-decisions-api-endpoints.md](.owlbear/kanban/tasks/1190-p3-02-implement-decisions-api-endpoints.md#L15). Because 1184, 1186, and 1189 exist as archived tasks, these are valid satisfied prerequisites, not broken references. | quality-runner N/A (`td:0`) | PASS |
+| This parent retains decomposition record for traceability (td:0) | The decomposition summary, task list, and dependency graph remain in the parent at [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L22), [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L27), and [.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md](.owlbear/kanban/tasks/1179-dr-script-replacement-replace-scribe-agent-with-deterministic-engine-functions-m.md#L46). | quality-runner N/A (`td:0`) | PASS |
+
+### Deductions
+- -0.02 process friction from two prior reviewer rejections before archive-aware proof was recorded.
+
+### Post-task Reflection
+- Archived child tasks must be checked with `list_tasks(archived=true, search="<id>")` or archive-inclusive search; `show_task` alone is insufficient.
+- For `td:0` closeout parents, kanban metadata is the decisive evidence, not pytest.
+- Multiple builder-note sections do not automatically prove a builder loop when architecture rewrites intervene and materially change the governing contract.
+
+### Confidence: 0.96
+### Verdict: PASS
+### Action
+- Advanced to docs.
+[[2026-04-30]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Builder changed no files; no behavior, API, CLI, config, or package structure changed |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | No | N/A | No research doc produced for this task |
+| 5 | Diagram maintenance (describes match) | No | N/A | No changed files to match against diagram `describes` globs |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No deleted files; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| (none) | — | No repository files changed by this td:0 tracking task |
+
+**No docs impact.** This is a decomposition parent closeout task with `td:0` AC only. All three AC lines (child existence, dependency graph, traceability record) were satisfied by kanban metadata; no application code, docs, or diagrams were modified.
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1179-*` files found)
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 15 child tasks (#1180-#1194) exist with correct parent references (td:0) | grep `parent: 1179` found 12 active + 3 archived (#1184, #1186, #1189) = 15 total | PASS |
+| Dependency graph wired per Planning section (td:0) | Reviewer confirmed all dependency edges point to existing tasks (active or archived satisfied prerequisites) | PASS |
+| Parent retains decomposition record for traceability (td:0) | Planning summary, Task List table, and Mermaid graph all present in task body | PASS |
+
+### Test Results
+- pytest: 3263 passed, 66 failed (all pre-existing background debt: engine config fields #1068, timestamp tests #1050, react compiler #1015, migrations, decisions API #1189 child not yet impl). None in task scope.
+- ruff: 4 violations (all pre-existing in knowledge/memory/orchestrator packages). None in task scope.
+
+### Reviewer Evidence
+Present and detailed (3rd pass). PASS verdict, confidence 0.96. Correctly identified earlier rejection as tooling gap (archive dir excluded from search). Live board verification via list_tasks(archived=true) and archive file scans.
+
+### Architect Quality: 3/5
+Initially pushed through pipeline without closeout AC or pass-through tag. Required 2 backlog rejections before producing a proper closeout contract (td:0 AC, quality tag, tracking title). Final output is clear and correct but the initial routing failure wasted cycles.
+
+### Deduction Breakdown
+- AC quality score 3 (notable initial gaps): -0.03
+- All 3 AC lines verified with independent evidence: no deduction
+- Reviewer evidence present and detailed: no deduction
+- Full-suite failures all pre-existing/background: no deduction
+- Lint violations all pre-existing: no deduction
+
+### Confidence: 0.97
+### Action: Archive
