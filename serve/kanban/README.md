@@ -68,7 +68,7 @@ for wave in response.waves:
         ...
 ```
 
-`AgentView.pick_tasks` runs a five-step pipeline: resolve pending Decision Requests (exceptions suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
+`AgentView.pick_tasks` runs a five-step pipeline: resolve pending Decision Requests (exceptions logged and suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
 
 ### Decision Requests
 

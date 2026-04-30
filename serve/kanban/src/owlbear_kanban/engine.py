@@ -2278,7 +2278,7 @@ class AgentView:
 
         1. **Resolve** — attempt to resolve any pending Decision Requests via
            ``owlbear_kanban.decisions.resolve_pending_drs``; exceptions are
-           suppressed so dispatch is never blocked.
+           logged and suppressed so dispatch is never blocked.
         2. **Filter** — exclude claimed, archived, ``blocked=True``, and
            ``dep_status="blocked"`` tasks.
         3. **Sort** — deterministic ordering: ``priority_rank ASC``,
