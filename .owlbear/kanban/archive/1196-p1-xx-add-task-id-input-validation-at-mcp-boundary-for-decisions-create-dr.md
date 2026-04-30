@@ -4,7 +4,7 @@ title: 'P1-XX: Add task_id input validation at MCP boundary for decisions.create
 status: archived
 priority: needed
 created: 2026-04-30T07:17:17.451013+00:00
-updated: 2026-04-30T09:45:48.932058+00:00
+updated: 2026-04-30T11:15:42.564304+00:00
 tags:
 - phase-1
 - scope:kanban
@@ -426,35 +426,32 @@ Contract reconciliation: `decisions.create_dr` signature declares `task_id: int`
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1196-*` files found)
+
 [[2026-04-30]]
 ## Audit
-
 ### AC Verification
 | AC Line | Evidence | Status |
 |---------|----------|--------|
-| AC1: Numeric-only check rejects invalid task_id with ToolError before downstream call | server.py:441-450 implements guard; 5 rejection tests pass | PASS |
-| AC2: Invalid values never reach decisions.create_dr | ToolError raised before asyncio.to_thread at :459; 5 assert_not_called tests pass | PASS |
-| AC3: Tests prove rejection of empty, wildcard, path-traversal, non-numeric | Dedicated tests at test_mcp_kanban_1196.py:127-195 | PASS |
-| AC4: Valid numeric IDs coerced to int before forwarding | Direct-int branch :442, str→int at :448; type assertions at :281,:300 pass | PASS |
-| AC5: Durable suite updated, both suites pass together | Commit 9897f5dc; combined run 19/19 green | PASS |
+| AC1: Numeric-only check rejects invalid task_id with ToolError | server.py:444-447 validation; tests at test_mcp_kanban_1196.py:127-195 | PASS |
+| AC2: Invalid values never reach decisions.create_dr | assert_not_called() proofs at test_mcp_kanban_1196.py:204-258 | PASS |
+| AC3: Tests prove rejection of empty/wildcard/path-traversal/non-numeric | Dedicated tests at test_mcp_kanban_1196.py:127-184 | PASS |
+| AC4: Coercion to int before forwarding | server.py:441-448; assertions at test_mcp_kanban_1196.py:278-300 | PASS |
+| AC5: Durable suite assertion fixed and both suites pass | test_mcp_create_dr_1182.py:145 asserts int(1); combined 19/19 | PASS |
 
 ### Test Results
-- Task-scoped: 19 passed, 0 failed
-- Full suite: 3290 passed, 77 failed — none in task scope (failures in engine_init_1068, storage_1050, corruption, cockpit_decisions_api_1189, etc.)
-- Lint: clean in scope (4 violations in unrelated packages)
+- pytest (full): 3324 passed, 73 failed (none in task scope), 4 skipped
+- ruff: clean
 
-### Commits
-- 4301b3d7 fix: validate create_dr task_id boundary (#1196, builder)
-- aacfb080 test: add failing tests for task_id MCP boundary validation (#1196, test-writer)
-- 8b8cc352 test: strengthen create_dr task_id proof coverage (#1196, test-writer)
-- 9897f5dc test: fix stale task_id assertion in durable create_dr suite (#1196, test-writer)
-- 3ebf2979 docs: update create_dr signature and diagram footers (#1196, doc-writer)
+### Architect Quality: 4/5
+AC was specific and verifiable. Required cycle 2 to add AC5 for durable-suite reconciliation the reviewer surfaced, but that was appropriate architect intervention for an emergent cross-suite conflict.
 
-### AC Quality Score: 4/5
-Specific, verifiable, security-motivated. One reactive refinement (AC5 added after cross-suite contradiction surfaced in review) but overall the AC provided a clean implementation path with clear test targets.
+### Deduction Breakdown
+- All 5 AC lines have specific evidence: 0
+- Lint: clean: 0
+- AC quality 4/5: 0
+- Reviewer evidence: present, detailed, PASS: 0
+- Full-suite failures outside task scope (pre-existing debt): 0
+- Module coverage low but branch-specific proof strong: 0
 
-### Deductions
-- None. All AC lines have specific evidence. Lint clean in scope. No task-scope failures. Reviewer section comprehensive (0.97 PASS). AC quality 4/5.
-
-### Confidence: 0.98
-### Action: ARCHIVE
+### Confidence: 0.99
+### Action: archive
