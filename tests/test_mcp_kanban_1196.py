@@ -227,6 +227,37 @@ class TestFromAC_CreateDrTaskIdValidation:
             mock_create_dr.assert_not_called()
 
     # ------------------------------------------------------------------
+    # AC2 (td:2): Remaining invalid classes must not reach decisions.create_dr
+    # ------------------------------------------------------------------
+
+    @pytest.mark.asyncio
+    async def test_path_traversal_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+        """AC2 error: path-traversal '../' task_id raises ToolError; decisions.create_dr never called."""
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await mcp_create_dr(ctx, task_id="../", agent="builder", request_type="decision", body="b")
+            mock_create_dr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_non_numeric_string_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+        """AC2 error: non-numeric 'abc' task_id raises ToolError; decisions.create_dr never called."""
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await mcp_create_dr(ctx, task_id="abc", agent="builder", request_type="decision", body="b")
+            mock_create_dr.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_mixed_alphanumeric_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+        """AC2 boundary: mixed '42abc' task_id raises ToolError; decisions.create_dr never called."""
+        ctx = _make_mcp_ctx(app_ctx)
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
+            with pytest.raises(ToolError):
+                await mcp_create_dr(ctx, task_id="42abc", agent="builder", request_type="decision", body="b")
+            mock_create_dr.assert_not_called()
+
+    # ------------------------------------------------------------------
     # AC4 (td:1): Valid numeric task_id coerced to int before forwarding
     # ------------------------------------------------------------------
 
@@ -242,6 +273,25 @@ class TestFromAC_CreateDrTaskIdValidation:
         mock_create_dr = MagicMock(return_value=MagicMock())
         with patch("owlbear_mcp_kanban.server.decisions.create_dr", mock_create_dr):
             await mcp_create_dr(ctx, task_id="42", agent="builder", request_type="decision", body="body text")
+
+        call_kwargs = mock_create_dr.call_args.kwargs
+        assert call_kwargs["task_id"] == 42, (
+            f"task_id forwarded as {call_kwargs['task_id']!r}; expected int 42"
+        )
+        assert isinstance(call_kwargs["task_id"], int), (
+            f"task_id must be int, got {type(call_kwargs['task_id']).__name__!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_literal_int_task_id_forwarded_unchanged(self, app_ctx: AppContext) -> None:
+        """AC4 direct-int branch: literal int 42 is forwarded as int 42 (no coercion needed).
+
+        Exercises the isinstance(task_id, int) branch at the MCP boundary.
+        """
+        ctx = _make_mcp_ctx(app_ctx)
+        mock_create_dr = MagicMock(return_value=MagicMock())
+        with patch("owlbear_mcp_kanban.server.decisions.create_dr", mock_create_dr):
+            await mcp_create_dr(ctx, task_id=42, agent="builder", request_type="decision", body="body text")
 
         call_kwargs = mock_create_dr.call_args.kwargs
         assert call_kwargs["task_id"] == 42, (
