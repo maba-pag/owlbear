@@ -1,10 +1,10 @@
 ---
 id: 1181
 title: 'P1-02: Implement decisions.py module'
-status: review
+status: archived
 priority: critical
 created: 2026-04-30T00:51:35.539925+00:00
-updated: 2026-04-30T09:42:54.664329+00:00
+updated: 2026-04-30T10:10:09.333886+00:00
 tags:
 - phase-1
 - scope:kanban
@@ -14,8 +14,8 @@ depends_on:
 - 1180
 blocked: false
 block_reason:
-claimed_by: near-hound
-claimed_at: 2026-04-30T09:42:54.664329+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -219,3 +219,146 @@ Post-task reflection:
 - Multi-step file+task mutation flows need idempotency markers to avoid replay side effects after partial failures.
 - Persisting a lightweight applied-state in the pending artifact is a low-diff way to preserve retry safety without widening API surface.
 - Scoped quality-runner evidence across task tests plus dependent regressions gives strong gate confidence for builder closeout.
+[[2026-04-30]]
+## Review Evidence
+### Source Scope
+- Builder commit verified in [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1057) as `02be0e06f53a3b5653129aa1beb1f3d69346d057`.
+- Changed-file scope is [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py). No public signature changes were introduced in [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L118-L232).
+
+### Test Results
+- quality-runner: pytest 45 passed, 0 failed, 0 skipped across [tests/test_decisions_1181.py](tests/test_decisions_1181.py), [tests/test_decisions_1180.py](tests/test_decisions_1180.py), and [tests/test_decisions_1195.py](tests/test_decisions_1195.py).
+
+### Lint
+- quality-runner: clean for [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py), [tests/test_decisions_1181.py](tests/test_decisions_1181.py), [tests/test_decisions_1180.py](tests/test_decisions_1180.py), and [tests/test_decisions_1195.py](tests/test_decisions_1195.py).
+
+### Coverage
+- quality-runner: 98% on [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py) with uncovered lines at [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L193) and [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L204-L205). Informational only.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test / Evidence | Would Fail If AC Violated? | Verdict |
+|---------|------------------------|----------------------------|---------|
+| decisions.py module exists | Scoped green execution of [tests/test_decisions_1181.py](tests/test_decisions_1181.py), [tests/test_decisions_1180.py](tests/test_decisions_1180.py), and [tests/test_decisions_1195.py](tests/test_decisions_1195.py) imports and exercises [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py) | Yes | COVERED |
+| create_dr with engine blocking | [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L80), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L179), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L118-L166) | Yes | COVERED |
+| dual call-form support | [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L213), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L170-L232) | Yes | COVERED |
+| 5-field frontmatter and request_type slug | [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L100), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L132), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L30-L34), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L136-L145) | Yes | COVERED |
+| O_EXCL create and collision retry | [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L150), [tests/test_decisions_1195.py](tests/test_decisions_1195.py#L355), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L97), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L153) | Yes | COVERED |
+| resolve happy, edge, boundary, and move-failure retry | [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L252), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L289), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L324), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L353), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L429), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L202-L225) | Yes, for the refined task contract | COVERED |
+| per-file isolation and unknown response handling | [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L375), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L405), [tests/test_decisions_1180.py](tests/test_decisions_1180.py#L516), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L227-L230) | Yes | COVERED |
+| inherited regression suites still pass | quality-runner execution evidence includes [tests/test_decisions_1180.py](tests/test_decisions_1180.py) and [tests/test_decisions_1195.py](tests/test_decisions_1195.py) | Yes | COVERED |
+
+#### Security Review
+- No issues found. Safe YAML parsing remains at [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L57). Exclusive-create file operations remain at [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L97) and [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L153). No subprocess, eval, template, or network surface exists in scope.
+
+#### Test Integrity
+- No builder-side weakening or removal of `TestFromAC_*` assertions found in [tests/test_decisions_1180.py](tests/test_decisions_1180.py), [tests/test_decisions_1195.py](tests/test_decisions_1195.py), or [tests/test_decisions_1181.py](tests/test_decisions_1181.py).
+- The retry addition at [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L429-L470) is additive and strengthens the previously failed move-failure replay gap without relaxing earlier assertions.
+
+#### Blocking Findings
+- None.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `decisions.py` module exists | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py) imported and exercised by 45 passing scoped tests | PASS |
+| `create_dr(decisions_dir, engine, *, task_id, agent, request_type, body) -> Path` with atomic create and blocking | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L118-L166), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L80), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L179) | PASS |
+| `resolve_pending_drs(decisions_or_engine, engine=None) -> list[Path]` dual call-form support | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L170-L232), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L213) | PASS |
+| Simplified 5-field frontmatter | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L135-L145), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L100) | PASS |
+| Slug generation from `request_type` | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L30-L34), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L132) | PASS |
+| Atomic file creation via `os.open` with `O_CREAT | O_EXCL` and collision suffix retry | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L97), [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L153), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L150), [tests/test_decisions_1195.py](tests/test_decisions_1195.py#L355) | PASS |
+| Rollback deletes file if blocking fails | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L161-L165), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L179) | PASS |
+| Resolve logic: append summary, conditional unblock for approved or rejected, move to resolved | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L202-L225), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L252), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L289), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L324), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L353), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L429) | PASS |
+| Per-file error isolation via broad `except Exception` | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L228-L230), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L375), [tests/test_decisions_1180.py](tests/test_decisions_1180.py#L516) | PASS |
+| Unknown response values log warning and skip | [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L227-L229), [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L405) | PASS |
+| All tests from #1180 and #1195 pass | quality-runner execution evidence: 45 passed, 0 failed, 0 skipped across [tests/test_decisions_1180.py](tests/test_decisions_1180.py) and [tests/test_decisions_1195.py](tests/test_decisions_1195.py) | PASS |
+
+### Informational
+- code-reader flagged a broader replay-risk class if unblock or `_rewrite_response()` fails after summary append at [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L210-L214) and [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L219-L222). I did not treat that as blocking here because task 1181 was refined to the implemented contract, and the task-owned unblock-failure proof at [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L324-L350) only requires the file to remain pending, not blanket transactional rollback across every internal failure site.
+- The previously reported move-failure replay defect is now closed by the applied-state fast path at [serve/kanban/src/owlbear_kanban/decisions.py](serve/kanban/src/owlbear_kanban/decisions.py#L202-L205) together with the retry regression at [tests/test_decisions_1181.py](tests/test_decisions_1181.py#L429-L470).
+
+### Deductions
+- 0.04: adjacent non-AC hardening gap remains informationally visible in the resolve flow.
+- 0.03: 98% coverage leaves a few non-governing lines uncovered.
+
+### Verdict
+- PASS; advance to docs.
+- Confidence: 0.93
+
+### Reflection
+- The first review fail is fixed: the move-failure replay path now has executable proof and no longer reproduces under the task-owned retry test.
+- Scoped green execution plus inherited regression suites mattered here because the builder changed behavior inside an already-shipping module.
+- Distinguishing AC-bound defects from adjacent hardening opportunities avoided moving the contract mid-review.
+[[2026-04-30]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Verified — no update needed | `serve/kanban/README.md` `### Decision Requests` section accurately describes `create_dr` and `resolve_pending_drs` signatures, behavior, and both call forms. The applied-state idempotency mechanism is an internal detail; high-level description remains correct. |
+| 2 | Module docstrings | Yes | Verified — no update needed | All public and private helpers in `serve/kanban/src/owlbear_kanban/decisions.py` have accurate docstrings: module docstring, `DecisionEngine`, `_slugify`, `_parse_dr`, `_append_summary`, `_resolve_decisions_dir`, `_move_with_collision_suffix`, `_rewrite_response` (new), `create_dr`, `resolve_pending_drs`. All match implemented behavior. |
+| 3 | External attribution | No | N/A | No external patterns or repos cited in task body. |
+| 4 | Research doc | No | N/A | Research section embedded inline in task body; no `.owlbear/research/*.md` file produced. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` and `share/diagrams/mcp-topology.excalidraw` both match `serve/kanban/src/**`. Footer updated to `Last verified: 2026-04-30 (cecfdfdb)` in both. Commit: `dae80079`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. `decisions.py` was modified (not deleted); no orphaned IN-scope docs detected. |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/decisions.py` | IN (docstrings) | Verified — no update needed |
+| `tests/test_decisions_1181.py` | OUT | N/A |
+| `tests/test_decisions_1180.py` | OUT | N/A |
+| `tests/test_decisions_1195.py` | OUT | N/A |
+
+### Files Updated
+- `share/diagrams/kanban.excalidraw` — footer updated (commit `dae80079`)
+- `share/diagrams/mcp-topology.excalidraw` — footer updated (commit `dae80079`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1181-*` files found)
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `decisions.py` module exists | File at `serve/kanban/src/owlbear_kanban/decisions.py` (232 LOC), imported by 45 tests | PASS |
+| `create_dr()` with O_EXCL and engine blocking | Source L118-166, test_decisions_1181.py:L80, L179 | PASS |
+| `resolve_pending_drs()` dual call-form | Source L170-232, test_decisions_1181.py:L213 | PASS |
+| 5-field frontmatter | Source L135-145, test_decisions_1181.py:L100 | PASS |
+| Slug from `request_type` | Source L30-34, test_decisions_1181.py:L132 | PASS |
+| Atomic O_EXCL + collision suffix | Source L97, L153, test_decisions_1181.py:L150, test_decisions_1195.py:L355 | PASS |
+| Rollback on engine failure | Source L161-165, test_decisions_1181.py:L179 | PASS |
+| Resolve: append, unblock, move (idempotent) | Source L202-225 applied-state pattern, test_decisions_1181.py:L252,L289,L324,L353,L429 | PASS |
+| Per-file error isolation | Source L228-230, test_decisions_1181.py:L375 | PASS |
+| Unknown response: warn+skip | Source L227, test_decisions_1181.py:L405 | PASS |
+| All #1180/#1195 tests pass | quality-runner: 45 decisions tests passed, 0 failed | PASS |
+
+### Test Results
+- Full suite: 3290 passed, 77 failed, 4 skipped
+- Task-scope failures: 0 (all 77 are in unrelated modules: engine_coverage_1068, storage_1050, engine_init_1068, corruption, cockpit, mcp-knowledge)
+- Decisions scoped: 45 passed, 0 failed
+
+### Lint
+- Task-scope: clean (4 violations are in knowledge/mcp-memory/orchestrator — unrelated)
+
+### Commit Integrity
+- `02be0e06` fix: make DR resolve idempotent on move failure (#1181, builder)
+- `843dfc38` test: add move-failure atomicity test (#1181, test-writer)
+- `5833240f` test: add contract tests for decisions.py module (#1181, test-writer)
+- `dae80079` docs: update diagram footers for decisions.py (#1181, doc-writer)
+
+### AC Quality Score: 4/5
+AC was refined post-challenger to accurately describe the implemented contract. Specific signatures, testable behaviors, td annotations. Minor gap: atomicity ordering wasn't explicit in original AC, caught by reviewer (system working as designed).
+
+### Deductions
+- None per rubric (all AC evidenced, lint clean in scope, no task-scope failures, reviewer evidence present and detailed, AC quality 4)
+
+### Confidence: .98
+Archive.
