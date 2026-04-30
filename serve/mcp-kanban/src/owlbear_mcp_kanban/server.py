@@ -329,34 +329,6 @@ def _invoke_view_end_work(  # noqa: PLR0913
     return task
 
 
-def _extract_task_id_compat(legacy: dict[str, object]) -> str | None:
-    """Extract optional legacy task_id kwarg from compatibility arguments."""
-    legacy_task_id = legacy.pop("task_id", None)
-    if legacy_task_id is None:
-        return None
-    if not isinstance(legacy_task_id, str | int):
-        msg = "task_id must be a string or integer"
-        raise ToolError(msg)
-    return _coerce_to_str(legacy_task_id)
-
-
-def _resolve_tool_id(
-    id_value: str | None,
-    legacy_task_id: str | None,
-    *,
-    tool: str,
-) -> str:
-    """Resolve canonical id with legacy task_id compatibility for mutation tools."""
-    if id_value is not None and legacy_task_id is not None and id_value != legacy_task_id:
-        msg = f"{tool} received conflicting id and task_id values"
-        raise ToolError(msg)
-    resolved = id_value if id_value is not None else legacy_task_id
-    if resolved is None:
-        msg = "id is required"
-        raise ToolError(msg)
-    return resolved
-
-
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, idempotentHint=True))
 async def show_task(
     ctx: Context,
@@ -451,13 +423,13 @@ async def move_task(
     status: str | None = None,
     archival_reason: str | None = None,
     archival_refs: list[int] | None = None,
-    **legacy: object,
 ) -> SingleTaskResponse:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    legacy_task_id = _extract_task_id_compat(legacy)
-    legacy.clear()
-    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="move_task")
+    if id is None:
+        msg = "id is required"
+        raise ToolError(msg)
+    resolved_id = id
     if status is None:
         msg = "status is required"
         raise ToolError(msg)
@@ -522,15 +494,14 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
     block_reason: str | None = None,
     archival_reason: str = "",
     archival_refs: list[int] | None = None,
-    **legacy: object,
 ) -> SingleTaskResponse:
     """Edit task fields."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    legacy_task_id = _extract_task_id_compat(legacy)
-    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="edit_task")
+    if id is None:
+        msg = "id is required"
+        raise ToolError(msg)
+    resolved_id = id
     kwargs: dict[str, object] = {}
-    title = legacy.pop("title", None)
-    legacy.clear()
     if body:
         kwargs["body"] = body
     if append_body:
@@ -555,8 +526,6 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
         kwargs["archival_reason"] = archival_reason
     if archival_refs is not None:
         kwargs["archival_refs"] = archival_refs
-    if title and "body" not in kwargs and "append_body" not in kwargs:
-        kwargs["append_body"] = str(title)
     try:
         response = app_ctx.engine.agent_view().edit_task(int(resolved_id), **kwargs)
     except KanbanError as exc:
@@ -572,13 +541,13 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
 async def start_work(
     ctx: Context,
     id: StrId | None = None,  # noqa: A002
-    **legacy: object,
 ) -> SingleTaskResponse:
     """Claim a task and return its full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    legacy_task_id = _extract_task_id_compat(legacy)
-    legacy.clear()
-    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="start_work")
+    if id is None:
+        msg = "id is required"
+        raise ToolError(msg)
+    resolved_id = id
 
     view = _agent_view_for(app_ctx.engine)
     if view is not None and hasattr(view, "start_work"):
@@ -623,13 +592,13 @@ async def end_work(  # noqa: PLR0913
     move_to: str | None = None,
     archival_reason: str | None = None,
     archival_refs: list[int] | None = None,
-    **legacy: object,
 ) -> SingleTaskResponse:
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    legacy_task_id = _extract_task_id_compat(legacy)
-    legacy.clear()
-    resolved_id = _resolve_tool_id(id, legacy_task_id, tool="end_work")
+    if id is None:
+        msg = "id is required"
+        raise ToolError(msg)
+    resolved_id = id
 
     view_result = _invoke_view_end_work(
         _agent_view_for(app_ctx.engine),
