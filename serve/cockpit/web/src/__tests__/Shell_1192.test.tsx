@@ -201,5 +201,51 @@ describe('TestFromAC_DRStatusIndicatorShellIntegration', () => {
       const lastProps = calls[calls.length - 1][0]
       expect(() => lastProps.onItemClick('dr-001')).not.toThrow()
     })
+
+    it('onItemClick reference is stable when DRStatusIndicator re-renders with changed count (React state setter proof)', () => {
+      // React Compiler memoizes DRStatusIndicator when props are unchanged.
+      // Changing count forces DRStatusIndicator to re-render with fresh props.
+      // A real setSelectedDRId has guaranteed stable identity (React contract);
+      // an inline no-op () => {} creates a new function object on every render.
+      stubPendingDRs({ count: 1, items: [DR_A] })
+      const { rerender } = renderShell()
+      const firstOnItemClick = (vi.mocked(DRStatusIndicator).mock.calls as DRStatusIndicatorProps[][])[0][0].onItemClick
+
+      stubPendingDRs({ count: 2, items: [DR_A, DR_B] })
+      rerender(
+        <PorscheDesignSystemProvider>
+          <MemoryRouter initialEntries={['/']}>
+            <Shell />
+          </MemoryRouter>
+        </PorscheDesignSystemProvider>,
+      )
+
+      const calls = vi.mocked(DRStatusIndicator).mock.calls as DRStatusIndicatorProps[][]
+      expect(calls.length).toBeGreaterThan(1)
+      const secondOnItemClick = calls[calls.length - 1][0].onItemClick
+      expect(secondOnItemClick).toBe(firstOnItemClick)
+    })
+
+    it('onItemClick reference is stable when count decreases to zero — covers dormant state (setter identity)', () => {
+      // Start with 2 DRs, rerender with 0 (dormant state).
+      // A real setSelectedDRId is stable; an inline no-op () => {} is a new reference each render.
+      stubPendingDRs({ count: 2, items: [DR_A, DR_B] })
+      const { rerender } = renderShell()
+      const firstOnItemClick = (vi.mocked(DRStatusIndicator).mock.calls as DRStatusIndicatorProps[][])[0][0].onItemClick
+
+      stubPendingDRs({ count: 0, items: [] })
+      rerender(
+        <PorscheDesignSystemProvider>
+          <MemoryRouter initialEntries={['/']}>
+            <Shell />
+          </MemoryRouter>
+        </PorscheDesignSystemProvider>,
+      )
+
+      const calls = vi.mocked(DRStatusIndicator).mock.calls as DRStatusIndicatorProps[][]
+      expect(calls.length).toBeGreaterThan(1)
+      const secondOnItemClick = calls[calls.length - 1][0].onItemClick
+      expect(secondOnItemClick).toBe(firstOnItemClick)
+    })
   })
 })
