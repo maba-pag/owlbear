@@ -41,7 +41,7 @@ def get_cache(engine=Depends(get_engine)) -> MtimeScanCache:  # noqa: ANN001, B0
     garbage-collected (e.g., at end of each test).
     """
     if engine not in _engine_caches:
-        _engine_caches[engine] = MtimeScanCache(engine._tasks_dir)  # noqa: SLF001
+        _engine_caches[engine] = MtimeScanCache(engine.tasks_dir)
     return _engine_caches[engine]
 
 
@@ -52,4 +52,4 @@ def get_view(engine=Depends(get_engine)) -> CockpitView:  # noqa: ANN001, B008
 
 def get_decisions_dir(engine=Depends(get_engine)) -> Path:  # noqa: ANN001, B008
     """Return the decisions directory derived from the active board path."""
-    return Path(engine._kanban_dir) / "decisions"  # noqa: SLF001
+    return Path(engine.kanban_dir) / "decisions"
