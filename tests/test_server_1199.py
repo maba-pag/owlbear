@@ -90,3 +90,33 @@ class TestFromAC_OutputSchemaPreserved:
         assert schema is not None
         # Must contain at least one top-level JSON Schema key
         assert any(k in schema for k in ("type", "properties", "$defs", "items"))
+
+    def test_patch_params_applies_enum_and_description(self) -> None:
+        """_patch_params metadata must survive the deletion of _apply_tool_exclusions.
+
+        Regression guard: asserts specific parameter enums and descriptions that
+        _patch_params injects at module load time.  Would FAIL immediately if
+        _patch_params (or its call sites) were removed together with
+        _apply_tool_exclusions during cleanup.
+
+        move_task.status enum must include 'archived' (not part of _STATUSES —
+        added only via the explicit _patch_params call).
+        edit_task.append_body description must match the patched help text.
+        """
+
+        def _tool_props(name: str) -> dict:
+            tool = next(
+                t
+                for t in mcp._tool_manager._tools.values()  # noqa: SLF001
+                if t.name == name
+            )
+            return tool.parameters.get("properties", {})
+
+        # move_task: status enum must include the extra "archived" value
+        move_status_enum = _tool_props("move_task")["status"]["enum"]
+        assert "archived" in move_status_enum
+        assert "todo" in move_status_enum  # sanity-check a _STATUSES member too
+
+        # edit_task: append_body description must match the patched text exactly
+        append_body_desc = _tool_props("edit_task")["append_body"]["description"]
+        assert append_body_desc == "Append to body (preserves existing content)"
