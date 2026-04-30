@@ -78,7 +78,9 @@ describe('TestFromAC_ResolveModal', () => {
       const { container } = renderModal()
       const el = container.querySelector('[data-testid="markdown-body"]')
       expect(el).not.toBeNull()
-      expect(el?.textContent).toContain('Should we include X?')
+      // Assert content unique to full `body` — NOT present in `body_preview`
+      expect(el?.textContent).toContain('## Options')
+      expect(el?.textContent).toContain('1. Yes')
     })
   })
 
@@ -117,9 +119,9 @@ describe('TestFromAC_ResolveModal', () => {
       vi.stubGlobal('fetch', fetchMock)
       const { container } = renderModal()
 
-      // Select a response option (radio button or select element)
+      // Select a NON-default response option to prove the selected value is transmitted
       const radio = container.querySelector(
-        '[data-testid="response-selector"] input[value="approved"]',
+        '[data-testid="response-selector"] input[value="rejected"]',
       ) as HTMLInputElement | null
       const selectEl = container.querySelector(
         '[data-testid="response-selector"] select',
@@ -127,7 +129,7 @@ describe('TestFromAC_ResolveModal', () => {
       if (radio) {
         fireEvent.click(radio)
       } else if (selectEl) {
-        fireEvent.change(selectEl, { target: { value: 'approved' } })
+        fireEvent.change(selectEl, { target: { value: 'rejected' } })
       }
 
       // Enter notes
@@ -147,7 +149,8 @@ describe('TestFromAC_ResolveModal', () => {
           )
           const [, opts] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
           const payload = JSON.parse(opts.body as string) as Record<string, unknown>
-          expect(payload).toHaveProperty('response')
+          // Exact value proof — hardcoding 'approved' (default) would fail this assertion
+          expect(payload.response).toBe('rejected')
           expect(payload).toHaveProperty('notes', 'Looks good to me.')
         },
         { timeout: 500 },
@@ -184,6 +187,25 @@ describe('TestFromAC_ResolveModal', () => {
   // ─── AC6: Error state shown on failed submission ──────────────────────────
 
   describe('AC6: error state shown on failed submission', () => {
+    it('renders a resolve-error element when fetch throws a network error (catch branch)', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.reject(new Error('Network error'))),
+      )
+      const { container } = renderModal()
+
+      const submitBtn = container.querySelector('[data-testid="resolve-submit"]') as HTMLElement | null
+      expect(submitBtn).not.toBeNull()
+      fireEvent.click(submitBtn!)
+
+      await waitFor(
+        () => {
+          expect(container.querySelector('[data-testid="resolve-error"]')).not.toBeNull()
+        },
+        { timeout: 500 },
+      )
+    })
+
     it('renders a resolve-error element when the POST response is not ok', async () => {
       vi.stubGlobal(
         'fetch',

@@ -9,7 +9,6 @@ export interface PendingDR {
   request_type: string
   created: string
   title: string
-  body: string
   body_preview: string
 }
 
@@ -22,7 +21,6 @@ export interface UsePendingDRsResult {
   items: PendingDR[]
   isLoading: boolean
   error: Error | null
-  refetch: () => Promise<void>
 }
 
 interface PendingDRResponse {
@@ -38,16 +36,15 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
   const [error, setError] = useState<Error | null>(null)
   const isMountedRef = useRef(true)
   const inFlightRef = useRef(false)
-  const pendingPollRef = useRef(false)
+  const pendingPollCountRef = useRef(0)
 
   const poll = async (): Promise<void> => {
     if (inFlightRef.current) {
-      pendingPollRef.current = true
+      pendingPollCountRef.current += 1
       return
     }
 
     inFlightRef.current = true
-    pendingPollRef.current = false
     setIsLoading(true)
     try {
       const response = await fetch('/api/decisions/pending', { method: 'GET' })
@@ -74,8 +71,8 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
       if (isMountedRef.current) {
         setIsLoading(false)
       }
-      if (pendingPollRef.current && isMountedRef.current) {
-        pendingPollRef.current = false
+      if (pendingPollCountRef.current > 0 && isMountedRef.current) {
+        pendingPollCountRef.current -= 1
         void poll()
       }
     }
@@ -100,6 +97,5 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
     items,
     isLoading,
     error,
-    refetch: poll,
   }
 }
