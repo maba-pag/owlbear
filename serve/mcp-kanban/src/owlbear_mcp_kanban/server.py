@@ -17,7 +17,7 @@ from mcp.types import ToolAnnotations
 from pydantic import BeforeValidator
 from pydantic import ValidationError as PydanticValidationError
 
-from owlbear_kanban import KanbanEngine
+from owlbear_kanban import KanbanEngine, decisions
 from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import (
     ListTasksResponse,
@@ -58,6 +58,7 @@ __all__ = [
     "_map_kanban_error",
     "_show_validated",
     "app_lifespan",
+    "create_dr",
     "create_task",
     "edit_task",
     "end_work",
@@ -422,6 +423,37 @@ async def create_task(  # noqa: PLR0913
         )
     except KanbanError as exc:
         _map_kanban_error(exc)
+
+
+@mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
+async def create_dr(
+    ctx: Context,
+    task_id: str,
+    agent: str,
+    request_type: str,
+    body: str,
+) -> dict[str, object]:
+    """Create a pending decision/action request file and return relative path."""
+    if request_type not in {"decision", "action"}:
+        msg = "request_type must be one of: decision, action"
+        raise ToolError(msg)
+
+    app_ctx: AppContext = ctx.request_context.lifespan_context
+    try:
+        created_path = await asyncio.to_thread(
+            decisions.create_dr,
+            app_ctx.kanban_dir / "decisions",
+            app_ctx.engine,
+            task_id=task_id,
+            agent=agent,
+            request_type=request_type,
+            body=body,
+        )
+    except KanbanError as exc:
+        _map_kanban_error(exc)
+
+    relative_path = created_path.relative_to(app_ctx.kanban_dir).as_posix()
+    return {"created": True, "path": relative_path}
 
 
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
