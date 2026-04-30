@@ -279,6 +279,102 @@ class TestFromAC_CorruptionSubModelPaths:
 
         assert any(o.code == "ERR_CORRUPT_MISSING_FIELD" for o in result)
 
+    def test_scan_and_fix_reads_sentinel_tasks_dir(self, tmp_path: Path) -> None:
+        """scan_and_fix() must find files in config.paths.tasks_dir (not hardcoded 'tasks').
+
+        Only 'sentinel_tasks/' is created — 'tasks/' does not exist.
+        A corrupted task file is placed in 'sentinel_tasks/'.
+        If scan_and_fix uses config.paths.tasks_dir, it finds the file and returns
+        a non-empty result.  If it hardcodes 'tasks', it returns [] (dir not found).
+        """
+        from owlbear_kanban.corruption import scan_and_fix
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_tasks").mkdir(parents=True)
+        (kanban_dir / "sentinel_archive").mkdir(parents=True)
+        # claimed_by present in tasks/ → corrupt (not archive)
+        path = kanban_dir / "sentinel_tasks" / "1-task.md"
+        path.write_text(
+            "---\nid: 1\ntitle: Task\nstatus: todo\npriority: needed\n"
+            'created: "2026-01-01T10:00:00+00:00"\nupdated: "2026-01-01T10:00:00+00:00"\n'
+            "claimed_by: some-agent\n---\n",
+            encoding="utf-8",
+        )
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+
+        result = scan_and_fix(kanban_dir, config)
+
+        assert len(result) >= 1, (
+            "scan_and_fix returned no results for corrupted file in sentinel_tasks/; "
+            "does not use config.paths.tasks_dir (sentinel value — hardcoded 'tasks' cannot pass)"
+        )
+
+    def test_scan_and_fix_reads_sentinel_archive_dir(self, tmp_path: Path) -> None:
+        """scan_and_fix() must find files in config.paths.archive_dir (not hardcoded 'archive').
+
+        Only 'sentinel_archive/' is created — 'archive/' does not exist.
+        A corrupt file is placed in 'sentinel_archive/'.
+        If scan_and_fix uses config.paths.archive_dir, it finds it and reports corruption.
+        If it hardcodes 'archive', it finds nothing and returns [].
+        """
+        from owlbear_kanban.corruption import scan_and_fix
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_tasks").mkdir(parents=True)
+        (kanban_dir / "sentinel_archive").mkdir(parents=True)
+        # File with missing required fields in archive dir
+        path = kanban_dir / "sentinel_archive" / "2-task.md"
+        path.write_text(
+            "---\nid: 2\ntitle: Task\nstatus: todo\n---\n",  # missing priority, created, updated
+            encoding="utf-8",
+        )
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+
+        result = scan_and_fix(kanban_dir, config)
+
+        assert len(result) >= 1, (
+            "scan_and_fix returned no results for corrupted file in sentinel_archive/; "
+            "does not use config.paths.archive_dir (sentinel value — hardcoded 'archive' cannot pass)"
+        )
+
+    def test_is_archive_path_uses_sentinel_archive_dir(self, tmp_path: Path) -> None:
+        """_is_archive_path() must use config.paths.archive_dir (not hardcoded 'archive').
+
+        A task with claimed_by in the archive is NOT corrupt (archive files are exempt).
+        Test uses 'sentinel_archive/' as the archive directory.
+        If _is_archive_path uses config.paths.archive_dir = 'sentinel_archive',
+        it correctly identifies the file as archived → no corruption detected.
+        If it hardcodes 'archive', it returns False for 'sentinel_archive/' and
+        wrongly reports claimed_by corruption.
+        """
+        from owlbear_kanban.corruption import detect_corruption
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_archive").mkdir(parents=True)
+        path = kanban_dir / "sentinel_archive" / "1-task.md"
+        path.write_text(
+            "---\nid: 1\ntitle: Task\nstatus: done\npriority: needed\n"
+            'created: "2026-01-01T10:00:00+00:00"\nupdated: "2026-01-01T10:00:00+00:00"\n'
+            "claimed_by: some-agent\n---\n",
+            encoding="utf-8",
+        )
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+
+        # With sentinel archive dir config, _is_archive_path returns True → no corruption.
+        # With hardcoded 'archive', _is_archive_path returns False → false corruption reported.
+        result = detect_corruption(path, config)
+
+        assert result is None, (
+            f"detect_corruption returned {result!r} for archive file with claimed_by; "
+            "_is_archive_path does not use config.paths.archive_dir (sentinel value)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2: storage.py non-save_config sites use sub-model access paths
@@ -417,6 +513,156 @@ class TestFromAC_StorageNonSaveConfigPaths:
             result = _storage.move_to_archive(1, kanban_dir)
 
         assert result.parent.name == "archive"
+
+    def test_write_task_writes_to_sentinel_tasks_dir(self, tmp_path: Path) -> None:
+        """write_task() must write to config.paths.tasks_dir (not hardcoded 'tasks').
+
+        Only 'sentinel_tasks/' is created — 'tasks/' does not exist.
+        If write_task uses config.paths.tasks_dir, it writes there and returns
+        a path under 'sentinel_tasks/'.
+        If it hardcodes 'tasks', the dir does not exist and write fails or
+        the returned path would not be under 'sentinel_tasks/'.
+        """
+        import owlbear_kanban.storage as _storage
+        from owlbear_kanban.models import Task
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_tasks").mkdir(parents=True)
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+        task = Task(
+            id=1,
+            title="Sentinel Task",
+            status="todo",
+            priority="needed",
+            created="2026-01-01T10:00:00+00:00",
+            updated="2026-01-01T10:00:00+00:00",
+        )
+
+        with patch("owlbear_kanban.storage.load_config", return_value=config):
+            result = _storage.write_task(task, kanban_dir)
+
+        assert result.parent.name == "sentinel_tasks", (
+            f"write_task wrote to {result.parent.name!r}, expected 'sentinel_tasks'; "
+            "does not use config.paths.tasks_dir (sentinel value — hardcoded 'tasks' cannot pass)"
+        )
+
+    def test_write_task_if_unchanged_reads_sentinel_tasks_dir(self, tmp_path: Path) -> None:
+        """write_task_if_unchanged() must look in config.paths.tasks_dir (not hardcoded 'tasks').
+
+        Task file is in 'sentinel_tasks/' — 'tasks/' does not exist.
+        If write_task_if_unchanged uses config.paths.tasks_dir, it finds the file.
+        If it hardcodes 'tasks', it raises FileNotFoundError.
+        """
+        import owlbear_kanban.storage as _storage
+        from owlbear_kanban.storage import read_task
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_tasks").mkdir(parents=True)
+        (kanban_dir / "sentinel_archive").mkdir(parents=True)
+        task_path = kanban_dir / "sentinel_tasks" / "1-task.md"
+        task_path.write_text(
+            "---\nid: 1\ntitle: Task\nstatus: todo\npriority: needed\n"
+            'created: "2026-01-01T10:00:00+00:00"\nupdated: "2026-01-01T10:00:00+00:00"\n'
+            "tags: []\nparent: null\ndepends_on: []\nblocked: false\nblock_reason: null\n"
+            "claimed_at: null\n---\nBody.\n",
+            encoding="utf-8",
+        )
+        task = read_task(task_path)
+        expected_updated = task.updated
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+
+        with patch("owlbear_kanban.storage.load_config", return_value=config):
+            result = _storage.write_task_if_unchanged(task, expected_updated, kanban_dir)
+
+        assert result.parent.name == "sentinel_tasks", (
+            f"write_task_if_unchanged returned path under {result.parent.name!r}; "
+            "expected 'sentinel_tasks' — does not use config.paths.tasks_dir (sentinel value)"
+        )
+
+    def test_list_task_files_reads_sentinel_tasks_dir(self, tmp_path: Path) -> None:
+        """list_task_files() must list from config.paths.tasks_dir (not hardcoded 'tasks').
+
+        A task file is placed in 'sentinel_tasks/' — 'tasks/' does not exist.
+        If list_task_files uses config.paths.tasks_dir, it finds the file.
+        If it hardcodes 'tasks', it returns [] (dir does not exist → no files).
+        """
+        import owlbear_kanban.storage as _storage
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_tasks").mkdir(parents=True)
+        task_path = kanban_dir / "sentinel_tasks" / "1-task.md"
+        task_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+
+        with patch("owlbear_kanban.storage.load_config", return_value=config):
+            result = _storage.list_task_files(kanban_dir)
+
+        assert result == [task_path], (
+            f"list_task_files returned {result!r}, expected [{task_path!r}]; "
+            "does not use config.paths.tasks_dir (sentinel value — hardcoded 'tasks' cannot pass)"
+        )
+
+    def test_list_archive_files_reads_sentinel_archive_dir(self, tmp_path: Path) -> None:
+        """list_archive_files() must list from config.paths.archive_dir (not hardcoded 'archive').
+
+        A file is placed in 'sentinel_archive/' — 'archive/' does not exist.
+        If list_archive_files uses config.paths.archive_dir, it finds the file.
+        If it hardcodes 'archive', it returns [] (dir does not exist → no files).
+        """
+        import owlbear_kanban.storage as _storage
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_archive").mkdir(parents=True)
+        archive_path = kanban_dir / "sentinel_archive" / "1-archived.md"
+        archive_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+
+        with patch("owlbear_kanban.storage.load_config", return_value=config):
+            result = _storage.list_archive_files(kanban_dir)
+
+        assert result == [archive_path], (
+            f"list_archive_files returned {result!r}, expected [{archive_path!r}]; "
+            "does not use config.paths.archive_dir (sentinel value — hardcoded 'archive' cannot pass)"
+        )
+
+    def test_move_to_archive_uses_sentinel_dirs(self, tmp_path: Path) -> None:
+        """move_to_archive() must read from config.paths.tasks_dir and write to config.paths.archive_dir.
+
+        Task is in 'sentinel_tasks/' — 'tasks/' does not exist.
+        Target is 'sentinel_archive/' — 'archive/' does not exist.
+        If move_to_archive uses hardcoded dirs, it raises FileNotFoundError (no task file found).
+        """
+        import owlbear_kanban.storage as _storage
+
+        kanban_dir = tmp_path / "board"
+        (kanban_dir / "sentinel_tasks").mkdir(parents=True)
+        (kanban_dir / "sentinel_archive").mkdir(parents=True)
+        task_path = kanban_dir / "sentinel_tasks" / "1-task.md"
+        task_path.write_text(
+            "---\nid: 1\ntitle: T\nstatus: todo\npriority: needed\n"
+            "created: '2026-01-01T10:00:00+00:00'\nupdated: '2026-01-01T10:00:00+00:00'\n---\n",
+            encoding="utf-8",
+        )
+        config = _MinimalConfig(
+            paths=_PathsConfig(tasks_dir="sentinel_tasks", archive_dir="sentinel_archive")
+        )
+
+        with patch("owlbear_kanban.storage.load_config", return_value=config):
+            result = _storage.move_to_archive(1, kanban_dir)
+
+        assert result.parent.name == "sentinel_archive", (
+            f"move_to_archive placed file in {result.parent.name!r}, expected 'sentinel_archive'; "
+            "does not use config.paths.archive_dir (sentinel value)"
+        )
+        assert not task_path.exists(), "task file still present in sentinel_tasks/ after move"
 
 
 # ---------------------------------------------------------------------------
@@ -605,32 +851,23 @@ class TestFromAC_LiveConfigGroupedFormat:
         )
 
     def test_live_config_loads_via_canonical_loader_with_grouped_submodels(self) -> None:
-        """load_config() on the live config.yml must succeed and return grouped sub-model access.
+        """load_config() on the live config.yml must prove grouped extraction via value-equality.
 
-        Exercises the canonical loader path (config_loader.load_config) and asserts
-        that the returned BoardConfig exposes grouped sub-model fields — proving the
-        live config actually loads correctly, not just that raw YAML markers are present.
+        Exercises the canonical loader path (config_loader.load_config) and proves
+        that config.pipeline.statuses was extracted from the root statuses list —
+        not just type-checked.  PipelineConfig.statuses defaults to [], so a
+        non-empty result that equals the root list proves the normalizer ran.
         """
         config = load_config(_LIVE_KANBAN_DIR)
-        # Grouped sub-model access — any surviving forwarding-property path or
-        # validation failure would prevent these from succeeding.
-        assert isinstance(config.paths.tasks_dir, str), (
-            f"config.paths.tasks_dir must be str, got {type(config.paths.tasks_dir)!r}"
+        # Value-equality assertion: pipeline.statuses must equal the root statuses list.
+        # PipelineConfig default is [] — a non-empty match proves normalizer extraction.
+        assert config.pipeline.statuses == config.statuses, (
+            f"config.pipeline.statuses {config.pipeline.statuses!r} != "
+            f"config.statuses {config.statuses!r}; normalizer extraction failed"
         )
-        assert isinstance(config.paths.archive_dir, str), (
-            f"config.paths.archive_dir must be str, got {type(config.paths.archive_dir)!r}"
-        )
-        assert isinstance(config.pipeline.terminal_status, str), (
-            "config.pipeline.terminal_status must be a str"
-        )
-        assert isinstance(config.pipeline.entry_status, str), (
-            "config.pipeline.entry_status must be a str"
-        )
-        assert isinstance(config.agents.agent_map, dict), (
-            "config.agents.agent_map must be a dict"
-        )
-        assert isinstance(config.policy.non_impl_tags, list), (
-            "config.policy.non_impl_tags must be a list"
+        assert len(config.pipeline.statuses) == 7, (
+            f"Expected 7 statuses (live config), got {len(config.pipeline.statuses)}; "
+            "PipelineConfig default is [] so any non-zero count would pass type check"
         )
 
 
