@@ -451,9 +451,11 @@ class TestFromAC_ResolvePendingDrs:
         resolve_pending_drs(decisions_dir, engine)
 
         append_calls = [
-            c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None
+            c
+            for c in engine.edit_task.call_args_list
+            if c.args and c.args[0] == 77 and c.kwargs.get("append_body") is not None
         ]
-        assert append_calls, "engine.edit_task(append_body=...) must be called for needs-info"
+        assert append_calls, "engine.edit_task(77, append_body=...) must be called for needs-info"
         payload: str = append_calls[0].kwargs["append_body"]
         assert "needs-info" in payload, (
             f"append_body must include the response value 'needs-info'; got {payload!r}"
