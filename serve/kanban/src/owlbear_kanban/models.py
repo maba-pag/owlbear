@@ -267,23 +267,25 @@ class BoardConfig(BaseModel):
                     if isinstance(s, dict)
                 ]
 
-        # Propagate legacy defaults → entry_status
+        # Legacy passthrough keys are only synthesized for non-grouped input.
         defaults = data.get("defaults")
-        if "entry_status" not in data and isinstance(defaults, dict):
-            data["entry_status"] = defaults.get("status", "research")
-        if "default_priority" not in data and isinstance(defaults, dict):
-            data["default_priority"] = defaults.get("priority", "important")
+        if not is_grouped_schema:
+            # Propagate legacy defaults → entry_status/default_priority
+            if "entry_status" not in data and isinstance(defaults, dict):
+                data["entry_status"] = defaults.get("status", "research")
+            if "default_priority" not in data and isinstance(defaults, dict):
+                data["default_priority"] = defaults.get("priority", "important")
 
-        # Legacy boards often omit agent_map entirely; derive a permissive
-        # status-complete map only in that case so explicit {} still fails.
-        if "agent_map" not in data and (
-            "version" in data or "board" in data or isinstance(defaults, dict)
-        ):
-            statuses = data.get("statuses")
-            if isinstance(statuses, list):
-                data["agent_map"] = {
-                    status: [] for status in statuses if isinstance(status, str)
-                }
+            # Legacy boards often omit agent_map entirely; derive a permissive
+            # status-complete map only in that case so explicit {} still fails.
+            if "agent_map" not in data and (
+                "version" in data or "board" in data or isinstance(defaults, dict)
+            ):
+                statuses = data.get("statuses")
+                if isinstance(statuses, list):
+                    data["agent_map"] = {
+                        status: [] for status in statuses if isinstance(status, str)
+                    }
 
         if is_grouped_schema:
             paths = data.get("paths")
@@ -393,71 +395,6 @@ class BoardConfig(BaseModel):
         return data
 
     @property
-    def tasks_dir(self) -> str:
-        """Backward-compatible forwarding to grouped paths.tasks_dir."""
-        return self.paths.tasks_dir
-
-    @property
-    def archive_dir(self) -> str:
-        """Backward-compatible forwarding to grouped paths.archive_dir."""
-        return self.paths.archive_dir
-
-    @property
-    def entry_status(self) -> str:
-        """Backward-compatible forwarding to grouped pipeline.entry_status."""
-        return self.pipeline.entry_status
-
-    @property
-    def terminal_status(self) -> str:
-        """Backward-compatible forwarding to grouped pipeline.terminal_status."""
-        return self.pipeline.terminal_status
-
-    @property
-    def wave_size(self) -> int:
-        """Backward-compatible forwarding to grouped pipeline.wave_size."""
-        return self.pipeline.wave_size
-
-    @property
-    def claim_timeout(self) -> str:
-        """Backward-compatible forwarding to grouped pipeline.claim_timeout."""
-        return self.pipeline.claim_timeout
-
-    @property
-    def default_priority(self) -> str:
-        """Backward-compatible forwarding to grouped pipeline.default_priority."""
-        return self.pipeline.default_priority
-
-    @property
-    def agent_map(self) -> dict[str, Any]:
-        """Backward-compatible forwarding to grouped agents.agent_map."""
-        return self.agents.agent_map
-
-    @property
-    def agent_types(self) -> dict[str, Any]:
-        """Backward-compatible forwarding to grouped agents.agent_types."""
-        return self.agents.agent_types
-
-    @property
-    def agent_compatibility(self) -> dict[str, Any]:
-        """Backward-compatible forwarding to grouped agents.agent_compatibility."""
-        return self.agents.agent_compatibility
-
-    @property
-    def non_impl_tags(self) -> list[str]:
-        """Backward-compatible forwarding to grouped policy.non_impl_tags."""
-        return self.policy.non_impl_tags
-
-    @property
-    def archival_reasons(self) -> frozenset[str]:
-        """Backward-compatible forwarding to grouped policy.archival_reasons."""
-        return self.policy.archival_reasons
-
-    @property
-    def status_predicates(self) -> dict[str, Any]:
-        """Backward-compatible forwarding to grouped policy.status_predicates."""
-        return self.policy.status_predicates
-
-    @property
     def status_names(self) -> list[str]:
         """Return statuses as a list of plain strings."""
         return self.statuses
@@ -467,10 +404,10 @@ class BoardConfig(BaseModel):
         """Validate semantic invariants required by engine and direct model usage."""
         _validate_status_and_priority(self.statuses, self.priorities)
         _validate_entry_and_terminal(
-            self.statuses, self.entry_status, self.terminal_status
+            self.statuses, self.pipeline.entry_status, self.pipeline.terminal_status
         )
-        _parse_claim_timeout(self.claim_timeout)
-        _validate_agent_compatibility(self.agent_compatibility)
+        _parse_claim_timeout(self.pipeline.claim_timeout)
+        _validate_agent_compatibility(self.agents.agent_compatibility)
 
         return self
 

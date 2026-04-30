@@ -412,7 +412,7 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
         Absolute path of the written file.
     """
     config = load_config(kanban_dir)
-    tasks_dir = target_dir or (kanban_dir / config.tasks_dir)
+    tasks_dir = target_dir or (kanban_dir / config.paths.tasks_dir)
 
     # Find existing file with this ID to keep filename stable
     existing = list(tasks_dir.glob(f"{task.id}-*.md"))
@@ -476,8 +476,8 @@ def write_task_if_unchanged(
     from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
 
     config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
-    archive_dir = kanban_dir / config.archive_dir
+    tasks_dir = kanban_dir / config.paths.tasks_dir
+    archive_dir = kanban_dir / config.paths.archive_dir
     lock_path = tasks_dir / f".{task.id}.lock"
     archive_lock_path = archive_dir / f".{task.id}.lock"
 
@@ -504,7 +504,7 @@ def write_task_if_unchanged(
 def list_task_files(kanban_dir: Path) -> list[Path]:
     """Return sorted list of all task ``.md`` files, excluding temp/lock files."""
     config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
+    tasks_dir = kanban_dir / config.paths.tasks_dir
     if not tasks_dir.exists():
         return []
     return sorted(
@@ -520,7 +520,7 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
 def list_archive_files(kanban_dir: Path) -> list[Path]:
     """Return sorted list of all archive ``.md`` files, excluding temp/lock files."""
     config = load_config(kanban_dir)
-    archive_dir = kanban_dir / config.archive_dir
+    archive_dir = kanban_dir / config.paths.archive_dir
     if not archive_dir.exists():
         return []
     return sorted(
@@ -543,8 +543,8 @@ def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
 
     config = load_config(kanban_dir)
-    tasks_dir = kanban_dir / config.tasks_dir
-    archive_dir = kanban_dir / config.archive_dir
+    tasks_dir = kanban_dir / config.paths.tasks_dir
+    archive_dir = kanban_dir / config.paths.archive_dir
     archive_dir.mkdir(parents=True, exist_ok=True)
     task_lock_path = tasks_dir / f".{task_id}.lock"
     archive_lock_path = archive_dir / f".{task_id}.lock"

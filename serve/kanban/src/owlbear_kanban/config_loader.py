@@ -47,7 +47,7 @@ def _validate_claim_timeout(config: BoardConfig) -> None:
     """Validate claim_timeout by delegating to the canonical parser (AC-C50)."""
     from owlbear_kanban.engine import _parse_duration  # noqa: PLC0415
 
-    _parse_duration(config.claim_timeout)
+    _parse_duration(config.pipeline.claim_timeout)
 
 
 # ---------------------------------------------------------------------------

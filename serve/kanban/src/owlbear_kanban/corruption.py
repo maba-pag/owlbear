@@ -312,7 +312,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
     # Mode 8: invalid status
     status_val = fm.get("status")
     if status_val is not None:
-        valid_statuses = set(config.statuses) | {"archived"}
+        valid_statuses = set(config.pipeline.statuses) | {"archived"}
         if status_val not in valid_statuses:
             return CorruptionError(
                 code=ERR_CORRUPT_INVALID_STATUS,
@@ -322,7 +322,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
 
     # Mode 9: invalid priority
     priority_val = fm.get("priority")
-    if priority_val is not None and priority_val not in config.priorities:
+    if priority_val is not None and priority_val not in config.pipeline.priorities:
         return CorruptionError(
             code=ERR_CORRUPT_INVALID_PRIORITY,
             detail=f"priority '{priority_val}' not in configured priorities",
@@ -481,7 +481,9 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
         changed = False
         for field, default in _SAFE_DEFAULTS.items():
             if field not in fm:
-                fm[field] = config.priorities[0] if field == "priority" else default
+                fm[field] = (
+                    config.pipeline.priorities[0] if field == "priority" else default
+                )
                 changed = True
 
         if not changed:
@@ -519,7 +521,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
     # Mode 9: invalid priority → coerce to first configured priority
     if code_name == ERR_CORRUPT_INVALID_PRIORITY.__name__:
-        fm["priority"] = config.priorities[0]
+        fm["priority"] = config.pipeline.priorities[0]
         return _write_repaired(path, fm, body_text, code_name, task_id)
 
     # Unknown code
@@ -583,8 +585,8 @@ def scan_and_fix(kanban_dir: Path, config: BoardConfig) -> list[RepairOutcome]: 
     """
     outcomes: list[RepairOutcome] = []
 
-    tasks_dir = kanban_dir / config.tasks_dir
-    archive_dir = kanban_dir / config.archive_dir
+    tasks_dir = kanban_dir / config.paths.tasks_dir
+    archive_dir = kanban_dir / config.paths.archive_dir
 
     # Collect all files
     task_files: list[Path] = []
@@ -672,4 +674,4 @@ def _extract_file_id(path: Path) -> int | None:
 
 def _is_archive_path(path: Path, config: BoardConfig) -> bool:
     """Return True if *path* is inside the archive directory."""
-    return path.parent.name == config.archive_dir.split("/")[-1]
+    return path.parent.name == config.paths.archive_dir.split("/")[-1]
