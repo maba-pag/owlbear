@@ -205,7 +205,8 @@ class TestFromAC_DecisionsPending:
         decisions_dir: Path,
     ) -> None:
         """body_preview is capped around 200 characters for long DR bodies."""
-        long_body = "# Long request\n" + ("lorem ipsum dolor sit amet " * 30)
+        unique_prefix = "# Long request\nTOKEN-START-"
+        long_body = unique_prefix + ("lorem ipsum dolor sit amet " * 30)
         _write_pending_dr(
             decisions_dir,
             stem="8-long-body",
@@ -218,6 +219,9 @@ class TestFromAC_DecisionsPending:
         assert response.status_code == 200
         preview = response.json()["items"][0]["body_preview"]
         assert isinstance(preview, str)
+        assert preview
+        assert long_body.startswith(preview)
+        assert preview.startswith(unique_prefix)
         assert len(preview) <= 200
 
     def test_pending_empty_returns_zero_and_empty_items(
@@ -234,13 +238,24 @@ class TestFromAC_DecisionsPending:
 class TestFromAC_DecisionsResolve:
     """AC coverage for POST /api/decisions/{id}/resolve."""
 
+    @pytest.mark.parametrize(
+        ("resolution", "notes"),
+        [
+            ("approved", "Looks good."),
+            ("needs-info", None),
+            ("rejected", "Not aligned with scope."),
+            ("completed", "Implemented as requested."),
+        ],
+    )
     def test_resolve_accepts_response_enum_and_optional_notes(
         self,
         client: TestClient,
         decisions_dir: Path,
+        resolution: str,
+        notes: str | None,
     ) -> None:
-        """Resolve endpoint accepts valid response enum plus notes."""
-        decision_id = "42-awaiting-approval"
+        """Resolve endpoint accepts every valid enum value and optional notes."""
+        decision_id = f"42-awaiting-approval-{resolution}"
         _write_pending_dr(
             decisions_dir,
             stem=decision_id,
@@ -248,9 +263,13 @@ class TestFromAC_DecisionsResolve:
             body="# Question\nApprove this decision?",
         )
 
+        payload: dict[str, str] = {"response": resolution}
+        if notes is not None:
+            payload["notes"] = notes
+
         response = client.post(
             f"/api/decisions/{decision_id}/resolve",
-            json={"response": "approved", "notes": "Looks good."},
+            json=payload,
         )
 
         assert response.status_code == 200
