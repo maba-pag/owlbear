@@ -16,7 +16,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Tools
 
-The server exposes exactly 8 tools:
+The server exposes 9 tools:
 
 | Tool | Signature |
 |------|-----------|
@@ -28,6 +28,7 @@ The server exposes exactly 8 tools:
 | `move_task` | `move_task(id: int, status: str, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `start_work` | `start_work(id: int)` |
 | `end_work` | `end_work(id: int, outcome: str, move_to: str \| None = None, note: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None, block_reason: str \| None = None)` |
+| `create_dr` | `create_dr(task_id: str, agent: str, request_type: str, body: str)` |
 
 ## Data Projections and Envelopes
 
