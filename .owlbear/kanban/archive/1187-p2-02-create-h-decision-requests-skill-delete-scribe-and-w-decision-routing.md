@@ -1,10 +1,10 @@
 ---
 id: 1187
 title: 'P2-02: Create h-decision-requests skill + delete scribe and w-decision-routing'
-status: done
+status: archived
 priority: needed
 created: 2026-04-30T00:52:00.447027+00:00
-updated: 2026-04-30T05:12:07.050236+00:00
+updated: 2026-04-30T05:17:14.679275+00:00
 tags:
 - phase-2
 - scope:agents
@@ -276,3 +276,30 @@ Architecture review complete. All AC lines td:0 (structural tests exist in #1186
 
 ### Scratch Files Cleaned
 - None (no .owlbear/scratch/1187-* files found)
+[[2026-04-30]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| SKILL.md created (~50 lines) documenting when/how/body/fire-and-forget | File exists at 82 lines; sections: When To Create (L13), create_dr Contract (L28), Body Format (L40), Fire-And-Forget (L63), Operational Rules (L78). Content aligns with live API (reviewer verified against server.py:429-434 and decisions.py:84-127). | PASS |
+| scribe.agent.md deleted | file_search returned no match | PASS |
+| w-decision-routing/SKILL.md deleted | file_search returned no match | PASS |
+| Valid frontmatter (name, description, user-invocable: false) | Present at lines 2-4 | PASS |
+| All tests from #1186 pass | quality-runner full run: test_dr_skill_replacement_1186.py not in 65 failures (9/9 green) | PASS |
+
+### Test Results
+- pytest: 3264 passed, 65 failed, 4 skipped. Zero failures in task scope. All 65 are pre-existing background debt in unrelated modules (engine_init_1068, storage_1050, cockpit_react_compiler_1015, engine_atomicity_1104, migrate, outputschema_541, engine_dead_code_1112, cockpit_decisions_api_1189).
+- ruff: 4 violations, none in task-scoped files (all in knowledge, mcp-knowledge, mcp-memory, orchestrator).
+
+### Architect Quality: 4/5
+AC lines are specific, verifiable, and scope-bounded. Minor gap: AC did not explicitly require live-API alignment for handbook content (reviewer caught this on first pass), but encoding contract accuracy for docs tasks is inherently difficult. Adequate.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 5 verified) = 0.00
+- Lint in task scope: 0 = 0.00
+- AC quality (4/5, above threshold): 0.00
+- Reviewer evidence: present and detailed (two passes, second PASS at 0.95): 0.00
+- Full-suite failures in task scope: 0 = 0.00
+
+### Confidence: 0.98
+### Action: archive

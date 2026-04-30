@@ -1,10 +1,10 @@
 ---
 id: 1191
 title: 'P3-03: Test DR status indicator + popover components'
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30T00:52:17.480756+00:00
-updated: 2026-04-30T05:08:49.714999+00:00
+updated: 2026-04-30T05:14:38.625906+00:00
 tags:
 - phase-3
 - scope:cockpit-fe
@@ -13,7 +13,7 @@ depends_on: []
 blocked: false
 block_reason:
 claimed_by: dim-stream
-claimed_at: 2026-04-30T05:08:49.714999+00:00
+claimed_at: 2026-04-30T05:14:38.625906+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -553,3 +553,18 @@ Architecture review (3rd re-entry): Diagnosed root cause of contract drift — t
   |---------|-------|
   | AC11: 3+ ticks → exactly 1 repoll (coalescing discriminator) | usePendingDRs_1191 'coalesces 3 skipped interval ticks into exactly 1 repoll after in-flight settles' |
   | AC12: rewrite conflicting interval test (settle-first) | usePendingDRs_1191 're-fetches multiple times as interval repeats (AC12: settled between intervals)' |
+[[2026-04-30]]
+## Builder Notes
+- Implementation: updated serve/cockpit/web/src/hooks/usePendingDRs.ts.
+- Fix applied: replaced counted overlap replay (`pendingPollCountRef`) with coalesced pending poll guard (`pendingPollRef`) so multiple skipped interval ticks during one in-flight request queue exactly one follow-up poll.
+- Scope discipline: no test files modified; no unrelated source files changed.
+- Tests (quality-runner, scoped): 49 passed, 0 failed, 0 skipped across serve/cockpit/web/src/__tests__/usePendingDRs_1191.test.ts and serve/cockpit/web/src/__tests__/DRStatusIndicator_1191.test.tsx.
+- Coverage (quality-runner, scoped): overall 94.59%; modules — src/hooks/usePendingDRs.ts 95.74%, src/components/DRStatusIndicator.tsx 92.59%.
+- Lint/type (quality-runner, frontend-scoped): ESLint clean (0 violations), TypeScript clean (0 errors) on src/hooks/usePendingDRs.ts, src/components/DRStatusIndicator.tsx, src/__tests__/usePendingDRs_1191.test.ts, src/__tests__/DRStatusIndicator_1191.test.tsx.
+- Commit: 3ab5e2bd6a3b307be74fa238e8f5adfb10b15ed2 (`fix: coalesce pending DR overlap polls (#1191, builder)`).
+
+### Reflection
+- Problem faced: prior implementation used counted replay, causing AC11 failure (expected 3 calls, got 5).
+- Workaround applied: aligned hook with the existing coalesced overlap pattern used by useScanPolling.
+- Pattern discovered: for interval polling hooks in Cockpit, overlap safety should coalesce skipped ticks to a single follow-up call.
+- Quality gap: none remaining after scoped test + lint/type + coverage verification.

@@ -4,7 +4,7 @@ title: 'P1-01: Test decisions.py create_dr + resolve_pending_drs'
 status: review
 priority: needed
 created: 2026-04-30T00:51:30.965405+00:00
-updated: 2026-04-30T05:09:29.233768+00:00
+updated: 2026-04-30T05:14:37.868166+00:00
 tags:
 - phase-1
 - scope:kanban
@@ -13,8 +13,8 @@ parent: 1179
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: dim-stream
+claimed_at: 2026-04-30T05:14:37.868166+00:00
 archival_reason:
 archival_refs: []
 ---
