@@ -45,10 +45,12 @@ from owlbear_kanban import storage
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.config_loader import load_config
+from owlbear_kanban.corruption import CorruptionError
 from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
     BoardConfig,
+    KanbanError,
     ConcurrencyError,
     ConfigError,
     DispatchEntry,
@@ -109,7 +111,7 @@ def _parse_duration(s: str) -> timedelta:
     return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
-def _validate_engine_config(config: BoardConfig) -> None:
+def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
     """Validate engine-specific config invariants required at engine init."""
     statuses = config.pipeline.statuses
     priorities = config.pipeline.priorities
@@ -140,6 +142,13 @@ def _validate_engine_config(config: BoardConfig) -> None:
             user_message=(
                 f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
             ),
+        )
+
+    missing_statuses = [status for status in statuses if status not in config.agents.agent_map]
+    if missing_statuses:
+        raise ConfigError(
+            code="ERR_INVALID_STATUS",
+            user_message=f"agent_map missing status entries: {missing_statuses}",
         )
 
     # Validate timeout format eagerly at engine init.
@@ -521,16 +530,6 @@ class KanbanEngine:
         """Per-instance write counter; incremented on every mutating operation."""
         return self._revision
 
-    @property
-    def tasks_dir(self) -> Path:
-        """Configured tasks directory for the active board."""
-        return self._tasks_dir
-
-    @property
-    def kanban_dir(self) -> Path:
-        """Root kanban directory for the active board."""
-        return self._kanban_dir
-
     # ------------------------------------------------------------------
     # Config-derived rank maps
     # ------------------------------------------------------------------
@@ -694,7 +693,7 @@ class KanbanEngine:
                         archive_task = read_task(archive_path)
                     except (FileNotFoundError, ValueError, KeyError):
                         archived_reasons[archive_id] = None
-                    except Exception:  # noqa: BLE001
+                    except CorruptionError:
                         archived_reasons[archive_id] = None
                     else:
                         archived_reasons[archive_id] = archive_task.archival_reason
@@ -730,12 +729,7 @@ class KanbanEngine:
                         continue
                     except (ValueError, KeyError):
                         continue
-                    except Exception as _exc:  # noqa: BLE001
-                        # Silently skip other parse errors (CorruptionError modes 1, 3-9)
-                        from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
-
-                        if isinstance(_exc, _CorruptionError):
-                            continue
+                    except CorruptionError:
                         continue
                     cache[entry.name] = (mtime_ns, task)
                     if not archived and task.id in archive_ids:
@@ -1586,7 +1580,7 @@ class KanbanEngine:
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
                 record = read_task(path)
-            except Exception:  # noqa: BLE001, S112
+            except (FileNotFoundError, ValueError, KeyError, CorruptionError):
                 continue  # silently skip corrupt files (AC-C27)
 
             # AC-C27: do not mutate parseable-but-corrupt files.
@@ -1673,7 +1667,7 @@ class KanbanEngine:
                         tags=["type:user-action"],
                     )
                     final_outcomes.append(outcome)
-                except Exception as _exc:  # noqa: BLE001
+                except (ValueError, KanbanError, OSError) as _exc:
                     from owlbear_kanban.corruption import RepairOutcome  # noqa: PLC0415
 
                     final_outcomes.append(
@@ -1869,7 +1863,8 @@ class AgentView:
     _MAX_BODY_BYTES = 500 * 1024
     _BODY_SIZE_WARNING = "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
     _BLOCK_AR_HINT = (
-        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request via the create_dr tool."
+        "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request for this block via the"
+        " scribe agent (see w-decision-routing)."
         " Blocks without a DR are invisible to the pipeline."
     )
 
@@ -2277,17 +2272,11 @@ class AgentView:
     ) -> PickTasksResponse:
         """Select dispatchable tasks and arrange them into dependency-disjoint waves.
 
-        Before the pipeline runs, validates that every status in
-        ``config.pipeline.statuses`` has a corresponding entry in
-        ``config.agents.agent_map``.  Raises :class:`ConfigError` with code
-        ``ERR_INVALID_STATUS`` and the list of missing statuses if any are
-        absent.
-
-        Then runs a five-step pipeline:
+        Runs a five-step pipeline:
 
         1. **Resolve** — attempt to resolve any pending Decision Requests via
            ``owlbear_kanban.decisions.resolve_pending_drs``; exceptions are
-           logged and suppressed so dispatch is never blocked.
+           suppressed so dispatch is never blocked.
         2. **Filter** — exclude claimed, archived, ``blocked=True``, and
            ``dep_status="blocked"`` tasks.
         3. **Sort** — deterministic ordering: ``priority_rank ASC``,
@@ -2310,8 +2299,6 @@ class AgentView:
             ``guidance``.
 
         Raises:
-            ConfigError: ``agent_map`` is missing entries for one or more
-                         pipeline statuses (``ERR_INVALID_STATUS``).
             ValidationError: ``wave_size < 1``, ``max_waves < 1``, or the
                              effective wave size resolved from config is
                              ``< 1`` (``ERR_INVALID_WAVE_PARAM``).
@@ -2335,20 +2322,15 @@ class AgentView:
                 user_message="wave_size must be >= 1",
             )
 
-        missing_statuses = [
-            status for status in config.pipeline.statuses if status not in config.agents.agent_map
-        ]
-        if missing_statuses:
-            raise ConfigError(
-                code="ERR_INVALID_STATUS",
-                user_message=f"agent_map missing status entries: {missing_statuses}",
-            )
-
         try:
             decisions = importlib.import_module("owlbear_kanban.decisions")
-            decisions.resolve_pending_drs(self.engine)
-        except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("Failed to resolve pending DRs before pick_tasks: %s", exc)
+        except ImportError as exc:
+            LOGGER.warning("Failed to import decisions module before pick_tasks: %s", exc)
+        else:
+            try:
+                decisions.resolve_pending_drs(self.engine)
+            except (KanbanError, OSError, ValueError) as exc:
+                LOGGER.warning("Failed to resolve pending DRs before pick_tasks: %s", exc)
 
         active = self.engine.list_tasks(
             archived=False,
@@ -2499,7 +2481,7 @@ class AgentView:
             a ``guidance`` warning when ``body`` exceeds 100 KB.
 
         Raises:
-            :class:`ValidationError`: title is empty (``ERR_INVALID_TITLE``),
+            :class:`ValidationError`: title is empty (``ERR_INVALID_STATUS``),
                 body exceeds 500 KB (``ERR_BODY_TOO_LARGE``),
                 parent not found (``ERR_PARENT_NOT_FOUND``),
                 a dependency not found (``ERR_DEP_NOT_FOUND``), or
@@ -2507,7 +2489,7 @@ class AgentView:
         """
         if not title.strip():
             raise ValidationError(
-                code="ERR_INVALID_TITLE",
+                code="ERR_INVALID_STATUS",
                 user_message="title must not be empty",
             )
         self._validate_body_size(body)

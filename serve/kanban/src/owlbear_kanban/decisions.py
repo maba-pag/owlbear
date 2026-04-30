@@ -10,7 +10,6 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
-from io import StringIO
 from pathlib import Path
 from typing import Protocol
 
@@ -82,39 +81,6 @@ def _resolve_decisions_dir(engine: DecisionEngine) -> Path:
     return Path(kanban_dir) / "decisions"
 
 
-def _move_with_collision_suffix(source: Path, resolved_dir: Path) -> Path:
-    """Move a file into resolved_dir without overwriting existing files."""
-    content = source.read_bytes()
-    counter = 1
-    while True:
-        filename = (
-            f"{source.stem}{source.suffix}"
-            if counter == 1
-            else f"{source.stem}-{counter}{source.suffix}"
-        )
-        destination = resolved_dir / filename
-        try:
-            fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-            with os.fdopen(fd, "wb") as handle:
-                handle.write(content)
-        except FileExistsError:
-            counter += 1
-        else:
-            source.unlink()
-            return destination
-
-
-def _rewrite_response(path: Path, meta: dict[str, object], body: str, response: str) -> None:
-    """Persist an updated DR response value while preserving file structure."""
-    updated_meta = dict(meta)
-    updated_meta["response"] = response
-    yaml = YAML()
-    buffer = StringIO()
-    yaml.dump(updated_meta, buffer)
-    frontmatter = buffer.getvalue().rstrip("\n")
-    path.write_text(f"---\n{frontmatter}\n---\n{body}", encoding="utf-8", newline="\n")
-
-
 def create_dr(  # noqa: PLR0913
     decisions_dir: Path,
     engine: DecisionEngine,
@@ -173,10 +139,6 @@ def resolve_pending_drs(
 ) -> list[Path]:
     """Resolve pending DR files and return moved files.
 
-    Moves each resolved file to ``resolved/`` using collision-safe
-    exclusive-create; appends a ``-2``, ``-3``, … suffix when a
-    conflicting basename already exists.
-
     Supports both call forms:
     - ``resolve_pending_drs(decisions_dir, engine)``
     - ``resolve_pending_drs(engine)``
@@ -199,11 +161,6 @@ def resolve_pending_drs(
             meta, body = _parse_dr(path)
             response = str(meta.get("response", "pending"))
 
-            if response in {"applied-approved", "applied-rejected", "applied-needs-info"}:
-                dest = _move_with_collision_suffix(path, resolved_dir)
-                moved.append(dest)
-                continue
-
             if response == "pending":
                 continue
 
@@ -211,16 +168,16 @@ def resolve_pending_drs(
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
                 engine.edit_task(task_id, blocked=False)
-                _rewrite_response(path, meta, body, f"applied-{response}")
-                dest = _move_with_collision_suffix(path, resolved_dir)
+                dest = resolved_dir / path.name
+                path.replace(dest)
                 moved.append(dest)
                 continue
 
             if response == "needs-info":
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
-                _rewrite_response(path, meta, body, "applied-needs-info")
-                dest = _move_with_collision_suffix(path, resolved_dir)
+                dest = resolved_dir / path.name
+                path.replace(dest)
                 moved.append(dest)
                 continue
 
