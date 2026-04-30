@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const DEFAULT_INTERVAL_MS = 60_000
 
@@ -34,41 +34,52 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
   const [items, setItems] = useState<PendingDR[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<Error | null>(null)
+  const isMountedRef = useRef(true)
+  const inFlightRef = useRef(false)
+  const pendingPollCountRef = useRef(0)
 
-  useEffect(() => {
-    let isMounted = true
+  const poll = async (): Promise<void> => {
+    if (inFlightRef.current) {
+      pendingPollCountRef.current += 1
+      return
+    }
 
-    const poll = async (): Promise<void> => {
-      if (!isMounted) {
+    inFlightRef.current = true
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/decisions/pending', { method: 'GET' })
+      if (!response.ok) {
+        throw new Error(`Pending DR request failed with status ${response.status}`)
+      }
+      const payload = (await response.json()) as PendingDRResponse
+      if (!isMountedRef.current) {
         return
       }
-      setIsLoading(true)
-      try {
-        const response = await fetch('/api/decisions/pending', { method: 'GET' })
-        if (!response.ok) {
-          throw new Error(`Pending DR request failed with status ${response.status}`)
-        }
-        const payload = (await response.json()) as PendingDRResponse
-        if (!isMounted) {
-          return
-        }
-        const nextItems = Array.isArray(payload.items) ? payload.items : []
-        setItems(nextItems)
-        setCount(typeof payload.count === 'number' ? payload.count : nextItems.length)
-        setError(null)
-      } catch (caught) {
-        if (!isMounted) {
-          return
-        }
-        setItems([])
-        setCount(0)
-        setError(caught instanceof Error ? caught : new Error('Pending DR request failed'))
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
+      const nextItems = Array.isArray(payload.items) ? payload.items : []
+      setItems(nextItems)
+      setCount(typeof payload.count === 'number' ? payload.count : nextItems.length)
+      setError(null)
+    } catch (caught) {
+      if (!isMountedRef.current) {
+        return
+      }
+      setItems([])
+      setCount(0)
+      setError(caught instanceof Error ? caught : new Error('Pending DR request failed'))
+    } finally {
+      inFlightRef.current = false
+      if (isMountedRef.current) {
+        setIsLoading(false)
+      }
+      if (pendingPollCountRef.current > 0 && isMountedRef.current) {
+        pendingPollCountRef.current -= 1
+        void poll()
       }
     }
+  }
+
+  useEffect(() => {
+    isMountedRef.current = true
 
     void poll()
     const intervalId = setInterval(() => {
@@ -76,7 +87,7 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
     }, intervalMs)
 
     return () => {
-      isMounted = false
+      isMountedRef.current = false
       clearInterval(intervalId)
     }
   }, [intervalMs])
