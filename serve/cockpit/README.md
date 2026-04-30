@@ -49,6 +49,15 @@ All mutation routes go through the `CockpitView` facade.
 | `claim_task()` / `start_work()` / `end_work()` | Agent lifecycle operations |
 | `refresh_config()` | Managed internally by the engine |
 
+## Decisions API
+
+Two endpoints handle Decision Request (DR) lifecycle. These routes use `get_decisions_dir` (a separate DI callable in `deps.py`) — not the CockpitView facade.
+
+| Route | Behaviour |
+|-------|----------|
+| `GET /api/decisions/pending` | Reads `decisions/pending/*.md`, parses YAML frontmatter, returns `{count, items[{id, task_id, agent, request_type, created, title, body_preview}]}`. Only items with frontmatter `response == "pending"` are included. Returns `{count: 0, items: []}` when the directory is empty or missing. |
+| `POST /api/decisions/{id}/resolve` | Accepts `{response: "approved"\|"needs-info"\|"rejected"\|"completed", notes?: string}`. Updates the DR file in-place (sets frontmatter `response`, appends `## Response` section). Returns 404 for unknown ids. The engine's `resolve_pending_drs` sweep (triggered by `pick_tasks`) handles the physical move to `resolved/`. |
+
 ## Work Sessions Model
 
 `GET /api/sessions` returns derived `SessionRecord` objects built from `activity.jsonl` at read time — there is no separate sessions store.
