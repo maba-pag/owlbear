@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -422,4 +422,50 @@ class TestFromAC_ResolvePendingDrs:
         )
         assert not engine.edit_task.called, (
             "engine.edit_task must NOT be called for unknown response values"
+        )
+
+    # --- AC8 atomicity: move failure after mutation must not produce duplicate summary ---
+
+    def test_ac8_move_failure_after_mutation_no_duplicate_summary_on_retry(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8 atomicity: if _move_with_collision_suffix fails after _append_summary and unblock,
+        retrying resolve_pending_drs must NOT produce a second append_body call.
+
+        Failure mode (current defect): the DR stays in pending after state mutation, so a retry
+        will call _append_summary again — producing a duplicate summary in the task body.
+        A correct implementation either rolls back the mutation or guards against re-processing.
+        """
+        decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
+        _write_dr(pending_dir, "99-approach-selection.md", response="approved", task_id=99)
+        engine = _mock_engine()
+
+        target = "owlbear_kanban.decisions._move_with_collision_suffix"
+        with patch(target, side_effect=OSError("disk full")):
+            resolve_pending_drs(decisions_dir, engine)
+
+        # DR must still be in pending after the failed move
+        assert (pending_dir / "99-approach-selection.md").exists(), (
+            "DR must remain in pending/ when _move_with_collision_suffix raises"
+        )
+
+        # Count append_body calls after the first (failed) attempt
+        append_calls_first = [
+            c for c in engine.edit_task.call_args_list
+            if c.kwargs.get("append_body") is not None
+        ]
+
+        # Retry: run resolve again with move still failing
+        with patch(target, side_effect=OSError("disk full")):
+            resolve_pending_drs(decisions_dir, engine)
+
+        append_calls_total = [
+            c for c in engine.edit_task.call_args_list
+            if c.kwargs.get("append_body") is not None
+        ]
+
+        assert len(append_calls_total) == len(append_calls_first), (
+            "Retrying resolve after a move failure must NOT produce a duplicate append_body call; "
+            f"after first attempt: {len(append_calls_first)} call(s), "
+            f"after retry: {len(append_calls_total)} call(s) — duplicate detected"
         )
