@@ -52,16 +52,16 @@ See `h-mcp-memory` for full tool reference.
 After claiming the task, check whether it was previously blocked by a decision or action request:
 
 1. Check the task body for `## Decision Resolved` or `## Action Completed` sections. If present, the user's chosen option and notes are binding constraints.
-2. If no summary in the body, call the **scribe** agent in query mode to check for existing DRs.
+2. If no summary in the body, call `create_dr(..., mode="query")` to check for existing DRs.
 3. If user notes contradict the AC or narrow the approach, adjust accordingly. If infeasible, block for clarification.
-4. Never write to `.owlbear/decisions/` directly — always use the **scribe** agent.
+4. Never write to `.owlbear/decisions/` directly — always use `create_dr`/`resolve_decision` from `h-decision-requests`.
 
 ### Entry-Gate Agents
 
 Researcher, architect, and planner must reject invalid task inputs immediately:
 
-- `TEMP-*` titles are placeholder artifacts — create a DR via scribe explaining the task needs scope, release claim, do not process.
-- Empty or unscoped bodies (no AC, no context) — same: DR via scribe, release claim.
+- `TEMP-*` titles are placeholder artifacts — create a DR via `create_dr` explaining the task needs scope, release claim, do not process.
+- Empty or unscoped bodies (no AC, no context) — same: DR via `create_dr`, release claim.
 
 ## 2. Working Standards
 
@@ -243,16 +243,16 @@ When an agent cannot proceed, route by cause:
 | Prerequisite work needed | Create task(s), `edit_task(add_dep="{new_id}")`, `end_work(outcome="fail")` | Self-resolving — `pick_tasks` dep gate holds until deps archive |
 | Infeasible / wrong AC | `end_work(outcome="reject", move_to="backlog")` with note to architect | Self-resolving — architect fixes AC |
 | Vague scope | `end_work(outcome="reject", move_to="research")` with note | Self-resolving — researcher/architect refines |
-| Design trade-off (T2) | Advisory DR via scribe, then `end_work(outcome="reject", move_to="backlog")` | Auto-resolving — DR expires in 5 days (see Decision Tiers) |
-| Arch / breaking change (T3) | Mandatory DR via scribe, then `end_work(outcome="block", block_reason="DR pending: {file}")` | **Blocks** — user must respond (see Decision Tiers) |
-| User action required | AR via scribe, then `end_work(outcome="block", block_reason="AR pending: {file}")` | **Blocks** — user must act |
+| Design trade-off (T2) | Advisory DR via `create_dr`, then `end_work(outcome="reject", move_to="backlog")` | Auto-resolving — DR expires in 5 days (see Decision Tiers) |
+| Arch / breaking change (T3) | Mandatory DR via `create_dr`, then `end_work(outcome="block", block_reason="DR pending: {file}")` | **Blocks** — user must respond (see Decision Tiers) |
+| User action required | AR via `create_dr`, then `end_work(outcome="block", block_reason="AR pending: {file}")` | **Blocks** — user must act |
 | Stale task (orchestrator triage) | `edit_task(block="reason")` / `edit_task(unblock=True)` | **Blocks** — orchestrator decision |
 
 **Block is reserved for T3 decisions, user-action tasks, and orchestrator triage.** Do not block when a reject or dependency gate would suffice. Do not pass through hoping a downstream agent will handle it.
 
 #### DR Required on Agent Block
 
-**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via the scribe agent (see `w-decision-routing`).
+**Every agent-initiated block requires a Decision Request.** When `end_work(outcome="block")` or `edit_task(block=...)` returns a non-empty `guidance` field, act on it immediately — the first message will direct you to create a DR via `create_dr` (see `h-decision-requests`).
 
 **Exemption — user-driven blocks:** Tasks blocked via the Cockpit carry the `block:user` tag. If `block:user` is present on the task after blocking, the guidance field will be empty — no DR is required. Agents **must not** create DRs for Cockpit-initiated blocks.
 
@@ -261,10 +261,10 @@ When an agent cannot proceed, route by cause:
 | Tier | When | Action |
 |------|------|--------|
 | T1 — Autonomous | Bug fix, refactor, config, perf | Proceed directly |
-| T2 — Advisory | Trade-offs, no T3 triggers | Advisory DR via scribe (5-day auto-resolve) |
-| T3 — Mandatory | New capability, arch/security/breaking change | Blocking DR via scribe (no auto-resolve) |
+| T2 — Advisory | Trade-offs, no T3 triggers | Advisory DR via `create_dr` (5-day auto-resolve) |
+| T3 — Mandatory | New capability, arch/security/breaking change | Blocking DR via `create_dr` (no auto-resolve) |
 
-All DR/AR creation goes through the **scribe** agent. Never write to `.owlbear/decisions/` directly. If in doubt, create the DR — the cost is lower than guessing.
+All DR/AR creation goes through `create_dr`. Never write to `.owlbear/decisions/` directly. If in doubt, create the DR — the cost is lower than guessing.
 
 ### User-Action Tasks
 
@@ -283,11 +283,11 @@ Researcher may provisionally tag `type:user-action` during research; architect c
 
 **Blocking flow:**
 
-1. Architect detects `type:user-action` → creates action request via scribe
+1. Architect detects `type:user-action` → creates action request via `create_dr`
 2. Architect calls `end_work(outcome="block", block_reason="AR pending: {filename}")`
 3. `pick_tasks` excludes the blocked task — no agents dispatched
 4. User performs the action → sets `response: completed` in the AR file
-5. Scribe resolves: appends `## Action Completed` to task body, unblocks task
+5. Decision resolver runs `resolve_decision`: appends `## Action Completed` to task body, unblocks task
 6. Architect (re-entry): sees `## Action Completed` + `type:user-action` → verifies AC → approves to `todo`
 7. Test-writer and builder pass through (tag is in `NON_IMPL_TAGS`)
 
@@ -295,7 +295,7 @@ Researcher may provisionally tag `type:user-action` during research; architect c
 
 **Dual-nature tasks:** When the same feature requires both user action and code change, split into two tasks: a `type:user-action` task (AR + block) and a code task. The code task sets `depends_on` to the user-action task to enforce ordering.
 
-**Dry-run scenario — #597-style loop prevented:** Because the task is `blocked` between architect cycles 1 and 2, `pick_tasks` returns nothing for it — the orchestrator dispatches no other agents until scribe unblocks. Result: **≤2 architect cycles** vs #597's **4+ futile cycles** with no resolution.
+**Dry-run scenario — #597-style loop prevented:** Because the task is `blocked` between architect cycles 1 and 2, `pick_tasks` returns nothing for it — the orchestrator dispatches no other agents until `resolve_decision` unblocks. Result: **≤2 architect cycles** vs #597's **4+ futile cycles** with no resolution.
 
 ### Handoff
 

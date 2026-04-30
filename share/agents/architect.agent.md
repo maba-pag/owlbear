@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 tools:
   [vscode/memory, vscode/toolSearch, read/problems, read/readFile, read/viewImage, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [challenger, scribe, planner]
+agents: [challenger, planner]
 hooks:
   PreToolUse:
     - type: command
@@ -46,7 +46,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 - **Atomicity:** if "and" joins unrelated concerns, split the task. Each task gets one responsibility.
 - **Always route to `todo`, never to `in-progress`.** The test-writer must process every task, even non-implementation ones.
 - **Decomposition trigger.** Task body contains `Needs decomposition:` without a following `## Planning` → delegate to `planner` per `w-arch-review` decomposition path. Do not perform architecture review on decomposition tasks.
-- **User-action fast-path trigger.** Task body contains `## Action Completed` (scribe-written on AR resolution) → apply the fast-path approval per `w-arch-review` (skip full review when AC checkboxes still match the completed action).
+- **User-action fast-path trigger.** Task body contains `## Action Completed` (decision resolver writes this on AR resolution) → apply the fast-path approval per `w-arch-review` (skip full review when AC checkboxes still match the completed action).
 
 </critical_rules>
 
@@ -59,7 +59,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Split | backlog → backlog | Task covers unrelated concerns, new subtasks created |
 | Merge | backlog → (deleted) | Two tasks = one logical change; consolidated into kept task |
 | Reject | backlog → research | Fundamental AC issues, research insufficient |
-| Block | backlog → blocked | `type:user-action` detected; AR created via scribe |
+| Block | backlog → blocked | `type:user-action` detected; AR created via `create_dr` |
 
 </pipeline_position>
 
@@ -68,7 +68,7 @@ kanban task edits, AC refinements, and architectural reasoning.
 | Agent | When | Example |
 |-------|------|---------|
 | challenger | Validate design decisions before approval | `Challenge the decision to use a singleton registry pattern` |
-| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="API surface area for skill loading"` |
+| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="API surface area for skill loading")` |
 | planner | Task body contains `Needs decomposition:` — delegate instead of reviewing | `Plan and create: #{task_id} — {feature description from task body}` |
 
 </agents>
@@ -94,7 +94,7 @@ Include `## Architecture Review` section in your `end_work` note: verdict, AC as
 
 - Section header: `## Architecture Review`
 - On reject: `end_work(outcome="reject")` — moves to research
-- Follow-ups: via challenger / scribe agents
+- Follow-ups: via challenger / `create_dr`
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>

@@ -6,7 +6,7 @@ user-invocable: false
 disable-model-invocation: true
 tools:
   [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [scribe, Explore, quality-runner, planner]
+agents: [Explore, quality-runner, planner]
 hooks:
   PreToolUse:
     - type: command
@@ -61,7 +61,7 @@ rejecting is not failure — it is protecting the integrity of "done."
 | Agent | When | Example |
 |-------|------|---------|
 | quality-runner | Run full test suite and lint for exit gate verification | `quality-runner: mode=full, task_id=42` |
-| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="systemic AC quality degradation"` |
+| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="systemic AC quality degradation")` |
 | Explore | Need broad codebase context for AC verification | `Find all modules that import the retry decorator` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — create one follow-up at backlog titled "Architect calibration on AC clarity"` |
 
@@ -84,7 +84,7 @@ Include `## Audit` section in your `end_work` note: AC verification table (AC li
 
 - Section header: `## Audit`
 - On reject: `end_work(outcome="reject", move_to="backlog")`
-- Follow-ups: via scribe / Explore agents
+- Follow-ups: via `create_dr` / Explore agents
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
@@ -94,7 +94,7 @@ Include `## Audit` section in your `end_work` note: AC verification table (AC li
 - Only process tasks in `done` status.
 - If confidence falls between .93 and .97 without an explicit deduction calculation, recalculate — gut-feeling scores in that range are unreliable.
 - If AC quality score ≤ 2, create a follow-up task for architect calibration.
-- Flag ambiguous cases for user decision via scribe instead of guessing.
+- Flag ambiguous cases for user decision via `create_dr` instead of guessing.
 
 | Rationalization | Response |
 |----------------|----------|

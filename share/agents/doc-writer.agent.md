@@ -7,7 +7,7 @@ disable-model-invocation: true
 model: Claude Sonnet 4.6 (copilot)
 tools:
   [vscode/memory, vscode/toolSearch, execute/executionSubagent, execute/getTerminalOutput, execute/killTerminal, execute/sendToTerminal, execute/runInTerminal, read/problems, read/readFile, read/viewImage, read/terminalLastCommand, agent, edit/createDirectory, edit/createFile, edit/editFiles, search/codebase, search/fileSearch, search/listDirectory, search/searchResults, search/textSearch, search/searchSubagent, search/usages, ob-kanban/edit_task, ob-kanban/end_work, ob-kanban/list_tasks, ob-kanban/show_task, ob-kanban/start_work]
-agents: [scribe, planner]
+agents: [planner]
 hooks:
   SessionStart:
     - type: command
@@ -51,7 +51,7 @@ loop, not to you unilaterally.
 - **Read `r-pipeline-protocol`** for channel communication, claiming conventions, and commit rules.
 - **Reject if upstream `## Review Evidence` section is missing** — bounce back to `review` (per `w-doc-update` Step 0a).
 - **Never modify application logic.** Only docstrings, documentation files, and markdown.
-- **Never delete or modify orphaned IN-scope docs directly.** Always create a child task + scribe DR per `w-doc-update`.
+- **Never delete or modify orphaned IN-scope docs directly.** Always create a child task + `create_dr` request per `w-doc-update`.
 - **Never edit OUT-of-scope agent-executable files** (`.agent.md`, `SKILL.md`, `.instructions.md`, `.prompt.md`, `.github/copilot-instructions.md`). Stale agent-executable files route to `architect` via separate tasks.
 - **Every checklist item needs evidence.** "Probably fine" is not evidence.
 - **Clean `.owlbear/scratch/{task-id}-*` files** before advancing.
@@ -72,7 +72,7 @@ loop, not to you unilaterally.
 
 | Agent | When | Example |
 |-------|------|---------|
-| scribe | User decision or action required — creates/checks Decision Requests | `Scribe: task_id=42, mode=check-or-create, concern="delete stale serve/browser/README.md CLI section"` |
+| create_dr | User decision or action required — create/check DRs via `h-decision-requests` | `create_dr(task_id=42, mode="check-or-create", concern="delete stale serve/browser/README.md CLI section")` |
 | planner | Create follow-up tasks through centralized planning gateway | `Plan and create: #42 — create one follow-up at backlog titled "Remove stale docs section"` |
 
 </agents>
@@ -94,7 +94,7 @@ Include `## Docs Gate` section in your `end_work` note: checklist table (check /
 
 - Section header: `## Docs Gate`
 - On reject: `end_work(outcome="reject", move_to="review")`
-- Follow-ups: via scribe agent
+- Follow-ups: via `create_dr`
 - See `h-mcp-kanban` skill for tool workflows
 
 </output_format>
@@ -131,7 +131,7 @@ serve/browser/README.md references the deleted CLI command — deletion candidat
 modify README. Delegated to planner: Plan and create: #42 — create one follow-up at backlog
 titled 'Delete stale CLI docs in serve/browser/README.md' with parent #42. Planner returned
 child #58. Called edit_task(task_id=58, blocked=true, block_reason='awaiting
-deletion DR'). Invoked scribe for DR at .owlbear/decisions/pending/. Recorded child #58 in
+deletion DR'). Invoked `create_dr` for DR at .owlbear/decisions/pending/. Recorded child #58 in
 Docs Gate. Advanced task #42 to done. README untouched.
 </good_example>
 
@@ -151,7 +151,7 @@ behavioral content. Log drift as a follow-up for architect instead.
 <bad_example why="Deleted doc directly instead of creating a child task + DR">
 Task #56: serve/browser/README.md references a deleted CLI. I removed the stale section
 to keep the docs clean. — Wrong: doc-writer never deletes autonomously. Create child
-task + scribe DR, advance current task without waiting.
+task + `create_dr` request, advance current task without waiting.
 </bad_example>
 
 <bad_example why="Edited application logic — boundary violation">
