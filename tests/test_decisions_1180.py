@@ -218,6 +218,59 @@ class TestFromAC_CreateDr:
             f"{[p.name for p in leftover]}"
         )
 
+    def test_frontmatter_key_set_is_exactly_five_fields(self, tmp_path: Path) -> None:
+        """AC1 boundary: pending file contains EXACTLY the 5-field schema — no more, no fewer."""
+        decisions_dir = _make_decisions_dir(tmp_path)
+        engine = _mock_engine()
+
+        result_path = create_dr(
+            decisions_dir,
+            engine,
+            task_id=42,
+            agent="builder",
+            request_type="approach-selection",
+            body="## Context",
+        )
+
+        fm = _parse_frontmatter(result_path)
+        expected_keys = {"task_id", "agent", "request_type", "created", "response"}
+        assert set(fm.keys()) == expected_keys, (
+            f"Frontmatter must have exactly {expected_keys!r}; "
+            f"got {set(fm.keys())!r}"
+        )
+
+    def test_exclusive_create_uses_o_excl_flag(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """AC2 boundary: create_dr uses O_CREAT|O_EXCL for atomic file creation (not exists-then-write)."""
+        import os as os_mod
+
+        real_open = os_mod.open
+        observed_flags: list[int] = []
+
+        def spy_open(path: object, flags: int, mode: int = 0o777) -> int:
+            observed_flags.append(flags)
+            return real_open(path, flags, mode)  # type: ignore[arg-type]
+
+        monkeypatch.setattr("owlbear_kanban.decisions.os.open", spy_open)
+
+        decisions_dir = _make_decisions_dir(tmp_path)
+        engine = _mock_engine()
+
+        create_dr(
+            decisions_dir,
+            engine,
+            task_id=42,
+            agent="builder",
+            request_type="approach-selection",
+            body="",
+        )
+
+        assert observed_flags, "os.open must be called at least once by create_dr"
+        flags = observed_flags[0]
+        assert flags & os_mod.O_CREAT, "O_CREAT must be set in os.open call"
+        assert flags & os_mod.O_EXCL, (
+            "O_EXCL must be set — atomic exclusive-create required (not exists-then-write)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC5-AC9: resolve_pending_drs
@@ -278,6 +331,37 @@ class TestFromAC_ResolvePendingDrs:
             f"actual calls: {engine.edit_task.call_args_list}"
         )
 
+    @pytest.mark.parametrize("response", ["approved", "rejected"])
+    def test_approved_or_rejected_appends_dr_summary(
+        self, tmp_path: Path, response: str
+    ) -> None:
+        """AC6 edge: approved/rejected → DR summary appended to task body before unblock."""
+        decisions_dir = _make_decisions_dir(tmp_path)
+        _write_dr(
+            decisions_dir / "pending",
+            "42-question.md",
+            response=response,
+            task_id=42,
+        )
+        engine = _mock_engine()
+
+        resolve_pending_drs(decisions_dir, engine)
+
+        append_calls = [
+            c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None
+        ]
+        assert append_calls, (
+            f"engine.edit_task must be called with append_body for response={response!r}; "
+            f"actual calls: {engine.edit_task.call_args_list}"
+        )
+        payload = append_calls[0].kwargs["append_body"]
+        assert isinstance(payload, str), (
+            f"append_body payload must be a string; got {type(payload)!r}"
+        )
+        assert len(payload.strip()) > 0, (
+            f"append_body payload must be non-empty; got {payload!r}"
+        )
+
     def test_needs_info_moves_file_but_keeps_task_blocked(self, tmp_path: Path) -> None:
         """AC7 happy: needs-info → file in resolved/, task NOT unblocked."""
         decisions_dir = _make_decisions_dir(tmp_path)
@@ -326,6 +410,32 @@ class TestFromAC_ResolvePendingDrs:
             f"actual calls: {engine.edit_task.call_args_list}"
         )
 
+    def test_needs_info_append_body_payload_is_meaningful(self, tmp_path: Path) -> None:
+        """AC7 boundary: needs-info append_body payload is a real summary, not a stub string."""
+        decisions_dir = _make_decisions_dir(tmp_path)
+        _write_dr(
+            decisions_dir / "pending",
+            "77-clarify.md",
+            response="needs-info",
+            task_id=77,
+        )
+        engine = _mock_engine()
+
+        resolve_pending_drs(decisions_dir, engine)
+
+        append_calls = [
+            c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None
+        ]
+        assert append_calls, "engine.edit_task(append_body=...) must be called for needs-info"
+        payload: str = append_calls[0].kwargs["append_body"]
+        assert "needs-info" in payload, (
+            f"append_body must include the response value 'needs-info'; got {payload!r}"
+        )
+        is_structured = "Decision Request" in payload or len(payload.strip().splitlines()) > 1
+        assert is_structured, (
+            f"append_body must contain a structured summary (not a one-word stub); got {payload!r}"
+        )
+
     def test_unknown_response_logs_warning_and_skips(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -353,6 +463,26 @@ class TestFromAC_ResolvePendingDrs:
         # File must remain untouched in pending/
         assert dr_file.exists(), "File with unknown response must remain in pending/"
         assert not (decisions_dir / "resolved" / "42-question.md").exists()
+
+    def test_unknown_response_does_not_mutate_task_state(
+        self, tmp_path: Path
+    ) -> None:
+        """AC8 edge: unknown response must NOT call engine.edit_task (task state untouched)."""
+        decisions_dir = _make_decisions_dir(tmp_path)
+        _write_dr(
+            decisions_dir / "pending",
+            "42-unknown.md",
+            response="invalid-status",
+            task_id=42,
+        )
+        engine = _mock_engine()
+
+        resolve_pending_drs(decisions_dir, engine)
+
+        assert not engine.edit_task.called, (
+            "engine.edit_task must NOT be called for unknown response values; "
+            f"actual calls: {engine.edit_task.call_args_list}"
+        )
 
     def test_per_file_exception_does_not_stall_other_files(self, tmp_path: Path) -> None:
         """AC9 error: exception from one DR is caught; remaining DRs are still processed."""
