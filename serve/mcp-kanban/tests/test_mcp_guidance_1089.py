@@ -122,8 +122,7 @@ _SKIP_REJECT_WARNING = (
 )
 
 _BLOCK_AR_HINT = (
-    "⚠️ ACTION REQUIRED: Create a Decision Request for this block via the"
-    " scribe agent (see w-decision-routing)."
+    "⚠️ ACTION REQUIRED: Create a Decision Request via the create_dr tool."
     " Blocks without a DR are invisible to the pipeline."
 )
 

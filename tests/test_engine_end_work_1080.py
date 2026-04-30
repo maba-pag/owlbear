@@ -90,8 +90,7 @@ _LIVE_CLAIM_TS = '"2026-04-25T08:00:00+00:00"'  # non-null, within 1 h claim_tim
 
 # Exact D54 contract strings emitted by AgentView.
 _EXPECTED_BLOCK_AR_HINT = (
-    "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request for this block via the"
-    " scribe agent (see w-decision-routing)."
+    "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request via the create_dr tool."
     " Blocks without a DR are invisible to the pipeline."
 )
 
