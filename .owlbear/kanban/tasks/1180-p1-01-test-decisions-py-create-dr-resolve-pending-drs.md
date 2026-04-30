@@ -4,7 +4,7 @@ title: 'P1-01: Test decisions.py create_dr + resolve_pending_drs'
 status: review
 priority: needed
 created: 2026-04-30T00:51:30.965405+00:00
-updated: 2026-04-30T05:14:37.868166+00:00
+updated: 2026-04-30T05:35:01.135827+00:00
 tags:
 - phase-1
 - scope:kanban
@@ -13,8 +13,8 @@ parent: 1179
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: dim-stream
-claimed_at: 2026-04-30T05:14:37.868166+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -344,3 +344,111 @@ APPROVED #1180 -> todo | Loop-breaker reconciliation: narrowed brief contracts (
 - Test-only retry routing prevented unnecessary code churn in an already-correct implementation.
 - Scoped quality-runner evidence isolated this task from unrelated suite noise.
 - The remaining loop-breaker deltas were assertion-strengthening only; runtime behavior stayed stable.
+[[2026-04-30]]
+## Review Evidence
+### Test Results
+- quality-runner: 19 passed, 0 failed, 0 skipped
+
+### Lint
+- clean
+
+### Coverage
+- `owlbear_kanban.decisions`: 95%
+- Package-wide low coverage reported by quality-runner was informational only and out of scope for this task.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+| --- | --- | --- |
+| AC1 - 5-field frontmatter + date-only created + body | `tests/test_decisions_1180.py:99`, `:119`, `:227` prove exact keys, `YYYY-MM-DD`, and body placement | PASS |
+| AC2 - request_type slug + O_EXCL + counter suffix | `tests/test_decisions_1180.py:145`, `:248`; live calls at `serve/kanban/src/owlbear_kanban/decisions.py:101` and `:119` | PASS |
+| AC3 - block the task via `edit_task` | Test at `tests/test_decisions_1180.py:180` only filters kwargs; live mutation target is positional `task_id` at `serve/kanban/src/owlbear_kanban/decisions.py:127`. A wrong-task mutation would still pass. | FAIL |
+| AC4 - rollback file on engine error | `tests/test_decisions_1180.py:205` proves pending dir is empty after failure | PASS |
+| AC5 - skip pending responses | `tests/test_decisions_1180.py:289` proves file stays in pending and no task mutation occurs | PASS |
+| AC6 - approved/rejected append summary, unblock, move file | Tests at `tests/test_decisions_1180.py:309`, `:341`, `:357`, `:370` prove move, unblock, and payload content, but never bind the positional `task_id` used by `engine.edit_task` at `serve/kanban/src/owlbear_kanban/decisions.py:72` and `:170`. | FAIL |
+| AC7 - needs-info append summary, stay blocked, move file | Tests at `tests/test_decisions_1180.py:374`, `:401`, `:422`, `:415`, `:436` prove move, no unblock, and payload content, but never bind the positional `task_id` used by `engine.edit_task` at `serve/kanban/src/owlbear_kanban/decisions.py:72`. | FAIL |
+| AC8 - unknown response logs warning and skips | `tests/test_decisions_1180.py:448`, `:476` prove warning + no task mutation | PASS |
+| AC9 - per-file exceptions do not stall | `tests/test_decisions_1180.py:496` proves engine-side failure on one file does not block the second file | PASS |
+| AC10 - unknown frontmatter keys ignored | `tests/test_decisions_1180.py:541` proves forward-compatible parsing | PASS |
+
+#### Security Review
+- No issues found in `serve/kanban/src/owlbear_kanban/decisions.py` or `tests/test_decisions_1180.py`.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions found relative to the latest architecture/test-writer refinements.
+
+#### Test Quality
+- FAIL: AC3, AC6, and AC7 use kwargs-only filtering on `engine.edit_task` calls and do not assert the positional task id. Because the implementation forwards task identity positionally at `serve/kanban/src/owlbear_kanban/decisions.py:72`, `:127`, and `:170`, a regression that edits the wrong task would keep these tests green.
+
+### Informational
+- I did not gate on the append/unblock-then-move ordering in `resolve_pending_drs`; that sequence matches the current brief/task history for this task.
+- The alternate `resolve_pending_drs(engine)` compatibility branch appears unused in the workspace and remains untested, but it is outside the current AC and not part of this rejection.
+
+### Required Follow-up
+- Strengthen AC3 to assert `engine.edit_task` was called for task id `99`.
+- Strengthen AC6 to assert both the append and unblock mutations target task id `42` for approved/rejected files.
+- Strengthen AC7 to assert the append mutation targets the DR task id and that no unblock mutation occurs for that task.
+
+### Confidence: 0.86
+### Verdict: FAIL
+### Action
+- Rejected to `backlog`.
+- Loop-breaker applies: this task already has prior review failures at `.owlbear/kanban/tasks/1180-p1-01-test-decisions-py-create-dr-resolve-pending-drs.md:134`, `:162`, and `:228`, so any further review failure routes to backlog.
+
+### Post-task Reflection
+- The main trap here was stale prior review reasoning in the task body; the latest refinement was authoritative, not the earlier fail notes.
+- A green scoped quality run was necessary but not sufficient; the remaining defect was proof depth, not runtime status.
+- The challenger pass was useful to narrow an overbroad implementation concern into the actual blocking issue: wrong-task mutations can still go green.
+[[2026-04-30]]
+[[2026-04-30]]
+## Architecture Review (cycle 4 — loop-breaker task_id binding)
+
+### Context
+Fourth review cycle. Reviewer found (confidence 0.86) that AC3, AC6, AC7 tests filter `engine.edit_task.call_args_list` by kwargs only without asserting the positional `task_id` argument (`c.args[0]`). A wrong-task mutation would still pass. All other AC lines PASS.
+
+### AC Refinements Applied (cycle 4)
+- AC3: appended "— assert call targets task_id=99"
+- AC6: appended "— assert mutations target task_id=42"
+- AC7: appended "— assert append targets the DR's task_id; no unblock mutation for that task_id"
+
+### Test-Proof Requirements for Builder
+Add positional task_id binding to 3 existing list comprehension filters (no new test methods):
+
+1. **AC3** in `test_blocks_task_via_edit_task`: change filter to include `and c.args[0] == 99`
+2. **AC6** in `test_approved_or_rejected_unblocks_and_moves_to_resolved`: add `and c.args[0] == 42` to the unblock_calls filter
+3. **AC6** in `test_approved_or_rejected_appends_dr_summary`: add `and c.args[0] == 42` to the append_calls filter
+4. **AC7** in `test_needs_info_moves_file_but_keeps_task_blocked`: add assertion that no `edit_task(42, blocked=False)` call exists (already passes since needs-info doesn't unblock, but makes the contract explicit)
+5. **AC7** in `test_needs_info_appends_summary_to_task_body`: add `and c.args[0] == 42` to the append_calls filter
+
+### Evaluation
+| Criterion | Status |
+|-----------|--------|
+| Single responsibility | PASS |
+| Interface clarity | PASS (after task_id binding) |
+| KISS/YAGNI | PASS — 5 filter clause additions, no new abstractions |
+| Pattern consistency | PASS — `c.args[0]` is standard mock call_args inspection |
+
+### Challenge
+Skipped — loop-breaker cycle 4 on a narrow proof-depth issue. No design divergence, no architectural risk. Prior challenger invoked in cycle 1.
+
+### Test Depth
+All td annotations unchanged. Test-writer pass-through (type:test).
+
+### Verdict: APPROVE
+AC3/AC6/AC7 refined with explicit task_id positional binding. Builder adds `c.args[0] == {expected_id}` to 5 existing filter expressions. Closes the review loop definitively.
+[[2026-04-30]]
+APPROVED #1180 -> todo | Loop-breaker cycle 4: AC3/AC6/AC7 refined to require positional task_id binding (`c.args[0] == expected_id`) in 5 existing mock filter expressions. Builder adds filter clauses only — no new tests needed.
+[[2026-04-30]]
+## Test-Writer Notes (retry cycle 5)
+
+Retry: AC3/AC6/AC7 task_id binding added to 5 filter expressions per loop-breaker cycle 4 architect ruling. No new test methods.
+
+Changes:
+1. test_blocks_task_via_edit_task (AC3): added `c.args and c.args[0] == 99` to blocking_calls filter
+2. test_approved_or_rejected_unblocks_and_moves_to_resolved (AC6): added `c.args and c.args[0] == 42` to unblock_calls filter
+3. test_approved_or_rejected_appends_dr_summary (AC6): added `c.args and c.args[0] == 42` to append_calls filter
+4. test_needs_info_moves_file_but_keeps_task_blocked (AC7): added `c.args and c.args[0] == 42` to no-unblock filter
+5. test_needs_info_appends_summary_to_task_body (AC7): added `c.args and c.args[0] == 99` to append_calls filter
+
+Total: 19 tests, all PASS. ruff: clean. Commit: 7ee3a3ad.
+Step 1b.1 applied: builder skip, advancing directly to review.
