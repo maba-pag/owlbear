@@ -105,10 +105,6 @@ Documented lifecycle outcomes for agent routing:
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `KANBAN_TOOLS_EXCLUDE` | _(none)_ | Comma-separated tool names to remove at startup (e.g. `create_task,move_task`) |
-
 Board directory is resolved relative to the working directory at `.owlbear/kanban`. No override is supported at the MCP server level.
 
 ## Dependencies

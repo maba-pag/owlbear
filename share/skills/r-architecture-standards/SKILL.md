@@ -119,11 +119,10 @@ async def lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
 
 ### Tool Exclusion
 
-Each server reads a `*_TOOLS_EXCLUDE` env var at startup:
+Tool exclusion is supported on select servers only:
 
 | Server | Env var |
 |--------|---------|
-| mcp-kanban | `KANBAN_TOOLS_EXCLUDE` |
 | mcp-knowledge | `KNOWLEDGE_TOOLS_EXCLUDE` |
 | mcp-memory | `MEMORY_TOOLS_EXCLUDE` |
 

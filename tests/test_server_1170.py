@@ -5,8 +5,7 @@ the canonical scoped test set (test_server_1172, test_mcp_lifecycle_1173,
 test_mcp_server_1090 both locations, test_mcp_lifecycle_tools).
 
 Uncovered paths addressed:
-  - AppContext.__contains__ (line 89)
-  - _apply_tool_exclusions loop body (lines 97-110)
+    - AppContext.__contains__ (line 89)
   - app_lifespan body (lines 116-120)
   - list_tasks error handlers (lines 162, 177)
   - _to_single_task_response non-identity branches (lines 203, 207-209)
@@ -38,7 +37,6 @@ from owlbear_kanban.models import SingleTaskResponse
 from owlbear_mcp_kanban.server import (
     AppContext,
     _agent_view_for,
-    _apply_tool_exclusions,
     _canonical_agent_view_for,
     _extract_task_id_compat,
     _invoke_engine_end_work,
@@ -162,65 +160,6 @@ class TestFromAC_AppContextHelpers:
         engine = _make_engine_mock()
         app_ctx = _make_app_ctx(engine)
         assert 0 not in app_ctx
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_ApplyToolExclusions — lines 97-110
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ApplyToolExclusions:
-    """_apply_tool_exclusions exercises lines 97-110."""
-
-    def test_empty_env_returns_empty_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No env var → early return with empty set (line 100).
-
-        FAILS: if the early-return branch is removed.
-        """
-        monkeypatch.delenv("KANBAN_TOOLS_EXCLUDE", raising=False)
-        server = MagicMock()
-        result = _apply_tool_exclusions(server)
-        assert result == set()
-
-    def test_valid_tool_excluded_and_in_return_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Valid tool removed from server; name in returned set (lines 104-107).
-
-        FAILS: if remove_tool is not called or return set is wrong.
-        """
-        monkeypatch.setenv("KANBAN_TOOLS_EXCLUDE", "my_tool")
-        server = MagicMock()
-        result = _apply_tool_exclusions(server)
-        server.remove_tool.assert_called_once_with("my_tool")
-        assert "my_tool" in result
-
-    def test_invalid_tool_silently_ignored_not_in_return_set(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Non-existent tool raises → silently swallowed; not in returned set (lines 108-109).
-
-        FAILS: if the exception is re-raised instead of suppressed.
-        """
-        monkeypatch.setenv("KANBAN_TOOLS_EXCLUDE", "nonexistent_tool")
-        server = MagicMock()
-        server.remove_tool.side_effect = KeyError("no such tool")
-        result = _apply_tool_exclusions(server)
-        assert "nonexistent_tool" not in result
-
-    def test_blank_entries_in_comma_list_skipped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Blank/whitespace entries skipped; non-blank entries processed (line 103-104).
-
-        FAILS: if blank entries cause an error or extra items in the returned set.
-        """
-        monkeypatch.setenv("KANBAN_TOOLS_EXCLUDE", "tool_a,,  ,tool_b")
-        server = MagicMock()
-        result = _apply_tool_exclusions(server)
-        assert "tool_a" in result
-        assert "tool_b" in result
-        assert len(result) == 2
 
 
 # ---------------------------------------------------------------------------

@@ -167,12 +167,6 @@ Do not use `edit_task` to append agent notes — use `end_work(note="...")` inst
 
 All tools raise `ToolError` (MCP `isError: true`) on failure.
 
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `KANBAN_TOOLS_EXCLUDE` | _(unset)_ | Comma-separated tool names to remove |
-
 ## Body Content Gotchas
 
 These affect both MCP `append_body`/`body` parameters and CLI `-a` arguments, because kanban-md parses the content internally.
