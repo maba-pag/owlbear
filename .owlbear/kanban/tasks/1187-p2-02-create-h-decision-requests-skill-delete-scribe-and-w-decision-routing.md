@@ -1,10 +1,10 @@
 ---
 id: 1187
 title: 'P2-02: Create h-decision-requests skill + delete scribe and w-decision-routing'
-status: docs
+status: done
 priority: needed
 created: 2026-04-30T00:52:00.447027+00:00
-updated: 2026-04-30T04:09:32.018742+00:00
+updated: 2026-04-30T05:12:07.050236+00:00
 tags:
 - phase-2
 - scope:agents
@@ -244,3 +244,35 @@ Architecture review complete. All AC lines td:0 (structural tests exist in #1186
 - Green inherited structural tests were necessary but not sufficient here; the handbook still needed a live contract audit.
 - The authoritative resolution hook for this DR lifecycle is the engine dispatch path in AgentView.pick_tasks(), not the MCP entry point alone.
 - Commit presence was verified through .git/logs because direct git diff inspection was not available in this tool surface.
+[[2026-04-30]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are all OUT-scope agent-executables (SKILL.md, .agent.md). No IN-scope prose docs (root README, serve/*/README, setup guides, share/README) reference scribe, w-decision-routing, or h-decision-requests. |
+| 2 | Module docstrings | No | N/A | No .py files changed. |
+| 3 | External attribution | No | N/A | Task body states "Research doc: none (trivial)"; no external patterns cited. |
+| 4 | Research doc | No | N/A | Task body confirms "Research doc: none." |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `pipeline.excalidraw` describes `share/agents/*.agent.md` (matches deleted scribe.agent.md). `project-overview.excalidraw` describes `share/**` (matches all changed files). Both footers updated: 3c5aa926/42a098d3 → f7c02f9a. Commit 04992804. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | Deleted files (scribe.agent.md, w-decision-routing/SKILL.md) are OUT-scope agent-executables. No IN-scope descriptive docs reference them (grep confirmed only .owlbear/decisions/README.md and share/WIRING.md — both OUT-scope). |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| share/skills/h-decision-requests/SKILL.md | OUT (agent-executable SKILL.md) | N/A |
+| share/agents/scribe.agent.md | OUT (agent-executable .agent.md) | N/A |
+| share/skills/w-decision-routing/SKILL.md | OUT (agent-executable SKILL.md) | N/A |
+| share/diagrams/pipeline.excalidraw | IN (diagram) | Footer updated |
+| share/diagrams/project-overview.excalidraw | IN (diagram) | Footer updated |
+
+### Files Updated
+- share/diagrams/pipeline.excalidraw (footer: 3c5aa926 → f7c02f9a)
+- share/diagrams/project-overview.excalidraw (footer: 42a098d3 → f7c02f9a)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no .owlbear/scratch/1187-* files found)

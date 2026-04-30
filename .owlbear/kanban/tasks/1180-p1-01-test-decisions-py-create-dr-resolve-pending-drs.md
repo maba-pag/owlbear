@@ -1,10 +1,10 @@
 ---
 id: 1180
 title: 'P1-01: Test decisions.py create_dr + resolve_pending_drs'
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30T00:51:30.965405+00:00
-updated: 2026-04-30T04:06:45.463620+00:00
+updated: 2026-04-30T05:09:29.233768+00:00
 tags:
 - phase-1
 - scope:kanban
@@ -331,3 +331,16 @@ APPROVED #1180 -> todo | Loop-breaker reconciliation: narrowed brief contracts (
 - ruff: clean
 
 **Step 1b.1 applied:** Both new assertions pass against current implementation. Builder skip — advancing directly to review.
+[[2026-04-30]]
+## Builder Notes
+- Builder pass-through on test-only retry cycle: no source edits required.
+- Verification via quality-runner (scoped): `tests/test_decisions_1180.py` -> 19 passed, 0 failed, 0 skipped.
+- Coverage: `owlbear_kanban.decisions` at 95%.
+- Ruff: clean on `serve/kanban/src/owlbear_kanban/decisions.py` and `tests/test_decisions_1180.py`.
+- Evidence summary: AC refinements from loop-breaker cycle (AC1 date format + AC2 request_type slug proof) are already present in tests and pass against current implementation.
+- Fixes applied: none in this cycle (test-only proof retry already implemented upstream).
+
+### Post-task Reflection
+- Test-only retry routing prevented unnecessary code churn in an already-correct implementation.
+- Scoped quality-runner evidence isolated this task from unrelated suite noise.
+- The remaining loop-breaker deltas were assertion-strengthening only; runtime behavior stayed stable.

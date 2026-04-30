@@ -1,10 +1,10 @@
 ---
 id: 1193
 title: 'P3-05: Test resolve modal component'
-status: done
+status: archived
 priority: needed
 created: 2026-04-30T00:52:25.642042+00:00
-updated: 2026-04-30T04:06:28.865677+00:00
+updated: 2026-04-30T05:12:32.083113+00:00
 tags:
 - phase-3
 - scope:cockpit-fe
@@ -540,3 +540,35 @@ Three surgical test fixes in `serve/cockpit/web/src/__tests__/ResolveModal_1193.
 
 ### Scratch Files Cleaned
 - None found (no `.owlbear/scratch/1193-*` files existed)
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test ResolveModal renders full DR body as markdown | `ResolveModal_1193.test.tsx:82-83` asserts `## Options` + `1. Yes` (unique to full body) | PASS |
+| Test response selector offers: approved, rejected, needs-info | `ResolveModal_1193.test.tsx:93-97` asserts all three labels | PASS |
+| Test optional notes textarea accepts freeform markdown | `ResolveModal_1193.test.tsx:104-108`, `:136`, `:154` | PASS |
+| Test submit calls POST with selected response + notes | `ResolveModal_1193.test.tsx:153` asserts exact `'rejected'` (non-default) | PASS |
+| Test modal closes on successful submission | `ResolveModal_1193.test.tsx:179-180` asserts both callbacks | PASS |
+| Test error state shown on failed submission | `ResolveModal_1193.test.tsx:190-224` covers thrown-fetch + non-OK paths | PASS |
+| Test cancel/close without submitting does not mutate | `ResolveModal_1193.test.tsx:244-245` asserts onClose + no fetch | PASS |
+
+### Test Results
+- Task-scoped vitest: 8 passed, 0 failed
+- Full suite (quality-runner): 3263 passed, 66 failed — all failures in unrelated domains (kanban engine config, decisions API 404s, migration tests, KanbanBoard React test). No task-scope regressions.
+- Lint: 4 violations in unrelated packages (knowledge, mcp-memory, orchestrator). Task files clean.
+
+### Commit Integrity
+- `6c94ace8` — test-writer initial commit
+- `86e96f92` — builder implementation commit
+- **Process concern:** test-strengthening pass (retry 3) left 32 lines of test changes + 2 lines component change uncommitted. Deliverables are functional but uncommitted diffs exist. Flagged as process gap.
+
+### Architect Quality
+- AC quality score: 4/5 — 7 specific, testable AC lines; prop interface and data-testid contracts provided in builder guidance; challenger interaction meaningful. Minor gap: initial `type:test` routing tag caused one wasted pass-through cycle before architect caught and fixed it.
+
+### Deductions
+- -0.02: Uncommitted deliverable diffs (test-strengthening + minor component edit not committed by upstream agents)
+
+### Confidence: 0.98
+### Action: ARCHIVE

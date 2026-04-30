@@ -4,7 +4,7 @@ title: 'P3-03: Test DR status indicator + popover components'
 status: in-progress
 priority: needed
 created: 2026-04-30T00:52:17.480756+00:00
-updated: 2026-04-30T04:09:02.135839+00:00
+updated: 2026-04-30T05:08:49.714999+00:00
 tags:
 - phase-3
 - scope:cockpit-fe
@@ -12,8 +12,8 @@ parent: 1179
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: dim-stream
+claimed_at: 2026-04-30T05:08:49.714999+00:00
 archival_reason:
 archival_refs: []
 ---
