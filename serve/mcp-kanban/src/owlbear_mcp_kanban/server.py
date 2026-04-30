@@ -428,7 +428,7 @@ async def create_task(  # noqa: PLR0913
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def create_dr(
     ctx: Context,
-    task_id: str,
+    task_id: str | int,
     agent: str,
     request_type: str,
     body: str,
@@ -438,13 +438,25 @@ async def create_dr(
         msg = "request_type must be one of: decision, action"
         raise ToolError(msg)
 
+    if isinstance(task_id, int):
+        validated_task_id = task_id
+    elif isinstance(task_id, str):
+        normalized_task_id = task_id.strip()
+        if not normalized_task_id or not normalized_task_id.isdigit():
+            msg = "task_id must be numeric"
+            raise ToolError(msg)
+        validated_task_id = int(normalized_task_id)
+    else:
+        msg = "task_id must be numeric"
+        raise ToolError(msg)
+
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
         created_path = await asyncio.to_thread(
             decisions.create_dr,
             app_ctx.kanban_dir / "decisions",
             app_ctx.engine,
-            task_id=task_id,
+            task_id=validated_task_id,
             agent=agent,
             request_type=request_type,
             body=body,
