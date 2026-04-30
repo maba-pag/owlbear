@@ -21,6 +21,7 @@ All tests FAIL (RED phase) — owlbear_kanban.decisions module does not exist ye
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -115,7 +116,9 @@ class TestFromAC_CreateDr:
         assert fm["task_id"] == 42
         assert fm["agent"] == "builder"
         assert fm["request_type"] == "approach-selection"
-        assert fm.get("created"), "created field must be non-empty"
+        assert re.match(r"\d{4}-\d{2}-\d{2}$", str(fm["created"])), (
+            f"created field must be in YYYY-MM-DD format; got {fm.get('created')!r}"
+        )
         assert fm["response"] == "pending"
 
     def test_pending_file_body_appears_after_frontmatter(self, tmp_path: Path) -> None:
@@ -167,6 +170,9 @@ class TestFromAC_CreateDr:
         assert second_path.exists(), "Second DR file must be created"
         assert second_path != first_path, "Collision must produce a different path"
         assert first_path.exists(), "Original file must not be overwritten"
+        assert "approach-selection" in first_path.stem, (
+            f"Slug must be derived from request_type 'approach-selection'; got stem {first_path.stem!r}"
+        )
         assert second_path.stem.endswith("-2"), (
             f"Counter suffix must be '-2', got stem {second_path.stem!r}"
         )
@@ -188,11 +194,13 @@ class TestFromAC_CreateDr:
         blocking_calls = [
             c
             for c in engine.edit_task.call_args_list
-            if c.kwargs.get("blocked") is True
+            if c.args
+            and c.args[0] == 99
+            and c.kwargs.get("blocked") is True
             and c.kwargs.get("block_reason") == "DR pending"
         ]
         assert blocking_calls, (
-            "create_dr must call engine.edit_task(blocked=True, block_reason='DR pending'); "
+            "create_dr must call engine.edit_task(99, blocked=True, block_reason='DR pending'); "
             f"actual calls: {engine.edit_task.call_args_list}"
         )
 
@@ -322,12 +330,16 @@ class TestFromAC_ResolvePendingDrs:
         assert not (decisions_dir / "pending" / "42-question.md").exists(), (
             "DR file must be removed from pending/"
         )
-        # Task must be unblocked
+        # Task must be unblocked (targeting task_id=42)
         unblock_calls = [
-            c for c in engine.edit_task.call_args_list if c.kwargs.get("blocked") is False
+            c
+            for c in engine.edit_task.call_args_list
+            if c.args
+            and c.args[0] == 42
+            and c.kwargs.get("blocked") is False
         ]
         assert unblock_calls, (
-            f"engine.edit_task(blocked=False) must be called for response={response!r}; "
+            f"engine.edit_task(42, blocked=False) must be called for response={response!r}; "
             f"actual calls: {engine.edit_task.call_args_list}"
         )
 
@@ -348,10 +360,14 @@ class TestFromAC_ResolvePendingDrs:
         resolve_pending_drs(decisions_dir, engine)
 
         append_calls = [
-            c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None
+            c
+            for c in engine.edit_task.call_args_list
+            if c.args
+            and c.args[0] == 42
+            and c.kwargs.get("append_body") is not None
         ]
         assert append_calls, (
-            f"engine.edit_task must be called with append_body for response={response!r}; "
+            f"engine.edit_task(42, append_body=...) must be called for response={response!r}; "
             f"actual calls: {engine.edit_task.call_args_list}"
         )
         payload = append_calls[0].kwargs["append_body"]
@@ -383,12 +399,16 @@ class TestFromAC_ResolvePendingDrs:
             "DR file must be in resolved/ after needs-info"
         )
         assert not (decisions_dir / "pending" / "42-question.md").exists()
-        # Task must NOT be unblocked
+        # Task must NOT be unblocked (specifically for task_id=42)
         unblock_calls = [
-            c for c in engine.edit_task.call_args_list if c.kwargs.get("blocked") is False
+            c
+            for c in engine.edit_task.call_args_list
+            if c.args
+            and c.args[0] == 42
+            and c.kwargs.get("blocked") is False
         ]
         assert not unblock_calls, (
-            "needs-info must NOT call engine.edit_task(blocked=False); "
+            "needs-info must NOT call engine.edit_task(42, blocked=False); "
             f"found unexpected unblock calls: {unblock_calls}"
         )
 
@@ -406,10 +426,14 @@ class TestFromAC_ResolvePendingDrs:
         resolve_pending_drs(decisions_dir, engine)
 
         append_calls = [
-            c for c in engine.edit_task.call_args_list if c.kwargs.get("append_body") is not None
+            c
+            for c in engine.edit_task.call_args_list
+            if c.args
+            and c.args[0] == 99
+            and c.kwargs.get("append_body") is not None
         ]
         assert append_calls, (
-            "engine.edit_task must be called with append_body for needs-info; "
+            "engine.edit_task(99, append_body=...) must be called for needs-info; "
             f"actual calls: {engine.edit_task.call_args_list}"
         )
 
