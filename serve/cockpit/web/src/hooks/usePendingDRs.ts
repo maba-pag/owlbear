@@ -36,15 +36,16 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
   const [error, setError] = useState<Error | null>(null)
   const isMountedRef = useRef(true)
   const inFlightRef = useRef(false)
-  const pendingPollCountRef = useRef(0)
+  const pendingPollRef = useRef(false)
 
   const poll = async (): Promise<void> => {
     if (inFlightRef.current) {
-      pendingPollCountRef.current += 1
+      pendingPollRef.current = true
       return
     }
 
     inFlightRef.current = true
+    pendingPollRef.current = false
     setIsLoading(true)
     try {
       const response = await fetch('/api/decisions/pending', { method: 'GET' })
@@ -71,8 +72,8 @@ export function usePendingDRs(options?: UsePendingDRsOptions): UsePendingDRsResu
       if (isMountedRef.current) {
         setIsLoading(false)
       }
-      if (pendingPollCountRef.current > 0 && isMountedRef.current) {
-        pendingPollCountRef.current -= 1
+      if (pendingPollRef.current && isMountedRef.current) {
+        pendingPollRef.current = false
         void poll()
       }
     }
