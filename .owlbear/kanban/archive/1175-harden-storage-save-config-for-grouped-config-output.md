@@ -1,18 +1,18 @@
 ---
 id: 1175
 title: Harden storage.save_config for grouped config output
-status: done
+status: archived
 priority: needed
 created: 2026-04-28T23:07:11.208593+00:00
-updated: 2026-04-29T05:25:59.763469+00:00
+updated: 2026-04-29T05:31:32.215842+00:00
 tags:
 - scope:kanban
 parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: salt-elk
-claimed_at: 2026-04-29T05:25:59.763469+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -338,3 +338,38 @@ Retry cycle: builder's implementation (commit 3b04581e) was already in place. Al
 
 ### Scratch Files Cleaned
 - None found (no `.owlbear/scratch/1175-*` files existed)
+[[2026-04-29]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: model_dump(exclude=...) denylist of dead-only keys; new fields emitted automatically | `storage.py:206` (_CONFIG_WRITE_EXCLUDE = {"board","version"}), `:249` (model_dump call); tests: ac1 quartet incl. `test_ac1_new_field_not_in_denylist_is_emitted_automatically` | PASS |
+| AC2: nested dict values survive save/load round-trip | `storage.py:249`; tests: `test_ac2_defaults_priority_non_default_survives_roundtrip`, `test_ac2_defaults_status_non_default_survives_roundtrip`, `test_ac2_defaults_is_dict_with_expected_keys_in_yaml_output` | PASS |
+| AC3: frozenset-to-list conversion at nested depth via recursive walker | `storage.py:258-266` (_yaml_safe_value handles dict/list/tuple/frozenset); tests: ac3 suite incl. `test_ac3_frozenset_in_list_container_is_converted`, `test_ac3_frozenset_in_tuple_container_is_converted` | PASS |
+| AC4: defaults.priority and activity_log preserved through cycle | `engine.py:459,936` (runtime reads); `models.py:181` (default); `test_ac4_defaults_priority_and_activity_log_preserved_through_cycle` | PASS |
+
+### Test Results
+- pytest: 2920 passed, 4 skipped, 107 failed (all pre-existing; 0 in task scope — 13/13 task tests green)
+- ruff: 4 violations (all in other packages; 0 in task scope)
+
+### Architect Quality: 4/5
+AC was specific and testable with clear test-depth annotations. AC1 was refined during arch review to specify denylist approach; AC4 refined to remove stale reference. Reviewer found test-writer proof gaps (AC1 future-field, AC3 list/tuple branches) — these were test-writer coverage gaps, not architect clarity gaps. Minor: original AC1 wording was slightly ambiguous before refinement.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 4 verified) → 0
+- Lint violations in task scope: 0 → 0
+- AC quality ≤ 3: no (score 4) → 0
+- Missing reviewer evidence: no (detailed two-pass review) → 0
+- Full-suite failures in task scope: 0 → 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| a7cc38cf | test | tests/test_storage_1175.py | #1175 |
+| 3b04581e | fix | serve/kanban/src/owlbear_kanban/storage.py | #1175 |
+| b71994d4 | test | tests/test_storage_1175.py | #1175 |
+| 687d89a4 | docs | share/diagrams/kanban.excalidraw, share/diagrams/mcp-topology.excalidraw | #1175 |
+| 6678c269 | chore | .owlbear/kanban/tasks/1175-*.md, .owlbear/decisions/resolved/1175-*.md, .owlbear/research/1175-*.md | #1175 |
