@@ -113,7 +113,7 @@ def list_pending_decisions(decisions_dir: _DecisionsDir) -> dict[str, object]:
         except (TypeError, ValueError, YAMLError):
             continue
 
-        if str(meta.get("response", "pending")) != "pending":
+        if str(meta.get("response", "")) != "pending":
             continue
 
         preview = body.strip()[:200]
