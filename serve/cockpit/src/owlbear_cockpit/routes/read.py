@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from owlbear_cockpit.cache import MtimeScanCache
 from owlbear_cockpit.deps import get_cache, get_engine, get_view
@@ -27,6 +28,12 @@ class CockpitListTasksResponse(ListTasksResponse):
     """Cockpit envelope for GET /api/tasks with tasks-dir mtime metadata."""
 
     mtime: int
+
+
+class SessionsResponse(BaseModel):
+    """Cockpit envelope for GET /api/sessions."""
+
+    sessions: list[SessionRecord]
 
 
 def _filter_cached_tasks(
@@ -141,7 +148,7 @@ def list_activity(  # noqa: PLR0913
     )
 
 
-@router.get("/sessions", response_model=list[SessionRecord])
-def list_sessions(view: _View, filter: str = "active") -> list[SessionRecord]:  # noqa: A002
+@router.get("/sessions", response_model=SessionsResponse)
+def list_sessions(view: _View, filter: str = "active") -> SessionsResponse:  # noqa: A002
     """Return work sessions, filtered by state."""
-    return view.list_sessions(filter=filter)
+    return SessionsResponse(sessions=view.list_sessions(filter=filter))

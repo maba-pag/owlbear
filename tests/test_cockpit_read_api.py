@@ -398,11 +398,15 @@ class TestFromAC_Sessions:
         assert response.status_code == 200
 
     def test_sessions_response_has_sessions_list(self, client: TestClient) -> None:
-        """Response body is a flat list of session records."""
+        """Response body is a dict with 'sessions' key whose value is a list."""
         response = client.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
         body = response.json()
-        assert isinstance(body, list)
+        assert isinstance(body, dict), (
+            f"Expected dict envelope, got {type(body).__name__}: {body!r}"
+        )
+        assert "sessions" in body, f"Response missing 'sessions' key: {body!r}"
+        assert isinstance(body["sessions"], list)
 
     def test_sessions_each_entry_has_task_id_and_state(
         self, client: TestClient
@@ -410,7 +414,8 @@ class TestFromAC_Sessions:
         """Each session entry has task_id (int) and state (str) fields."""
         response = client.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
-        sessions = response.json()
+        body = response.json()
+        sessions = body["sessions"]
         for session in sessions:
             assert "task_id" in session, f"Session missing task_id: {session}"
             assert "state" in session, f"Session missing state: {session}"
@@ -436,7 +441,9 @@ class TestFromAC_Sessions:
         response = client.get("/api/sessions")
         assert response.status_code == 200
         body = response.json()
-        assert isinstance(body, list)
+        assert isinstance(body, dict)
+        assert "sessions" in body
+        assert isinstance(body["sessions"], list)
         assert called_filter == "active"
 
 
