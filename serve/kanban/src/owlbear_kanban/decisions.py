@@ -161,6 +161,10 @@ def resolve_pending_drs(
 ) -> list[Path]:
     """Resolve pending DR files and return moved files.
 
+    Moves each resolved file to ``resolved/`` using collision-safe
+    exclusive-create; appends a ``-2``, ``-3``, … suffix when a
+    conflicting basename already exists.
+
     Supports both call forms:
     - ``resolve_pending_drs(decisions_dir, engine)``
     - ``resolve_pending_drs(engine)``

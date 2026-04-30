@@ -95,7 +95,7 @@ moved = resolve_pending_drs(engine)
 | Function | Description |
 |----------|-------------|
 | `create_dr(decisions_dir, engine, *, task_id, agent, request_type, body)` | Write a 5-field YAML-frontmatter DR to `pending/` using `O_EXCL` (atomic), then block the task via `engine.edit_task`. Collision retries append `-2`, `-3`, … suffix. |
-| `resolve_pending_drs(decisions_dir, engine)` | Scan `pending/` and process non-pending responses: append summary to task body, unblock (`approved`/`rejected`) or keep blocked (`needs-info`), and move file to `resolved/`. Supports single-argument form `resolve_pending_drs(engine)` (used by `pick_tasks`). |
+| `resolve_pending_drs(decisions_dir, engine)` | Scan `pending/` and process non-pending responses: append summary to task body, unblock (`approved`/`rejected`) or keep blocked (`needs-info`), and move file to `resolved/` using collision-safe exclusive-create (suffixes `-2`, `-3`, … on conflict). Supports single-argument form `resolve_pending_drs(engine)` (used by `pick_tasks`). |
 
 ## Migration
 
