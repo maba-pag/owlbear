@@ -3,8 +3,8 @@ id: 1220
 title: Cockpit config — populate agent_map and remove flat duplicate keys
 status: in-progress
 priority: needed
-created: 2026-04-30 16:31:18.556842+00:00
-updated: 2026-04-30T21:37:32.988702+00:00
+created: '2026-04-30 16:31:18.556842+00:00'
+updated: '2026-04-30 21:37:32.988702+00:00'
 tags:
 - cockpit
 - config

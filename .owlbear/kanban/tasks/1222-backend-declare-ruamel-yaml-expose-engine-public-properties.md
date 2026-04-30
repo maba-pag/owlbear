@@ -3,8 +3,8 @@ id: 1222
 title: Backend — declare ruamel.yaml + expose engine public properties
 status: review
 priority: needed
-created: 2026-04-30 16:31:18.578610+00:00
-updated: 2026-04-30T21:47:44.537838+00:00
+created: '2026-04-30 16:31:18.578610+00:00'
+updated: '2026-04-30 21:47:44.537838+00:00'
 tags:
 - cockpit
 - kanban-engine
@@ -12,8 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: green-stream
-claimed_at: 2026-04-30T21:47:44.537838+00:00
+claimed_at: '2026-04-30 21:47:44.537838+00:00'
 archival_reason:
 archival_refs: []
 ---

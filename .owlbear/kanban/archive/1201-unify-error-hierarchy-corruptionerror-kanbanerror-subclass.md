@@ -1,10 +1,10 @@
 ---
 id: 1201
 title: Unify error hierarchy — CorruptionError → KanbanError subclass
-status: done
+status: archived
 priority: needed
 created: 2026-04-30 15:28:56.411894+00:00
-updated: 2026-04-30T21:47:49.175669+00:00
+updated: 2026-04-30T21:56:52.357544+00:00
 tags:
 - audit-kanban
 parent:
@@ -12,8 +12,8 @@ depends_on:
 - 1203
 blocked: false
 block_reason:
-claimed_by: green-stream
-claimed_at: 2026-04-30T21:47:49.175669+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -223,3 +223,43 @@ Architecture review complete. Refined AC to resolve constructor incompatibility 
 ### Scratch Files Cleaned
 - None (no scratch files for task 1201)
 - Commit-presence verification via `.git/logs` is useful when direct git diff access is unavailable, but it warrants a small confidence deduction.
+
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| CorruptionError inherits from KanbanError | `corruption.py:117`: `class CorruptionError(KanbanError):` | PASS |
+| __init__ calls KanbanError.__init__(code, user_message) before extra attrs | `corruption.py:133`: `super().__init__(code_name, msg)` before self.detail/path/file_path assignments | PASS |
+| KANBAN_ERROR_CODES contains all 9 ERR_CORRUPT_* codes | `errors.py:52-60`: 9 codes verified by grep | PASS |
+| errors.py re-exports CorruptionError | `errors.py:102-103`: lazy __getattr__ re-export verified | PASS |
+| isinstance(CorruptionError(...), KanbanError) is True | Structural consequence of confirmed inheritance; test_isinstance_of_kanban_error green | PASS |
+| All 9 ERR_CORRUPT_* dynamic subclasses remain CorruptionError subclasses | `corruption.py:141-158`: 9 _make_corruption_code_type calls verified | PASS |
+| Existing consumers importing from corruption.py or errors.py still work | test_corruption_py_import_still_works, test_errors_py_import_still_works green; no circular import | PASS |
+
+### Test Results
+- Task-scoped: 31/31 passed, 0 failed (tests/test_error_hierarchy_1201.py)
+- Full suite: 1493 passed, 13 failed, 4 skipped
+- Full-suite failures: all pre-existing and out-of-scope
+  - test_cockpit_react_compiler_1015.py (3): Babel/Vite frontend config
+  - test_engine_dead_code_1112.py (2): engine status transitions
+  - test_engine_end_work_fail_1125.py (1): end_work failure text
+  - test_mcp_kanban_1091/1092/1126.py (7): MCP adapter task_id keyword arg signature mismatch -- unrelated to error hierarchy
+- Lint: clean (corruption.py, errors.py, test_error_hierarchy_1201.py)
+
+### Commits Verified
+- Builder: f26de48e "fix: unify corruption and kanban errors (#1201, builder)"
+- Doc-writer: fb1240c4 "docs: update diagram footers for error hierarchy unification (#1201, doc-writer)"
+
+### Reviewer Evidence
+- Present, detailed, PASS verdict. 7 AC lines fully mapped. One LAX notation (constructor ordering proven by source inspection, not isolated test) -- accepted: source directly confirms ordering.
+
+### Architect Quality: 4/5
+AC was specific, testable, with precise constructor contract and explicit out-of-scope bounds. Minor gap: lazy re-export pattern needed to avoid circular import was not specified in AC, requiring builder empirical discovery. Does not affect verdict.
+
+### Deduction Breakdown
+- quality-runner infrastructure failure required direct terminal invocation: -.01
+
+### Confidence: 0.99
+### Action: archive

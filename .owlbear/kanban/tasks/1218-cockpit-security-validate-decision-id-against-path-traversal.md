@@ -1,10 +1,10 @@
 ---
 id: 1218
 title: Cockpit security — validate decision_id against path traversal
-status: review
+status: docs
 priority: needed
 created: 2026-04-30 16:31:07.651363+00:00
-updated: 2026-04-30T21:47:39.185992+00:00
+updated: 2026-04-30T21:56:21.627922+00:00
 tags:
 - cockpit
 - security
@@ -12,8 +12,8 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: green-stream
-claimed_at: 2026-04-30T21:47:39.185992+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -184,3 +184,71 @@ Prevent path traversal via crafted decision_id in the decisions API.
 ### Post-task Reflection
 - Pattern discovered: reviewer-found test-proof gaps can often be resolved by test-writer without any builder source delta.
 - Quality note: scoped coverage can remain low when only a single task test file is run; use it as task evidence, not module-completeness evidence.
+
+[[2026-04-30]]
+## Review Evidence
+
+### Scope
+- Reviewed the live task-owned source and tests in [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py) and [tests/test_decisions_1218.py](tests/test_decisions_1218.py).
+- Builder commit presence for the original source change was confirmed in [.git/logs/refs/heads/dev](.git/logs/refs/heads/dev#L1104); changed-file scope for this review was reconstructed from the task body plus the live files because reviewer tools do not expose direct git diff.
+
+### Test Results
+- quality-runner scoped pytest: 15 passed, 0 failed in [tests/test_decisions_1218.py](tests/test_decisions_1218.py)
+
+### Lint
+- quality-runner scoped ruff: clean for [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py) and [tests/test_decisions_1218.py](tests/test_decisions_1218.py)
+
+### Coverage
+- quality-runner explicit module rerun produced 39% coverage for [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py).
+- This is informational, not a reject reason. The review gate is diff-scoped changed behavior, and the changed validation path in [_find_decision_path](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L94) is directly exercised by exact helper and route assertions in the task-owned suite.
+
+### Pass 1 - Critical
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: helper raises HTTP 422 for malformed ids before Path.exists or filesystem lookup | [test_invalid_id_raises_http422](tests/test_decisions_1218.py#L125), [test_no_filesystem_io_for_traversal_payload](tests/test_decisions_1218.py#L192), [test_no_filesystem_io_for_empty_id](tests/test_decisions_1218.py#L211) against the allowlist gate at [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L96) and the first lookup at [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L100) | Yes | COVERED |
+| AC2: resolve route returns HTTP 422 for malformed ids | [test_route_422_for_dot_hidden_id](tests/test_decisions_1218.py#L231) and [test_route_422_for_dot_dot_traversal_id](tests/test_decisions_1218.py#L242), with the route only remapping FileNotFoundError at [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L151) | Yes | COVERED |
+| AC3: direct helper coverage includes traversal payloads and a valid allowlisted id | Direct bad-id helper coverage at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L125) and direct valid-id success proof at [test_valid_id_returns_pending_path](tests/test_decisions_1218.py#L164) with the exact returned-path assertion at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L181) | Yes | COVERED |
+
+#### Security Review
+- PASS: the allowlist in [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L19) blocks traversal-shaped ids before any path existence checks in [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L96-L100). No new injection, path traversal, or secret-handling issue was introduced in scope.
+
+#### Test Integrity
+- PASS: the live TestFromAC suite preserves the earlier negative-path assertions and strengthens AC3 with an exact success-path assertion in [test_valid_id_returns_pending_path](tests/test_decisions_1218.py#L164-L181). No weakened or removed TestFromAC assertions found.
+
+#### Test Quality
+- PASS: assertions are exact HTTP status codes or exact returned path values, not loose truthiness checks. The precondition-order tests patch the actual call site with [Path.exists monkeypatch setup](tests/test_decisions_1218.py#L200) and [zero-call assertion](tests/test_decisions_1218.py#L206), repeated for empty-id at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L219-L223).
+
+#### Data Safety
+- PASS: malformed ids are rejected in the helper before file lookup in [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L96-L100), and no shared-state or write-path regression appears in the changed behavior.
+
+#### Implementation-Aware Test Gaps
+- PASS for AC scope: no remaining AC-blocking gaps. The resolved-file compatibility branch at [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L103) and valid-missing-id 404 behavior are not exercised by this task suite, but those branches are outside AC 1-3 and are informational only.
+
+#### Builder Process Quality
+- CLEAN: one prior review reject for a test-proof gap, then a test-only retry that added the missing valid-id helper proof, followed by a builder pass-through with no source delta. No loop pattern detected.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | Helper validation fires before the first path lookup in [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L96-L100), and the suite asserts no Path.exists calls for malformed ids at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L192-L223) | invalid-id helper tests and no-filesystem-io tests | PASS |
+| AC2 | The route resolves through the helper at [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L142-L164) and only converts FileNotFoundError at [serve/cockpit/src/owlbear_cockpit/routes/decisions.py](serve/cockpit/src/owlbear_cockpit/routes/decisions.py#L151); malformed-id route tests assert 422 at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L231-L250) | route 422 tests | PASS |
+| AC3 | The suite directly calls _find_decision_path for the required malformed payloads at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L125-L162) and for the valid allowlisted id at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L164-L181) | direct helper tests | PASS |
+
+### Informational
+- The default quality-runner coverage report initially omitted cockpit module-level coverage; an explicit module-targeted rerun produced the needed evidence without changing the verdict.
+- The route test label at [tests/test_decisions_1218.py](tests/test_decisions_1218.py#L242) overstates the payload as URL-decoded traversal, but the assertion still correctly proves malformed-id 422 behavior.
+
+### Deductions
+- -0.02 changed-file scope reconstructed from task notes plus commit-presence evidence instead of a direct git diff
+- -0.01 initial default coverage report required explicit cockpit-module rerun
+- Confidence: 0.97
+
+### Verdict
+- PASS -> docs. The prior AC3 proof gap is closed, the live implementation satisfies all three AC lines, and the strengthened task-owned suite is now discriminating enough to catch regressions in the validation path.
+
+### Post-task Reflection
+- Default scoped coverage on cockpit routes was noisy; explicit module-targeted coverage produced the usable evidence.
+- The prior reject was resolved cleanly by a test-only retry, with no source change needed in the second builder pass.
+- For narrow security tasks, low whole-module coverage is informational when the AC-mapped changed path is directly exercised by exact assertions.

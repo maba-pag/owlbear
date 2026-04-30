@@ -3,8 +3,8 @@ id: 1223
 title: Backend — fix sessions API contract mismatch
 status: backlog
 priority: needed
-created: 2026-04-30 16:31:18.589039+00:00
-updated: 2026-04-30T21:37:32.990854+00:00
+created: '2026-04-30 16:31:18.589039+00:00'
+updated: '2026-04-30 21:37:32.990854+00:00'
 tags:
 - cockpit
 - bug

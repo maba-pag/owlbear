@@ -3,8 +3,8 @@ id: 1221
 title: Engine — lazy agent_map validation at pick_tasks only
 status: in-progress
 priority: needed
-created: 2026-04-30 16:31:18.568412+00:00
-updated: 2026-04-30T21:37:32.989631+00:00
+created: '2026-04-30 16:31:18.568412+00:00'
+updated: '2026-04-30 21:37:32.989631+00:00'
 tags:
 - cockpit
 - kanban-engine

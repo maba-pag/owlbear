@@ -3,8 +3,8 @@ id: 1198
 title: Remove legacy compatibility code from MCP server
 status: review
 priority: needed
-created: 2026-04-30 15:28:54.145200+00:00
-updated: 2026-04-30T21:47:50.360548+00:00
+created: '2026-04-30 15:28:54.145200+00:00'
+updated: '2026-04-30 21:47:50.360548+00:00'
 tags:
 - audit-kanban
 - mcp-server
@@ -14,8 +14,7 @@ depends_on:
 - 1199
 blocked: false
 block_reason:
-claimed_by: green-stream
-claimed_at: 2026-04-30T21:47:50.360548+00:00
+claimed_at: '2026-04-30 21:47:50.360548+00:00'
 archival_reason:
 archival_refs: []
 ---

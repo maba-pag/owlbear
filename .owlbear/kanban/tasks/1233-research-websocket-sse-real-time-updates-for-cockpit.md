@@ -3,8 +3,8 @@ id: 1233
 title: Research — WebSocket/SSE real-time updates for cockpit
 status: backlog
 priority: nice-to-have
-created: 2026-04-30 16:31:18.682845+00:00
-updated: 2026-04-30T21:46:42.314156+00:00
+created: '2026-04-30 16:31:18.682845+00:00'
+updated: '2026-04-30 21:46:42.314156+00:00'
 tags:
 - cockpit
 - needs-ideation
@@ -14,7 +14,6 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []

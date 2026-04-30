@@ -3,8 +3,8 @@ id: 1225
 title: Frontend — split KanbanBoard into Card + Column + Board
 status: backlog
 priority: needed
-created: 2026-04-30 16:31:18.609234+00:00
-updated: 2026-04-30T21:37:32.992050+00:00
+created: '2026-04-30 16:31:18.609234+00:00'
+updated: '2026-04-30 21:37:32.992050+00:00'
 tags:
 - cockpit
 - frontend
