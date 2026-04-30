@@ -1,12 +1,12 @@
 # share/ — Agent Ecosystem
 
-OwlBear's agent ecosystem: 27 agents, 33 skills, 7 instructions, 10 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
+OwlBear's agent ecosystem: 26 agents, 33 skills, 7 instructions, 10 prompts. This directory is the single source of truth for agent definitions and their supporting documents.
 
 ## Directory Layout
 
 | Directory | Contents | Count |
 |-----------|----------|-------|
-| `agents/` | Agent definitions (`.agent.md`) | 27 |
+| `agents/` | Agent definitions (`.agent.md`) | 26 |
 | `skills/` | Reusable domain knowledge (`SKILL.md`) | 33 |
 | `instructions/` | Auto-loaded instruction files (`.instructions.md`) | 6 |
 | `prompts/` | User-invocable one-shot commands (`.prompt.md`) | 10 |
@@ -54,13 +54,13 @@ These load into every agent's context on every turn:
 
 ## Agents
 
-27 agent definitions (`.agent.md` files).
+26 agent definitions (`.agent.md` files).
 
 | Tier | Count | Agents |
 |------|-------|--------|
 | T1 — Orchestrator | 3 | orchestrator, ideation-discoverer, ideation-mediator |
 | T2 — Pipeline | 7 | researcher, architect, test-writer, builder, reviewer, doc-writer, auditor |
-| T3 — Support | 4 | scribe, planner, test-curator, memory-curator |
+| T3 — Support | 3 | planner, test-curator, memory-curator |
 | T4 — Tools/Panel | 13 | quality-runner, code-reader, fix-attempt, challenger, ideation-architect, ideation-critic, ideation-data, ideation-enduser, ideation-firstprinciples, ideation-outsider, ideation-pragmatist, ideation-security, ideation-simplifier |
 
 Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — problem framing) and `ideation-mediator` (Phase 2 — synthesis, decisions, Brief).
@@ -69,7 +69,7 @@ Ideation has two user-facing entrypoints: `ideation-discoverer` (Phase 1 — pro
 
 VS Code does not inject the agents catalog at nesting depth ≥2. Agents at depth ≥3 (ND3) must have `disable-model-invocation: false` to be resolvable, and dispatching agents rely on their `<agents>` body section — not the system-injected catalog — for subagent discovery.
 
-**ND3 agents** (marked with `(ND3)` in their description): challenger, scribe, planner, fix-attempt, code-reader, ideation-critic, quality-runner.
+**ND3 agents** (marked with `(ND3)` in their description): challenger, planner, fix-attempt, code-reader, ideation-critic, quality-runner.
 
 See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent table.
 
@@ -79,9 +79,9 @@ See `h-agent-structure` § Nesting Depth & DMI for the full rule and ND3 agent t
 
 | Prefix | Count | Purpose |
 |--------|-------|---------|
-| `w-` | 15 | Workflow — step-by-step procedures |
+| `w-` | 14 | Workflow — step-by-step procedures |
 | `r-` | 4 | Rules — shared conventions |
-| `h-` | 14 | Handbook — domain knowledge |
+| `h-` | 15 | Handbook — domain knowledge |
 
 ## Instructions
 

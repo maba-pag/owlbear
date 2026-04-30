@@ -55,8 +55,8 @@
 - ## `1. Project Identity`
 - ## `2. Repository Branches`
 - ## `3. Cockpit Frontend`
-- ## `5. Tools Package`
 - ## `4. Cockpit Backend`
+- ## `5. Tools Package`
 
 ## .pytest_cache/README.md
 - # `pytest cache directory #`
@@ -80,7 +80,8 @@
 - ## `Launch / Usage`
 - ## `Engine Surface — Allowlist`
 - ### `Via adapter (read-only)`
-- ### `Direct engine calls (mutations)`
+- ### `Mutation routes`
+- #### `Via CockpitView facade`
 - ### `Excluded methods — why`
 - ## `Work Sessions Model`
 - ### `Derived states`
@@ -100,6 +101,7 @@
 - ## `Launch / Usage`
 - ### `KanbanEngine methods`
 - ### `Dispatch helper`
+- ### `AgentView dispatch pipeline`
 - ## `Migration`
 - ## `Configuration`
 - ## `Dependencies`
@@ -134,6 +136,14 @@
 - # `owlbear-mcp-kanban — Kanban MCP Server`
 - ## `Launch / Usage`
 - ### `Tools`
+- ## `Data Projections and Envelopes`
+- ### `TaskSummary`
+- ### `TaskFull`
+- ### `DispatchEntry and Wave`
+- ### `guidance Field`
+- ## `Archival Fields`
+- ## `end_work Outcomes`
+- ## `Usage Examples`
 - ## `Configuration`
 - ## `Dependencies`
 
@@ -222,8 +232,47 @@
 - [Customization](setup-guide.md#adding-local-agents)
 - [uv docs](https://docs.astral.sh/uv/)
 
-## share/agents/README.md
-- # `agents/`
+## share/README.md
+- # `share/ — Agent Ecosystem`
+- ## `Directory Layout`
+- ## `Loading Model`
+- ### `Two-Tier Skill Loading`
+- ### `Belts and Suspenders`
+- ### `Transitive Dependencies`
+- ## `Universal Files`
+- ## `Agents`
+- ### `Nesting Depth`
+- ## `Skills`
+- ## `Instructions`
+- ## `Prompts`
+- ## `File Interconnections`
+- ## `Structural Standards`
+
+### Outbound links
+- [WIRING.md](WIRING.md)
+
+## share/WIRING.md
+- # `Agent ↔ File Mapping Tables`
+- ## `Connection Methods`
+- ## `Nesting Depth (ND3 Agents)`
+- ## `Universal Files (apply to ALL agents/prompts)`
+- ## `Table 1: Agent/Prompt → Relevant Files`
+- ### `T1 — Orchestrators`
+- ### `T2 — Pipeline Agents`
+- ### `T3 — Support Agents`
+- ### `T1 — Ideation Orchestrators`
+- ### `T4 — Ideation Panel (9 agents)`
+- ### `T4 — Utility Agents`
+- ### `Prompts`
+- ## `Table 2: File → Agents/Prompts (Inverse)`
+- ### `Skills`
+- ### `Skills with ZERO regular consumers`
+- ### `Instructions`
+- ## `Table 3: Subagent Dependencies`
+- ## `Gap Analysis`
+- ### `Potential Gaps (file has no regular consumer)`
+- ### `Potential Gaps (agent has sparse file coverage)`
+- ### `Observation`
 
 ## share/agents/architect.agent.md
 - ### `Channel A`
@@ -307,13 +356,11 @@
 - ### `Output File`
 
 ## share/agents/ideation-pragmatist.agent.md
-- ## `Input Contract`
-- ## `Output Contract`
-- ### ``mode=converge``
-- ### ``mode=denoise``
 - ### `Channel A`
 - ### `Channel B`
-- ### `Output Files (per mode)`
+- ### ``mode=converge` → `synthesis.md``
+- ### ``mode=denoise` → `synthesis-idea-panel.md``
+- ### ``mode=compare` → `synthesis.md``
 
 ## share/agents/ideation-security.agent.md
 - ### `Channel A`
@@ -333,7 +380,6 @@
 ## share/agents/orchestrator.agent.md
 - ### `Channel A`
 - ### `Session Output`
-- ### `Degradation Defense`
 
 ## share/agents/planner.agent.md
 - ### `Channel A`
@@ -353,10 +399,6 @@
 - ### `Channel A`
 - ### `Channel B`
 - ### `Kanban protocol`
-
-## share/agents/scribe.agent.md
-- ### `Channel A`
-- ### `Channel B`
 
 ## share/agents/test-curator.agent.md
 - ### `Channel A`
@@ -388,36 +430,29 @@ describes: share/instructions/owlbear-system.instructions.md, share/skills/r-pip
 ## share/diagrams/project-overview.excalidraw
 describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
-## share/instructions/README.md
-- # `instructions/`
+## share/instructions/agent-ecosystem.instructions.md
 
-## share/instructions/agent-common.instructions.md
-- ## `Channel B`
-- ## `Per-Agent Section Mapping`
-- ## `User-Action Detection Responsibilities`
-
-## share/instructions/agents-and-skills.instructions.md
+## share/instructions/doc-standards.instructions.md
 
 ## share/instructions/frontend.instructions.md
 
 ## share/instructions/owlbear-system.instructions.md
-- ## `2. Decision Heuristics`
-- ## `3. System Awareness`
+- ## `1. Decision Heuristics`
+- ## `2. System Awareness`
 - ### `Tech Stack`
 - ### `Pipeline`
 - ### `Directory Structure`
-- ## `4. Memory Governance`
-- ## `5. Operational Fundamentals`
+- ## `3. Memory Governance`
+- ## `4. Operational Fundamentals`
+
+## share/instructions/pipeline-agents.instructions.md
+- ## `Channel B`
+- ## `Per-Agent Section Mapping`
+- ## `User-Action Detection Responsibilities`
 
 ## share/instructions/python.instructions.md
 
 ## share/instructions/research-docs.instructions.md
-
-## share/prompts/README.md
-- # `prompts/`
-- ## `Invocation Pattern`
-- ## `Naming Convention`
-- ## `Current Prompts`
 
 ## share/prompts/agent-audit.prompt.md
 - # `Agent Ecosystem Audit`
@@ -437,6 +472,14 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Phase 1 — Scan`
 - ### `Phase 2 — Finding Loop`
 - ## `5. Verification`
+
+## share/prompts/arch-audit.prompt.md
+- # `Architecture Module Quality Audit`
+- ## `Step 1 - Load the standard first`
+- ## `Step 2 - Define the audit unit`
+- ## `Step 3 - Evaluate with full vocabulary`
+- ## `Step 4 - Output format`
+- ## `Step 5 - Optional follow-up tasks`
 
 ## share/prompts/design-context.prompt.md
 - # `Design-Context Onboarding`
@@ -507,15 +550,11 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/prompts/test-curation.prompt.md
 
-## share/skills/README.md
-- # `skills/`
-
 ## share/skills/h-agent-structure/SKILL.md
 - # `Agent Ecosystem Structure`
-- ## `Loading Model`
-- ### `File Type Selection`
-- ### `Boundary Fitness`
-- ## `Agent Tiers`
+- ## `Foundation`
+- ## `File Type Selection`
+- ## `Boundary Fitness`
 - ## `Agent Extraction Markers`
 - ### `Extract when (≥ 2 apply)`
 - ### `Defer extraction when (< 2 extract conditions apply)`
@@ -529,6 +568,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Required Sections`
 - ### `Optional Sections`
 - ### `Forbidden Content`
+- ### `Nesting Depth & DMI`
 - ## `Skill File Structure (SKILL.md)`
 - ### `Frontmatter (YAML)`
 - ### `Three Categories`
@@ -540,6 +580,12 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Stubs — Safety Nets`
 - ### `Authority Files — Embedded Rules`
 - ## `Formatting Rules`
+
+### Outbound links
+- [share/README.md](../../README.md)
+
+## share/skills/h-decision-requests/SKILL.md
+- # `Decision Requests Handbook`
 
 ## share/skills/h-excalidraw-diagram/SKILL.md
 - # `Excalidraw Diagram Reference`
@@ -635,6 +681,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/h-ideation/SKILL.md
 - # `Ideation Handbook`
 - ## `Phase Map`
+- ## `Moment Reference`
+- ## `Investment Tier`
 - ## `User-Facing Entry Points`
 - ### ``@ideation-discoverer``
 - ### ``@ideation-mediator``
@@ -645,10 +693,11 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### ``research-notes.md``
 - ### ``synthesis-idea-panel.md``
 - ### ``synthesis.md``
+- ### ``stances/*-proposal.md``
 - ## `Shared Interaction Contract`
-- ### `Investigative Turns`
+- ### `Investigative Turns (Investigator Mode — M1-M3)`
 - ### `Synthesis Turns`
-- ### `Decision Turns`
+- ### `Decision Turns (Facilitative Mode — M4-M6)`
 - ## `Decision Entry Template`
 - ## `Handoff Contract`
 - ## `Cross-References`
@@ -666,6 +715,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Selection Logic`
 - ### `Parallel Batch (Default)`
 - ### `Sequential Deep-Dive (Conditional)`
+- ### `Propose Mode (M3.5 Path)`
 - ## `Critic Loop Protocol`
 - ### `Stance Reasoning Cycle`
 - ### `Exit Conditions`
@@ -673,12 +723,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Pragmatist Modes`
 - ### ``mode=denoise``
 - ### ``mode=converge``
+- ### ``mode=compare``
 - ## `Disagreement Resolution`
 - ## `Panelist References`
-
-## share/skills/h-kanban-md/SKILL.md
-- # `kanban-md CLI Reference (Deprecated)`
-- ## `Board Configuration`
 
 ## share/skills/h-knowledge-ops/SKILL.md
 - # `Knowledge Base Operations`
@@ -705,6 +752,13 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/h-mcp-kanban/SKILL.md
 - # `MCP Kanban Tool Reference`
 - ## `Tool Summary`
+- ### `Filter and Retrieval Additions`
+- ## `Projection Schemas`
+- ### `TaskSummary`
+- ### `TaskFull`
+- ### `DispatchEntry`
+- ### `Wave`
+- ## `Archival Semantics`
 - ## `Response: Guidance Field`
 - ### ``block:user` Tag Exemption`
 - ## `Compound Tools`
@@ -768,7 +822,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Consumer Invocation Pattern`
 - ## `Input Fields`
 - ## `Output Format`
-- ## `Fallback: Quality-Runner Unavailable`
 
 ## share/skills/h-visual-output/SKILL.md
 - # `Visual Output Reference`
@@ -788,6 +841,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/r-architecture-standards/SKILL.md
 - # `Architecture Standards`
 - ## `v2 Architecture Overview`
+- ## `Module Quality Vocabulary`
+- ### `Deletion Test`
+- ### `Dependency Classification`
 - ## `MCP Server Conventions`
 - ### `Error Handling`
 - #### `Anti-pattern: double-prefix`
@@ -816,6 +872,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/r-pipeline-protocol/SKILL.md
 - # `Pipeline Protocol`
+- ### `Companion Skills`
 - ## `1. Task Setup`
 - ### `Task Discipline`
 - ### `Claiming`
@@ -829,6 +886,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Defense-in-Depth`
 - ### `Confidence Thresholds (source of truth)`
 - ### `Process Habits`
+- ### `Test-Depth Convention`
+- ### `Builder-Skip on Test-Only Retry`
 - ### `Follow-up Task Quality`
 - ## `3. Communication`
 - ### `Channel A — Routing Signal`
@@ -862,6 +921,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 0 — Setup`
 - ## `Step 1 — Analyze Codebase Context`
 - ## `Step 2 — Evaluate Architecture`
+- ## `Step 2.1 — Test-Depth Annotation`
+- ## `Step 2.3 — Conditional Design Diverge`
 - ## `Step 2.5 — Challenge Proposed Verdict`
 - ## `Step 3 — Decide and Act`
 - ## `Output Template`
@@ -873,13 +934,10 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 0 — Setup`
 - ## `Step 1 — Check Source Control Changes`
 - ## `Step 2 — Run Tests Independently`
-- ### `Fallback: Quality-Runner Unavailable`
 - ## `Step 2.5 — Parallel Fan-Out Dispatch`
 - ### `Code-Reader Consumer Contract`
 - ## `Step 3 — Run Lint`
-- ### `Fallback: Quality-Runner Unavailable`
 - ## `Step 4 — Run Coverage`
-- ### `Fallback: Quality-Runner Unavailable`
 - ## `Step 5 — Pass 1: CRITICAL Checks`
 - ### `5.0 Test-Writer Audit — AC-to-Test Coverage`
 - ### `5.1 Security Review`
@@ -901,37 +959,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
 
-## share/skills/w-decision-routing/SKILL.md
-- # `Decision Routing`
-- ## `Step 0 — Setup`
-- ## `Consumer Invocation Contract`
-- ### `Mode-Specific Output Contracts`
-- #### `check-or-create`
-- #### `resolve`
-- #### `query`
-- ## `Modes`
-- ### `Mode 1: check-or-create`
-- ### `Mode 2: resolve`
-- #### `response: pending — Not yet responded`
-- #### `response: approved — Full approval (decision requests)`
-- #### `response: completed — Action request completed`
-- #### `response: needs-info — Clarification requested`
-- #### `response: rejected — User rejects all options`
-- ### `Mode 3: query`
-- ## `When to Create a Decision Request`
-- ## `When to Create an Action Request`
-- ## `Decision Request File Format`
-- ### `Frontmatter`
-- #### ``response` field values`
-- ### `Body Structure`
-- ### `Option Presentation Conventions`
-- ## `Action Request File Format`
-- ## `Blocking Behavior`
-- ## `User Notes Are AC Amendments`
-- ## `Output Template`
-- ## `Verification Checklist`
-- ## `Known Pitfalls`
-
 ## share/skills/w-doc-update/SKILL.md
 - # `Documentation Update (v2)`
 - ## `Step 0 — Setup`
@@ -947,8 +974,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Item 6: Explicit Diagram Creation`
 - ### `Item 7: Deletion Detection`
 - ## `Step 3 — Clean Scratch Files`
-- ## `Step 4 — Deliverables`
-- ## `Step 5 — Advance`
+- ## `Step 4 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
@@ -970,8 +996,9 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Working Rules`
 - ## `Conditional Denoise`
 - ## `Step 0 — Setup and Entry`
-- ## `Step 1 — M1: Understanding`
-- ## `Step 2 — M2: Outcomes and Early Challenge Lane`
+- ## `Step 1 — M1: Understanding — "What's really going on?"`
+- ## `Step 1.5 — Investment Tier Check`
+- ## `Step 2 — M2: Outcomes — "What does winning look like?"`
 - ## `Step 3 — Research Bridge and Phase Handoff`
 - ## `Artifact Contract`
 - ### ``context.md``
@@ -989,12 +1016,13 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Concrete Specifics`
 - ### `Inline Verbatim Evidence`
 - ## `Step 0 — Phase 2 Start`
-- ## `Step 1 — M3: Landscape Presentation and Research Follow-Up`
-- ## `Step 2 — Late Domain Panel Orchestration`
-- ## `Step 3 — M4: Decision Support`
+- ## `Step 1 — M3: Landscape — "What exists, what's possible?"`
+- ## `Step 1.5 — M3.5: Conditional Proposal Round (Design It Twice)`
+- ## `Step 2 — Late Domain Panel Orchestration (Stance Path)`
+- ## `Step 3 — M4: Decision — "What are we doing and why?"`
 - ## `Step 4 — Critic Validation Pass`
-- ## `Step 5 — M5: Brief Drafting`
-- ## `Step 6 — M6: Handoff`
+- ## `Step 5 — M5: The Brief — "Here's the plan"`
+- ## `Step 6 — M6: Handoff — "Go"`
 - ## `Verification Checklist`
 
 ## share/skills/w-mem-curation/SKILL.md
@@ -1004,11 +1032,8 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 2 — Deduplicate`
 - ## `Step 3 — Assess Signal`
 - ## `Step 4 — Act`
-- ## `Step 5 — Deliverables`
-- ### `5a — Write curation-report.json`
-- ### `5b — Append to task body`
-- ## `Step 6 — Advance`
-- ## `Output Template`
+- ## `Step 5 — Return Channel A signal`
+- ## `Step 6 — Done`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
 
@@ -1016,17 +1041,14 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `Orchestration`
 - ## `Context Budget`
 - ## `Signal Contracts`
-- ## `Step 1 — Resolve Pending Decision Requests`
+- ## `Step 1 — Housekeeping`
 - ## `Step 2 — Plan`
 - ## `Configuration`
 - ## `Step 3 — Dispatch`
 - ### `Wave Assembly`
 - ### `Dispatch Mechanics`
-- ### `Tool-Failure Verification`
-- ### `Rate-Limit Sequential Fallback`
 - ## `Step 4 — Loop`
 - ## `Output Format`
-- ## `Post-Session Diagnostics`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
 
@@ -1043,8 +1065,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 5 — Classify Outcome and Create Follow-Up Tasks`
 - ### `Tier Classification`
 - ### `Create Follow-Up Tasks`
-- ## `Step 6 — Deliverables`
-- ## `Step 7 — Advance`
+- ## `Step 6 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
@@ -1053,8 +1074,10 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - # `Task Decomposition`
 - ## `Step 0 — Setup`
 - ## `Step 1 — Read the Plan`
+- ## `Step 1a — Single-Task Shortcut`
 - ## `Step 2 — Check Board State`
 - ## `Step 3 — Decompose into Atomic Tasks`
+- ## `Durability Principles`
 - ## `Step 4 — Build Dependency Graph`
 - ## `Step 5 — Assign Priority and Tags`
 - ## `Step 5a — Validate Planned Tasks`
@@ -1073,7 +1096,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 1a — Research task verification`
 - ## `Step 2 — Architect quality audit`
 - ## `Step 3 — Score and decide`
-- ## `Step 4 — Verify commits and commit leftovers`
+- ## `Step 4 — Verify commits and commit task files`
 - ## `Step 5 — Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
@@ -1085,19 +1108,15 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `Step 0a — Non-Implementation Pass-Through`
 - ## `Step 1 — Plan the Change`
 - ## `Step 2 — Read Existing Tests`
-- ### `Fallback: Quality-Runner Unavailable`
 - ### `Module-Level Test Visibility`
 - ## `Step 3 — Implement Minimal Code (GREEN)`
-- ### `Fallback: Quality-Runner Unavailable`
 - ## `Step 4 — Handle Missing Blocking Edge Cases`
 - ## `Step 5 — Refactor (If Needed)`
 - ## `Step 6 — Verify`
-- ### `Fallback: Quality-Runner Unavailable`
 - ### `Step 6.1 — Pass: Continue`
 - ### `Step 6.2 — Fail: Same-Context Retry`
 - ### `Step 6.3 — Fail Again: Delegate to fix-attempt`
-- ## `Step 7 — Deliverables`
-- ## `Step 8 — Advance`
+- ## `Step 7 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
@@ -1107,15 +1126,16 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 0 — Setup`
 - ## `Step 1 — Assess Task Type`
 - ### `Step 1a — Pass-Through for Non-Implementation Tasks`
-- ### `Step 1b — Retry-Cycle Handling`
+- ### `Step 1b — Retry-Cycle Handling (Surgical Fill Mode)`
+- #### `Step 1b.1 — Direct-to-Review Advance (Test-Only Retry)`
+- ### `Step 1c — Depth-Zero Pass-Through`
 - ## `Step 2 — Search Codebase`
 - ### `Step 2a — Non-Implementation Assessment`
 - ## `Step 3 — Plan Test Categories`
 - ## `Step 4 — Write Tests`
 - ## `Step 5 — Verify RED`
-- ### `Fallback: Quality-Runner Unavailable`
 - ## `Step 6 — Deliverables`
-- ## `Step 7 — Advance`
+- ## `Step 6 — Commit & Advance`
 - ## `Output Template`
 - ## `Verification Checklist`
 - ## `Known Pitfalls`
@@ -1130,6 +1150,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `Step 4 — Clean Up Task-Tests`
 - ## `Step 5 — Full Suite Gate`
 - ## `Step 6 — Lifecycle Log`
-- ## `Step 7 — Commit`
+- ## `Step 7 — Commit & Advance`
 - ## `Output Template`
 - ## `Known Pitfalls`
+- ## `Companion Skills`
