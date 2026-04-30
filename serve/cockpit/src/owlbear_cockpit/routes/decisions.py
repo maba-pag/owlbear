@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from io import StringIO
 from pathlib import Path
 from typing import Annotated, Literal
@@ -14,6 +15,8 @@ from ruamel.yaml.error import YAMLError
 from owlbear_cockpit.deps import get_decisions_dir
 
 router = APIRouter()
+
+_DECISION_ID_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 
 _DecisionsDir = Annotated[Path, Depends(get_decisions_dir)]
 
@@ -90,6 +93,9 @@ def _rewrite_response(path: Path, meta: dict[str, object], body: str) -> None:
 
 def _find_decision_path(decisions_dir: Path, decision_id: str) -> Path:
     """Resolve a decision path from pending first, then resolved."""
+    if not _DECISION_ID_PATTERN.fullmatch(decision_id):
+        raise HTTPException(status_code=422, detail="Invalid decision id")
+
     pending = decisions_dir / "pending" / f"{decision_id}.md"
     if pending.exists():
         return pending
