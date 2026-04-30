@@ -1,10 +1,10 @@
 ---
 id: 1198
 title: Remove legacy compatibility code from MCP server
-status: review
+status: in-progress
 priority: needed
-created: '2026-04-30 15:28:54.145200+00:00'
-updated: '2026-04-30 21:47:50.360548+00:00'
+created: 2026-04-30 15:28:54.145200+00:00
+updated: 2026-04-30T22:23:55.084857+00:00
 tags:
 - audit-kanban
 - mcp-server
@@ -14,7 +14,7 @@ depends_on:
 - 1199
 blocked: false
 block_reason:
-claimed_at: '2026-04-30 21:47:50.360548+00:00'
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -145,3 +145,12 @@ All 4 fail with `AssertionError: {fn} still has **legacy catch-all` — VAR_KEYW
 - Initial scoped verification passed but only yielded 82% coverage on the touched module; expanding to additional existing server-focused suites was required to satisfy the gate.
 - Keeping the commit scoped to the single builder-owned source file avoided mixing in unrelated dirty-tree changes.
 - Existing test-writer updates in task body provided clear handoff context, which reduced implementation churn and allowed a direct closeout.
+
+[[2026-04-30]]
+## Test-Writer Notes
+- Pipeline-state recovery: task reset to `todo` after builder committed `706cc2f7`.
+- Test file `tests/test_server_1198.py` exists with 4 tests — `TestFromAC_LegacyCompatRemoval`.
+- All 4 tests PASS against committed implementation (legacy code removed, `**legacy` catch-alls gone).
+- ruff: clean.
+
+**Builder action:** No new implementation needed. Verify quality-runner, commit is `706cc2f7`. Re-advance to review.

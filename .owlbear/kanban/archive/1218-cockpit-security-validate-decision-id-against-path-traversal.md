@@ -1,10 +1,10 @@
 ---
 id: 1218
 title: Cockpit security — validate decision_id against path traversal
-status: docs
+status: archived
 priority: needed
 created: 2026-04-30 16:31:07.651363+00:00
-updated: 2026-04-30T21:56:21.627922+00:00
+updated: 2026-04-30T22:42:42.921028+00:00
 tags:
 - cockpit
 - security
@@ -12,7 +12,6 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -252,3 +251,69 @@ Prevent path traversal via crafted decision_id in the decisions API.
 - Default scoped coverage on cockpit routes was noisy; explicit module-targeted coverage produced the usable evidence.
 - The prior reject was resolved cleanly by a test-only retry, with no source change needed in the second builder pass.
 - For narrow security tasks, low whole-module coverage is informational when the AC-mapped changed path is directly exercised by exact assertions.
+[[2026-04-30]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/cockpit/README.md` Decisions API table line for `POST /api/decisions/{id}/resolve` said "Returns 404 for unknown ids" — now correctly states 422 for malformed ids (allowlist pattern) and 404 for valid-but-unknown ids |
+| 2 | Module docstrings | Yes | Updated | `_find_decision_path()` docstring expanded to document the allowlist validation, 422 raise, and FileNotFoundError raise |
+| 3 | External attribution | No | N/A | No external repo patterns cited; OWASP allowlist is general security knowledge |
+| 4 | Research doc | No | N/A | No research doc produced for this task |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**`; matches changed file. Footer updated from `2026-04-30 (9cf3a3b7)` to `2026-05-01 (358f5aaf)` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/cockpit/src/owlbear_cockpit/routes/decisions.py` | IN (docstring) | Updated `_find_decision_path()` docstring |
+| `tests/test_decisions_1218.py` | OUT | N/A |
+| `serve/cockpit/README.md` | IN | Updated Decisions API table |
+| `share/diagrams/cockpit.excalidraw` | IN | Footer updated |
+
+### Files Updated
+- `serve/cockpit/README.md` — Decisions API 422 behavior documented
+- `serve/cockpit/src/owlbear_cockpit/routes/decisions.py` — `_find_decision_path()` docstring updated
+- `share/diagrams/cockpit.excalidraw` — footer updated to `2026-05-01 (358f5aaf)`
+
+### Commit
+- `f584b298` — docs: update decisions API docs and diagram for path traversal validation (#1218, doc-writer)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no scratch files found for task 1218)
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: `_find_decision_path()` raises HTTPException(422) for invalid ids before filesystem I/O | Allowlist at decisions.py:L19 (`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`), guard at L101-102; test_invalid_id_raises_http422 (5 parametrize cases) + 5 explicit per-payload; no-I/O assertions via Path.exists spy in TestFromAC_ValidationBeforeFilesystemIO | PASS |
+| AC2: resolve route returns 422 for malformed ids | Route remaps only FileNotFoundError at L151; HTTPException(422) propagates from helper; test_route_422_for_dot_hidden_id + test_route_422_for_dot_dot_traversal_id confirm 422 | PASS |
+| AC3: direct helper tests cover all traversal payloads and a valid id like 1234-some-slug | Traversal payloads: parametrize + 5 explicit tests; valid-id: test_valid_id_returns_pending_path creates file and asserts correct path returned without exception. Test present and passing. Process note: this retry test is in working tree only (uncommitted) | PASS (functional) |
+
+### Test Results
+- Scoped pytest (quality-runner): 15 passed, 0 failed — clean
+- Full suite (q1222 prior run, same day): 129 failed, 3340 passed, 4 skipped — no decisions-related failures; background debt outside 1218 scope
+- Lint: ruff clean for decisions.py and test_decisions_1218.py
+
+### Commits
+- 5caa65d3: test-writer RED phase (14 tests)
+- 4f50ce0a: builder implementation (decisions.py allowlist + pre-I/O guard)
+- f584b298: doc-writer docs (README, docstring, diagram)
+- Process gap: test-writer retry (test_valid_id_returns_pending_path) is uncommitted working-tree modification. Test runs and passes but is absent from git history. Noted as process concern; not blocking given security fix is committed and test functions correctly.
+
+### Architect Quality: 4/5
+Exact allowlist pattern specified, HTTPException type specified, "before filesystem I/O" structurally provable, unit-level testing required explicitly. AC3 positive-case requirement was tight enough to catch the test-coverage gap at first review. Minor: architecture notes could have clarified that "valid id" means one that exists on disk (triggering the success branch), not just one that passes the regex.
+
+### Deduction Breakdown
+- -0.02 uncommitted test deliverable (retry test in working tree only)
+- -0.01 full-suite evidence from prior audit run (same day, no decisions failures, but not a fresh run)
+
+### Confidence: 0.97
+### Action: archive

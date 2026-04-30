@@ -3,13 +3,11 @@ id: 1233
 title: Research — WebSocket/SSE real-time updates for cockpit
 status: backlog
 priority: nice-to-have
-created: '2026-04-30 16:31:18.682845+00:00'
-updated: '2026-04-30 21:46:42.314156+00:00'
+created: 2026-04-30 16:31:18.682845+00:00
+updated: 2026-04-30T22:37:50.283811+00:00
 tags:
 - cockpit
-- needs-ideation
 - architecture
-- type:user-action
 parent:
 depends_on: []
 blocked: false
@@ -187,3 +185,75 @@ Downstream actions required:
 2. Approve #1234/#1235/#1236 for architecture review
 3. Validate `watchfiles` dependency availability before builder starts
 4. Log external sources in `.owlbear/sources/overview.md`
+[[2026-04-30]]
+## Architecture Review
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Research task: 4 clearly scoped questions, well bounded |
+| Interface clarity | N/A | Research output; follow-up tasks #1234/#1235/#1236 created with correct dependency wiring |
+| Dependency correctness | PASS | Follow-up tasks wired correctly |
+| Module layering | N/A | Research task |
+| TDD compliance | N/A | Research task, no testable Python interface |
+| KISS/YAGNI | PASS | Scope bounded to 4 questions; invalidation-only SSE model is minimal |
+| Premise challenge | PASS | T3 DR approved (Option A); SSE verdict was uncontested by challenger |
+| Pattern consistency | N/A | Research task |
+| Security surface | N/A | No code changes introduced |
+| Single domain | PASS | cockpit/architecture |
+
+### Failure Mode Map
+N/A — research task, no codepath changes.
+
+### Design Diverge
+Skipped — research task, no architecture design choices in this review cycle.
+
+### Challenge Results
+Skipped — research task; T3 DR resolved (Option A) provides the authority gate.
+
+### Test Depth
+All AC lines: td:0 — no testable Python interface.
+Test-writer: SKIP
+
+### Verdict: REJECT → research
+
+### Governance resolved
+- T3 DR: APPROVED — `resolved/1233-cockpit-polling-vs-sse.md` (Option A, user-approved).
+- Tags `type:user-action` and `needs-ideation` removed (DR resolved, research complete).
+
+### Remaining FAIL conditions (from reviewer, still open)
+
+1. **Sources ledger incomplete** — 6 external sources in `.owlbear/research/1233-realtime-cockpit-updates.md` (lines 16–20) have not been added to `.owlbear/sources/overview.md`. Add a `## Real-Time Cockpit Updates (Task #1233)` section with rows for:
+   - germano.dev/sse-websockets (2022)
+   - digitalbiztalk.com — SSE vs WebSockets 2026
+   - Medium — FastAPI SSE implementation (2025)
+   - github.com/sysid/sse-starlette
+   - github.com/samuelcolvin/watchfiles
+   - uvicorn.org/settings — concurrency limits
+
+2. **`watchfiles` dependency claim unverified** — Research doc implies watchfiles is a zero-new-dep addition ("already used by uvicorn for reload"). `serve/cockpit/pyproject.toml` does NOT list `watchfiles` or `uvicorn[standard]`. Either: (a) retract the claim and note watchfiles as a new explicit dependency for #1234 to add, or (b) document the transitive dep path with evidence (e.g. from installed packages or uv.lock). This affects builder scoping for #1234.
+
+### Required action before re-advancing
+Researcher must fix both items above and then move #1233 to backlog for a second architect pass.
+
+### Downstream action (tracked separately)
+`.owlbear/briefs/draft-cockpit/decisions.md` D6 still states "no SSE/WebSocket in v1". Must be amended to reflect Option A approval. A separate task has been created for this — see new task created alongside this rejection.
+
+
+**Note from architect:** Brief amendment task created for D6 update — see new task in backlog.
+[[2026-04-30]]
+## Research
+
+**Correction pass** — fixed two governance failures flagged by architect review:
+
+**1. Sources ledger** — Added `## Real-Time Cockpit Updates (Task #1233)` section to `.owlbear/sources/overview.md` with 6 rows:
+- germano.dev/sse-websockets (confirmed URL, valid)
+- digitalbiztalk.com SSE vs WebSockets 2026 (domain unresolvable at validation time — flagged in ledger; exact article path unknown)
+- Medium FastAPI SSE 2025 (best-match URL: mahdijafaridev.medium.com)
+- github.com/sysid/sse-starlette (confirmed)
+- github.com/samuelcolvin/watchfiles (confirmed)
+- uvicorn.org/settings (confirmed)
+
+**2. watchfiles dependency claim** — Retracted the "already used by uvicorn for reload" mitigation. Verified: `uv pip show watchfiles` → not found; `uvicorn v0.46.0` depends only on `click` + `h11`. `watchfiles` requires `uvicorn[standard]` which is NOT installed. Updated `.owlbear/research/1233-realtime-cockpit-updates.md §4 Risks` to note watchfiles as a **new explicit dependency** that #1234 must add. Task #1234 body already says "Dependency: sse-starlette + watchfiles packages" — consistent.
+
+All three architect pre-conditions now met: T3 DR resolved (Option A), sources ledger complete, watchfiles claim corrected.

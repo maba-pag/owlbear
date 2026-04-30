@@ -1,10 +1,10 @@
 ---
 id: 1220
 title: Cockpit config — populate agent_map and remove flat duplicate keys
-status: in-progress
+status: done
 priority: needed
-created: '2026-04-30 16:31:18.556842+00:00'
-updated: '2026-04-30 21:37:32.988702+00:00'
+created: 2026-04-30 16:31:18.556842+00:00
+updated: 2026-04-30T22:42:01.246518+00:00
 tags:
 - cockpit
 - config
@@ -206,3 +206,119 @@ APPROVED #1220 -> todo | Refined stale premise and AC scope. Rewrote objective (
 - AC3 (td:0) and AC4 (td:0) are existing durable suite gates — no new test obligation.
 - Cycle-2 Architecture Review explicitly marks test-writer SKIP (type:config pass-through).
 - Passing through to builder.
+
+[[2026-04-30]]
+## Builder Notes
+- Implementation: no file edits were required in this cycle; `.owlbear/kanban/config.yml` was already in the required grouped-schema state when claimed.
+- Verification scope: `tests/test_support_module_migration_1176.py::TestFromAC_LiveConfigFlatKeyCleanup`, `tests/test_support_module_migration_1176.py::TestFromAC_ForwardingPropertiesRemoved`, and `tests/test_engine_lazy_agent_map_1221.py`.
+- Tests: 25 passed, 0 failed, 0 skipped (quality-runner scoped run).
+- Lint: ruff clean on scoped test files.
+- Coverage: informational only for this config task; scoped quality-runner report returned no failures.
+- Evidence summary: required live-config cleanup and forwarding-property assertions pass; lazy-agent-map regression suite remains green.
+
+### Post-task Reflection
+- Previous builder failure was process-related (pass-through on a task that still required config edits); this cycle corrected by verifying live state against revised AC.
+- Task body AC references a class name that no longer exists (`TestFromAC_LiveConfigMigrated`); scoped evidence used the current equivalent class (`TestFromAC_LiveConfigFlatKeyCleanup`).
+- Running quality-runner with exact test selectors prevented broad-suite noise and provided clean gate evidence for a config-only task.
+[[2026-04-30]]
+## Review Evidence
+### Scope
+- Anchored this review to the latest `## Architecture Review (cycle 2)` refinement in the task body. The top-level objective/AC text is stale and no longer governs the current retry.
+- Max test depth is td:1, so reviewer fan-out used quality-runner only; code-reader was correctly skipped.
+- No builder commit hash or explicit changed-file list was supplied. Diff scope was reconstructed from the refined AC, the live target file, and the durable suites named in the task body.
+
+### Test Results
+- quality-runner scoped run: 25 passed, 0 failed, 0 skipped.
+- Test scope: `tests/test_support_module_migration_1176.py::TestFromAC_LiveConfigFlatKeyCleanup`, `tests/test_support_module_migration_1176.py::TestFromAC_ForwardingPropertiesRemoved`, and `tests/test_engine_lazy_agent_map_1221.py`.
+
+### Lint
+- Ruff clean on `tests/test_support_module_migration_1176.py` and `tests/test_engine_lazy_agent_map_1221.py`.
+
+### Coverage
+- Informational only for this td:1 config task.
+- quality-runner reported overall 22% for the scoped run; relevant reported modules were `owlbear_kanban.config_loader` 96%, `owlbear_kanban.models` 82%, `owlbear_kanban.errors` 86%, `owlbear_kanban.yaml_rt` 90%, and `owlbear_mcp_kanban.models` 90%.
+
+### Pass 1 — Critical
+#### Test-Writer AC Coverage
+- Skip. Latest Architecture Review marks #1220 as `type:config` pass-through, and no task-owned `TestFromAC_*` suite was authored for this task.
+- Durable legacy `TestFromAC_*` suites were still used as binding proof and remained untouched in the reviewed scope.
+
+#### Security Review
+- No new security surface in `.owlbear/kanban/config.yml`.
+- No secrets, dynamic execution, path handling, or boundary-validation changes were introduced by the task scope.
+
+#### Test Integrity
+- No builder test edits surfaced in task scope.
+- Review evidence relies on existing durable suites in `tests/test_support_module_migration_1176.py` and `tests/test_engine_lazy_agent_map_1221.py`.
+
+#### Test Quality
+- Assertion specificity: STRONG. The live-config suite checks exact root-key absence and exact `model_extra` absence, not loose truthiness.
+- Negative/error-path coverage: ADEQUATE for scope. The task is config hygiene plus regression protection, and the selected durable suites exercise both direct file shape and loaded-config behavior.
+- Manual mutation reasoning: STRONG. Reintroducing any forbidden flat key or breaking empty-agent-map cockpit init would trip the selected tests.
+- Test independence: STRONG. The selected tests load the live config or isolated tmp-path boards without cross-test shared mutable state.
+- Test naming: STRONG. The selected test names are specific about the contract they enforce.
+
+#### Data Safety
+- No data-safety issue observed in scope.
+
+#### Implementation-Aware Gap Analysis
+- No significant untested path remains inside the reviewed scope.
+- Live file inspection covers the exact 7 grouped `agent_map` entries; the durable suite covers flat-key absence at YAML root and absence of legacy forwarding attrs after load; the lazy-agent-map suite covers the cockpit regression contract.
+
+#### Necessity Check
+- Skip. No new dependency, integration, or external capability was added.
+
+#### Builder Process Quality
+- FRICTION only, not LOOP. The task has one prior review failure, but the current retry follows a materially refined Architecture Review contract and does not repeat the same rejected evidence path.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1: `agents.agent_map` maps all 7 statuses to responsible agents | `.owlbear/kanban/config.yml:28-35` contains `research: researcher`, `backlog: architect`, `todo: test-writer`, `in-progress: builder`, `review: reviewer`, `docs: doc-writer`, `done: auditor`. | none (direct live-file inspection) | PASS |
+| AC2: all 11 forbidden flat duplicate root-level keys removed from config.yml | `.owlbear/kanban/config.yml:18-46` shows the formerly flat keys only inside grouped sections (`paths`, `pipeline`, `agents`, `policy`). quality-runner passed `tests/test_support_module_migration_1176.py:538` (`test_live_config_no_flat_agent_map`), `tests/test_support_module_migration_1176.py:571` (`test_live_config_no_forbidden_flat_keys`), and `tests/test_support_module_migration_1176.py:634` (`test_loaded_live_config_no_forbidden_forwarding_attrs`). | `test_live_config_no_flat_agent_map`, `test_live_config_no_forbidden_flat_keys`, `test_loaded_live_config_no_forbidden_forwarding_attrs` | PASS |
+| AC3: live-config durable cleanup proofs pass | quality-runner passed the selected cleanup/forwarding suite. The task body names `TestFromAC_LiveConfigMigrated`, but the live file contains the current equivalent class `TestFromAC_LiveConfigFlatKeyCleanup` at `tests/test_support_module_migration_1176.py:464`; `TestFromAC_ForwardingPropertiesRemoved` is present at `tests/test_support_module_migration_1176.py:590` and its key forwarding-attr test is at `tests/test_support_module_migration_1176.py:634`. | `TestFromAC_LiveConfigFlatKeyCleanup`, `TestFromAC_ForwardingPropertiesRemoved` | PASS |
+| AC4: `tests/test_engine_lazy_agent_map_1221.py` continues passing | quality-runner passed the full file. Cockpit regression proofs include `tests/test_engine_lazy_agent_map_1221.py:349` (`test_cockpit_engine_init_succeeds_with_empty_agent_map`) and `tests/test_engine_lazy_agent_map_1221.py:358` (`test_cockpit_engine_board_config_accessible_with_empty_agent_map`). | `tests/test_engine_lazy_agent_map_1221.py` | PASS |
+
+### Deductions
+- 0.03 stale AC naming: the refined task body still refers to `TestFromAC_LiveConfigMigrated`, which no longer exists; reviewer verified the live equivalent class before accepting the proof.
+- 0.03 builder evidence gap: no commit hash or explicit changed-file proof was supplied, so scope reconstruction depended on live-state verification.
+
+### Verdict
+- Confidence: 0.94
+- PASS. Advance to docs.
+
+### Action
+- No implementation or test rework is required from builder/test-writer.
+- Doc-writer should assess whether this config hygiene change needs any user-facing note; otherwise this should be a fast pass through docs.
+
+### Post-task Reflection
+- Latest Architecture Review refinements, not stale top-of-body AC, were authoritative here.
+- Durable legacy suites can provide sufficient binding proof for a `type:config` pass-through task when the reviewer re-verifies the current contract directly.
+- Stale selector names in AC text are non-blocking only when the reviewer confirms the live replacement class enforces the same contract.
+[[2026-04-30]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A (already accurate) | `serve/kanban/README.md` line 119 previously said "must be populated before starting the engine"; that stale text was already corrected (current text accurately describes lazy validation via `pick_tasks`). No update needed. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified by this task (type:config — config.yml only). |
+| 3 | External attribution | No | N/A | No external patterns used. |
+| 4 | Research doc | No | N/A | No research doc produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | N/A (already current) | Two diagrams match `.owlbear/kanban/config.yml`: `share/diagrams/kanban.excalidraw` (`describes: .owlbear/kanban/**`) and `share/diagrams/project-overview.excalidraw` (`describes: .owlbear/**`). Both footers already read `Last verified: 2026-05-01 (927cce5a)` — current HEAD. No update needed. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested. |
+| 7 | Deletion detection | No | N/A | No deleted files. Flat root-level keys were removed from config.yml (YAML edit), but no IN-scope doc references those keys as an externally visible feature. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `.owlbear/kanban/config.yml` | Non-doc (operational config) | Verified via diagram describes-match; diagrams already current |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1220-*` files found)
