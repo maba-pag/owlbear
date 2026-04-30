@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import weakref
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import Depends
@@ -47,3 +48,8 @@ def get_cache(engine=Depends(get_engine)) -> MtimeScanCache:  # noqa: ANN001, B0
 def get_view(engine=Depends(get_engine)) -> CockpitView:  # noqa: ANN001, B008
     """Return a CockpitView facade bound to the request engine."""
     return CockpitView(engine)
+
+
+def get_decisions_dir(engine=Depends(get_engine)) -> Path:  # noqa: ANN001, B008
+    """Return the decisions directory derived from the active board path."""
+    return Path(engine._kanban_dir) / "decisions"  # noqa: SLF001
