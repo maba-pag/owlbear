@@ -46,3 +46,34 @@
 ## D8 — 2026-04-30 — Concern Matching / Duplicate Detection
 
 **Chosen:** Drop semantic matching. If needed, task_id-only check internal to `create_dr`. Duplicates are acceptable edge case vs. over-engineering detection.
+
+## D9 — 2026-04-30 — Response Validation
+
+**Options considered:**
+- A: Closed enum — unknown response values → leave pending, log warning
+- B: Open freeform — accept any string, classify best-effort
+
+**Chosen:** A — closed enum. Unknown values stay unresolved. Prevents silent mis-resolution from typos or junk in file-edit fallback. Cockpit UI constrains input anyway.
+
+## D10 — 2026-04-30 — Concurrency Guard
+
+**Options considered:**
+- A: Three-state lifecycle (`pending/` → `processing/` → `resolved/`) with rename-as-lock
+- B: Skip `processing/`, accept theoretical gap, add resilience test
+- C: Skip `processing/`, accept theoretical gap, no extra test
+
+**Chosen:** C — concurrent resolves are not a real risk. Single-user, single-pipeline. Not worth any mitigation code or tests.
+
+## D11 — 2026-04-30 — Polling Interval
+
+**Chosen:** Leave to implementation. 60s is fine. DRs are out-of-band and asynchronous — measured in hours, not seconds.
+
+## D12 — 2026-04-30 — Stale-State Draft Protection
+
+**Chosen:** None. No live editing or auto-save exists. User saves manually. If a DR gets resolved during edit, that's an acceptable edge case — no mitigation needed.
+
+## D13 — 2026-04-30 — `create_dr` Response Shape
+
+**Chosen:** Engine blocks task internally as side-effect. Response does NOT include `task_blocked` field. Returns `{created: true, path: "..."}` only.
+
+**Rationale:** Agents should still use `end_work` for their own flow. If agent overwrites block reason, that's desirable — agent has better context than a generic "blocked because of DR" message.
