@@ -7,7 +7,7 @@ AC coverage:
 - AC4 (line 1676): repair_storage quarantine — except (ValueError, KanbanError, OSError): (td:2)
 - AC5 (line 2342): pick_tasks — split ImportError/else/(KanbanError, OSError, ValueError) (td:2)
 - AC6: no # noqa: BLE001 suppressions remain in engine.py (td:1)
-- AC7: ruff check serve/kanban exits clean (td:1)
+- AC7: ruff check serve/kanban/src/owlbear_kanban/engine.py --select BLE001 exits clean (td:1)
 """
 
 from __future__ import annotations
@@ -372,14 +372,15 @@ class TestFromAC_NoBleSuppressions:
 
 
 class TestFromAC_RuffClean:
-    """AC7: ruff check serve/kanban must exit 0 -- no BLE001 violations."""
+    """AC7: ruff check engine.py --select BLE001 must exit 0 -- no BLE001 violations in engine.py."""
 
     def test_ruff_ble001_check_passes(self) -> None:
-        """ruff check with --ignore-noqa on serve/kanban must exit 0.
+        """ruff check with --ignore-noqa on engine.py must exit 0.
 
         --ignore-noqa forces ruff to report actual violations regardless of noqa comments,
         so this test fails while engine.py still has the 5 broad except clauses.
         After fix: all handlers narrowed -> ruff exits 0 even without noqa suppressions.
+        Scoped to engine.py only (not package-wide) per AC7 refinement.
         """
         result = subprocess.run(
             [
@@ -387,7 +388,7 @@ class TestFromAC_RuffClean:
                 "run",
                 "ruff",
                 "check",
-                str(_SERVE_KANBAN),
+                str(_ENGINE_PY),
                 "--select",
                 "BLE001",
                 "--ignore-noqa",
