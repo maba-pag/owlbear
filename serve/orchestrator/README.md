@@ -33,6 +33,14 @@ No environment variables. Board directory and binary path are resolved relative 
 | Kanban dir | `kanban/` |
 | Kanban binary | `kanban/kanban-md` |
 
+## Kanban CLI Status
+
+`kanban-md` usage in orchestrator is active and required (not deprecated).
+
+- `owlbear.planner.board.read_board()` invokes `kanban-md list --json` with board filters to gather actionable tasks.
+- `owlbear.cli.status()` invokes `kanban-md list --json --dir kanban` to print per-status counts and blocked entries.
+- CLI commands resolve the binary from `kanban/kanban-md` relative to the working directory.
+
 ## Dependencies
 
 | Package | Purpose |
