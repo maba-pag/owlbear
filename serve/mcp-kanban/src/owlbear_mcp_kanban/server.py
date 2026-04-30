@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,6 +54,7 @@ StrId = Annotated[str, BeforeValidator(_coerce_to_str)]
 __all__ = [
     "AppContext",
     "StrId",
+    "_apply_tool_exclusions",
     "_map_kanban_error",
     "_show_validated",
     "app_lifespan",
@@ -88,10 +90,32 @@ class AppContext:
         return False
 
 
+def _apply_tool_exclusions(server: FastMCP) -> set[str]:
+    """Read KANBAN_TOOLS_EXCLUDE and remove each listed tool from the server.
+
+    Returns the set of tool names successfully removed.
+    """
+    excluded: set[str] = set()
+    env_val = os.environ.get("KANBAN_TOOLS_EXCLUDE", "")
+    if not env_val:
+        return excluded
+    for raw in env_val.split(","):
+        tool_name = raw.strip()
+        if not tool_name:
+            continue
+        try:
+            server.remove_tool(tool_name)
+            excluded.add(tool_name)
+        except Exception:  # noqa: BLE001, S110
+            pass
+    return excluded
+
+
 @asynccontextmanager
 async def app_lifespan(_server: FastMCP) -> AsyncGenerator[AppContext, None]:
     """Instantiate KanbanEngine and yield AppContext for the MCP session."""
     kanban_dir: Path = _DEFAULT_KANBAN_DIR
+    _apply_tool_exclusions(_server)
     engine = KanbanEngine(kanban_dir)
     engine.sweep()
     yield AppContext(engine=engine, kanban_dir=kanban_dir)
@@ -376,7 +400,7 @@ async def create_task(  # noqa: PLR0913
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def create_dr(
     ctx: Context,
-    task_id: str | int,
+    task_id: str,
     agent: str,
     request_type: str,
     body: str,
@@ -386,25 +410,13 @@ async def create_dr(
         msg = "request_type must be one of: decision, action"
         raise ToolError(msg)
 
-    if isinstance(task_id, int):
-        validated_task_id = task_id
-    elif isinstance(task_id, str):
-        normalized_task_id = task_id.strip()
-        if not normalized_task_id or not normalized_task_id.isdigit():
-            msg = "task_id must be numeric"
-            raise ToolError(msg)
-        validated_task_id = int(normalized_task_id)
-    else:
-        msg = "task_id must be numeric"
-        raise ToolError(msg)
-
     app_ctx: AppContext = ctx.request_context.lifespan_context
     try:
         created_path = await asyncio.to_thread(
             decisions.create_dr,
             app_ctx.kanban_dir / "decisions",
             app_ctx.engine,
-            task_id=validated_task_id,
+            task_id=task_id,
             agent=agent,
             request_type=request_type,
             body=body,
@@ -419,16 +431,13 @@ async def create_dr(
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False, idempotentHint=True))
 async def move_task(
     ctx: Context,
-    id: StrId | None = None,  # noqa: A002
+    id: StrId,  # noqa: A002
     status: str | None = None,
     archival_reason: str | None = None,
     archival_refs: list[int] | None = None,
 ) -> SingleTaskResponse:
     """Move a task to the specified status column, or archive it when status is "archived"."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    if id is None:
-        msg = "id is required"
-        raise ToolError(msg)
     resolved_id = id
     if status is None:
         msg = "status is required"
@@ -481,7 +490,7 @@ async def move_task(
 async def edit_task(  # noqa: PLR0912, PLR0913, C901
     ctx: Context,
     *,
-    id: StrId | None = None,  # noqa: A002
+    id: StrId,  # noqa: A002
     body: str = "",
     append_body: str = "",
     timestamp: bool = False,
@@ -497,9 +506,6 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
 ) -> SingleTaskResponse:
     """Edit task fields."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    if id is None:
-        msg = "id is required"
-        raise ToolError(msg)
     resolved_id = id
     kwargs: dict[str, object] = {}
     if body:
@@ -540,13 +546,10 @@ async def edit_task(  # noqa: PLR0912, PLR0913, C901
 @mcp.tool(annotations=ToolAnnotations(destructiveHint=False))
 async def start_work(
     ctx: Context,
-    id: StrId | None = None,  # noqa: A002
+    id: StrId,  # noqa: A002
 ) -> SingleTaskResponse:
     """Claim a task and return its full details."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    if id is None:
-        msg = "id is required"
-        raise ToolError(msg)
     resolved_id = id
 
     view = _agent_view_for(app_ctx.engine)
@@ -585,7 +588,7 @@ async def start_work(
 async def end_work(  # noqa: PLR0913
     ctx: Context,
     *,
-    id: StrId | None = None,  # noqa: A002
+    id: StrId,  # noqa: A002
     note: str | None = None,
     outcome: Literal["success", "block", "reject", "release"] = "success",
     block_reason: str | None = None,
@@ -595,9 +598,6 @@ async def end_work(  # noqa: PLR0913
 ) -> SingleTaskResponse:
     """Release a task: append note, advance or resolve status, release claim."""
     app_ctx: AppContext = ctx.request_context.lifespan_context
-    if id is None:
-        msg = "id is required"
-        raise ToolError(msg)
     resolved_id = id
 
     view_result = _invoke_view_end_work(
