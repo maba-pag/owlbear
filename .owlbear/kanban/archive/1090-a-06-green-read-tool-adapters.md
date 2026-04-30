@@ -1,10 +1,10 @@
 ---
 id: 1090
 title: 'A-06: GREEN — read tool adapters'
-status: archived
+status: done
 priority: critical
 created: 2026-04-21 10:54:20.345618+00:00
-updated: 2026-04-28T09:58:08.568912+00:00
+updated: 2026-04-28T09:53:04.266879+00:00
 tags:
 - phase:mcp
 - brief:a
@@ -15,8 +15,8 @@ depends_on:
 - 1086
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: quiet-shade
+claimed_at: 2026-04-28T09:53:04.266879+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -361,34 +361,3 @@ Post-task reflection:
 ### Scratch Files Cleaned
 - .owlbear/scratch/1090-quality-pass-pytest.txt
 - .owlbear/scratch/1090-quality-pass-ruff.txt
-[[2026-04-28]]
-## Audit
-### AC Verification
-| AC Line | Evidence | Status |
-|---------|----------|--------|
-| AC1 | ListTasksParams.model_validate at server.py:146; 12-param forwarding proven at test_mcp_read_tools.py:515 | PASS |
-| AC2 | Unconditional view.show_task(task_id=params.id, section=params.section) at server.py:336; passthrough proven at test_mcp_server_1090.py:143 | PASS |
-| AC3 | PickTasksParams.model_validate at server.py:612; exact kwarg assertions at test_mcp_read_tools.py:974,:992,:1010 | PASS |
-| AC4 | Boundary invalid-type proof at serve/mcp-kanban/tests/test_mcp_server_1090.py:147,:173 | PASS |
-| AC5 | _map_kanban_error at server.py:75 used at :177,:338,:623; ToolError behavior at test_mcp_guidance_1089.py:444 | PASS |
-| AC6 | output_schema registration at server.py:188; equality assertion at serve/mcp-kanban/tests/test_mcp_server_1090.py:208 | PASS |
-| AC7 | No isinstance(view, Mock) at server.py:326-338; structural guard at test_mcp_server_1090.py:174 | PASS |
-| AC8 | Guidance callers id= at test_mcp_guidance_1089.py:226,:254,:444; durable kwarg at test_mcp_read_tools.py:807; rollout guard at tests/test_mcp_server_1090.py:207 | PASS |
-
-### Test Results
-- pytest: 66 passed, 0 failed (task-scoped); full suite 115 failures all in serve/kanban background debt (corruption/storage/engine), 0 in task scope
-- ruff: clean on task-scoped files; 4 violations in unrelated packages (knowledge, orchestrator)
-
-### Architect Quality: 4/5
-Cycle-5 AC is specific, executable, and complete. Multi-cycle rework (5 arch review cycles) indicates initial AC was poor, but final refinement with root-cause analysis and challenger response produced high-quality verifiable criteria.
-
-### Deduction Breakdown
-- -0.02: AC8a guidance file changes left uncommitted by builder (committed by auditor as leftover)
-
-### Confidence: 0.98
-### Action: archive
-
-## Commits
-| Commit | Type | Files | Tasks |
-|--------|------|-------|-------|
-| f61bd905 | fix | test_mcp_guidance_1089.py, task file | #1090 |

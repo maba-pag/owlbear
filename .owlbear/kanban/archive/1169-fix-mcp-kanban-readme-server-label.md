@@ -1,10 +1,10 @@
 ---
 id: 1169
 title: Fix mcp-kanban README server label
-status: archived
+status: done
 priority: important
 created: 2026-04-28T20:08:43.209516+00:00
-updated: 2026-04-28T21:37:50.043827+00:00
+updated: 2026-04-28T21:34:37.715525+00:00
 tags:
 - phase:mcp
 - docs
@@ -14,8 +14,8 @@ parent: 1045
 depends_on: []
 blocked: false
 block_reason:
-claimed_by:
-claimed_at:
+claimed_by: quiet-shade
+claimed_at: 2026-04-28T21:34:37.715525+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -278,29 +278,3 @@ AC4 scopes to "MCP-config label" — do NOT change the dependency table (line 11
 
 ### Scratch Files Cleaned
 - None (no `1169-*` scratch files existed)
-[[2026-04-28]]
-## Audit
-### AC Verification
-| AC Line | Evidence | Status |
-|---------|----------|--------|
-| README uses `ob-kanban` for VS Code MCP config entry | `serve/mcp-kanban/README.md:3` says `ob-kanban` | PASS |
-| Wording aligns with `.vscode/mcp.json` and `seed/.vscode/mcp.json` | Both config files use `ob-kanban`; README matches | PASS |
-| README and h-mcp-kanban/SKILL.md use consistent terminology | Both say `ob-kanban`; no undocumented distinction | PASS |
-| No stale `owlbear-kanban` MCP-config label in README | Only remaining `owlbear-kanban` at line 118 is the workspace package name, not a config label | PASS |
-
-### Test Results
-- pytest: 1109 passed, 65 failed (all pre-existing — kanban ConfigError + unrelated suites), 4 skipped
-- ruff: 4 violations (all pre-existing, none in task scope)
-
-### Architect Quality: 4/5
-Precise AC targeting exact file, exact label, and exact authority references. Challenger engagement produced useful Builder Notes disambiguation table for the 3 naming surfaces. Minor gap: AC3 "or document any intentional distinction explicitly" was vague enough to need architect clarification, but the challenger/rebuttal cycle resolved it cleanly.
-
-### Deduction Breakdown
-- AC lines with no evidence: 0 (all 4 verified) → -0.00
-- Lint violations: pre-existing, not task-related → -0.00
-- AC quality ≤ 3: no (score 4) → -0.00
-- Missing reviewer evidence: present and detailed → -0.00
-- Full-suite failures in task scope: 0 → -0.00
-
-### Confidence: 0.98
-### Action: archive
