@@ -1,10 +1,10 @@
 ---
 id: 1188
 title: 'P2-03: Update agent/skill/instruction references + decisions README'
-status: done
+status: archived
 priority: important
 created: 2026-04-30T00:52:05.085246+00:00
-updated: 2026-04-30T06:15:54.199178+00:00
+updated: 2026-04-30T06:18:57.244395+00:00
 tags:
 - phase-2
 - scope:agents
@@ -16,8 +16,8 @@ depends_on:
 - 1187
 blocked: false
 block_reason:
-claimed_by: near-hound
-claimed_at: 2026-04-30T06:15:54.199178+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -229,3 +229,43 @@ Post-task reflection:
 
 ### Scratch Files Cleaned
 - None found (`.owlbear/scratch/1188-*` — no matches)
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| 7 agent files clean (no scribe refs) | test_dr_skill_replacement_1186.py:90-108 green (9 passed, 0 failed) | PASS |
+| r-pipeline-protocol/SKILL.md clean | test_dr_skill_replacement_1186.py:113-127 green | PASS |
+| w-orchestration/SKILL.md clean | test_dr_skill_replacement_1186.py:132-146 green | PASS |
+| pipeline-agents.instructions.md: scribe removed | Direct inspection L24-36: "create AR via create_dr" confirmed | PASS |
+| decisions/README.md rewritten | Direct inspection: 5-field schema table, Cockpit primary path, file-edit fallback, h-decision-requests pointer, no scribe refs | PASS |
+| All static tests from #1186 pass | Full suite: test_dr_skill_replacement_1186.py 9/9 passed | PASS |
+
+### Test Results
+- pytest: 3262 passed, 67 failed (all pre-existing background debt: tasks 1068, 1050, 1015, 1101, 1189), 4 skipped
+- ruff: 4 violations in unrelated packages (knowledge, mcp-knowledge, mcp-memory, orchestrator)
+- No task-scoped failures
+
+### Upstream Commits
+- f37d8910 docs: update DR references and README format (#1188, builder)
+- a6d5b269 docs: update project-overview diagram footer (#1188, doc-writer)
+
+### Architect Quality: 4/5
+Specific file targets, clear scope boundaries, td:0 appropriate for docs-only reference task. Minor gap: README rewrite AC could specify exact expected sections rather than "rewritten for new format."
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 6 verified)
+- Lint violations in task scope: 0
+- AC quality: 4/5 (above threshold)
+- Reviewer evidence: present, detailed, PASS
+- Task-scoped test failures: 0
+- Total deductions: 0
+
+### Confidence: 1.00
+### Action: archive
+
+## Commits
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| c3f1380b | chore | .owlbear/kanban/tasks/1188-*.md | #1188 |
