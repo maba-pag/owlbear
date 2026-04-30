@@ -93,12 +93,19 @@ describe('TestFromAC_usePendingDRs', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
-    it('re-fetches multiple times as interval repeats', async () => {
+    it('re-fetches multiple times as interval repeats (AC12: settled between intervals)', async () => {
+      // AC12: settle mount fetch first, then advance one interval at a time.
+      // Proves independent repeated polling without overlap interaction.
+      // With the coalesced boolean-ref pattern, each settled interval adds exactly 1 call.
       const fetchMock = makeFetch(PENDING_RESPONSE)
       vi.stubGlobal('fetch', fetchMock)
       renderHook(() => usePendingDRs({ intervalMs: 5_000 }))
-      await act(async () => { vi.advanceTimersByTime(15_000) })
-      expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(3)
+      await act(async () => {})                                    // settle mount fetch (call 1)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      await act(async () => { vi.advanceTimersByTime(5_000) })    // first interval tick + settle (call 2)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      await act(async () => { vi.advanceTimersByTime(5_000) })    // second interval tick + settle (call 3)
+      expect(fetchMock).toHaveBeenCalledTimes(3)
     })
   })
 
@@ -282,6 +289,41 @@ describe('TestFromAC_usePendingDRs', () => {
 
       await act(async () => { resolveSlowPoll(undefined) }) // slow fetch settles → queued repoll fires (call 3)
       expect(fetchMock).toHaveBeenCalledTimes(3)            // exactly one queued repoll, not more
+    })
+  })
+
+  // ─── AC11: multi-tick coalescing — 3+ skipped ticks → exactly 1 repoll ───
+
+  describe('AC11: multi-tick coalescing — 3+ skipped ticks yield exactly 1 repoll', () => {
+    it('coalesces 3 skipped interval ticks into exactly 1 repoll after in-flight settles', async () => {
+      // Discriminates boolean coalesced (pendingPollRef) from counted replay
+      // (pendingPollCountRef). Counted replay fires 3 repolls; coalesced fires 1.
+      let resolveSlowPoll!: (value: unknown) => void
+      const slowPollPromise = new Promise<unknown>((res) => { resolveSlowPoll = res })
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })
+        .mockImplementationOnce(() =>
+          slowPollPromise.then(() => ({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })),
+        )
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      renderHook(() => usePendingDRs({ intervalMs: 5_000 }))
+      await act(async () => {})                           // mount fetch resolves (call 1)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      act(() => { vi.advanceTimersByTime(5_000) })        // first interval tick → slow fetch starts (call 2, in-flight)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      act(() => { vi.advanceTimersByTime(5_000) })        // tick 2 while call 2 in-flight → skipped
+      act(() => { vi.advanceTimersByTime(5_000) })        // tick 3 while call 2 in-flight → skipped
+      act(() => { vi.advanceTimersByTime(5_000) })        // tick 4 while call 2 in-flight → skipped
+      expect(fetchMock).toHaveBeenCalledTimes(2)          // guard: 3 skipped ticks, no extra fetches started
+
+      await act(async () => { resolveSlowPoll(undefined) }) // slow fetch settles
+      // Coalesced (boolean ref): exactly 1 repoll fires → total 3 calls
+      // Counted replay (pendingPollCountRef=3): fires 3 repolls → total 5+ calls → FAILS
+      expect(fetchMock).toHaveBeenCalledTimes(3)
     })
   })
 })
