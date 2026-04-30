@@ -1,10 +1,10 @@
 ---
 id: 1198
 title: Remove legacy compatibility code from MCP server
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30 15:28:54.145200+00:00
-updated: 2026-04-30T22:23:55.084857+00:00
+updated: 2026-04-30T22:50:28.233882+00:00
 tags:
 - audit-kanban
 - mcp-server
@@ -14,7 +14,7 @@ depends_on:
 - 1199
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-04-30T22:50:28.233882+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -154,3 +154,27 @@ All 4 fail with `AssertionError: {fn} still has **legacy catch-all` — VAR_KEYW
 - ruff: clean.
 
 **Builder action:** No new implementation needed. Verify quality-runner, commit is `706cc2f7`. Re-advance to review.
+[[2026-04-30]]
+## Builder Notes
+- Implementation already present in commit 706cc2f7 on [serve/mcp-kanban/src/owlbear_mcp_kanban/server.py](serve/mcp-kanban/src/owlbear_mcp_kanban/server.py); no additional code changes were required in this recovery pass.
+- Verified AC behavior remains intact: no compat helper resolution path and lifecycle tool paths use direct id handling (covered by task-scoped/durable MCP server suites).
+- Quality evidence (fresh run via quality-runner): 114 passed, 0 failed, 0 skipped.
+- Coverage: 90% on module owlbear_mcp_kanban.server.
+- Lint: ruff clean (0 violations).
+
+## Verification Evidence
+- [tests/test_server_1198.py](tests/test_server_1198.py)
+- [tests/test_server_1199.py](tests/test_server_1199.py)
+- [tests/test_server_1170.py](tests/test_server_1170.py)
+- [tests/test_server_1172.py](tests/test_server_1172.py)
+- [tests/test_mcp_lifecycle_1173.py](tests/test_mcp_lifecycle_1173.py)
+- [tests/test_mcp_server_1090.py](tests/test_mcp_server_1090.py)
+- [tests/test_mcp_kanban_1196.py](tests/test_mcp_kanban_1196.py)
+- [tests/test_engine_lazy_agent_map_1221.py](tests/test_engine_lazy_agent_map_1221.py)
+- [serve/mcp-kanban/tests/test_mcp_server_1090.py](serve/mcp-kanban/tests/test_mcp_server_1090.py)
+- [serve/mcp-kanban/tests/test_mcp_create_dr_1182.py](serve/mcp-kanban/tests/test_mcp_create_dr_1182.py)
+
+## Post-task Reflection
+- Pipeline-state recovery tasks can be closed safely without new edits when a committed builder change already satisfies AC and tests.
+- Re-running quality-runner on the exact server-focused regression slice provides reliable gate evidence without full-suite overhead.
+- Keeping recovery closeout strictly evidence-first avoids accidental drift in already-green code paths.

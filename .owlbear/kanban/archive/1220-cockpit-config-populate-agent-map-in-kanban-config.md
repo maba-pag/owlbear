@@ -1,10 +1,10 @@
 ---
 id: 1220
 title: Cockpit config — populate agent_map and remove flat duplicate keys
-status: done
+status: archived
 priority: needed
 created: 2026-04-30 16:31:18.556842+00:00
-updated: 2026-04-30T22:42:01.246518+00:00
+updated: 2026-04-30T22:56:50.656977+00:00
 tags:
 - cockpit
 - config
@@ -322,3 +322,33 @@ APPROVED #1220 -> todo | Refined stale premise and AC scope. Rewrote objective (
 
 ### Scratch Files Cleaned
 - None (no `.owlbear/scratch/1220-*` files found)
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: `agents.agent_map` maps all 7 statuses | Direct read: `.owlbear/kanban/config.yml:22-29` — research: researcher, backlog: architect, todo: test-writer, in-progress: builder, review: reviewer, docs: doc-writer, done: auditor | PASS |
+| AC2: all 11 forbidden flat duplicate root-level keys removed | Direct read: `.owlbear/kanban/config.yml:15-44` — all formerly flat keys now only inside grouped sections (paths, pipeline, agents, policy); no root-level duplicates | PASS |
+| AC3: durable cleanup proofs pass | Scoped run: `TestFromAC_LiveConfigFlatKeyCleanup` (8 tests), `TestFromAC_ForwardingPropertiesRemoved` (3 tests) — 25 passed, 0 failed | PASS |
+| AC4: `tests/test_engine_lazy_agent_map_1221.py` continues passing | Scoped run: `TestFromAC_PickTasksValidatesAgentMap` (5), `TestFromAC_CockpitInitWithEmptyAgentMap` (2), others — all included in 25 passed | PASS |
+
+### Test Results
+- Scoped (AC-gate): 25 passed, 0 failed
+- Full suite (cross-task regression): 138 failures, 350 lint violations — all pre-existing; 340+ lint errors are in `tests/test_cockpit_mutation_race.py` (syntax error in docstrings); failure set (React compiler, storage timestamps, MCP adapter TypeErrors) is structurally unrelated to a YAML config change
+
+### Commit Integrity
+- Builder commit `b7d45ca0 fix: clean grouped kanban config duplicates (#1220, builder)` confirmed in `git log -- .owlbear/kanban/config.yml`
+- Informational: builder notes claim "no file edits required in this cycle" — contradicts commit presence; outcome is correct but documentation is inconsistent
+
+### Reviewer Evidence
+- Present and detailed: 4-line AC table, scoped quality-runner results, lint, coverage, PASS verdict at 0.94
+
+### Architect Quality: 4/5
+Cycle-2 AC is well-specified (7 exact mappings, 11 exact key names, specific test classes). Minor: AC3 references nonexistent class `TestFromAC_LiveConfigMigrated` (actual: `TestFromAC_LiveConfigFlatKeyCleanup`). Two-cycle architecture expected for premise-drift tasks. No significant builder improvisation required beyond class name lookup.
+
+### Deduction Breakdown
+- No rubric deductions apply: all 4 AC lines verified, no task-scope lint, AC quality 4/5 (threshold less than or equal to 3), reviewer section present, no task-scope full-suite failures
+
+### Confidence: 0.97
+### Action: archive

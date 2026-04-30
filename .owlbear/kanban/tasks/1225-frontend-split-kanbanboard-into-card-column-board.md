@@ -1,10 +1,10 @@
 ---
 id: 1225
 title: Frontend — split KanbanBoard into Card + Column + Board
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30 16:31:18.609234+00:00
-updated: 2026-04-30T22:24:33.012590+00:00
+updated: 2026-04-30T22:48:03.784371+00:00
 tags:
 - cockpit
 - frontend
@@ -105,3 +105,27 @@ Break the 270-line KanbanBoard.tsx monolith into focused component files.
 | All existing pytest suites pass without modification | 0 | skipped |
 | useBoard import from KanbanBoard resolves | 0 | skipped |
 | No net DOM change | 0 | skipped |
+[[2026-04-30]]
+## Builder Notes
+- Implementation:
+  - serve/cockpit/web/src/KanbanBoard.tsx
+  - serve/cockpit/web/src/components/Card.tsx (new)
+  - serve/cockpit/web/src/components/Column.tsx (new)
+- Approach: extracted `Card` + `Column` verbatim from `KanbanBoard.tsx`, moved `PRIORITY_COLORS` into `Card.tsx`, preserved `export { useBoard }`, and kept all DOM structure/data-testid/event handlers/inline styles unchanged.
+- RED verification (pre-implementation): `tests/test_kanban_board_split_1225.py` -> 0 passed / 8 failed (all `TestFromAC_*` failing as expected for missing files).
+- GREEN verification (task-scoped pytest):
+  - `tests/test_kanban_board_split_1225.py`, `tests/test_occ_frontend_wire_1137.py` -> 27 passed / 0 failed.
+  - ruff (scoped): clean.
+- Additional guard run: including `tests/test_cockpit_react_compiler_1015.py` surfaced 3 pre-existing config failures in vite/package config (unrelated to changed files); scoped rerun above isolates task-owned proof.
+- Vitest verification (required suites):
+  - `src/__tests__/KanbanBoard.test.tsx`
+  - `src/__tests__/KanbanBoard_933.test.tsx`
+  - `src/__tests__/KanbanBoard_959.test.tsx`
+  - Result: 56 passed / 0 failed.
+- Coverage: quality-runner coverage output is Python-package scoped and not meaningful for TSX extraction; frontend behavior parity validated by passing Vitest suites.
+- Commit: `9945b9d2` — `refactor: split KanbanBoard components (#1225, builder)`.
+
+### Post-task Reflection
+- Broader pytest checks can include unrelated baseline failures; scoped rerun is necessary for fair task gating.
+- Pure extraction with line-preserving moves minimizes behavioral drift risk in UI refactors.
+- For TSX-only changes, Vitest suite evidence is the reliable regression gate; Python coverage metrics are incidental.

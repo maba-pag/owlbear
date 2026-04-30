@@ -1,10 +1,10 @@
 ---
 id: 1223
 title: Backend — fix sessions API contract mismatch
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30 16:31:18.589039+00:00
-updated: 2026-04-30T22:26:01.662505+00:00
+updated: 2026-04-30T22:50:26.922725+00:00
 tags:
 - cockpit
 - bug
@@ -12,7 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-04-30T22:50:26.922725+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -107,3 +107,23 @@ Backend returns `list[SessionRecord]` at top level. Both `ActivityTab.tsx` (line
 
 ### Builder note
 `test_sessions_active_is_default_filter` in `test_cockpit_read_api.py` (existing, not AC-listed) also does `assert isinstance(body, list)` — this will fail after the backend fix. Builder should update that assertion to `assert isinstance(body, dict)` as part of the GREEN implementation.
+[[2026-04-30]]
+## Builder Notes
+- Implementation: updated serve/cockpit/src/owlbear_cockpit/routes/read.py to add `SessionsResponse(BaseModel)` and changed `GET /api/sessions` to `response_model=SessionsResponse` returning `SessionsResponse(sessions=view.list_sessions(filter=filter))`.
+- Durable alignment: updated tests/test_cockpit_read_api.py `TestFromAC_Sessions::test_sessions_active_is_default_filter` to assert dict envelope with `sessions` list.
+- Tests (RED evidence before implementation): quality-runner on `tests/test_cockpit_read_api_1223.py` -> 0 passed / 6 failed (missing `SessionsResponse`, list-vs-dict contract mismatch).
+- Tests (module baseline before implementation): quality-runner on `tests/test_cockpit_read_api.py` -> 46 passed / 2 failed (session envelope assertions).
+- Tests (GREEN, task-scoped): quality-runner on `tests/test_cockpit_read_api_1223.py` -> 6 passed / 0 failed.
+- Tests (GREEN, regression scoped): quality-runner on `[tests/test_cockpit_read_api.py, tests/test_cockpit_read_api_1223.py]` -> 54 passed / 0 failed.
+- Coverage: `owlbear_cockpit.routes.read` at 98% (missing line 141 only) on scoped regression run.
+- Ruff: clean on touched source + scoped tests.
+- Commit: `cb6f145e` (`fix: wrap sessions API in envelope (#1223, builder)`) with only:
+  - serve/cockpit/src/owlbear_cockpit/routes/read.py
+  - tests/test_cockpit_read_api.py
+
+Post-task reflection:
+- Problems faced: none structural; only one additional durable assertion needed to match the corrected envelope contract.
+- Workaround applied: used dual scoped quality-runner passes (task file + module file) to separate AC proof from regression proof.
+- Pattern discovered: session API consumers and tests are envelope-first (`data.sessions`), so backend should preserve wrapped responses consistently.
+- Time sink: minimal; majority spent on required RED/GREEN evidence collection.
+- Quality gap: task-scoped-only coverage understates route-module coverage; combined scoped run gives accurate gate signal for this endpoint fix.

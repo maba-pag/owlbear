@@ -1,10 +1,10 @@
 ---
 id: 1202
 title: Narrow exception handling (BLE001) in engine.py
-status: in-progress
+status: backlog
 priority: important
 created: 2026-04-30 15:28:57.610272+00:00
-updated: 2026-04-30T22:34:17.087253+00:00
+updated: 2026-04-30T22:46:54.102440+00:00
 tags:
 - audit-kanban
 - safety
@@ -127,3 +127,24 @@ AC coverage:
 | AC8 existing tests pass (td:0) | skipped — td:0 |
 
 Strategy: All RED tests verify that exceptions currently swallowed by broad `except Exception:` propagate after narrowing. Using `DID NOT RAISE` failures as RED signal. Mock targets: `owlbear_kanban.engine.read_task`, `owlbear_kanban.storage.detect_corruption`, `owlbear_kanban.corruption.scan_and_fix`, `KanbanEngine.create_task`, `importlib.import_module`.
+[[2026-04-30]]
+## Builder Notes
+- Implementation: narrowed all 5 targeted BLE001 handlers in serve/kanban/src/owlbear_kanban/engine.py per AC1-AC6.
+- RED verification (quality-runner): 13/13 TestFromAC failed before implementation.
+- Post-implementation verification (quality-runner): 12/13 TestFromAC pass; remaining failure is AC7 (`TestFromAC_RuffClean::test_ruff_ble001_check_passes`).
+- Lint (scoped): clean for serve/kanban/src/owlbear_kanban/engine.py and tests/test_engine_ble001_1202.py.
+- Coverage (scoped run): engine module measured; task blocked by AC mismatch before GREEN completion.
+
+Evidence summary:
+- Remaining failing assertion runs `uv run ruff check serve/kanban --select BLE001 --ignore-noqa` and expects exit 0.
+- The failure reports pre-existing BLE001 violations in unrelated modules (activity_store.py, corruption.py, decisions.py, migrate.py, etc.), outside this task's objective/scope (objective is 5 sites in engine.py).
+- Therefore AC7 currently encodes package-wide cleanup not implied by AC1-AC6/objective and is infeasible as a surgical builder task without broad cross-module refactor.
+
+Requested AC refinement:
+- Either (A) scope AC7/test to engine-only BLE001 check, or (B) split package-wide BLE001 cleanup into a separate backlog task with explicit file list and acceptance criteria.
+
+Post-task reflection:
+- Problem faced: task-scoped fix versus package-wide BLE001 gate mismatch.
+- Workaround applied: completed all engine.py-targeted narrowing first, then validated via quality-runner to isolate residual failure to AC7 only.
+- Pattern discovered: using `--ignore-noqa` on package path can pull in pre-existing debt unrelated to a narrowly scoped task.
+- Quality gap: AC7 should be aligned with objective scope or explicitly expanded with planned decomposition.

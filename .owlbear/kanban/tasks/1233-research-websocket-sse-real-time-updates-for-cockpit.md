@@ -1,13 +1,14 @@
 ---
 id: 1233
 title: Research — WebSocket/SSE real-time updates for cockpit
-status: backlog
+status: todo
 priority: nice-to-have
 created: 2026-04-30 16:31:18.682845+00:00
-updated: 2026-04-30T22:37:50.283811+00:00
+updated: 2026-04-30T22:49:33.757109+00:00
 tags:
 - cockpit
 - architecture
+- research
 parent:
 depends_on: []
 blocked: false
@@ -257,3 +258,42 @@ Researcher must fix both items above and then move #1233 to backlog for a second
 **2. watchfiles dependency claim** — Retracted the "already used by uvicorn for reload" mitigation. Verified: `uv pip show watchfiles` → not found; `uvicorn v0.46.0` depends only on `click` + `h11`. `watchfiles` requires `uvicorn[standard]` which is NOT installed. Updated `.owlbear/research/1233-realtime-cockpit-updates.md §4 Risks` to note watchfiles as a **new explicit dependency** that #1234 must add. Task #1234 body already says "Dependency: sse-starlette + watchfiles packages" — consistent.
 
 All three architect pre-conditions now met: T3 DR resolved (Option A), sources ledger complete, watchfiles claim corrected.
+[[2026-04-30]]
+## Architecture Review
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Research task: 4 clearly scoped questions; all answered |
+| Interface clarity | N/A | Research output; follow-up tasks #1234/#1235/#1236 wired with correct deps |
+| Dependency correctness | PASS | Follow-up tasks wired correctly: #1234 (SSE backend), #1235 (EventSource frontend), #1236 (extend to decisions/activity) |
+| Module layering | N/A | Research task |
+| TDD compliance | N/A | Research task — no testable Python interface |
+| KISS/YAGNI | PASS | Invalidation-only SSE model is minimal; scope bounded to 4 questions |
+| Premise challenge | PASS | T3 DR approved (Option A) — SSE approach sanctioned, v1 polling lock overturned |
+| Pattern consistency | N/A | Research task |
+| Security surface | N/A | No code changes introduced |
+| Single domain | PASS | cockpit/architecture |
+
+### Failure Mode Map
+N/A — research task, no codepath changes.
+
+### Design Diverge
+Skipped — research task, no competing architecture designs to evaluate.
+
+### Challenge Results
+Skipped — all AC lines td:0 (no testable Python interface).
+
+### Test Depth
+All AC lines: td:0 — no testable Python interface.
+Test-writer: SKIP
+
+### Governance Verification (second-pass)
+1. **T3 DR** — RESOLVED: `resolved/1233-cockpit-polling-vs-sse.md` (Option A, user-approved). ✅
+2. **Sources ledger** — FIXED: `## Real-Time Cockpit Updates (Task #1233)` section present in `.owlbear/sources/overview.md` with all 6 rows (germano.dev, digitalbiztalk.com, Medium/FastAPI, sse-starlette, watchfiles, uvicorn.org). digitalbiztalk URL flagged as unverifiable in ledger — appropriate. ✅
+3. **watchfiles dependency claim** — FIXED: Research doc §4 now explicitly states watchfiles is a **new explicit dependency** that #1234 must add; "already used by uvicorn for reload" claim retracted with evidence. ✅
+
+### Non-implementation tagging
+Added `research` tag — required for test-writer pass-through routing. Tags: cockpit, architecture, research.
+
+### Verdict: APPROVE → todo
