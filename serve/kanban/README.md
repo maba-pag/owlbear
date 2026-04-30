@@ -68,7 +68,7 @@ for wave in response.waves:
         ...
 ```
 
-`AgentView.pick_tasks` runs a five-step pipeline: resolve pending Decision Requests (exceptions logged and suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
+`AgentView.pick_tasks` first validates that every pipeline status has an entry in `BoardConfig.agent_map` (raises `ConfigError(ERR_INVALID_STATUS)` with the list of missing statuses if any are absent), then runs a five-step pipeline: resolve pending Decision Requests (exceptions logged and suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
 
 ### Decision Requests
 
@@ -116,7 +116,7 @@ uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all] [--kanban-di
 
 Exit code 0 when no files failed; exit code 1 otherwise. Each failed file is reported on stderr as `FAIL {path}: {reason}`.
 
-After `--lane config` runs, `agent_map`, `agent_types`, and `agent_compatibility` are empty stubs that must be populated before starting the engine.
+After `--lane config` runs, `agent_map`, `agent_types`, and `agent_compatibility` are empty stubs. The engine itself will start with an empty `agent_map`, but calling `pick_tasks` will raise `ConfigError(ERR_INVALID_STATUS)` until every pipeline status has an entry in the map.
 
 ## Configuration
 

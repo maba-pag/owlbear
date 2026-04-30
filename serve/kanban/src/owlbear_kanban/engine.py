@@ -2277,7 +2277,13 @@ class AgentView:
     ) -> PickTasksResponse:
         """Select dispatchable tasks and arrange them into dependency-disjoint waves.
 
-        Runs a five-step pipeline:
+        Before the pipeline runs, validates that every status in
+        ``config.pipeline.statuses`` has a corresponding entry in
+        ``config.agents.agent_map``.  Raises :class:`ConfigError` with code
+        ``ERR_INVALID_STATUS`` and the list of missing statuses if any are
+        absent.
+
+        Then runs a five-step pipeline:
 
         1. **Resolve** — attempt to resolve any pending Decision Requests via
            ``owlbear_kanban.decisions.resolve_pending_drs``; exceptions are
@@ -2304,6 +2310,8 @@ class AgentView:
             ``guidance``.
 
         Raises:
+            ConfigError: ``agent_map`` is missing entries for one or more
+                         pipeline statuses (``ERR_INVALID_STATUS``).
             ValidationError: ``wave_size < 1``, ``max_waves < 1``, or the
                              effective wave size resolved from config is
                              ``< 1`` (``ERR_INVALID_WAVE_PARAM``).
