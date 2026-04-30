@@ -1,10 +1,10 @@
 ---
 id: 1182
 title: 'P1-03: Test create_dr MCP tool'
-status: done
+status: archived
 priority: needed
 created: 2026-04-30T00:51:39.532255+00:00
-updated: 2026-04-30T05:09:07.888891+00:00
+updated: 2026-04-30T05:13:06.502597+00:00
 tags:
 - phase-1
 - scope:mcp-kanban
@@ -13,8 +13,8 @@ parent: 1179
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: dim-stream
-claimed_at: 2026-04-30T05:09:07.888891+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -534,3 +534,33 @@ Re-architecture review (cycle 3). AC refined with explicit assertion-depth requi
 
 ### Scratch Files Cleaned
 - None found
+[[2026-04-30]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Test create_dr registration via @mcp.tool() | test_mcp_create_dr_1182.py:83-97 identity check + server.py:428 decorator | PASS |
+| Test tool accepts 4 required params | test_mcp_create_dr_1182.py:103-115 len==5 + no-defaults assertion | PASS |
+| Test success returns created+path | test_mcp_create_dr_1182.py:121-161 call_args + response dict | PASS |
+| Test error when task not found | test_mcp_create_dr_1182.py:168-180 ToolError match | PASS |
+| Test file collision passthrough | test_mcp_create_dr_1182.py:190-213 suffixed path assertion | PASS |
+| Test request_type enum validation | test_mcp_create_dr_1182.py:217-264 action+invalid+not_called | PASS |
+
+### Test Results
+- pytest (full): 3263 passed, 66 failed (all outside task scope), 4 skipped
+- task-scoped: 7 passed, 0 failed
+- ruff: clean on task files; 4 violations in unrelated packages
+
+### Architect Quality: 4/5
+Original AC was specific and testable. Required 2 re-architecture cycles for ownership clarification and assertion-depth refinement, but gaps were process routing issues not AC vagueness.
+
+### Deduction Breakdown
+- Background suite failures (66 in unrelated modules): -0.02
+- Task boundary overlap with sibling #1183 (builder shipped impl early): -0.01
+
+### Confidence: 0.97
+### Action: archive
+
+### Commits Verified
+- a17f2595 test: add RED create_dr MCP tool tests (#1182, builder)
+- f9cc1359 feat: add create_dr MCP tool adapter (#1182, builder)
