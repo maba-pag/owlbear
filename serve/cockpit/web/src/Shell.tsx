@@ -1,7 +1,9 @@
 import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
 import KanbanBoard from './KanbanBoard'
+import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
+import { usePendingDRs } from './hooks/usePendingDRs'
 import { usePolling } from './hooks/usePolling'
 import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
 import './Shell.css'
@@ -12,9 +14,11 @@ function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
 
 function Shell() {
   const { health } = usePolling('/health')
+  const { count: pendingDRCount, items: pendingDRItems } = usePendingDRs()
   const { items: scanItems, isLoading, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
+  const [, setSelectedDRId] = useState<string | null>(null)
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
@@ -49,6 +53,11 @@ function Shell() {
             onRepairSuccess={refetch}
           />
         ) : null}
+        <DRStatusIndicator
+          count={pendingDRCount}
+          items={pendingDRItems}
+          onItemClick={setSelectedDRId}
+        />
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
         <button data-surface="kanban" aria-current="page">
