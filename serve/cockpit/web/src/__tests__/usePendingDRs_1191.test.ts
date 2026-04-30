@@ -234,4 +234,54 @@ describe('TestFromAC_usePendingDRs', () => {
       expect(fetchMock.mock.calls.length).toBe(callCountAtUnmount)
     })
   })
+
+  // ─── AC9: overlap guard — in-flight fetch blocks concurrent second fetch ──
+
+  describe('AC9: overlap guard — interval tick while fetch in-flight does not start a concurrent second fetch', () => {
+    it('does not start a second fetch when first interval poll is still in flight', async () => {
+      let resolveSlowPoll!: (value: unknown) => void
+      const slowPollPromise = new Promise<unknown>((res) => { resolveSlowPoll = res })
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })
+        .mockImplementationOnce(() =>
+          slowPollPromise.then(() => ({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })),
+        )
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      renderHook(() => usePendingDRs({ intervalMs: 5_000 }))
+      await act(async () => {})                           // mount fetch resolves (call 1)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      act(() => { vi.advanceTimersByTime(5_000) })        // first interval tick → slow fetch starts (call 2, in-flight)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+
+      act(() => { vi.advanceTimersByTime(5_000) })        // second interval tick while call 2 still in-flight
+      expect(fetchMock).toHaveBeenCalledTimes(2)          // guard: no third fetch started — FAILS with current impl
+
+      await act(async () => { resolveSlowPoll(undefined) }) // settle slow fetch to avoid timer leaks
+    })
+
+    it('queues exactly one repoll after the in-flight request resolves when a tick was skipped', async () => {
+      let resolveSlowPoll!: (value: unknown) => void
+      const slowPollPromise = new Promise<unknown>((res) => { resolveSlowPoll = res })
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })
+        .mockImplementationOnce(() =>
+          slowPollPromise.then(() => ({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })),
+        )
+        .mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve(PENDING_RESPONSE) })
+      vi.stubGlobal('fetch', fetchMock)
+
+      renderHook(() => usePendingDRs({ intervalMs: 5_000 }))
+      await act(async () => {})                           // mount fetch resolves (call 1)
+
+      act(() => { vi.advanceTimersByTime(5_000) })        // first interval tick → slow fetch (call 2, in-flight)
+      act(() => { vi.advanceTimersByTime(5_000) })        // second tick → pending poll queued (guard), NOT eager call 3
+      expect(fetchMock).toHaveBeenCalledTimes(2)          // guard: call 2 still in-flight → FAILS with current impl
+
+      await act(async () => { resolveSlowPoll(undefined) }) // slow fetch settles → queued repoll fires (call 3)
+      expect(fetchMock).toHaveBeenCalledTimes(3)            // exactly one queued repoll, not more
+    })
+  })
 })

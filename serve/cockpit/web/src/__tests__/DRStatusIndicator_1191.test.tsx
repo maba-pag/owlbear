@@ -173,6 +173,37 @@ describe('TestFromAC_DRStatusIndicator', () => {
     expect(popover.textContent?.trim().length).toBeGreaterThan(0)
   })
 
+  // ─── AC8: age field renders specific formatted text with frozen clock ──────
+  // The assertion above is preserved for backwards compatibility; this test
+  // provides a stronger item-specific, time-stable proof that fails when the
+  // age <span> is removed or formatAge produces the wrong output.
+
+  it('popover item renders the exact computed age text when clock is frozen (AC8)', () => {
+    // Freeze Date.now() so formatAge returns a deterministic value.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-30T12:00:00.000Z'))
+    const drAgeProbe: PendingDR = {
+      id: 'dr-age-probe',
+      task_id: 77,
+      agent: 'tester',
+      request_type: 'scope-decision',
+      created: '2026-04-30T10:00:00.000Z', // exactly 2 h before frozen "now"
+      title: 'Age probe title',
+      body_preview: '',
+    }
+    try {
+      const { container } = renderIndicator(1, [drAgeProbe])
+      fireEvent.click(container.querySelector('[data-testid="dr-indicator"]')!)
+      const item = container.querySelector('[data-testid="dr-item-dr-age-probe"]')!
+      expect(item).not.toBeNull()
+      // title='Age probe title', agent='tester', task_id='77' — none contains '2h ago'.
+      // This assertion fails if the age span is removed or formatAge is broken.
+      expect(item.textContent).toContain('2h ago')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('each popover item has data-testid="dr-item-{id}"', () => {
     const { container } = renderIndicator(1, [DR_A])
     fireEvent.click(container.querySelector('[data-testid="dr-indicator"]')!)
