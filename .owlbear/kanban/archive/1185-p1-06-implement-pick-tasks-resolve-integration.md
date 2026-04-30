@@ -1,10 +1,10 @@
 ---
 id: 1185
 title: 'P1-06: Implement pick_tasks resolve integration'
-status: review
+status: archived
 priority: important
 created: 2026-04-30T00:51:51.711195+00:00
-updated: 2026-04-30T11:11:35.391427+00:00
+updated: 2026-04-30T11:38:34.349984+00:00
 tags:
 - phase-1
 - scope:kanban
@@ -15,8 +15,8 @@ depends_on:
 - 1184
 blocked: false
 block_reason:
-claimed_by: near-hound
-claimed_at: 2026-04-30T11:11:35.391427+00:00
+claimed_by:
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -186,3 +186,149 @@ Architecture review complete. All AC pre-satisfied — implementation shipped wi
 - Task-scoped suite did not detect the missing log behavior pre-fix; this is a proof-strength signal for follow-up at test-writer/reviewer layers.
 - Full-suite quality snapshot is useful for module coverage evidence, but unrelated baseline failures require scoped interpretation for gating.
 - Keeping commit scope to one file avoided staging contamination in a dirty worktree.
+[[2026-04-30]]
+## Review Evidence
+### Source Control Changes
+- Builder commit present in git logs: `0a25a9ca` (`fix: log pick_tasks DR resolve failures (#1185, builder)`).
+- Exact commit diff was not available through the current reviewer tool set.
+- Changed-file scope was reconstructed from the task record, commit-log presence, and live inspection: `serve/kanban/src/owlbear_kanban/engine.py`.
+
+### Test Results
+- pytest: 32 passed, 0 failed, 0 skipped.
+- Task-owned AC suite: `tests/test_pick_tasks_resolve_1184.py` = 5 passed.
+- Adjacent regression suites: `serve/kanban/tests/test_engine_pick_tasks_1074.py` = 22 passed; `serve/kanban/tests/test_engine_pick_tasks_1076.py` = 5 passed.
+
+### Lint
+- clean: true
+- Paths checked:
+  - `serve/kanban/src/owlbear_kanban/engine.py`
+  - `tests/test_pick_tasks_resolve_1184.py`
+  - `serve/kanban/tests/test_engine_pick_tasks_1074.py`
+  - `serve/kanban/tests/test_engine_pick_tasks_1076.py`
+
+### Coverage
+- td:0 verification task; coverage is not a gate for this review.
+- Quality-runner reported scoped execution on the touched `pick_tasks` paths; module-level `engine.py` percentage (27%) is informational only for this source-only retry.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- SKIP: architect marked all AC lines `(td:0)` and test-writer was explicitly skipped.
+
+#### Security Review
+- No security findings in `serve/kanban/src/owlbear_kanban/engine.py` or `serve/kanban/src/owlbear_kanban/decisions.py`.
+
+#### Test Integrity
+- No evidence of builder edits to task-owned `TestFromAC_*` assertions in this retry.
+- Current task history and reconstructed change scope point to a source-only fix in `serve/kanban/src/owlbear_kanban/engine.py`.
+
+#### Data Safety
+- No issues found.
+- Resolver/import failures remain non-blocking, and dispatch still returns a valid response.
+
+#### Implementation-Aware Gaps
+- No blocking gaps remain.
+- Live implementation now logs resolver/import failures before continuing dispatch.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 |
+| Approach variation | Yes |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- The task-owned AC suite still does not assert the warning log record directly. For this td:0 verification task, that is non-blocking once live code and scoped regressions pass, but it remains a future test-hardening opportunity.
+- The missing-directory AC is proven primarily by live code in `serve/kanban/src/owlbear_kanban/decisions.py:192-193`; the task-owned test still stubs the resolver rather than exercising that branch directly.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `pick_tasks` calls `resolve_pending_drs(engine)` at top of function, before task selection | `serve/kanban/src/owlbear_kanban/engine.py:2327-2329` invokes resolver before `list_tasks`; `tests/test_pick_tasks_resolve_1184.py:160` and `:216-219` prove the call occurs during pick selection and before filtering | `test_resolve_pending_drs_is_called`; `test_resolve_runs_before_task_filtering` | PASS |
+| Call wrapped in try/except — resolve failures logged but never stall task dispatch | `serve/kanban/src/owlbear_kanban/engine.py:2327-2331` wraps import/resolve in `try/except` and emits `LOGGER.warning(...)`; `tests/test_pick_tasks_resolve_1184.py:182-185` proves the exception path returns `PickTasksResponse` and does not propagate | `test_resolve_exceptions_do_not_propagate` | PASS |
+| Existing pick_tasks behavior unchanged when no pending DRs exist | `tests/test_pick_tasks_resolve_1184.py:239-240` shows dispatch still returns task 1 when resolver returns `[]` | `test_no_pending_drs_pick_tasks_works` | PASS |
+| Graceful handling when pending/ directory doesn't exist (no crash) | `serve/kanban/src/owlbear_kanban/decisions.py:192-193` returns `[]` when `pending/` is absent; `tests/test_pick_tasks_resolve_1184.py:264-265` shows dispatch still returns normally on a board without `decisions/` | `test_no_decisions_directory_pick_tasks_works` | PASS |
+| All tests from #1184 pass | Independent quality-runner run: `tests/test_pick_tasks_resolve_1184.py` 5 passed, 0 failed | `tests/test_pick_tasks_resolve_1184.py` | PASS |
+
+### Deductions
+- -0.03: exact builder diff unavailable in the current reviewer tool set; change scope reconstructed from task record plus commit-log presence.
+- -0.02: task-owned suite does not directly assert the warning log side effect.
+
+### Verdict
+- PASS
+- Confidence: 0.95
+- Next status: docs
+
+## Post-task Reflection
+- The retry fixed the only blocking implementation defect from the previous review with a surgical source change.
+- td:0 verification tasks still require live code inspection; the earlier "already implemented" claim was not sufficient by itself.
+- Scoped regression suites were enough to validate the retry without conflating unrelated baseline debt.
+[[2026-04-30]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/kanban/README.md` L71 said "exceptions suppressed" — updated to "exceptions logged and suppressed" to match builder fix |
+| 2 | Module docstrings | Yes | Updated | `engine.py` L2281-2282 docstring step 1 said "exceptions are suppressed" — updated to "exceptions are logged and suppressed" |
+| 3 | External attribution | No | N/A | No external patterns used; validation-only task |
+| 4 | Research doc | No | N/A | Task body states "No research doc needed — validation-only pass" |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes: serve/kanban/src/**) and `share/diagrams/mcp-topology.excalidraw` (describes: serve/kanban/src/**) — both footers updated from e2ac09ad → 567f19fa |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/kanban/src/owlbear_kanban/engine.py | IN (docstring only) | Updated docstring |
+| serve/kanban/README.md | IN (serve/*/README.md) | Updated prose |
+| share/diagrams/kanban.excalidraw | IN (diagram) | Footer updated |
+| share/diagrams/mcp-topology.excalidraw | IN (diagram) | Footer updated |
+
+### Files Updated
+- serve/kanban/src/owlbear_kanban/engine.py (docstring step 1: "suppressed" → "logged and suppressed")
+- serve/kanban/README.md (dispatch pipeline prose: "exceptions suppressed" → "exceptions logged and suppressed")
+- share/diagrams/kanban.excalidraw (footer: e2ac09ad → 567f19fa)
+- share/diagrams/mcp-topology.excalidraw (footer: e2ac09ad → 567f19fa)
+
+### Commit
+- f3ca3575: docs: update pick_tasks docstring and kanban README for logged DR failures (#1185, doc-writer)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (no .owlbear/scratch/1185-* files existed)
+[[2026-04-30]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| pick_tasks calls resolve_pending_drs(engine) at top, before task selection | engine.py L2327-2329: import + call before list_tasks at L2333 | PASS |
+| Call wrapped in try/except, failures logged but never stall dispatch | engine.py L2327-2331: try/except Exception + LOGGER.warning; test L182-185 proves non-propagation | PASS |
+| Existing behavior unchanged when no pending DRs | test L239-240: dispatch returns task 1 when resolver returns [] | PASS |
+| Graceful handling when pending/ directory missing | decisions.py L192-193 early-return []; test L264-265 dispatch returns normally | PASS |
+| All tests from #1184 pass | quality-runner: 5/5 green in test_pick_tasks_resolve_1184.py | PASS |
+
+### Test Results
+- pytest: 3333 passed, 67 failed (pre-existing baseline debt, none in task scope), 4 skipped
+- ruff: clean on task paths
+
+### Architect Quality: 4/5
+AC was specific enough that the reviewer caught the logged-vs-silent gap in AC2. Minor: "logged" could have specified log level/content. Overall adequate; builder/reviewer filled the gap cleanly.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all verified via live code + tests)
+- Lint violations: 0
+- AC quality: 4/5, no deduction
+- Reviewer evidence: present, detailed, PASS verdict, trusted
+- Full-suite failures in task scope: 0
+
+### Confidence: 0.98
+- -0.02: reviewer could not access exact builder diff (reconstructed from commit-log + live inspection); auditor verified live code matches
+
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Agent |
+|--------|------|-------|
+| 0a25a9ca | fix | builder |
+| f3ca3575 | docs | doc-writer |
