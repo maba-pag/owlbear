@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from importlib import import_module
+
 KANBAN_ERROR_CODES: frozenset[str] = frozenset(
     {
         "ERR_NOT_CLAIMED",
@@ -47,6 +49,15 @@ KANBAN_ERROR_CODES: frozenset[str] = frozenset(
         "ERR_BODY_TOO_LARGE",
         "ERR_STALE",
         "ERR_NOT_FOUND",
+        "ERR_CORRUPT_DELIMITERS",
+        "ERR_CORRUPT_DUPLICATE_ID",
+        "ERR_CORRUPT_MISSING_FIELD",
+        "ERR_CORRUPT_TYPE_MISMATCH",
+        "ERR_CORRUPT_YAML_PARSE",
+        "ERR_CORRUPT_ID_FILENAME_MISMATCH",
+        "ERR_CORRUPT_DUPLICATE_LOCATION",
+        "ERR_CORRUPT_INVALID_STATUS",
+        "ERR_CORRUPT_INVALID_PRIORITY",
     }
 )
 
@@ -85,3 +96,10 @@ class MigrationRequiredError(KanbanError):
     Raised by ``KanbanEngine.__init__`` when any active task file contains
     the legacy ``claimed_by`` field (Brief C §1.5, AC-C47).
     """
+
+
+def __getattr__(name: str) -> object:
+    if name == "CorruptionError":
+        return import_module("owlbear_kanban.corruption").CorruptionError
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

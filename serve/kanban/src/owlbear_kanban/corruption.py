@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 
+from owlbear_kanban.errors import KanbanError
 from owlbear_kanban.models import RepairOutcome
 from owlbear_kanban.storage_io import atomic_write
 
@@ -113,7 +114,7 @@ def _move_to_quarantine(task_path: Path, kanban_dir: Path) -> Path:
     return dest
 
 
-class CorruptionError(Exception):
+class CorruptionError(KanbanError):
     """Raised when storage detects unrepairable on-disk state.
 
     Carries one of the 9 ERR_CORRUPT_* codes from §4.1.
@@ -131,11 +132,9 @@ class CorruptionError(Exception):
     ) -> None:
         code_name = _normalize_code(code)
         msg = user_message or detail or code_name
-        super().__init__(msg)
-        self.code = code_name
+        super().__init__(code_name, msg)
         self.detail = detail or user_message or code_name
         self.path = path
-        self.user_message = user_message or detail or code_name
         self.file_path = file_path or (str(path) if path else None)
 
 
