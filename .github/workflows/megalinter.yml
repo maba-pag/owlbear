@@ -95,30 +95,43 @@ jobs:
       - name: Job summary
         if: always()
         shell: bash
+        env:
+          INPUT_FIX: ${{ inputs.fix }}
+          INPUT_FIX_MODE: ${{ inputs.fix_mode }}
+          FIX_MODE_DISPLAY: ${{ inputs.fix && inputs.fix_mode || 'disabled' }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          MEGALINTER_HAS_UPDATED_SOURCES: ${{ steps.megalinter.outputs.has_updated_sources }}
+          FIX_PR_OUTCOME: ${{ steps.fix_pr.outcome }}
+          FIX_PR_URL: ${{ steps.fix_pr.outputs.pull-request-url }}
+          FIX_COMMIT_OUTCOME: ${{ steps.fix_commit.outcome }}
+          MEGALINTER_OUTCOME: ${{ steps.megalinter.outcome }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           {
             echo "## MegaLinter Results"
             echo ""
-            echo "Auto-fix enabled: ${{ inputs.fix }}"
-            echo "Auto-fix mode: ${{ inputs.fix && inputs.fix_mode || 'disabled' }}"
+            echo "Auto-fix enabled: $INPUT_FIX"
+            echo "Auto-fix mode: $FIX_MODE_DISPLAY"
             echo ""
-            if [ "${{ inputs.fix }}" = "true" ] && [ "${{ steps.megalinter.outputs.has_updated_sources }}" = "1" ]; then
-              if [ "${{ inputs.fix_mode }}" = "pull_request" ] && [ "${{ steps.fix_pr.outcome }}" = "success" ]; then
-                echo "Created or updated fix PR: ${{ steps.fix_pr.outputs.pull-request-url }}"
-              elif [ "${{ steps.fix_commit.outcome }}" = "success" ]; then
-                echo "Applied fixes were committed back to branch ${{ github.ref_name }}."
+            if [ "$INPUT_FIX" = "true" ] && [ "$MEGALINTER_HAS_UPDATED_SOURCES" = "1" ]; then
+              if [ "$INPUT_FIX_MODE" = "pull_request" ] && [ "$FIX_PR_OUTCOME" = "success" ]; then
+                echo "Created or updated fix PR: $FIX_PR_URL"
+              elif [ "$FIX_COMMIT_OUTCOME" = "success" ]; then
+                echo "Applied fixes were committed back to branch $GITHUB_REF_NAME."
               else
                 echo "MegaLinter updated files, but publishing those fixes did not complete."
               fi
               echo ""
-            elif [ "${{ inputs.fix }}" = "true" ]; then
+            elif [ "$INPUT_FIX" = "true" ]; then
               echo "Auto-fix was enabled, but MegaLinter did not report updated files."
               echo ""
             fi
-            if [ "${{ steps.megalinter.outcome }}" = "success" ]; then
+            if [ "$MEGALINTER_OUTCOME" = "success" ]; then
               echo "All linters passed."
             else
-              ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              ARTIFACT_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
               echo "Some linters reported issues." \
                 "See [megalinter-reports artifact](${ARTIFACT_URL})"
             fi
