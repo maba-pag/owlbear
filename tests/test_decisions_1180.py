@@ -361,6 +361,9 @@ class TestFromAC_ResolvePendingDrs:
         assert len(payload.strip()) > 0, (
             f"append_body payload must be non-empty; got {payload!r}"
         )
+        assert response in payload, (
+            f"append_body payload must contain the response value {response!r}; got {payload!r}"
+        )
 
     def test_needs_info_moves_file_but_keeps_task_blocked(self, tmp_path: Path) -> None:
         """AC7 happy: needs-info → file in resolved/, task NOT unblocked."""
