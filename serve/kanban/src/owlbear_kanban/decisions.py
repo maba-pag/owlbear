@@ -10,6 +10,7 @@ import logging
 import os
 import re
 from datetime import UTC, datetime
+from io import StringIO
 from pathlib import Path
 from typing import Protocol
 
@@ -103,6 +104,17 @@ def _move_with_collision_suffix(source: Path, resolved_dir: Path) -> Path:
             return destination
 
 
+def _rewrite_response(path: Path, meta: dict[str, object], body: str, response: str) -> None:
+    """Persist an updated DR response value while preserving file structure."""
+    updated_meta = dict(meta)
+    updated_meta["response"] = response
+    yaml = YAML()
+    buffer = StringIO()
+    yaml.dump(updated_meta, buffer)
+    frontmatter = buffer.getvalue().rstrip("\n")
+    path.write_text(f"---\n{frontmatter}\n---\n{body}", encoding="utf-8", newline="\n")
+
+
 def create_dr(  # noqa: PLR0913
     decisions_dir: Path,
     engine: DecisionEngine,
@@ -187,6 +199,11 @@ def resolve_pending_drs(
             meta, body = _parse_dr(path)
             response = str(meta.get("response", "pending"))
 
+            if response in {"applied-approved", "applied-rejected", "applied-needs-info"}:
+                dest = _move_with_collision_suffix(path, resolved_dir)
+                moved.append(dest)
+                continue
+
             if response == "pending":
                 continue
 
@@ -194,6 +211,7 @@ def resolve_pending_drs(
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
                 engine.edit_task(task_id, blocked=False)
+                _rewrite_response(path, meta, body, f"applied-{response}")
                 dest = _move_with_collision_suffix(path, resolved_dir)
                 moved.append(dest)
                 continue
@@ -201,6 +219,7 @@ def resolve_pending_drs(
             if response == "needs-info":
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
+                _rewrite_response(path, meta, body, "applied-needs-info")
                 dest = _move_with_collision_suffix(path, resolved_dir)
                 moved.append(dest)
                 continue
