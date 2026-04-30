@@ -1,10 +1,10 @@
 ---
 id: 1195
 title: 'P1-02: Add resolved-file collision protection to resolve_pending_drs'
-status: done
+status: archived
 priority: needed
 created: 2026-04-30T06:39:19.775572+00:00
-updated: 2026-04-30T08:21:29.266259+00:00
+updated: 2026-04-30T08:42:20.293782+00:00
 tags:
 - phase-1
 - scope:kanban
@@ -349,3 +349,37 @@ No additional intervention was necessary; implementation already satisfies the s
 
 ### Scratch Files Cleaned
 - None found
+[[2026-04-30]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Move without overwrite on conflict | test_ac1_* (4 tests) pass; implementation uses exclusive-create at decisions.py:92-99 | PASS |
+| AC2: Original content preserved byte-for-byte | test_ac2_original_resolved_content_preserved_byte_for_byte passes with exact byte comparison | PASS |
+| AC3: Counter suffix next-free allocation | test_ac3_* (3 tests) assert exact -2, -3, -4 filenames | PASS |
+| AC4: O_EXCL mechanism | Spot-checked decisions.py:95 uses os.O_CREAT|os.O_EXCL|os.O_WRONLY; test_ac4_collision_helper_uses_o_excl_exclusive_create_flag spies on os.open flags | PASS |
+| AC5: Both resolution paths | test_ac5_approved/rejected/needs_info all pass; helper invoked at both move sites (L189, L197) | PASS |
+
+### Test Results
+- pytest (task-scoped): 32 passed, 0 failed
+- pytest (full suite): 3276 passed, 78 failed (0 in task scope; failures are background debt in cockpit API 1189, config schema, react compiler)
+- ruff: clean
+
+### Upstream Commits
+- 828456cc fix: protect DR resolve collisions (#1195, builder)
+- 9a33ba1c test: add collision unlink + O_EXCL mechanism proof for #1195 (retry, test-writer)
+- 4f071277 docs: add collision-safe move to resolve_pending_drs docs (#1195, doc-writer)
+
+### Architect Quality: 4/5
+AC was directionally correct but required refinement during architecture review (AC2 strengthened to byte-for-byte, AC4 mechanism made explicit, AC5 added for branch parity). Challenger was productive; refinements were well-incorporated.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 x -0.02 = 0
+- Lint violations: 0
+- AC quality <=3: no (4/5)
+- Missing reviewer evidence: no (detailed, two-cycle review)
+- Full-suite failures in task scope: 0
+- Process: -0.02 (reviewer scope reconstructed from live state, inherited)
+
+### Confidence: 0.98
+### Action: archive
