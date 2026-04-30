@@ -1,10 +1,10 @@
 ---
 id: 1191
 title: 'P3-03: Test DR status indicator + popover components'
-status: review
+status: archived
 priority: needed
 created: 2026-04-30T00:52:17.480756+00:00
-updated: 2026-04-30T05:14:38.625906+00:00
+updated: 2026-04-30T05:35:19.786864+00:00
 tags:
 - phase-3
 - scope:cockpit-fe
@@ -12,8 +12,9 @@ parent: 1179
 depends_on: []
 blocked: false
 block_reason:
-claimed_by: dim-stream
-claimed_at: 2026-04-30T05:14:38.625906+00:00
+archival_reason: completed
+completed: 2026-04-30T05:42:44.624463+00:00
+claimed_at: 2026-04-30T05:35:19.786864+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -568,3 +569,142 @@ Architecture review (3rd re-entry): Diagnosed root cause of contract drift — t
 - Workaround applied: aligned hook with the existing coalesced overlap pattern used by useScanPolling.
 - Pattern discovered: for interval polling hooks in Cockpit, overlap safety should coalesce skipped ticks to a single follow-up call.
 - Quality gap: none remaining after scoped test + lint/type + coverage verification.
+[[2026-04-30]]
+## Review Evidence
+### Scope
+- Reviewed the current refined contract in `.owlbear/kanban/tasks/1191-p3-03-test-dr-status-indicator-popover-components.md:511-513` plus the task-owned deliverables:
+  - `serve/cockpit/web/src/components/DRStatusIndicator.tsx`
+  - `serve/cockpit/web/src/hooks/usePendingDRs.ts`
+  - `serve/cockpit/web/src/__tests__/DRStatusIndicator_1191.test.tsx`
+  - `serve/cockpit/web/src/__tests__/usePendingDRs_1191.test.ts`
+- Max AC depth remains `td:1` across the refined polling lines (`.owlbear/kanban/tasks/1191-p3-03-test-dr-status-indicator-popover-components.md:321-322`, `:511-513`), so `code-reader` was correctly skipped per workflow.
+- Latest builder commit presence verified in `.git/logs/HEAD:1071` (`3ab5e2bd6a3b307be74fa238e8f5adfb10b15ed2`). Changed-file scope was reconstructed from the latest builder note and live task-owned files.
+
+### Test Results
+- quality-runner scoped verification: 49 passed, 0 failed, 0 skipped.
+- Exit codes: vitest 0, eslint 0.
+- Errors: none.
+
+### Lint
+- clean: 0 violations across the 2 source files and 2 task-owned test files.
+
+### Coverage
+- overall: 94.59%
+- `DRStatusIndicator.tsx`: 92.59% statements, 100% lines
+- `usePendingDRs.ts`: 95.74% statements, 95.74% lines
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| Test StatusBarIndicator renders pending DR count | `DRStatusIndicator_1191.test.tsx:71`, `:76`, `:82` against `DRStatusIndicator.tsx:26`, `:31` | Yes | COVERED |
+| Test indicator uses attention color when count > 0, dormant when count = 0 | `DRStatusIndicator_1191.test.tsx:90`, `:102`, `:110` against `DRStatusIndicator.tsx:20`, `:27` | Yes | COVERED |
+| Test indicator click opens popover | `DRStatusIndicator_1191.test.tsx:128`, `:135` against `DRStatusIndicator.tsx:35` | Yes | COVERED |
+| Test popover list renders DR items: title, agent, task_id, age | `DRStatusIndicator_1191.test.tsx:150`, `:156`, `:162`, `:181`, `:201`, `:213` against `DRStatusIndicator.tsx:44-50` | Yes | COVERED |
+| Test popover item click triggers navigation/modal open | `DRStatusIndicator_1191.test.tsx:233`, `:243` against `DRStatusIndicator.tsx:45` | Yes | COVERED |
+| Test polling hook fetches `/api/decisions/pending` on interval | `usePendingDRs_1191.test.ts:49`, `:54`, `:63-64`, `:77`, `:96`, `:106`, `:108` against `usePendingDRs.ts:51`, `:86` | Yes | COVERED |
+| Test empty state (0 pending) renders dormant indicator | `DRStatusIndicator_1191.test.tsx:110`, `:116` and `usePendingDRs_1191.test.ts:183`, `:190` against `DRStatusIndicator.tsx:20`, `:37` and `usePendingDRs.ts:60` | Yes | COVERED |
+| AC8: Test age field renders specific formatted age text via frozen clock | `DRStatusIndicator_1191.test.tsx:181-201` against `DRStatusIndicator.tsx:10`, `:50` | Yes | COVERED |
+| AC9: Test overlap guard: in-flight tick does not start concurrent fetch and exactly one queued repoll runs after settle | `usePendingDRs_1191.test.ts:247-291` against `usePendingDRs.ts:42-43`, `:75-76` | Yes | COVERED |
+| AC10 (revised): `usePendingDRs` uses boolean `pendingPollRef` coalescing, not counted replay | `usePendingDRs_1191.test.ts:297-326` plus live hook at `usePendingDRs.ts:39`, `:43`, `:75-76` and analogue `useScanPolling.ts:29`, `:61` | Yes | COVERED |
+| AC11: 3+ skipped ticks coalesce into exactly 1 repoll after settle | `usePendingDRs_1191.test.ts:297-326` against `usePendingDRs.ts:39`, `:75-76` | Yes | COVERED |
+| AC12: interval-repeat test is settle-first and proves one additional poll per settled interval | `usePendingDRs_1191.test.ts:96-108` against `usePendingDRs.ts:86` | Yes | COVERED |
+
+#### Security Review
+- No hardcoded secrets, injection sinks, path traversal, insecure deserialization, or dependency-risk additions found in the changed source files.
+
+#### Test Integrity
+| Original Test Intent | Change Made | Assessment |
+|----------------------|-------------|------------|
+| `TestFromAC_DRStatusIndicator` must keep the exact-age proof that closed the prior false-green gap | Current suite still contains the binding frozen-clock exact-age assertion at `DRStatusIndicator_1191.test.tsx:181-201` | PRESERVED |
+| `TestFromAC_usePendingDRs` must prove overlap safety and coalescing after the AC10/AC11 refinement | Current suite contains both AC9 overlap tests at `usePendingDRs_1191.test.ts:247-291` and the AC11 discriminator at `:297-326` | PRESERVED |
+- Latest builder retry explicitly states `Scope discipline: no test files modified` in `.owlbear/kanban/tasks/1191-p3-03-test-dr-status-indicator-popover-components.md:560`, so there is no evidence of builder weakening/removal.
+
+#### Test Quality
+- PASS.
+- Assertion specificity: STRONG. The exact-age probe (`DRStatusIndicator_1191.test.tsx:181-201`) fails if the age span is removed or `formatAge` changes incorrectly; the coalescing probe (`usePendingDRs_1191.test.ts:297-326`) fails if counted replay returns.
+- Negative/error-path coverage: ADEQUATE. `usePendingDRs_1191.test.ts` covers rejected fetches and non-OK HTTP status (`:198-225`).
+- Manual mutation reasoning: STRONG. Removing overlap coalescing or reintroducing counted replay breaks AC9/AC11; removing the endpoint/method breaks AC1 (`:49-64`).
+- Independence: ADEQUATE. The hook tests reset fake timers and globals in `afterEach`; the component tests render fresh state per case.
+- Naming: ADEQUATE.
+
+#### Data Safety
+- PASS.
+- The live hook now uses the coalesced boolean guard at `usePendingDRs.ts:39`, `:43`, `:75-76`, matching the established analogue in `useScanPolling.ts:29`, `:61`.
+- No overlapping-request race or unbounded queued replay path remains in the current implementation under the refined AC10/AC11 contract.
+
+#### Implementation-Aware Test Gaps
+- PASS.
+- Component coverage includes count, status, popover toggle, empty state, item fields, exact age, and click callback.
+- Hook coverage includes mount fetch, GET method, settled interval repetition, empty response, network rejection, non-OK status, unmount cleanup, single-tick overlap blocking, queued repoll, and multi-tick coalescing.
+- No significant untested branch remains in the task-owned logic.
+
+#### Builder Process Quality
+- CLEAN.
+- Task history shows approach variation rather than a repeated loop: initial pass-through failure, initial implementation, counted-replay retry, then final coalesced fix. The final builder commit is present in `.git/logs/HEAD:1071` and the latest retry aligns with the refined contract.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| Test StatusBarIndicator renders pending DR count | `DRStatusIndicator.tsx:26`, `:31` render the indicator and count text; tests assert counts `1` and `2` at `DRStatusIndicator_1191.test.tsx:76-85` | `DRStatusIndicator_1191` count tests | PASS |
+| Test indicator uses attention color when count > 0, dormant when count = 0 | `DRStatusIndicator.tsx:20`, `:27` derive and expose `data-status`; tests assert `attention` and `dormant` at `DRStatusIndicator_1191.test.tsx:90-113` | `DRStatusIndicator_1191` status tests | PASS |
+| Test indicator click opens popover | `DRStatusIndicator.tsx:35` renders `dr-popover` when open; click/toggle tests pass at `DRStatusIndicator_1191.test.tsx:128-140` | `DRStatusIndicator_1191` popover tests | PASS |
+| Test popover list renders DR items: title, agent, task_id, age | `DRStatusIndicator.tsx:44-50` renders item fields; tests cover title/agent/task_id plus exact age at `DRStatusIndicator_1191.test.tsx:150-201` and multi-item list at `:213-228` | `DRStatusIndicator_1191` item-field + AC8 tests | PASS |
+| Test popover item click triggers navigation/modal open | `DRStatusIndicator.tsx:45` calls `onItemClick(item.id)`; tests assert callback ids at `DRStatusIndicator_1191.test.tsx:233-249` | `DRStatusIndicator_1191` callback tests | PASS |
+| Test polling hook fetches `/api/decisions/pending` on interval | `usePendingDRs.ts:51`, `:86` fetch the endpoint on mount and interval; tests assert path, method, and repeat polling at `usePendingDRs_1191.test.ts:49-64`, `:77-108` | `usePendingDRs_1191` AC1/AC2/AC12 tests | PASS |
+| Test empty state (0 pending) renders dormant indicator | `usePendingDRs.ts:60` normalizes count from empty payload and `DRStatusIndicator.tsx:20`, `:37` render dormant/empty UI; tests pass at `DRStatusIndicator_1191.test.tsx:110-118` and `usePendingDRs_1191.test.ts:183-190` | empty-state indicator + hook tests | PASS |
+| AC8: Test age field with frozen time + specific format assertion | `formatAge` in `DRStatusIndicator.tsx:10-14` feeds the age span at `:50`; exact `'2h ago'` assertion passes at `DRStatusIndicator_1191.test.tsx:181-201` | AC8 test | PASS |
+| AC9: overlap guard (in-flight + interval = deferred, not duplicate) | `usePendingDRs.ts:42-43`, `:75-76` block concurrent polls and queue exactly one follow-up; tests pass at `usePendingDRs_1191.test.ts:247-291` | AC9 tests | PASS |
+| AC10 (revised): boolean `pendingPollRef` coalescing matches `useScanPolling` | Task contract requires the boolean analogue at `.owlbear/kanban/tasks/1191-p3-03-test-dr-status-indicator-popover-components.md:511-513`; live hook uses `pendingPollRef` at `usePendingDRs.ts:39`, `:43`, `:75-76`, matching `useScanPolling.ts:29`, `:61` | AC11 discriminator + source inspection | PASS |
+| AC11: 3+ ticks coalesce to exactly 1 repoll | `usePendingDRs_1191.test.ts:297-326` asserts total call count `3` after 3 skipped ticks; this would fail if counted replay returned | AC11 test | PASS |
+| AC12: settle-first interval test proves one additional poll per settled interval | `usePendingDRs_1191.test.ts:96-108` settles mount first, then proves call counts 1 -> 2 -> 3 across settled intervals | AC12 test | PASS |
+
+### Deductions
+- -0.02 Changed-file scope was reconstructed from the latest builder note and live task-owned files rather than a direct commit diff in this tool surface.
+- Confidence: 0.96
+
+### Verdict
+- PASS. The latest retry satisfies the refined contract: the earlier age false-green gap is closed, the polling hook now matches the coalesced `pendingPollRef` analogue, and the AC11/AC12 tests prove the distinction.
+
+### Action
+- Advanced to docs.
+
+### Reflection
+- Problem faced: the task body contained multiple stale failure states, so the review had to be grounded in the latest refined AC rather than earlier rejected snapshots.
+- Workaround applied: re-ran scoped frontend verification independently and cross-checked it against the canonical task file and live source.
+- Pattern discovered: for Cockpit polling hooks, the stable contract is boolean `pendingPollRef` coalescing plus an explicit multi-tick discriminator test.
+- Quality gap: no blocking gaps remain after the current pass.
+[[2026-04-30]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are all frontend TSX/TS — `DRStatusIndicator.tsx`, `usePendingDRs.ts`, and two test files. `serve/cockpit/README.md` covers the backend engine surface only; no IN-scope doc references individual FE components. Grep on cockpit README confirmed no mention of DRStatusIndicator or usePendingDRs. |
+| 2 | Module docstrings | No | N/A | No Python files changed. |
+| 3 | External attribution | No | N/A | Research doc states "7 studied (all internal codebase)" — no external patterns used. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/dr-status-indicator-test-strategy.md` exists and is linked in the task body `## Research` section. |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index contains no `describes` glob matching `serve/cockpit/web/src/components/**` or `hooks/**`. No diagram describes-match found. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/components/DRStatusIndicator.tsx | OUT | N/A |
+| serve/cockpit/web/src/hooks/usePendingDRs.ts | OUT | N/A |
+| serve/cockpit/web/src/__tests__/DRStatusIndicator_1191.test.tsx | OUT | N/A |
+| serve/cockpit/web/src/__tests__/usePendingDRs_1191.test.ts | OUT | N/A |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1191-*` files found)
+
+[[2026-04-30]]
+## Audit
+12/12 AC PASS. Full suite 3796 passed, 65 unrelated failures. Task-owned 49 tests green. Lint clean in scope. 6 commits verified (a414cd52 → 3ab5e2bd). Architect quality 4/5. Confidence 0.98. ARCHIVED.
