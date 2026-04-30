@@ -68,34 +68,7 @@ for wave in response.waves:
         ...
 ```
 
-`AgentView.pick_tasks` first validates that every pipeline status has an entry in `BoardConfig.agent_map` (raises `ConfigError(ERR_INVALID_STATUS)` with the list of missing statuses if any are absent), then runs a five-step pipeline: resolve pending Decision Requests (exceptions logged and suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
-
-### Decision Requests
-
-Lightweight file-based decision request (DR) helpers, stored under `decisions/` with `pending/` and `resolved/` subdirectories.
-
-```python
-from pathlib import Path
-from owlbear_kanban.decisions import create_dr, resolve_pending_drs
-
-# Create a pending DR file and block the task
-create_dr(
-    decisions_dir=Path(".owlbear/kanban/decisions"),
-    engine=engine,
-    task_id=42,
-    agent="architect",
-    request_type="approach-selection",
-    body="Should we use X or Y?",
-)
-
-# Resolve pending DRs during dispatch (one-argument form used by pick_tasks)
-moved = resolve_pending_drs(engine)
-```
-
-| Function | Description |
-|----------|-------------|
-| `create_dr(decisions_dir, engine, *, task_id, agent, request_type, body)` | Write a 5-field YAML-frontmatter DR to `pending/` using `O_EXCL` (atomic), then block the task via `engine.edit_task`. Collision retries append `-2`, `-3`, … suffix. |
-| `resolve_pending_drs(decisions_dir, engine)` | Scan `pending/` and process non-pending responses: append summary to task body, unblock (`approved`/`rejected`) or keep blocked (`needs-info`), and move file to `resolved/` using collision-safe exclusive-create (suffixes `-2`, `-3`, … on conflict). Supports single-argument form `resolve_pending_drs(engine)` (used by `pick_tasks`). |
+`AgentView.pick_tasks` runs a five-step pipeline: resolve pending Decision Requests (exceptions suppressed, never blocks dispatch), filter (exclude claimed/archived/blocked/dep-blocked tasks), deterministic sort (priority ASC, age DESC, id ASC), greedy wave assembly (size cap, dep-disjointness, agent-bucket compatibility), and agent assignment from `BoardConfig.agent_map`.
 
 ## Migration
 
@@ -116,7 +89,7 @@ uv run kanban-migrate [--dry-run] [--lane tasks|archive|config|all] [--kanban-di
 
 Exit code 0 when no files failed; exit code 1 otherwise. Each failed file is reported on stderr as `FAIL {path}: {reason}`.
 
-After `--lane config` runs, `agent_map`, `agent_types`, and `agent_compatibility` are empty stubs. The engine itself will start with an empty `agent_map`, but calling `pick_tasks` will raise `ConfigError(ERR_INVALID_STATUS)` until every pipeline status has an entry in the map.
+After `--lane config` runs, `agent_map`, `agent_types`, and `agent_compatibility` are empty stubs that must be populated before starting the engine.
 
 ## Configuration
 

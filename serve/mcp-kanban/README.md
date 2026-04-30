@@ -28,7 +28,7 @@ The server exposes 9 tools:
 | `move_task` | `move_task(id: int, status: str, archival_reason: str \| None = None, archival_refs: list[int] \| None = None)` |
 | `start_work` | `start_work(id: int)` |
 | `end_work` | `end_work(id: int, outcome: str, move_to: str \| None = None, note: str \| None = None, archival_reason: str \| None = None, archival_refs: list[int] \| None = None, block_reason: str \| None = None)` |
-| `create_dr` | `create_dr(task_id: str \| int, agent: str, request_type: str, body: str)` |
+| `create_dr` | `create_dr(task_id: str, agent: str, request_type: str, body: str)` |
 
 ## Data Projections and Envelopes
 
@@ -104,6 +104,10 @@ Documented lifecycle outcomes for agent routing:
 ```
 
 ## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KANBAN_TOOLS_EXCLUDE` | _(none)_ | Comma-separated tool names to remove at startup (e.g. `create_task,move_task`) |
 
 Board directory is resolved relative to the working directory at `.owlbear/kanban`. No override is supported at the MCP server level.
 
