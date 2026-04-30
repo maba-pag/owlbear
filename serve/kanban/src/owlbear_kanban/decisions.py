@@ -81,6 +81,28 @@ def _resolve_decisions_dir(engine: DecisionEngine) -> Path:
     return Path(kanban_dir) / "decisions"
 
 
+def _move_with_collision_suffix(source: Path, resolved_dir: Path) -> Path:
+    """Move a file into resolved_dir without overwriting existing files."""
+    content = source.read_bytes()
+    counter = 1
+    while True:
+        filename = (
+            f"{source.stem}{source.suffix}"
+            if counter == 1
+            else f"{source.stem}-{counter}{source.suffix}"
+        )
+        destination = resolved_dir / filename
+        try:
+            fd = os.open(destination, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(content)
+        except FileExistsError:
+            counter += 1
+        else:
+            source.unlink()
+            return destination
+
+
 def create_dr(  # noqa: PLR0913
     decisions_dir: Path,
     engine: DecisionEngine,
@@ -168,16 +190,14 @@ def resolve_pending_drs(
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
                 engine.edit_task(task_id, blocked=False)
-                dest = resolved_dir / path.name
-                path.replace(dest)
+                dest = _move_with_collision_suffix(path, resolved_dir)
                 moved.append(dest)
                 continue
 
             if response == "needs-info":
                 task_id = meta.get("task_id")
                 _append_summary(engine, task_id, response, body)
-                dest = resolved_dir / path.name
-                path.replace(dest)
+                dest = _move_with_collision_suffix(path, resolved_dir)
                 moved.append(dest)
                 continue
 
