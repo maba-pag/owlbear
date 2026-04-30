@@ -2273,16 +2273,19 @@ class AgentView:
     ) -> PickTasksResponse:
         """Select dispatchable tasks and arrange them into dependency-disjoint waves.
 
-        Runs a four-step pipeline:
+        Runs a five-step pipeline:
 
-        1. **Filter** — exclude claimed, archived, ``blocked=True``, and
+        1. **Resolve** — attempt to resolve any pending Decision Requests via
+           ``owlbear_kanban.decisions.resolve_pending_drs``; exceptions are
+           suppressed so dispatch is never blocked.
+        2. **Filter** — exclude claimed, archived, ``blocked=True``, and
            ``dep_status="blocked"`` tasks.
-        2. **Sort** — deterministic ordering: ``priority_rank ASC``,
+        3. **Sort** — deterministic ordering: ``priority_rank ASC``,
            age (oldest first) ``DESC``, ``id ASC``.
-        3. **Greedy wave assembly** — fill waves respecting three constraints:
+        4. **Greedy wave assembly** — fill waves respecting three constraints:
            wave size cap, dependency disjointness (no intra-wave dep edges),
            and agent-bucket compatibility.
-        4. **Agent assignment** — each :class:`DispatchEntry` carries the full
+        5. **Agent assignment** — each :class:`DispatchEntry` carries the full
            ``BoardConfig.agent_map`` value for the task's status.
 
         Args:
