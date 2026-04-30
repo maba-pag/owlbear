@@ -56,7 +56,7 @@ Two endpoints handle Decision Request (DR) lifecycle. These routes use `get_deci
 | Route | Behaviour |
 |-------|----------|
 | `GET /api/decisions/pending` | Reads `decisions/pending/*.md`, parses YAML frontmatter, returns `{count, items[{id, task_id, agent, request_type, created, title, body, body_preview}]}`. Only items with frontmatter `response == "pending"` are included. Returns `{count: 0, items: []}` when the directory is empty or missing. |
-| `POST /api/decisions/{id}/resolve` | Accepts `{response: "approved"\|"needs-info"\|"rejected"\|"completed", notes?: string}`. Updates the DR file in-place (sets frontmatter `response`, appends `## Response` section). Returns 404 for unknown ids. The engine's `resolve_pending_drs` sweep (triggered by `pick_tasks`) handles the physical move to `resolved/`. |
+| `POST /api/decisions/{id}/resolve` | Accepts `{response: "approved"\|"needs-info"\|"rejected"\|"completed", notes?: string}`. Updates the DR file in-place (sets frontmatter `response`, appends `## Response` section). Returns 422 for malformed decision ids (allowlist `^[a-zA-Z0-9][a-zA-Z0-9_-]*$`); returns 404 for valid but unknown ids. The engine's `resolve_pending_drs` sweep (triggered by `pick_tasks`) handles the physical move to `resolved/`. |
 
 ## Work Sessions Model
 

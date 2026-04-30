@@ -92,7 +92,12 @@ def _rewrite_response(path: Path, meta: dict[str, object], body: str) -> None:
 
 
 def _find_decision_path(decisions_dir: Path, decision_id: str) -> Path:
-    """Resolve a decision path from pending first, then resolved."""
+    """Resolve a decision path from pending first, then resolved.
+
+    Raises HTTPException(422) if decision_id does not match the allowlist
+    pattern ``^[a-zA-Z0-9][a-zA-Z0-9_-]*$`` (path traversal protection).
+    Raises FileNotFoundError if the id is valid but no file exists.
+    """
     if not _DECISION_ID_PATTERN.fullmatch(decision_id):
         raise HTTPException(status_code=422, detail="Invalid decision id")
 
