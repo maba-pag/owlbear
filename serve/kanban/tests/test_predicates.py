@@ -283,3 +283,101 @@ class TestFromAC_RequireListInSection:
         )
         task = _make_task_with_sections(_make_sections(("Steps", 2, content)))
         assert require_list_in_section(task, "Steps") is True
+
+
+# Promoted from archived task #1060.
+
+
+def _make_section(heading: str | None, level: int, content: str) -> Section:
+    return Section(heading=heading, level=level, content=content)
+
+
+def _make_task(sections: list[Section]) -> Task:
+    return Task(
+        id=1060,
+        title="predicate-commonmark-test",
+        status="todo",
+        priority="important",
+        created="2026-04-23T00:00:00+00:00",
+        updated="2026-04-23T00:00:00+00:00",
+        body=sections,  # type: ignore[arg-type]
+    )
+
+
+class TestFromAC_PredicateCommonMarkSubstrate:
+    """AC-C40: require_list_in_section parses to a CommonMark bullet_list or ordered_list.
+
+    The AC uses CommonMark AST node names which require a proper CommonMark
+    parser (e.g. markdown-it-py) rather than a hand-rolled regex. The tests
+    below expose cases where the current regex-based helper diverges from the
+    CommonMark spec.
+    """
+
+    def test_ac_c40_ordered_paren_delimiter_is_ordered_list(self) -> None:
+        task = _make_task(
+            [_make_section("Steps", 2, "1) First step\n2) Second step\n")]
+        )
+        assert require_list_in_section(task, "Steps") is True
+
+    def test_ac_c40_ordered_paren_delimiter_multi_digit_is_ordered_list(self) -> None:
+        task = _make_task([_make_section("Items", 2, "99) First\n100) Second\n")])
+        assert require_list_in_section(task, "Items") is True
+
+    def test_ac_c40_paren_ordered_list_after_fenced_block(self) -> None:
+        content = "```\n1. fake inside fence\n```\n1) real item after fence\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is True
+
+    def test_ac_c40_four_space_indent_is_indented_code_block_not_list(self) -> None:
+        task = _make_task(
+            [_make_section("Steps", 2, "    - item inside indented code block\n")]
+        )
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_tab_indent_is_indented_code_block_not_list(self) -> None:
+        task = _make_task(
+            [_make_section("Steps", 2, "\t- item inside tab-indented code block\n")]
+        )
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_four_space_indent_ordered_is_code_block_not_list(self) -> None:
+        task = _make_task(
+            [_make_section("Steps", 2, "    1. item inside indented code block\n")]
+        )
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_three_space_indented_fence_excludes_content(self) -> None:
+        content = "   ```\n- fake inside 3-space-indented fence\n   ```\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_four_backtick_fence_not_closed_by_three_backtick(self) -> None:
+        content = "````\n- hidden inside 4-backtick fence\n```\n- still inside fence (not leaked)\n````\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_four_tilde_fence_not_closed_by_three_tilde(self) -> None:
+        content = "~~~~\n- hidden inside 4-tilde fence\n~~~\n- still inside fence (not leaked)\n~~~~\n"
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c40_three_space_indented_fence_close_resumes_list_detection(
+        self,
+    ) -> None:
+        content = (
+            "   ```\n- inside fence (excluded)\n   ```\n- real list item after close\n"
+        )
+        task = _make_task([_make_section("Steps", 2, content)])
+        assert require_list_in_section(task, "Steps") is True
+
+    def test_ac_c41_substrate_thematic_break_asterisks_is_not_list(self) -> None:
+        task = _make_task([_make_section("Steps", 2, "* * *\n")])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c41_substrate_thematic_break_dashes_is_not_list(self) -> None:
+        task = _make_task([_make_section("Steps", 2, "- - -\n")])
+        assert require_list_in_section(task, "Steps") is False
+
+    def test_ac_c41_substrate_list_in_blockquote_is_detected(self) -> None:
+        task = _make_task([_make_section("Steps", 2, "> - item inside blockquote\n")])
+        assert require_list_in_section(task, "Steps") is True
