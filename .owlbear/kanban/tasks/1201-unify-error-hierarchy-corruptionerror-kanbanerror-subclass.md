@@ -3,8 +3,8 @@ id: 1201
 title: Unify error hierarchy — CorruptionError → KanbanError subclass
 status: done
 priority: needed
-created: 2026-04-30T15:28:56.411894+00:00
-updated: 2026-04-30T18:43:46.873383+00:00
+created: 2026-04-30 15:28:56.411894+00:00
+updated: 2026-04-30T21:47:49.175669+00:00
 tags:
 - audit-kanban
 parent:
@@ -12,8 +12,8 @@ depends_on:
 - 1203
 blocked: false
 block_reason:
-claimed_by: near-hound
-claimed_at: 2026-04-30T18:43:46.873383+00:00
+claimed_by: green-stream
+claimed_at: 2026-04-30T21:47:49.175669+00:00
 archival_reason:
 archival_refs: []
 ---
