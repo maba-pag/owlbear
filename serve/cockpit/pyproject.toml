@@ -3,7 +3,7 @@ name = "owlbear-cockpit"
 version = "0.1.0"
 requires-python = ">=3.14.4"
 description = "OwlBear Cockpit — FastAPI backend for the kanban UI"
-dependencies = ["owlbear-kanban", "fastapi", "uvicorn", "pydantic"]
+dependencies = ["owlbear-kanban", "fastapi", "uvicorn", "pydantic", "ruamel.yaml"]
 
 [build-system]
 requires = ["hatchling"]
