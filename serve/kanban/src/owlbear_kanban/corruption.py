@@ -51,6 +51,30 @@ _SAFE_DEFAULTS: dict[str, object] = {
 }
 
 
+def _configured_statuses(config: BoardConfig) -> list[str]:
+    """Return configured statuses from pipeline, falling back to root legacy data."""
+    try:
+        statuses = config.pipeline.statuses
+    except Exception:  # noqa: BLE001
+        statuses = None
+    if isinstance(statuses, list) and statuses:
+        return statuses
+    fallback = getattr(config, "statuses", [])
+    return fallback if isinstance(fallback, list) else []
+
+
+def _configured_priorities(config: BoardConfig) -> list[str]:
+    """Return configured priorities from pipeline, falling back to root legacy data."""
+    try:
+        priorities = config.pipeline.priorities
+    except Exception:  # noqa: BLE001
+        priorities = None
+    if isinstance(priorities, list) and priorities:
+        return priorities
+    fallback = getattr(config, "priorities", [])
+    return fallback if isinstance(fallback, list) else []
+
+
 def _generate_slug(title: str) -> str:
     """Return a filesystem-safe slug derived from *title*."""
     return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80]
@@ -312,7 +336,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
     # Mode 8: invalid status
     status_val = fm.get("status")
     if status_val is not None:
-        valid_statuses = set(config.pipeline.statuses) | {"archived"}
+        valid_statuses = set(_configured_statuses(config)) | {"archived"}
         if status_val not in valid_statuses:
             return CorruptionError(
                 code=ERR_CORRUPT_INVALID_STATUS,
@@ -322,7 +346,7 @@ def detect_corruption(path: Path, config: BoardConfig) -> CorruptionError | None
 
     # Mode 9: invalid priority
     priority_val = fm.get("priority")
-    if priority_val is not None and priority_val not in config.pipeline.priorities:
+    if priority_val is not None and priority_val not in _configured_priorities(config):
         return CorruptionError(
             code=ERR_CORRUPT_INVALID_PRIORITY,
             detail=f"priority '{priority_val}' not in configured priorities",
@@ -479,10 +503,11 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
         # Other missing fields → apply safe defaults
         changed = False
+        configured_priorities = _configured_priorities(config)
         for field, default in _SAFE_DEFAULTS.items():
             if field not in fm:
                 fm[field] = (
-                    config.pipeline.priorities[0] if field == "priority" else default
+                    configured_priorities[0] if field == "priority" else default
                 )
                 changed = True
 
@@ -521,7 +546,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
 
     # Mode 9: invalid priority → coerce to first configured priority
     if code_name == ERR_CORRUPT_INVALID_PRIORITY.__name__:
-        fm["priority"] = config.pipeline.priorities[0]
+        fm["priority"] = _configured_priorities(config)[0]
         return _write_repaired(path, fm, body_text, code_name, task_id)
 
     # Unknown code
