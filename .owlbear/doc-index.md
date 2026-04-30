@@ -83,6 +83,7 @@
 - ### `Mutation routes`
 - #### `Via CockpitView facade`
 - ### `Excluded methods — why`
+- ## `Decisions API`
 - ## `Work Sessions Model`
 - ### `Derived states`
 - ### `Filter vocabulary`
@@ -102,6 +103,7 @@
 - ### `KanbanEngine methods`
 - ### `Dispatch helper`
 - ### `AgentView dispatch pipeline`
+- ### `Decision Requests`
 - ## `Migration`
 - ## `Configuration`
 - ## `Dependencies`
@@ -175,6 +177,7 @@
 - # `owlbear — Orchestrator`
 - ## `Launch / Usage`
 - ## `Configuration`
+- ## `Kanban CLI Status`
 - ## `Dependencies`
 
 ### Outbound links
@@ -202,7 +205,6 @@
 - ### `Adding local agents`
 - ### `Overriding instructions`
 - ### `Adding project-specific MCP servers`
-- ### `Configuring the kanban MCP server`
 - ### `Configuring the knowledge MCP server`
 - ## `Troubleshooting`
 
@@ -586,6 +588,11 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/h-decision-requests/SKILL.md
 - # `Decision Requests Handbook`
+- ## `When To Create A DR`
+- ## `create_dr Contract`
+- ## `Body Format`
+- ## `Fire-And-Forget Semantics`
+- ## `Operational Rules`
 
 ## share/skills/h-excalidraw-diagram/SKILL.md
 - # `Excalidraw Diagram Reference`
@@ -768,7 +775,6 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ### `edit_task (advanced)`
 - ## `Compound vs Single Tool Guidance`
 - ## `Error Handling`
-- ## `Configuration`
 - ## `Body Content Gotchas`
 
 ## share/skills/h-mcp-memory/SKILL.md
