@@ -87,7 +87,10 @@
       "versionNonce": 9100002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_r_b", "type": "arrow" }
+        {
+          "id": "arr_r_b",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -110,8 +113,14 @@
       "versionNonce": 9101002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_r_b", "type": "arrow" },
-        { "id": "arr_b_t", "type": "arrow" }
+        {
+          "id": "arr_r_b",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_b_t",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -134,8 +143,14 @@
       "versionNonce": 9102002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_b_t", "type": "arrow" },
-        { "id": "arr_t_ip", "type": "arrow" }
+        {
+          "id": "arr_b_t",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_t_ip",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -158,8 +173,14 @@
       "versionNonce": 9103002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_t_ip", "type": "arrow" },
-        { "id": "arr_ip_rv", "type": "arrow" }
+        {
+          "id": "arr_t_ip",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_ip_rv",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -182,8 +203,14 @@
       "versionNonce": 9104002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_ip_rv", "type": "arrow" },
-        { "id": "arr_rv_d", "type": "arrow" }
+        {
+          "id": "arr_ip_rv",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_rv_d",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -206,8 +233,14 @@
       "versionNonce": 9105002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_rv_d", "type": "arrow" },
-        { "id": "arr_d_do", "type": "arrow" }
+        {
+          "id": "arr_rv_d",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_d_do",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -230,8 +263,14 @@
       "versionNonce": 9106002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_d_do", "type": "arrow" },
-        { "id": "arr_do_a", "type": "arrow" }
+        {
+          "id": "arr_d_do",
+          "type": "arrow"
+        },
+        {
+          "id": "arr_do_a",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -254,7 +293,10 @@
       "versionNonce": 9107002,
       "groupIds": [],
       "boundElements": [
-        { "id": "arr_do_a", "type": "arrow" }
+        {
+          "id": "arr_do_a",
+          "type": "arrow"
+        }
       ],
       "isDeleted": false
     },
@@ -518,7 +560,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "stage_research_rect",
@@ -553,7 +604,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "stage_backlog_rect",
@@ -588,7 +648,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "stage_todo_rect",
@@ -623,7 +692,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "stage_in_progress_rect",
@@ -658,7 +736,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "stage_review_rect",
@@ -693,7 +780,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "stage_docs_rect",
@@ -728,7 +824,16 @@
       "groupIds": [],
       "boundElements": [],
       "isDeleted": false,
-      "points": [[0, 0], [44, 0]],
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          44,
+          0
+        ]
+      ],
       "lastCommittedPoint": null,
       "startBinding": {
         "elementId": "stage_done_rect",
@@ -1005,7 +1110,7 @@
       "isDeleted": false,
       "fontSize": 16,
       "fontFamily": 1,
-      "text": "Last verified: 2026-04-30 (3c5aa926)",
+      "text": "Last verified: 2026-04-30 (f7c02f9a)",
       "originalText": "Last verified: 2026-04-30 (3c5aa926)",
       "textAlign": "left",
       "verticalAlign": "top",
