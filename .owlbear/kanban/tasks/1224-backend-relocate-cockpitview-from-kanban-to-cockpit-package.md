@@ -1,10 +1,10 @@
 ---
 id: 1224
 title: Backend — relocate CockpitView from kanban to cockpit package
-status: review
+status: backlog
 priority: needed
 created: 2026-04-30 16:31:18.599723+00:00
-updated: 2026-05-01T03:14:00.710699+00:00
+updated: 2026-05-01T03:33:22.279332+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -151,3 +151,95 @@ Challenger returned `block` (confidence 0.43) citing: (1) under-scoped import fi
   - Removing engine accessor required one extra durable-test adaptation (`test_engine_pick_tasks_1074.py`) outside AC list.
   - Running broad suites revealed significant pre-existing baseline failures; scoped quality gates were necessary to isolate this task’s regression surface.
   - Moving the class intact minimized behavior drift and kept the diff surgical despite multi-file import churn.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- Scoped task suite via quality-runner: `tests/test_cockpit_view_1224.py` -> 32 passed, 0 failed.
+- Broad cockpit regression via quality-runner: 201 passed, 0 failed.
+- Broad kanban regression via quality-runner: 1264 passed, 41 failed.
+
+### Lint
+- Ruff on changed source/test scope: clean.
+
+### Coverage
+- `owlbear_cockpit.view`: 27% module coverage.
+- `owlbear_kanban.engine`: 11% module coverage.
+- Informational only: module-level coverage is low, but the review gate here is driven by proof quality and live AC state, not overall untouched-module coverage.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1 move `CockpitView` into `serve/cockpit/.../view.py` | `TestFromAC_CockpitViewNewModule` in `tests/test_cockpit_view_1224.py` | Yes | COVERED |
+| AC2 remove `cockpit_view()` / `_cockpit_view` and keep `engine.py` free of `owlbear_cockpit` imports | `TestFromAC_EngineCleanup` in `tests/test_cockpit_view_1224.py` | Only partially. It would fail on lingering class/property state, but there is no TestFromAC proof for the explicit `engine.py imports nothing from owlbear_cockpit` clause. | MISSING |
+| AC3 source consumers import from `owlbear_cockpit.view` | `TestFromAC_SourceConsumersImport` in `tests/test_cockpit_view_1224.py` | Yes | COVERED |
+| AC4 listed test consumers updated to new import path | `TestFromAC_TestFileImportUpdates` in `tests/test_cockpit_view_1224.py` | Yes | COVERED |
+| AC5 kanban-side CockpitView coverage removed and equivalent coverage lives in `tests/test_engine_cockpit_view.py` | `TestFromAC_KanbanTestCleanup` in `tests/test_cockpit_view_1224.py` | No. The suite proves deletion from kanban-side files, but it does not prove equivalent behavioral coverage now lives in the root suite. | MISSING |
+| AC6 `view.py` avoids private engine attributes | `TestFromAC_ViewNoPrivateAccess` in `tests/test_cockpit_view_1224.py` | Yes | COVERED |
+| AC7 README accessor row removed | `TestFromAC_ReadmeCleanup` in `tests/test_cockpit_view_1224.py` | Yes | COVERED |
+| AC8 all cockpit tests pass | td:0 / quality-runner broad cockpit run | Yes | PASS |
+| AC9 all kanban tests pass | td:0 / quality-runner broad kanban run | No: live run is red. | FAIL |
+
+#### Security Review
+- No security issues found. The moved facade in `serve/cockpit/src/owlbear_cockpit/view.py` is a thin wrapper over existing public engine APIs and does not add new input-boundary, subprocess, path, or secret-handling risk.
+
+#### Test Integrity
+| Original Test / Contract | Change Made | Assessment |
+|--------------------------|-------------|------------|
+| `serve/kanban/tests/test_engine_init_1068.py` header contract listed CockpitView method surface `list_tasks`, `show_task`, `edit_task`, `move_task`, `release_task`, `board_config` | Replacement task suite only asserts callable existence for `list_tasks`, `show_task`, `edit_task`, `move_task`, and `release_task` in `tests/test_cockpit_view_1224.py`; there is no replacement proof for `board_config`. | REMOVED |
+| `serve/kanban/tests/test_engine_list_show_1071.py` AC-cv-list / AC-cv-show declared CockpitView behavioral parity for `list_tasks` and `show_task` | Kanban-side tests were removed, but `tests/test_engine_cockpit_view.py` does not re-home those list/show behavioral assertions. | REMOVED |
+| Constructability from the new import path | Replaced by `TestFromAC_CockpitViewNewModule` | PRESERVED |
+
+#### Test Quality
+- WEAK: the new surface checks are existence-only assertions such as `callable(getattr(view, "list_tasks", None))` at `tests/test_cockpit_view_1224.py:99`, `:110`, `:121`, `:132`, `:143`. They do not prove delegation semantics, signature parity, or result shape parity.
+- WEAK: the destination root suite currently covers OCC, edit-title, sweep, activity, sessions, scan/repair, compact, role separation, and activity-source behavior in `tests/test_engine_cockpit_view.py`, but there is no relocated behavioral coverage for `list_tasks`, `show_task`, or `board_config`.
+- WEAK: the task-owned suite instantiates `KanbanEngine(..., agent_name="test-1224")` at `tests/test_cockpit_view_1224.py:88`, `:97`, `:108`, `:119`, `:130`, `:141`, `:160`, `:176`, while the live kanban durable suite still asserts that `agent_name` must be rejected in `serve/kanban/tests/test_engine_init_1067.py:256-269`. That contradiction contributes to the broad kanban red state and weakens confidence in the task suite as an authority source.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gaps
+- `serve/cockpit/src/owlbear_cockpit/view.py:32` implements `list_tasks`, but after the kanban-side removals there is no behavioral test proving the relocated facade still matches the prior list contract.
+- `serve/cockpit/src/owlbear_cockpit/view.py:66` implements `show_task`, but after the kanban-side removals there is no behavioral test proving the relocated facade still matches the prior show contract.
+- `serve/cockpit/src/owlbear_cockpit/view.py:242` still exposes `board_config`, but the relocation task removed the prior method-surface proof without replacing it.
+
+#### Necessity Check
+- Not applicable. This is a refactor/relocation with no new dependency or external capability.
+
+#### Builder Process Quality
+- CLEAN: one `## Builder Notes` section; no retry loop.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test / Run | Status |
+|---------|----------|-------------------|--------|
+| AC1 | `serve/cockpit/src/owlbear_cockpit/view.py:26` defines `class CockpitView`; scoped task suite green | `tests/test_cockpit_view_1224.py` | PASS |
+| AC2 | `serve/kanban/src/owlbear_kanban/engine.py` has no `class CockpitView`, no `def cockpit_view`, and no `owlbear_cockpit` import hits; scoped cleanup tests green | `tests/test_cockpit_view_1224.py` + direct file read | PASS |
+| AC3 | Import rewrites present at `serve/cockpit/src/owlbear_cockpit/deps.py:12`, `serve/cockpit/src/owlbear_cockpit/routes/read.py:15`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:12` | direct file scan + task suite | PASS |
+| AC4 | Listed test consumers now import from `owlbear_cockpit.view` (`tests/test_engine_release_task_occ.py:27`, `tests/test_cockpit_mutation_api_1132.py:35`, `tests/test_engine_cockpit_view.py:25`, plus matching hits in the other listed cockpit tests) | direct grep + task suite | PASS |
+| AC5 | Removal from kanban-side files is proven, but `serve/kanban/tests/test_engine_list_show_1071.py:14-15` defined behavioral parity for `list_tasks` / `show_task`, and `tests/test_engine_cockpit_view.py` re-homes other CockpitView areas only (`:155`, `:322`, `:403`, `:472`, `:553`, `:706`, `:757`, `:837`, `:872`, `:916`) rather than those removed behaviors | direct file scan | FAIL |
+| AC6 | `serve/cockpit/src/owlbear_cockpit/view.py` delegates through public engine APIs; task suite private-access scan is green | `tests/test_cockpit_view_1224.py` | PASS |
+| AC7 | No `cockpit_view` match remains in `serve/kanban/README.md` | task suite + direct grep | PASS |
+| AC8 | Broad cockpit quality-runner run: 201 passed, 0 failed | quality-runner | PASS |
+| AC9 | Broad kanban quality-runner run: 1264 passed, 41 failed | quality-runner | FAIL |
+
+### Deductions
+- `-0.18` AC5 is not satisfied: removal was completed, but equivalent root-suite behavioral coverage was not re-homed.
+- `-0.12` AC2’s explicit import-boundary clause is not fully proven by the task-owned TestFromAC suite.
+- `-0.10` Surface-only `callable(...)` assertions are too weak for a td:2 relocation of removed behavioral coverage.
+- `-0.12` AC9 is false in the live workspace; the broad kanban suite remains red.
+
+### Verdict
+- FAIL -> backlog
+- Confidence: 0.48
+
+### Required Follow-up
+- Rework AC9. The current workspace does not satisfy `All kanban tests pass`, and the failure set is broad enough that this is an AC-quality/infeasibility issue rather than a safe reviewer reinterpretation.
+- Restore equivalent CockpitView behavioral coverage for `list_tasks`, `show_task`, and the `board_config` surface in `tests/test_engine_cockpit_view.py` or explicitly narrow the AC with architect approval.
+- Add task-owned proof for the `engine.py imports nothing from owlbear_cockpit` clause if that clause remains part of AC2.
+- Resolve the `agent_name` contract contradiction between `tests/test_cockpit_view_1224.py` and the live durable kanban suite before claiming broad kanban green.
+
+### Reflection
+- Broad regression evidence was necessary here because AC8 and AC9 assert subsystem-wide current state, not just the task-owned suite.
+- The task-owned suite is strong at detecting relocation/removal but weak at proving behavioral equivalence after deleting older CockpitView tests.
+- The destination root suite already has substantial CockpitView coverage, but not for the specific list/show/board_config contracts this task retired.
+- The live kanban baseline makes `all kanban tests pass` an architect-level gating problem.

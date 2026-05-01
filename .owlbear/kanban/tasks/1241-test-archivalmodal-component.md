@@ -1,10 +1,10 @@
 ---
 id: 1241
 title: 'Test: ArchivalModal component'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-01T03:07:55.116658+00:00
-updated: 2026-05-01T03:10:19.137835+00:00
+updated: 2026-05-01T04:11:08.921408+00:00
 tags:
 - scope:frontend
 parent: 1238
@@ -48,3 +48,31 @@ archival_refs: []
 ## Brief reference
 
 Brief: `.owlbear/briefs/draft-archival-ux/brief.md` — Frontend Changes F1, F2
+[[2026-05-01]]
+## Test-Writer Notes
+- Test file: `serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx`
+- Classes: `TestFromAC_ArchivalModal`
+- Tests per category: happy ~15, edge ~10, error ~11, boundary ~5
+- Total: 41 tests, all FAIL (module resolution error — `../components/ArchivalModal` does not exist; frontend equivalent of ImportError)
+- ruff: N/A (TSX file); no TypeScript syntax errors in test file itself
+
+### AC Coverage
+
+| AC | Tests | Description |
+|---|---|---|
+| ARCHIVAL_REASONS constant | 3 | Order exact match, first=completed, last=duplicate |
+| role/aria-modal/aria-labelledby | 3 | Each attribute verified independently |
+| Focus on select at open | 1 | `document.activeElement === select` after mount |
+| completed option visibility | 3 | non-done, done=show, todo (boundary) |
+| Refs input visibility | 6 | deprecated, duplicate, completed, dropped, wontfix, initial |
+| Refs clear on reason switch | 2 | deprecated→dropped, duplicate→wontfix |
+| Submit disabled (no reason) | 1 | Initial state |
+| Submit disabled (refs empty) | 4 | deprecated empty, duplicate empty, deprecated filled, dropped enabled |
+| Submit disabled (isSubmitting) | 1 | In-flight request gates button |
+| Hint text | 4 | deprecated, duplicate show; dropped, initial don't |
+| Non-numeric refs error | 3 | alpha-only, mixed, valid (boundary) |
+| 422 error verbatim | 1 | error.detail shown exactly; onClose not called |
+| 409 stale error | 2 | Modal stays open; stale keyword present |
+| Success: close + refresh | 3 | onClose, onRefresh, full payload assertion |
+| Focus trap Tab/Shift+Tab | 2 | Last→first, first→last wrapping |
+| Escape closes without fetch | 2 | No reason selected, reason selected |
