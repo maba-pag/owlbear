@@ -338,6 +338,15 @@ class TestFromAC_TestFileImportUpdates:
             "update to: from owlbear_cockpit.view import CockpitView"
         )
 
+    def _assert_new_import_present(self, test_file: Path) -> None:
+        """AC4 cycle 3: file must contain canonical new import path."""
+        source = test_file.read_text(encoding="utf-8")
+        pattern = r"from owlbear_cockpit\.view import CockpitView"
+        assert re.search(pattern, source), (
+            f"{test_file.name} must contain 'from owlbear_cockpit.view import CockpitView' "
+            "after import path update"
+        )
+
     def test_engine_cockpit_view_test_import_updated(self, project_root: Path) -> None:
         self._assert_no_old_import(
             project_root / "tests" / "test_engine_cockpit_view.py"
@@ -363,6 +372,44 @@ class TestFromAC_TestFileImportUpdates:
 
     def test_cockpit_read_api_1223_import_updated(self, project_root: Path) -> None:
         self._assert_no_old_import(
+            project_root / "tests" / "test_cockpit_read_api_1223.py"
+        )
+
+    # AC4 cycle 3: positive import assertions (new-path string must be present)
+
+    def test_engine_cockpit_view_test_has_new_import(self, project_root: Path) -> None:
+        """AC4 cycle 3: test_engine_cockpit_view.py must positively import from owlbear_cockpit.view."""
+        self._assert_new_import_present(
+            project_root / "tests" / "test_engine_cockpit_view.py"
+        )
+
+    def test_engine_release_task_occ_has_new_import(self, project_root: Path) -> None:
+        """AC4 cycle 3: test_engine_release_task_occ.py must positively import from owlbear_cockpit.view."""
+        self._assert_new_import_present(
+            project_root / "tests" / "test_engine_release_task_occ.py"
+        )
+
+    def test_cockpit_kanban_routes_has_new_import(self, project_root: Path) -> None:
+        """AC4 cycle 3: test_cockpit_kanban_routes.py must positively import from owlbear_cockpit.view."""
+        self._assert_new_import_present(
+            project_root / "tests" / "test_cockpit_kanban_routes.py"
+        )
+
+    def test_cockpit_mutation_api_1132_has_new_import(self, project_root: Path) -> None:
+        """AC4 cycle 3: test_cockpit_mutation_api_1132.py must positively import from owlbear_cockpit.view."""
+        self._assert_new_import_present(
+            project_root / "tests" / "test_cockpit_mutation_api_1132.py"
+        )
+
+    def test_cockpit_read_api_has_new_import(self, project_root: Path) -> None:
+        """AC4 cycle 3: test_cockpit_read_api.py must positively import from owlbear_cockpit.view."""
+        self._assert_new_import_present(
+            project_root / "tests" / "test_cockpit_read_api.py"
+        )
+
+    def test_cockpit_read_api_1223_has_new_import(self, project_root: Path) -> None:
+        """AC4 cycle 3: test_cockpit_read_api_1223.py must positively import from owlbear_cockpit.view."""
+        self._assert_new_import_present(
             project_root / "tests" / "test_cockpit_read_api_1223.py"
         )
 
@@ -649,4 +696,60 @@ class TestFromAC_CockpitViewBehavior:
         )
         assert "research" in config.statuses, (
             f"CockpitView.board_config() must return config with 'research' status; got {config.statuses}"
+        )
+
+    # AC5b cycle 3: parity assertions — exact output equality against engine
+
+    def test_list_tasks_count_and_ids_match_engine(self, tmp_path: Path) -> None:
+        """AC5b cycle 3: list_tasks() count and task IDs must match engine.agent_view().list_tasks()."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        engine.create_task("Alpha")
+        engine.create_task("Beta")
+        view = CockpitView(engine)
+        view_result = view.list_tasks()
+        engine_result = engine.agent_view().list_tasks()
+        assert len(view_result.tasks) == len(engine_result.tasks), (
+            f"CockpitView.list_tasks() count {len(view_result.tasks)} must equal "
+            f"engine.agent_view().list_tasks() count {len(engine_result.tasks)}"
+        )
+        assert {t.id for t in view_result.tasks} == {t.id for t in engine_result.tasks}, (
+            "CockpitView.list_tasks() task IDs must exactly match engine.agent_view().list_tasks() IDs"
+        )
+
+    def test_show_task_returns_show_task_response_type(self, tmp_path: Path) -> None:
+        """AC5b cycle 3: show_task() must return ShowTaskResponse with correct id, title, and status."""
+        from owlbear_kanban.models import ShowTaskResponse  # noqa: PLC0415
+
+        view, task_id = self._make_view_with_task(tmp_path)
+        result = view.show_task(task_id)  # type: ignore[union-attr]
+        assert isinstance(result, ShowTaskResponse), (
+            f"CockpitView.show_task() must return ShowTaskResponse; got {type(result)}"
+        )
+        assert result.id == task_id, (
+            f"CockpitView.show_task({task_id}).id must equal {task_id}; got {result.id}"
+        )
+        assert result.title == "Test Task", (
+            f"CockpitView.show_task({task_id}).title must be 'Test Task'; got '{result.title}'"
+        )
+        assert result.status == "research", (
+            f"CockpitView.show_task({task_id}).status must be 'research' (default); got '{result.status}'"
+        )
+
+    def test_board_config_statuses_match_engine(self, tmp_path: Path) -> None:
+        """AC5b cycle 3: board_config().statuses must equal engine.board_config().statuses."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        view = CockpitView(engine)
+        view_config = view.board_config()
+        engine_config = engine.board_config()
+        assert view_config.statuses == engine_config.statuses, (
+            f"CockpitView.board_config().statuses {view_config.statuses!r} must equal "
+            f"engine.board_config().statuses {engine_config.statuses!r}"
         )
