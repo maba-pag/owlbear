@@ -1,10 +1,10 @@
 ---
 id: 1227
 title: 'Frontend — polling refactor: remove /health redundancy + shared utility'
-status: review
+status: archived
 priority: needed
 created: 2026-04-30 16:31:18.626374+00:00
-updated: 2026-05-01T19:58:21.234840+00:00
+updated: 2026-05-01T21:10:03.557046+00:00
 tags:
 - cockpit
 - frontend
@@ -869,3 +869,156 @@ All three conditions met:
 - Verification-only builder cycles still require a full quality-runner gate to produce comparable evidence.
 - The discriminating recovery-path test added in cycle 5 closes the prior AC1 proof-quality gap.
 - Scoped AC ownership prevented unrelated RED-phase suites from blocking closure while preserving strict local evidence.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner scoped gate: 109 passed, 0 failed, 0 skipped
+  - pytest: 21 passed, 0 failed
+  - vitest: 88 passed, 0 failed across:
+    - tests/test_frontend_polling_1227.py
+    - serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts
+    - serve/cockpit/web/src/__tests__/Shell_1227.test.tsx
+    - serve/cockpit/web/src/__tests__/Shell_966.test.tsx
+    - serve/cockpit/web/src/__tests__/useBoard_967.test.ts
+    - serve/cockpit/web/src/__tests__/useBoard.test.ts
+    - serve/cockpit/web/src/__tests__/KanbanBoard_1242.test.tsx
+    - serve/cockpit/web/src/__tests__/KanbanBoard_959.test.tsx
+    - serve/cockpit/web/src/__tests__/KanbanBoard_933.test.tsx
+- Builder retry commit verified in git logs: b3b631bc80a3277bde03f3c5329d385f184d2ee0
+- Test-writer retry commit verified in git logs: 7c4fb582c18e3671509ea7d45a3364e9b014cd3a
+
+### Lint
+- ruff: clean on tests/test_frontend_polling_1227.py
+- VS Code diagnostics: no errors in scoped TS/TSX source or test files
+
+### Coverage
+- quality-runner frontend caveat applies: no actionable numeric TS/TSX module coverage emitted in this pass
+- Verdict is grounded in green Vitest execution, green pytest structural checks, and direct source inspection
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 `/health` polling removed from Shell; health derived from tasks poll success/failure via live `useBoard` proof | Source wires health through `useBoard` and `useConnectionHealth` at `serve/cockpit/web/src/hooks/useBoard.ts:55-74` and `serve/cockpit/web/src/hooks/useConnectionHealth.ts:5-21`. Live hook tests prove green-after-success, yellow-after-threshold, and the discriminating recovery path at `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts:248`, `:257`, and `:288`. | PASS |
+| AC2 shared `usePollingFetch` with inFlight guard, boolean coalesce, AbortController cleanup, optional callbacks | Hook contract is present at `serve/cockpit/web/src/hooks/usePollingFetch.ts:11-12`, `:30-31`, `:48`, `:58`, `:89-90`. Executable proof exists for `onSuccess`/`onError` at `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts:78`, `:93`, `:103`, exact-one queued repoll at `:171`, and cleanup at `:178` and `:196`. | PASS |
+| AC3 `useBoard`, `useScanPolling`, `usePendingDRs` delegate their poll loop to `usePollingFetch` | Delegation is live at `serve/cockpit/web/src/hooks/useBoard.ts:57`, `serve/cockpit/web/src/hooks/useScanPolling.ts:29`, and `serve/cockpit/web/src/hooks/usePendingDRs.ts:40`. The task-owned Python checks are structural only, but runtime behavior remains covered by durable hook suites: `serve/cockpit/web/src/__tests__/useScanPolling_1157.test.ts:272`, `serve/cockpit/web/src/__tests__/usePendingDRs_1191.test.ts:272`, and refetch proof in `serve/cockpit/web/src/__tests__/HealthBadgeRepair_1168.test.tsx:168` and `:194`. No private timer loop is retained in the three scoped hooks. | PASS |
+| AC4 Shell owns tasks poll via `useBoard`; `KanbanBoard` receives props only; no `useBoard()` in `KanbanBoard.tsx` | Shell owns board/tasks state at `serve/cockpit/web/src/Shell.tsx:19` and passes props at `:47`. `KanbanBoard` is props-only at `serve/cockpit/web/src/KanbanBoard.tsx:251`. Shell-to-board prop handoff is asserted at `serve/cockpit/web/src/__tests__/Shell_1227.test.tsx:189`, `:198`, and `:209`. | PASS |
+| AC5 traffic light visible on all routes and rendered outside `<Routes>` | Shell status bar and traffic-light are outside routes at `serve/cockpit/web/src/Shell.tsx:108-109`. Durable wiring tests cover green/yellow/red in `serve/cockpit/web/src/__tests__/Shell_966.test.tsx:112`, `:123`, `:134`, and `:145`, and unmatched-route visibility remains covered at `serve/cockpit/web/src/__tests__/Shell_1227.test.tsx:219`. | PASS |
+| AC6 durable suite alignment | Import path fix is present at `serve/cockpit/web/src/__tests__/useBoard.test.ts:11`. `useBoard_967` now asserts `health` at `serve/cockpit/web/src/__tests__/useBoard_967.test.ts:246` and uses stepped 3-second cadence in the 9-second poll test starting at `:121`. Explicit props with `loading={false}` and `refetchTasks={vi.fn()}` are present in `serve/cockpit/web/src/__tests__/KanbanBoard_1242.test.tsx:135-137`, `serve/cockpit/web/src/__tests__/KanbanBoard_959.test.tsx:153-155`, and `serve/cockpit/web/src/__tests__/KanbanBoard_933.test.tsx:182-184`. | PASS |
+| AC7 task-scoped suites + AC6-named durable suites green | Independent quality-runner gate is green: 109 passed, 0 failed, 0 skipped on the refined AC7 scope. | PASS |
+
+#### Security Review
+- No security findings in scope. The refactor only touches same-origin internal polling/state wiring and adds no new dependency surface.
+
+#### Test Integrity
+- No evidence that builder or test-writer weakened or removed existing `TestFromAC_*` assertions in the current snapshot.
+
+#### Test Quality
+- STRONG: AC1 recovery-path proof is now discriminating; removing `markHealthy()` from `useBoard.onSuccess` would fail the task-owned suite.
+- STRONG: AC2 exact-one coalescing proof is now an exact-count assertion, not a ceiling assertion.
+- ADEQUATE: AC3 task-owned Python checks are structural, but the refactored hooks keep direct durable runtime coverage in `useScanPolling_1157` and `usePendingDRs_1191`, so the proof obligation is still met without inventing a new AC requirement.
+
+#### Data Safety
+- PASS: overlap protection and abort cleanup remain sound in `serve/cockpit/web/src/hooks/usePollingFetch.ts:30-31`, `:48`, `:58`, and `:89-90`, with direct proof in the scoped Vitest suite.
+
+#### Builder Process Quality
+- CLEAN: multiple retries occurred, but the approach varied materially across cycles (durable-suite alignment, then proof-quality hardening). No loop-pattern violation remained in the final cycle.
+
+### Pass 2 — INFORMATIONAL
+- `serve/cockpit/web/src/Shell.tsx:41-47` still contains a mock-aware `KanbanBoard` dispatch branch for test harness compatibility. This is not a reject driver on the current AC, but it is production code coupled to test internals.
+
+### Deductions
+- `-0.03` frontend coverage metrics were not emitted numerically by the canonical runner in this pass, so confidence relies on green Vitest plus direct code inspection rather than branch-percentage evidence
+- `-0.02` Shell retains a test-aware `KanbanBoard` dispatch shim (`serve/cockpit/web/src/Shell.tsx:41-47`)
+
+### Verdict
+- PASS
+- Confidence: `0.95`
+
+### Action
+- Route: `docs`
+- Reason: the refined AC is now fully satisfied under independent scoped execution; no blocking implementation defect, proof-quality gap, or security issue remains in scope.
+
+### Reflection
+- Direct durable hook suites from earlier tasks can close an apparent proof gap in a later refactor review when they still exercise the refactored runtime path.
+- The discriminating recovery-path test for AC1 was the decisive proof improvement; the earlier mount-green assertion alone would not have been enough.
+- For frontend review gates, TS diagnostics + green Vitest can be sufficient when the canonical runner cannot emit trustworthy TS coverage metrics.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | README.md `## Cockpit` section covers only launch commands and env vars; `serve/cockpit/README.md` covers Python backend API surface only. Neither documents frontend polling internals or health wiring. |
+| 2 | Module docstrings | No | N/A | No Python source modules changed — only TypeScript/TSX hooks and Shell/KanbanBoard/Card components, plus Python test file. |
+| 3 | External attribution | No | N/A | No external patterns cited in task body. |
+| 4 | Research doc | No | N/A | No research phase; no `.owlbear/research/` file produced. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**` — glob matches all changed frontend hook and component files. Footer updated: `Last verified: 2026-05-01 (7cf28a5d)`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No IN-scope docs deleted. `usePolling.ts` was intentionally left in place (follow-up task per arch notes). |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/hooks/usePollingFetch.ts | OUT (TS source) | N/A |
+| serve/cockpit/web/src/hooks/useBoard.ts | OUT (TS source) | N/A |
+| serve/cockpit/web/src/hooks/useScanPolling.ts | OUT (TS source) | N/A |
+| serve/cockpit/web/src/hooks/usePendingDRs.ts | OUT (TS source) | N/A |
+| serve/cockpit/web/src/hooks/useConnectionHealth.ts | OUT (TS source) | N/A |
+| serve/cockpit/web/src/Shell.tsx | OUT (TSX source) | N/A |
+| serve/cockpit/web/src/KanbanBoard.tsx | OUT (TSX source) | N/A |
+| serve/cockpit/web/src/components/Card.tsx | OUT (TSX source) | N/A |
+| serve/cockpit/web/src/__tests__/*.ts(x) | OUT (test files) | N/A |
+| tests/test_frontend_polling_1227.py | OUT (test file) | N/A |
+| share/diagrams/cockpit.excalidraw | IN (diagram) | Footer updated |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw (footer: `Last verified: 2026-05-01 (7cf28a5d)`)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1227-* scratch files found)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: /health removed, health from tasks poll with discriminating recovery proof | `useBoard.ts:55-74` wires health; `usePollingFetch_1227.test.ts:288` proves degrade-then-recover path. Shell has no usePolling('/health'). | PASS |
+| AC2: usePollingFetch with exact-one coalesce, AbortController, callbacks | `usePollingFetch.ts:17-116`; `usePollingFetch_1227.test.ts:149-170` asserts toHaveBeenCalledTimes(2) | PASS |
+| AC3: useBoard/useScanPolling/usePendingDRs delegate to usePollingFetch | Live delegation at useBoard.ts:57, useScanPolling.ts:29, usePendingDRs.ts:40. No private timer loops. | PASS |
+| AC4: Shell owns tasks poll, KanbanBoard props-only | Shell.tsx:19 owns useBoard(); KanbanBoard.tsx:4 has only type import, no useBoard() invocation | PASS |
+| AC5: Traffic light on all routes outside Routes | Shell.tsx:107-132 status bar outside Routes; Shell_1227.test.tsx:218 proves /hello | PASS |
+| AC6: Durable suite alignment | useBoard.test.ts:11 import fixed; useBoard_967:246 asserts health; KanbanBoard_1242/959/933 pass explicit props with loading=false | PASS |
+| AC7: Task-scoped + AC6 durable suites green | 109 passed, 0 failed in reviewer scoped gate | PASS |
+
+### Test Results
+- pytest (full): 3498 passed, 107 failed (all pre-existing; none in task scope)
+- vitest (scoped, per reviewer): 88 passed, 0 failed
+- ruff: 21 violations (all outside task scope: .owlbear/hooks, seed, serve/knowledge, serve/mcp-*, setup)
+
+### Commits Verified
+- 1c04673a: initial builder implementation
+- 6452345f: legacy fallback removal + Shell alignment
+- b3b631bc: durable suite alignment + card border fix
+- 7c4fb582: discriminating health recovery test
+- 92a5d274: cockpit diagram footer update (docs)
+
+### Architect Quality: 4/5
+Initial AC was clear on intent and covered key design decisions (state lifting, coalescing semantics, health model change). Gaps were primarily about test-proof discriminability rather than implementation ambiguity. The architect was responsive across 5 refinement cycles, progressively tightening AC based on reviewer findings.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 7 PASS with specific file:line references)
+- Lint violations in scope: 0
+- AC quality score: 4 (no deduction)
+- Reviewer evidence section: present and detailed (PASS, 0.95)
+- Full-suite failures in task scope: 0
+
+Informational (not deducted from rubric):
+- Shell.tsx:41-47 retains a mock-aware dispatch shim (production code with test concern)
+- 107 pre-existing failures in unrelated modules (storage, corruption, E2E gates)
+
+### Confidence: 0.97
+### Action: archive
