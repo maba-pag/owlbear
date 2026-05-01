@@ -102,3 +102,4 @@ See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for all
 | `uvicorn` | ASGI server |
 | `pydantic` | Request/response model validation |
 | `owlbear-kanban` | Kanban engine (workspace package) |
+| `ruamel.yaml` | Round-trip YAML parsing for the Decisions API |
