@@ -22,8 +22,8 @@ const REASONS_REQUIRING_REFS: ReadonlySet<ArchivalReason> = new Set(['deprecated
 
 function parseRefsInput(refsRaw: string): { values: number[]; invalid: boolean } {
   const parts = refsRaw
-    .split(',')
-    .map((part) => part.trim())
+    .trim()
+    .split(/[\s,]+/)
     .filter((part) => part.length > 0)
 
   if (parts.length === 0) {
@@ -142,7 +142,7 @@ export default function ArchivalModal({
 
     const refsResult = parseRefsInput(refsRaw)
     if (refsResult.invalid) {
-      setError('Refs must contain only numeric task IDs separated by commas.')
+      setError('Refs must contain only numeric task IDs.')
       return
     }
 
