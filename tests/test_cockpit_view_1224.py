@@ -1,12 +1,18 @@
 """Failing tests for CockpitView relocation: kanban → cockpit package (#1224).
 
 AC1 (td:2): CockpitView importable from owlbear_cockpit.view (new file)
-AC2 (td:2): KanbanEngine.cockpit_view() + _cockpit_view removed; engine.py defines no CockpitView class
+AC2 (td:2): KanbanEngine.cockpit_view() + _cockpit_view removed; engine.py defines no CockpitView class;
+            engine.py contains zero import/from references to owlbear_cockpit [cycle 2: import-boundary proof]
 AC3 (td:2): Source consumers (deps.py, routes/read.py, routes/mutation.py) import from owlbear_cockpit.view
 AC4 (td:2): Test files updated — no test file imports CockpitView from owlbear_kanban.engine
-AC5 (td:2): Kanban-package CockpitView test classes removed from serve/kanban/tests/
+AC5a (td:2): Kanban-package CockpitView test classes removed from serve/kanban/tests/;
+             includes TestFromAC_CockpitViewParentForwarding, _make_cockpit_view helper,
+             and CockpitView import in test_engine_list_show_1071.py [cycle 2 expanded]
+AC5b (td:2): CockpitView behavioral equivalence for list_tasks, show_task, board_config
+             re-homed to this suite [cycle 2 new]
 AC6 (td:1): CockpitView implementation does not access private engine attributes (no ._-prefixed fields)
 AC7 (td:1): serve/kanban/README.md cockpit_view() row removed from engine accessor table
+AC10 (td:1): Task-owned tests use KanbanEngine(kanban_dir) without agent_name parameter [cycle 2 new]
 """
 
 from __future__ import annotations
@@ -85,7 +91,7 @@ class TestFromAC_CockpitViewNewModule:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
         assert view is not None, (
             "CockpitView(engine) must construct successfully from new module"
@@ -96,7 +102,7 @@ class TestFromAC_CockpitViewNewModule:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
         assert callable(getattr(view, "list_tasks", None)), (
             "CockpitView from owlbear_cockpit.view must expose list_tasks"
@@ -107,7 +113,7 @@ class TestFromAC_CockpitViewNewModule:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
         assert callable(getattr(view, "show_task", None)), (
             "CockpitView from owlbear_cockpit.view must expose show_task"
@@ -118,7 +124,7 @@ class TestFromAC_CockpitViewNewModule:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
         assert callable(getattr(view, "edit_task", None)), (
             "CockpitView from owlbear_cockpit.view must expose edit_task"
@@ -129,7 +135,7 @@ class TestFromAC_CockpitViewNewModule:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
         assert callable(getattr(view, "move_task", None)), (
             "CockpitView from owlbear_cockpit.view must expose move_task"
@@ -140,7 +146,7 @@ class TestFromAC_CockpitViewNewModule:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         view = CockpitView(engine)
         assert callable(getattr(view, "release_task", None)), (
             "CockpitView from owlbear_cockpit.view must expose release_task"
@@ -159,7 +165,7 @@ class TestFromAC_EngineCleanup:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         assert not hasattr(engine, "cockpit_view"), (
             "KanbanEngine must NOT have a cockpit_view property after CockpitView relocation"
         )
@@ -175,7 +181,7 @@ class TestFromAC_EngineCleanup:
         from owlbear_kanban import KanbanEngine  # noqa: PLC0415
 
         kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir, agent_name="test-1224")
+        engine = KanbanEngine(kanban_dir)
         assert not hasattr(engine, "_cockpit_view"), (
             "KanbanEngine must NOT initialize a _cockpit_view attribute after relocation"
         )
@@ -201,6 +207,19 @@ class TestFromAC_EngineCleanup:
         # Match "def cockpit_view" as a method/property definition
         assert not re.search(r"def cockpit_view\b", source), (
             "engine.py must not define a cockpit_view method/property after relocation"
+        )
+
+    def test_engine_py_has_no_owlbear_cockpit_import(
+        self, project_root: Path
+    ) -> None:
+        """AC2: engine.py must have zero import/from lines referencing owlbear_cockpit."""
+        engine_py = (
+            project_root / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
+        )
+        source = engine_py.read_text(encoding="utf-8")
+        hits = re.findall(r"^.*owlbear_cockpit.*$", source, re.MULTILINE)
+        assert not hits, (
+            f"engine.py must contain zero references to owlbear_cockpit; found: {hits}"
         )
 
 
@@ -425,6 +444,57 @@ class TestFromAC_KanbanTestCleanup:
             "CockpitView tests belong in owlbear_cockpit package suite"
         )
 
+    def test_engine_list_show_1071_no_cockpit_view_parent_forwarding_class(
+        self, project_root: Path
+    ) -> None:
+        """AC5a: TestFromAC_CockpitViewParentForwarding must be removed from kanban suite."""
+        test_file = (
+            project_root
+            / "serve"
+            / "kanban"
+            / "tests"
+            / "test_engine_list_show_1071.py"
+        )
+        source = test_file.read_text(encoding="utf-8")
+        assert "TestFromAC_CockpitViewParentForwarding" not in source, (
+            "test_engine_list_show_1071.py must not contain TestFromAC_CockpitViewParentForwarding; "
+            "equivalent parent-filter behavioral coverage belongs in tests/test_cockpit_view_1224.py"
+        )
+
+    def test_engine_list_show_1071_no_make_cockpit_view_helper(
+        self, project_root: Path
+    ) -> None:
+        """AC5a: _make_cockpit_view helper must be removed once all CockpitView references are gone."""
+        test_file = (
+            project_root
+            / "serve"
+            / "kanban"
+            / "tests"
+            / "test_engine_list_show_1071.py"
+        )
+        source = test_file.read_text(encoding="utf-8")
+        assert "_make_cockpit_view" not in source, (
+            "test_engine_list_show_1071.py must not contain _make_cockpit_view helper; "
+            "CockpitView is no longer tested in the kanban package suite"
+        )
+
+    def test_engine_list_show_1071_no_cockpit_view_import(
+        self, project_root: Path
+    ) -> None:
+        """AC5a: CockpitView import must be removed from test_engine_list_show_1071.py."""
+        test_file = (
+            project_root
+            / "serve"
+            / "kanban"
+            / "tests"
+            / "test_engine_list_show_1071.py"
+        )
+        source = test_file.read_text(encoding="utf-8")
+        assert "CockpitView" not in source, (
+            "test_engine_list_show_1071.py must not import or reference CockpitView; "
+            "all CockpitView coverage belongs in the cockpit package suite"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC6: CockpitView implementation does not access private engine attributes
@@ -462,4 +532,121 @@ class TestFromAC_ReadmeCleanup:
         assert "cockpit_view()" not in source, (
             "serve/kanban/README.md must not contain a cockpit_view() row; "
             "the accessor is removed from KanbanEngine"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC5b: CockpitView behavioral equivalence — list_tasks, show_task, board_config
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CockpitViewBehavior:
+    """AC5b: Relocated CockpitView must delegate correctly for list_tasks, show_task, board_config."""
+
+    def _make_view(self, tmp_path: Path) -> object:
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        return CockpitView(engine)
+
+    def _make_view_with_task(self, tmp_path: Path) -> tuple[object, int]:
+        """Return (view, task_id) with one task created on the board."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        task = engine.create_task("Test Task")
+        view = CockpitView(engine)
+        return view, task.id
+
+    def test_list_tasks_empty_board_returns_empty_list(self, tmp_path: Path) -> None:
+        """AC5b: CockpitView.list_tasks() on empty board returns a response with no tasks."""
+        view = self._make_view(tmp_path)
+        result = view.list_tasks()  # type: ignore[union-attr]
+        assert result.tasks == [], (
+            "CockpitView.list_tasks() on empty board must return tasks=[]"
+        )
+
+    def test_list_tasks_returns_created_tasks(self, tmp_path: Path) -> None:
+        """AC5b: CockpitView.list_tasks() returns tasks that were created via the engine."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        engine.create_task("Alpha")
+        engine.create_task("Beta")
+        view = CockpitView(engine)
+        result = view.list_tasks()
+        titles = [t.title for t in result.tasks]
+        assert "Alpha" in titles, (
+            f"CockpitView.list_tasks() must include 'Alpha'; got titles: {titles}"
+        )
+        assert "Beta" in titles, (
+            f"CockpitView.list_tasks() must include 'Beta'; got titles: {titles}"
+        )
+
+    def test_list_tasks_parent_filter_returns_children_only(
+        self, tmp_path: Path
+    ) -> None:
+        """AC5b: CockpitView.list_tasks(parent=N) returns only direct children of N."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        parent_task = engine.create_task("Parent")
+        child_task = engine.create_task("Child", parent=parent_task.id)
+        _other = engine.create_task("Unrelated")
+        view = CockpitView(engine)
+        result = view.list_tasks(parent=parent_task.id)
+        ids = [t.id for t in result.tasks]
+        assert child_task.id in ids, (
+            f"CockpitView.list_tasks(parent={parent_task.id}) must include child task {child_task.id}; got {ids}"
+        )
+        assert _other.id not in ids, (
+            f"CockpitView.list_tasks(parent={parent_task.id}) must exclude unrelated task {_other.id}; got {ids}"
+        )
+
+    def test_list_tasks_parent_filter_returns_empty_when_no_match(
+        self, tmp_path: Path
+    ) -> None:
+        """AC5b: CockpitView.list_tasks(parent=N) returns empty list when no children exist."""
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir)
+        task = engine.create_task("Lonely Task")
+        view = CockpitView(engine)
+        result = view.list_tasks(parent=task.id)
+        assert result.tasks == [], (
+            f"CockpitView.list_tasks(parent={task.id}) must return [] when task has no children; got {result.tasks}"
+        )
+
+    def test_show_task_returns_correct_task(self, tmp_path: Path) -> None:
+        """AC5b: CockpitView.show_task(id) returns the task matching the given ID."""
+        view, task_id = self._make_view_with_task(tmp_path)
+        result = view.show_task(task_id)  # type: ignore[union-attr]
+        assert result.id == task_id, (
+            f"CockpitView.show_task({task_id}) must return task with id={task_id}; got id={result.id}"
+        )
+        assert result.title == "Test Task", (
+            f"CockpitView.show_task({task_id}) must return task titled 'Test Task'; got '{result.title}'"
+        )
+
+    def test_board_config_returns_board_name(self, tmp_path: Path) -> None:
+        """AC5b: CockpitView.board_config() returns a BoardConfig with expected statuses."""
+        from owlbear_kanban.models import BoardConfig  # noqa: PLC0415
+
+        view = self._make_view(tmp_path)
+        config = view.board_config()  # type: ignore[union-attr]
+        assert isinstance(config, BoardConfig), (
+            f"CockpitView.board_config() must return a BoardConfig instance; got {type(config)}"
+        )
+        assert "research" in config.statuses, (
+            f"CockpitView.board_config() must return config with 'research' status; got {config.statuses}"
         )
