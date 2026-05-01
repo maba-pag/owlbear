@@ -1,10 +1,10 @@
 ---
 id: 1242
 title: 'Test: handleTransitionClick archive intercept'
-status: done
+status: backlog
 priority: needed
 created: 2026-05-01T03:07:57.562942+00:00
-updated: 2026-05-01T09:11:16.850483+00:00
+updated: 2026-05-01T10:04:43.149034+00:00
 tags:
 - scope:frontend
 parent: 1238
@@ -299,3 +299,51 @@ AC coverage:
 
 ### Scratch Files Cleaned
 - None (.owlbear/scratch/1242-* — no files found)
+[[2026-05-01]]
+## Planning
+
+Created single follow-up task:
+
+| ID | Title | Status | Parent | Tags |
+|----|-------|--------|--------|------|
+| #1265 | Fix stale test fixture in KanbanBoard_1242.test.tsx after #1227 API change | backlog | #1238 | scope:frontend |
+
+No TDD pair needed — this IS a test-fix task (the deliverable is passing tests).
+[[2026-05-01]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Clicking → archived opens ArchivalModal; no POST fires immediately | `KanbanBoard.tsx:157-163` — `targetStatus === 'archived'` sets archival modal state and returns before POST path | PASS (impl) |
+| Other transitions remain unaffected — still fire move request immediately | `KanbanBoard.tsx:166-175` — non-archived path calls fetch POST; durable suite `KanbanBoard.test.tsx` 35/35 green | PASS (impl) |
+| ArchivalModal receives taskId, taskStatus, expectedUpdated as props | `KanbanBoard.tsx:208-214` — conditional render passes all three props from `archivalModal` state | PASS (impl) |
+| expectedUpdated equals task.updated frozen at context-menu-open time | `KanbanBoard.tsx:238` passes `contextMenu.taskUpdated` (frozen at menu-open via `:90-93`) | PASS (impl) |
+| Brief F3 split timing: taskStatus live at intercept, expectedUpdated frozen | `KanbanBoard.tsx:237` uses `tasks.find(...)?.status ?? contextMenu.taskStatus` (live); `:238` uses `contextMenu.taskUpdated` (frozen) | PASS (impl) |
+
+**Note:** All AC lines verified via code inspection only. Task-scoped test evidence unavailable — see test results below.
+
+### Test Results
+- vitest (task-scoped `KanbanBoard_1242.test.tsx`): **8 failed, 0 passed** — all tests stuck at "Loading…" because `renderBoard()` renders `<KanbanBoard />` with no props; #1227 (`6452345f`) changed the component to accept props, breaking the old internal-fetch pattern.
+- vitest (durable `KanbanBoard.test.tsx`): 35 passed, 0 failed.
+- pytest (full suite): 3420 passed, 104 failed, 4 skipped — no failures in task scope.
+- ruff: 4 errors — none in task-scoped files.
+- ESLint: 1 error in `usePolling.ts`, 4 warnings — none in task-scoped files.
+
+### Uncommitted Deliverable
+Test-writer retry added an 8th test (brief F3 timing-split proof, lines 367-480) but never committed it. Only the original 7-test commit (`805fd6f3`) exists.
+
+### Architect Quality: 3/5
+Original AC omitted the split-timing contract between `taskStatus` (live at intercept) and `expectedUpdated` (frozen at menu-open). Required a full reject-retry cycle to surface.
+
+### Deduction Breakdown
+- −0.05: Task-scoped test suite fails 8/8 (cross-task regression from #1227 API change)
+- −0.03: AC quality ≤ 3
+
+### Confidence: 0.92
+### Action: reject-to-backlog
+
+### Required Follow-up
+- Follow-up #1265 created: fix stale test fixture and commit missing 8th test.
+
+### Process Concern
+`start_work` on a `done`-status task unexpectedly archived it (moved file to archive/, set status to archived). Manual restoration was required.
