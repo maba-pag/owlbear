@@ -4,6 +4,7 @@ const DEFAULT_INTERVAL_MS = 3000
 
 export interface UsePollingFetchOptions<TPayload> {
   intervalMs?: number
+  paused?: boolean
   method?: string
   requestInit?: Omit<RequestInit, 'method' | 'signal'>
   parse?: (response: Response) => Promise<TPayload>
@@ -28,6 +29,7 @@ export function usePollingFetch<TPayload = unknown>(
   const inFlightRef = useRef(false)
   const pendingPollRef = useRef(false)
   const controllerRef = useRef<AbortController | null>(null)
+  const pausedRef = useRef(options?.paused ?? false)
 
   const methodRef = useRef(options?.method)
   const requestInitRef = useRef(options?.requestInit)
@@ -39,6 +41,7 @@ export function usePollingFetch<TPayload = unknown>(
   parseRef.current = options?.parse
   onSuccessRef.current = options?.onSuccess
   onErrorRef.current = options?.onError
+  pausedRef.current = options?.paused ?? false
 
   const poll = useCallback(async (): Promise<void> => {
     if (inFlightRef.current) {
@@ -83,7 +86,7 @@ export function usePollingFetch<TPayload = unknown>(
         setIsFetching(false)
         setHasFetched(true)
       }
-      if (pendingPollRef.current && isMountedRef.current) {
+      if (pendingPollRef.current && isMountedRef.current && !pausedRef.current) {
         pendingPollRef.current = false
         void poll()
       }
@@ -95,7 +98,9 @@ export function usePollingFetch<TPayload = unknown>(
     void poll()
 
     const intervalId = setInterval(() => {
-      void poll()
+      if (!pausedRef.current) {
+        void poll()
+      }
     }, intervalMs)
 
     return () => {
