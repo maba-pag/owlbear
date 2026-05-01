@@ -103,7 +103,7 @@ Confidence: **0.78**
 Challenge: reconsider — confidence in original: 0.67. Challenger correctly identified gaps in fallback definition, scope boundaries, and mutation-detection comparison. These are now addressed above. The core SSE-over-WebSocket verdict was not disputed.
 
 Risks:
-1. **watchfiles adds a dependency** — mitigated: it's by the Pydantic author, Rust-based, well-maintained, already used by uvicorn for reload
+1. **watchfiles adds a new explicit dependency** — `serve/cockpit/pyproject.toml` currently lists only `owlbear-kanban`, `fastapi`, `uvicorn`, `pydantic`, `ruamel.yaml`. `uvicorn v0.46.0` pulls only `click` + `h11` (no `watchfiles` even transitively — `uvicorn[standard]` is required for that, and it is NOT installed). **#1234 must add `watchfiles` explicitly.** The library is well-maintained (Pydantic author, Rust-based, ≥2M weekly downloads) — low adoption risk, but it is a new dependency. The earlier claim that it is "already used by uvicorn for reload" has been retracted.
 2. **Fallback complexity** — mitigated: invalidation-only model means polling and SSE share the same fetch path
 3. **Scope creep into other polling surfaces** — mitigated: research scopes to task-list only; decisions/activity are separate follow-up
 
