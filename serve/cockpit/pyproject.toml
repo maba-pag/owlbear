@@ -4,13 +4,13 @@ version = "0.1.0"
 requires-python = ">=3.14.4"
 description = "OwlBear Cockpit — FastAPI backend for the kanban UI"
 dependencies = [
-	"owlbear-kanban",
-	"fastapi",
-	"uvicorn",
-	"pydantic",
-	"ruamel.yaml",
-	"sse-starlette",
-	"watchfiles",
+  "owlbear-kanban",
+  "fastapi",
+  "uvicorn",
+  "pydantic",
+  "ruamel.yaml",
+  "sse-starlette",
+  "watchfiles",
 ]
 
 [build-system]

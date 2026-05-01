@@ -103,7 +103,7 @@ describe('TestFromAC_FilterPanel', () => {
 
   // ─── AC1: Renders all controls when open=true ──────────────────────────────
 
-  describe('AC1: renders text input, priority select, tags control, blocked switch, reset button when open=true', () => {
+  describe('AC1: renders text input, priority select, tags, blocked switch, reset when open=true', () => {
     // td:2 — happy path + edge
 
     it('renders a text input when open=true', () => {
