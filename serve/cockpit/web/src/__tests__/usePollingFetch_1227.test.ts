@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { usePollingFetch } from '../hooks/usePollingFetch'
+import { useBoard } from '../hooks/useBoard'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -205,5 +206,82 @@ describe('TestFromAC_UsePollingFetch', () => {
       // After unmount, no additional fetches should fire
       expect(fetchMock).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+// ─── AC1: useBoard live health transitions (not Shell-level mock) ─────────────
+//
+// Reviewer (cycles 3 & 4) identified that all AC1 proof in Shell_1227.test.tsx
+// stubs useBoard().health — no test exercises the live useBoard hook and proves
+// the elapsed-time-based health model transitions correctly.
+//
+// These tests use renderHook + fake timers to drive the live useBoard hook
+// (and the real useConnectionHealth / computeHealth underneath it) through
+// the green → yellow transition.
+
+describe('TestFromAC_UseBoardHealthTransition', () => {
+  const BOARD = {
+    statuses: [{ name: 'todo' }],
+    priorities: ['important'],
+    valid_transitions: { todo: [] as string[] },
+  }
+
+  function makeSuccessFetch(tasks = { tasks: [] as unknown[], mtime: 1000 }) {
+    return vi.fn((url: string) => {
+      if ((url as string).includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(tasks) })
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('health is green after the first successful tasks poll (AC1: success = green)', async () => {
+    // Live hook — not a Shell-level mock. After a successful /api/tasks fetch,
+    // useBoard must call markHealthy() + updateHealth() → computeHealth(~0ms) = 'green'.
+    vi.stubGlobal('fetch', makeSuccessFetch())
+    const { result } = renderHook(() => useBoard())
+    await act(async () => {})
+    expect(result.current.health).toBe('green')
+  })
+
+  it('health degrades to yellow after 6000ms elapses with no successful tasks poll (AC1: elapsed-time model)', async () => {
+    // Mount succeeds → health = green.  Subsequent polls fail.  After two 3s
+    // ticks (total 6000ms elapsed since last healthy), computeHealth(6000) = 'yellow'.
+    let callCount = 0
+    const fetchMock = vi.fn((url: string) => {
+      if ((url as string).includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
+      }
+      callCount++
+      if (callCount === 1) {
+        // Mount fetch succeeds — marks last-healthy at t=0
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ tasks: [], mtime: 1 }) })
+      }
+      return Promise.reject(new Error('network failure'))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useBoard())
+    await act(async () => {})
+    // First success → green
+    expect(result.current.health).toBe('green')
+
+    // t = 3000ms: first failing poll → updateHealth() → elapsed = 3000ms < 6000ms → green
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(result.current.health).toBe('green')
+
+    // t = 6000ms: second failing poll → updateHealth() → elapsed = 6000ms → yellow
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(result.current.health).toBe('yellow')
   })
 })
