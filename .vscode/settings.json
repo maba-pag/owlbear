@@ -1,10 +1,4 @@
 {
-  "[chatagent]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[instructions]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features",
     "editor.formatOnSave": false
@@ -18,23 +12,14 @@
   "[powershell]": {
     "editor.defaultFormatter": "ms-vscode.powershell"
   },
-  "[prompt]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[skill]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
   },
   "[toml]": {
     "editor.defaultFormatter": "tamasfe.even-better-toml"
   },
-  "[typescript]": {
-    "editor.defaultFormatter": "vscode.typescript-language-features"
-  },
   "[xml]": {
     "editor.defaultFormatter": "redhat.vscode-xml"
-  },
-  "[yaml]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "accessibility.chat.showCheckmarks": true,
   "chat.agent.maxRequests": 99999,
@@ -75,7 +60,7 @@
   "chat.useCustomAgentHooks": true,
   "chat.viewSessions.orientation": "stacked",
   "diffEditor.hideUnchangedRegions.enabled": false,
-  "editor.defaultFormatter": "charliermarsh.ruff",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnPaste": false,
   "editor.formatOnSave": false,
   "editor.links": false,
@@ -140,7 +125,12 @@
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
   "redhat.telemetry.enabled": false,
-  "ruff.importStrategy": "useBundled",
+  "eslint.workingDirectories": [
+    {
+      "directory": "serve/cockpit/web"
+    }
+  ],
+  "ruff.importStrategy": "fromEnvironment",
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
   "search.exclude": {

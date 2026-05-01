@@ -98,7 +98,7 @@
   "python.terminal.useEnvFile": true,
   "python.testing.pytestEnabled": true,
   "redhat.telemetry.enabled": false,
-  "ruff.importStrategy": "useBundled",
+  "ruff.importStrategy": "fromEnvironment",
   "scm.defaultViewMode": "tree",
   "scm.graph.pageOnScroll": false,
   "search.exclude": {
