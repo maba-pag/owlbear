@@ -391,3 +391,51 @@ class TestFromAC_NonCallableMockFixtures:
         """
         source = _LIFECYCLE_TOOLS_PY.read_text(encoding="utf-8")
         assert "NonCallableMagicMock" in source
+
+
+# ---------------------------------------------------------------------------
+# TestFromAC_CanonicalResolverBranches — AC2 revised callable-branch proof
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_CanonicalResolverBranches:
+    """AC2 (revised): callable-branch proof for _canonical_agent_view_for.
+
+    Covers server.py:219-222 — the 'if callable(candidate)' branch including
+    exception suppression (server.py:219-220) and the None-result fallback
+    (server.py:221-222).
+    """
+
+    def test_canonical_resolver_callable_returning_none(self) -> None:
+        """AC2: callable agent_view returning None → resolver returns None.
+
+        Covers server.py:221-222: 'if resolved is None: return None'.
+        If that guard is removed, calling a None-returning agent_view would
+        propagate None through and the resolver would incorrectly return None
+        without the explicit guard — though the result is the same, removing
+        the branch would break the three-branch contract described in AC2.
+
+        Proof: candidate() returns None → _canonical_agent_view_for returns None.
+        """
+        engine = MagicMock()
+        engine.agent_view = lambda: None
+        result = _server_mod._canonical_agent_view_for(engine)  # noqa: SLF001
+        assert result is None
+
+    def test_canonical_resolver_callable_raising(self) -> None:
+        """AC2: callable agent_view raising → exception suppressed → resolver returns None.
+
+        Covers server.py:219-220: 'with contextlib.suppress(Exception): resolved = candidate()'.
+        If exception suppression were removed, this would propagate the exception
+        to the caller instead of returning None.
+
+        Proof: candidate() raises RuntimeError → _canonical_agent_view_for returns None.
+        """
+        def _raising() -> None:
+            msg = "test error — must be suppressed"
+            raise RuntimeError(msg)
+
+        engine = MagicMock()
+        engine.agent_view = _raising
+        result = _server_mod._canonical_agent_view_for(engine)  # noqa: SLF001
+        assert result is None

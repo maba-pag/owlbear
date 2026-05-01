@@ -24,7 +24,7 @@ Uncovered paths addressed:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, NonCallableMagicMock, patch
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
@@ -81,12 +81,12 @@ def _make_single_task_response(**overrides: object) -> SingleTaskResponse:
 def _make_engine_mock(*, agent_view: object | None = "default") -> MagicMock:
     """Return a MagicMock engine.
 
-    agent_view="default" → MagicMock (callable view).
+    agent_view="default" → NonCallableMagicMock (non-callable view).
     agent_view=None → None (forces fallback paths).
     """
     engine = MagicMock()
     if agent_view == "default":
-        av = MagicMock()
+        av = NonCallableMagicMock()
         engine.agent_view = av
     else:
         engine.agent_view = agent_view
