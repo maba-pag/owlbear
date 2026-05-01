@@ -1,10 +1,10 @@
 ---
 id: 1233
 title: Research — WebSocket/SSE real-time updates for cockpit
-status: backlog
+status: archived
 priority: nice-to-have
 created: 2026-04-30 16:31:18.682845+00:00
-updated: 2026-05-01T00:08:45.483487+00:00
+updated: 2026-05-01T08:50:05.173203+00:00
 tags:
 - cockpit
 - architecture
@@ -404,3 +404,226 @@ Added `research` tag — required for test-writer pass-through routing. Tags: co
 - Research-only tasks can still fail on handoff integrity when resolved decisions are not propagated into the live authority substrate.
 - A resolved DR is not enough if the brief still says the opposite and the follow-up task that should reconcile it cannot be found.
 - Board searches are useful review evidence when a task body claims a follow-up exists; absence matters when that claim is load-bearing for downstream agents.
+[[2026-05-01]]
+## Architecture Review (5th pass)
+
+### Context
+Research task returned to backlog by 2nd reviewer (confidence 0.62) due to three findings:
+1. Live brief D6/D14 contradicts the approved T3 DR (SSE approved but brief still says "no SSE/WebSocket in v1")
+2. Task body claims a brief-amendment task was created but none existed on the board
+3. Child tasks #1234/#1235/#1236 don't reference the resolved DR
+
+### Resolution of Reviewer Findings
+
+**Finding 1 (brief authority contradiction):** The contradiction is real but the fix is out of scope for this research task. Created **#1257** ("Amend cockpit brief D6/D14 to reflect approved SSE direction") at `research` status, tagged `docs,cockpit`, with AC covering D6, D14, and brief.md amendments. The brief amendment is a separate docs task — the research task's job was to produce findings and a decision, both of which are complete.
+
+**Finding 2 (missing amendment task):** Now resolved — #1257 exists and covers the exact scope the reviewer identified as missing.
+
+**Finding 3 (child task authority gap):** Child tasks #1234/#1235/#1236 are all at `research` status depending on #1233. When they reach their own architect reviews, the reviewing architect will verify brief consistency (standard criterion 7/8). If #1257 hasn't completed by then, the architect will catch the stale brief and can add #1257 as a dependency. The governance chain is intact through normal pipeline flow.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Research: 4 scoped questions, answered with evidence |
+| Interface clarity | N/A | Research output; follow-ups #1234/#1235/#1236 correctly wired |
+| Dependency correctness | PASS | No deps; children depend on this task correctly |
+| Module layering | N/A | Research task |
+| TDD compliance | N/A | Research task, no testable Python interface |
+| KISS/YAGNI | PASS | Invalidation-only SSE model is minimal; scope bounded |
+| Premise challenge | PASS | T3 DR approved (Option A); SSE verdict was unchallenged |
+| Pattern consistency | N/A | Research task |
+| Security surface | N/A | No code changes |
+| Single domain | PASS | cockpit/architecture |
+
+### Failure Mode Map
+N/A — research task, no codepath changes.
+
+### Design Diverge
+Skipped — research task, no competing architecture designs.
+
+### Challenge Results
+Skipped — all AC lines td:0 (Step 2.1 gate).
+
+### Test Depth
+All AC lines: td:0 — research task with no testable Python interface.
+Test-writer: SKIP
+
+### Governance Status (complete)
+1. T3 DR: RESOLVED — `resolved/1233-cockpit-polling-vs-sse.md` (Option A, user-approved) ✅
+2. Sources ledger: COMPLETE — `.owlbear/sources/overview.md` has all 6 rows ✅
+3. watchfiles claim: CORRECTED — research doc §4 notes it as new explicit dependency ✅
+4. Brief amendment: TRACKED — #1257 created to amend D6/D14 ✅
+
+### Non-implementation tagging
+Tags already include `research` — required for test-writer pass-through.
+
+### Verdict: APPROVE → todo
+[[2026-05-01]]
+## Test-Writer Notes
+- Non-implementation task (tagged research) — no testable Python interfaces, no AC lines.
+- Architect confirmed (5th pass): all AC lines td:0, test-writer skip.
+- Prior governance failures (T3 DR, sources ledger, watchfiles claim) all resolved by research/architect cycles. Brief amendment tracked under #1257.
+- Passing through to builder.
+[[2026-05-01]]
+## Builder Notes
+- Scope classification: non-implementation research pass-through (confirmed by `## Test-Writer Notes`: no testable Python interfaces / no AC lines requiring code).
+- Files changed: none.
+- Tests: quality-runner (scoped empty inputs) reported 0 passed, 0 failed, 0 skipped; pytest exit 5 (no tests collected) expected for td:0 research pass-through.
+- Lint: clean=true, 0 violations (ruff exit 0).
+- Coverage: N/A for non-implementation scope (overall_pct: 0, modules: []).
+- Evidence summary: canonical quality-runner verification completed; no implementation surface existed for builder work.
+- Fixes applied: none.
+
+### Post-task Reflection
+- Research-only tasks still require explicit quality-runner evidence at builder gate, even when no code paths are owned.
+- Empty scoped verification is valid evidence when task depth is td:0 and test-writer marks non-implementation pass-through.
+- Keeping builder notes strictly mechanical helps downstream review avoid re-opening implementation expectations on research tickets.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner (scoped td:0): 0 passed, 0 failed, 0 skipped
+- pytest execution: not run; empty `test_paths` was the expected no-op input for a non-implementation td:0 review
+
+### Lint
+- quality-runner: clean=true, 0 violations
+- ruff execution: not run; empty `lint_paths` was the expected no-op input for a non-implementation td:0 review
+
+### Coverage
+- N/A — td:0 research task with no builder-owned code or test scope
+
+### Review Scope
+- Current builder cycle is a pass-through only: no source files changed, no task-scoped tests changed, no runtime surface changed.
+- Review therefore focused on research-artifact completeness, live authority reconciliation, and handoff integrity for the spawned follow-up work.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- N/A — no `TestFromAC_*` classes and no testable Python interface
+
+#### Security Review
+- No code changes or new runtime surface were introduced in the reviewed cycle.
+
+#### Test Integrity
+- N/A — no task-scoped tests in this cycle.
+
+#### Test Quality
+- N/A — no task-scoped tests in this cycle.
+
+#### Data Safety
+- N/A — no implementation changes.
+
+#### Implementation-Aware Test Gap Analysis
+- N/A — no implementation changes.
+
+#### Necessity Check
+- PASS. The research artifact still directly answers the transport, mutation-detection, fallback, and deployment questions in `.owlbear/research/1233-realtime-cockpit-updates.md:26-41`, `.owlbear/research/1233-realtime-cockpit-updates.md:43-59`, `.owlbear/research/1233-realtime-cockpit-updates.md:73-85`, and `.owlbear/research/1233-realtime-cockpit-updates.md:87-95`.
+
+#### Builder Process Quality
+- CLEAN. Multiple historical builder sections exist in the task body, but they are separated by substantive Architecture Review rewrites and governance fixes rather than repeated builder retries on the same unchanged defect.
+
+### Research Question Coverage
+| Research question | Evidence | Status |
+|---|---|---|
+| WebSocket vs SSE — which fits FastAPI + React better? | `.owlbear/research/1233-realtime-cockpit-updates.md:26-41` shows the transport comparison and closes with `Verdict: SSE is the clear fit.` | PASS |
+| How to detect mutations? | `.owlbear/research/1233-realtime-cockpit-updates.md:43-59` compares explicit push, watchfiles, hybrid, and fast polling, then recommends the file-watcher approach. | PASS |
+| Impact on deployment (uvicorn workers, connection limits)? | `.owlbear/research/1233-realtime-cockpit-updates.md:87-95` records connection count, worker, memory, watcher overhead, and infra impact. | PASS |
+| Fallback to polling when connection drops? | `.owlbear/research/1233-realtime-cockpit-updates.md:73-85` defines the reconnect path and 3-second polling fallback. | PASS |
+
+### Live-State Verification
+- The resolved T3 decision exists and approves SSE: `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md:1-4`.
+- The live cockpit authority is now reconciled to that decision, not contradictory:
+  - `.owlbear/briefs/draft-cockpit/decisions.md:18-19` now defines D6 as `SSE ... primary transport` with polling fallback and DR attribution.
+  - `.owlbear/briefs/draft-cockpit/brief.md:30` records sub-second freshness via SSE with polling fallback.
+  - `.owlbear/briefs/draft-cockpit/brief.md:55-57` adds `GET /api/events` and the SSE + mtime-scan fallback row.
+  - `.owlbear/briefs/draft-cockpit/brief.md:71-74` defines `SSE as primary push channel` with automatic polling fallback.
+  - `.owlbear/briefs/draft-cockpit/brief.md:92` keeps WebSocket out of scope while explicitly preserving SSE.
+- The previously missing authority-reconciliation follow-up now exists and matches the identified gap: `.owlbear/kanban/tasks/1257-amend-cockpit-brief-d6-d14-to-reflect-approved-sse-direction.md`.
+- The external-source ledger exists with all six task-1233 rows at `.owlbear/sources/overview.md:5-14`.
+- The `watchfiles` claim is now correctly framed as a new explicit dependency in `.owlbear/research/1233-realtime-cockpit-updates.md:104-110`, consistent with child task #1234.
+
+### Pass 2 — INFORMATIONAL
+- Task `#1257` is still mid-pipeline, but the specific brief/decision amendments it exists to track are already present in the live authority files. That leaves no active contradiction for task #1233's handoff.
+
+### AC Compliance
+| Task line | Evidence | Mapped artifact | Status |
+|---|---|---|---|
+| Replace polling with server-push for real-time board updates | `.owlbear/research/1233-realtime-cockpit-updates.md:97-110` recommends SSE invalidation-only events with polling fallback; child tasks `.owlbear/kanban/tasks/1234-implement-sse-endpoint-with-watchfiles-based-file-watcher.md`, `.owlbear/kanban/tasks/1235-replace-useboard-polling-with-eventsource-client.md`, and `.owlbear/kanban/tasks/1236-research-extend-sse-to-decisions-and-activity-polling.md` operationalize the next steps. | Research doc + follow-up tasks | PASS |
+| WebSocket vs SSE | `.owlbear/research/1233-realtime-cockpit-updates.md:26-41` | Research question 1 | PASS |
+| Mutation detection | `.owlbear/research/1233-realtime-cockpit-updates.md:43-59` | Research question 2 | PASS |
+| Deployment impact | `.owlbear/research/1233-realtime-cockpit-updates.md:87-95` | Research question 3 | PASS |
+| Polling fallback on disconnect | `.owlbear/research/1233-realtime-cockpit-updates.md:73-85` | Research question 4 | PASS |
+
+### Deductions
+- -0.03 td:0 research work has documentary/live-state evidence only; no executable proof surface exists by design
+- -0.02 sibling task `#1257` remains in progress even though the live authority files are already reconciled
+- Confidence: 0.95
+
+### Verdict
+- PASS -> docs
+
+### Post-task Reflection
+- Research-only tasks can pass cleanly once live authority and handoff integrity are reconciled; they do not need implementation proof when all AC lines are td:0.
+- A previously blocking authority contradiction stops mattering once the canonical brief files themselves reflect the resolved DR.
+- Sibling follow-up status can remain informational when the live substrate is already aligned and downstream tasks no longer inherit stale guidance.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Research-only task; no behavior, API, CLI, or config changed. No IN-scope prose doc references the cockpit polling surface in a way that needs updating (README.md `## Cockpit` section is high-level launch/usage — unaffected by research findings). |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | Yes | Verified | `.owlbear/sources/overview.md` §"Real-Time Cockpit Updates (Task #1233)" contains all 6 source rows (germano.dev, digitalbiztalk.com, Medium/FastAPI, sse-starlette, watchfiles, uvicorn.org) with dates and relevance notes. Added by researcher in prior pass. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1233-realtime-cockpit-updates.md` exists, is complete (5 sections, 4 research questions answered), and is linked from task body. Follow-up tasks #1234, #1235, #1236 created. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `project-overview.excalidraw` (describes `.owlbear/**`) and `kanban.excalidraw` (describes `.owlbear/kanban/**`) both matched changed files. Footers updated from `9cc65998`/`8dfad0d8` to `2436b55f` (2026-05-01). Committed `f0dedee6`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no IN-scope orphaned docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `.owlbear/research/1233-realtime-cockpit-updates.md` | IN | Verified — complete and accurate |
+| `.owlbear/sources/overview.md` | IN | Verified — 6 source rows present |
+| `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md` | OUT | Decision artifact — not in IN-scope list |
+| `.owlbear/briefs/draft-cockpit/decisions.md` | OUT | Brief artifact — not in IN-scope list |
+| `.owlbear/briefs/draft-cockpit/brief.md` | OUT | Brief artifact — not in IN-scope list |
+
+### Files Updated
+- `share/diagrams/project-overview.excalidraw` — footer hash updated
+- `share/diagrams/kanban.excalidraw` — footer hash updated
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `.owlbear/scratch/1233-*` files found)
+[[2026-05-01]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| WebSocket vs SSE — which fits better? | `.owlbear/research/1233-realtime-cockpit-updates.md:26-41` — detailed comparison table, SSE verdict | PASS |
+| How to detect mutations? | `.owlbear/research/1233-realtime-cockpit-updates.md:43-59` — 4-approach comparison, watchfiles recommendation | PASS |
+| Impact on deployment? | `.owlbear/research/1233-realtime-cockpit-updates.md:87-95` — connection count, workers, memory, watcher overhead | PASS |
+| Fallback to polling when connection drops? | `.owlbear/research/1233-realtime-cockpit-updates.md:73-85` — reconnect flow + 3s polling fallback | PASS |
+| Follow-up tasks created | #1234 (SSE backend), #1235 (EventSource frontend), #1236 (extend SSE) — all at research status, depend on #1233 | PASS |
+| T3 DR resolved | `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md` — Option A approved, user-signed | PASS |
+| Source ledger | `.owlbear/sources/overview.md` — 6 rows under §Real-Time Cockpit Updates | PASS |
+| watchfiles dependency corrected | `.owlbear/research/1233-realtime-cockpit-updates.md:104-110` — retracted transitive claim, noted as new explicit dep | PASS |
+
+### Test Results
+- pytest (full suite): 3428 passed, 111 failed, 4 skipped — all 111 failures are pre-existing background issues (kanban storage timestamps, corruption module, cockpit models, react compiler, MCP kanban); zero failures in task scope (no code changes)
+- ruff (full): 4 violations — all in knowledge/mcp-knowledge/mcp-memory/orchestrator packages; zero in task scope
+
+### Architect Quality: 4/5
+Research questions were specific, verifiable, and produced clear actionable findings. Governance gaps (DR, sources, watchfiles claim) were process infrastructure issues caught and fixed by the pipeline, not AC drafting defects. Minor gap: original task body did not explicitly require source-ledger or DR creation as AC, which caused the first rejection cycle.
+
+### Deduction Breakdown
+- AC lines with no evidence: 0 (all 8 checked items have specific file:line citations) → -0.00
+- Lint violations in task scope: 0 → -0.00
+- AC quality (4/5, not ≤ 3): no deduction → -0.00
+- Reviewer evidence: present, detailed, PASS at 0.95 → -0.00
+- Full-suite failures in task scope: 0 → -0.00
+- td:0 research-only evidence is documentary (no executable proof surface): -0.02
+
+### Confidence: 0.98
+### Action: archive
