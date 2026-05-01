@@ -2287,8 +2287,10 @@ class AgentView:
               has an ``agent_map`` entry.
 
           2. **Resolve** — attempt to resolve any pending Decision Requests via
-           ``owlbear_kanban.decisions.resolve_pending_drs``; exceptions are
-           suppressed so dispatch is never blocked.
+           ``owlbear_kanban.decisions.resolve_pending_drs``; ``ImportError``
+           and expected runtime errors (``KanbanError``, ``OSError``,
+           ``ValueError``) are suppressed and logged at ``WARNING``; unexpected
+           exception types propagate.
           3. **Filter** — exclude claimed, archived, ``blocked=True``, and
            ``dep_status="blocked"`` tasks.
           4. **Sort** — deterministic ordering: ``priority_rank ASC``,
