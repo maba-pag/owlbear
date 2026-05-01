@@ -1,10 +1,10 @@
 ---
 id: 1234
 title: Implement SSE endpoint with watchfiles-based file watcher
-status: backlog
+status: review
 priority: nice-to-have
 created: 2026-04-30 16:48:42.978432+00:00
-updated: 2026-05-01T21:23:54.147564+00:00
+updated: 2026-05-01T22:07:05.658577+00:00
 tags:
 - cockpit
 - backend
@@ -675,3 +675,83 @@ AC coverage (new tests only):
 - patterns_discovered: SSE tests can prove eventual shutdown while still missing first-yield ordering defects.
 - quality_gaps: mixed live/deleted watcher batches are an easy false-green hole when a suite only checks single-live and all-deleted cases.
 - time_sinks: coverage attribution was noisy, so proof quality had to come from test semantics plus live-source inspection rather than module coverage metrics.
+[[2026-05-01]]
+## Architecture Review (Loop-Breaker Approval #2)
+
+### Problem Analysis
+
+Task returned from 4th review cycle (confidence 0.69). Two remaining test-proof gaps:
+
+1. **AC4 mixed batch**: Tests exercise single-live and all-deleted batches but not a mixed batch where some files survive and some are deleted. The implementation is correct (per-file `FileNotFoundError` catch at events.py:52-53 with `continue`; `latest_mtime` tracks survivors).
+
+2. **AC6b disconnect ordering**: Tests prove eventual termination but not that zero event chunks are emitted after `is_disconnected()` returns True. The implementation is correct (disconnect check at events.py:43-44 fires before any payload processing at :48-62).
+
+### AC Refinement
+
+AC1, AC2, AC3 (revised), AC5 (revised), AC6a, AC6c, AC7 are **unchanged**.
+
+**AC4 add explicit sub-clause:**
+- [ ] AC4: Each SSE event: `event: tasks-changed`, `data: {"mtime": <int>}` using `st_mtime_ns` from changed files; if no changed files remain stat-able, event is skipped (td:2)
+- [ ] AC4b: When a batch contains both deleted and surviving `.md` files, the surviving files still produce a `tasks-changed` event with their `st_mtime_ns` — deleted files in the same batch do not suppress the event (td:1)
+
+**AC6b add explicit ordering clause:**
+- [ ] AC6b (revised): When `request.is_disconnected()` returns `True`, generator breaks the watch loop and the stream terminates — zero event chunks are yielded after the disconnect check fires (td:2)
+
+### Builder Guidance
+
+- **No implementation changes needed.** The code at events.py:43-56 already handles both cases correctly.
+- AC4b test: mock `awatch` to yield one batch with two paths; patch `Path.stat()` to raise `FileNotFoundError` on one path and return a stat result on the other; consume the stream and assert one `tasks-changed` event with the surviving file's `st_mtime_ns`.
+- AC6b test: mock `is_disconnected()` to return `True` from the first call; mock `awatch` to yield a real change set; consume the generator and assert zero `event:`/`data:` lines emitted — only termination.
+- The xdist workaround for streaming tests is `-n0` isolation (already documented).
+- This is a test-only pass. Builder should verify green and advance.
+
+### Evaluation
+
+All 10 architectural criteria remain PASS (unchanged across 4 review cycles). Implementation verified correct by direct code inspection.
+
+### Challenge Results
+
+Skipped — architecture unchanged since prior APPROVE; only test-proof edge cases being clarified.
+
+### Test Depth
+
+- Max depth: td:2
+- Test-writer: PROCEED (write exactly AC4b + revised AC6b tests, nothing else)
+
+### Verdict: APPROVE
+### Action Taken: AC4b added for mixed-batch edge case. AC6b revised with zero-chunk ordering clause. No implementation changes needed — test-only cycle. Builder should verify and advance.
+[[2026-05-01]]
+## Architecture Review (Loop-Breaker Approval #2)
+
+**Verdict: APPROVE -> todo** — AC4b added (mixed-batch edge case), AC6b revised (zero-chunk ordering clause). Implementation verified correct; test-only cycle needed.
+
+Root cause of repeated review failures: reviewer correctly identifies that tests don't exercise two specific edge-case branches, but the implementation handles both correctly (events.py:43-56). Added explicit AC sub-clauses so test-writer writes exactly those two tests.
+
+Test-writer: write AC4b + revised AC6b only. Builder: verify green, no code changes. Expected: final pass.
+[[2026-05-01]]
+## Test-Writer Notes
+- Test file: tests/test_cockpit_events_1234.py
+- Retry: added 2 new tests for loop-breaker architect AC4b + AC6b revised gaps
+- `TestFromAC_EventPayload`: `test_mixed_batch_surviving_file_still_emits_event` (AC4b — mixed batch with one deleted + one surviving file; asserts surviving file's `st_mtime_ns` event is emitted)
+- `TestFromAC_GeneratorCleanup`: `test_generator_emits_zero_chunks_when_disconnected_before_first_yield` (AC6b revised — `is_disconnected()` returns True at first check; asserts zero `tasks-changed` chunks emitted before termination)
+- Total: 36 tests (34 original + 2 new)
+- Results: 36 PASS, 0 FAIL — both new tests green against current implementation
+- ruff: clean
+- commit: a8585f2e
+
+Builder skip: test-only retry — all new tests pass against current impl. Advancing directly to review (Step 1b.1).
+
+AC coverage (new tests only):
+| AC | New Test | Status |
+|----|----------|--------|
+| AC4b (mixed-batch) | test_mixed_batch_surviving_file_still_emits_event | PASS — implementation correct |
+| AC6b (zero-chunk ordering) | test_generator_emits_zero_chunks_when_disconnected_before_first_yield | PASS — implementation correct |
+[[2026-05-01]]
+## Builder Notes
+- Implementation changes in this pass: none (verification-only pass per latest architect/test-writer loop-breaker notes).
+- Files changed: none.
+- Tests: `tests/test_cockpit_events_1234.py` -> 36 passed, 0 failed, 0 skipped.
+- Coverage: `owlbear_cockpit.routes.events` -> 100%.
+- Lint: ruff clean for `serve/cockpit/src/owlbear_cockpit/routes/events.py`, `serve/cockpit/src/owlbear_cockpit/main.py`, `tests/test_cockpit_events_1234.py`.
+- Evidence summary: quality-runner scoped report returned `failed: []`, `clean: true`, pytest exit code 0, ruff exit code 0.
+- Fixes applied: none required; runtime and task-owned tests already aligned to refined AC (including AC4b and revised AC6b).

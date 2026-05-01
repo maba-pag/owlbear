@@ -1,10 +1,10 @@
 ---
 id: 1250
 title: 'P2-01: RED — FilterPanel component tests'
-status: todo
+status: in-progress
 priority: needed
 created: 2026-05-01T04:34:48.876923+00:00
-updated: 2026-05-01T21:24:50.288463+00:00
+updated: 2026-05-01T21:59:44.501829+00:00
 tags:
 - phase-2
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1249
 blocked: false
 block_reason:
-claimed_at: 2026-05-01T21:24:50.288463+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -106,3 +106,45 @@ Refined AC to align with brief's `FilterPanelProps` contract. Key changes:
 - td:1 lines: 5
 - td:0 lines: 1 (meta RED requirement)
 - Test-writer: processes normally
+[[2026-05-01]]
+## Test-Writer Notes
+- Test file: `serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx`
+- Classes: `TestFromAC_FilterPanel`
+- Tests by category:
+  - AC1 (td:2): 6 tests — happy path (text input, select, tags, blocked, reset) + edge (open=false)
+  - AC2 (td:1): 2 tests — priorities options present; custom priorities list
+  - AC3 (td:1): 2 tests — tags absent when empty; tags present when non-empty
+  - AC4 (td:1): 5 tests — reset absent with emptyFilter; reset present for text/priority/blocked/tags active
+  - AC5 (td:1): 1 test — click reset → onFilterChange(emptyFilter)
+  - AC6 (td:2): 8 tests — text change, text clear, priority set, priority clear, blocked on, blocked off, tags update, tags clear
+  - AC7 (td:1): 4 tests — text/select/blocked/tags absent when open=false
+- **Total: 28 tests — all FAIL (ImportError: FilterPanel.tsx does not exist)**
+- Lint: clean (ESLint 0 violations)
+- Commit: `da395867` — test: RED phase tests for FilterPanel component (#1250)
+
+AC coverage:
+| AC | Tests | Status |
+|----|-------|--------|
+| AC1: renders controls when open | 6 | covered |
+| AC2: priorities prop populates select | 2 | covered |
+| AC3: tag control hidden when availableTags=[] | 2 | covered |
+| AC4: reset button visibility by filter state | 5 | covered |
+| AC5: reset clears filter | 1 | covered |
+| AC6: control interactions fire onFilterChange | 8 | covered |
+| AC7: controls absent when open=false | 4 | covered |
+
+Selector strategy: `input[type="text"]`, `select`, `[data-testid="filter-tags"]` (PDS multi-select, last resort), `[role="switch"]`/`input[type="checkbox"]` (blocked), `[data-testid="filter-reset"]` (reset button). PDS multi-select interaction uses `CustomEvent('update', { detail: { value: string[] } })` per PDS v3 spec.
+[[2026-05-01]]
+## Builder Notes
+- No code changes made (surgical/no-op by design).
+- RED verification run in `serve/cockpit/web`: `npx vitest run src/__tests__/FilterPanel_1250.test.tsx --reporter=verbose`.
+- Result: `Test Files 1 failed, 0 passed`; failure is import resolution (`../components/FilterPanel` not found).
+- Interpretation: this task is a RED test-writer deliverable (tests intentionally failing because implementation is absent), not a builder GREEN implementation task.
+- Routing recommendation: proceed with implementation task `#1251` (GREEN for `FilterPanel`) and keep `#1250` owned/completed by test-writer/orchestrator flow.
+[[2026-05-01]]
+## Test-Writer Notes
+- Re-verification run (task re-claimed after builder pass-through).
+- Test file: `serve/cockpit/web/src/__tests__/FilterPanel_1250.test.tsx` (already committed at `da395867`)
+- 28 tests — all FAIL (ImportError: `../components/FilterPanel` not found — component not yet implemented)
+- AC coverage: all 7 AC lines covered (see prior notes for full table)
+- Advancing to in-progress for #1251 (GREEN phase).

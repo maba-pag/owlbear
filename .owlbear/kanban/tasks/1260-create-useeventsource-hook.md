@@ -1,10 +1,10 @@
 ---
 id: 1260
 title: Create useEventSource hook
-status: review
+status: in-progress
 priority: nice-to-have
 created: 2026-05-01T09:34:24.718353+00:00
-updated: 2026-05-01T21:17:26.959767+00:00
+updated: 2026-05-01T22:14:29.898589+00:00
 tags:
 - cockpit
 - frontend
@@ -286,3 +286,142 @@ The hook's `onopen`, `onerror`, and `tasks-changed` handlers close over `isMount
   - Identity-guarding every async callback path is the minimal robust pattern for EventSource retry/disable flows.
   - Branch coverage misses were primarily from defensive-but-unreachable guards in `openConnection`; removing those improved signal quality without changing behavior.
   - Keeping the change to one hook file made regression risk low while directly closing all failing AC5/AC7 proofs.
+[[2026-05-01]]
+## Review Evidence
+### Scope
+- Second review cycle confirmed: one prior `## Review Evidence` section already exists in `.owlbear/kanban/tasks/1260-create-useeventsource-hook.md`.
+- Builder retry commit present in git logs: `a03c3741` (`fix: harden stale-event guards in useEventSource (#1260, builder)`).
+- Reviewed live scope: `serve/cockpit/web/src/hooks/useEventSource.ts` and `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`.
+- Downstream usages of `useEventSource`: task test file only.
+
+### Test Results
+- quality-runner: 28 passed, 0 failed on `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`.
+
+### Lint
+- quality-runner does not execute TypeScript lint; no TS/TSX diagnostics were reported on the changed source or test file.
+
+### Coverage
+- `serve/cockpit/web/src/hooks/useEventSource.ts`: 97.89% statements, 90.47% branches, 100% functions, 100% lines.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | Source signature/export is correct at `serve/cockpit/web/src/hooks/useEventSource.ts:15-17`, and the test imports the named type at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:17`, but the AC1 proof is still lax: it only checks `typeof useEventSource === 'function'` at `:91`, property presence at `:95-98`, and result-type assignability at `:104-108`. It does not prove exact exported hook type/signature. | FAIL |
+| AC2 | State-machine behavior is directly exercised by the tests at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:115-142` against `serve/cockpit/web/src/hooks/useEventSource.ts:19-20,63,68-87`. | PASS |
+| AC3 | Listener registration and `lastEventMtime` update are exercised at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:153-171` against `serve/cockpit/web/src/hooks/useEventSource.ts:112-123`. | PASS |
+| AC4 | Stall detection and single-stall-timer behavior are exercised at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:181-248` against `serve/cockpit/web/src/hooks/useEventSource.ts:93-105`. | PASS |
+| AC5 | The hook implements retry deduping and clear-on-open at `serve/cockpit/web/src/hooks/useEventSource.ts:73,86-87,104-105`, and stale `onerror` / stale `tasks-changed` retry races are covered at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:334-399`. But the AC5 suite only proves retry timing and stale `onerror` / event filtering (`:262`, `:278`, `:298`, `:312`, `:334`, `:368`); it never proves the explicit "only one retry timer is active" clause or stale `onopen` inertness after a source is superseded. | FAIL |
+| AC6 | Cleanup code exists at `serve/cockpit/web/src/hooks/useEventSource.ts:146-150`, and unmount close/timer cleanup tests exist at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:410-460`. But the post-unmount callback proof at `:464-479` only asserts that no new instance is created; it does not directly prove the AC6 clause that no React state updates occur after unmount. | FAIL |
+| AC7 | Disable/reset logic exists at `serve/cockpit/web/src/hooks/useEventSource.ts:129-139`, and the test suite proves disabled initial state, close on disable, re-enable, and stale event inertness at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:486-564`. But none of those tests disables while a stall timer or retry timer is actually pending, so the explicit `clear all timers` clause is still not discriminatingly proven. | FAIL |
+
+#### Security Review
+- No security issues found in the reviewed scope. The hook uses native browser `EventSource`, parses in-memory JSON, and adds no filesystem, shell, eval, or dependency surface.
+
+#### Test Integrity
+- No `TestFromAC_*` weakening found in the current task suite. The stale-source tests added in the retry cycle strengthen the prior failure area.
+- Small confidence deduction: current-file inspection and task history show strengthening, but this review did not have a direct commit diff of the original test-writer artifact.
+
+#### Test Quality
+- WEAK.
+- AC1 proof is still assignability/property-shape based rather than exact exported hook-type proof.
+- AC5 names a one-retry-timer guarantee, but unlike AC4's explicit single-timer test at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:213`, AC5 has no duplicate-failure test that would fail if retry timers stacked.
+- AC6's callback-after-unmount test at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:464-479` proves "no reconnect" but not "no state write".
+- The source guards stale `onopen` at `serve/cockpit/web/src/hooks/useEventSource.ts:68-74`, but the suite has no stale-`onopen` regression.
+
+#### Data Safety
+- No implementation-side data-safety issue remains in the current hook. The source-identity guards are present on `onopen`, `onerror`, stall-timeout callback, and `tasks-changed` listener at `serve/cockpit/web/src/hooks/useEventSource.ts:68-74,77-109,112-123`.
+
+#### Implementation-Aware Test Gap Analysis
+- A stale-`onopen` regression on a superseded-but-still-mounted source is untested even though that guard is part of the implemented fix.
+- Duplicate retry scheduling is untested; repeated failure before reopen could regress the explicit AC5 single-retry-timer contract without failing the current suite.
+- Disable-time timer clearing is untested while a stall or retry timer is active.
+- Post-unmount state-write suppression is only indirectly checked.
+
+#### Necessity Check
+- No issue. A local hook around native `EventSource` is necessary for this frontend behavior.
+
+#### Builder Process Quality
+- CLEAN. The current code appears to address the previously reported stale-source implementation defect; the remaining gate failure is proof quality.
+
+### Confidence
+- 0.83
+
+### Verdict
+- FAIL
+
+### Action
+- Rejected to `backlog` as a loop-breaker: this is the second review failure on the task, and the remaining issues are test-proof quality rather than a current source-code defect.
+
+### Required Follow-up
+- Add an exact exported hook-type proof for AC1, not only named-type/result-shape checks.
+- Add an AC5 regression that would fail if retry timers stacked or if a stale `onopen` from a superseded source mutated state.
+- Add a direct AC6 proof that callback activity after unmount cannot write `status` or `lastEventMtime`.
+- Add an AC7 proof that disabling while stall/retry timers are pending clears them and prevents reconnect.
+
+### Post-task Reflection
+- EventSource state-machine fixes can be correct in code while still false-green unless each async callback path is directly exercised.
+- ACs that say "single timer" need duplicate-trigger tests, not just boundary-time tests.
+- Post-unmount safety needs a direct state-write suppression proof, not only a "no new instances" surrogate.
+[[2026-05-01]]
+## Architecture Review (loop-breaker re-entry)
+
+**Context:** Reviewer rejected to `backlog` after 2nd review cycle (confidence 0.83). Implementation is correct — all issues are test-proof quality gaps. Architecture unchanged; challenger results from first cycle still valid.
+
+### Evaluation (delta only)
+
+No AC or architecture changes needed. The 7 AC lines are precise and verifiable. The reviewer's gaps are about test methodology, not AC vagueness:
+
+| Reviewer Gap | AC Line | Issue |
+|-------------|---------|-------|
+| AC1 type proof | AC1 | Runtime shape check ≠ named export proof |
+| AC5 timer stacking | AC5 | "only one retry timer" clause untested discriminatingly |
+| AC5 stale onopen | AC5 | Guard exists in code but no regression test |
+| AC6 state-write | AC6 | "no state updates after unmount" proven indirectly |
+| AC7 timer clear | AC7 | "clears all timers" untested with active timers |
+
+### Test-Writer Guidance (loop-breaker)
+
+Add these discriminating proofs to the existing test suite. The implementation already passes — these strengthen proof quality:
+
+1. **AC1 exact type proof:** Use `expectTypeOf<UseEventSourceResult>().toEqualTypeOf<{status: 'connecting' | 'open' | 'closed', lastEventMtime: number | null}>()` — compile-time exact shape, not assignability.
+2. **AC5 single-retry-timer:** Trigger two consecutive fatal errors without an intervening `onopen`; advance 30s; assert only ONE `new EventSource` call (not two). This fails if retry timers stack.
+3. **AC5 stale onopen:** After retry creates a new source, fire `onopen` on the OLD source; assert `status` reflects the new source's state, not the stale callback.
+4. **AC6 direct state-write suppression:** After unmount, fire `simulateOpen()` and `simulateEvent('tasks-changed', ...)` on the captured source; assert no `console.error` from React (act warnings) AND assert the hook's last returned values are unchanged.
+5. **AC7 timer-clear during active timers:** Enable → trigger stall (start 15s timer) → disable before 15s elapses → advance 15s → assert no state transition to `'closed'` (stall timer was cleared). Same pattern for retry timer.
+
+### Verdict: APPROVE (loop-breaker)
+
+Implementation is correct, AC is precise, architecture is sound. Test-writer adds 5 discriminating proofs per guidance above. Builder confirms GREEN (code already handles all cases). Reviewer verifies proof quality.
+[[2026-05-01]]
+Architecture Review (loop-breaker): APPROVED. Implementation correct (reviewer confidence 0.83), AC precise (7 lines unchanged), architecture sound (10/10 criteria from first cycle). Remaining issues are 5 test-proof quality gaps — test-writer guidance provided with exact discriminating test patterns. Challenger skip justified: design unchanged since first-cycle challenge.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry (loop-breaker, 2nd retry): added 6 discriminating proofs for reviewer gaps. All 6 PASS against current impl.
+- Builder skip: test-only retry, all tests green. Advancing directly to review.
+- Test file: `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`
+- Classes: `TestFromAC_UseEventSource`
+- 6 new tests added, all PASS (implementation already correct per architect confirmation):
+
+| New test | AC | Result |
+|----------|-----|--------|
+| `UseEventSourceResult full object shape matches exactly (no extra or missing properties)` | AC1 | PASS ✓ |
+| `stale onopen from a superseded source does not mutate status after new source is active` | AC5 | PASS ✓ |
+| `only one retry timer active — two consecutive fatal errors schedule exactly one retry` | AC5 | PASS ✓ |
+| `callbacks firing after unmount do not write status or lastEventMtime (direct state suppression)` | AC6 | PASS ✓ |
+| `disabling while stall timer is pending clears the timer — no retry EventSource created` | AC7 | PASS ✓ |
+| `disabling while retry timer is pending clears the timer — no new EventSource after disable` | AC7 | PASS ✓ |
+
+- Total suite: 34 tests — 34 pass, 0 fail
+- Lint: ESLint exit 0
+- Commit: `57bd7d77`
+
+### AC coverage (loop-breaker additions)
+| AC | Gap addressed | Status |
+|----|--------------|--------|
+| AC1 | Full object `toEqualTypeOf` proof (not per-property assignability) | Covered (passes — correct) |
+| AC5 | Stale onopen from superseded source does not mutate status | Covered (passes — isCurrentSource guard works) |
+| AC5 | Duplicate retry scheduling guard (single-timer contract) | Covered (passes — clearRetryTimer prevents stacking) |
+| AC6 | Direct state-write suppression after unmount | Covered (passes — isMountedRef guard works) |
+| AC7 | Stall timer cleared when disabled | Covered (passes — clearStallTimer in disabled path) |
+| AC7 | Retry timer cleared when disabled | Covered (passes — clearRetryTimer in disabled path) |

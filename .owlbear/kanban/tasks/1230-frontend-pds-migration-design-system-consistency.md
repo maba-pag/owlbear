@@ -1,10 +1,10 @@
 ---
 id: 1230
 title: Frontend — PDS migration (design system consistency)
-status: in-progress
+status: todo
 priority: nice-to-have
 created: 2026-04-30 16:31:18.656061+00:00
-updated: 2026-05-01T21:22:43.026869+00:00
+updated: 2026-05-01T22:04:17.102063+00:00
 tags:
 - cockpit
 - frontend
@@ -92,3 +92,62 @@ All 54 tests fail because components render raw HTML (`<button>`, `<h3>`, `<p>`,
 
 ### Note on AC7
 "All affected suites green" is a builder constraint enforced by the CI gate and existing suites. No new tests added for AC7 — existing suites (DetailTab.test, ArchivalModal_1241, ArchivalModal_1245, ResolveModal_1193, etc.) serve as the regression guard.
+[[2026-05-01]]
+## Builder Notes
+- Files changed (not committed): serve/cockpit/web/src/components/ConfirmDialog.tsx, serve/cockpit/web/src/components/ArchivalModal.tsx, serve/cockpit/web/src/components/ActivityTab.tsx, serve/cockpit/web/src/components/DetailTab.tsx, serve/cockpit/web/src/components/ResolveModal.tsx, serve/cockpit/web/src/components/HealthBadge.tsx, serve/cockpit/web/src/components/DRStatusIndicator.tsx, serve/cockpit/web/src/Shell.tsx
+- RED verification (quality-runner): 54 failed / 54 total in serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx, lint clean.
+- GREEN attempt result (quality-runner): 50 passed / 54 total, lint clean.
+
+### Reject reason (test-assumption mismatch)
+Remaining failures are in ArchivalModal tests that require state transitions via a raw native `<select>` handle while the same suite also asserts there must be no raw `<select>` after PDS migration.
+
+Conflicting expectations in the same TestFromAC suite:
+- `AC4 happy: ArchivalModal reason uses PSelect` asserts `container.querySelector('select')` is `null`.
+- Other tests attempt to drive reason changes with:
+  - `const select = container.querySelector('select')`
+  - `if (select) fireEvent.change(select, ...)`
+  and then assert refs/error UI that depends on that change.
+
+Because `select` is required to be absent, those change events never fire, leaving reason-dependent UI unreachable in test execution.
+
+### Failing tests (4)
+- AC3 ArchivalModal error message uses PText > renders p-text[data-testid="archival-error"] for submission errors
+- AC3 ArchivalModal refs hint uses PText > renders p-text for "Required - enter at least one task ID" hint when refs visible
+- AC4 happy ArchivalModal refs input uses PInputText when visible > renders p-input-text for refs when reason requires refs
+- AC4 boundary ArchivalModal labeled fields do not get hide-label > p-input-text for refs does NOT have hide-label
+
+### Test-writer: what to fix
+- Update ArchivalModal interaction steps in TestFromAC_PdsMigration_FormControls/Text to drive `p-select` (or a component-level helper) instead of querying native `select`.
+- Keep no-raw-native-element assertions as-is (`querySelector('select') === null`) after migrating interaction helpers.
+- Re-run suite to confirm those 4 tests become reachable and meaningful under PDS controls.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry: fixed 7 ArchivalModal interaction helpers across TestFromAC_PdsMigration_Text and TestFromAC_PdsMigration_FormControls.
+- Root cause: tests queried `container.querySelector('select')` (native element), which returns null after PDS migration to `p-select`. The `if (select)` guard prevented all state-change events from firing, leaving reason-dependent UI (refs input, refs hint, error) unreachable.
+- Fix: replaced native `select` queries with `container.querySelector('p-select')` + `fireEvent(pSelect, new CustomEvent('change', { detail: { value: '...' }, bubbles: true }))` — matches the `readControlValue(event.detail?.value)` path in the component.
+- All 54 tests now PASS against current implementation (builder's uncommitted changes are correct).
+- Lint: ESLint clean, 0 violations.
+- Commit: eb54c8dc — test: fix ArchivalModal interaction helpers for PDS migration (#1230, test-writer)
+- Builder note: implementation files are already correct but uncommitted — builder should verify 54/54 pass then commit.
+[[2026-05-01]]
+## Builder Notes
+- Implementation status: in-scope migration files remain updated for PDS components (`ConfirmDialog.tsx`, `ArchivalModal.tsx`, `ActivityTab.tsx`, `DetailTab.tsx`, `ResolveModal.tsx`, `HealthBadge.tsx`, `DRStatusIndicator.tsx`, `Shell.tsx`).
+- RED baseline evidence: prior task history already recorded `PdsMigration_1230` as 54/54 failing before implementation.
+- GREEN evidence (task-scoped): `serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx` is 54/54 passing.
+- Frontend lint evidence: ESLint over changed TSX files and `PdsMigration_1230.test.tsx` is clean.
+- Quality-runner note: for TSX files, `ruff` output is a known false-positive parser mismatch (Python linter over TypeScript), per `h-quality-runner` limitations.
+
+### Reject reason (test-assumption mismatch in AC7 suites)
+AC7 requires legacy regression suites to be green (`DetailTab.test`, `ArchivalModal_1241`, `ArchivalModal_1245`, `ResolveModal_1193`, `ResolveModal_plugins_1194`, `Shell.test`, `HealthBadge.test`, `DRStatusIndicator_1191`, `ActivityTab.test`). Scoped run shows 4 files failing with 44 failing tests total.
+
+Observed blockers:
+- `ArchivalModal_1241` expects native `select` and native `h3` (`reason select not found`, `querySelector('h3')` assertions), but this task’s AC explicitly migrates to `PSelect` and `PHeading`.
+- `DetailTab.test` and `ResolveModal_plugins_1194.test` fail on web-component internals assumptions (`this.internals?.setValidity/setFormValue is not a function`) triggered by migrated PDS controls in test environment.
+- `ResolveModal_plugins_1194.test` additionally fails plugin assertions (`expected [] to contain remarkGfm/rehypeSanitize`) in same regression pass.
+
+### Test-writer: what to fix
+- Update AC7 legacy suites to align with PDS migration contract (query/interact through `p-*` controls instead of native `input/select/textarea/h3`).
+- Add/adjust test-environment shims for PDS form components that require ElementInternals APIs.
+- Reconcile plugin expectations in `ResolveModal_plugins_1194.test` with current renderer/plugin wiring so AC7 can serve as a stable regression gate.
+
+- Commit status: no builder commit in this pass because gate AC7 is still red under current test assumptions.
