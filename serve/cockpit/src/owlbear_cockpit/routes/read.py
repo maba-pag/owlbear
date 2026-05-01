@@ -12,8 +12,8 @@ from owlbear_cockpit.deps import get_cache, get_engine, get_view
 from owlbear_cockpit.models import (
     BoardOut,
 )
+from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.engine import CockpitView
 from owlbear_kanban.errors import NotFoundError
 from owlbear_kanban.models import ActivityEvent, ListTasksResponse, SessionRecord, ShowTaskResponse
 

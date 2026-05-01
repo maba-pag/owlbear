@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from fastapi import Depends
 
 from owlbear_cockpit.cache import MtimeScanCache
-from owlbear_kanban.engine import CockpitView
+from owlbear_cockpit.view import CockpitView
 
 if TYPE_CHECKING:
     from owlbear_kanban import KanbanEngine
