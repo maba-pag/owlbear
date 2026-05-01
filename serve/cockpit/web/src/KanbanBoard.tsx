@@ -236,7 +236,7 @@ function KanbanBoardContent({
                 void handleTransitionClick(
                   contextMenu.taskId,
                   target,
-                  contextMenu.taskStatus,
+                  tasks.find((task) => task.id === contextMenu.taskId)?.status ?? contextMenu.taskStatus,
                   contextMenu.taskUpdated,
                 )
               }
