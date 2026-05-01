@@ -128,14 +128,14 @@ describe('TestFromAC_ArchivalModal', () => {
       expect(modal?.getAttribute('aria-modal')).toBe('true')
     })
 
-    it('aria-labelledby points to a visible title element with text content', () => {
+    it('aria-labelledby exactly matches the id of the visible h3 title element', () => {
       const { container } = renderModal()
       const modal = container.querySelector('[role="dialog"]')
       const labelledById = modal?.getAttribute('aria-labelledby')
       expect(labelledById).toBeTruthy()
-      const titleEl = container.querySelector(`#${labelledById}`)
-      expect(titleEl).not.toBeNull()
-      expect(titleEl?.textContent?.trim().length).toBeGreaterThan(0)
+      const titleH3 = container.querySelector('h3')
+      expect(titleH3).not.toBeNull()
+      expect(labelledById).toBe(titleH3?.id)
     })
   })
 
@@ -412,7 +412,7 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent).toContain(errorDetail)
+        expect(errorEl?.textContent).toBe(errorDetail)
       })
 
       expect(onClose).not.toHaveBeenCalled()
@@ -441,13 +441,13 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
+        expect(errorEl?.textContent).toBe('Task snapshot is stale; refresh and try again.')
       })
 
       expect(onClose).not.toHaveBeenCalled()
     })
 
-    it('409 error message references staleness (stale/snapshot/conflict/changed)', async () => {
+    it('409 error message is exactly the stale-snapshot string (no keyword guessing)', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn(() =>
@@ -465,13 +465,8 @@ describe('TestFromAC_ArchivalModal', () => {
 
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
-        const text = errorEl?.textContent?.toLowerCase() ?? ''
-        const hasStaleKeyword =
-          text.includes('stale') ||
-          text.includes('snapshot') ||
-          text.includes('conflict') ||
-          text.includes('changed')
-        expect(hasStaleKeyword).toBe(true)
+        expect(errorEl).not.toBeNull()
+        expect(errorEl?.textContent).toBe('Task snapshot is stale; refresh and try again.')
       })
     })
   })
@@ -690,7 +685,7 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
+        expect(errorEl?.textContent).toBe('Archival failed (404).')
       })
 
       expect(onClose).not.toHaveBeenCalled()
@@ -715,7 +710,7 @@ describe('TestFromAC_ArchivalModal', () => {
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="archival-error"]')
         expect(errorEl).not.toBeNull()
-        expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
+        expect(errorEl?.textContent).toBe('Archival failed due to network error.')
       })
 
       expect(onClose).not.toHaveBeenCalled()
