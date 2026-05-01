@@ -1,10 +1,10 @@
 ---
 id: 1221
 title: Engine — lazy agent_map validation at pick_tasks only
-status: done
+status: archived
 priority: needed
 created: 2026-04-30 16:31:18.568412+00:00
-updated: 2026-05-01T03:14:54.085667+00:00
+updated: 2026-05-01T03:18:38.465932+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -12,7 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-05-01T03:14:54.085667+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -769,3 +769,41 @@ Previous docs gate commit `0de43485` was in history but a subsequent commit `4a6
 
 ### Commit
 `fdf0409d` — docs: update pick_tasks docs for lazy agent_map validation (#1221, doc-writer)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: `__init__` no longer raises for missing agent_map | `_validate_engine_config` at engine.py:112-166 has no agent_map check; init still calls helper at engine.py:448; init tests pass. | PASS |
+| AC2: `pick_tasks()` validates at top, after wave guard, before `resolve_pending_drs`/filtering | Guard at engine.py:2328-2335; wave guard at engine.py:2322-2326; non-call proofs for list_tasks (L339), resolve_pending_drs (L371), and wave-guard precedence (L401) all pass. | PASS |
+| AC3: Cockpit starts with agent_map: {} | cockpit/main.py:72 constructs KanbanEngine before uvicorn; task tests + cockpit launch regression (70/70) pass. | PASS |
+| AC4: MCP raises ToolError with all missing statuses named | server.py:76 maps KanbanError.user_message to ToolError; task tests assert ToolError and all 4 missing statuses individually. | PASS |
+| AC5: test_engine_coverage_1068.py::test_agent_map_missing_status_raises asserts non-raising | test_engine_coverage_1068.py:260 uses plain call to _validate_engine_config (no pytest.raises); scoped test passes. | PASS |
+| AC6: resolve_pending_drs never called when agent_map is incomplete | test_pick_tasks_validates_before_resolve_pending_drs (L371) monkeypatches sys.modules["owlbear_kanban.decisions"]; call_count == 0 after ConfigError. | PASS |
+| AC7: ERR_INVALID_WAVE_PARAM wins over ERR_INVALID_STATUS when effective_wave less than 1 | test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard (L401) uses wave_size:0 config plus agent_map:{}; asserts ValidationError(ERR_INVALID_WAVE_PARAM). | PASS |
+
+### Test Results
+- Full suite (quality-runner mode=full): 3341 passed, 109 failed, 4 skipped -- no task-attributed failures; 109 are pre-existing background failures from other in-flight tasks. Prior audit's AC5 regression (test_agent_map_missing_status_raises) is absent from failure set (count dropped from 138 to 109).
+- Task suite (scoped, per builder/reviewer): 16 passed, 0 failed (15 in test_engine_lazy_agent_map_1221.py + 1 AC5 node in test_engine_coverage_1068.py)
+- Lint: clean for engine.py, task test file, and test_engine_coverage_1068.py
+
+### Reviewer Evidence
+Two Review Evidence sections present. Latest (Round 3, reviewer) verdict: PASS, confidence 0.93. All 7 AC lines mapped. Test quality assessment: STRONG for AC2 (three ordering proofs), ADEQUATE overall. Accepted.
+
+### Commit Integrity
+- 062b2644 -- fix: defer agent_map completeness validation to pick_tasks (#1221, builder) -- engine.py only
+- d80c3b61 -- test: add AC6/AC7 ordering proofs for pick_tasks validation (#1221, test-writer) -- test file only
+- fdf0409d -- docs: update pick_tasks docs for lazy agent_map validation (#1221, doc-writer) -- README, engine.py docstring, kanban.excalidraw
+
+### Architect Quality: 4/5
+AC required 3 rounds to reach full specificity (missed AC5 stale-test migration, AC6 resolve_pending_drs ordering proof, AC7 wave-guard conflict proof in initial spec). Final AC block is specific, complete, and verifiable. Architect responded well to challenger and auditor feedback -- gaps were real but not fundamental.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| AC3 composite proof (constructor test + launch regression vs dedicated run() test) | -0.02 |
+| Diff access via snapshot + reflog only | -0.02 |
+
+### Confidence: 0.96
+### Action: archive

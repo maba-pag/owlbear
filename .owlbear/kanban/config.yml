@@ -13,7 +13,7 @@ priorities:
 - important
 - needed
 - critical
-next_id: 1237
+next_id: 1247
 activity_log: false
 paths:
   tasks_dir: tasks
@@ -47,3 +47,19 @@ policy:
 defaults:
   status: research
   priority: important
+claim_timeout: 1h
+tasks_dir: tasks
+archive_dir: archive
+entry_status: research
+wave_size: 4
+agent_map: {}
+agent_types: {}
+agent_compatibility: {}
+non_impl_tags: []
+archival_reasons:
+- completed
+- deprecated
+- dropped
+- duplicate
+- wontfix
+status_predicates: {}
