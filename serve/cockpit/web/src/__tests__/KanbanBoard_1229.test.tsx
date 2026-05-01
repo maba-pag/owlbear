@@ -1,23 +1,25 @@
 /**
- * RED phase tests for #1229: Frontend — complete drag-and-drop (call move API on drop).
+ * Tests for #1229: Frontend — complete drag-and-drop (call move API on drop).
  *
  * Covers:
  *   AC1 (td:1) — Dragging a card propagates its taskId + updated token into
  *                KanbanBoard drag state (Card.onDragStart interface change)
  *   AC2 (td:2) — Dropping on a valid column fires POST /api/tasks/{id}/move
  *                with {status: targetStatus, updated: storedToken} body
- *   AC3 (td:1) — On 2xx: refetchTasks() called and drag state cleared
+ *   AC3 (td:1) — On 2xx: refetchTasks() called (drag state clearing is unconditional
+ *                and unobservable — covered by AC7 td:0)
  *   AC4 (td:2) — On 409: stale-snapshot error displayed via moveError state,
  *                refetchTasks() called to sync fresh updated tokens
- *   AC5 (td:1) — On other error (4xx/5xx/network): error displayed via moveError,
- *                no immediate refetch
+ *   AC5 (td:2) — On other error (4xx/5xx/network): error displayed via moveError,
+ *                refetchTasks() NOT called (polling handles eventual consistency)
  *   AC6 (td:0) — Invalid drop target does nothing (skipped — td:0)
+ *   AC7 (td:0) — Drag state cleared before async move request; browser dragEnd
+ *                provides redundant cleanup (skipped — unconditional, unobservable)
  *
- * All tests are RED until the builder:
- *   - Changes Card.onDragStart to pass (taskId, updated) through Column → Board
- *   - Adds onDrop prop to Column, wired from Board
- *   - Adds drag state {taskId, updated} to KanbanBoard
- *   - Implements drop handler with 409-specific branching (refetch on stale)
+ * Harness note: KanbanBoard is prop-driven (task #1227 removed the legacy
+ * LegacyKanbanBoard/useBoard fallback). Board and tasks are passed directly as props;
+ * refetchTasks is a vi.fn() spy so AC3/AC4/AC5 refetch assertions are direct
+ * (no fetch-call counting required).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
@@ -25,15 +27,15 @@ import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import KanbanBoard from '../KanbanBoard'
 
-// ─── Mock ArchivalModal ───────────────────────────────────────────────────────
+// --- Mock ArchivalModal ------------------------------------------------------
 // KanbanBoard imports ArchivalModal; stub it to avoid rendering real component.
 vi.mock('../components/ArchivalModal', () => ({
   default: vi.fn(() => null),
 }))
 
-// ─── Fixtures ─────────────────────────────────────────────────────────────────
+// --- Fixtures -----------------------------------------------------------------
 
-// Two-column board: backlog → todo transition exists.
+// Two-column board: backlog -> todo transition exists.
 const BOARD = {
   statuses: [{ name: 'backlog' }, { name: 'todo' }],
   priorities: ['someday', 'nice-to-have', 'important', 'needed', 'critical'],
@@ -56,21 +58,19 @@ const TASK_ONE = {
   claimed: false,
 }
 
-const TASKS = { tasks: [TASK_ONE], mtime: 1000 }
+const TASKS = [TASK_ONE]
 
-// ─── Fetch stub ───────────────────────────────────────────────────────────────
+// --- Fetch stub ---------------------------------------------------------------
+// Only stubs the /move endpoint — board and tasks come in as props.
 
-type FetchStubOptions = {
+type MoveFetchOptions = {
   moveStatus?: number
   moveNetwork?: boolean
 }
 
-function stubFetch(opts: FetchStubOptions = {}) {
+function stubMoveFetch(opts: MoveFetchOptions = {}) {
   const { moveStatus = 200, moveNetwork = false } = opts
-  const mockFetch = vi.fn((url: string, init?: RequestInit) => {
-    if (url.includes('/api/board')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
-    }
+  const mockFetch = vi.fn((url: string) => {
     if (/\/api\/tasks\/\d+\/move/.test(url)) {
       if (moveNetwork) return Promise.reject(new Error('Network failure'))
       return Promise.resolve({
@@ -79,30 +79,34 @@ function stubFetch(opts: FetchStubOptions = {}) {
         json: () => Promise.resolve({}),
       })
     }
-    if (url.includes('/api/tasks')) {
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(TASKS) })
-    }
-    return Promise.reject(new Error(`Unexpected URL: ${url}`))
+    return Promise.reject(new Error(`Unexpected fetch URL in 1229 suite: ${url}`))
   })
   vi.stubGlobal('fetch', mockFetch)
   return mockFetch
 }
 
-// ─── Render helper ────────────────────────────────────────────────────────────
+// --- Render helper ------------------------------------------------------------
+// Passes board + tasks as props; refetchSpy is tracked directly for AC3/AC4/AC5.
 
-function renderBoard() {
+function renderBoard(refetchSpy = vi.fn()) {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
-        <KanbanBoard />
+        <KanbanBoard
+          board={BOARD}
+          tasks={TASKS}
+          loading={false}
+          error={null}
+          refetchTasks={refetchSpy}
+        />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )
 }
 
-// ─── Drag helpers ─────────────────────────────────────────────────────────────
+// --- Drag helpers -------------------------------------------------------------
 
-/** Wait for the board to load, then fire dragStart on card with data-id="7". */
+/** Find card with data-id="7" (board is synchronous -- waitFor resolves in one tick). */
 async function waitAndDragCard(container: HTMLElement) {
   await waitFor(() => {
     expect(
@@ -122,16 +126,9 @@ function dropOnTodo(container: HTMLElement) {
   return col
 }
 
-/** Count calls to /api/tasks (excluding /move calls). */
-function countTaskFetches(mockFetch: ReturnType<typeof vi.fn>) {
-  return (mockFetch.mock.calls as [string, RequestInit?][]).filter(
-    ([url]) => url.includes('/api/tasks') && !/\/move/.test(url),
-  ).length
-}
+// --- Tests -------------------------------------------------------------------
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
-
-// ── AC1 (td:1): Drag propagates task identity into board state ────────────────
+// -- AC1 (td:1): Drag propagates task identity into board state ----------------
 
 describe('TestFromAC_DragStart', () => {
   afterEach(() => {
@@ -140,23 +137,22 @@ describe('TestFromAC_DragStart', () => {
 
   // Smoke test: drop on todo sends POST to /api/tasks/7/move, proving that the
   // dragged card's taskId (7) was propagated through Column into KanbanBoard state.
-  // Currently FAILS: Column.onDrop does not call any API callback.
   it('dragging card 7 then dropping on todo column sends POST to /api/tasks/7/move', async () => {
-    const mockFetch = stubFetch()
+    const mockFetch = stubMoveFetch()
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const moveCalls = (mockFetch.mock.calls as [string, RequestInit?][]).filter(
-        ([url]) => /\/api\/tasks\/7\/move/.test(url),
+      const moveCalls = (mockFetch.mock.calls as [string][]).filter(([url]) =>
+        /\/api\/tasks\/7\/move/.test(url),
       )
       expect(moveCalls.length).toBeGreaterThan(0)
     })
   })
 })
 
-// ── AC2 (td:2): Drop calls POST /api/tasks/{id}/move with correct body ─────────
+// -- AC2 (td:2): Drop calls POST /api/tasks/{id}/move with correct body --------
 
 describe('TestFromAC_DropCallsMoveAPI', () => {
   afterEach(() => {
@@ -164,129 +160,122 @@ describe('TestFromAC_DropCallsMoveAPI', () => {
   })
 
   // Happy: drop fires POST at all.
-  // Currently FAILS: Column.onDrop has no API callback.
   it('dropping on a valid column fires POST /api/tasks/{id}/move', async () => {
-    const mockFetch = stubFetch()
+    const mockFetch = stubMoveFetch()
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const moveCalls = (mockFetch.mock.calls as [string, RequestInit?][]).filter(
-        ([url]) => /\/api\/tasks\/\d+\/move/.test(url),
+      const moveCalls = (mockFetch.mock.calls as [string][]).filter(([url]) =>
+        /\/api\/tasks\/\d+\/move/.test(url),
       )
       expect(moveCalls.length).toBeGreaterThan(0)
     })
   })
 
   // Boundary: POST targets the correct task id in the URL path.
-  // Currently FAILS: no POST fired at all.
   it('POST URL contains the dragged card task id', async () => {
-    const mockFetch = stubFetch()
+    const mockFetch = stubMoveFetch()
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const moveCalls = (mockFetch.mock.calls as [string, RequestInit?][]).filter(
-        ([url]) => /\/api\/tasks\/7\/move/.test(url),
+      const moveCalls = (mockFetch.mock.calls as [string][]).filter(([url]) =>
+        /\/api\/tasks\/7\/move/.test(url),
       )
       expect(moveCalls.length).toBeGreaterThan(0)
     })
   })
 
-  // Boundary: POST body contains the target column status.
-  // Currently FAILS: no POST fired.
+  // Boundary: POST uses POST method and body contains the target column status.
   it('POST body contains status equal to the drop target column status', async () => {
-    const mockFetch = stubFetch()
+    const mockFetch = stubMoveFetch()
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const moveCalls = (mockFetch.mock.calls as [string, RequestInit?][]).filter(
-        ([url]) => /\/api\/tasks\/\d+\/move/.test(url),
+      const moveCalls = (mockFetch.mock.calls as [string, RequestInit][]).filter(([url]) =>
+        /\/api\/tasks\/\d+\/move/.test(url),
       )
       expect(moveCalls.length).toBeGreaterThan(0)
-      const [, init] = moveCalls[0] as [string, RequestInit]
+      const [, init] = moveCalls[0]
+      expect(init.method).toBe('POST')
       const body = JSON.parse(init.body as string) as Record<string, unknown>
       expect(body.status).toBe('todo')
     })
   })
 
   // Boundary: POST body contains the exact updated token from the dragged card.
-  // Currently FAILS: no POST fired.
   it('POST body contains the dragged card updated token', async () => {
-    const mockFetch = stubFetch()
+    const mockFetch = stubMoveFetch()
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const moveCalls = (mockFetch.mock.calls as [string, RequestInit?][]).filter(
-        ([url]) => /\/api\/tasks\/\d+\/move/.test(url),
+      const moveCalls = (mockFetch.mock.calls as [string, RequestInit][]).filter(([url]) =>
+        /\/api\/tasks\/\d+\/move/.test(url),
       )
       expect(moveCalls.length).toBeGreaterThan(0)
-      const [, init] = moveCalls[0] as [string, RequestInit]
+      const [, init] = moveCalls[0]
       const body = JSON.parse(init.body as string) as Record<string, unknown>
       expect(body.updated).toBe(TASK_ONE.updated)
     })
   })
 
-  // Edge: POST body has exactly the two required fields (status, updated) — no extras.
-  // Currently FAILS: no POST fired.
+  // Edge: POST body has exactly the two required fields (status, updated) -- no extras.
   it('POST body contains exactly the status and updated fields', async () => {
-    const mockFetch = stubFetch()
+    const mockFetch = stubMoveFetch()
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
-      const moveCalls = (mockFetch.mock.calls as [string, RequestInit?][]).filter(
-        ([url]) => /\/api\/tasks\/\d+\/move/.test(url),
+      const moveCalls = (mockFetch.mock.calls as [string, RequestInit][]).filter(([url]) =>
+        /\/api\/tasks\/\d+\/move/.test(url),
       )
       expect(moveCalls.length).toBeGreaterThan(0)
-      const [, init] = moveCalls[0] as [string, RequestInit]
+      const [, init] = moveCalls[0]
       const body = JSON.parse(init.body as string) as Record<string, unknown>
       expect(Object.keys(body).sort()).toEqual(['status', 'updated'])
     })
   })
 })
 
-// ── AC3 (td:1): On 2xx — refetchTasks called, drag state cleared ──────────────
+// -- AC3 (td:1): On 2xx -- refetchTasks() called ------------------------------
 
 describe('TestFromAC_DropSuccess', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  // Smoke: after 2xx, GET /api/tasks is called again (refetchTasks).
-  // Currently FAILS: no drop→API→refetch chain exists.
-  it('on 2xx response, GET /api/tasks is called again (refetchTasks)', async () => {
-    const mockFetch = stubFetch({ moveStatus: 200 })
-    const { container } = renderBoard()
+  // Smoke: 2xx -> refetchTasks() spy is called.
+  it('on 2xx response, refetchTasks() is called', async () => {
+    stubMoveFetch({ moveStatus: 200 })
+    const refetchSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy)
     await waitAndDragCard(container)
-    const taskFetchesBefore = countTaskFetches(mockFetch)
-
     dropOnTodo(container)
 
     await waitFor(() => {
-      expect(countTaskFetches(mockFetch)).toBeGreaterThan(taskFetchesBefore)
+      expect(refetchSpy).toHaveBeenCalled()
     })
   })
 })
 
-// ── AC4 (td:2): On 409 — stale-snapshot error displayed, refetchTasks called ──
+// -- AC4 (td:2): On 409 -- stale-snapshot error displayed, refetchTasks called -
 
 describe('TestFromAC_Drop409', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  // Happy (error condition): 409 → moveError element appears.
-  // Currently FAILS: no drop handler → no POST → no error state.
+  // Happy (error condition): 409 -> moveError element appears.
   it('on 409 response, displays a move-error message', async () => {
-    stubFetch({ moveStatus: 409 })
+    stubMoveFetch({ moveStatus: 409 })
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
@@ -298,10 +287,9 @@ describe('TestFromAC_Drop409', () => {
     })
   })
 
-  // Edge: 409 error message specifically indicates a stale / snapshot / conflict
-  // condition — not a generic error. Currently FAILS: no error appears.
+  // Edge: 409 error message specifically indicates a stale / snapshot / conflict.
   it('on 409 response, error text indicates a stale-snapshot conflict', async () => {
-    stubFetch({ moveStatus: 409 })
+    stubMoveFetch({ moveStatus: 409 })
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
@@ -314,60 +302,56 @@ describe('TestFromAC_Drop409', () => {
         text.includes('stale') ||
           text.includes('snapshot') ||
           text.includes('outdated') ||
-          text.includes('conflict') ||
-          text.includes('409'),
+          text.includes('conflict'),
       ).toBe(true)
     })
   })
 
-  // Boundary: 409 triggers refetchTasks to sync fresh updated tokens.
-  // This is the 409-specific behaviour — other errors (AC5) do NOT refetch.
-  // Currently FAILS: no drop handler.
-  it('on 409 response, GET /api/tasks is called again to sync fresh tokens', async () => {
-    const mockFetch = stubFetch({ moveStatus: 409 })
-    const { container } = renderBoard()
+  // Boundary: 409 triggers refetchTasks() to sync fresh updated tokens.
+  // This is the 409-specific behaviour -- other errors (AC5) do NOT refetch.
+  it('on 409 response, refetchTasks() is called to sync fresh tokens', async () => {
+    stubMoveFetch({ moveStatus: 409 })
+    const refetchSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy)
     await waitAndDragCard(container)
-    const taskFetchesBefore = countTaskFetches(mockFetch)
-
     dropOnTodo(container)
 
     await waitFor(() => {
-      expect(countTaskFetches(mockFetch)).toBeGreaterThan(taskFetchesBefore)
+      expect(refetchSpy).toHaveBeenCalled()
     })
   })
 
-  // Boundary: 422 (non-409 non-ok) must NOT trigger a refetch — the 409 branch
-  // is intentionally distinct from generic error handling (AC5 contract).
-  // Currently FAILS: no drop → move-error appears (first assertion fails).
-  it('on 422 response, displays error but does NOT trigger a refetch (unlike 409)', async () => {
-    const mockFetch = stubFetch({ moveStatus: 422 })
-    const { container } = renderBoard()
+  // Boundary: 422 (non-409 non-ok) must NOT trigger refetchTasks() -- the 409
+  // branch is intentionally distinct from generic error handling (AC5 contract).
+  // Direct spy assertion: stronger than a timing-window fetch-count check and
+  // catches early (pre-error-render) refetch calls that a baseline approach would miss.
+  it('on 422 response, displays error but does NOT call refetchTasks() (unlike 409)', async () => {
+    stubMoveFetch({ moveStatus: 422 })
+    const refetchSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
-    // Error must appear (currently no drop handler → this assertion fails RED).
     await waitFor(() => {
       expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
     })
 
-    // Refetch must NOT happen for a 422.
-    const taskFetchesBefore = countTaskFetches(mockFetch)
+    // Allow extra ticks; refetchTasks() must never be called for a 422.
     await new Promise<void>((resolve) => setTimeout(resolve, 80))
-    expect(countTaskFetches(mockFetch)).toBe(taskFetchesBefore)
+    expect(refetchSpy).not.toHaveBeenCalled()
   })
 })
 
-// ── AC5 (td:1): On other error — moveError shown, no immediate refetch ─────────
+// -- AC5 (td:2): On other error -- moveError shown, refetchTasks() NOT called --
 
 describe('TestFromAC_DropOtherError', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  // Smoke: 500 → moveError element appears.
-  // Currently FAILS: no drop handler.
+  // Smoke: 500 -> moveError element appears.
   it('on 500 response, displays a move-error message', async () => {
-    stubFetch({ moveStatus: 500 })
+    stubMoveFetch({ moveStatus: 500 })
     const { container } = renderBoard()
     await waitAndDragCard(container)
     dropOnTodo(container)
@@ -377,35 +361,39 @@ describe('TestFromAC_DropOtherError', () => {
     })
   })
 
-  // Error: network failure → moveError element appears.
-  // Currently FAILS: no drop handler.
-  it('on network failure, displays a move-error message', async () => {
-    stubFetch({ moveNetwork: true })
-    const { container } = renderBoard()
+  // Error: network failure -> moveError element appears; refetchTasks() NOT called.
+  it('on network failure, displays a move-error message and does NOT call refetchTasks()', async () => {
+    stubMoveFetch({ moveNetwork: true })
+    const refetchSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy)
     await waitAndDragCard(container)
     dropOnTodo(container)
 
     await waitFor(() => {
       expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
     })
-  })
 
-  // Boundary: 500 must NOT trigger an immediate refetch (polling handles eventual
-  // consistency). Currently FAILS: no drop → move-error (first waitFor fails).
-  it('on 500 response, displays error and does NOT trigger an additional refetch', async () => {
-    const mockFetch = stubFetch({ moveStatus: 500 })
-    const { container } = renderBoard()
-    await waitAndDragCard(container)
-    dropOnTodo(container)
-
-    // Error must appear (fails RED — no drop handling).
-    await waitFor(() => {
-      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
-    })
-
-    // No extra refetch after the error.
-    const taskFetchesBefore = countTaskFetches(mockFetch)
+    // Allow extra ticks; refetchTasks() must never be called for a network error.
     await new Promise<void>((resolve) => setTimeout(resolve, 80))
-    expect(countTaskFetches(mockFetch)).toBe(taskFetchesBefore)
+    expect(refetchSpy).not.toHaveBeenCalled()
+  })
+
+  // Boundary: 500 must NOT trigger refetchTasks() -- polling handles eventual
+  // consistency. Direct spy assertion catches early refetch calls that a
+  // timing-window fetch-count baseline approach would miss.
+  it('on 500 response, displays error and does NOT call refetchTasks()', async () => {
+    stubMoveFetch({ moveStatus: 500 })
+    const refetchSpy = vi.fn()
+    const { container } = renderBoard(refetchSpy)
+    await waitAndDragCard(container)
+    dropOnTodo(container)
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="move-error"]')).not.toBeNull()
+    })
+
+    // Allow extra ticks; refetchTasks() must never be called for a 500.
+    await new Promise<void>((resolve) => setTimeout(resolve, 80))
+    expect(refetchSpy).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,11 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import {
+  PButton,
+  PHeading,
+  PText,
+  PTextarea,
+} from '@porsche-design-system/components-react'
 
 import type { PendingDR } from '../hooks/usePendingDRs'
 
@@ -44,9 +50,34 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
     return null
   }
 
+  function setHeadingTagAttr(element: HTMLElement | null): void {
+    element?.setAttribute('tag', 'h3')
+  }
+
+  function setHideLabelAttr(element: HTMLElement | null): void {
+    element?.setAttribute('hide-label', '')
+  }
+
+  function readControlValue(
+    event: {
+      target?: { value?: unknown }
+      detail?: { value?: unknown }
+    },
+  ): string {
+    if (typeof event.detail?.value === 'string') {
+      return event.detail.value
+    }
+
+    if (typeof event.target?.value === 'string') {
+      return event.target.value
+    }
+
+    return ''
+  }
+
   return (
     <div data-testid="resolve-modal" role="dialog" aria-label="Resolve decision request">
-      <h3>{dr.title}</h3>
+      <PHeading ref={setHeadingTagAttr} tag="h3">{dr.title}</PHeading>
       <ReactMarkdown>{dr.body}</ReactMarkdown>
 
       <fieldset data-testid="response-selector">
@@ -83,25 +114,28 @@ export default function ResolveModal({ dr, onClose, onResolved }: ResolveModalPr
         </label>
       </fieldset>
 
-      <textarea
+      <PTextarea
+        ref={setHideLabelAttr}
         data-testid="resolve-notes"
+        hideLabel={true}
         value={notes}
-        onChange={(event) => setNotes(event.target.value)}
+        onChange={(event) => setNotes(readControlValue(event))}
+        onInput={(event) => setNotes(readControlValue(event))}
       />
 
-      <button
+      <PButton
         data-testid="resolve-submit"
         onClick={() => {
           void handleSubmit()
         }}
       >
         Submit
-      </button>
-      <button data-testid="resolve-cancel" onClick={onClose}>
+      </PButton>
+      <PButton data-testid="resolve-cancel" variant="tertiary" onClick={onClose}>
         Cancel
-      </button>
+      </PButton>
 
-      {error ? <p data-testid="resolve-error">{error}</p> : null}
+      {error ? <PText data-testid="resolve-error">{error}</PText> : null}
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PButton, PText } from '@porsche-design-system/components-react'
 import type { PendingDR } from '../hooks/usePendingDRs'
 
 export interface DRStatusIndicatorProps {
@@ -21,34 +22,36 @@ export default function DRStatusIndicator({ count, items, onItemClick }: DRStatu
 
   return (
     <div>
-      <button
+      <PButton
         type="button"
         data-testid="dr-indicator"
         data-status={status}
         aria-label={`Pending decision requests: ${count}`}
+        variant="tertiary"
         onClick={() => setIsOpen((current) => !current)}
       >
         DR {count}
-      </button>
+      </PButton>
 
       {isOpen ? (
         <div data-testid="dr-popover" role="dialog" aria-label="Pending decision requests">
           {items.length === 0 ? (
-            <p>No pending decision requests</p>
+            <PText>No pending decision requests</PText>
           ) : (
             <ul>
               {items.map((item) => (
                 <li key={item.id}>
-                  <button
+                  <PButton
                     type="button"
                     data-testid={`dr-item-${item.id}`}
+                    variant="tertiary"
                     onClick={() => onItemClick(item.id)}
                   >
                     <span>{item.title}</span>
                     <span>{item.agent}</span>
                     <span>{item.task_id}</span>
                     <span>{formatAge(item.created)}</span>
-                  </button>
+                  </PButton>
                 </li>
               ))}
             </ul>

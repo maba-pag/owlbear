@@ -1,4 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import {
+  PButton,
+  PHeading,
+  PInputText,
+  PSelect,
+  PText,
+} from '@porsche-design-system/components-react'
 
 export const ARCHIVAL_REASONS = [
   'completed',
@@ -50,7 +57,7 @@ export default function ArchivalModal({
 }: ArchivalModalProps) {
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement | null>(null)
-  const reasonSelectRef = useRef<HTMLSelectElement | null>(null)
+  const reasonSelectRef = useRef<HTMLElement | null>(null)
 
   const [reason, setReason] = useState<ArchivalReason | ''>('')
   const [refsRaw, setRefsRaw] = useState('')
@@ -77,6 +84,27 @@ export default function ArchivalModal({
     reasonSelectRef.current?.focus()
   }, [])
 
+  function setHeadingTagAttr(element: HTMLElement | null): void {
+    element?.setAttribute('tag', 'h3')
+  }
+
+  function readControlValue(
+    event: {
+      target?: { value?: unknown }
+      detail?: { value?: unknown }
+    },
+  ): string {
+    if (typeof event.detail?.value === 'string') {
+      return event.detail.value
+    }
+
+    if (typeof event.target?.value === 'string') {
+      return event.target.value
+    }
+
+    return ''
+  }
+
   function getFocusableElements(): HTMLElement[] {
     const root = dialogRef.current
     if (!root) {
@@ -85,7 +113,8 @@ export default function ArchivalModal({
 
     return Array.from(
       root.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), ' +
+        'p-button:not([disabled]), p-input-text:not([disabled]), p-select:not([disabled]), ' +
+          'p-textarea:not([disabled]), button:not([disabled]), [href], input:not([disabled]), ' +
           'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
     )
@@ -190,15 +219,18 @@ export default function ArchivalModal({
 
   return (
     <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown}>
-      <h3 id={titleId}>Archive task</h3>
+      <PHeading ref={setHeadingTagAttr} id={titleId} tag="h3">Archive task</PHeading>
 
       <label>
         Reason
-        <select
+        <PSelect
           ref={reasonSelectRef}
           value={reason}
           onChange={(event) => {
-            handleReasonChange(event.target.value)
+            handleReasonChange(readControlValue(event))
+          }}
+          onInput={(event) => {
+            handleReasonChange(readControlValue(event))
           }}
         >
           <option value="">Select reason</option>
@@ -213,26 +245,29 @@ export default function ArchivalModal({
               </option>
             )
           })}
-        </select>
+        </PSelect>
       </label>
 
       {requiresRefs ? (
         <label>
           Refs
-          <input
-            type="text"
+          <PInputText
             placeholder="e.g., 1230, 1229"
             value={refsRaw}
             onChange={(event) => {
-              setRefsRaw(event.target.value)
+              setRefsRaw(readControlValue(event))
+              setError(null)
+            }}
+            onInput={(event) => {
+              setRefsRaw(readControlValue(event))
               setError(null)
             }}
           />
-          <p>Required — enter at least one task ID</p>
+          <PText>Required - enter at least one task ID</PText>
         </label>
       ) : null}
 
-      <button
+      <PButton
         data-testid="archival-submit"
         disabled={submitDisabled}
         onClick={() => {
@@ -240,12 +275,12 @@ export default function ArchivalModal({
         }}
       >
         Archive
-      </button>
-      <button type="button" onClick={onClose}>
+      </PButton>
+      <PButton type="button" variant="tertiary" onClick={onClose}>
         Cancel
-      </button>
+      </PButton>
 
-      {error ? <p data-testid="archival-error">{error}</p> : null}
+      {error ? <PText data-testid="archival-error">{error}</PText> : null}
     </div>
   )
 }

@@ -1,4 +1,10 @@
 import { useEffect, useState } from 'react'
+import {
+  PButton,
+  PInputText,
+  PSelect,
+  PTextarea,
+} from '@porsche-design-system/components-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
@@ -77,12 +83,33 @@ export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
 
   const taskSessions = sessions.filter((s) => s.task_id === t.id)
 
+  function setHideLabelAttr(element: HTMLElement | null): void {
+    element?.setAttribute('hide-label', '')
+  }
+
+  function readControlValue(
+    event: {
+      target?: { value?: unknown }
+      detail?: { value?: unknown }
+    },
+  ): string {
+    if (typeof event.detail?.value === 'string') {
+      return event.detail.value
+    }
+
+    if (typeof event.target?.value === 'string') {
+      return event.target.value
+    }
+
+    return ''
+  }
+
   return (
     <div>
       {/* History tab button — always visible */}
-      <button data-testid="history-tab" onClick={() => void handleHistoryClick()}>
+      <PButton data-testid="history-tab" variant="tertiary" onClick={() => void handleHistoryClick()}>
         History
-      </button>
+      </PButton>
 
       {/* Read-only fields */}
       <span data-testid="field-id">{t.id}</span>
@@ -90,60 +117,85 @@ export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
       <span data-testid="field-created">{t.created}</span>
 
       {/* Editable fields */}
-      <input
+      <PInputText
+        ref={setHideLabelAttr}
         data-field="title"
+        hideLabel={true}
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(event) => setTitle(readControlValue(event))}
+        onInput={(event) => setTitle(readControlValue(event))}
       />
-      <select
+      <PSelect
+        ref={setHideLabelAttr}
         data-field="priority"
+        hideLabel={true}
         value={priority}
-        onChange={(e) => setPriority(e.target.value)}
+        onChange={(event) => setPriority(readControlValue(event))}
+        onInput={(event) => setPriority(readControlValue(event))}
       >
         <option value="someday">someday</option>
         <option value="nice-to-have">nice-to-have</option>
         <option value="important">important</option>
         <option value="needed">needed</option>
         <option value="critical">critical</option>
-      </select>
+      </PSelect>
       {t.tags.map((tag) => (
         <span key={tag} data-testid="tag-chip">
           {tag}
         </span>
       ))}
-      <input data-field="depends_on" defaultValue={t.depends_on.join(', ')} />
-      <input
+      <PInputText
+        ref={setHideLabelAttr}
+        data-field="depends_on"
+        hideLabel={true}
+        defaultValue={t.depends_on.join(', ')}
+      />
+      <PInputText
+        ref={setHideLabelAttr}
         data-field="parent"
+        hideLabel={true}
         defaultValue={t.parent !== null ? String(t.parent) : ''}
       />
       {t.blocked && (
-        <input data-field="block_reason" defaultValue={t.block_reason ?? ''} />
+        <PInputText
+          ref={setHideLabelAttr}
+          data-field="block_reason"
+          hideLabel={true}
+          defaultValue={t.block_reason ?? ''}
+        />
       )}
 
       {/* Body — markdown view or edit textarea */}
       {editBody ? (
-        <textarea data-field="body" value={body} onChange={(e) => setBody(e.target.value)} />
+        <PTextarea
+          ref={setHideLabelAttr}
+          data-field="body"
+          hideLabel={true}
+          value={body}
+          onChange={(event) => setBody(readControlValue(event))}
+          onInput={(event) => setBody(readControlValue(event))}
+        />
       ) : (
         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{t.body}</ReactMarkdown>
       )}
-      <button data-testid="body-edit-toggle" onClick={() => setEditBody((v) => !v)}>
+      <PButton data-testid="body-edit-toggle" variant="tertiary" onClick={() => setEditBody((v) => !v)}>
         Edit
-      </button>
+      </PButton>
 
       {/* Actions */}
-      <button data-testid="save-button" onClick={() => void handleSave()}>
+      <PButton data-testid="save-button" onClick={() => void handleSave()}>
         Save
-      </button>
-      <button data-testid="move-backward" onClick={() => setConfirmType('move-backward')}>
+      </PButton>
+      <PButton data-testid="move-backward" variant="tertiary" onClick={() => setConfirmType('move-backward')}>
         Move Backward
-      </button>
-      <button data-testid="unclaim-action" onClick={() => setConfirmType('unclaim')}>
+      </PButton>
+      <PButton data-testid="unclaim-action" variant="tertiary" onClick={() => setConfirmType('unclaim')}>
         Unclaim
-      </button>
+      </PButton>
       {t.blocked && (
-        <button data-testid="unblock-action" onClick={() => setConfirmType('unblock')}>
+        <PButton data-testid="unblock-action" variant="tertiary" onClick={() => setConfirmType('unblock')}>
           Unblock
-        </button>
+        </PButton>
       )}
 
       {/* History subtab */}
@@ -152,13 +204,14 @@ export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
       {/* Conflict modal */}
       {showConflict && (
         <div data-testid="conflict-modal">
-          <button
+          <PButton
             data-testid="conflict-refresh"
+            variant="tertiary"
             onClick={() => setShowConflict(false)}
           >
             Discard changes
-          </button>
-          <button data-testid="conflict-overwrite" onClick={() => void handleForceSave()}>Force save</button>
+          </PButton>
+          <PButton data-testid="conflict-overwrite" onClick={() => void handleForceSave()}>Force save</PButton>
         </div>
       )}
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { PButton } from '@porsche-design-system/components-react'
 import { type Session } from './HistorySubtab'
 import { rowStyleForState } from '../utils/styles'
 
@@ -46,21 +47,21 @@ export default function ActivityTab({ onSelectTask }: ActivityTabProps) {
   return (
     <div>
       <div>
-        <button data-testid="filter-active" onClick={() => setFilter('active')}>
+        <PButton data-testid="filter-active" variant="tertiary" onClick={() => setFilter('active')}>
           Active
-        </button>
-        <button data-testid="filter-all" onClick={() => setFilter('all')}>
+        </PButton>
+        <PButton data-testid="filter-all" variant="tertiary" onClick={() => setFilter('all')}>
           All
-        </button>
-        <button data-testid="filter-blocked" onClick={() => setFilter('blocked')}>
+        </PButton>
+        <PButton data-testid="filter-blocked" variant="tertiary" onClick={() => setFilter('blocked')}>
           Blocked
-        </button>
-        <button data-testid="filter-stuck" onClick={() => setFilter('stuck')}>
+        </PButton>
+        <PButton data-testid="filter-stuck" variant="tertiary" onClick={() => setFilter('stuck')}>
           Stuck
-        </button>
-        <button data-testid="filter-released" onClick={() => setFilter('released')}>
+        </PButton>
+        <PButton data-testid="filter-released" variant="tertiary" onClick={() => setFilter('released')}>
           Released
-        </button>
+        </PButton>
       </div>
       <div>
         {displayed.map((s, i) => (

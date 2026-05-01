@@ -1,3 +1,5 @@
+import { PButton } from '@porsche-design-system/components-react'
+
 export interface ConfirmDialogProps {
   type: 'move-backward' | 'unblock' | 'unclaim'
   blockReason?: string | null
@@ -9,8 +11,8 @@ export default function ConfirmDialog({ type, blockReason, onCancel, onConfirm }
   return (
     <div data-testid="confirm-dialog">
       {type === 'unblock' && blockReason && <span>{blockReason}</span>}
-      <button onClick={onCancel}>Cancel</button>
-      <button onClick={onConfirm}>Confirm</button>
+      <PButton variant="tertiary" onClick={onCancel}>Cancel</PButton>
+      <PButton onClick={onConfirm}>Confirm</PButton>
     </div>
   )
 }

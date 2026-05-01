@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PButton, PText } from '@porsche-design-system/components-react'
 import RepairPanel from './RepairPanel'
 
 export interface ScanItem {
@@ -23,20 +24,21 @@ export default function HealthBadge({ items, corruptionCount = 0, onRepairSucces
 
   return (
     <div>
-      <button
+      <PButton
         type="button"
         data-testid="health-badge"
         data-region="health"
         data-health={health}
         aria-label={ariaLabel}
+        variant="tertiary"
         onClick={() => setIsOpen((current) => !current)}
       >
         Health {label}
-      </button>
+      </PButton>
       {isOpen ? (
         <div data-testid="health-badge-popover" role="dialog" aria-label="Health details">
           {items.length === 0 ? (
-            <p>No issues</p>
+            <PText>No issues</PText>
           ) : (
             <ul>
               {items.map((item, index) => (

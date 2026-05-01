@@ -98,6 +98,15 @@ describe('TestFromAC_FilterTasks', () => {
       const result = filterTasks([taskCrit, taskImpt], { ...noFilter, priority: 'critical' })
       expect(result).toEqual([taskCrit])
     })
+
+    it('priority match is case-sensitive — uppercase variant does not match lowercase filter', () => {
+      // Proves exact string equality: 'CRITICAL' !== 'critical'
+      // A case-insensitive implementation would return both tasks; exact match returns only the lowercase one.
+      const lower = makeTask({ id: 1, priority: 'critical' })
+      const upper = makeTask({ id: 2, priority: 'CRITICAL' })
+      const result = filterTasks([lower, upper], { ...noFilter, priority: 'critical' })
+      expect(result).toEqual([lower])
+    })
   })
 
   // ─── Tags dimension (AND semantics) ──────────────────────────────────────

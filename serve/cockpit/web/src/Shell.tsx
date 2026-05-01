@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
+import { PButton } from '@porsche-design-system/components-react'
 import KanbanBoard from './KanbanBoard'
 import ActivityTab from './components/ActivityTab'
 import DetailTab, { type TaskDetail } from './components/DetailTab'
@@ -122,10 +123,10 @@ function Shell() {
         />
       </header>
       <nav className="shell__nav-rail" data-region="nav-rail">
-        <button data-surface="kanban" aria-current="page">
+        <PButton data-surface="kanban" aria-current="page" variant="tertiary">
           <p-icon name="list" aria-hidden="true" />
           Kanban
-        </button>
+        </PButton>
       </nav>
       <main className="shell__workspace" data-region="workspace">
         <Routes>
