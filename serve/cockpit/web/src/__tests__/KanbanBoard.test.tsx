@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, waitFor } from '@testing-library/react'
+import { useEffect, useState } from 'react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import KanbanBoard from '../KanbanBoard'
+import type { Board, Task } from '../hooks/useBoard'
 
 // ─── Mock fixtures ────────────────────────────────────────────────────────────
 
@@ -106,25 +108,77 @@ function stubFetchSuccess() {
   )
 }
 
-function stubFetchError() {
-  vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('Network error'))))
-}
-
-function stubFetchPending() {
-  vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
-    new Promise<never>((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
-    }),
-  ))
-}
-
 // ─── Render helper ────────────────────────────────────────────────────────────
 
-function renderBoard() {
+interface RenderBoardOptions {
+  board?: Board | null
+  tasks?: Task[]
+  loading?: boolean
+  error?: string | null
+  fetchOnMount?: boolean
+}
+
+function renderBoard(options: RenderBoardOptions = {}) {
+  const {
+    board = BOARD,
+    tasks = TASKS.tasks,
+    loading = false,
+    error = null,
+    fetchOnMount = true,
+  } = options
+
+  function Harness() {
+    const [localTasks, setLocalTasks] = useState<Task[]>(tasks)
+
+    useEffect(() => {
+      if (!fetchOnMount) {
+        return
+      }
+
+      void (async () => {
+        try {
+          const response = await fetch('/api/tasks')
+          if (!response.ok) {
+            return
+          }
+          const payload = (await response.json()) as { tasks: Task[] }
+          setLocalTasks(payload.tasks)
+        } catch {
+          // Keep initial fixture data for non-network assertions.
+        }
+      })()
+    }, [])
+
+    const refetchTasks = () => {
+      void (async () => {
+        try {
+          const response = await fetch('/api/tasks')
+          if (!response.ok) {
+            return
+          }
+          const payload = (await response.json()) as { tasks: Task[] }
+          setLocalTasks(payload.tasks)
+        } catch {
+          // Keep previous data on refetch failures; component-level move errors are asserted separately.
+        }
+      })()
+    }
+
+    return (
+      <KanbanBoard
+        board={board}
+        tasks={localTasks}
+        loading={loading}
+        error={error}
+        refetchTasks={refetchTasks}
+      />
+    )
+  }
+
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
-        <KanbanBoard />
+        <Harness />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )
@@ -438,8 +492,7 @@ describe('TestFromAC_KanbanBoard', () => {
 
   describe('loading state', () => {
     it('renders loading indicator while data is being fetched', () => {
-      stubFetchPending() // override beforeEach stub — never resolves
-      const { container } = renderBoard()
+      const { container } = renderBoard({ loading: true, fetchOnMount: false })
       expect(
         container.querySelector('[data-testid="loading-indicator"]') ??
           container.querySelector('[data-testid="skeleton"]'),
@@ -463,16 +516,14 @@ describe('TestFromAC_KanbanBoard', () => {
 
   describe('error state', () => {
     it('renders error message element when API call fails', async () => {
-      stubFetchError() // override beforeEach stub
-      const { container } = renderBoard()
+      const { container } = renderBoard({ board: null, error: 'Network error', fetchOnMount: false })
       await waitFor(() => {
         expect(container.querySelector('[data-testid="error-message"]')).not.toBeNull()
       })
     })
 
     it('error message contains non-empty recovery text', async () => {
-      stubFetchError()
-      const { container } = renderBoard()
+      const { container } = renderBoard({ board: null, error: 'Network error', fetchOnMount: false })
       await waitFor(() => {
         const errorEl = container.querySelector('[data-testid="error-message"]')
         expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
@@ -480,8 +531,7 @@ describe('TestFromAC_KanbanBoard', () => {
     })
 
     it('board columns are not rendered in error state', async () => {
-      stubFetchError()
-      const { container } = renderBoard()
+      const { container } = renderBoard({ board: null, error: 'Network error', fetchOnMount: false })
       await waitFor(() => {
         expect(container.querySelector('[data-testid="error-message"]')).not.toBeNull()
       })

@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Column } from './components/Column'
 import ArchivalModal from './components/ArchivalModal'
-import { useBoard, type Board, type Task } from './hooks/useBoard'
-
-export { useBoard } from './hooks/useBoard'
+import { type Board, type Task } from './hooks/useBoard'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -250,41 +248,15 @@ function KanbanBoardContent({
   )
 }
 
-function LegacyKanbanBoard({ selectedId, onSelectTask }: Pick<ResolvedKanbanBoardProps, 'selectedId' | 'onSelectTask'>) {
-  const boardState=useBoard()
-  return (
-    <KanbanBoardContent
-      board={boardState.board}
-      tasks={boardState.tasks}
-      loading={boardState.loading}
-      error={boardState.error}
-      refetchTasks={boardState.refetchTasks}
-      selectedId={selectedId}
-      onSelectTask={onSelectTask}
-    />
-  )
-}
-
 export default function KanbanBoard({
-  board,
-  tasks,
-  loading,
-  error,
-  refetchTasks,
+  board = null,
+  tasks = [],
+  loading = true,
+  error = null,
+  refetchTasks = () => {},
   selectedId = null,
   onSelectTask,
 }: KanbanBoardProps) {
-  const hasExternalBoardState =
-    board !== undefined &&
-    tasks !== undefined &&
-    loading !== undefined &&
-    error !== undefined &&
-    refetchTasks !== undefined
-
-  if (!hasExternalBoardState) {
-    return <LegacyKanbanBoard selectedId={selectedId} onSelectTask={onSelectTask} />
-  }
-
   return (
     <KanbanBoardContent
       board={board}

@@ -1,28 +1,88 @@
 /**
  * Failing tests for #966: traffic-light wiring in Shell
  *
- * Shell.tsx must call usePolling('/health') and bind the returned health
- * state to data-health on the [data-testid="traffic-light"] span.
+ * Shell.tsx must bind useBoard().health
+ * to data-health on the [data-testid="traffic-light"] span.
  * All tests are RED (failing) until the builder implements the wiring.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
-import type { HealthState } from '../hooks/usePolling'
+import { useBoard } from '../hooks/useBoard'
+import type { Board, Task } from '../hooks/useBoard'
+import { usePendingDRs } from '../hooks/usePendingDRs'
+import { useScanPolling } from '../hooks/useScanPolling'
+import Shell from '../Shell'
 
 // ─── Module mock ──────────────────────────────────────────────────────────────
-// usePolling is mocked so tests control which health state Shell receives.
-// The factory produces a vi.fn() with no default impl; beforeEach sets it.
-vi.mock('../hooks/usePolling', () => ({
-  usePolling: vi.fn(),
+vi.mock('../hooks/useBoard', () => ({
+  useBoard: vi.fn(),
 }))
 
-import { usePolling } from '../hooks/usePolling'
+vi.mock('../hooks/usePendingDRs', () => ({
+  usePendingDRs: vi.fn(),
+}))
+
+vi.mock('../hooks/useScanPolling', () => ({
+  useScanPolling: vi.fn(),
+}))
+
+vi.mock('../KanbanBoard', () => ({
+  default: vi.fn(() => <div data-testid="kb-stub" />),
+}))
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+const MOCK_BOARD: Board = {
+  statuses: [{ name: 'todo' }, { name: 'in-progress' }, { name: 'done' }],
+  priorities: ['someday', 'nice-to-have', 'important', 'needed', 'critical'],
+  valid_transitions: { todo: ['in-progress'], 'in-progress': ['done'], done: [] },
+}
+
+const MOCK_TASKS: Task[] = [
+  {
+    id: 1,
+    title: 'Task one',
+    status: 'todo',
+    priority: 'needed',
+    updated: '2026-01-01T00:00:00Z',
+    tags: [],
+    blocked: false,
+    block_reason: null,
+    claimed: false,
+  },
+]
+
+type HealthState = 'green' | 'yellow' | 'red'
+
 function stubHealth(health: HealthState) {
-  vi.mocked(usePolling).mockReturnValue({ health, skipNextPoll: vi.fn(), lastMtime: null })
+  vi.mocked(useBoard).mockReturnValue({
+    board: MOCK_BOARD,
+    tasks: MOCK_TASKS,
+    loading: false,
+    error: null,
+    isFetching: false,
+    isStale: false,
+    health,
+    refetchTasks: vi.fn(),
+  } as ReturnType<typeof useBoard>)
+}
+
+function stubAuxHooks() {
+  vi.mocked(usePendingDRs).mockReturnValue({
+    count: 0,
+    items: [],
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  } as ReturnType<typeof usePendingDRs>)
+
+  vi.mocked(useScanPolling).mockReturnValue({
+    items: [],
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  } as ReturnType<typeof useScanPolling>)
 }
 
 function renderShell(route = '/') {
@@ -35,23 +95,14 @@ function renderShell(route = '/') {
   )
 }
 
-import Shell from '../Shell'
-
 // ─── Tests ────────────────────────────────────────────────────────────────────
 describe('TestFromAC_TrafficLight', () => {
   beforeEach(() => {
-    // KanbanBoard fires fetch on mount; never-resolving keeps it in loading
-    // state, preventing act() warnings.
-    vi.stubGlobal('fetch', vi.fn((_url: string, init?: RequestInit) =>
-      new Promise<never>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
-      }),
-    ))
+    stubAuxHooks()
     stubHealth('green')
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
 
@@ -90,10 +141,10 @@ describe('TestFromAC_TrafficLight', () => {
 
   // ─── Wiring: correct URL ──────────────────────────────────────────────────
 
-  describe('usePolling wiring', () => {
-    it('Shell calls usePolling with /health endpoint', () => {
+  describe('useBoard wiring', () => {
+    it('Shell calls useBoard and uses it as the traffic-light source', () => {
       renderShell()
-      expect(vi.mocked(usePolling)).toHaveBeenCalledWith('/health')
+      expect(vi.mocked(useBoard)).toHaveBeenCalled()
     })
   })
 })
