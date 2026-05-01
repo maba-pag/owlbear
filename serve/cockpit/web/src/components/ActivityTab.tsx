@@ -1,34 +1,12 @@
-import { useState, useEffect, type CSSProperties } from 'react'
+import { useState, useEffect } from 'react'
 import { type Session } from './HistorySubtab'
+import { rowStyleForState } from '../utils/styles'
 
 export interface ActivityTabProps {
   onSelectTask?: (taskId: number, subtab?: string) => void
 }
 
 type FilterType = 'all' | 'active' | 'blocked' | 'stuck' | 'released'
-
-function rowStyleForState(state: string): CSSProperties {
-  if (state === 'blocked' || state === 'rejected') {
-    return {
-      cursor: 'pointer',
-      borderLeft: '4px solid var(--pds-theme-light-notification-error)',
-      backgroundColor: 'var(--pds-theme-light-notification-error-soft)',
-    }
-  }
-
-  if (state === 'stuck') {
-    return {
-      cursor: 'pointer',
-      borderLeft: '4px solid var(--pds-theme-light-notification-warning)',
-      backgroundColor: 'var(--pds-theme-light-notification-warning-soft)',
-    }
-  }
-
-  return {
-    cursor: 'pointer',
-    borderLeft: '4px solid var(--pds-theme-light-contrast-low)',
-  }
-}
 
 function applyFilter(sessions: Session[], filter: FilterType): Session[] {
   switch (filter) {

@@ -1,4 +1,4 @@
-import { type CSSProperties } from 'react'
+import { rowStyleForState } from '../utils/styles'
 
 export interface Session {
   task_id: number
@@ -12,29 +12,6 @@ export interface Session {
 export interface HistorySubtabProps {
   sessions: Session[]
   onSelectTask?: (taskId: number, subtab?: string) => void
-}
-
-function rowStyleForState(state: string): CSSProperties {
-  if (state === 'blocked' || state === 'rejected') {
-    return {
-      cursor: 'pointer',
-      borderLeft: '4px solid var(--pds-theme-light-notification-error)',
-      backgroundColor: 'var(--pds-theme-light-notification-error-soft)',
-    }
-  }
-
-  if (state === 'stuck') {
-    return {
-      cursor: 'pointer',
-      borderLeft: '4px solid var(--pds-theme-light-notification-warning)',
-      backgroundColor: 'var(--pds-theme-light-notification-warning-soft)',
-    }
-  }
-
-  return {
-    cursor: 'pointer',
-    borderLeft: '4px solid var(--pds-theme-light-contrast-low)',
-  }
 }
 
 export default function HistorySubtab({ sessions, onSelectTask }: HistorySubtabProps) {
