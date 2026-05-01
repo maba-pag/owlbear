@@ -12,18 +12,13 @@ See [copilot-instructions.md](../../.github/copilot-instructions.md) §4 for lau
 
 ## Engine Surface — Allowlist
 
-The cockpit exposes a subset of `KanbanEngine`'s public API. All read access goes through `adapter.py`.
+The cockpit exposes a subset of `KanbanEngine`'s public API. Read routes call the engine or `CockpitView` directly; `adapter.py` retains only one method used by mutation routes.
 
-### Via adapter (read-only)
+### Via adapter
 
 | Method | Purpose |
 |--------|---------|
-| `list_tasks(**kwargs)` | Task summaries for board columns |
-| `show_task(task_id)` | Full task detail for the detail tab |
-| `board_config()` | Statuses and priorities for column rendering |
-| `valid_transitions(status)` | Validates move targets; also used by `move_task` route |
-| `list_sessions(**kwargs)` | Work session data for the activity tab |
-| `list_activity(**kwargs)` | Activity events for the audit trail tab |
+| `valid_transitions(status)` | Validates move targets; called by the `move_task` mutation route |
 
 ### Mutation routes
 

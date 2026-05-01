@@ -1,4 +1,4 @@
-"""Cockpit engine adapter — thin wrappers over allowed KanbanEngine read methods."""
+"""Cockpit engine adapter — thin shim exposing valid_transitions for mutation routes."""
 
 from __future__ import annotations
 
