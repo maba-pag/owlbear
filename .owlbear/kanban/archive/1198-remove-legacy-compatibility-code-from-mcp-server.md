@@ -1,10 +1,10 @@
 ---
 id: 1198
 title: Remove legacy compatibility code from MCP server
-status: docs
+status: archived
 priority: needed
 created: 2026-04-30 15:28:54.145200+00:00
-updated: 2026-05-01T03:02:20.833634+00:00
+updated: 2026-05-01T03:38:19.025788+00:00
 tags:
 - audit-kanban
 - mcp-server
@@ -724,3 +724,74 @@ Test-writer: PASS-THROUGH — implementation committed, 18 task-owned tests gree
 - Latest architecture refinement mattered here; earlier review failures in the body were stale once the gate was narrowed to zero `task_id` TypeErrors.
 - Running both a focused proof slice and a broader migration slice was necessary to separate task-owned correctness from unrelated neighboring red tests.
 - Targeted grep over the refined migration file list was the most reliable way to confirm the public `task_id=` call shape was fully removed from 1198-owned suites.
+[[2026-05-01]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A — already accurate | `serve/mcp-kanban/README.md` Tools table already shows `id: int` signatures for all 4 lifecycle tools; no `task_id`, `**legacy`, or compat helper references present. `create_dr`'s `task_id: str` is a different unaffected tool. |
+| 2 | Module docstrings | Yes | Verified accurate | `move_task`, `edit_task`, `start_work`, `end_work` docstrings in `server.py` are correct and contain no references to removed compat path. |
+| 3 | External attribution | No | N/A | No external patterns used. |
+| 4 | Research doc | No | N/A | No research doc was produced for this task. |
+| 5 | Diagram maintenance | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes: `serve/mcp-kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes: `serve/mcp-*/src/**`) both matched — footers updated to `Last verified: 2026-05-01 (8dfad0d8)`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested. |
+| 7 | Deletion detection | No | N/A | Deleted functions (`_extract_task_id_compat`, `_resolve_tool_id`) were private helpers (underscore-prefixed); no IN-scope descriptive doc references them. README confirms no mention. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/mcp-kanban/src/owlbear_mcp_kanban/server.py | IN (docstrings) | Verified — docstrings accurate |
+| tests/test_server_1198.py | OUT | N/A |
+| tests/test_server_1170.py | OUT | N/A |
+| tests/test_server_1172.py | OUT | N/A |
+| tests/test_mcp_lifecycle_1173.py | OUT | N/A |
+| serve/mcp-kanban/tests/* (9 migration files) | OUT | N/A |
+| tests/test_mcp_kanban_1091.py | OUT | N/A |
+| tests/test_mcp_kanban_1092.py | OUT | N/A |
+| share/diagrams/kanban.excalidraw | IN | Footer updated |
+| share/diagrams/mcp-topology.excalidraw | IN | Footer updated |
+
+### Files Updated
+- share/diagrams/kanban.excalidraw (footer: 8e9d7030 → 8dfad0d8)
+- share/diagrams/mcp-topology.excalidraw (footer: 9cc65998 → 8dfad0d8)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `_extract_task_id_compat()` and `_resolve_tool_id()` deleted (td:0) | Workspace grep: zero matches in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` | PASS |
+| `**legacy` kwargs removed from 4 signatures (td:0) | Workspace grep: zero matches; signature tests at `tests/test_server_1198.py:95-119` green | PASS |
+| Legacy `title` kwarg handling removed from `edit_task` (td:0) | Reviewer confirmed `edit_task` whitelist at server.py:490-536 has no title forwarding | PASS |
+| Tool functions use `id: StrId` directly — no resolution indirection (td:1) | Direct binding at server.py:441,509,553,601; 14 task-owned proof tests (parameter name, StrId annotation, positive routing, legacy-kwarg rejection) | PASS |
+| Compat tests deleted from `test_server_1170.py` (td:0) | Workspace grep: zero matches for removed symbols | PASS |
+| 9 per-file task_id migration AC lines (td:0 each) | Commit `e11271c1`: 9 files, 73 insertions/deletions; 96-test spot-check all green | PASS |
+| Zero TypeError task_id failures in broader MCP contract slice (td:0) | Full suite: 3341 passed, 109 failed — zero TypeError task_id failures; MCP-domain failures are pre-existing, pre-dated #1198, documented by reviewer | PASS |
+
+### Test Results
+- pytest (full suite): 3341 passed, 109 failed — 0 failures in #1198 scope
+- pytest (task-owned + migration slice): 96 passed, 0 failed
+- ruff: clean (0 violations)
+- coverage owlbear_mcp_kanban.server: 94%
+
+### Commits
+- `706cc2f7` — builder: remove MCP legacy compatibility shims (#1198)
+- `e11271c1` — test-writer: migrate task_id= to id= in durable MCP contract suites (#1198)
+
+### Reviewer Evidence
+Thorough: dual quality-runner slices, explicit AC compliance table for all 15 lines, PASS verdict. Trusted.
+
+### Architect Quality: 3/5
+Original "Existing non-compat test suite passes" clause was underspecified — required 2 reviewer rejections and 3 architecture passes to refine to explicit per-file migration gates. Core deletion AC was adequate; integration gate clause was the gap.
+
+### Deduction Breakdown
+- AC quality score = 3: -0.03
+
+### Confidence: 0.97
+### Action: archive
