@@ -28,7 +28,7 @@ The cockpit is *stop-and-redirect*, not *start-and-run*. This invariant explains
 |---|---------|-------------------|
 | O1 | **Board at a glance** | At 1440×900 with ≥700 tasks loaded, all status columns visible (horizontal scroll between columns; vertical within). "What's in review?" / "What's blocked?" answerable without clicking. Cold-load time is *not* a pass/fail criterion — post-load smoothness is. |
 | O2 | **Intervene without leaving the surface** | Six v1 mutations (move, reprioritise, block/unblock, unclaim, edit body, edit allowlisted YAML — fields: `title`, `tags`, `priority`, `depends_on`, `parent`, `block_reason`) reachable from the board. Quick mutations ≤2 clicks/keystrokes. A GUI mutation is visible to a parallel MCP `list_tasks` within 5 s. Destructive mutations confirm. |
-| O3 | **I know what's running, and I know my view is fresh** | (a) Work Sessions surface shows session states in human language: *running*, *stuck*, *released* (operator unclaimed), *completed-pass*, *completed-fail*, *completed-rejected*. (b) Status region traffic light (green/yellow/red) reflects engine connection health within one update cycle (sub-second via SSE; ≤3 s via polling fallback). |
+| O3 | **I know what's running, and I know my view is fresh** | (a) Work Sessions surface shows session states in human language: *running*, *stuck*, *released* (operator unclaimed), *completed-pass*, *completed-fail*, *completed-rejected*. (b) Status region traffic light (green/yellow/red) reflects engine connection health within one update cycle (sub-second via SSE; ≤3 s via polling fallback), per resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`. |
 | O4a | **Extensibility: shell welcomes new surfaces** | A hello-world second surface = route + component + optional nav entry. Shell↔surface contract is documented. No shell-layout changes needed. |
 | O4b | **Cockpit layout philosophy** | Top status bar · left icon rail (surface selectors) · workspace center (kanban in v1) · a sidecar panel carrying **Detail + Activity tabs**. Whether the sidecar is always-visible or behaves as an overlay/drawer is decided by the D13 mockup outcome — the panel contract (tab structure, surface reachability) is invariant. Reserved areas (project/consumer nav) present but empty. |
 | O5 | **Coherent, tokenized design** | All UI uses Porsche DS primitives + tokens (or fallback DS — see D14). No hand-rolled colour hex outside tokens file. Recolouring is a token swap. |
@@ -52,9 +52,9 @@ These two tasks **block** Phase 1 because their outcomes may force architecture 
 |-----------|--------|
 | Package skeleton | New uv workspace member at `serve/cockpit/`. `pyproject.toml` deps: `owlbear-kanban`, `fastapi`, `uvicorn`, `pydantic`. |
 | FastAPI app | Single `main.py` mounting routes + static handler for SPA bundle. Bind `127.0.0.1` only by default. |
-| HTTP routes (six v1 mutations + reads + SSE) | `GET /api/board` (config + valid_transitions), `GET /api/tasks` (TaskSummary list + mtime), `GET /api/tasks/{id}` (full Task + `updated` snapshot), `POST /api/tasks/{id}/move`, `POST /api/tasks/{id}/edit` (allowlisted YAML fields `title`, `tags`, `priority`, `depends_on`, `parent`, `block_reason` + body, requires `updated` snapshot for D9), `POST /api/tasks/{id}/release`, `GET /api/sessions?filter=` (derived from activity log), `GET /api/events` (SSE stream — emits change events on tasks-dir mtime change). |
+| HTTP routes (six v1 mutations + reads + SSE) | `GET /api/board` (config + valid_transitions), `GET /api/tasks` (TaskSummary list + mtime), `GET /api/tasks/{id}` (full Task + `updated` snapshot), `POST /api/tasks/{id}/move`, `POST /api/tasks/{id}/edit` (allowlisted YAML fields `title`, `tags`, `priority`, `depends_on`, `parent`, `block_reason` + body, requires `updated` snapshot for D9), `POST /api/tasks/{id}/release`, `GET /api/sessions?filter=` (derived from activity log), `GET /api/events` (SSE stream — emits change events on tasks-dir mtime change), per resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`. |
 | `list_sessions` engine helper | New helper that **derives** logical Work Sessions by reducing existing `activity.jsonl` events (claim / release / move / edit / block / unblock / end_work). One logical session per claim cycle; mutates as state advances; terminal states: *completed-pass*, *completed-fail*, *completed-rejected*, *released*. No new log schema — sessions are a view over the existing event stream. Legacy activity.jsonl format is preserved; cockpit writes its own entries with `actor: "cockpit"`. |
-| SSE + mtime-scan fallback | Backend pushes change events via SSE on tasks-dir mtime change; falls back to polling @ 3 s when SSE disconnects. Cache invalidates on mtime change (~1 ms scan); full reload only when files changed. |
+| SSE + mtime-scan fallback | Backend pushes change events via SSE on tasks-dir mtime change; falls back to polling @ 3 s when SSE disconnects. Cache invalidates on mtime change (~1 ms scan); full reload only when files changed. Authority: resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`. |
 | Audit | All cockpit mutations write `actor: "cockpit"` to `activity.jsonl` via the engine's existing logging path. Sessions log is derived, not separately written. |
 | Engine adapter discipline | Backend imports only allowed engine methods. Linter or boundary test prevents accidental import of `claim_task`, `start_work`, `end_work`, `pick_dispatchable`. |
 
@@ -68,10 +68,10 @@ These two tasks **block** Phase 1 because their outcomes may force architecture 
 | Kanban surface | Status columns by board config order; cards by priority. Card density ~48–56 px. Indicators: priority border, block badge, running indicator. Drag-to-move with valid-target highlighting (per `valid_transitions`); context menu for long-distance moves. |
 | Detail tab | YAML allowlist as structured controls; markdown body as react-markdown + remark-gfm + rehypeSanitize editor/viewer. Save-time `updated` comparison (D9). History subtab listing per-session breakdown. |
 | Activity tab (Work Sessions) | Default filter: active sessions (running + stuck). Filter switch: all / failed-or-rejected / released. One row per session, mutating as state advances. Click row → opens Detail tab + History subtab. |
-| SSE + polling fallback | SSE as primary push channel; mtime-aware polling @ 3 s as automatic fallback. Skip 1 poll cycle after a local mutation. |
+| SSE + polling fallback | SSE as primary push channel; mtime-aware polling @ 3 s as automatic fallback. Skip 1 poll cycle after a local mutation. Authority: resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`. |
 | Optimistic UI + rollback | Per-mutation snapshot + rollback on engine error. |
 | Confirmations | "Oppose-the-flow" rule: backward moves, unclaim, unblock require confirm. Unblock surfaces existing block reason. |
-| Connection health | Status traffic light: green = SSE connected, yellow = SSE lost (polling fallback active), red = disconnected. |
+| Connection health | Status traffic light: green = SSE connected, yellow = SSE lost (polling fallback active), red = disconnected. Authority: resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`. |
 | XSS hardening | Strict CSP. No `dangerouslySetInnerHTML` for any task-derived field. rehypeSanitize on body render. |
 | Empty / error / loading states | Designed (not browser-default). White-screen forbidden. |
 
@@ -89,7 +89,7 @@ These two tasks **block** Phase 1 because their outcomes may force architecture 
 - Claim, `start_work`, `end_work`, archive, dispatch (agent-only)
 - Editing timestamps, ids, claim fields
 - Save-time per-field conflict detection (task-level via `updated` is sufficient for v1)
-- WebSocket (SSE approved as primary transport per DR `1233-cockpit-polling-vs-sse.md`; polling retained as fallback)
+- WebSocket (SSE approved as primary transport per resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`; polling retained as fallback)
 - Multi-user, auth, remote network binding (`--allow-remote` deferred to a future brief)
 - Mobile / responsive layouts (desktop-only v1)
 - Future surfaces themselves: decision queue, knowledge search, memory curation, agent/skill/instruction editor, recurring-tasks/maintenance panel, VS Code settings controller, drag-task-onto-chat dispatch (North Star)
@@ -100,12 +100,12 @@ These two tasks **block** Phase 1 because their outcomes may force architecture 
 |---|------|------------|
 | R1 | `list_tasks()` performance unknown at real scale (700+ tasks) | D11 benchmark gates Phase 1 |
 | R2 | Sidecar-open layout may compress columns below readable width at 1440×900 | D13 mockup gates Phase 1; fallback to overlay/drawer pattern |
-| R3 | Per-instance revision counter does **not** see cross-process writes | SSE push on mtime change (D14); polling @ 3 s as fallback — corrects the original research-notes assumption |
+| R3 | Per-instance revision counter does **not** see cross-process writes | SSE push on mtime change (D14); polling @ 3 s as fallback — corrects the original research-notes assumption. Authority: resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`. |
 | R4 | Concurrent same-task edits could overwrite agent changes | D9 `updated`-timestamp save-time check + traffic-light freshness signal |
 | R5 | Markdown body XSS (agent-authored content) | rehypeSanitize + strict CSP (security panel: load-bearing control) |
 | R6 | Porsche DS task cards may need heavy override for cockpit indicators | Validate during Phase 1; swap to Radix + Tailwind on PDS tokens if needed |
 | R7 | Sessions log is new schema; engine work expands cockpit scope | Accepted; legacy activity.jsonl has no current consumers |
-| R8 | SSE/polling vs in-flight mutation race | SSE suppresses push for 1 cycle after local mutation; polling fallback skips 1 cycle similarly |
+| R8 | SSE/polling vs in-flight mutation race | SSE suppresses push for 1 cycle after local mutation; polling fallback skips 1 cycle similarly. Authority: resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`. |
 
 ## Key Design Decisions (D-series, condensed)
 
@@ -116,7 +116,7 @@ These two tasks **block** Phase 1 because their outcomes may force architecture 
 | D3 | Board / activity weighting: **70 / 30** |
 | D4 | **Humans RELEASE (with confirmation); agents CLAIM/advance** — cockpit cannot distinguish stuck-vs-running, so confirmation is the gate |
 | D5 | YAML frontmatter and markdown body parsed and rendered separately |
-| D6 | Staleness budget: **2–5 s**; SSE primary, polling fallback (amended per DR 1233) |
+| D6 | Staleness budget: **2–5 s**; SSE primary, polling fallback (amended per resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md`) |
 | D7 | v1 ships shell + kanban + activity; future surfaces are out of v1 |
 | D8 | Project name: **cockpit** |
 | D9 | Save-time `updated`-timestamp conflict detection (refresh / overwrite modal) |
