@@ -445,8 +445,6 @@ class Task(BaseModel):
 
     # Claim field — Brief C uses claimed_at only
     claimed_at: str | None = None
-    # Backward-compatible in-memory alias; never persisted to disk.
-    claimed_by: str | None = Field(default=None, exclude=True)
 
     # Archive fields added in Brief C
     archival_reason: str | None = None

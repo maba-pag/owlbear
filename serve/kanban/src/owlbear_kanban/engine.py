@@ -14,7 +14,7 @@ Architecture:
   - move_task() changes status; "archived" moves file to archive/.
   - claim_task() marks a task as claimed by this engine's agent_name; rejects
     blocked tasks and rival claims within the configured timeout window.
-    - release_task() clears claimed_by and claimed_at fields unconditionally;
+    - release_task() clears claimed_at unconditionally;
         appends a timestamped note to the body when ``note`` is provided.
   - board_config() returns a defensive copy of the current BoardConfig.
   - refresh_config() reloads config from disk, updating all derived state.
@@ -1127,7 +1127,6 @@ class KanbanEngine:
             self._archive_dir.mkdir(parents=True, exist_ok=True)
             record.status = "archived"
             record.claimed_at = None
-            record.claimed_by = None
             record.archival_reason = archival_reason
             record.archival_refs = (
                 list(archival_refs) if archival_refs is not None else []
@@ -1231,7 +1230,6 @@ class KanbanEngine:
                 # Expired rival claim: clear it first via CAS before claiming.
                 cleared = record.model_copy(deep=True)
                 cleared.claimed_at = None
-                cleared.claimed_by = None
                 cleared.updated = effective_now.isoformat()
                 try:
                     storage.write_task_if_unchanged(
@@ -1251,7 +1249,6 @@ class KanbanEngine:
                 record = cleared
 
             record.claimed_at = effective_now.isoformat()
-            record.claimed_by = self._agent_name
             record.updated = effective_now.isoformat()
 
             try:
@@ -1344,7 +1341,6 @@ class KanbanEngine:
         self._append_timestamped_note(record, note, now)
 
         record.claimed_at = None
-        record.claimed_by = None
         record.updated = now.isoformat()
         if expected_updated is not None:
             storage.write_task_if_unchanged(
@@ -1504,7 +1500,6 @@ class KanbanEngine:
 
         # --- Release claim ---
         record.claimed_at = None
-        record.claimed_by = None
 
         # --- Apply outcome-specific mutations ---
         needs_archive = self._apply_outcome(

@@ -1199,7 +1199,7 @@ class TestFromAC_EngineClaimRelease:
         _write_task(board, task_id=1, claimed_at=_EPOCH_TS)
         engine = KanbanEngine(board, activity_log=False)
         result = engine.claim_task("1")
-        assert result.claimed_by == engine.agent_name
+        assert result.claimed_at is not None
 
     def test_release_task_clears_claimed_at(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
@@ -1221,7 +1221,6 @@ class TestFromAC_EngineClaimRelease:
         engine = KanbanEngine(board, activity_log=False)
         result = engine.start_work("1")
         assert result.claimed_at is not None
-        assert result.claimed_by == engine.agent_name
 
 
 # ---------------------------------------------------------------------------
@@ -2024,7 +2023,7 @@ class TestFromAC_EngineShowTaskStalePath:
         engine = KanbanEngine(board, activity_log=False)
         engine.list_tasks()  # populate id→filename
         result = engine.claim_task("31")
-        assert result.claimed_by == engine.agent_name
+        assert result.claimed_at is not None
 
 
 # ---------------------------------------------------------------------------

@@ -395,9 +395,6 @@ class TestFromAC_ReadTaskPyYAML:
         assert task.block_reason == "no", (
             f"block_reason 'no' must not be coerced to bool False; got {task.block_reason!r}"
         )
-        assert task.claimed_by == "yes", (
-            f"claimed_by 'yes' must not be coerced to bool True; got {task.claimed_by!r}"
-        )
         assert task.tags == ["on", "off"], (
             f"tags with on/off values must survive as strings; got {task.tags!r}"
         )
@@ -447,7 +444,6 @@ class TestFromAC_WriteReadRoundTrip:
             updated="2026-04-17T20:16:32.171661+00:00",
             blocked=False,
             block_reason="no",  # YAML 1.1 SafeLoader would coerce this to False
-            claimed_by="yes",  # YAML 1.1 SafeLoader would coerce this to True
             tags=["on", "off"],  # YAML 1.1 SafeLoader would coerce on→True, off→False
         )
         kanban_dir = _make_kanban_dir(tmp_path)
@@ -457,9 +453,6 @@ class TestFromAC_WriteReadRoundTrip:
 
         assert loaded.block_reason == "no", (
             f"block_reason 'no' must survive as string; got {loaded.block_reason!r}"
-        )
-        assert loaded.claimed_by is None, (
-            f"claimed_by must be dropped on write_task(); got {loaded.claimed_by!r}"
         )
         assert loaded.tags == ["on", "off"], (
             f"tags ['on', 'off'] must survive as strings; got {loaded.tags!r}"
@@ -479,7 +472,6 @@ class TestFromAC_WriteReadRoundTrip:
             updated="2026-04-17T20:16:32.171661+00:00",
             blocked=True,
             block_reason="waiting on reviewer",
-            claimed_by="test-agent",
         )
         kanban_dir = _make_kanban_dir(tmp_path)
         task_file = write_task(task, kanban_dir)
@@ -512,7 +504,6 @@ class TestFromAC_WriteReadRoundTrip:
             parent=10,
             depends_on=[11, 12],
             block_reason=None,
-            claimed_by="builder",
             body="## Notes\n\nSome body text.\n",
         )
         kanban_dir = _make_kanban_dir(tmp_path)
@@ -533,7 +524,6 @@ class TestFromAC_WriteReadRoundTrip:
         assert validated.tags == ["cockpit", "engine", "phase-0"]
         assert validated.parent == 10
         assert validated.depends_on == [11, 12]
-        assert validated.claimed_by is None
         assert validated.block_reason is None
         assert "Some body text." in validated.body
 

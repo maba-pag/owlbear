@@ -696,7 +696,7 @@ class TestFromAC_EngineClaimTaskGuards:
         _write_task(board, task_id=1, claimed_at=_EPOCH_CLAIMED_AT)
         engine = KanbanEngine(board, activity_log=False)
         task = engine.claim_task("1")
-        assert task.claimed_by == engine.agent_name
+        assert task.claimed_at is not None
 
 
 # ---------------------------------------------------------------------------
