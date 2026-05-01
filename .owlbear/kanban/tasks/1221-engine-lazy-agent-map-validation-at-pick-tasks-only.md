@@ -1,10 +1,10 @@
 ---
 id: 1221
 title: Engine — lazy agent_map validation at pick_tasks only
-status: todo
+status: done
 priority: needed
 created: 2026-04-30 16:31:18.568412+00:00
-updated: 2026-05-01T02:05:38.435060+00:00
+updated: 2026-05-01T02:56:28.644455+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -602,3 +602,170 @@ AC changes:
 Challenger: reconsider (0.48) — all three concerns resolved: AC7 proof-contract mismatch corrected (config-driven zero, not explicit param), AC4 stale wording fixed, builder-skip noted.
 
 Implementation at engine.py:2333–2338 is correct. 14/14 task-owned tests pass. Test-writer: add 2 tests. Builder: skip implementation, run verification only.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry (Round 3 arch review): added 2 new tests for AC6 and AC7. All 15 tests PASS against current implementation — builder skip applied (direct-to-review advance).
+- Test files:
+  - `tests/test_engine_lazy_agent_map_1221.py` — 15 tests, all PASS
+- Classes: TestFromAC_InitNoLongerRaises, TestFromAC_PickTasksValidatesAgentMap, TestFromAC_CockpitInitWithEmptyAgentMap, TestFromAC_McpPickTasksRaisesForIncompleteAgentMap
+- Tests per category: happy 0, edge 2, error 9, boundary 4
+- Total: 15 tests, all PASS (green against existing implementation)
+- ruff: clean
+- Commit: d80c3b61
+
+AC coverage:
+| AC line | Tests |
+|---------|-------|
+| AC1: __init__ no longer raises | test_init_accepts_empty_agent_map, test_init_accepts_partial_agent_map |
+| AC2: pick_tasks validates at top, before filtering | test_pick_tasks_raises_config_error_for_empty_agent_map, test_pick_tasks_raises_config_error_for_partial_agent_map, test_pick_tasks_error_code_is_err_invalid_status, test_pick_tasks_error_message_names_missing_statuses, test_pick_tasks_validates_before_filtering_with_tasks_present, test_pick_tasks_validates_before_list_tasks_is_called |
+| AC3: Cockpit starts with empty agent_map | test_cockpit_engine_init_succeeds_with_empty_agent_map, test_cockpit_engine_board_config_accessible_with_empty_agent_map |
+| AC4: MCP raises ToolError with all missing statuses named | test_mcp_pick_tasks_raises_tool_error_for_incomplete_agent_map, test_mcp_pick_tasks_tool_error_message_contains_missing_entries, test_mcp_pick_tasks_tool_error_message_names_all_missing_statuses |
+| AC5: test_engine_coverage_1068.py::test_agent_map_missing_status_raises asserts non-raising | already updated in prior retry (serve/kanban/tests/test_engine_coverage_1068.py) |
+| AC6: resolve_pending_drs non-call proof | **test_pick_tasks_validates_before_resolve_pending_drs** (new — monkeypatches sys.modules["owlbear_kanban.decisions"], asserts call_count == 0 after ConfigError) |
+| AC7: effective_wave conflict proof — ERR_INVALID_WAVE_PARAM wins over ERR_INVALID_STATUS | **test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard** (new — config wave_size:0 + agent_map:{}, asserts ValidationError(ERR_INVALID_WAVE_PARAM) not ConfigError) |
+
+Round 3 changes:
+- Added _BASE_CONFIG_ZERO_WAVE_EMPTY_AGENT_MAP fixture (wave_size: 0, agent_map: {})
+- Added test_pick_tasks_validates_before_resolve_pending_drs: monkeypatches sys.modules["owlbear_kanban.decisions"] via MagicMock; ConfigError is raised before decisions import so call_count must be 0.
+- Added test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard: reloads config with wave_size:0 + agent_map:{}; no explicit wave_size arg → effective_wave=0<1 → ValidationError(ERR_INVALID_WAVE_PARAM) wins before agent_map guard.
+- Builder skip: test-only retry, all 15 tests pass against current implementation.
+[[2026-05-01]]
+## Builder Notes
+- Scope: verification-only builder pass (Round 3 builder-skip path); no source or test edits in this invocation.
+- Files changed: none.
+- Verification (quality-runner, scoped): 16 passed, 0 failed, 0 skipped for:
+  - `tests/test_engine_lazy_agent_map_1221.py`
+  - `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises`
+- Lint: clean for `serve/kanban/src/owlbear_kanban/engine.py`, `tests/test_engine_lazy_agent_map_1221.py`, and `serve/kanban/tests/test_engine_coverage_1068.py`.
+- Coverage: `owlbear_kanban.engine` at 13% (overall run 23%); informational for this large module and consistent with prior task-scoped evidence.
+- Evidence summary: AC-focused proofs including AC6/AC7 remain green against the current implementation; no additional builder implementation was required.
+
+Post-task reflection:
+- Builder-skip verification avoided unnecessary churn while still producing fresh GREEN evidence.
+- Including the AC5 node test in scoped verification keeps cross-task stale-contract regressions contained.
+- Module-wide coverage remains low for a large file; AC-path confidence comes from targeted test proofs and clean lint.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner (task-owned scoped): pytest 16 passed, 0 failed, 0 skipped for `tests/test_engine_lazy_agent_map_1221.py` and `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises`
+- quality-runner (boundary spot-check): pytest 70 passed, 0 failed, 0 skipped across `tests/test_cockpit_launch.py` and `serve/mcp-kanban/tests/test_mcp_read_tools.py`
+
+### Lint
+- clean for `serve/kanban/src/owlbear_kanban/engine.py`, `tests/test_engine_lazy_agent_map_1221.py`, and `serve/kanban/tests/test_engine_coverage_1068.py`
+
+### Coverage
+- task-scoped coverage: `owlbear_kanban.engine` 13% module-wide (196/1457 statements)
+- Informational only for this large module. The gate is diff-scoped; the moved guard path is directly exercised by AC1/AC2/AC5/AC6/AC7 tests.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: `KanbanEngine.__init__` no longer raises `ConfigError` for missing `agent_map` entries | `tests/test_engine_lazy_agent_map_1221.py::test_init_accepts_empty_agent_map`, `tests/test_engine_lazy_agent_map_1221.py::test_init_accepts_partial_agent_map` | Yes. Reintroducing constructor-time `agent_map` completeness validation would fail both init tests immediately. | COVERED |
+| AC2: `pick_tasks()` validates completeness immediately after the effective-wave-size guard, before `resolve_pending_drs`, and before filtering/sorting/wave assembly; raises `ConfigError(ERR_INVALID_STATUS)` | `tests/test_engine_lazy_agent_map_1221.py::test_pick_tasks_*` group, including `test_pick_tasks_validates_before_list_tasks_is_called`, `test_pick_tasks_validates_before_resolve_pending_drs`, and `test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard` | Yes. The suite binds the error code, pre-`list_tasks` ordering, pre-`resolve_pending_drs` ordering, and precedence of the earlier `effective_wave` guard. | COVERED |
+| AC3: Cockpit starts successfully with `agent_map: {}` in grouped config | `tests/test_engine_lazy_agent_map_1221.py::test_cockpit_engine_init_succeeds_with_empty_agent_map`, `tests/test_engine_lazy_agent_map_1221.py::test_cockpit_engine_board_config_accessible_with_empty_agent_map` | Yes for the task-owned root cause. `serve/cockpit/src/owlbear_cockpit/main.py:72` constructs `KanbanEngine(..., agent_name="cockpit")` before uvicorn starts, so restoring eager init validation would break the startup path at that constructor boundary. The broader cockpit launch suite also stayed green. | COVERED |
+| AC4: MCP `pick_tasks` raises `ToolError` with missing-entry message when `agent_map` is incomplete | `tests/test_engine_lazy_agent_map_1221.py::test_mcp_pick_tasks_raises_tool_error_for_incomplete_agent_map`, `tests/test_engine_lazy_agent_map_1221.py::test_mcp_pick_tasks_tool_error_message_names_all_missing_statuses` | Yes. The tests require the MCP boundary to surface `ToolError` and name all missing statuses individually. | COVERED |
+| AC5: `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` now asserts non-raising for incomplete `agent_map` | `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` | Yes. Restoring the old `_validate_engine_config` completeness check would fail this test immediately. | COVERED |
+| AC6: `resolve_pending_drs` is never called when `agent_map` is incomplete | `tests/test_engine_lazy_agent_map_1221.py::test_pick_tasks_validates_before_resolve_pending_drs` | Yes. The monkeypatched decisions module remains untouched because the `ConfigError` is raised before import/call. | COVERED |
+| AC7: `ERR_INVALID_WAVE_PARAM` wins when `effective_wave < 1` and `agent_map` is incomplete | `tests/test_engine_lazy_agent_map_1221.py::test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard` | Yes. The test asserts the exact `ValidationError` code from the earlier guard, so reordering would fail it. | COVERED |
+
+#### Security Review
+- No issues found. The live change is local config validation in `serve/kanban/src/owlbear_kanban/engine.py` before decisions import and task scan.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions observed in the current snapshot.
+- Reflog confirms the scoped commits exist: `062b2644c8d664abc224da5a71b2774c8fc53e36` (builder) and `d80c3b61016443bd3a97841b629bfb673f6de158` (test-writer).
+
+#### Test Quality
+- Assertion specificity: ADEQUATE. Binding assertions exist for error code, `list_tasks` non-call, `resolve_pending_drs` non-call, MCP `ToolError`, all-missing-status names, and `effective_wave` precedence. One older direct ConfigError message test at `tests/test_engine_lazy_agent_map_1221.py:315` still accepts generic `"missing"`; this is non-blocking because AC2 is already bound by stronger tests.
+- Negative/error-path coverage: STRONG.
+- Manual mutation reasoning: STRONG. Reintroducing eager init validation, moving the guard below `resolve_pending_drs` or `list_tasks`, or letting `ERR_INVALID_STATUS` beat `ERR_INVALID_WAVE_PARAM` would fail named tests.
+- Independence and naming: ADEQUATE. Tests are isolated via fresh tmp boards; one legacy AC5 test name still says `_raises` after the contract moved.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gap Analysis
+- No implementation defect found in the live source.
+- `_validate_engine_config` no longer checks `agent_map` completeness at `serve/kanban/src/owlbear_kanban/engine.py:114-166`.
+- `KanbanEngine.__init__` still calls that validator at `serve/kanban/src/owlbear_kanban/engine.py:448`.
+- `pick_tasks` now enforces the moved check after the `effective_wave` guard and before `resolve_pending_drs` / `list_tasks` at `serve/kanban/src/owlbear_kanban/engine.py:2327-2352`.
+- Boundary regression spot-check stayed green on cockpit launch and MCP read tools.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability was added.
+
+#### Builder Process Quality
+- FRICTION, not LOOP.
+- Builder note sections in body: 5.
+- Approach variation is real: environment block, initial implementation, verification-only pass, re-implementation after overwrite, final verification-only pass.
+
+### Pass 2 — INFORMATIONAL
+- `serve/kanban/tests/test_engine_coverage_1068.py:260` still uses the old `_raises` method name even though the body now asserts non-raising.
+- `tests/test_engine_lazy_agent_map_1221.py` still contains some RED-phase commentary about the old failure mode; comments are stale but assertions are current.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | `_validate_engine_config` at `serve/kanban/src/owlbear_kanban/engine.py:114-166` no longer enforces `agent_map` completeness, while `__init__` still calls it at `serve/kanban/src/owlbear_kanban/engine.py:448`; scoped tests passed. | init tests in `tests/test_engine_lazy_agent_map_1221.py` | PASS |
+| AC2 | The live guard raises `ERR_INVALID_STATUS` after the `effective_wave` guard and before `resolve_pending_drs` / `list_tasks` in `serve/kanban/src/owlbear_kanban/engine.py:2327-2352`; scoped tests passed. | `test_pick_tasks_*` group | PASS |
+| AC3 | `serve/cockpit/src/owlbear_cockpit/main.py:72` constructs `KanbanEngine(..., agent_name="cockpit")` before uvicorn; grouped empty-map task tests passed; cockpit launch regression spot-check passed. | cockpit tests in `tests/test_engine_lazy_agent_map_1221.py` | PASS |
+| AC4 | MCP maps `KanbanError.user_message` to `ToolError` in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:77-78`, and `pick_tasks` enters the engine path at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:658-683`; scoped tests passed. | MCP tests in `tests/test_engine_lazy_agent_map_1221.py` | PASS |
+| AC5 | Legacy validator test now requires non-raising behavior at `serve/kanban/tests/test_engine_coverage_1068.py:260-269`; scoped test passed. | `test_agent_map_missing_status_raises` | PASS |
+| AC6 | `resolve_pending_drs` call site remains below the moved guard in `serve/kanban/src/owlbear_kanban/engine.py:2348`; direct non-call test passed. | `test_pick_tasks_validates_before_resolve_pending_drs` | PASS |
+| AC7 | `effective_wave < 1` raises `ERR_INVALID_WAVE_PARAM` before the moved `agent_map` guard in `serve/kanban/src/owlbear_kanban/engine.py:2327-2339`; direct precedence test passed. | `test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard` | PASS |
+
+### Deductions
+- `-0.03` Direct raw diff was unavailable; integrity was verified from the current snapshot plus reflog commit presence instead.
+- `-0.02` AC3 is proved as a task-owned root-cause composite (`run()` constructs `KanbanEngine(...)` before uvicorn, and the grouped empty-map constructor tests stay green) rather than by a dedicated `run()` test with empty `agent_map`.
+
+### Verdict
+- PASS
+- Confidence: 0.93
+- Action: advance to docs
+
+### Post-task Reflection
+- The missing proof from the prior review is now present: `resolve_pending_drs` non-call and `effective_wave` precedence are both bound by direct tests.
+- AC wording drift on the MCP boundary mattered; the authoritative runtime contract is `ToolError` carrying `KanbanError.user_message`.
+- Composite boundary proof can be sufficient when the live entry point fails only at a single constructor call, but it carries a small confidence cost relative to an exact entrypoint test.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 0a | Review Evidence present | Yes | PASS | Latest `## Review Evidence` section present; Round 3 reviewer verdict: PASS (confidence 0.93) |
+| 0b | Doc-index loaded | Yes | PASS | `.owlbear/doc-index.md` read; `kanban.excalidraw` describes `serve/kanban/src/**` |
+| 1 | Descriptive prose docs | Yes | UPDATED | `serve/kanban/README.md` — (1) "five-step pipeline" corrected to "six-step pipeline" with validation as step 1; (2) migration note corrected from "before starting the engine" to "before calling `pick_tasks()`" |
+| 2 | Module docstrings | Yes | VERIFIED | `pick_tasks` docstring already accurate from previous docs pass — six-step pipeline with step 1 validate, Raises includes `ConfigError(ERR_INVALID_STATUS)` |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | No | N/A | No research doc in task body |
+| 5 | Diagram maintenance | Yes | UPDATED | `share/diagrams/kanban.excalidraw` describes `serve/kanban/src/**` — footer updated from `9cc65998` to `8e9d7030` |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request |
+| 7 | Deletion detection | No | N/A | No deleted files |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN | Docstring verified accurate |
+| `tests/test_engine_lazy_agent_map_1221.py` | OUT | Test file — not edited |
+| `serve/kanban/tests/test_engine_coverage_1068.py` | OUT | Test file — not edited |
+
+### Context Note
+Previous docs gate commit `0de43485` was in history but a subsequent commit `4a64f9ff` ("docs: update README to clarify create_dr function signature…") overwrote the README changes. Re-applied both README corrections.
+
+### Files Updated
+- `serve/kanban/README.md` — six-step pipeline description + migration note
+- `share/diagrams/kanban.excalidraw` — footer updated to `2026-05-01 (8e9d7030)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- `.owlbear/scratch/q1221-pytest.log`
+- `.owlbear/scratch/q1221-red-baseline.log`
+- `.owlbear/scratch/qr-1221-pytest.txt`
+- `.owlbear/scratch/qr-1221-ruff.txt`
+
+### Commit
+`fdf0409d` — docs: update pick_tasks docs for lazy agent_map validation (#1221, doc-writer)
