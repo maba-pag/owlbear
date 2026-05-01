@@ -606,7 +606,7 @@ class TestFromAC_PickTasksWarningLogs:
             "pick_tasks must return PickTasksResponse even when import raises ImportError"
         )
         warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
         assert any("Failed to import decisions module" in msg for msg in warning_msgs), (
             "WARNING must be logged when importlib.import_module raises ImportError"
@@ -628,7 +628,7 @@ class TestFromAC_PickTasksWarningLogs:
 
         assert isinstance(result, PickTasksResponse)
         warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
         assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
             "WARNING must be logged when resolve_pending_drs raises KanbanError"
@@ -650,7 +650,7 @@ class TestFromAC_PickTasksWarningLogs:
 
         assert isinstance(result, PickTasksResponse)
         warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
         assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
             "WARNING must be logged when resolve_pending_drs raises OSError"
@@ -672,7 +672,7 @@ class TestFromAC_PickTasksWarningLogs:
 
         assert isinstance(result, PickTasksResponse)
         warning_msgs = [
-            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+            r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
         ]
         assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
             "WARNING must be logged when resolve_pending_drs raises ValueError"
