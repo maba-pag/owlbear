@@ -1,10 +1,10 @@
 ---
 id: 1257
 title: Amend cockpit brief D6/D14 to reflect approved SSE direction
-status: review
+status: archived
 priority: nice-to-have
 created: 2026-05-01T05:33:27.534058+00:00
-updated: 2026-05-01T09:40:50.443619+00:00
+updated: 2026-05-01T12:53:37.356114+00:00
 tags:
 - docs
 - cockpit
@@ -183,3 +183,127 @@ Post-task reflection:
 - Workaround applied: standardized inline authority references directly on each affected row/statement rather than relying on nearby implicit references.
 - Pattern discovered: for docs AC phrased as "all changes reference authority," reviewers enforce per-change explicit citation, not just section-level intent.
 - Quality gap avoided: removed shorthand DR mentions and normalized to the full resolved decision path to prevent another ambiguity-based reject.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner: no execution for this td:0 docs-only review (`test_paths=[]`, `lint_paths=[]`, `coverage_modules=[]`); no task-owned tests or executable modules were in scope.
+
+### Lint
+- quality-runner: clean with 0 violations; no applicable Python lint targets existed for the markdown-only artifact set.
+
+### Coverage
+- Not applicable for this td:0 docs-only scope.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+- Not applicable. All AC lines are td:0 and no `TestFromAC_*` classes were expected or produced.
+
+#### Security Review
+- No runtime, boundary, or dependency changes were in scope. No security findings.
+
+#### Test Integrity
+- Not applicable. No task-owned tests.
+
+#### Test Quality
+- Not applicable. No task-owned tests.
+
+#### Data Safety
+- Not applicable. Documentation-only task.
+
+#### Implementation-Aware Gaps
+- No critical gaps found after direct artifact inspection.
+- `.owlbear/briefs/draft-cockpit/decisions.md:19` now states SSE primary with polling fallback and cites the resolved DR.
+- `.owlbear/briefs/draft-cockpit/decisions.md:65` now states SSE primary push transport with polling fallback and cites the resolved DR.
+- `.owlbear/briefs/draft-cockpit/brief.md:31`, `:55`, `:57`, `:71`, `:74`, `:92`, `:103`, `:108`, and `:119` all reflect the SSE-primary / polling-fallback direction and each carries explicit resolved-DR attribution.
+- Workspace search found no remaining `"no SSE/WebSocket in v1"` text under `.owlbear/briefs/draft-cockpit/`.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability was added.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 |
+| Approach variation | Yes |
+| Assessment | CLEAN |
+
+### Pass 2 - INFORMATIONAL
+- Verified retry commit `23e18214` exists in `.git/logs/HEAD:1341` and `.git/logs/refs/heads/dev:1216`.
+- quality-runner could not execute tooling because this td:0 docs-only retry had no test or lint artifacts; verdict is grounded in direct file inspection instead.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| D6 in decisions.md updated to reflect SSE approval, removing "no SSE/WebSocket in v1" | `.owlbear/briefs/draft-cockpit/decisions.md:19` states SSE primary with polling fallback, and the old phrase is absent from `.owlbear/briefs/draft-cockpit/` | N/A (td:0) | PASS |
+| D14 polling references updated to note SSE as primary transport with polling as fallback | `.owlbear/briefs/draft-cockpit/decisions.md:65` states SSE primary push transport with polling fallback | N/A (td:0) | PASS |
+| brief.md sections referencing polling-only updated for consistency | `.owlbear/briefs/draft-cockpit/brief.md:31`, `:55`, `:57`, `:71`, `:74`, `:92`, `:103`, `:108`, and `:119` all reflect SSE-primary / polling-fallback wording | N/A (td:0) | PASS |
+| All changes reference the resolved DR as authority | `.owlbear/briefs/draft-cockpit/decisions.md:19`, `:65` and `.owlbear/briefs/draft-cockpit/brief.md:31`, `:55`, `:57`, `:71`, `:74`, `:92`, `:103`, `:108`, `:119` all cite `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md` | N/A (td:0) | PASS |
+
+### Deductions
+- None.
+
+### Confidence: 0.98
+### Verdict: PASS
+### Action
+- Advance to docs.
+[[2026-05-01]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are `.owlbear/briefs/` artifacts — OUT of scope; no IN-scope prose doc references them |
+| 2 | Module docstrings | No | N/A | No Python files touched |
+| 3 | External attribution | No | N/A | No external patterns used |
+| 4 | Research doc | No | N/A | No `.owlbear/research/*.md` produced; resolved DR is in `.owlbear/decisions/resolved/` (not a research doc) |
+| 5 | Diagram maintenance (describes match) | No | N/A | Doc-index has no `describes` glob matching `.owlbear/briefs/draft-cockpit/` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `.owlbear/briefs/draft-cockpit/decisions.md` | OUT | N/A — `.owlbear/briefs/` not in IN-scope list |
+| `.owlbear/briefs/draft-cockpit/brief.md` | OUT | N/A — `.owlbear/briefs/` not in IN-scope list |
+
+**No docs impact.** Both changed files are brief artifacts outside the doc-writer IN-scope boundary. All checklist items resolve to N/A.
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None
+[[2026-05-01]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| D6 in decisions.md updated to reflect SSE approval, removing "no SSE/WebSocket in v1" | `.owlbear/briefs/draft-cockpit/decisions.md` D6 now reads "SSE (server-sent events) as primary transport; mtime-scan polling @ 3 s as fallback"; grep confirms old phrase absent from `.owlbear/briefs/draft-cockpit/` | PASS |
+| D14 polling references updated to note SSE as primary transport with polling as fallback | `.owlbear/briefs/draft-cockpit/decisions.md` D14 reads "SSE as primary push transport… polling @ 3 s as automatic fallback" with DR attribution | PASS |
+| brief.md sections referencing polling-only updated for consistency | brief.md lines :31, :55, :57, :71, :74, :92, :103, :108, :119 all reflect SSE-primary / polling-fallback wording | PASS |
+| All changes reference the resolved DR as authority | decisions.md:19, :65 and brief.md:31, :55, :57, :71, :74, :92, :103, :108, :119 all cite `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md` | PASS |
+
+### Test Results
+- pytest: 3483 passed, ~104 failed, 4 skipped — all failures pre-existing and outside task scope (engine storage, corruption, React compiler, migration tests). No regressions from #1257.
+- ruff: 4 violations, all pre-existing and outside task scope (knowledge, mcp-knowledge, mcp-memory, orchestrator packages).
+
+### Architect Quality: 4/5
+AC was specific and verifiable. Minor ambiguity in AC4 about per-section vs per-file attribution granularity (caused one reviewer reject cycle), but reasonable for a docs-only task.
+
+### Deduction Breakdown
+- AC lines: 4/4 PASS, no deduction
+- Lint: out of scope, no deduction
+- AC quality 4/5 (>3): no deduction
+- Reviewer evidence: present, detailed, two-pass (FAIL→PASS at 0.98): no deduction
+- Full-suite failures in task scope: none, no deduction
+
+### Confidence: 1.00
+### Action: archive
+
+### Commits (upstream)
+| Commit | Type | Files | Tasks |
+|--------|------|-------|-------|
+| 46dd244f | docs | decisions.md, brief.md | #1257 |
+| 23e18214 | docs | brief.md | #1257 |
