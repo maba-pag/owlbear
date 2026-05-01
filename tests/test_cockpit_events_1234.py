@@ -159,6 +159,19 @@ class TestFromAC_EventsModuleExists:
                 f"Status: {response.status_code}"
             )
 
+    def test_events_router_registered_in_main_exact_pattern(self) -> None:
+        """AC1 (tightened): main.py must contain the exact include_router call wiring."""
+        main_file = (
+            Path(__file__).parent.parent
+            / "serve/cockpit/src/owlbear_cockpit/main.py"
+        )
+        content = main_file.read_text(encoding="utf-8")
+        assert 'include_router(events_router, prefix="/api")' in content, (
+            'main.py must contain: include_router(events_router, prefix="/api"). '
+            "Substring checks for 'events_router' and 'include_router' in isolation "
+            "are insufficient — the exact pattern proves the wiring is correct."
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2: EventSourceResponse + Depends(get_engine) (td:1)
@@ -589,6 +602,51 @@ class TestFromAC_MissingDirGuard:
             f"Got: {event_lines}"
         )
 
+    @pytest.mark.asyncio
+    async def test_missing_tasks_dir_awatch_unreachable_on_consumed_path(self, tmp_path) -> None:
+        """AC5 (combined proof): consuming a missing-dir stream produces zero events AND never calls awatch.
+
+        Patches awatch to raise immediately if invoked on the consumed path,
+        proving the missing-dir guard short-circuits before awatch is reached.
+        """
+        import shutil  # noqa: PLC0415
+
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        shutil.rmtree(engine.tasks_dir)
+        assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
+
+        async def _raise_if_called(*_args, **_kwargs):
+            msg = (
+                "awatch must not be called when tasks_dir does not exist "
+                "\u2014 missing-dir guard is absent or placed after the awatch call."
+            )
+            raise AssertionError(msg)
+            yield  # pragma: no cover — makes this a valid async generator
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", _raise_if_called):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    assert response.status_code == 200
+                    event_lines: list[str] = []
+                    async for line in response.aiter_lines():
+                        if line.startswith(("event:", "data:")):
+                            event_lines.append(line)
+        finally:
+            app.dependency_overrides.clear()
+
+        assert not event_lines, (
+            f"Missing-dir path must produce zero SSE event:/data: lines. Got: {event_lines}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC6: Generator terminates cleanly on disconnect / shutdown (td:2)
@@ -793,4 +851,30 @@ class TestFromAC_ProjDependencies:
         assert "watchfiles" in content, (
             "watchfiles is missing from serve/cockpit/pyproject.toml [project.dependencies]. "
             "Builder must add it explicitly — it is a new direct dependency."
+        )
+
+    def test_sse_starlette_in_project_dependencies_section(self) -> None:
+        """AC7 (tightened): sse-starlette must be in [project.dependencies], not merely elsewhere in the file."""
+        import tomllib  # noqa: PLC0415
+
+        with self._PYPROJECT.open("rb") as f:
+            data = tomllib.load(f)
+        deps: list[str] = data.get("project", {}).get("dependencies", [])
+        assert any("sse-starlette" in dep for dep in deps), (
+            f"sse-starlette not found in [project.dependencies] section. "
+            f"Raw substring search is insufficient — name must appear in the structured "
+            f"[project.dependencies] list. Got dependencies: {deps}"
+        )
+
+    def test_watchfiles_in_project_dependencies_section(self) -> None:
+        """AC7 (tightened): watchfiles must be in [project.dependencies], not merely elsewhere in the file."""
+        import tomllib  # noqa: PLC0415
+
+        with self._PYPROJECT.open("rb") as f:
+            data = tomllib.load(f)
+        deps: list[str] = data.get("project", {}).get("dependencies", [])
+        assert any("watchfiles" in dep for dep in deps), (
+            f"watchfiles not found in [project.dependencies] section. "
+            f"Raw substring search is insufficient — name must appear in the structured "
+            f"[project.dependencies] list. Got dependencies: {deps}"
         )
