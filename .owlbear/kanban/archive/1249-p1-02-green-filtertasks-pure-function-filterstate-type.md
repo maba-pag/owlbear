@@ -1,10 +1,10 @@
 ---
 id: 1249
 title: 'P1-02: GREEN — filterTasks pure function + FilterState type'
-status: done
+status: archived
 priority: critical
 created: 2026-05-01T04:34:45.636679+00:00
-updated: 2026-05-01T20:12:45.033435+00:00
+updated: 2026-05-01T20:26:10.790165+00:00
 tags:
 - phase-1
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1248
 blocked: false
 block_reason:
-claimed_at: 2026-05-01T20:12:45.033435+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -382,3 +382,38 @@ Reviewer-confirmed builder-skip applies — task can advance directly to review.
 
 ### Scratch Files Cleaned
 - None (no 1249-* scratch files found)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| filterTasks function exported from utils/filterTasks.ts (td:2) | `serve/cockpit/web/src/utils/filterTasks.ts:10` exports `filterTasks`; 23/23 tests GREEN; commit `87208eba` | PASS |
+| FilterState interface exported from the same module (td:0) | `serve/cockpit/web/src/utils/filterTasks.ts:3` exports `FilterState`; type imports resolve in both suites | PASS |
+| All #1248 unit tests pass (GREEN) (td:2) | `filterTasks_1248.test.ts`: 19/19 passed in full Vitest run | PASS |
+| Pure function, no React imports, no side effects (td:1) | Source: only `import type` (compile-time erased); `filterTasks_1249.test.ts`: 4/4 passed (React-import scan, deep mutation guard, array mutation guard, determinism) | PASS |
+| AND semantics across all four dimensions (td:2) | `filterTasks.ts:20`: `matchesText && matchesPriority && matchesTags && matchesBlocked`; combined-dimensions test GREEN | PASS |
+
+### Test Results
+- Vitest (full): 722 passed, 2 failed (ResolveModal_plugins_1194 unrelated)
+- Vitest (task-scoped): 23 passed, 0 failed
+- pytest (full): 3494 passed, 107 failed (all in unrelated modules: kanban engine, MCP, decisions)
+- ESLint: clean on task-scoped files
+
+### Upstream Commits Verified
+- `87208eba` feat: implement filterTasks AND filter logic (#1249, builder)
+- `416bb66d` test: add failing tests for filterTasks purity constraint (#1249, test-writer)
+
+### Architect Quality: 4/5
+Specific AC with td-levels, clear scope/out-of-scope. Minor gap: bundled "no React imports" and "no side effects" into one AC line, requiring disaggregation during review. Path correction (lib to utils) was handled cleanly during architecture review.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (0 x -0.02 = 0.00)
+- Lint violations: none (0.00)
+- AC quality LE 3: no (score 4, 0.00)
+- Missing reviewer evidence: no (0.00)
+- Task-scope test failures: none (0.00)
+- Discretionary: -0.02 (AC bundling caused one extra review cycle)
+
+### Confidence: 0.98
+### Action: archive
