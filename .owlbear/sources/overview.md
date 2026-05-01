@@ -2,6 +2,17 @@
 
 External repos and resources studied during OwlBear development.
 
+## Real-Time Cockpit Updates (Task #1233)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| germano.dev — SSE vs WebSockets (2022, 263 HN comments) | <https://germano.dev/sse-websockets> | Technical deep-dive + live demo comparing SSE and WebSocket; confirmed SSE fits server→client-only push | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| digitalbiztalk.com — SSE vs WebSockets 2026 | `https://www.digitalbiztalk.com/` (exact article path unverified — domain unresolvable at 2026-05-01 validation) | Comparison article cited in original research; URL could not be independently confirmed | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| Medium — FastAPI SSE implementation (2025) | <https://mahdijafaridev.medium.com/implementing-server-sent-events-sse-with-fastapi-real-time-updates-made-simple-6492f8bfc154> | FastAPI-specific SSE howto; StreamingResponse + async generator pattern | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| sysid/sse-starlette (GitHub) | <https://github.com/sysid/sse-starlette> | Battle-tested SSE library for Starlette/FastAPI; EventSourceResponse, reconnect handling | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| samuelcolvin/watchfiles (GitHub) | <https://github.com/samuelcolvin/watchfiles> | Rust-backed async file watcher (Pydantic author); OS-native FSEvents/inotify, async-friendly API | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+| uvicorn.org — Settings (concurrency limits) | <https://www.uvicorn.org/settings/> | Worker count, connection limits, async model reference for SSE deployment impact assessment | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
+
 ## Version Field Semantics (Task #1170)
 
 | Source | URL | What | Where Used | Date |
