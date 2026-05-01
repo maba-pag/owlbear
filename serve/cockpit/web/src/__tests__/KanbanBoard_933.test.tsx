@@ -44,10 +44,17 @@ const TASKS = {
   mtime: 1713456000,
 }
 
+let currentBoard: typeof BOARD | null = BOARD
+let currentTasks = TASKS.tasks
+let currentError: string | null = null
+
 // ─── Fetch stub helpers ───────────────────────────────────────────────────────
 
 /** /api/board fails with network error; /api/tasks succeeds */
 function stubBoardNetworkError() {
+  currentBoard = BOARD
+  currentTasks = TASKS.tasks
+  currentError = 'Network error'
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) => {
@@ -64,6 +71,9 @@ function stubBoardNetworkError() {
 
 /** /api/tasks fails with network error; /api/board succeeds */
 function stubTasksNetworkError() {
+  currentBoard = BOARD
+  currentTasks = TASKS.tasks
+  currentError = 'Network error'
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) => {
@@ -80,6 +90,9 @@ function stubTasksNetworkError() {
 
 /** /api/board returns HTTP 500 (ok: false); /api/tasks succeeds */
 function stubBoardHttpError() {
+  currentBoard = BOARD
+  currentTasks = TASKS.tasks
+  currentError = 'Board API error: 500'
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) => {
@@ -121,6 +134,9 @@ function stubFetchSuccessMulti() {
     ],
     mtime: 1713456000,
   }
+  currentBoard = BOARD
+  currentTasks = tasksMulti.tasks
+  currentError = null
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) => {
@@ -137,6 +153,9 @@ function stubFetchSuccessMulti() {
 
 /** /api/tasks returns HTTP 500 (ok: false); /api/board succeeds */
 function stubTasksHttpError() {
+  currentBoard = BOARD
+  currentTasks = TASKS.tasks
+  currentError = 'Tasks API error: 500'
   vi.stubGlobal(
     'fetch',
     vi.fn((url: string) => {
@@ -157,7 +176,13 @@ function renderBoard() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
-        <KanbanBoard />
+        <KanbanBoard
+          board={currentBoard}
+          tasks={currentTasks}
+          loading={false}
+          error={currentError}
+          refetchTasks={vi.fn()}
+        />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )

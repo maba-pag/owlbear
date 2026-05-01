@@ -129,7 +129,13 @@ function renderBoard() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
-        <KanbanBoard />
+        <KanbanBoard
+          board={BOARD}
+          tasks={TASKS.tasks}
+          loading={false}
+          error={null}
+          refetchTasks={vi.fn()}
+        />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )
@@ -272,96 +278,174 @@ describe('TestFromAC_HandleTransitionClickArchive', () => {
     const FROZEN = '2026-01-01T00:00:00+00:00'
     const POLLED = '2026-02-01T00:00:00+00:00'
 
-    let tasksCallCount = 0
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (url.includes('/api/board')) {
-          return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
-        }
-        if (url.includes('/api/tasks') && !/\/move/.test(url)) {
-          tasksCallCount++
-          const updated = tasksCallCount === 1 ? FROZEN : POLLED
-          const mtime = tasksCallCount === 1 ? 1000 : 2000
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                mtime,
-                tasks: [
-                  {
-                    id: 1,
-                    title: 'Completed task',
-                    status: 'done',
-                    priority: 'needed',
-                    updated,
-                    tags: [],
-                    blocked: false,
-                    block_reason: null,
-                    claimed: false,
-                  },
-                  {
-                    id: 2,
-                    title: 'Backlog task',
-                    status: 'backlog',
-                    priority: 'needed',
-                    updated: '2026-01-02T00:00:00+00:00',
-                    tags: [],
-                    blocked: false,
-                    block_reason: null,
-                    claimed: false,
-                  },
-                ],
-              }),
-          })
-        }
-        return Promise.reject(new Error(`Unexpected URL: ${url}`))
-      }),
+    const initialTasks = [
+      {
+        id: 1,
+        title: 'Completed task',
+        status: 'done',
+        priority: 'needed',
+        updated: FROZEN,
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+      },
+      {
+        id: 2,
+        title: 'Backlog task',
+        status: 'backlog',
+        priority: 'needed',
+        updated: '2026-01-02T00:00:00+00:00',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+      },
+    ]
+
+    const updatedTasks = [
+      {
+        ...initialTasks[0],
+        updated: POLLED,
+      },
+      initialTasks[1],
+    ]
+
+    const { container, rerender } = render(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter>
+          <KanbanBoard
+            board={BOARD}
+            tasks={initialTasks}
+            loading={false}
+            error={null}
+            refetchTasks={vi.fn()}
+          />
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
     )
 
-    vi.useFakeTimers()
-    try {
-      const { container } = renderBoard()
+    await openContextMenuForTask(container, 1)
 
-      // Flush initial load: useBoard calls fetch in useEffect; since fetch is
-      // mocked with Promise.resolve(), it settles as a microtask. act() drains
-      // all pending microtasks and React state updates (no timer advance needed).
-      await act(async () => {})
+    rerender(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter>
+          <KanbanBoard
+            board={BOARD}
+            tasks={updatedTasks}
+            loading={false}
+            error={null}
+            refetchTasks={vi.fn()}
+          />
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
+    )
 
-      expect(container.querySelector('[data-testid="task-card"][data-id="1"]')).not.toBeNull()
+    fireEvent.click(
+      container.querySelector('[data-testid="transition-item"][data-status="archived"]')!,
+    )
 
-      // Open context menu — contextMenu.taskUpdated captures FROZEN
-      fireEvent.contextMenu(
-        container.querySelector('[data-testid="task-card"][data-id="1"]')!,
-      )
-      expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
+    await act(async () => {})
 
-      // Advance past polling interval (3000 ms) to fire exactly one poll cycle.
-      // advanceTimersByTimeAsync advances the clock and awaits callbacks — safe
-      // because it does not loop; the next interval fires only after another 3000 ms.
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(3100)
-      })
+    const modal = container.querySelector('[data-testid="archival-modal-stub"]')
+    expect(modal).not.toBeNull()
+    // Must be FROZEN (captured at menu-open), NOT POLLED (updated props)
+    expect(modal?.getAttribute('data-expected-updated')).toBe(FROZEN)
+  })
 
-      // Confirm the poll fired (tasksCallCount >= 2, tasks state now has POLLED)
-      expect(tasksCallCount).toBeGreaterThanOrEqual(2)
+  // ─── Brief F3 timing split: taskStatus at intercept time, expectedUpdated frozen ─
+  // When polling updates task.status between menu-open and archived-click,
+  // ArchivalModal must receive the LIVE status at click time (not the frozen
+  // menu-open snapshot). expectedUpdated must still come from menu-open.
+  //
+  // This test fails against the current implementation because it passes
+  // contextMenu.taskStatus (frozen at menu-open = 'done') instead of reading
+  // the live tasks snapshot at intercept time (= 'in-progress' after the poll).
+  // brief.md F3 lines 165-170: "taskStatus — task.status at intercept time".
 
-      // Click → archived while context menu is still open.
-      // handleTransitionClick must use contextMenu.taskUpdated (FROZEN), not
-      // tasks.find(...)?.updated (POLLED).
-      fireEvent.click(
-        container.querySelector('[data-testid="transition-item"][data-status="archived"]')!,
-      )
+  it('taskStatus passed to ArchivalModal reflects task.status at archived-click time, not context-menu-open time', async () => {
+    const FROZEN_UPDATED = '2026-01-01T00:00:00+00:00'
+    const POLLED_UPDATED = '2026-02-01T00:00:00+00:00'
 
-      // Flush the click handler's React state updates without advancing time further
-      await act(async () => {})
+    const initialTasks = [
+      {
+        id: 1,
+        title: 'Completed task',
+        status: 'done',
+        priority: 'needed',
+        updated: FROZEN_UPDATED,
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+      },
+      {
+        id: 2,
+        title: 'Backlog task',
+        status: 'backlog',
+        priority: 'needed',
+        updated: '2026-01-02T00:00:00+00:00',
+        tags: [],
+        blocked: false,
+        block_reason: null,
+        claimed: false,
+      },
+    ]
 
-      const modal = container.querySelector('[data-testid="archival-modal-stub"]')
-      expect(modal).not.toBeNull()
-      // Must be FROZEN (captured at menu-open), NOT POLLED (post-poll state)
-      expect(modal?.getAttribute('data-expected-updated')).toBe(FROZEN)
-    } finally {
-      vi.useRealTimers()
-    }
+    const updatedTasks = [
+      {
+        ...initialTasks[0],
+        status: 'in-progress',
+        updated: POLLED_UPDATED,
+      },
+      initialTasks[1],
+    ]
+
+    const { container, rerender } = render(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter>
+          <KanbanBoard
+            board={BOARD}
+            tasks={initialTasks}
+            loading={false}
+            error={null}
+            refetchTasks={vi.fn()}
+          />
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
+    )
+
+    await openContextMenuForTask(container, 1)
+
+    rerender(
+      <PorscheDesignSystemProvider>
+        <MemoryRouter>
+          <KanbanBoard
+            board={BOARD}
+            tasks={updatedTasks}
+            loading={false}
+            error={null}
+            refetchTasks={vi.fn()}
+          />
+        </MemoryRouter>
+      </PorscheDesignSystemProvider>,
+    )
+
+    expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
+    expect(
+      container.querySelector('[data-testid="transition-item"][data-status="archived"]'),
+    ).not.toBeNull()
+
+    fireEvent.click(
+      container.querySelector('[data-testid="transition-item"][data-status="archived"]')!,
+    )
+    await act(async () => {})
+
+    const modal = container.querySelector('[data-testid="archival-modal-stub"]')
+    expect(modal).not.toBeNull()
+    // Must be the LIVE intercept-time status, NOT the frozen menu-open status
+    expect(modal?.getAttribute('data-task-status')).toBe('in-progress')
+    // expectedUpdated must still be the FROZEN value from menu-open time
+    expect(modal?.getAttribute('data-expected-updated')).toBe(FROZEN_UPDATED)
   })
 })

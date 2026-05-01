@@ -139,13 +139,21 @@ function stubFetch(tasks: TaskFixture[]) {
   )
 }
 
+let currentTasks: TaskFixture[] = []
+
 // ─── Render helper ────────────────────────────────────────────────────────────
 
 function renderBoard() {
   return render(
     <PorscheDesignSystemProvider>
       <MemoryRouter>
-        <KanbanBoard />
+        <KanbanBoard
+          board={BOARD}
+          tasks={currentTasks}
+          loading={false}
+          error={null}
+          refetchTasks={vi.fn()}
+        />
       </MemoryRouter>
     </PorscheDesignSystemProvider>,
   )
@@ -162,7 +170,8 @@ describe('TestFromAC_Board700Structural', () => {
 
   describe('uniform distribution (SEED=42, 100 tasks/column)', () => {
     beforeEach(() => {
-      stubFetch(generateUniformTasks(42))
+      currentTasks = generateUniformTasks(42)
+      stubFetch(currentTasks)
     })
 
     it('board container has data-testid="kanban-board" for DOM scoping', async () => {
@@ -221,7 +230,8 @@ describe('TestFromAC_Board700Structural', () => {
 
   describe('skewed distribution (SEED=42, 400 backlog / 150 done / 30 each remaining)', () => {
     beforeEach(() => {
-      stubFetch(generateSkewedTasks(42))
+      currentTasks = generateSkewedTasks(42)
+      stubFetch(currentTasks)
     })
 
     it('board container has data-testid="kanban-board" for DOM scoping', async () => {

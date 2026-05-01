@@ -30,8 +30,8 @@ export function Card({ task, selected = false, onSelect, onContextMenu, onDragSt
       onDragEnd={onDragEnd}
       onContextMenu={(e) => onContextMenu(e, task)}
       style={{
-        borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? '#888888'}`,
         border: selected ? '1px solid var(--pds-theme-light-notification-success)' : '1px solid transparent',
+        borderLeft: `4px solid ${PRIORITY_COLORS[task.priority] ?? '#888888'}`,
         backgroundColor: selected ? 'var(--pds-theme-light-notification-success-soft)' : 'transparent',
         minHeight: '48px',
         maxHeight: '56px',

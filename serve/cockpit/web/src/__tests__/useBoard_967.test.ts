@@ -22,6 +22,7 @@ interface UseBoardResult {
   error: string | null
   isFetching: boolean
   isStale: boolean
+  health: string
   refetchTasks: () => void
 }
 
@@ -122,7 +123,13 @@ describe('TestFromAC_useBoardHook967', () => {
       vi.stubGlobal('fetch', fetchMock)
       renderHook(() => useBoard())
       await act(async () => {
-        vi.advanceTimersByTime(9000)
+        vi.advanceTimersByTime(3000)
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
+      })
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
       })
       const tasksCalls = fetchMock.mock.calls.filter((c) =>
         (c[0] as string).includes('/api/tasks'),
@@ -236,6 +243,7 @@ describe('TestFromAC_useBoardHook967', () => {
       expect(hook).toHaveProperty('error')
       expect(hook).toHaveProperty('isFetching')
       expect(hook).toHaveProperty('isStale')
+      expect(hook).toHaveProperty('health')
       expect(hook).toHaveProperty('refetchTasks')
       expect(typeof hook.refetchTasks).toBe('function')
     })

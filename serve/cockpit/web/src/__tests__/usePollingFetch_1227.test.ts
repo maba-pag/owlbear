@@ -166,8 +166,8 @@ describe('TestFromAC_UsePollingFetch', () => {
       expect(slowFetch).toHaveBeenCalledTimes(1)
       // Resolve and check that only ONE pending poll fires (not two)
       await act(async () => { resolveFetch() })
-      // After resolving, at most one follow-up fetch should have been triggered
-      expect(slowFetch.mock.calls.length).toBeLessThanOrEqual(2)
+      // After resolving, exactly one queued repoll should fire.
+      expect(slowFetch).toHaveBeenCalledTimes(2)
     })
   })
 
