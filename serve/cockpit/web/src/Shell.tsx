@@ -70,6 +70,9 @@ function Shell() {
       return
     }
 
+    // Clear stale detail data immediately when switching tasks.
+    setSelectedTask(null)
+
     const controller = new AbortController()
     let cancelled = false
 
@@ -127,7 +130,6 @@ function Shell() {
       <main className="shell__workspace" data-region="workspace">
         <Routes>
           <Route path="/" element={kanbanElement} />
-          <Route path="/hello" element={<div>hello</div>} />
         </Routes>
       </main>
       <aside className="shell__sidecar" data-region="sidecar">
