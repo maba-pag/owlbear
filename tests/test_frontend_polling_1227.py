@@ -266,3 +266,101 @@ class TestFromAC_DurableSuiteAlignment:
             "AC6 requires this suite to provide board, tasks, loading, error, and "
             "refetchTasks props after LegacyKanbanBoard removal."
         )
+
+    # ── Cycle-3 gaps: additional durable suites identified by reviewer ──────
+
+    def test_useboard_test_imports_from_hooks_not_kanbanboard(self) -> None:
+        """useBoard.test.ts (#965) must import useBoard from hooks/useBoard, not KanbanBoard.
+
+        KanbanBoard.tsx no longer re-exports useBoard after the state-lifting refactor.
+        The import ``import { useBoard } from '../KanbanBoard'`` in useBoard.test.ts will
+        fail at runtime — the builder must update it to ``../hooks/useBoard``.
+        """
+        suite = self.TESTS_DIR / "useBoard.test.ts"
+        assert suite.exists(), "useBoard.test.ts missing."
+        content = suite.read_text()
+        assert "from '../KanbanBoard'" not in content, (
+            "useBoard.test.ts (#965) still imports useBoard from '../KanbanBoard'. "
+            "KanbanBoard.tsx no longer exports useBoard after the refactor. "
+            "AC6 (cycle 3) requires updating the import to '../hooks/useBoard'."
+        )
+
+    def test_kanbanboard_1242_no_bare_render_without_props(self) -> None:
+        """KanbanBoard_1242.test.tsx must not render <KanbanBoard /> without required props.
+
+        After LegacyKanbanBoard removal, bare ``<KanbanBoard />`` renders show
+        a loading spinner (loading defaults to true) instead of the task cards
+        the test expects.  Builder must pass board, tasks, loading={false},
+        error, and refetchTasks as explicit props (AC6 cycle 3 scope).
+        """
+        import re
+
+        suite = self.TESTS_DIR / "KanbanBoard_1242.test.tsx"
+        assert suite.exists(), "KanbanBoard_1242.test.tsx missing."
+        content = suite.read_text()
+        bare_render = re.search(r"<KanbanBoard\s*/>", content)
+        assert bare_render is None, (
+            "KanbanBoard_1242.test.tsx renders <KanbanBoard /> without required props. "
+            "After LegacyKanbanBoard removal this shows only a loading spinner — "
+            "tests see no task cards and fail. "
+            "AC6 (cycle 3) requires explicit board/tasks/loading={false}/error/refetchTasks props."
+        )
+
+    def test_kanbanboard_959_no_bare_render_without_props(self) -> None:
+        """KanbanBoard_959.test.tsx must not render <KanbanBoard /> without required props.
+
+        The performance test renders 700 task cards via renderBoard() which uses
+        a bare ``<KanbanBoard />``.  After state-lifting, the component no longer
+        polls, so no tasks ever appear — the test waits forever and then fails.
+        Builder must pass the fixture tasks via props (AC6 cycle 3 scope).
+        """
+        import re
+
+        suite = self.TESTS_DIR / "KanbanBoard_959.test.tsx"
+        assert suite.exists(), "KanbanBoard_959.test.tsx missing."
+        content = suite.read_text()
+        bare_render = re.search(r"<KanbanBoard\s*/>", content)
+        assert bare_render is None, (
+            "KanbanBoard_959.test.tsx renders <KanbanBoard /> without required props. "
+            "After state-lifting the component never polls — task cards never appear. "
+            "AC6 (cycle 3) requires explicit props with the 700-task fixture."
+        )
+
+    def test_kanbanboard_933_no_bare_render_without_props(self) -> None:
+        """KanbanBoard_933.test.tsx must not render <KanbanBoard /> without required props.
+
+        Same root cause as 959/1242: the renderBoard() helper wraps a bare
+        ``<KanbanBoard />`` without board/tasks props.  After state-lifting
+        the component shows a loading spinner; the error-path tests never see
+        task cards or error states and fail.
+        Builder must pass explicit props (AC6 cycle 3 scope).
+        """
+        import re
+
+        suite = self.TESTS_DIR / "KanbanBoard_933.test.tsx"
+        assert suite.exists(), "KanbanBoard_933.test.tsx missing."
+        content = suite.read_text()
+        bare_render = re.search(r"<KanbanBoard\s*/>", content)
+        assert bare_render is None, (
+            "KanbanBoard_933.test.tsx renders <KanbanBoard /> without required props. "
+            "After state-lifting the component shows only a loading spinner — "
+            "error-path tests never see the expected error UI. "
+            "AC6 (cycle 3) requires explicit board/tasks/loading={false}/error/refetchTasks props."
+        )
+
+    def test_useboard_967_interface_asserts_health_field(self) -> None:
+        """useBoard_967.test.ts must assert 'health' in the hook return interface.
+
+        The hook now returns a 'health' field (HealthState) derived from the
+        tasks poll via useConnectionHealth.  The durable interface test in
+        useBoard_967.test.ts must include ``toHaveProperty('health')`` alongside
+        the other seven fields (AC6 cycle 3).
+        """
+        suite = self.TESTS_DIR / "useBoard_967.test.ts"
+        assert suite.exists(), "useBoard_967.test.ts missing."
+        content = suite.read_text()
+        assert "toHaveProperty('health')" in content or 'toHaveProperty("health")' in content, (
+            "useBoard_967.test.ts does not assert toHaveProperty('health') in its "
+            "interface test.  useBoard now returns a 'health' field — AC6 (cycle 3) "
+            "requires the durable interface assertion to include it."
+        )
