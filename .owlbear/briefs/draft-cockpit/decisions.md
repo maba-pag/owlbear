@@ -16,7 +16,7 @@
 Never dump raw file contents. YAML frontmatter rendered as structured controls; markdown body rendered as markdown (with editor mode).
 
 ## D6 — Staleness Budget
-**2–5 s.** Short-poll the `revision` counter; no SSE/WebSocket in v1.
+**2–5 s.** SSE (server-sent events) as primary transport; mtime-scan polling @ 3 s as fallback when SSE connection drops. *Amended per resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md` (Option A approved).*
 
 ## D7 — Extensibility as Shell, Not Surfaces
 v1 ships the **cockpit shell** (routing, layout, engine adapter, session model, theming). v1 ships **only the kanban surface + activity panel**. Future surfaces (decision queue, knowledge search, memory curation, agent/skill/instruction editor, VS Code settings controller, DnD dispatch) are out of v1, but their shape informs the shell design.
@@ -62,7 +62,7 @@ The cockpit HTTP layer exposes only the six v1 mutations. Agent-only verbs (`cla
 - **Frontend:** React 19 + Vite + TypeScript. Built bundle served by FastAPI static handler.
 - **Design system:** Porsche DS React wrapper primary; Radix UI + Tailwind on Porsche tokens as fallback if PDS card customisation proves heavy.
 - **Network:** binds `127.0.0.1` only by default. `--allow-remote` flag (deferred to future brief) would require mandatory bearer token.
-- **Polling:** mtime-scan on tasks dir as primary change-detection (per-instance revision counter does NOT see cross-process writes; this corrects the original research-notes assumption). Poll @ 3 s; skip 1 cycle after a local mutation.
+- **Change detection:** SSE as primary push transport (backend emits event on tasks-dir mtime change). Mtime-scan polling @ 3 s as automatic fallback when SSE connection is lost. Skip 1 poll cycle after a local mutation. *Amended per resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md` (Option A approved).*
 - **Layout:** thin top status bar (traffic light + counts) · narrow left icon rail (surface selectors) · kanban workspace center · right sidecar with Detail + Activity tabs.
 - **Mutation safety:** "oppose-the-flow = confirm" — backward moves, unclaim, unblock require confirmation; forward moves and reprioritise don't. Unblock surfaces the block reason before clearing.
 - **Audit:** cockpit-initiated mutations write `actor: "cockpit"` to `activity.jsonl`.
