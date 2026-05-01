@@ -7,7 +7,16 @@ export interface FilterState {
   blocked: boolean
 }
 
-// RED-phase stub for task #1248; real filtering logic is implemented in #1249.
-export function filterTasks(_tasks: Task[], _filter: FilterState): Task[] {
-  return []
+export function filterTasks(tasks: Task[], filter: FilterState): Task[] {
+  const text = filter.text.toLowerCase()
+
+  return tasks.filter((task) => {
+    const matchesText = !text || task.title.toLowerCase().includes(text)
+    const matchesPriority = !filter.priority || task.priority === filter.priority
+    const matchesTags =
+      filter.tags.length === 0 || filter.tags.every((tag) => task.tags?.includes(tag) === true)
+    const matchesBlocked = !filter.blocked || task.blocked
+
+    return matchesText && matchesPriority && matchesTags && matchesBlocked
+  })
 }
