@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.errors import ConfigError
+from owlbear_kanban.errors import ConfigError, ValidationError
 
 # ---------------------------------------------------------------------------
 # Board config fixtures
@@ -91,6 +91,41 @@ pipeline:
     entry_status: research
     terminal_status: done
     wave_size: 4
+    claim_timeout: 1h
+agents:
+    agent_map: {}
+    agent_types: {}
+    agent_compatibility: {}
+policy:
+    non_impl_tags: [research, docs]
+    archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]
+    status_predicates: {}
+"""
+
+# wave_size: 0 AND agent_map: {} — exercises effective_wave < 1 guard before agent_map guard
+_BASE_CONFIG_ZERO_WAVE_EMPTY_AGENT_MAP = """\
+schema: grouped
+statuses:
+  - research
+  - backlog
+  - todo
+  - in-progress
+  - review
+  - done
+priorities:
+  - critical
+  - needed
+  - important
+  - nice-to-have
+  - someday
+next_id: 1
+paths:
+    tasks_dir: tasks
+    archive_dir: archive
+pipeline:
+    entry_status: research
+    terminal_status: done
+    wave_size: 0
     claim_timeout: 1h
 agents:
     agent_map: {}
@@ -331,6 +366,64 @@ class TestFromAC_PickTasksValidatesAgentMap:
         assert list_tasks_calls == [], (
             "list_tasks must NOT be called when agent_map validation raises ConfigError "
             f"(was called {len(list_tasks_calls)} time(s))"
+        )
+
+    def test_pick_tasks_validates_before_resolve_pending_drs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """AC6 ordering proof: resolve_pending_drs is NOT called when agent_map validation fails.
+
+        Monkeypatches sys.modules["owlbear_kanban.decisions"] so importlib.import_module
+        returns the mock instead of the real module.  After ConfigError is raised,
+        the mock's resolve_pending_drs must have call_count == 0 — proving that the
+        agent_map check at engine.py:2333 fires BEFORE the decisions import at line 2348.
+        """
+        import sys
+
+        kanban_dir = _make_board(tmp_path, _BASE_CONFIG_COMPLETE)
+        engine = KanbanEngine(kanban_dir)
+        av = engine.agent_view()
+
+        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        engine.refresh_config()
+
+        mock_decisions = MagicMock()
+        monkeypatch.setitem(sys.modules, "owlbear_kanban.decisions", mock_decisions)
+
+        with pytest.raises(ConfigError):
+            av.pick_tasks()
+
+        assert mock_decisions.resolve_pending_drs.call_count == 0, (
+            "resolve_pending_drs must NOT be called when agent_map validation raises ConfigError; "
+            f"was called {mock_decisions.resolve_pending_drs.call_count} time(s)"
+        )
+
+    def test_pick_tasks_effective_wave_guard_fires_before_agent_map_guard(
+        self, tmp_path: Path
+    ) -> None:
+        """AC7 conflict proof: ERR_INVALID_WAVE_PARAM wins when effective_wave < 1 AND agent_map is incomplete.
+
+        Config has wave_size: 0 (effective_wave = 0 < 1) and agent_map: {}.
+        pick_tasks() with no explicit wave_size arg must raise ValidationError
+        (ERR_INVALID_WAVE_PARAM), not ConfigError (ERR_INVALID_STATUS).
+        This proves the effective_wave < 1 guard at engine.py:2327 executes before
+        the agent_map completeness check at engine.py:2333.
+        """
+        kanban_dir = _make_board(tmp_path, _BASE_CONFIG_COMPLETE)
+        engine = KanbanEngine(kanban_dir)
+        av = engine.agent_view()
+
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_ZERO_WAVE_EMPTY_AGENT_MAP, encoding="utf-8"
+        )
+        engine.refresh_config()
+
+        with pytest.raises(ValidationError) as exc_info:
+            av.pick_tasks()  # no explicit wave_size arg → effective_wave = config.wave_size = 0
+
+        assert exc_info.value.code == "ERR_INVALID_WAVE_PARAM", (
+            f"Expected ERR_INVALID_WAVE_PARAM but got code={exc_info.value.code!r}; "
+            "effective_wave guard must fire before agent_map guard"
         )
 
 
