@@ -14,6 +14,7 @@ For pipeline conventions and claiming protocol, see `r-pipeline-protocol`.
 
 Exactly 8 tools are exposed:
 
+<!-- markdownlint-disable MD056 -- pipe chars in Python union types (str | None) inside table cells -->
 | Tool | Signature |
 |------|-----------|
 | `list_tasks` | `list_tasks(status: str | None = None, priority: str | None = None, tag: str | None = None, archival_reason: str | None = None, ids: list[int] | None = None, unclaimed: bool = False, blocked: bool | None = None, parent: int | None = None, search: str | None = None, sort: str | None = None, reverse: bool = False, limit: int = 0)` |
@@ -24,6 +25,7 @@ Exactly 8 tools are exposed:
 | `move_task` | `move_task(id: int, status: str, archival_reason: str | None = None, archival_refs: list[int] | None = None)` |
 | `start_work` | `start_work(id: int)` |
 | `end_work` | `end_work(id: int, outcome: str, move_to: str | None = None, note: str | None = None, archival_reason: str | None = None, archival_refs: list[int] | None = None, block_reason: str | None = None)` |
+<!-- markdownlint-enable MD056 -->
 
 ### Filter and Retrieval Additions
 

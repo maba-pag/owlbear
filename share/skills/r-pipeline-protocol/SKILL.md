@@ -8,7 +8,7 @@ user-invocable: false
 
 Shared conventions for pipeline agents (T1–T3). Read once at session start from your `<critical_rules>` reference. This skill is the single source of truth for pipeline coordination.
 
-### Companion Skills
+## Companion Skills
 
 Load these via `read_file` when the referenced capability is needed during your workflow:
 
