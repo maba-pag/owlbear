@@ -276,15 +276,15 @@ class TestFromAC_ValidateEngineConfig:
 
     def test_asymmetric_agent_compatibility_raises(self) -> None:
         config = self._make_valid_config()
-        config.agents.agent_compatibility = {"alice": ["bob"]}  # bob does not list alice
+        config.agents.agent_compatibility = {
+            "alice": ["bob"]
+        }  # bob does not list alice
         with pytest.raises(ConfigError):
             _validate_engine_config(config)
 
     def test_agent_compatibility_non_list_peer_raises(self) -> None:
         config = self._make_valid_config()
-        config.agents.agent_compatibility = {
-            "alice": "not-a-list"
-        }  # type: ignore[assignment]
+        config.agents.agent_compatibility = {"alice": "not-a-list"}  # type: ignore[assignment]
         with pytest.raises(ConfigError):
             _validate_engine_config(config)
 
@@ -350,7 +350,7 @@ class TestFromAC_SessionDurationHelpers:
 
     def test_compute_duration_mixed_tz(self) -> None:
         result = _compute_duration(
-            "2026-04-23T10:00:00",        # tz-naive
+            "2026-04-23T10:00:00",  # tz-naive
             "2026-04-23T11:00:00+00:00",  # tz-aware
         )
         assert result == 3600.0
@@ -395,7 +395,9 @@ class TestFromAC_CollectTaskSessions:
             ),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(1, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            1, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         assert len(sessions) == 1
         assert sessions[0].state == "completed"
         assert sessions[0].outcome == "success"
@@ -406,7 +408,9 @@ class TestFromAC_CollectTaskSessions:
             self._evt("claim", "agent-A", datetime.now(UTC).isoformat()),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(2, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            2, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         assert len(sessions) == 1
         assert sessions[0].state == "running"
 
@@ -415,7 +419,9 @@ class TestFromAC_CollectTaskSessions:
             self._evt("claim", "agent-A", "2026-01-01T10:00:00+00:00"),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(3, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            3, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         assert sessions[0].state == "stuck"
 
     def test_double_claim_emits_first_as_stuck(self) -> None:
@@ -424,7 +430,9 @@ class TestFromAC_CollectTaskSessions:
             self._evt("claim", "agent-B", datetime.now(UTC).isoformat()),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(4, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            4, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         assert len(sessions) >= 2
         assert any(s.agent == "agent-A" and s.state == "stuck" for s in sessions)
 
@@ -434,7 +442,9 @@ class TestFromAC_CollectTaskSessions:
             self._evt("release", "released by agent-A", "2026-04-23T10:30:00+00:00"),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(5, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            5, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         assert sessions[0].state == "released"
         assert sessions[0].outcome == "released"
 
@@ -446,7 +456,9 @@ class TestFromAC_CollectTaskSessions:
             ),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(6, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            6, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         assert sessions[0].state == "expired"
 
     def test_orphan_close_without_open_claim_is_skipped(self) -> None:
@@ -454,7 +466,9 @@ class TestFromAC_CollectTaskSessions:
             self._evt("end_work", "success: todo -> done", "2026-04-23T10:00:00+00:00"),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(7, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            7, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         assert sessions == []
 
     def test_intermediate_event_updates_last_activity_ts(self) -> None:
@@ -464,7 +478,9 @@ class TestFromAC_CollectTaskSessions:
             self._evt("edit", "task edited", datetime.now(UTC).isoformat()),
         ]
         sessions: list[SessionRecord] = []
-        _collect_task_sessions(8, events, timedelta(hours=1), datetime.now(UTC), sessions)
+        _collect_task_sessions(
+            8, events, timedelta(hours=1), datetime.now(UTC), sessions
+        )
         # recent activity → should be running, not stuck
         assert sessions[0].state == "running"
 
@@ -605,15 +621,19 @@ class TestFromAC_EngineConfigOps:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
         # Add a new status to config YAML
-        new_config = _BASE_CONFIG.replace(
-            "  - done\n",
-            "  - done\n  - released\n",
-        ).replace(
-            "        done: auditor\n",
-            "        done: auditor\n        released: auditor\n",
-        ).replace(
-            "terminal_status: done",
-            "terminal_status: released",
+        new_config = (
+            _BASE_CONFIG.replace(
+                "  - done\n",
+                "  - done\n  - released\n",
+            )
+            .replace(
+                "        done: auditor\n",
+                "        done: auditor\n        released: auditor\n",
+            )
+            .replace(
+                "terminal_status: done",
+                "terminal_status: released",
+            )
         )
         (board / "config.yml").write_text(new_config, encoding="utf-8")
         engine.refresh_config()
@@ -683,7 +703,9 @@ class TestFromAC_MigrationGateEdgeCases:
         engine = KanbanEngine(board, activity_log=False)
         assert engine is not None
 
-    def test_cleared_claimed_by_empty_string_does_not_raise(self, tmp_path: Path) -> None:
+    def test_cleared_claimed_by_empty_string_does_not_raise(
+        self, tmp_path: Path
+    ) -> None:
         board = _make_board(tmp_path)
         (board / "tasks" / "1-empty.md").write_text(
             '---\nid: 1\ntitle: T\nstatus: todo\nclaimed_by: ""\n---\nBody\n',
@@ -932,9 +954,7 @@ class TestFromAC_EngineShowTask:
 class TestFromAC_EngineCreateTask:
     """AC: create_task allocates IDs and writes task files."""
 
-    def test_create_task_returns_task_with_correct_title(
-        self, tmp_path: Path
-    ) -> None:
+    def test_create_task_returns_task_with_correct_title(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
         task = engine.create_task("New Feature")
@@ -1468,7 +1488,8 @@ class TestFromAC_EngineListSessions:
     def test_missing_required_log_fields_line_skipped(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         (board / "activity.jsonl").write_text(
-            json.dumps({"action": "claim"}) + "\n",  # missing task_id, detail, timestamp
+            json.dumps({"action": "claim"})
+            + "\n",  # missing task_id, detail, timestamp
             encoding="utf-8",
         )
         engine = KanbanEngine(board, activity_log=True)
@@ -1555,7 +1576,9 @@ class TestFromAC_EngineActivityLog:
         engine.release_task("1")
         log_path = board / "activity.jsonl"
         assert log_path.exists()
-        lines = [json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()]
+        lines = [
+            json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()
+        ]
         actions = [e["action"] for e in lines]
         assert "claim" in actions
         assert "release" in actions
@@ -1566,7 +1589,9 @@ class TestFromAC_EngineActivityLog:
         engine = KanbanEngine(board, activity_log=True)
         engine.end_work("1", note="Done.", outcome="fail")
         log_path = board / "activity.jsonl"
-        lines = [json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()]
+        lines = [
+            json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()
+        ]
         actions = [e["action"] for e in lines]
         assert "end_work" in actions
 
@@ -1576,7 +1601,9 @@ class TestFromAC_EngineActivityLog:
         engine = KanbanEngine(board, activity_log=True)
         engine.move_task("1", "in-progress")
         log_path = board / "activity.jsonl"
-        lines = [json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()]
+        lines = [
+            json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()
+        ]
         actions = [e["action"] for e in lines]
         assert "move" in actions
 
@@ -1586,7 +1613,9 @@ class TestFromAC_EngineActivityLog:
         engine = KanbanEngine(board, activity_log=True)
         engine.edit_task("1", title="Updated Title")
         log_path = board / "activity.jsonl"
-        lines = [json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()]
+        lines = [
+            json.loads(ln) for ln in log_path.read_text().splitlines() if ln.strip()
+        ]
         actions = [e["action"] for e in lines]
         assert "edit" in actions
 
@@ -1763,9 +1792,7 @@ Body.
 class TestFromAC_EngineApplyOutcome:
     """AC: _apply_outcome advances status, sets blocked, rejects, or fails."""
 
-    def test_success_from_first_status_advances_to_second(
-        self, tmp_path: Path
-    ) -> None:
+    def test_success_from_first_status_advances_to_second(self, tmp_path: Path) -> None:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="research")
         engine = KanbanEngine(board, activity_log=False)
@@ -1895,9 +1922,7 @@ class TestFromAC_EngineListTasksInvalidStatus:
 class TestFromAC_EngineArchiveScanErrorPaths:
     """AC: list_tasks handles unreadable/corrupt archive files gracefully."""
 
-    def test_archive_scan_skips_unreadable_archive_file(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archive_scan_skips_unreadable_archive_file(self, tmp_path: Path) -> None:
         """Archive scan continues when a file cannot be read (OSError)."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1)  # valid task in tasks/
@@ -1937,9 +1962,7 @@ class TestFromAC_EngineArchiveScanErrorPaths:
 class TestFromAC_EngineDuplicateIdDetection:
     """AC: list_tasks raises CorruptionError when two active tasks share the same ID."""
 
-    def test_duplicate_task_id_raises_corruption_error(
-        self, tmp_path: Path
-    ) -> None:
+    def test_duplicate_task_id_raises_corruption_error(self, tmp_path: Path) -> None:
         """Two task files with the same numeric ID trigger CorruptionError."""
         from owlbear_kanban.corruption import CorruptionError
 
@@ -1974,9 +1997,7 @@ class TestFromAC_EngineDuplicateIdDetection:
 class TestFromAC_EngineShowTaskStalePath:
     """AC: show_task handles FileNotFoundError when cached file is deleted."""
 
-    def test_show_task_file_deleted_after_index_built(
-        self, tmp_path: Path
-    ) -> None:
+    def test_show_task_file_deleted_after_index_built(self, tmp_path: Path) -> None:
         """show_task raises FileNotFoundError when file is deleted after list_tasks."""
         board = _make_board(tmp_path)
         path = _write_task(board, task_id=20, title="Ephemeral")
@@ -2393,7 +2414,9 @@ class TestFromAC_DepStatusPaths:
         """Dep archived with 'dropped' reason → dep_status = 'blocked'."""
         board = _make_board(tmp_path)
         (board / "archive" / "10-dropped-dep.md").write_text(
-            _ARCHIVE_TASK_TMPL.format(task_id=10, title="Dropped", archival_reason="dropped"),
+            _ARCHIVE_TASK_TMPL.format(
+                task_id=10, title="Dropped", archival_reason="dropped"
+            ),
             encoding="utf-8",
         )
         _write_task(board, task_id=1, depends_on="[10]")
@@ -2408,7 +2431,9 @@ class TestFromAC_DepStatusPaths:
         """Dep archived with 'duplicate' reason → dep_status = 'redirect'."""
         board = _make_board(tmp_path)
         (board / "archive" / "10-dup-dep.md").write_text(
-            _ARCHIVE_TASK_TMPL.format(task_id=10, title="Dup", archival_reason="duplicate"),
+            _ARCHIVE_TASK_TMPL.format(
+                task_id=10, title="Dup", archival_reason="duplicate"
+            ),
             encoding="utf-8",
         )
         _write_task(board, task_id=1, depends_on="[10]")
@@ -2454,9 +2479,7 @@ class TestFromAC_SortByTimestampPath:
         )
         content = content.replace(
             'created: "2026-01-01T10:00:00+00:00"', f'created: "{created}"'
-        ).replace(
-            'updated: "2026-01-01T10:00:00+00:00"', f'updated: "{updated}"'
-        )
+        ).replace('updated: "2026-01-01T10:00:00+00:00"', f'updated: "{updated}"')
         (board / "tasks" / f"{task_id}-task.md").write_text(content, encoding="utf-8")
 
     def test_list_tasks_sort_by_created(self, tmp_path: Path) -> None:

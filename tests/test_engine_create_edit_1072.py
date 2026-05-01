@@ -256,7 +256,9 @@ class TestFromAC_EditTaskSemanticDiff:
 class TestFromAC_EditTaskArchivedNoOp:
     """Archived-task semantic no-op: same archival_reason or archival_refs → ERR_NO_OP."""
 
-    def test_same_archival_reason_on_archived_raises_no_op(self, tmp_path: Path) -> None:
+    def test_same_archival_reason_on_archived_raises_no_op(
+        self, tmp_path: Path
+    ) -> None:
         """Archived task: edit_task(archival_reason="dropped") when reason already "dropped" → ERR_NO_OP.
 
         Sending an identical archival_reason must not advance `updated` or rewrite
@@ -319,7 +321,9 @@ class TestFromAC_D46NoExpectedUpdatedParam:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
-            view.edit_task(1, priority="someday", expected_updated="2026-01-01T10:00:00+00:00")  # type: ignore[call-arg]
+            view.edit_task(
+                1, priority="someday", expected_updated="2026-01-01T10:00:00+00:00"
+            )  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------

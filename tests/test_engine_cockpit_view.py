@@ -336,9 +336,7 @@ class TestFromAC_CockpitViewEditTaskTitle:
         sig = inspect.signature(cv.edit_task)
         param = sig.parameters.get("title")
         assert param is not None, "title param missing from CockpitView.edit_task"
-        assert param.default is None, (
-            "CockpitView.edit_task title must default to None"
-        )
+        assert param.default is None, "CockpitView.edit_task title must default to None"
 
     def test_edit_task_with_title_updates_task_title(self, tmp_path: Path) -> None:
         """Supplying title updates the underlying task title."""
@@ -419,9 +417,7 @@ class TestFromAC_CockpitViewSweep:
 
         assert set(released) == {1}
 
-    def test_sweep_cas_stale_task_skipped_no_error_raised(
-        self, tmp_path: Path
-    ) -> None:
+    def test_sweep_cas_stale_task_skipped_no_error_raised(self, tmp_path: Path) -> None:
         """CAS ERR_STALE causes sweep to skip the task without mutating disk or logs."""
         kanban_dir = _make_board(tmp_path)
         expired_ts = (datetime.now(tz=UTC) - timedelta(hours=2)).isoformat()
@@ -788,7 +784,9 @@ class TestFromAC_CockpitViewRepairStorage:
 
         mock_scan_and_fix.assert_called_once()
         assert mock_scan_and_fix.call_args[0][0] == kanban_dir
-        quarantined = [outcome for outcome in outcomes if outcome.action == "quarantined"]
+        quarantined = [
+            outcome for outcome in outcomes if outcome.action == "quarantined"
+        ]
         assert len(quarantined) >= 1
 
     def test_repair_storage_phase2_ar_creation_uses_engine_create_task_method(
@@ -811,7 +809,9 @@ class TestFromAC_CockpitViewRepairStorage:
         ) as mock_create:
             outcomes = cv.repair_storage()
 
-        quarantined = [outcome for outcome in outcomes if outcome.action == "quarantined"]
+        quarantined = [
+            outcome for outcome in outcomes if outcome.action == "quarantined"
+        ]
         assert len(quarantined) >= 1
         mock_create.assert_called_once()
         assert "type:user-action" in mock_create.call_args.kwargs.get("tags", [])

@@ -179,18 +179,26 @@ class TestFromAC_ReleaseNoteAppending:
         the disk file will not contain the note.
         """
         view, kanban_dir = _make_view(tmp_path)
-        task_path = _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+        task_path = _write_task(
+            kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS
+        )
 
         note_text = "Disk body note verification."
         view.end_work(1, outcome="release", note=note_text)
 
         disk_record = read_task(task_path)
-        disk_body = disk_record.body if isinstance(disk_record.body, str) else str(disk_record.body)
+        disk_body = (
+            disk_record.body
+            if isinstance(disk_record.body, str)
+            else str(disk_record.body)
+        )
         assert note_text in disk_body, (
             f"Expected note in on-disk body after release; disk_body={disk_body!r}"
         )
 
-    def test_release_claimed_compound_note_and_claim_cleared(self, tmp_path: Path) -> None:
+    def test_release_claimed_compound_note_and_claim_cleared(
+        self, tmp_path: Path
+    ) -> None:
         """AC1: note is appended AND claim is cleared AND status is unchanged (compound guard).
 
         FAIL reason: engine.release_task() does not append the note, so the note
@@ -214,7 +222,9 @@ class TestFromAC_ReleaseNoteAppending:
 
     # --- AC3: note format ----------------------------------------------------
 
-    def test_release_claimed_note_has_iso_timestamp_prefix(self, tmp_path: Path) -> None:
+    def test_release_claimed_note_has_iso_timestamp_prefix(
+        self, tmp_path: Path
+    ) -> None:
         """AC3: appended note includes an ISO 8601 datetime prefix (no microseconds).
 
         FAIL reason: no note is appended at all on release; the timestamp prefix
@@ -233,7 +243,9 @@ class TestFromAC_ReleaseNoteAppending:
             f"Expected ISO 8601 datetime prefix (no microseconds) in body; body={body!r}"
         )
 
-    def test_release_claimed_note_no_microseconds_in_timestamp(self, tmp_path: Path) -> None:
+    def test_release_claimed_note_no_microseconds_in_timestamp(
+        self, tmp_path: Path
+    ) -> None:
         """AC3: timestamp uses now.replace(microsecond=0) — no fractional seconds.
 
         FAIL reason: no note is appended; the timestamp format cannot be verified.
@@ -265,7 +277,12 @@ class TestFromAC_ReleaseNoteAppending:
             <note text>
         """
         view, kanban_dir = _make_view(tmp_path)
-        _write_task(kanban_dir, status="in-progress", body="Original.", claimed_at=_LIVE_CLAIM_TS)
+        _write_task(
+            kanban_dir,
+            status="in-progress",
+            body="Original.",
+            claimed_at=_LIVE_CLAIM_TS,
+        )
 
         note_text = "Release note content."
         result = view.end_work(1, outcome="release", note=note_text)
@@ -280,7 +297,9 @@ class TestFromAC_ReleaseNoteAppending:
             f"Note text must follow timestamp; rest after timestamp={rest!r}"
         )
 
-    def test_release_claimed_note_format_matches_other_outcomes(self, tmp_path: Path) -> None:
+    def test_release_claimed_note_format_matches_other_outcomes(
+        self, tmp_path: Path
+    ) -> None:
         """AC3: release note format matches the format used by success/block outcomes.
 
         FAIL reason: no note is appended on release so format cannot be compared.
@@ -291,7 +310,9 @@ class TestFromAC_ReleaseNoteAppending:
         _write_task(kanban_dir_s, task_id=1, status="todo", claimed_at=_LIVE_CLAIM_TS)
 
         view_release, kanban_dir_r = _make_view(tmp_path / "release")
-        _write_task(kanban_dir_r, task_id=1, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
+        _write_task(
+            kanban_dir_r, task_id=1, status="in-progress", claimed_at=_LIVE_CLAIM_TS
+        )
 
         note_text = "Shared note content."
 
@@ -312,7 +333,7 @@ class TestFromAC_ReleaseNoteAppending:
             f"No timestamp in release body — note not appended; body={release_body!r}"
         )
         # Both timestamps must contain note text immediately after
-        assert note_text in release_body[release_ts.start():], (
+        assert note_text in release_body[release_ts.start() :], (
             f"Note text must appear after timestamp in release body; body={release_body!r}"
         )
 
@@ -331,14 +352,18 @@ class TestFromAC_ReleaseUnclaimedNoop:
     regression guards.
     """
 
-    def test_unclaimed_release_body_not_modified_in_memory(self, tmp_path: Path) -> None:
+    def test_unclaimed_release_body_not_modified_in_memory(
+        self, tmp_path: Path
+    ) -> None:
         """AC2: returned body is unchanged when release is called on an unclaimed task.
 
         The note parameter must be ignored for unclaimed tasks.
         """
         view, kanban_dir = _make_view(tmp_path)
         initial_body = "Original task body."
-        _write_task(kanban_dir, status="in-progress", body=initial_body, claimed_at="null")
+        _write_task(
+            kanban_dir, status="in-progress", body=initial_body, claimed_at="null"
+        )
 
         note_text = "This note must NOT appear."
         result = view.end_work(1, outcome="release", note=note_text)
@@ -362,20 +387,24 @@ class TestFromAC_ReleaseUnclaimedNoop:
         view.end_work(1, outcome="release", note=note_text)
 
         disk_record = read_task(task_path)
-        disk_body = disk_record.body if isinstance(disk_record.body, str) else str(disk_record.body)
+        disk_body = (
+            disk_record.body
+            if isinstance(disk_record.body, str)
+            else str(disk_record.body)
+        )
         assert note_text not in disk_body, (
             f"Note must not appear in on-disk body for unclaimed release; disk_body={disk_body!r}"
         )
 
-    def test_unclaimed_release_updated_timestamp_not_advanced(self, tmp_path: Path) -> None:
+    def test_unclaimed_release_updated_timestamp_not_advanced(
+        self, tmp_path: Path
+    ) -> None:
         """AC2: the 'updated' timestamp is not advanced for unclaimed task release.
 
         No state mutation must occur — the updated field must remain unchanged.
         """
         view, kanban_dir = _make_view(tmp_path)
-        task_path = _write_task(
-            kanban_dir, status="in-progress", claimed_at="null"
-        )
+        task_path = _write_task(kanban_dir, status="in-progress", claimed_at="null")
 
         before_mtime = task_path.stat().st_mtime
         view.end_work(1, outcome="release", note="Should not advance timestamp.")
@@ -422,7 +451,9 @@ class TestFromAC_ReleaseActivityEvent:
             f"Expected 'release' action in activity log; found actions={actions!r}"
         )
 
-    def test_release_claimed_emits_released_by_agent_detail(self, tmp_path: Path) -> None:
+    def test_release_claimed_emits_released_by_agent_detail(
+        self, tmp_path: Path
+    ) -> None:
         """AC4: claimed release with note emits detail='released by agent' in activity log.
 
         The detail must not be changed to include note content or other metadata.
@@ -467,7 +498,9 @@ class TestFromAC_ReleaseActivityEvent:
             f"'end_work' action must not appear in log for release outcome; actions={actions!r}"
         )
 
-    def test_release_claimed_emits_exact_detail_released_by_agent(self, tmp_path: Path) -> None:
+    def test_release_claimed_emits_exact_detail_released_by_agent(
+        self, tmp_path: Path
+    ) -> None:
         """AC4: claimed release with note emits detail exactly equal to 'released by agent'.
 
         Reviewer noted the existing substring check allows transformed values like
@@ -506,7 +539,9 @@ class TestFromAC_ReleaseAtomicity:
     other mutated fields.
     """
 
-    def test_release_task_with_note_emit_failure_body_rolls_back(self, tmp_path: Path) -> None:
+    def test_release_task_with_note_emit_failure_body_rolls_back(
+        self, tmp_path: Path
+    ) -> None:
         """release_task(note=...): note must NOT appear in disk body after emit failure rollback.
 
         The rollback writes the pre-mutation snapshot (without the note) back to
@@ -535,7 +570,11 @@ class TestFromAC_ReleaseAtomicity:
             engine.release_task("1", note=note_text)
 
         disk_record = read_task(task_path)
-        disk_body = disk_record.body if isinstance(disk_record.body, str) else str(disk_record.body)
+        disk_body = (
+            disk_record.body
+            if isinstance(disk_record.body, str)
+            else str(disk_record.body)
+        )
         assert note_text not in disk_body, (
             f"Note must be rolled back after emit failure; disk_body={disk_body!r}"
         )
@@ -574,7 +613,7 @@ class TestFromAC_ReleaseAtomicity:
         after = read_task(task_path)
         assert after.model_dump() == before.model_dump(), (
             "Full Task model must be identical to pre-release snapshot after emit-failure rollback "
-            f"when note= is provided"
+            "when note= is provided"
         )
 
 
@@ -592,7 +631,9 @@ class TestFromAC_ReleaseUnclaimedNoopNL:
     invariants are explicitly verified against the newline case.
     """
 
-    def test_unclaimed_release_newline_body_disk_unchanged(self, tmp_path: Path) -> None:
+    def test_unclaimed_release_newline_body_disk_unchanged(
+        self, tmp_path: Path
+    ) -> None:
         """AC2 (newline fixture): on-disk body unchanged when unclaimed task has trailing newline.
 
         Seeds a body ending with ``\\n``.  The persisted disk content must not
@@ -612,13 +653,19 @@ class TestFromAC_ReleaseUnclaimedNoopNL:
         view.end_work(1, outcome="release", note=note_text)
 
         disk_record = read_task(task_path)
-        disk_body = disk_record.body if isinstance(disk_record.body, str) else str(disk_record.body)
+        disk_body = (
+            disk_record.body
+            if isinstance(disk_record.body, str)
+            else str(disk_record.body)
+        )
         assert note_text not in disk_body, (
             f"Note must not be appended to disk body for unclaimed release "
             f"even with trailing newline; disk_body={disk_body!r}"
         )
 
-    def test_unclaimed_release_newline_body_mtime_unchanged(self, tmp_path: Path) -> None:
+    def test_unclaimed_release_newline_body_mtime_unchanged(
+        self, tmp_path: Path
+    ) -> None:
         """AC2 (newline fixture): file mtime unchanged when unclaimed task has trailing newline.
 
         Verifies that no disk write occurs (no ``updated`` advance) for unclaimed
@@ -675,7 +722,11 @@ class TestFromAC_DirectEngineUnclaimedRelease:
         engine.release_task("1", note=note_text)
 
         disk_record = read_task(task_path)
-        disk_body = disk_record.body if isinstance(disk_record.body, str) else str(disk_record.body)
+        disk_body = (
+            disk_record.body
+            if isinstance(disk_record.body, str)
+            else str(disk_record.body)
+        )
         assert note_text not in disk_body, (
             f"Note must not be written on direct engine unclaimed release_task(note=...); "
             f"disk_body={disk_body!r}"

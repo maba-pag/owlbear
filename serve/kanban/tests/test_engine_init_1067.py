@@ -73,7 +73,9 @@ def _make_board(base_dir: Path, config_yaml: str = _BASE_CONFIG) -> Path:
 class TestFromAC_EntryStatusValidation:
     """AC-NEW-14: entry_status not in statuses → ConfigError(ERR_ENTRY_STATUS_INVALID)."""
 
-    def test_entry_status_not_in_statuses_raises_config_error(self, tmp_path: Path) -> None:
+    def test_entry_status_not_in_statuses_raises_config_error(
+        self, tmp_path: Path
+    ) -> None:
         config = _BASE_CONFIG.replace("entry_status: research", "entry_status: missing")
         kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
@@ -82,13 +84,17 @@ class TestFromAC_EntryStatusValidation:
 
     def test_entry_status_wrong_case_raises_config_error(self, tmp_path: Path) -> None:
         # "RESEARCH" is not in statuses which contains "research" — case-sensitive check
-        config = _BASE_CONFIG.replace("entry_status: research", "entry_status: RESEARCH")
+        config = _BASE_CONFIG.replace(
+            "entry_status: research", "entry_status: RESEARCH"
+        )
         kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
             KanbanEngine(kanban_dir)
         assert exc_info.value.code == "ERR_ENTRY_STATUS_INVALID"
 
-    def test_entry_status_empty_string_raises_config_error(self, tmp_path: Path) -> None:
+    def test_entry_status_empty_string_raises_config_error(
+        self, tmp_path: Path
+    ) -> None:
         config = _BASE_CONFIG.replace("entry_status: research", "entry_status: ''")
         kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
@@ -109,7 +115,9 @@ class TestFromAC_TerminalStatusValidation:
         self, tmp_path: Path
     ) -> None:
         # "nonexistent" is not in statuses at all
-        config = _BASE_CONFIG.replace("terminal_status: done", "terminal_status: nonexistent")
+        config = _BASE_CONFIG.replace(
+            "terminal_status: done", "terminal_status: nonexistent"
+        )
         kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
             KanbanEngine(kanban_dir)
@@ -129,7 +137,9 @@ class TestFromAC_TerminalStatusValidation:
         self, tmp_path: Path
     ) -> None:
         # "research" is statuses[0], not statuses[-1]
-        config = _BASE_CONFIG.replace("terminal_status: done", "terminal_status: research")
+        config = _BASE_CONFIG.replace(
+            "terminal_status: done", "terminal_status: research"
+        )
         kanban_dir = _make_board(tmp_path, config)
         with pytest.raises(ConfigError) as exc_info:
             KanbanEngine(kanban_dir)
@@ -151,7 +161,9 @@ class TestFromAC_AgentMapCoverage:
         with pytest.raises(ConfigError):
             KanbanEngine(kanban_dir)
 
-    def test_agent_map_empty_with_nonempty_statuses_raises(self, tmp_path: Path) -> None:
+    def test_agent_map_empty_with_nonempty_statuses_raises(
+        self, tmp_path: Path
+    ) -> None:
         config = _BASE_CONFIG.replace(
             "agent_map:\n  research: researcher\n  backlog: architect\n  todo: builder\n  done: auditor",
             "agent_map: {}",
@@ -181,7 +193,9 @@ class TestFromAC_ClaimTimeoutFormat:
         kanban_dir = _make_board(tmp_path, config)
         KanbanEngine(kanban_dir)  # must not raise
 
-    def test_claim_timeout_unknown_unit_raises_config_error(self, tmp_path: Path) -> None:
+    def test_claim_timeout_unknown_unit_raises_config_error(
+        self, tmp_path: Path
+    ) -> None:
         # "30x" has an unrecognised unit — must raise ERR_INVALID_CLAIM_TIMEOUT
         config = _BASE_CONFIG.replace("claim_timeout: 1h", "claim_timeout: 30x")
         kanban_dir = _make_board(tmp_path, config)
@@ -189,7 +203,9 @@ class TestFromAC_ClaimTimeoutFormat:
             KanbanEngine(kanban_dir)
         assert exc_info.value.code == "ERR_INVALID_CLAIM_TIMEOUT"
 
-    def test_claim_timeout_bare_number_raises_config_error(self, tmp_path: Path) -> None:
+    def test_claim_timeout_bare_number_raises_config_error(
+        self, tmp_path: Path
+    ) -> None:
         # "30" (quoted string, no unit) is ambiguous and must raise ERR_INVALID_CLAIM_TIMEOUT.
         # Use a quoted YAML value so Pydantic receives a string and _parse_duration does the check.
         config = _BASE_CONFIG.replace("claim_timeout: 1h", 'claim_timeout: "30"')
@@ -257,7 +273,9 @@ class TestFromAC_NoAgentNameParam:
         sig = inspect.signature(KanbanEngine.__init__)
         assert "agent_name" not in sig.parameters
 
-    def test_constructor_rejects_agent_name_kwarg_at_runtime(self, tmp_path: Path) -> None:
+    def test_constructor_rejects_agent_name_kwarg_at_runtime(
+        self, tmp_path: Path
+    ) -> None:
         """Passing agent_name at runtime must raise TypeError per D33 behavioral contract.
 
         D33 states the constructor no longer accepts agent_name.  A hidden **kwargs

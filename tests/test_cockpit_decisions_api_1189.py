@@ -158,7 +158,9 @@ def client(engine: KanbanEngine, decisions_dir: Path):
 class TestFromAC_DecisionsPending:
     """AC coverage for GET /api/decisions/pending."""
 
-    def test_pending_returns_count_and_items(self, client: TestClient, decisions_dir: Path) -> None:
+    def test_pending_returns_count_and_items(
+        self, client: TestClient, decisions_dir: Path
+    ) -> None:
         """GET pending endpoint returns a count and an items array."""
         _write_pending_dr(
             decisions_dir,
@@ -304,7 +306,9 @@ class TestFromAC_DecisionsResolve:
         assert "## Response" in content
         assert "Not aligned with scope." in content
 
-    def test_resolve_returns_404_for_unknown_decision_id(self, client: TestClient) -> None:
+    def test_resolve_returns_404_for_unknown_decision_id(
+        self, client: TestClient
+    ) -> None:
         """Resolve endpoint returns 404 when the decision file does not exist."""
         response = client.post(
             "/api/decisions/not-a-real-id/resolve",

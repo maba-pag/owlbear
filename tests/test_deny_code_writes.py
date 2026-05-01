@@ -69,7 +69,10 @@ def _is_safe_path_expr(  # noqa: C901, PLR0911, PLR0912
             return False
         if node.attr == "parent":
             parent_unsafe_names = safe_names if tmp_aliases is None else tmp_aliases
-            if isinstance(node.value, ast.Name) and node.value.id in parent_unsafe_names:
+            if (
+                isinstance(node.value, ast.Name)
+                and node.value.id in parent_unsafe_names
+            ):
                 return False
             return _is_safe_path_expr(node.value, safe_names, tmp_aliases)
         if node.attr == "parents":
@@ -163,8 +166,8 @@ def _collect_safe_names(tree: ast.AST) -> set[str]:  # noqa: C901
                 and _is_safe_path_expr(node.value, safe_names)
                 and node.target.id not in safe_names
             ):
-                    safe_names.add(node.target.id)
-                    changed = True
+                safe_names.add(node.target.id)
+                changed = True
 
     return safe_names
 
@@ -338,7 +341,9 @@ class TestFromAC_DenyWritesEnforcement:
             "to enforce the architect v2 refined AC-C46 relative-parent-hop rule."
         )
 
-    def test_is_safe_path_expr_rejects_path_multi_arg_with_absolute_segment(self) -> None:
+    def test_is_safe_path_expr_rejects_path_multi_arg_with_absolute_segment(
+        self,
+    ) -> None:
         """AC-C46 (v9): Path(tmp_path, "/outside.txt") must be rejected.
 
         pathlib resolves ``Path(tmp_path, "/outside.txt")`` to ``/outside.txt``

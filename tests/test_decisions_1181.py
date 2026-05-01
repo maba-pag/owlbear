@@ -91,7 +91,9 @@ class TestFromAC_CreateDr:
             body="## Context\nSome body.",
         )
 
-        assert isinstance(result, Path), f"create_dr must return a Path; got {type(result)!r}"
+        assert isinstance(result, Path), (
+            f"create_dr must return a Path; got {type(result)!r}"
+        )
         assert result.exists(), "Returned path must exist on disk"
         assert result.parent == decisions_dir / "pending", (
             f"File must be written inside decisions_dir/pending/; got parent {result.parent}"
@@ -210,7 +212,9 @@ class TestFromAC_ResolvePendingDrs:
 
     # --- AC3: dual call-form (engine-only) — PRIMARY GAP not in #1180/#1195 ---
 
-    def test_ac3_engine_only_form_resolves_from_kanban_dir(self, tmp_path: Path) -> None:
+    def test_ac3_engine_only_form_resolves_from_kanban_dir(
+        self, tmp_path: Path
+    ) -> None:
         """AC3 smoke: resolve_pending_drs(engine) infers decisions_dir from engine._kanban_dir."""
         kanban_dir = tmp_path / "kanban"
         decisions_dir = kanban_dir / "decisions"
@@ -249,18 +253,25 @@ class TestFromAC_ResolvePendingDrs:
 
     # --- AC8 (td:2): resolve logic — happy, edge, error, boundary ---
 
-    def test_ac8_happy_approved_appends_unblocks_and_moves(self, tmp_path: Path) -> None:
+    def test_ac8_happy_approved_appends_unblocks_and_moves(
+        self, tmp_path: Path
+    ) -> None:
         """AC8 happy: approved DR → append_body called, unblock called, file in resolved/."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
-        _write_dr(pending_dir, "42-approach-selection.md", response="approved", task_id=42)
+        _write_dr(
+            pending_dir, "42-approach-selection.md", response="approved", task_id=42
+        )
         engine = _mock_engine()
 
         result = resolve_pending_drs(decisions_dir, engine)
 
         # append_body must have been called for task 42
         append_calls = [
-            c for c in engine.edit_task.call_args_list
-            if len(c.args) > 0 and c.args[0] == 42 and c.kwargs.get("append_body") is not None
+            c
+            for c in engine.edit_task.call_args_list
+            if len(c.args) > 0
+            and c.args[0] == 42
+            and c.kwargs.get("append_body") is not None
         ]
         assert append_calls, (
             f"approved DR must trigger engine.edit_task(42, append_body=...) — "
@@ -269,7 +280,8 @@ class TestFromAC_ResolvePendingDrs:
 
         # unblock must have been called for task 42
         unblock_calls = [
-            c for c in engine.edit_task.call_args_list
+            c
+            for c in engine.edit_task.call_args_list
             if len(c.args) > 0 and c.args[0] == 42 and c.kwargs.get("blocked") is False
         ]
         assert unblock_calls, (
@@ -291,15 +303,20 @@ class TestFromAC_ResolvePendingDrs:
     ) -> None:
         """AC8 edge: needs-info DR → append_body called, file moved, NO unblock."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
-        _write_dr(pending_dir, "55-approach-selection.md", response="needs-info", task_id=55)
+        _write_dr(
+            pending_dir, "55-approach-selection.md", response="needs-info", task_id=55
+        )
         engine = _mock_engine()
 
         resolve_pending_drs(decisions_dir, engine)
 
         # append_body must be called
         append_calls = [
-            c for c in engine.edit_task.call_args_list
-            if len(c.args) > 0 and c.args[0] == 55 and c.kwargs.get("append_body") is not None
+            c
+            for c in engine.edit_task.call_args_list
+            if len(c.args) > 0
+            and c.args[0] == 55
+            and c.kwargs.get("append_body") is not None
         ]
         assert append_calls, (
             f"needs-info DR must trigger engine.edit_task(55, append_body=...) — "
@@ -308,7 +325,8 @@ class TestFromAC_ResolvePendingDrs:
 
         # unblock must NOT be called
         unblock_calls = [
-            c for c in engine.edit_task.call_args_list
+            c
+            for c in engine.edit_task.call_args_list
             if len(c.args) > 0 and c.args[0] == 55 and c.kwargs.get("blocked") is False
         ]
         assert not unblock_calls, (
@@ -350,16 +368,21 @@ class TestFromAC_ResolvePendingDrs:
             "DR file must NOT appear in resolved/ when unblock failed"
         )
 
-    def test_ac8_boundary_rejected_full_flow_matches_approved(self, tmp_path: Path) -> None:
+    def test_ac8_boundary_rejected_full_flow_matches_approved(
+        self, tmp_path: Path
+    ) -> None:
         """AC8 boundary: rejected DR follows the same full flow as approved (append+unblock+move)."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
-        _write_dr(pending_dir, "88-approach-selection.md", response="rejected", task_id=88)
+        _write_dr(
+            pending_dir, "88-approach-selection.md", response="rejected", task_id=88
+        )
         engine = _mock_engine()
 
         result = resolve_pending_drs(decisions_dir, engine)
 
         unblock_calls = [
-            c for c in engine.edit_task.call_args_list
+            c
+            for c in engine.edit_task.call_args_list
             if len(c.args) > 0 and c.args[0] == 88 and c.kwargs.get("blocked") is False
         ]
         assert unblock_calls, (
@@ -372,15 +395,21 @@ class TestFromAC_ResolvePendingDrs:
 
     # --- AC9: per-file exception isolation ---
 
-    def test_ac9_exception_from_one_dr_does_not_stall_others(self, tmp_path: Path) -> None:
+    def test_ac9_exception_from_one_dr_does_not_stall_others(
+        self, tmp_path: Path
+    ) -> None:
         """AC9 smoke: exception from processing one DR does not prevent others from being resolved."""
         decisions_dir, pending_dir, _ = _make_dirs(tmp_path)
         resolved_dir = decisions_dir / "resolved"
 
         # File A: task 10 — engine.edit_task will raise for this task ID
-        _write_dr(pending_dir, "10-approach-selection.md", response="approved", task_id=10)
+        _write_dr(
+            pending_dir, "10-approach-selection.md", response="approved", task_id=10
+        )
         # File B: task 20 — must be processed successfully
-        _write_dr(pending_dir, "20-approach-selection.md", response="approved", task_id=20)
+        _write_dr(
+            pending_dir, "20-approach-selection.md", response="approved", task_id=20
+        )
 
         engine = _mock_engine()
 
@@ -407,14 +436,20 @@ class TestFromAC_ResolvePendingDrs:
     ) -> None:
         """AC10 smoke: unknown response value → warning logged, file stays in pending/."""
         decisions_dir, pending_dir, _ = _make_dirs(tmp_path)
-        dr_file = _write_dr(pending_dir, "42-approach-selection.md", response="bogus-status")
+        dr_file = _write_dr(
+            pending_dir, "42-approach-selection.md", response="bogus-status"
+        )
         engine = _mock_engine()
 
         with caplog.at_level(logging.WARNING):
             resolve_pending_drs(decisions_dir, engine)
 
-        warning_texts = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
-        assert any("bogus-status" in t or "unknown" in t.lower() for t in warning_texts), (
+        warning_texts = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert any(
+            "bogus-status" in t or "unknown" in t.lower() for t in warning_texts
+        ), (
             f"Expected warning mentioning the unknown response value; got: {warning_texts}"
         )
         assert dr_file.exists(), (
@@ -437,7 +472,9 @@ class TestFromAC_ResolvePendingDrs:
         A correct implementation either rolls back the mutation or guards against re-processing.
         """
         decisions_dir, pending_dir, _resolved_dir = _make_dirs(tmp_path)
-        _write_dr(pending_dir, "99-approach-selection.md", response="approved", task_id=99)
+        _write_dr(
+            pending_dir, "99-approach-selection.md", response="approved", task_id=99
+        )
         engine = _mock_engine()
 
         target = "owlbear_kanban.decisions._move_with_collision_suffix"
@@ -451,7 +488,8 @@ class TestFromAC_ResolvePendingDrs:
 
         # Count append_body calls after the first (failed) attempt
         append_calls_first = [
-            c for c in engine.edit_task.call_args_list
+            c
+            for c in engine.edit_task.call_args_list
             if c.kwargs.get("append_body") is not None
         ]
 
@@ -460,7 +498,8 @@ class TestFromAC_ResolvePendingDrs:
             resolve_pending_drs(decisions_dir, engine)
 
         append_calls_total = [
-            c for c in engine.edit_task.call_args_list
+            c
+            for c in engine.edit_task.call_args_list
             if c.kwargs.get("append_body") is not None
         ]
 

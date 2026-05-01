@@ -71,7 +71,13 @@ def _make_engine_mock(agent_view: MagicMock) -> MagicMock:
     engine = MagicMock()
     engine.agent_view = agent_view
     task_dict = _make_task_dict()
-    for method_name in ("show_task", "move_task", "start_work", "end_work", "edit_task"):
+    for method_name in (
+        "show_task",
+        "move_task",
+        "start_work",
+        "end_work",
+        "edit_task",
+    ):
         getattr(engine, method_name).return_value.model_dump.return_value = task_dict
     engine.board_config.return_value.statuses = [
         "research",
@@ -169,9 +175,15 @@ class TestFromAC_MoveTaskAdapter:
             code="ERR_ARCHIVAL_REASON_REQUIRED",
             user_message="archival_reason is required when status is archived",
         )
-        with pytest.raises(ToolError, match="archival_reason is required when status is archived"):
+        with pytest.raises(
+            ToolError, match="archival_reason is required when status is archived"
+        ):
             await move_task(
-                ctx, id="42", status="archived", archival_reason=None, archival_refs=None
+                ctx,
+                id="42",
+                status="archived",
+                archival_reason=None,
+                archival_refs=None,
             )
 
     @pytest.mark.asyncio
@@ -206,7 +218,9 @@ class TestFromAC_StartWorkAdapter:
         mock_av.start_work.assert_called_once_with(42)
 
     @pytest.mark.asyncio
-    async def test_start_work_returns_single_task_response(self, ctx: MagicMock) -> None:
+    async def test_start_work_returns_single_task_response(
+        self, ctx: MagicMock
+    ) -> None:
         """start_work returns SingleTaskResponse, not KanbanTask."""
         result = await start_work(ctx, id="42")
         assert isinstance(result, SingleTaskResponse)
@@ -326,11 +340,16 @@ class TestFromAC_EndWorkAdapter:
     ) -> None:
         """outcome='block' + block_reason: AgentView.end_work called with block_reason forwarded."""
         await end_work(
-            ctx, id="42", outcome="block", block_reason="waiting for design review", note=None
+            ctx,
+            id="42",
+            outcome="block",
+            block_reason="waiting for design review",
+            note=None,
         )
         mock_av.end_work.assert_called_once()
         assert (
-            mock_av.end_work.call_args.kwargs.get("block_reason") == "waiting for design review"
+            mock_av.end_work.call_args.kwargs.get("block_reason")
+            == "waiting for design review"
         )
 
     @pytest.mark.asyncio
@@ -471,7 +490,9 @@ class TestFromAC_EndWorkForbiddenMatrix:
             code="ERR_MOVE_TO_FORBIDDEN_ON_RELEASE",
             user_message="move_to is forbidden when outcome is release",
         )
-        with pytest.raises(ToolError, match="move_to is forbidden when outcome is release"):
+        with pytest.raises(
+            ToolError, match="move_to is forbidden when outcome is release"
+        ):
             await end_work(
                 ctx, id="42", outcome="release", move_to="research", note=None
             )
@@ -572,6 +593,4 @@ class TestFromAC_EndWorkForbiddenMatrix:
             user_message="block_reason is forbidden when outcome is not block",
         )
         with pytest.raises(ToolError, match="block_reason is forbidden"):
-            await end_work(
-                ctx, id="42", outcome="fail", block_reason="oops", note=None
-            )
+            await end_work(ctx, id="42", outcome="fail", block_reason="oops", note=None)

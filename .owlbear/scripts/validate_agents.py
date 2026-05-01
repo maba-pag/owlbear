@@ -53,10 +53,17 @@ _AGENTS_DIR = Path(__file__).resolve().parents[2] / "share" / "agents"
 
 # Known ND3 agents — must have disable-model-invocation: false.
 # See share/WIRING.md § "Nesting Depth" for the canonical list.
-ND3_AGENTS: frozenset[str] = frozenset({
-    "challenger", "scribe", "planner", "fix-attempt",
-    "code-reader", "ideation-critic", "quality-runner",
-})
+ND3_AGENTS: frozenset[str] = frozenset(
+    {
+        "challenger",
+        "scribe",
+        "planner",
+        "fix-attempt",
+        "code-reader",
+        "ideation-critic",
+        "quality-runner",
+    }
+)
 
 _BUILTINS = frozenset({"Explore", "General Purpose"})
 
@@ -148,7 +155,11 @@ def _body_agents_table(content: str) -> list[str]:
     agents: list[str] = []
     for line in m.group(1).splitlines():
         line = line.strip()
-        if line.startswith("|") and not line.startswith("| Agent") and not line.startswith("|---"):
+        if (
+            line.startswith("|")
+            and not line.startswith("| Agent")
+            and not line.startswith("|---")
+        ):
             cells = [c.strip() for c in line.split("|")]
             if len(cells) >= 2 and cells[1] and cells[1] != "Agent":
                 agents.append(cells[1])

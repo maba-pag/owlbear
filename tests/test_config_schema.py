@@ -291,9 +291,7 @@ class TestFromAC_BoardConfigRootAllow:
         config = BoardConfig.model_validate(data)
         assert config is not None
 
-    def test_vendor_field_survives_save_reload_round_trip(
-        self, tmp_path: Path
-    ) -> None:
+    def test_vendor_field_survives_save_reload_round_trip(self, tmp_path: Path) -> None:
         """AC2: vendor field must survive save_config → load_config round-trip."""
         yaml_with_vendor = _GROUPED_YAML + "vendor_custom: keep-me\n"
         kanban_dir = _make_board(tmp_path, yaml_with_vendor)
@@ -456,8 +454,12 @@ class TestFromAC_SaveConfigGrouped:
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = self._read_yaml(kanban_dir / "config.yml")
-        assert isinstance(data.get("agents"), dict), "agents: must be nested dict in grouped output"
-        assert isinstance(data.get("policy"), dict), "policy: must be nested dict in grouped output"
+        assert isinstance(data.get("agents"), dict), (
+            "agents: must be nested dict in grouped output"
+        )
+        assert isinstance(data.get("policy"), dict), (
+            "policy: must be nested dict in grouped output"
+        )
         assert "agent_map" in data["agents"]
         assert "non_impl_tags" in data["policy"]
 
@@ -502,7 +504,9 @@ class TestFromAC_SaveConfigGrouped:
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        assert "tasks_dir" not in data, "tasks_dir must not leak as flat root key in grouped output"
+        assert "tasks_dir" not in data, (
+            "tasks_dir must not leak as flat root key in grouped output"
+        )
 
     def test_save_config_no_flat_archive_dir_at_root(self, tmp_path: Path) -> None:
         """AC8 (negative): grouped save_config must NOT write archive_dir as flat root key."""
@@ -510,7 +514,9 @@ class TestFromAC_SaveConfigGrouped:
         config = load_config(kanban_dir)
         save_config(config, kanban_dir)
         data = yaml.safe_load((kanban_dir / "config.yml").read_text(encoding="utf-8"))
-        assert "archive_dir" not in data, "archive_dir must not leak as flat root key in grouped output"
+        assert "archive_dir" not in data, (
+            "archive_dir must not leak as flat root key in grouped output"
+        )
 
     def test_save_config_grouped_nested_paths_structural(self, tmp_path: Path) -> None:
         """AC8 (structural): YAML-parsed output has nested paths dict with tasks_dir and archive_dir."""
@@ -530,7 +536,9 @@ class TestFromAC_SaveConfigGrouped:
         reloaded = load_config(kanban_dir)
         # Exclude legacy 'defaults' field — not preserved in grouped round-trip
         exclude = {"defaults"}
-        assert reloaded.model_dump(exclude=exclude) == config.model_dump(exclude=exclude)
+        assert reloaded.model_dump(exclude=exclude) == config.model_dump(
+            exclude=exclude
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -606,9 +614,7 @@ archive_dir: custom-archive
             f"Expected 'critical' in pipeline.default_priority, got {data.get('pipeline')!r}"
         )
 
-    def test_migrate_config_preserves_custom_tasks_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_config_preserves_custom_tasks_dir(self, tmp_path: Path) -> None:
         """_migrate_config must preserve tasks_dir and archive_dir from legacy config.
 
         MUST FAIL until #1172: current migrate.py new_cfg does not include tasks_dir or
@@ -627,9 +633,7 @@ archive_dir: custom-archive
             f"migrate must preserve archive_dir='custom-archive', got {config.paths.archive_dir!r}"
         )
 
-    def test_migrate_config_round_trip_no_data_loss(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_config_round_trip_no_data_loss(self, tmp_path: Path) -> None:
         """AC9 (migrate): _migrate_config output loads without data loss.
 
         MUST FAIL until #1172: tasks_dir not preserved; default_priority not in grouped section.

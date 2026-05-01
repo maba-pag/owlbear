@@ -46,7 +46,9 @@ _LIFECYCLE_TOOLS_PATH = (
     / "tests"
     / "test_mcp_lifecycle_tools.py"
 )
-_spec = importlib.util.spec_from_file_location("_lifecycle_tools", _LIFECYCLE_TOOLS_PATH)
+_spec = importlib.util.spec_from_file_location(
+    "_lifecycle_tools", _LIFECYCLE_TOOLS_PATH
+)
 assert _spec is not None
 assert _spec.loader is not None
 _lifecycle_mod = importlib.util.module_from_spec(_spec)

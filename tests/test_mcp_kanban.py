@@ -291,7 +291,10 @@ class TestNoRetryOnTypeError:
         mock_view = MagicMock()
         mock_view.end_work.side_effect = TypeError("unexpected kwarg: archival_refs")
 
-        with patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view), pytest.raises(TypeError):
+        with (
+            patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view),
+            pytest.raises(TypeError),
+        ):
             await end_work(
                 _make_ctx(app_ctx_claimed),
                 id="1",
@@ -312,7 +315,10 @@ class TestNoRetryOnTypeError:
         mock_view = MagicMock()
         mock_view.end_work.side_effect = TypeError("unexpected kwarg: archival_refs")
 
-        with patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view), pytest.raises(TypeError):
+        with (
+            patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view),
+            pytest.raises(TypeError),
+        ):
             await end_work(
                 _make_ctx(app_ctx_claimed),
                 id="1",
@@ -333,7 +339,10 @@ class TestNoRetryOnTypeError:
         mock_view = MagicMock()
         mock_view.move_task.side_effect = TypeError("unexpected kwarg: archival_refs")
 
-        with patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view), pytest.raises(TypeError):
+        with (
+            patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view),
+            pytest.raises(TypeError),
+        ):
             await move_task(
                 _make_ctx(app_ctx_todo),
                 id="1",

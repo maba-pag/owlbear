@@ -78,14 +78,25 @@ def main() -> None:
         return
 
     # Filter: only existing .py files
-    existing_py = [p for p in candidate_paths if p.endswith(".py") and Path(p).is_file()]
+    existing_py = [
+        p for p in candidate_paths if p.endswith(".py") and Path(p).is_file()
+    ]
     if not existing_py:
         print("{}")
         return
 
     try:
         result = subprocess.run(  # noqa: S603
-            ["uv", "run", "--quiet", "ruff", "check", "--ignore", "INP001", *existing_py],  # noqa: S607
+            [
+                "uv",
+                "run",
+                "--quiet",
+                "ruff",
+                "check",
+                "--ignore",
+                "INP001",
+                *existing_py,
+            ],  # noqa: S607
             capture_output=True,
             text=True,
             check=False,

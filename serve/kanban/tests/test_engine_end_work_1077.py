@@ -253,9 +253,7 @@ class TestFromAC_EndWork:
             f"body was: {result.body!r}"
         )
 
-    def test_reject_to_archived_moves_file_to_archive_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_to_archived_moves_file_to_archive_dir(self, tmp_path: Path) -> None:
         """AC19: reject with move_to='archived' and archival_reason moves file to archive/.
 
         FAIL reason: engine.end_work does not move the file for reject outcome;
@@ -274,17 +272,13 @@ class TestFromAC_EndWork:
         )
 
         archive_file = kanban_dir / "archive" / "1-task.md"
-        assert archive_file.exists(), (
-            "Reject to 'archived' must move file to archive/"
-        )
+        assert archive_file.exists(), "Reject to 'archived' must move file to archive/"
         assert result.archival_reason == "wontfix", (
             f"archival_reason must be stored; got {result.archival_reason!r}"
         )
         assert result.claimed_at is None, "claim must be cleared after reject"
 
-    def test_release_clears_claim_no_status_change(
-        self, tmp_path: Path
-    ) -> None:
+    def test_release_clears_claim_no_status_change(self, tmp_path: Path) -> None:
         """AC20 (updated for D52): release clears claimed_at; status unchanged;
         note appended to body when provided on a claimed task.
 
@@ -363,8 +357,7 @@ class TestFromAC_EndWork:
         assert result.claimed_at is None, "claim must be cleared"
         assert result.body is not None
         assert re.search(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", result.body), (
-            "Note must be prepended with ISO 8601 datetime; "
-            f"body was: {result.body!r}"
+            f"Note must be prepended with ISO 8601 datetime; body was: {result.body!r}"
         )
 
     def test_block_with_reason_and_move_to_moves_status_and_sets_blocked(
@@ -414,9 +407,9 @@ class TestFromAC_EndWork:
             note="Back to drawing board.",
         )
 
-        assert any("decision" in hint.lower() or "AR" in hint for hint in result.guidance), (
-            "guidance must include AR/DR creation hint for block outcome"
-        )
+        assert any(
+            "decision" in hint.lower() or "AR" in hint for hint in result.guidance
+        ), "guidance must include AR/DR creation hint for block outcome"
         assert any("skip" in hint.lower() for hint in result.guidance), (
             "guidance must include skip-warning when move_to skips >1 status; "
             f"got guidance={result.guidance!r}"
@@ -460,9 +453,7 @@ class TestFromAC_EndWork:
             f"Expected ERR_REJECT_REQUIRES_MOVE_TO; got {exc_info.value.code!r}"
         )
 
-    def test_fail_outcome_keeps_status_and_releases_claim(
-        self, tmp_path: Path
-    ) -> None:
+    def test_fail_outcome_keeps_status_and_releases_claim(self, tmp_path: Path) -> None:
         """AC-NEW-6: 'fail' outcome is accepted by AgentView.end_work.
 
         It should delegate to engine.end_work, keep the current status, and
@@ -549,9 +540,7 @@ class TestFromAC_EndWork:
             f"got {exc_info.value.code!r}"
         )
 
-    def test_unclaimed_success_raises_err_not_claimed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unclaimed_success_raises_err_not_claimed(self, tmp_path: Path) -> None:
         """AC-NEW-8: success on unclaimed task raises ERR_NOT_CLAIMED.
 
         FAIL reason: AgentView.end_work does not validate whether the task
@@ -568,9 +557,7 @@ class TestFromAC_EndWork:
             f"got {exc_info.value.code!r}"
         )
 
-    def test_unclaimed_reject_raises_err_not_claimed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unclaimed_reject_raises_err_not_claimed(self, tmp_path: Path) -> None:
         """AC-NEW-8: reject on unclaimed task raises ERR_NOT_CLAIMED.
 
         FAIL reason: AgentView.end_work does not validate claim state.
@@ -586,9 +573,7 @@ class TestFromAC_EndWork:
             f"got {exc_info.value.code!r}"
         )
 
-    def test_unclaimed_block_raises_err_not_claimed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_unclaimed_block_raises_err_not_claimed(self, tmp_path: Path) -> None:
         """AC-NEW-8: block on unclaimed task raises ERR_NOT_CLAIMED.
 
         FAIL reason: AgentView.end_work does not validate claim state.
@@ -621,9 +606,7 @@ class TestFromAC_EndWork:
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
         with pytest.raises(ValidationError) as exc_info:
-            view.end_work(
-                1, outcome="success", move_to="nonexistent", note="Done."
-            )
+            view.end_work(1, outcome="success", move_to="nonexistent", note="Done.")
 
         assert exc_info.value.code == "ERR_MOVE_TO_INVALID_STATUS", (
             f"success+invalid move_to must raise ERR_MOVE_TO_INVALID_STATUS; "
@@ -807,9 +790,7 @@ class TestFromAC_EndWork:
 
     # --- D41 atomicity tests ---
 
-    def test_success_predicate_fail_claim_not_cleared(
-        self, tmp_path: Path
-    ) -> None:
+    def test_success_predicate_fail_claim_not_cleared(self, tmp_path: Path) -> None:
         """AC-NEW-12 + D41: success on non-terminal where destination has predicate
         that fails raises ERR_PREDICATE_FAILED; claimed_at is NOT cleared.
 

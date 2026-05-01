@@ -124,7 +124,9 @@ class TestFromAC_CreateDrTaskIdValidation:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_empty_string_rejected_with_tool_error(self, app_ctx: AppContext) -> None:
+    async def test_empty_string_rejected_with_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC1+AC3: empty string task_id → ToolError raised at MCP boundary.
 
         FAIL path (RED): current code performs no task_id validation; empty string
@@ -136,7 +138,9 @@ class TestFromAC_CreateDrTaskIdValidation:
             patch("owlbear_mcp_kanban.server.decisions.create_dr"),
             pytest.raises(ToolError),
         ):
-            await mcp_create_dr(ctx, task_id="", agent="builder", request_type="decision", body="b")
+            await mcp_create_dr(
+                ctx, task_id="", agent="builder", request_type="decision", body="b"
+            )
 
     @pytest.mark.asyncio
     async def test_wildcard_rejected_with_tool_error(self, app_ctx: AppContext) -> None:
@@ -150,10 +154,14 @@ class TestFromAC_CreateDrTaskIdValidation:
             patch("owlbear_mcp_kanban.server.decisions.create_dr"),
             pytest.raises(ToolError),
         ):
-            await mcp_create_dr(ctx, task_id="*", agent="builder", request_type="decision", body="b")
+            await mcp_create_dr(
+                ctx, task_id="*", agent="builder", request_type="decision", body="b"
+            )
 
     @pytest.mark.asyncio
-    async def test_path_traversal_rejected_with_tool_error(self, app_ctx: AppContext) -> None:
+    async def test_path_traversal_rejected_with_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC1+AC3: path-traversal '../' task_id → ToolError raised at MCP boundary.
 
         FAIL path (RED): current code passes '../' to decisions.create_dr; this
@@ -165,10 +173,14 @@ class TestFromAC_CreateDrTaskIdValidation:
             patch("owlbear_mcp_kanban.server.decisions.create_dr"),
             pytest.raises(ToolError),
         ):
-            await mcp_create_dr(ctx, task_id="../", agent="builder", request_type="decision", body="b")
+            await mcp_create_dr(
+                ctx, task_id="../", agent="builder", request_type="decision", body="b"
+            )
 
     @pytest.mark.asyncio
-    async def test_non_numeric_string_rejected_with_tool_error(self, app_ctx: AppContext) -> None:
+    async def test_non_numeric_string_rejected_with_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC1+AC3: non-numeric string 'abc' → ToolError raised at MCP boundary.
 
         FAIL path (RED): no validation in current code; 'abc' is forwarded.
@@ -178,10 +190,14 @@ class TestFromAC_CreateDrTaskIdValidation:
             patch("owlbear_mcp_kanban.server.decisions.create_dr"),
             pytest.raises(ToolError),
         ):
-            await mcp_create_dr(ctx, task_id="abc", agent="builder", request_type="decision", body="b")
+            await mcp_create_dr(
+                ctx, task_id="abc", agent="builder", request_type="decision", body="b"
+            )
 
     @pytest.mark.asyncio
-    async def test_mixed_alphanumeric_rejected_with_tool_error(self, app_ctx: AppContext) -> None:
+    async def test_mixed_alphanumeric_rejected_with_tool_error(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC1 boundary: '42abc' (mixed numeric+alpha) → ToolError.
 
         Purely-numeric-only check must reject inputs that contain alphabetic
@@ -194,14 +210,18 @@ class TestFromAC_CreateDrTaskIdValidation:
             patch("owlbear_mcp_kanban.server.decisions.create_dr"),
             pytest.raises(ToolError),
         ):
-            await mcp_create_dr(ctx, task_id="42abc", agent="builder", request_type="decision", body="b")
+            await mcp_create_dr(
+                ctx, task_id="42abc", agent="builder", request_type="decision", body="b"
+            )
 
     # ------------------------------------------------------------------
     # AC2 (td:2): Invalid task_id must not reach decisions.create_dr
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_wildcard_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+    async def test_wildcard_does_not_reach_decisions_create_dr(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC2 error: wildcard task_id raises ToolError; decisions.create_dr never called.
 
         FAIL path (RED): current code calls decisions.create_dr with the wildcard value.
@@ -211,11 +231,15 @@ class TestFromAC_CreateDrTaskIdValidation:
         ctx = _make_mcp_ctx(app_ctx)
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
             with pytest.raises(ToolError):
-                await mcp_create_dr(ctx, task_id="*", agent="builder", request_type="decision", body="b")
+                await mcp_create_dr(
+                    ctx, task_id="*", agent="builder", request_type="decision", body="b"
+                )
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_empty_string_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+    async def test_empty_string_does_not_reach_decisions_create_dr(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC2 edge: empty string task_id raises ToolError; decisions.create_dr never called.
 
         FAIL path (RED): current code calls decisions.create_dr with the empty string.
@@ -223,7 +247,9 @@ class TestFromAC_CreateDrTaskIdValidation:
         ctx = _make_mcp_ctx(app_ctx)
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
             with pytest.raises(ToolError):
-                await mcp_create_dr(ctx, task_id="", agent="builder", request_type="decision", body="b")
+                await mcp_create_dr(
+                    ctx, task_id="", agent="builder", request_type="decision", body="b"
+                )
             mock_create_dr.assert_not_called()
 
     # ------------------------------------------------------------------
@@ -231,30 +257,54 @@ class TestFromAC_CreateDrTaskIdValidation:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_path_traversal_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+    async def test_path_traversal_does_not_reach_decisions_create_dr(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC2 error: path-traversal '../' task_id raises ToolError; decisions.create_dr never called."""
         ctx = _make_mcp_ctx(app_ctx)
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
             with pytest.raises(ToolError):
-                await mcp_create_dr(ctx, task_id="../", agent="builder", request_type="decision", body="b")
+                await mcp_create_dr(
+                    ctx,
+                    task_id="../",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_non_numeric_string_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+    async def test_non_numeric_string_does_not_reach_decisions_create_dr(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC2 error: non-numeric 'abc' task_id raises ToolError; decisions.create_dr never called."""
         ctx = _make_mcp_ctx(app_ctx)
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
             with pytest.raises(ToolError):
-                await mcp_create_dr(ctx, task_id="abc", agent="builder", request_type="decision", body="b")
+                await mcp_create_dr(
+                    ctx,
+                    task_id="abc",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
             mock_create_dr.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_mixed_alphanumeric_does_not_reach_decisions_create_dr(self, app_ctx: AppContext) -> None:
+    async def test_mixed_alphanumeric_does_not_reach_decisions_create_dr(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC2 boundary: mixed '42abc' task_id raises ToolError; decisions.create_dr never called."""
         ctx = _make_mcp_ctx(app_ctx)
         with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr:
             with pytest.raises(ToolError):
-                await mcp_create_dr(ctx, task_id="42abc", agent="builder", request_type="decision", body="b")
+                await mcp_create_dr(
+                    ctx,
+                    task_id="42abc",
+                    agent="builder",
+                    request_type="decision",
+                    body="b",
+                )
             mock_create_dr.assert_not_called()
 
     # ------------------------------------------------------------------
@@ -262,7 +312,9 @@ class TestFromAC_CreateDrTaskIdValidation:
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_numeric_string_coerced_to_int_before_forwarding(self, app_ctx: AppContext) -> None:
+    async def test_numeric_string_coerced_to_int_before_forwarding(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC4 smoke: string '42' is coerced to int 42 before calling decisions.create_dr.
 
         FAIL path (RED): current code forwards task_id='42' (str) unchanged.
@@ -272,7 +324,13 @@ class TestFromAC_CreateDrTaskIdValidation:
         ctx = _make_mcp_ctx(app_ctx)
         mock_create_dr = MagicMock(return_value=MagicMock())
         with patch("owlbear_mcp_kanban.server.decisions.create_dr", mock_create_dr):
-            await mcp_create_dr(ctx, task_id="42", agent="builder", request_type="decision", body="body text")
+            await mcp_create_dr(
+                ctx,
+                task_id="42",
+                agent="builder",
+                request_type="decision",
+                body="body text",
+            )
 
         call_kwargs = mock_create_dr.call_args.kwargs
         assert call_kwargs["task_id"] == 42, (
@@ -283,7 +341,9 @@ class TestFromAC_CreateDrTaskIdValidation:
         )
 
     @pytest.mark.asyncio
-    async def test_literal_int_task_id_forwarded_unchanged(self, app_ctx: AppContext) -> None:
+    async def test_literal_int_task_id_forwarded_unchanged(
+        self, app_ctx: AppContext
+    ) -> None:
         """AC4 direct-int branch: literal int 42 is forwarded as int 42 (no coercion needed).
 
         Exercises the isinstance(task_id, int) branch at the MCP boundary.
@@ -291,7 +351,13 @@ class TestFromAC_CreateDrTaskIdValidation:
         ctx = _make_mcp_ctx(app_ctx)
         mock_create_dr = MagicMock(return_value=MagicMock())
         with patch("owlbear_mcp_kanban.server.decisions.create_dr", mock_create_dr):
-            await mcp_create_dr(ctx, task_id=42, agent="builder", request_type="decision", body="body text")
+            await mcp_create_dr(
+                ctx,
+                task_id=42,
+                agent="builder",
+                request_type="decision",
+                body="body text",
+            )
 
         call_kwargs = mock_create_dr.call_args.kwargs
         assert call_kwargs["task_id"] == 42, (

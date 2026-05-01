@@ -154,7 +154,9 @@ class TestFromAC_PendingDecisionsBodyField:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """AC1 happy: 'body' contains the full markdown body, not a preview or empty string."""
-        body_text = "## Context\n\nShould we include feature X?\n\n## Options\n\n1. Yes\n2. No"
+        body_text = (
+            "## Context\n\nShould we include feature X?\n\n## Options\n\n1. Yes\n2. No"
+        )
         _write_pending_dr(
             decisions_dir,
             stem="42-scope-decision",
@@ -176,7 +178,9 @@ class TestFromAC_PendingDecisionsBodyField:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """AC1 boundary: 'body' is NOT truncated at 200 chars (body_preview is limited to ~200)."""
-        long_body = "## Context\n\n" + ("A very long description that goes on and on. " * 10)
+        long_body = "## Context\n\n" + (
+            "A very long description that goes on and on. " * 10
+        )
         assert len(long_body) > 200, "Precondition: test body must exceed 200 chars"
         _write_pending_dr(
             decisions_dir,

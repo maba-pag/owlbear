@@ -44,7 +44,9 @@ def _make_dirs(tmp_path: Path) -> tuple[Path, Path, Path]:
     return decisions_dir, pending_dir, resolved_dir
 
 
-def _write_dr(pending_dir: Path, filename: str, response: str, task_id: int = 42) -> Path:
+def _write_dr(
+    pending_dir: Path, filename: str, response: str, task_id: int = 42
+) -> Path:
     """Write a minimal DR file into pending_dir with the given response."""
     content = (
         "---\n"
@@ -60,7 +62,9 @@ def _write_dr(pending_dir: Path, filename: str, response: str, task_id: int = 42
     return path
 
 
-def _write_resolved(resolved_dir: Path, filename: str, content: str = _SENTINEL) -> Path:
+def _write_resolved(
+    resolved_dir: Path, filename: str, content: str = _SENTINEL
+) -> Path:
     """Write a pre-existing file in resolved/ to simulate a collision."""
     path = resolved_dir / filename
     path.write_text(content, encoding="utf-8")
@@ -159,7 +163,9 @@ class TestFromAC_ResolvePendingDrsCollision:
         engine = _mock_engine()
 
         filename = "10-approach-selection.md"
-        original_bytes = b"PRECIOUS ORIGINAL CONTENT\xc3\xa9"  # non-ASCII to catch encoding bugs
+        original_bytes = (
+            b"PRECIOUS ORIGINAL CONTENT\xc3\xa9"  # non-ASCII to catch encoding bugs
+        )
         (resolved_dir / filename).write_bytes(original_bytes)
         _write_dr(pending_dir, filename, response="approved", task_id=10)
 
@@ -175,9 +181,7 @@ class TestFromAC_ResolvePendingDrsCollision:
     # AC3 (td:2): Counter suffix; next-free allocation
     # ---------------------------------------------------------------------------
 
-    def test_ac3_happy_first_collision_uses_dash_2_suffix(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ac3_happy_first_collision_uses_dash_2_suffix(self, tmp_path: Path) -> None:
         """AC3 happy: when resolved/ already has the base name, the moved file gets -2.md."""
         decisions_dir, pending_dir, resolved_dir = _make_dirs(tmp_path)
         engine = _mock_engine()

@@ -131,7 +131,13 @@ class TestFromAC_SeedTemplateGroupedFormat:
             f"got pipeline={data.get('pipeline')!r}"
         )
         pipeline = data["pipeline"]
-        for field in ("entry_status", "terminal_status", "wave_size", "claim_timeout", "default_priority"):
+        for field in (
+            "entry_status",
+            "terminal_status",
+            "wave_size",
+            "claim_timeout",
+            "default_priority",
+        ):
             assert field in pipeline, (
                 f"pipeline: section must contain '{field}'; got pipeline={pipeline!r}"
             )
@@ -200,7 +206,9 @@ class TestFromAC_SeedTemplateGroupedFormat:
             f"seed config.yml must not have legacy 'version:' key; got version={data.get('version')!r}"
         )
 
-    def test_seed_config_loaded_has_no_legacy_version_in_extra(self, tmp_path: Path) -> None:
+    def test_seed_config_loaded_has_no_legacy_version_in_extra(
+        self, tmp_path: Path
+    ) -> None:
         """Grouped seed config when loaded must not expose 'version' key in model_extra.
 
         MUST FAIL: current seed has 'version: 10' at root, which BoardConfig stores in
@@ -288,9 +296,7 @@ class TestFromAC_MigrateConfigCleanGroupedOutput:
             f"'agent_map' belongs only inside agents: section."
         )
 
-    def test_migrate_output_no_flat_non_impl_tags_at_root(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_output_no_flat_non_impl_tags_at_root(self, tmp_path: Path) -> None:
         """_migrate_config output must NOT have flat non_impl_tags at root level.
 
         MUST FAIL: current code writes new_cfg['non_impl_tags'] = [...] as root key.
@@ -342,9 +348,7 @@ class TestFromAC_MigrateLoadSaveNoFlatKeyLeak:
     If migrate is clean, there are no extra fields to leak — the round-trip is clean.
     """
 
-    def test_migrate_load_save_no_flat_entry_status_leak(
-        self, tmp_path: Path
-    ) -> None:
+    def test_migrate_load_save_no_flat_entry_status_leak(self, tmp_path: Path) -> None:
         """entry_status must not re-appear as a flat root key after migrate → load → save.
 
         MUST FAIL: _migrate_config writes flat entry_status → load stores it in

@@ -205,8 +205,12 @@ class TestFromAC_DynamicSubclasses:
         self, cls: type
     ) -> None:
         """Smoke+regression: subclass is still CorruptionError and also KanbanError."""
-        assert issubclass(cls, CorruptionError), f"{cls.__name__} lost CorruptionError base"
-        assert issubclass(cls, KanbanError), f"{cls.__name__} is not a KanbanError subclass"
+        assert issubclass(cls, CorruptionError), (
+            f"{cls.__name__} lost CorruptionError base"
+        )
+        assert issubclass(cls, KanbanError), (
+            f"{cls.__name__} is not a KanbanError subclass"
+        )
 
 
 # ---------------------------------------------------------------------------

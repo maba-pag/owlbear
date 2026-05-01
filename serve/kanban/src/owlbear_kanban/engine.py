@@ -749,7 +749,9 @@ class KanbanEngine:
             for task in tasks:
                 if task.id in id_seen:
                     from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID  # noqa: PLC0415
-                    from owlbear_kanban.corruption import CorruptionError as _CorruptionError  # noqa: PLC0415
+                    from owlbear_kanban.corruption import (
+                        CorruptionError as _CorruptionError,
+                    )  # noqa: PLC0415
 
                     raise _CorruptionError(
                         code=ERR_CORRUPT_DUPLICATE_ID,
@@ -1012,7 +1014,9 @@ class KanbanEngine:
             msg = f"Invalid priority {priority!r}. Valid options: {self._config.pipeline.priorities}"
             raise ValueError(msg)
 
-        task_path = self._find_task_path(task_id, self._tasks_dir, include_archive_fallback=True)
+        task_path = self._find_task_path(
+            task_id, self._tasks_dir, include_archive_fallback=True
+        )
         target_dir = task_path.parent
         record = read_task(task_path)
         original = record.model_copy(deep=True)
@@ -1130,7 +1134,9 @@ class KanbanEngine:
             record.claimed_at = None
             record.claimed_by = None
             record.archival_reason = archival_reason
-            record.archival_refs = list(archival_refs) if archival_refs is not None else []
+            record.archival_refs = (
+                list(archival_refs) if archival_refs is not None else []
+            )
             record.updated = datetime.now(tz=UTC).isoformat()
             if expected_updated is not None:
                 storage.write_task_if_unchanged(
@@ -1239,7 +1245,10 @@ class KanbanEngine:
                         self._kanban_dir,
                     )
                 except ConcurrencyError as exc:
-                    if exc.code == "ERR_STALE" and stale_retries < _MAX_CLAIM_STALE_RETRIES:
+                    if (
+                        exc.code == "ERR_STALE"
+                        and stale_retries < _MAX_CLAIM_STALE_RETRIES
+                    ):
                         stale_retries += 1
                         continue
                     raise
@@ -1859,7 +1868,9 @@ class AgentView:
     """Minimal role-scoped wrapper for agent-facing engine use."""
 
     _MAX_BODY_BYTES = 500 * 1024
-    _BODY_SIZE_WARNING = "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
+    _BODY_SIZE_WARNING = (
+        "\u26a0\ufe0f Task body is large (>100 KB); consider splitting."
+    )
     _BLOCK_AR_HINT = (
         "\u26a0\ufe0f ACTION REQUIRED: Create a Decision Request for this block via the"
         " scribe agent (see w-decision-routing)."
@@ -1870,7 +1881,9 @@ class AgentView:
         self.engine = engine
 
     @staticmethod
-    def _to_single_response(task: Task, guidance: list[str] | None = None) -> SingleTaskResponse:
+    def _to_single_response(
+        task: Task, guidance: list[str] | None = None
+    ) -> SingleTaskResponse:
         payload = task.model_dump()
         if isinstance(payload.get("body"), list):
             payload["body"] = None
@@ -2010,16 +2023,14 @@ class AgentView:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REFS_REQUIRED",
                 user_message=(
-                    "archival_refs required for "
-                    f"archival_reason='{archival_reason}'"
+                    f"archival_refs required for archival_reason='{archival_reason}'"
                 ),
             )
         if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REFS_FORBIDDEN",
                 user_message=(
-                    "archival_refs forbidden for "
-                    f"archival_reason='{archival_reason}'"
+                    f"archival_refs forbidden for archival_reason='{archival_reason}'"
                 ),
             )
         if archival_reason == "completed" and not can_mark_completed:
@@ -2061,13 +2072,14 @@ class AgentView:
             return
 
         sections = predicate_spec.get("sections")
-        required = [str(section) for section in sections] if isinstance(sections, list) else []
+        required = (
+            [str(section) for section in sections] if isinstance(sections, list) else []
+        )
         if not self._required_sections_passes(body, required):
             raise ValidationError(
                 code="ERR_PREDICATE_FAILED",
                 user_message=(
-                    "Task body does not satisfy predicate for status "
-                    f"'{target_status}'"
+                    f"Task body does not satisfy predicate for status '{target_status}'"
                 ),
             )
 
@@ -2187,7 +2199,9 @@ class AgentView:
                 blocked=blocked,
             )
             if archival_reason:
-                tasks = [task for task in tasks if task.archival_reason == archival_reason]
+                tasks = [
+                    task for task in tasks if task.archival_reason == archival_reason
+                ]
 
         return ListTasksResponse(tasks=tasks, guidance=[], missing_ids=missing_ids)
 
@@ -2244,7 +2258,9 @@ class AgentView:
                     user_message="section must not be an empty string",
                 )
 
-            body_text = payload.get("body") if isinstance(payload.get("body"), str) else ""
+            body_text = (
+                payload.get("body") if isinstance(payload.get("body"), str) else ""
+            )
             matches = [
                 part
                 for part in parse_body(body_text)
@@ -2318,7 +2334,9 @@ class AgentView:
             )
 
         config = self.engine.board_config()
-        effective_wave = wave_size if wave_size is not None else config.pipeline.wave_size
+        effective_wave = (
+            wave_size if wave_size is not None else config.pipeline.wave_size
+        )
         if effective_wave < 1:
             raise ValidationError(
                 code="ERR_INVALID_WAVE_PARAM",
@@ -2326,7 +2344,9 @@ class AgentView:
             )
 
         missing_statuses = [
-            status for status in config.pipeline.statuses if status not in config.agents.agent_map
+            status
+            for status in config.pipeline.statuses
+            if status not in config.agents.agent_map
         ]
         if missing_statuses:
             raise ConfigError(
@@ -2337,12 +2357,16 @@ class AgentView:
         try:
             decisions = importlib.import_module("owlbear_kanban.decisions")
         except ImportError as exc:
-            LOGGER.warning("Failed to import decisions module before pick_tasks: %s", exc)
+            LOGGER.warning(
+                "Failed to import decisions module before pick_tasks: %s", exc
+            )
         else:
             try:
                 decisions.resolve_pending_drs(self.engine)
             except (KanbanError, OSError, ValueError) as exc:
-                LOGGER.warning("Failed to resolve pending DRs before pick_tasks: %s", exc)
+                LOGGER.warning(
+                    "Failed to resolve pending DRs before pick_tasks: %s", exc
+                )
 
         active = self.engine.list_tasks(
             archived=False,
@@ -2363,7 +2387,9 @@ class AgentView:
 
         created_rank = {task.id: index for index, task in enumerate(active)}
 
-        priority_rank = {name: idx for idx, name in enumerate(config.pipeline.priorities)}
+        priority_rank = {
+            name: idx for idx, name in enumerate(config.pipeline.priorities)
+        }
 
         ordered = sorted(
             dispatchable,
@@ -2461,7 +2487,9 @@ class AgentView:
             f"Dispatch hints: {dispatched_count} task(s) across {len(waves)} wave(s)."
         ]
         if dropped:
-            guidance.append(f"Dropped {dropped} task(s) because no wave fit within max_waves.")
+            guidance.append(
+                f"Dropped {dropped} task(s) because no wave fit within max_waves."
+            )
         return PickTasksResponse(waves=waves, guidance=guidance)
 
     def create_task(  # noqa: PLR0913
@@ -2531,7 +2559,11 @@ class AgentView:
             and predicate_spec.get("type") == "required_sections"
         ):
             sections = predicate_spec.get("sections")
-            required = [str(section) for section in sections] if isinstance(sections, list) else []
+            required = (
+                [str(section) for section in sections]
+                if isinstance(sections, list)
+                else []
+            )
             if not self._required_sections_passes(body, required):
                 raise ValidationError(
                     code="ERR_PREDICATE_FAILED",
@@ -2549,7 +2581,9 @@ class AgentView:
                 depends_on=depends_on,
             )
         except ValueError as exc:
-            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+            raise ValidationError(
+                code="ERR_INVALID_STATUS", user_message=str(exc)
+            ) from exc
 
         guidance: list[str] = []
         if len(body.encode("utf-8")) > 100 * 1024:
@@ -2670,11 +2704,18 @@ class AgentView:
                 )
 
             effective_reason = (
-                archival_reason if archival_reason_set else (existing.archival_reason or "")
+                archival_reason
+                if archival_reason_set
+                else (existing.archival_reason or "")
             )
-            effective_refs = archival_refs if archival_refs_set else list(existing.archival_refs)
+            effective_refs = (
+                archival_refs if archival_refs_set else list(existing.archival_refs)
+            )
 
-            if archival_reason_set and effective_reason not in config.policy.archival_reasons:
+            if (
+                archival_reason_set
+                and effective_reason not in config.policy.archival_reasons
+            ):
                 raise ValidationError(
                     code="ERR_ARCHIVAL_REASON_INVALID",
                     user_message=(
@@ -2689,13 +2730,19 @@ class AgentView:
                     user_message=f"archival_refs required for archival_reason='{effective_reason}'",
                 )
 
-            if effective_reason in {"completed", "dropped", "wontfix"} and effective_refs:
+            if (
+                effective_reason in {"completed", "dropped", "wontfix"}
+                and effective_refs
+            ):
                 raise ValidationError(
                     code="ERR_ARCHIVAL_REFS_FORBIDDEN",
                     user_message=f"archival_refs forbidden for archival_reason='{effective_reason}'",
                 )
 
-            if effective_reason == "completed" and existing.status != config.pipeline.terminal_status:
+            if (
+                effective_reason == "completed"
+                and existing.status != config.pipeline.terminal_status
+            ):
                 raise ValidationError(
                     code="ERR_COMPLETED_REQUIRES_DONE",
                     user_message="archival_reason='completed' requires terminal status",
@@ -2763,9 +2810,13 @@ class AgentView:
             changes_requested = True
         if parent > 0 and parent != existing.parent:
             changes_requested = True
-        if add_dep is not None and any(dep_id not in existing.depends_on for dep_id in add_dep):
+        if add_dep is not None and any(
+            dep_id not in existing.depends_on for dep_id in add_dep
+        ):
             changes_requested = True
-        if remove_dep is not None and any(dep_id in existing.depends_on for dep_id in remove_dep):
+        if remove_dep is not None and any(
+            dep_id in existing.depends_on for dep_id in remove_dep
+        ):
             changes_requested = True
         if add_tag is not None and any(tag not in existing.tags for tag in add_tag):
             changes_requested = True
@@ -2774,7 +2825,8 @@ class AgentView:
         if block_reason_set:
             if block_reason:
                 changes_requested = changes_requested or (
-                    existing.blocked is not True or existing.block_reason != block_reason
+                    existing.blocked is not True
+                    or existing.block_reason != block_reason
                 )
             else:
                 changes_requested = changes_requested or (
@@ -2798,7 +2850,9 @@ class AgentView:
         try:
             task = self.engine.edit_task(str(task_id), source="agent", **kwargs)
         except ValueError as exc:
-            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+            raise ValidationError(
+                code="ERR_INVALID_STATUS", user_message=str(exc)
+            ) from exc
 
         guidance: list[str] = []
         if body_set and len(body.encode("utf-8")) > 100 * 1024:
@@ -2850,7 +2904,9 @@ class AgentView:
         except FileNotFoundError as exc:
             raise self._wrap_not_found(task_id) from exc
         except ValueError as exc:
-            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+            raise ValidationError(
+                code="ERR_INVALID_STATUS", user_message=str(exc)
+            ) from exc
 
         guidance = self._skip_transition_guidance(
             before_status=before.status,
@@ -2997,10 +3053,7 @@ class AgentView:
             if move_to not in valid_statuses:
                 raise ValidationError(
                     code="ERR_INVALID_STATUS",
-                    user_message=(
-                        "move_to must be one of "
-                        f"{sorted(valid_statuses)}"
-                    ),
+                    user_message=(f"move_to must be one of {sorted(valid_statuses)}"),
                 )
             if move_to == "archived":
                 self._validate_move_archival_for_archive(
@@ -3112,7 +3165,10 @@ class AgentView:
         except ConcurrencyError as exc:
             if exc.code == "ERR_STALE":
                 latest = self.engine.show_task(str(task_id))
-                if outcome in {"success", "fail", "reject", "block"} and latest.claimed_at is None:
+                if (
+                    outcome in {"success", "fail", "reject", "block"}
+                    and latest.claimed_at is None
+                ):
                     raise ValidationError(
                         code="ERR_NOT_CLAIMED",
                         user_message=(
@@ -3154,5 +3210,3 @@ class AgentView:
                     )
                 )
         return self._to_single_response(task, guidance)
-
-

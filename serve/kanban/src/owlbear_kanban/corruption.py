@@ -505,9 +505,7 @@ def attempt_repair(  # noqa: C901, PLR0911, PLR0912, PLR0915
         configured_priorities = _configured_priorities(config)
         for field, default in _SAFE_DEFAULTS.items():
             if field not in fm:
-                fm[field] = (
-                    configured_priorities[0] if field == "priority" else default
-                )
+                fm[field] = configured_priorities[0] if field == "priority" else default
                 changed = True
 
         if not changed:

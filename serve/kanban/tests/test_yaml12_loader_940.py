@@ -64,13 +64,13 @@ activity_log: false
 
 
 def _make_kanban_dir(base_dir: Path) -> Path:
-        """Create a minimal board layout expected by write_task()."""
-        kanban_dir = base_dir / "board"
-        kanban_dir.mkdir(parents=True, exist_ok=True)
-        (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
-        (kanban_dir / "tasks").mkdir(exist_ok=True)
-        (kanban_dir / "archive").mkdir(exist_ok=True)
-        return kanban_dir
+    """Create a minimal board layout expected by write_task()."""
+    kanban_dir = base_dir / "board"
+    kanban_dir.mkdir(parents=True, exist_ok=True)
+    (kanban_dir / "config.yml").write_text(_CONFIG_YAML, encoding="utf-8")
+    (kanban_dir / "tasks").mkdir(exist_ok=True)
+    (kanban_dir / "archive").mkdir(exist_ok=True)
+    return kanban_dir
 
 
 # ---------------------------------------------------------------------------

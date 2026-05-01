@@ -133,11 +133,23 @@ def client(engine: KanbanEngine):
 
 
 # Expected 13-key schema for task detail responses
-_TASK_DETAIL_KEYS = frozenset({
-    "id", "title", "status", "priority", "body",
-    "updated", "created", "tags", "blocked", "block_reason",
-    "parent", "depends_on", "claimed",
-})
+_TASK_DETAIL_KEYS = frozenset(
+    {
+        "id",
+        "title",
+        "status",
+        "priority",
+        "body",
+        "updated",
+        "created",
+        "tags",
+        "blocked",
+        "block_reason",
+        "parent",
+        "depends_on",
+        "claimed",
+    }
+)
 
 
 # ---------------------------------------------------------------------------

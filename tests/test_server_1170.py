@@ -213,7 +213,9 @@ class TestFromAC_ListTasksErrorPaths:
         FAILS: if the PydanticValidationError handler is missing from list_tasks.
         """
         ctx = MagicMock()
-        ctx.request_context.lifespan_context.engine.agent_view.return_value = MagicMock()
+        ctx.request_context.lifespan_context.engine.agent_view.return_value = (
+            MagicMock()
+        )
         with pytest.raises(ToolError):
             await list_tasks(ctx, ids=["not_an_int"])  # type: ignore[list-item]
 
@@ -543,7 +545,8 @@ class TestFromAC_InvokeViewEndWork:
         resp.guidance = []
         view.end_work.return_value = resp
         with patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=["Proceed to review"]
+            "owlbear_mcp_kanban.server.collect_guidance",
+            return_value=["Proceed to review"],
         ) as mock_cg:
             result = _invoke_view_end_work(
                 view,

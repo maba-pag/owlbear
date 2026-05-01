@@ -156,7 +156,9 @@ class TestFromAC_EntryStatusDefault:
     Mirrors the terminal_status omission-path pattern in TestFromAC_TerminalStatusField.
     """
 
-    def test_entry_status_default_is_research_without_yaml_key(self, tmp_path: Path) -> None:
+    def test_entry_status_default_is_research_without_yaml_key(
+        self, tmp_path: Path
+    ) -> None:
         """Config YAML without entry_status key → board_config().entry_status == 'research'."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_ENTRY_STATUS)
         engine = KanbanEngine(kanban_dir)
@@ -170,7 +172,9 @@ class TestFromAC_EntryStatusDefault:
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
-            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
+            agents=AgentsConfig(
+                agent_map={"research": "r", "backlog": "b", "done": "d"}
+            ),
         )
         assert cfg.entry_status == "research", (
             f"Expected entry_status='research' on direct BoardConfig() omission, got {cfg.entry_status!r}"
@@ -192,7 +196,9 @@ class TestFromAC_TerminalStatusField:
             "with default='done' per D65"
         )
 
-    def test_terminal_status_default_is_done_without_yaml_key(self, tmp_path: Path) -> None:
+    def test_terminal_status_default_is_done_without_yaml_key(
+        self, tmp_path: Path
+    ) -> None:
         """Config YAML without terminal_status key → board_config().terminal_status == 'done'."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_TERMINAL_STATUS)
         engine = KanbanEngine(kanban_dir)
@@ -205,11 +211,15 @@ class TestFromAC_TerminalStatusField:
         cfg = BoardConfig(
             statuses=["research", "backlog", "done"],
             priorities=["needed"],
-            agents=AgentsConfig(agent_map={"research": "r", "backlog": "b", "done": "d"}),
+            agents=AgentsConfig(
+                agent_map={"research": "r", "backlog": "b", "done": "d"}
+            ),
         )
         assert cfg.terminal_status == "done"
 
-    def test_terminal_status_engine_init_succeeds_without_yaml_key(self, tmp_path: Path) -> None:
+    def test_terminal_status_engine_init_succeeds_without_yaml_key(
+        self, tmp_path: Path
+    ) -> None:
         """Engine init with no terminal_status in YAML must not raise — default 'done' == statuses[-1]."""
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_NO_TERMINAL_STATUS)
         # Must not raise ConfigError — declared default "done" equals statuses[-1] "done"
@@ -233,11 +243,15 @@ class TestFromAC_ArchivalReasonsFrozenSet:
             f"Expected frozenset, got {type(cfg.archival_reasons).__name__}"
         )
 
-    def test_archival_reasons_default_contains_standard_five_reasons(self, tmp_path: Path) -> None:
+    def test_archival_reasons_default_contains_standard_five_reasons(
+        self, tmp_path: Path
+    ) -> None:
         """Default archival_reasons frozenset == the 5 standard values."""
         engine = _make_engine(tmp_path)
         cfg = engine.board_config()
-        expected = frozenset({"completed", "deprecated", "dropped", "duplicate", "wontfix"})
+        expected = frozenset(
+            {"completed", "deprecated", "dropped", "duplicate", "wontfix"}
+        )
         assert cfg.archival_reasons == expected
 
     def test_archival_reasons_is_frozenset_on_boardconfig_direct(self) -> None:
@@ -249,7 +263,9 @@ class TestFromAC_ArchivalReasonsFrozenSet:
         )
         assert isinstance(cfg.archival_reasons, frozenset)
 
-    def test_archival_reasons_yaml_list_coerced_to_frozenset(self, tmp_path: Path) -> None:
+    def test_archival_reasons_yaml_list_coerced_to_frozenset(
+        self, tmp_path: Path
+    ) -> None:
         """archival_reasons from YAML list is converted to frozenset at load time."""
         config = _BASE_CONFIG.replace(
             "archival_reasons: [completed, deprecated, dropped, duplicate, wontfix]",
@@ -276,7 +292,9 @@ class TestFromAC_AgentViewMethodStubs:
 
     def test_agent_view_has_list_tasks_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "list_tasks", None)), "AgentView.list_tasks missing"
+        assert callable(getattr(view, "list_tasks", None)), (
+            "AgentView.list_tasks missing"
+        )
 
     def test_agent_view_has_show_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
@@ -284,11 +302,15 @@ class TestFromAC_AgentViewMethodStubs:
 
     def test_agent_view_has_pick_tasks_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "pick_tasks", None)), "AgentView.pick_tasks missing"
+        assert callable(getattr(view, "pick_tasks", None)), (
+            "AgentView.pick_tasks missing"
+        )
 
     def test_agent_view_has_create_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "create_task", None)), "AgentView.create_task missing"
+        assert callable(getattr(view, "create_task", None)), (
+            "AgentView.create_task missing"
+        )
 
     def test_agent_view_has_edit_task_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
@@ -296,7 +318,9 @@ class TestFromAC_AgentViewMethodStubs:
 
     def test_agent_view_has_start_work_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
-        assert callable(getattr(view, "start_work", None)), "AgentView.start_work missing"
+        assert callable(getattr(view, "start_work", None)), (
+            "AgentView.start_work missing"
+        )
 
     def test_agent_view_has_end_work_stub(self, tmp_path: Path) -> None:
         view = AgentView(_make_engine(tmp_path))
@@ -311,7 +335,9 @@ class TestFromAC_AgentViewMethodStubs:
 class TestFromAC_RoleViewAccessors:
     """AC: AgentView constructed at init and accessible via engine accessor."""
 
-    def test_engine_agent_view_returns_agent_view_instance(self, tmp_path: Path) -> None:
+    def test_engine_agent_view_returns_agent_view_instance(
+        self, tmp_path: Path
+    ) -> None:
         """engine.agent_view() must return an AgentView instance."""
         engine = _make_engine(tmp_path)
         view = engine.agent_view()
@@ -368,7 +394,9 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "todo", "done"],
                 priorities=["needed"],
-                agents=AgentsConfig(agent_map={"research": "r", "todo": "b", "done": "d"}),
+                agents=AgentsConfig(
+                    agent_map={"research": "r", "todo": "b", "done": "d"}
+                ),
                 terminal_status="todo",  # not last
             )
         assert "ERR_TERMINAL_STATUS_INVALID" in exc_info.value.code
@@ -381,7 +409,9 @@ class TestFromAC_BoardConfigDirectValidation:
             BoardConfig(
                 statuses=["research", "backlog", "done"],
                 priorities=["needed"],
-                agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),  # "backlog" missing
+                agents=AgentsConfig(
+                    agent_map={"research": "r", "done": "d"}
+                ),  # "backlog" missing
             )
 
     def test_boardconfig_invalid_claim_timeout_raises(self) -> None:
@@ -407,6 +437,8 @@ class TestFromAC_BoardConfigDirectValidation:
                 priorities=["needed"],
                 agents=AgentsConfig(
                     agent_map={"research": "r", "done": "d"},
-                    agent_compatibility={"builder": ["reviewer"]},  # reviewer not reciprocating
+                    agent_compatibility={
+                        "builder": ["reviewer"]
+                    },  # reviewer not reciprocating
                 ),
             )

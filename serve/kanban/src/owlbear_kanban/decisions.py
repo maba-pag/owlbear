@@ -113,7 +113,9 @@ def create_dr(  # noqa: PLR0913
     slug = _slugify(request_type)
     counter = 1
     while True:
-        filename = f"{task_id}-{slug}.md" if counter == 1 else f"{task_id}-{slug}-{counter}.md"
+        filename = (
+            f"{task_id}-{slug}.md" if counter == 1 else f"{task_id}-{slug}-{counter}.md"
+        )
         candidate = pending_dir / filename
         try:
             fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)

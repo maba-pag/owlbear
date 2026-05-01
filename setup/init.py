@@ -139,9 +139,7 @@ def _write_gitignore(src: Path, dest: Path) -> None:
     dest.write_text(existing + separator + "\n" + owlbear_section, encoding="utf-8")
 
 
-def _write_settings(
-    src: Path, dest: Path, replacements: dict[str, str]
-) -> None:
+def _write_settings(src: Path, dest: Path, replacements: dict[str, str]) -> None:
     """Write .vscode/settings.json, merging with existing file if present (AC12)."""
     template = src.read_text(encoding="utf-8")
     template = _replace_placeholders(template, replacements)

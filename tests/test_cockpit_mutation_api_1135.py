@@ -128,9 +128,7 @@ class TestFromAC_MoveRequestUpdatedField:
     requests without it get 422 (Pydantic validates before the handler runs).
     """
 
-    def test_move_without_updated_field_returns_422(
-        self, client
-    ) -> None:
+    def test_move_without_updated_field_returns_422(self, client) -> None:
         """Move request missing 'updated' field → 422 validation error.
 
         Fails against current code because MoveRequest has no 'updated' field
@@ -153,9 +151,7 @@ class TestFromAC_MoveRequestUpdatedField:
         )
         assert response.status_code == 200
 
-    def test_move_nonexistent_task_with_updated_returns_404(
-        self, client
-    ) -> None:
+    def test_move_nonexistent_task_with_updated_returns_404(self, client) -> None:
         """Non-existent task with 'updated' present → 404 (not 422 or 200).
 
         Pydantic accepts the request body; handler raises 404.
@@ -331,9 +327,7 @@ class TestFromAC_MoveStaleUpdated:
     HTTP move with stale token → 409.
     """
 
-    def test_move_stale_updated_returns_409(
-        self, client, engine: KanbanEngine
-    ) -> None:
+    def test_move_stale_updated_returns_409(self, client, engine: KanbanEngine) -> None:
         """Stale 'updated' token causes move route to return 409.
 
         Follows the pattern from test_edit_stale_updated_returns_409 in
@@ -466,7 +460,9 @@ class TestFromAC_MoveSharedSuiteContract:
         from being verified by executable regression of the named suite.
         """
         module_path = Path("tests/test_cockpit_mutation_api.py")
-        spec = importlib.util.spec_from_file_location("_shared_suite_probe", module_path)
+        spec = importlib.util.spec_from_file_location(
+            "_shared_suite_probe", module_path
+        )
         assert spec is not None
         assert spec.loader is not None
         mod = importlib.util.module_from_spec(spec)

@@ -27,7 +27,12 @@ from owlbear_kanban.models import RepairOutcome
 # ---------------------------------------------------------------------------
 
 _ENGINE_PY = (
-    Path(__file__).parents[1] / "serve" / "kanban" / "src" / "owlbear_kanban" / "engine.py"
+    Path(__file__).parents[1]
+    / "serve"
+    / "kanban"
+    / "src"
+    / "owlbear_kanban"
+    / "engine.py"
 )
 _SERVE_KANBAN = Path(__file__).parents[1] / "serve" / "kanban"
 _PROJECT_ROOT = Path(__file__).parents[1]
@@ -105,7 +110,9 @@ def _make_view(base_dir: Path) -> AgentView:
 class TestFromAC_ListTasksArchiveScanExceptions:
     """AC1: Non-CorruptionError from read_task in archive scan must propagate after narrowing."""
 
-    def test_archive_scan_non_narrowed_exception_propagates(self, tmp_path: Path) -> None:
+    def test_archive_scan_non_narrowed_exception_propagates(
+        self, tmp_path: Path
+    ) -> None:
         """Error path: RuntimeError from read_task is NOT caught by except CorruptionError:.
 
         Currently: caught by broad except Exception: -> list_tasks returns normally.
@@ -116,7 +123,10 @@ class TestFromAC_ListTasksArchiveScanExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch("owlbear_kanban.engine.read_task", side_effect=RuntimeError("unexpected")),
+            patch(
+                "owlbear_kanban.engine.read_task",
+                side_effect=RuntimeError("unexpected"),
+            ),
             pytest.raises(RuntimeError, match="unexpected"),
         ):
             engine.list_tasks()
@@ -128,7 +138,9 @@ class TestFromAC_ListTasksArchiveScanExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch("owlbear_kanban.engine.read_task", side_effect=AttributeError("attr")),
+            patch(
+                "owlbear_kanban.engine.read_task", side_effect=AttributeError("attr")
+            ),
             pytest.raises(AttributeError),
         ):
             engine.list_tasks()
@@ -159,7 +171,9 @@ class TestFromAC_ListTasksMainScanExceptions:
 
         with (
             patch("owlbear_kanban.storage.detect_corruption", return_value=None),
-            patch("owlbear_kanban.engine.read_task", side_effect=RuntimeError("scan-err")),
+            patch(
+                "owlbear_kanban.engine.read_task", side_effect=RuntimeError("scan-err")
+            ),
             pytest.raises(RuntimeError, match="scan-err"),
         ):
             engine.list_tasks()
@@ -202,7 +216,9 @@ class TestFromAC_SweepExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch("owlbear_kanban.engine.read_task", side_effect=RuntimeError("sweep-err")),
+            patch(
+                "owlbear_kanban.engine.read_task", side_effect=RuntimeError("sweep-err")
+            ),
             pytest.raises(RuntimeError, match="sweep-err"),
         ):
             engine.sweep()
@@ -219,7 +235,10 @@ class TestFromAC_SweepExceptions:
         engine = KanbanEngine(board, activity_log=False)
 
         with (
-            patch("owlbear_kanban.engine.read_task", side_effect=PermissionError("no-access")),
+            patch(
+                "owlbear_kanban.engine.read_task",
+                side_effect=PermissionError("no-access"),
+            ),
             pytest.raises(PermissionError),
         ):
             engine.sweep()
@@ -255,7 +274,9 @@ class TestFromAC_RepairStorageExceptions:
 
         with (
             patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
-            patch.object(KanbanEngine, "create_task", side_effect=RuntimeError("ct-err")),
+            patch.object(
+                KanbanEngine, "create_task", side_effect=RuntimeError("ct-err")
+            ),
             pytest.raises(RuntimeError, match="ct-err"),
         ):
             engine.repair_storage()
@@ -273,7 +294,9 @@ class TestFromAC_RepairStorageExceptions:
 
         with (
             patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
-            patch.object(KanbanEngine, "create_task", side_effect=TypeError("type-err")),
+            patch.object(
+                KanbanEngine, "create_task", side_effect=TypeError("type-err")
+            ),
             pytest.raises(TypeError, match="type-err"),
         ):
             engine.repair_storage()

@@ -224,7 +224,9 @@ class TestFromAC_ListTasksAdapter:
 
         call_kwargs = mock_av.list_tasks.call_args
         assert call_kwargs is not None
-        assert "todo" in str(call_kwargs), "status='todo' must be forwarded to AgentView.list_tasks"
+        assert "todo" in str(call_kwargs), (
+            "status='todo' must be forwarded to AgentView.list_tasks"
+        )
 
     @pytest.mark.asyncio
     async def test_list_tasks_forwards_tag_param(
@@ -319,9 +321,10 @@ class TestFromAC_ListTasksAdapter:
         with pytest.raises(ToolError) as exc_info:
             await list_tasks(ctx, status="todo", ids=[1])
 
-        assert "ids" in str(exc_info.value).lower() or "exclusive" in str(exc_info.value).lower(), (
-            "ToolError must carry user_message about ids exclusivity"
-        )
+        assert (
+            "ids" in str(exc_info.value).lower()
+            or "exclusive" in str(exc_info.value).lower()
+        ), "ToolError must carry user_message about ids exclusivity"
 
     @pytest.mark.asyncio
     async def test_list_tasks_validation_error_message_preserved(
@@ -352,9 +355,7 @@ class TestFromAC_ListTasksAdapter:
         from owlbear_mcp_kanban.server import list_tasks
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
-        expected = ListTasksResponse(
-            tasks=[], guidance=[], missing_ids=[99, 100]
-        )
+        expected = ListTasksResponse(tasks=[], guidance=[], missing_ids=[99, 100])
         mock_av.list_tasks.return_value = expected
 
         ctx = _make_mcp_ctx(app_ctx)
@@ -650,9 +651,7 @@ class TestFromAC_ShowTaskAdapter:
         from owlbear_mcp_kanban.server import show_task
 
         app_ctx, mock_av = app_ctx_with_mock_agent_view
-        expected = _make_show_task_response(
-            id=42, body="Full body", guidance=["hint1"]
-        )
+        expected = _make_show_task_response(id=42, body="Full body", guidance=["hint1"])
         mock_av.show_task.return_value = expected
 
         ctx = _make_mcp_ctx(app_ctx)
@@ -742,7 +741,10 @@ class TestFromAC_ShowTaskAdapter:
         with pytest.raises(ToolError) as exc_info:
             await show_task(ctx, id=42, section="")
 
-        assert "section" in str(exc_info.value).lower() or "empty" in str(exc_info.value).lower()
+        assert (
+            "section" in str(exc_info.value).lower()
+            or "empty" in str(exc_info.value).lower()
+        )
 
     @pytest.mark.asyncio
     async def test_show_task_empty_section_not_normalized_passthrough(
@@ -964,9 +966,9 @@ class TestFromAC_PickTasksAdapter:
         with pytest.raises(ToolError) as exc_info:
             await pick_tasks(ctx, max_waves=0)
 
-        assert "max_waves" in str(exc_info.value).lower() or "1" in str(exc_info.value), (
-            "ToolError must carry user_message about invalid max_waves"
-        )
+        assert "max_waves" in str(exc_info.value).lower() or "1" in str(
+            exc_info.value
+        ), "ToolError must carry user_message about invalid max_waves"
 
     # -- Retry: exact-kwargs forwarding tests for pick_tasks --
 

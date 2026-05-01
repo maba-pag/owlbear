@@ -246,9 +246,7 @@ class TestFromAC_ExistingBehaviorUnchanged:
         assert response.status_code == 200
         assert response.json()["title"] == "Regression guard title"
 
-    def test_edit_stale_snapshot_still_returns_409(
-        self, client
-    ) -> None:
+    def test_edit_stale_snapshot_still_returns_409(self, client) -> None:
         """Regression: stale updated token → 409 (precheck preserved)."""
         response = client.post(
             "/api/tasks/1/edit",
@@ -256,9 +254,7 @@ class TestFromAC_ExistingBehaviorUnchanged:
         )
         assert response.status_code == 409
 
-    def test_edit_nonexistent_task_still_returns_404(
-        self, client
-    ) -> None:
+    def test_edit_nonexistent_task_still_returns_404(self, client) -> None:
         """Regression: non-existent task ID → 404."""
         response = client.post(
             "/api/tasks/999/edit",

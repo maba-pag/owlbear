@@ -87,7 +87,9 @@ class TestFromAC_CockpitViewNewModule:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir, agent_name="test-1224")
         view = CockpitView(engine)
-        assert view is not None, "CockpitView(engine) must construct successfully from new module"
+        assert view is not None, (
+            "CockpitView(engine) must construct successfully from new module"
+        )
 
     def test_cockpit_view_has_list_tasks(self, tmp_path: Path) -> None:
         from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
@@ -210,7 +212,9 @@ class TestFromAC_EngineCleanup:
 class TestFromAC_SourceConsumersImport:
     """AC3: deps.py, routes/read.py, routes/mutation.py must import from owlbear_cockpit.view."""
 
-    def test_deps_py_imports_from_owlbear_cockpit_view(self, project_root: Path) -> None:
+    def test_deps_py_imports_from_owlbear_cockpit_view(
+        self, project_root: Path
+    ) -> None:
         deps_py = (
             project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
         )
@@ -316,7 +320,9 @@ class TestFromAC_TestFileImportUpdates:
         )
 
     def test_engine_cockpit_view_test_import_updated(self, project_root: Path) -> None:
-        self._assert_no_old_import(project_root / "tests" / "test_engine_cockpit_view.py")
+        self._assert_no_old_import(
+            project_root / "tests" / "test_engine_cockpit_view.py"
+        )
 
     def test_engine_release_task_occ_import_updated(self, project_root: Path) -> None:
         self._assert_no_old_import(
@@ -354,11 +360,7 @@ class TestFromAC_KanbanTestCleanup:
         self, project_root: Path
     ) -> None:
         test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_init_1067.py"
+            project_root / "serve" / "kanban" / "tests" / "test_engine_init_1067.py"
         )
         source = test_file.read_text(encoding="utf-8")
         assert "CockpitView" not in source, (
@@ -370,11 +372,7 @@ class TestFromAC_KanbanTestCleanup:
         self, project_root: Path
     ) -> None:
         test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_init_1068.py"
+            project_root / "serve" / "kanban" / "tests" / "test_engine_init_1068.py"
         )
         source = test_file.read_text(encoding="utf-8")
         assert "TestFromAC_CockpitViewMethodStubs" not in source, (
@@ -386,11 +384,7 @@ class TestFromAC_KanbanTestCleanup:
         self, project_root: Path
     ) -> None:
         test_file = (
-            project_root
-            / "serve"
-            / "kanban"
-            / "tests"
-            / "test_engine_init_1068.py"
+            project_root / "serve" / "kanban" / "tests" / "test_engine_init_1068.py"
         )
         source = test_file.read_text(encoding="utf-8")
         # The cockpit_view() accessor test must be gone

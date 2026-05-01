@@ -170,9 +170,7 @@ def _make_view(
 class TestFromAC_StartWork_1075:
     """D18+D36 CAS contract tests for AgentView.start_work."""
 
-    def test_already_claimed_error_includes_claimed_at(
-        self, tmp_path: Path
-    ) -> None:
+    def test_already_claimed_error_includes_claimed_at(self, tmp_path: Path) -> None:
         """D18+D36: ConcurrencyError(ERR_ALREADY_CLAIMED) must include claimed_at in message.
 
         Brief §1.7: ``ConcurrencyError(code="ERR_ALREADY_CLAIMED", detail="claimed_at={ts}")``.
@@ -193,9 +191,7 @@ class TestFromAC_StartWork_1075:
             f"got: {exc_info.value.user_message!r}"
         )
 
-    def test_expired_claim_release_uses_cas_primitive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_expired_claim_release_uses_cas_primitive(self, tmp_path: Path) -> None:
         """D18+D36: start_work on expired-claim task must route the release write
         through storage.write_task_if_unchanged (CAS), not plain write_task.
 
@@ -217,9 +213,7 @@ class TestFromAC_StartWork_1075:
             "lazy-release (D18+D36); engine.claim_task currently uses plain write_task"
         )
 
-    def test_fresh_claim_uses_cas_primitive(
-        self, tmp_path: Path
-    ) -> None:
+    def test_fresh_claim_uses_cas_primitive(self, tmp_path: Path) -> None:
         """D18+D36: start_work on an unclaimed task must route the claim write
         through storage.write_task_if_unchanged (CAS).
 
@@ -284,7 +278,10 @@ class TestFromAC_StartWork_1075:
             return storage.write_task_if_unchanged(task, expected_updated, kdir)
 
         with (
-            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=inject_then_stale),
+            patch(
+                "owlbear_kanban.storage.write_task_if_unchanged",
+                side_effect=inject_then_stale,
+            ),
             pytest.raises(ConcurrencyError) as exc_info,
         ):
             view.start_work(1)
@@ -321,7 +318,9 @@ class TestFromAC_StartWork_1075:
             cas_call_claimed_ats.append(getattr(task, "claimed_at", None))
             return real_cas(task, expected_updated, kdir)
 
-        with patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=capture):
+        with patch(
+            "owlbear_kanban.storage.write_task_if_unchanged", side_effect=capture
+        ):
             view.start_work(1)
 
         assert len(cas_call_claimed_ats) >= 2, (
@@ -376,7 +375,9 @@ class TestFromAC_StartWork_1075:
                 )
             return real_cas(task, expected_updated, kdir)
 
-        with patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_on_first):
+        with patch(
+            "owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_on_first
+        ):
             result = view.start_work(1)
 
         from datetime import datetime  # noqa: PLC0415
@@ -444,7 +445,10 @@ class TestFromAC_StartWork_1075:
             if cas_call_count == 1:
                 # Concurrent update: write t_concurrent to disk, then raise ERR_STALE.
                 task_path = next((kdir / "tasks").glob("1-*.md"))
-                from owlbear_kanban.storage import read_task as _read, write_task as _write  # noqa: PLC0415
+                from owlbear_kanban.storage import (
+                    read_task as _read,
+                    write_task as _write,
+                )  # noqa: PLC0415
 
                 concurrent_record = _read(task_path)
                 concurrent_record.updated = t_concurrent.isoformat()
@@ -457,7 +461,10 @@ class TestFromAC_StartWork_1075:
 
         with (
             patch("owlbear_kanban.engine.datetime", _MockDatetime),
-            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_then_succeed),
+            patch(
+                "owlbear_kanban.storage.write_task_if_unchanged",
+                side_effect=stale_then_succeed,
+            ),
         ):
             result = view.start_work(1)
 
@@ -492,9 +499,7 @@ class TestFromAC_StartWork_1075:
 class TestFromAC_MoveTask_D37_1075:
     """D37 archival-matrix self-ref and cycle tests for AgentView.move_task."""
 
-    def test_move_task_archival_rejects_self_reference(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_archival_rejects_self_reference(self, tmp_path: Path) -> None:
         """D37: move_task('archived') must raise ERR_ARCHIVAL_REF_SELF when
         archival_refs includes the task's own id.
 
@@ -518,9 +523,7 @@ class TestFromAC_MoveTask_D37_1075:
             f"ERR_ARCHIVAL_REF_SELF; got {exc_info.value.code!r}"
         )
 
-    def test_move_task_archival_rejects_cycle(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_task_archival_rejects_cycle(self, tmp_path: Path) -> None:
         """D37: move_task('archived') must raise ERR_ARCHIVAL_REF_CYCLE when
         archival_refs would introduce a transitive cycle.
 

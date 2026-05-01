@@ -30,7 +30,9 @@ class TestFromAC_HealthBadgeStructure:
         )
 
     def test_component_file_is_non_empty(self) -> None:
-        assert COMPONENT_PATH.exists(), "Component file missing — run test_component_file_exists_at_contract_path first."
+        assert COMPONENT_PATH.exists(), (
+            "Component file missing — run test_component_file_exists_at_contract_path first."
+        )
         content = COMPONENT_PATH.read_text()
         assert len(content.strip()) > 0, "HealthBadge.tsx must not be empty."
 
@@ -43,7 +45,9 @@ class TestFromAC_HealthBadgeStructure:
         )
 
     def test_vitest_test_file_contains_testfromac_class(self) -> None:
-        assert TEST_PATH.exists(), "Test file missing — run test_vitest_test_file_exists_at_contract_path first."
+        assert TEST_PATH.exists(), (
+            "Test file missing — run test_vitest_test_file_exists_at_contract_path first."
+        )
         content = TEST_PATH.read_text()
         assert "TestFromAC_HealthBadge" in content, (
             "Vitest test file must contain the TestFromAC_HealthBadge describe block."
