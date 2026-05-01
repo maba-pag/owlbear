@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_cockpit import adapter
 from owlbear_cockpit.deps import get_view
-from owlbear_kanban.engine import CockpitView
+from owlbear_cockpit.view import CockpitView
 from owlbear_kanban.errors import ConcurrencyError, ConfigError, NotFoundError, ValidationError
 from owlbear_kanban.models import ActivityCompactionResult, RepairOutcome, SingleTaskResponse
 
@@ -30,6 +30,8 @@ class MoveRequest(BaseModel):
 
     status: str
     updated: str
+    archival_reason: str | None = None
+    archival_refs: list[int] = Field(default_factory=list)
 
 
 class EditRequest(BaseModel):
@@ -147,6 +149,8 @@ def move_task(task_id: int, req: MoveRequest, view: _View) -> SingleTaskResponse
             task_id,
             req.status,
             expected_updated=req.updated,
+            archival_reason=req.archival_reason,
+            archival_refs=req.archival_refs,
         )
     except NotFoundError:
         raise HTTPException(
