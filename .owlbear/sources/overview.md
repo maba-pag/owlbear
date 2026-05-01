@@ -28,6 +28,13 @@ External repos and resources studied during OwlBear development.
 | ReactUse — useEventSource | <https://reactuse.com/browser/useeventsource/> | React hook API pattern: status types (CONNECTING/CONNECTED/DISCONNECTED), autoReconnect options, open/close methods | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
 | NepeinAV/react-sse-hooks (GitHub) | <https://github.com/NepeinAV/react-sse-hooks> | Provider-based SSE hook library: EventSourceProvider, useEventSource, useEventSourceListener patterns | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
 
+## Paused Polling Option (Task #1259)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| Dan Abramov — Making setInterval Declarative with React Hooks | <https://overreacted.io/making-setinterval-declarative-with-react-hooks/> | Canonical `delay: null` pause pattern for React interval hooks; ref-based callback approach | `.owlbear/research/1259-paused-option-usepollingfetch.md` | 2026-05-01 |
+| TanStack Query — `enabled` option | <https://tanstack.com/query/latest/docs/framework/react/guides/disabling-queries> | Industry-standard boolean pause pattern for React data-fetching hooks | `.owlbear/research/1259-paused-option-usepollingfetch.md` | 2026-05-01 |
+
 ## SSE Endpoint Implementation (Task #1234)
 
 | Source | URL | What | Where Used | Date |
