@@ -197,7 +197,7 @@ class TestFromAC_LifecycleToolAdapters:
         ctx = _make_mcp_ctx(app_ctx)
 
         with pytest.raises(ToolError):
-            await move_task(ctx, task_id="1", status="review")
+            await move_task(ctx, id="1", status="review")
 
         assert len(helper_calls) == 1, (
             "move_task must call _map_kanban_error(exc) for KanbanError (AC6). "
@@ -237,7 +237,7 @@ class TestFromAC_LifecycleToolAdapters:
         ctx = _make_mcp_ctx(app_ctx)
 
         with pytest.raises(ToolError):
-            await start_work(ctx, task_id="1")
+            await start_work(ctx, id="1")
 
         assert len(helper_calls) == 1, (
             "start_work must call _map_kanban_error(exc) for KanbanError (AC6). "
@@ -279,7 +279,7 @@ class TestFromAC_LifecycleToolAdapters:
         with pytest.raises(ToolError):
             await end_work(
                 ctx,
-                task_id="1",
+                id="1",
                 outcome="block",
                 note="blocked",
                 block_reason=None,

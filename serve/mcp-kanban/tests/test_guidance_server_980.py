@@ -120,7 +120,7 @@ class TestFromAC_GuidanceSuppressContract:
             "owlbear_mcp_kanban.server.collect_guidance",
             side_effect=RuntimeError("boom"),
         ):
-            result = await edit_task(ctx, task_id="1", title="Safe title")
+            result = await edit_task(ctx, id="1", priority="critical")
         assert result.id is not None, (
             "Expected valid KanbanTask returned despite guidance failure"
         )
@@ -138,7 +138,7 @@ class TestFromAC_GuidanceSuppressContract:
             "owlbear_mcp_kanban.server.collect_guidance",
             side_effect=RuntimeError("boom"),
         ):
-            result = await end_work(ctx, task_id="1", note="done", outcome="success")
+            result = await end_work(ctx, id="1", note="done", outcome="success")
         assert result.id is not None, (
             "Expected valid KanbanTask returned despite guidance failure"
         )
@@ -168,7 +168,7 @@ class TestFromAC_GuidanceCallWiring:
         with patch(
             "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
         ) as mock_cg:
-            await edit_task(ctx, task_id="1", title="Verify wiring")
+            await edit_task(ctx, id="1", priority="critical")
         mock_cg.assert_called_once_with("edit_task", None, ANY)
 
     @pytest.mark.asyncio
@@ -180,7 +180,7 @@ class TestFromAC_GuidanceCallWiring:
         with patch(
             "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
         ) as mock_cg:
-            await end_work(ctx, task_id="1", note="all done", outcome="success")
+            await end_work(ctx, id="1", note="all done", outcome="success")
         mock_cg.assert_called_once_with("end_work", None, ANY, outcome="success")
 
     @pytest.mark.asyncio
@@ -192,7 +192,7 @@ class TestFromAC_GuidanceCallWiring:
         with patch(
             "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
         ) as mock_cg:
-            await end_work(ctx, task_id="1", note="failed", outcome="fail")
+            await end_work(ctx, id="1", note="failed", outcome="fail")
         mock_cg.assert_called_once_with("end_work", None, ANY, outcome="fail")
 
 
@@ -223,7 +223,7 @@ class TestFromAC_BlockUserTagOrderingInEndWork:
         ctx = _make_ctx(app_ctx_end)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="agent re-blocking",
             outcome="block",
             block_reason="dependency on external service",

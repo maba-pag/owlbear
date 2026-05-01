@@ -309,7 +309,7 @@ class TestFromAC_EditTaskAdapter:
         """Adapter must call AgentView.edit_task (not engine.edit_task directly)."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         ctx = _make_mcp_ctx(app_ctx)
-        await edit_task(ctx, task_id="1", priority="critical")
+        await edit_task(ctx, id="1", priority="critical")
         mock_av.edit_task.assert_called_once()
 
     @pytest.mark.asyncio
@@ -321,7 +321,7 @@ class TestFromAC_EditTaskAdapter:
         ctx = _make_mcp_ctx(app_ctx)
         await edit_task(
             ctx,
-            task_id="1",
+            id="1",
             body="new body",
             append_body="appended",
             timestamp=True,
@@ -357,7 +357,7 @@ class TestFromAC_EditTaskAdapter:
         """task_id string is coerced to int before forwarding to AgentView.edit_task (id: int)."""
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         ctx = _make_mcp_ctx(app_ctx)
-        await edit_task(ctx, task_id="1", priority="critical")
+        await edit_task(ctx, id="1", priority="critical")
         args, kwargs = mock_av.edit_task.call_args
         forwarded_id = args[0] if args else kwargs.get("id")
         assert forwarded_id == 1, (
@@ -373,7 +373,7 @@ class TestFromAC_EditTaskAdapter:
         expected = _make_single_task_response(id=1, title="Edited Task")
         mock_av.edit_task.return_value = expected
         ctx = _make_mcp_ctx(app_ctx)
-        result = await edit_task(ctx, task_id="1", priority="critical")
+        result = await edit_task(ctx, id="1", priority="critical")
         assert result is expected, (
             "edit_task must return the unmodified SingleTaskResponse from AgentView — "
             f"passthrough fidelity required; got {type(result).__name__}"
@@ -391,7 +391,7 @@ class TestFromAC_EditTaskAdapter:
         )
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await edit_task(ctx, task_id="1", body="replace", append_body="append")
+            await edit_task(ctx, id="1", body="replace", append_body="append")
         mock_av.edit_task.assert_called_once()
         assert "body and append_body cannot both be set" in str(exc_info.value), (
             "ToolError must carry the ERR_BODY_EXCLUSIVE user_message"
@@ -409,7 +409,7 @@ class TestFromAC_EditTaskAdapter:
         )
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await edit_task(ctx, task_id="1", archival_reason="dropped")
+            await edit_task(ctx, id="1", archival_reason="dropped")
         mock_av.edit_task.assert_called_once()
         assert "archival_reason can only be set on archived tasks" in str(exc_info.value), (
             "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
@@ -427,7 +427,7 @@ class TestFromAC_EditTaskAdapter:
         )
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await edit_task(ctx, task_id="1", archival_refs=[42])
+            await edit_task(ctx, id="1", archival_refs=[42])
         mock_av.edit_task.assert_called_once()
         assert "archival_refs can only be set on archived tasks" in str(exc_info.value), (
             "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
@@ -445,7 +445,7 @@ class TestFromAC_EditTaskAdapter:
         )
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await edit_task(ctx, task_id="1")
+            await edit_task(ctx, id="1")
         mock_av.edit_task.assert_called_once()
         assert "no fields would change" in str(exc_info.value), (
             "ToolError must carry the ERR_NO_OP user_message"
@@ -478,7 +478,7 @@ class TestFromAC_EditTaskAdapter:
         """
         app_ctx, mock_av = app_ctx_with_mock_agent_view
         ctx = _make_mcp_ctx(app_ctx)
-        await edit_task(ctx, task_id="1", block_reason="")
+        await edit_task(ctx, id="1", block_reason="")
         _, kwargs = mock_av.edit_task.call_args
         assert "block_reason" in kwargs, (
             "block_reason='' must be forwarded to AgentView (signals unblock via D53); "
@@ -529,7 +529,7 @@ class TestFromAC_KanbanErrorMapping:
         )
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await edit_task(ctx, task_id="9999", priority="critical")
+            await edit_task(ctx, id="9999", priority="critical")
         assert user_msg in str(exc_info.value), (
             "ToolError must embed the NotFoundError.user_message verbatim"
         )
@@ -547,7 +547,7 @@ class TestFromAC_KanbanErrorMapping:
         )
         ctx = _make_mcp_ctx(app_ctx)
         with pytest.raises(ToolError) as exc_info:
-            await edit_task(ctx, task_id="1", priority="critical")
+            await edit_task(ctx, id="1", priority="critical")
         assert user_msg in str(exc_info.value), (
             "ToolError must embed the ConcurrencyError.user_message verbatim"
         )

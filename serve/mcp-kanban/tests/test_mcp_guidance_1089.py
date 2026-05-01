@@ -309,7 +309,7 @@ class TestFromAC_GuidancePassthrough:
         — the call propagates before the assertion.
         """
         ctx = _make_ctx(app_ctx)
-        result = await edit_task(ctx, task_id="1", body=_LARGE_BODY)
+        result = await edit_task(ctx, id="1", body=_LARGE_BODY)
         assert result.guidance == [_BODY_SIZE_WARNING], (
             f"Expected exact body-size warning {[_BODY_SIZE_WARNING]!r} in edit_task guidance; "
             f"got {result.guidance!r}"
@@ -334,7 +334,7 @@ class TestFromAC_GuidancePassthrough:
             "owlbear_mcp_kanban.server.collect_guidance",
             return_value=_ADAPTER_FALLBACK_SENTINEL,
         ):
-            result = await move_task(ctx, task_id="1", status="review")
+            result = await move_task(ctx, id="1", status="review")
         assert result.guidance == [_SKIP_MOVE_WARNING], (
             f"Expected AgentView skip-transition warning {_SKIP_MOVE_WARNING!r}; "
             f"got {result.guidance!r}"
@@ -358,7 +358,7 @@ class TestFromAC_GuidancePassthrough:
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="rejected to done",
             outcome="reject",
             move_to="done",
@@ -389,7 +389,7 @@ class TestFromAC_GuidancePassthrough:
         ):
             result = await end_work(
                 ctx,
-                task_id="1",
+                id="1",
                 note="blocked on external dependency",
                 outcome="block",
                 block_reason="waiting for decision",
@@ -481,7 +481,7 @@ class TestFromAC_GuidanceProofRepair:
         sentinel_response = SingleTaskResponse.model_validate(task_data)
         ctx = _make_ctx(app_ctx)
         with patch.object(AgentView, "start_work", return_value=sentinel_response):
-            result = await start_work(ctx, task_id="1")
+            result = await start_work(ctx, id="1")
         assert result.guidance == self._SENTINEL, (
             f"start_work must pass AgentView guidance through unchanged; got {result.guidance!r}"
         )
@@ -500,7 +500,7 @@ class TestFromAC_GuidanceProofRepair:
         sentinel_response = SingleTaskResponse.model_validate(task_data)
         ctx = _make_ctx(app_ctx_claimed)
         with patch.object(AgentView, "end_work", return_value=sentinel_response):
-            result = await end_work(ctx, task_id="1", outcome="success", note="done")
+            result = await end_work(ctx, id="1", outcome="success", note="done")
         assert result.guidance == self._SENTINEL, (
             f"end_work(success) must pass AgentView guidance unchanged; got {result.guidance!r}"
         )
@@ -541,7 +541,7 @@ class TestFromAC_GuidanceProofRepair:
         """
         ctx = _make_ctx(app_ctx_claimed)
         with pytest.raises(ToolError) as exc_info:
-            await start_work(ctx, task_id="1")
+            await start_work(ctx, id="1")
         error_text = str(exc_info.value)
         assert error_text.startswith("Task '1' is already claimed by another agent"), (
             f"ToolError must start with exact prefix; got {error_text!r}"

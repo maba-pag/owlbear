@@ -105,7 +105,7 @@ class TestFromAC_MoveTaskGuidanceIntegration:
         """move_task forward skip >1 slot → guidance with skip message."""
         ctx = _make_ctx(app_ctx)
         # Task 1 is at "research"; skip to "todo" (2 slots: research→backlog→todo)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0, (
             f"Expected guidance for >1-slot skip (research→todo), got {result.guidance!r}"
         )
@@ -117,7 +117,7 @@ class TestFromAC_MoveTaskGuidanceIntegration:
         """move_task forward skip exactly 1 slot → empty guidance."""
         ctx = _make_ctx(app_ctx)
         # Task 1 is at "research"; advance to "backlog" (1 slot)
-        result = await move_task(ctx, task_id="1", status="backlog")
+        result = await move_task(ctx, id="1", status="backlog")
         assert result.guidance == [], (
             f"Expected empty guidance for 1-slot move (research→backlog), got {result.guidance!r}"
         )
@@ -129,7 +129,7 @@ class TestFromAC_MoveTaskGuidanceIntegration:
         """move_task backward move → empty guidance."""
         ctx = _make_ctx(app_ctx)
         # Task 2 is at "todo"; move back to "backlog"
-        result = await move_task(ctx, task_id="2", status="backlog")
+        result = await move_task(ctx, id="2", status="backlog")
         assert result.guidance == [], (
             f"Expected empty guidance for backward move (todo→backlog), got {result.guidance!r}"
         )
@@ -143,7 +143,7 @@ class TestFromAC_MoveTaskGuidanceIntegration:
         # Task 3 is at "done"; archive it
         result = await move_task(
             ctx,
-            task_id="3",
+            id="3",
             status="archived",
             archival_reason="completed",
         )
@@ -157,7 +157,7 @@ class TestFromAC_MoveTaskGuidanceIntegration:
     ) -> None:
         """Forward-skip guidance message references both source and target status."""
         ctx = _make_ctx(app_ctx)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0
         assert "research" in result.guidance[0], (
             f"Expected 'research' in skip message, got {result.guidance[0]!r}"

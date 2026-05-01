@@ -101,7 +101,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="blocking for dependency",
             outcome="block",
             block_reason="waiting on infra",
@@ -123,7 +123,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="agent re-blocking",
             outcome="block",
             block_reason="stale dependency",
@@ -140,7 +140,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="all done",
             outcome="success",
         )
@@ -159,7 +159,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="failed attempt",
             outcome="fail",
         )
@@ -175,7 +175,7 @@ class TestFromAC_EndWorkGuidanceIntegration:
         ctx = _make_ctx(app_ctx)
         result = await end_work(
             ctx,
-            task_id="1",
+            id="1",
             note="rejecting to backlog",
             outcome="reject",
             move_to="backlog",

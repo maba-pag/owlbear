@@ -226,7 +226,7 @@ class TestFromAC_MutationToolErrorHelper:
         ctx = _make_mcp_ctx(app_ctx)
 
         with pytest.raises(ToolError):
-            await edit_task(ctx, task_id="1", priority="critical")
+            await edit_task(ctx, id="1", priority="critical")
 
         assert len(helper_calls) == 1, (
             "edit_task must call _map_kanban_error(exc) for KanbanError (AC6). "

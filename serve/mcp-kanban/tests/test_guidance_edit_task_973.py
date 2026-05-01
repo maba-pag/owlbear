@@ -97,7 +97,7 @@ class TestFromAC_EditTaskGuidanceIntegration:
     async def test_block_returns_dr_guidance(self, app_ctx: AppContext) -> None:
         """edit_task(block=...) → guidance contains DR-required message."""
         ctx = _make_ctx(app_ctx)
-        result = await edit_task(ctx, task_id="1", block="waiting on infra")
+        result = await edit_task(ctx, id="1", block_reason="waiting on infra")
         assert len(result.guidance) > 0, (
             f"Expected non-empty guidance on block, got guidance={result.guidance!r}"
         )
@@ -113,7 +113,7 @@ class TestFromAC_EditTaskGuidanceIntegration:
         # Setup: add block:user tag first
         app_ctx.engine.edit_task("1", add_tags=["block:user"])
         ctx = _make_ctx(app_ctx)
-        result = await edit_task(ctx, task_id="1", block="agent re-blocking")
+        result = await edit_task(ctx, id="1", block_reason="agent re-blocking")
         assert "block:user" not in result.tags, (
             f"Expected block:user removed after MCP block, tags={result.tags!r}"
         )
@@ -128,7 +128,7 @@ class TestFromAC_EditTaskGuidanceIntegration:
             "1", blocked=True, block_reason="dependency", add_tags=["block:user"]
         )
         ctx = _make_ctx(app_ctx)
-        result = await edit_task(ctx, task_id="1", unblock=True)
+        result = await edit_task(ctx, id="1", block_reason="")
         assert result.guidance == [], (
             f"Expected empty guidance on unblock, got {result.guidance!r}"
         )
@@ -142,7 +142,7 @@ class TestFromAC_EditTaskGuidanceIntegration:
     ) -> None:
         """Non-blocking edit (title change) → empty guidance."""
         ctx = _make_ctx(app_ctx)
-        result = await edit_task(ctx, task_id="1", title="New title")
+        result = await edit_task(ctx, id="1", priority="critical")
         assert result.guidance == [], (
             f"Expected empty guidance for title change, got {result.guidance!r}"
         )
