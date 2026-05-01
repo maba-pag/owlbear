@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
@@ -35,6 +35,12 @@ export default function DetailTab({ task, onSelectTask }: DetailTabProps) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [priority, setPriority] = useState(task?.priority ?? '')
   const [body, setBody] = useState(task?.body ?? '')
+
+  useEffect(() => {
+    setTitle(task?.title ?? '')
+    setPriority(task?.priority ?? '')
+    setBody(task?.body ?? '')
+  }, [task?.id])
 
   if (!task) return null
 
