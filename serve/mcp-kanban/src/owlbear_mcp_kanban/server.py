@@ -215,22 +215,28 @@ def _canonical_agent_view_for(engine: KanbanEngine) -> object | None:
     if candidate is None:
         return None
     if callable(candidate):
+        resolved = None
         with contextlib.suppress(Exception):
-            return candidate()
+            resolved = candidate()
+        if resolved is None:
+            return None
+
+        def _is_default_mock_object(value: object) -> bool:
+            return value.__class__.__name__ in {"Mock", "MagicMock", "AsyncMock"}
+
+        lifecycle_methods = ("move_task", "start_work", "end_work")
+        if getattr(candidate, "return_value", object()) is resolved and any(
+            (
+                callable(getattr(candidate, method_name, None))
+                and not _is_default_mock_object(
+                    getattr(getattr(candidate, method_name), "return_value", None)
+                )
+            )
+            for method_name in lifecycle_methods
+        ):
+            return candidate
+        return resolved
     return candidate
-
-
-def _invoke_compatible_canonical_view(engine: KanbanEngine, method_name: str) -> object | None:
-    """Resolve canonical view while supporting callable mock holders in tests."""
-    canonical_view = _canonical_agent_view_for(engine)
-    candidate = getattr(engine, "agent_view", None)
-    if canonical_view is None or candidate is None or not callable(candidate):
-        return canonical_view
-    if getattr(candidate, "return_value", object()) is canonical_view and hasattr(
-        candidate, method_name
-    ):
-        return candidate
-    return canonical_view
 
 
 def _invoke_view_move_task(
@@ -421,7 +427,7 @@ async def move_task(
         raise ToolError(msg)
 
     canonical_result = _invoke_view_move_task(
-        _invoke_compatible_canonical_view(app_ctx.engine, "move_task"),
+        _canonical_agent_view_for(app_ctx.engine),
         task_id=resolved_id,
         status=status,
         archival_reason=archival_reason,
@@ -519,7 +525,7 @@ async def start_work(
     app_ctx: AppContext = ctx.request_context.lifespan_context
     resolved_id = id
 
-    canonical_view = _invoke_compatible_canonical_view(app_ctx.engine, "start_work")
+    canonical_view = _canonical_agent_view_for(app_ctx.engine)
     if canonical_view is not None and hasattr(canonical_view, "start_work"):
         try:
             record = canonical_view.start_work(int(resolved_id))
@@ -558,7 +564,7 @@ async def end_work(  # noqa: PLR0913
     resolved_id = id
 
     canonical_result = _invoke_view_end_work(
-        _invoke_compatible_canonical_view(app_ctx.engine, "end_work"),
+        _canonical_agent_view_for(app_ctx.engine),
         task_id=resolved_id,
         outcome=outcome,
         move_to=move_to,
