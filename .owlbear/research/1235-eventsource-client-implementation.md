@@ -42,7 +42,7 @@ IDLE → new EventSource('/api/events')
       if readyState===CONNECTING: state=RECONNECTING, start 15s timer, health=yellow
       if readyState===CLOSED: state=FAILED, resume polling, health=red
   → tasks-changed event: call refetchTasks()
-  
+
 RECONNECTING (browser auto-reconnects):
   → onopen: cancel 15s timer, state=CONNECTED, pause polling, health=green
   → 15s timer fires while still CONNECTING: close(), state=FAILED, resume polling, health=red
