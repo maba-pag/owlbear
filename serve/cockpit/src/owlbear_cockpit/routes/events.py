@@ -29,10 +29,6 @@ async def events(request: Request, engine: _Engine) -> EventSourceResponse:
     """Stream task invalidation events to clients via SSE."""
 
     async def _stream() -> object:
-        # Emit an initial comment frame so clients can establish the stream
-        # even when no file changes occur yet.
-        yield {"comment": "connected"}
-
         tasks_dir = Path(engine.tasks_dir)
         if not tasks_dir.exists():  # noqa: ASYNC240
             return
