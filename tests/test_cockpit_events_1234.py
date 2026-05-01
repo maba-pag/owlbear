@@ -473,6 +473,56 @@ class TestFromAC_EventPayload:
         )
 
     @pytest.mark.asyncio
+    async def test_mixed_batch_surviving_file_still_emits_event(self, board_dir) -> None:
+        """AC4b: When a batch contains both a deleted and a surviving .md file, the surviving file still produces a tasks-changed event."""
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        surviving_path = board_dir / "tasks" / "task-surviving.md"
+        surviving_path.write_text("---\nid: 10\n---\n", encoding="utf-8")
+        deleted_path = board_dir / "tasks" / "task-deleted.md"
+        # deleted_path intentionally does NOT exist
+        assert not deleted_path.exists(), "Test setup: deleted_path must not exist"
+        expected_mtime = surviving_path.stat().st_mtime_ns
+
+        async def _mixed_batch_then_stop(*_args, **_kwargs):
+            # One batch with both a deleted path and a surviving path
+            yield {(MagicMock(), str(deleted_path)), (MagicMock(), str(surviving_path))}
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", _mixed_batch_then_stop):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    assert response.status_code == 200
+                    event_lines: list[str] = []
+                    data_lines: list[str] = []
+                    async for line in response.aiter_lines():
+                        if line.startswith("event:"):
+                            event_lines.append(line[len("event:"):].strip())
+                        elif line.startswith("data:"):
+                            data_lines.append(line[len("data:"):].strip())
+                        if event_lines and data_lines:
+                            break
+        finally:
+            app.dependency_overrides.clear()
+
+        assert event_lines == ["tasks-changed"], (
+            f"Expected one 'tasks-changed' event from the surviving file in a mixed batch. "
+            f"Got events: {event_lines!r} — deleted file in the same batch must NOT suppress the event."
+        )
+        assert data_lines, "No data line received for the mixed-batch event"
+        payload = json.loads(data_lines[0])
+        assert payload.get("mtime") == expected_mtime, (
+            f"mtime must be from the surviving file's st_mtime_ns ({expected_mtime}), "
+            f"got {payload.get('mtime')!r}"
+        )
+
+    @pytest.mark.asyncio
     async def test_mtime_uses_st_mtime_ns(self, board_dir) -> None:
         """mtime payload must use st_mtime_ns (nanoseconds), not st_mtime (seconds)."""
         from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
@@ -785,6 +835,42 @@ class TestFromAC_GeneratorCleanup:
         assert awatch_yields[0] <= 1, (
             f"Generator must exit after is_disconnected()=True; "
             f"awatch was iterated {awatch_yields[0]} times — generator did not break."
+        )
+
+    @pytest.mark.asyncio
+    async def test_generator_emits_zero_chunks_when_disconnected_before_first_yield(
+        self, board_dir
+    ) -> None:
+        """AC6b (revised): When is_disconnected() is True at the first disconnect check, zero event/data chunks must be emitted — disconnect fires before payload processing."""
+        import asyncio  # noqa: PLC0415
+
+        from owlbear_cockpit.routes.events import events  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        real_path = board_dir / "tasks" / "task-dc.md"
+        real_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
+
+        mock_request = AsyncMock()
+        # Disconnected from the very first check — before any payload processing
+        mock_request.is_disconnected = AsyncMock(return_value=True)
+
+        async def _one_real_change(*_args, **_kwargs):
+            # Yields a real change set — would produce an event if disconnect check is late
+            yield {(MagicMock(), str(real_path))}
+
+        with patch("owlbear_cockpit.routes.events.awatch", _one_real_change):
+            response = await events(mock_request, engine)
+            emitted_chunks: list = []
+            async with asyncio.timeout(3.0):
+                async for chunk in response.body_iterator:
+                    if isinstance(chunk, dict) and chunk.get("event") == "tasks-changed":
+                        emitted_chunks.append(chunk)
+
+        assert not emitted_chunks, (
+            f"AC6b: when is_disconnected() returns True before payload processing, "
+            f"zero 'tasks-changed' chunks must be emitted. "
+            f"Got: {emitted_chunks!r} — disconnect check may fire AFTER the yield."
         )
 
     @pytest.mark.asyncio
