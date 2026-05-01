@@ -151,7 +151,7 @@ def move_task(task_id: int, req: MoveRequest, view: _View) -> SingleTaskResponse
         )
 
     transitions = adapter.valid_transitions(view.engine, task.status)
-    if req.status not in transitions:
+    if req.status != "archived" and req.status not in transitions:
         raise HTTPException(
             status_code=422,
             detail=f"Cannot move from '{task.status}' to '{req.status}'",
