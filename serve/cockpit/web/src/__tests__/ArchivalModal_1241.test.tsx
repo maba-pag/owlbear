@@ -609,4 +609,118 @@ describe('TestFromAC_ArchivalModal', () => {
       expect(fetchMock).not.toHaveBeenCalled()
     })
   })
+
+  // ─── AC-Addendum: Comma-and-whitespace refs tokenization ─────────────────
+
+  describe('AC-Addendum: whitespace and mixed separators are accepted and parse to numeric refs', () => {
+    it('accepts whitespace-only separated refs ("1230 1229") and sends them as numeric array', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { container } = renderModal({ taskId: 42, expectedUpdated: '2026-05-01T12:00:00+00:00' })
+      selectReason(container, 'deprecated')
+      fireEvent.change(getRefsInput(container), { target: { value: '1230 1229' } })
+      fireEvent.click(getSubmitBtn(container))
+
+      await waitFor(() => {
+        const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit]
+        const payload = JSON.parse(opts.body as string) as Record<string, unknown>
+        expect(payload['archival_refs']).toEqual([1230, 1229])
+      })
+    })
+
+    it('accepts mixed comma-and-whitespace separators ("1230, 1229") and sends numeric refs', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { container } = renderModal({ taskId: 42, expectedUpdated: '2026-05-01T12:00:00+00:00' })
+      selectReason(container, 'deprecated')
+      fireEvent.change(getRefsInput(container), { target: { value: '1230, 1229' } })
+      fireEvent.click(getSubmitBtn(container))
+
+      await waitFor(() => {
+        const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit]
+        const payload = JSON.parse(opts.body as string) as Record<string, unknown>
+        expect(payload['archival_refs']).toEqual([1230, 1229])
+      })
+    })
+
+    it('accepts consecutive separators ("1230  1229") — empty tokens filtered — sends numeric refs', async () => {
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { container } = renderModal({ taskId: 42, expectedUpdated: '2026-05-01T12:00:00+00:00' })
+      selectReason(container, 'duplicate')
+      fireEvent.change(getRefsInput(container), { target: { value: '1230  1229' } })
+      fireEvent.click(getSubmitBtn(container))
+
+      await waitFor(() => {
+        const [, opts] = fetchMock.mock.calls[0] as [string, RequestInit]
+        const payload = JSON.parse(opts.body as string) as Record<string, unknown>
+        expect(payload['archival_refs']).toEqual([1230, 1229])
+      })
+    })
+  })
+
+  // ─── AC-Addendum: Non-422/409 HTTP error display ─────────────────────────
+
+  describe('AC-Addendum: non-422/409 HTTP error — modal stays open, generic error displayed', () => {
+    it('shows generic error message on 404, keeps modal open, resets isSubmitting', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() =>
+          Promise.resolve({
+            ok: false,
+            status: 404,
+            json: () => Promise.resolve({}),
+          }),
+        ),
+      )
+
+      const { container, onClose } = renderModal()
+      selectReason(container, 'dropped')
+      fireEvent.click(getSubmitBtn(container))
+
+      await waitFor(() => {
+        const errorEl = container.querySelector('[data-testid="archival-error"]')
+        expect(errorEl).not.toBeNull()
+        expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
+      })
+
+      expect(onClose).not.toHaveBeenCalled()
+      // isSubmitting resets — submit button is re-enabled
+      expect(getSubmitBtn(container).disabled).toBe(false)
+    })
+  })
+
+  // ─── AC-Addendum: Network failure error display ───────────────────────────
+
+  describe('AC-Addendum: network failure (fetch throws) — modal stays open, generic error displayed', () => {
+    it('shows generic error message when fetch throws, keeps modal open, resets isSubmitting', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.reject(new Error('Network error'))),
+      )
+
+      const { container, onClose } = renderModal()
+      selectReason(container, 'dropped')
+      fireEvent.click(getSubmitBtn(container))
+
+      await waitFor(() => {
+        const errorEl = container.querySelector('[data-testid="archival-error"]')
+        expect(errorEl).not.toBeNull()
+        expect(errorEl?.textContent?.trim().length).toBeGreaterThan(0)
+      })
+
+      expect(onClose).not.toHaveBeenCalled()
+      // isSubmitting resets — submit button is re-enabled
+      expect(getSubmitBtn(container).disabled).toBe(false)
+    })
+  })
 })
