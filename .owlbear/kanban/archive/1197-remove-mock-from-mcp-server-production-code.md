@@ -1,10 +1,10 @@
 ---
 id: 1197
 title: Remove Mock from MCP server production code
-status: todo
+status: archived
 priority: needed
 created: 2026-04-30 15:28:53.011300+00:00
-updated: 2026-05-01T09:25:44.159113+00:00
+updated: 2026-05-01T14:47:25.045366+00:00
 tags:
 - audit-kanban
 - mcp-server
@@ -376,3 +376,348 @@ Revised AC: (1) No mock import; (2) canonical resolver simplified to 3 branches 
 Challenger: reconsider (0.42). Concerns addressed: false-green proof gap resolved by explicit banned-pattern list for test-writer; behavioral ambiguity resolved by preserving exception suppression in AC; stale evidence fixed by acknowledging completed work.
 
 Builder guidance: delete lines 224-239 of server.py, change MagicMock→NonCallableMagicMock in test_server_1170.py and test_mcp_lifecycle_tools.py fixtures, do not touch invoke helpers.
+[[2026-05-01]]
+## Test-Writer Notes
+
+- **Test file:** `tests/test_mcp_kanban_1197.py`
+- **Retry:** Strengthened AC2 proof and added AC4 (revised) fixture checks per architecture review and review evidence.
+
+**Existing tests (9) — all PASS against current impl (retained, not modified):**
+- `TestFromAC_NoMockImport` (2 tests) — AC1: no `unittest.mock` import in server.py
+- `TestFromAC_AgentViewForRemoved` (4 tests) — AC2 behavioral: tools call `_canonical_agent_view_for`
+- `TestFromAC_TestPatchesUpdated` (3 tests) — original AC4: no `_agent_view_for` refs in test files
+
+**New tests (5) — all FAIL:**
+- `TestFromAC_CanonicalResolverClean` (3 tests) — AC2 (revised): structural banned-pattern checks on `_canonical_agent_view_for()` source via `inspect.getsource()`:
+  - `test_canonical_resolver_has_no_is_default_mock_object` → `AssertionError`
+  - `test_canonical_resolver_has_no_class_name_mock_check` → `AssertionError`
+  - `test_canonical_resolver_has_no_return_value_string_lookup` → `AssertionError`
+- `TestFromAC_NonCallableMockFixtures` (2 tests) — AC4 (revised): `NonCallableMagicMock` in fixture files:
+  - `test_server_1170_make_engine_mock_uses_noncallable_agent_view` → `AssertionError`
+  - `test_lifecycle_tools_mock_av_fixture_uses_noncallable_agent_view` → `AssertionError`
+
+**AC coverage (revised AC):**
+| AC | Tests |
+|----|-------|
+| AC1 — No `unittest.mock` import | `TestFromAC_NoMockImport` (existing) |
+| AC2 — Banned patterns absent from `_canonical_agent_view_for()` | `TestFromAC_AgentViewForRemoved` (call-count, existing) + `TestFromAC_CanonicalResolverClean` (banned patterns, new) |
+| AC3 — Invoke helpers unchanged (td:0) | skipped |
+| AC4 — Fixtures use `NonCallableMagicMock` | `TestFromAC_NonCallableMockFixtures` (new) |
+| AC5 — Test patches already updated, verify only (td:1) | `TestFromAC_TestPatchesUpdated` (existing) |
+| AC6 — Scoped test gate passes (td:1) | Verified by builder running full scoped suite |
+
+**Total: 14 tests — 9 PASS (preserved), 5 FAIL (new gaps)**
+- ruff: clean
+- Commit: `e2bf4cfb`
+
+**Builder notes:**
+- Delete lines 224-239 of `server.py` (`_is_default_mock_object` inner function + `return_value` identity block) to pass `TestFromAC_CanonicalResolverClean`
+- Change `av = MagicMock()` → `av = NonCallableMagicMock()` in `tests/test_server_1170.py` `_make_engine_mock` default branch to pass fixture tests
+- Change `av = MagicMock()` → `av = NonCallableMagicMock()` in `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py` `mock_av` fixture to pass fixture tests
+- Existing 9 tests must remain green after changes
+[[2026-05-01]]
+## Builder Notes
+- Implementation: no new code changes in this build pass.
+- Current code state already satisfied revised AC in task body:
+  - `_canonical_agent_view_for()` has no mock-aware pattern logic.
+  - `tests/test_server_1170.py` fixture uses `NonCallableMagicMock` for default `agent_view`.
+  - `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py` fixture uses `NonCallableMagicMock`.
+  - No `_agent_view_for` references remain in `tests/test_mcp_kanban.py`, `tests/test_mcp_kanban_1126.py`, `tests/test_server_1170.py`.
+- RED check result (task file): `quality-runner` scoped run on `tests/test_mcp_kanban_1197.py` reported 14 passed / 0 failed; this retry started from an already-green baseline, so no implementation delta was needed.
+- Verification (scoped AC6 surface): `quality-runner` run on
+  - `tests/test_mcp_kanban.py`
+  - `tests/test_mcp_kanban_1126.py`
+  - `tests/test_mcp_kanban_1197.py`
+  - `tests/test_server_1170.py`
+  - `tests/test_server_1172.py`
+  - `tests/test_mcp_lifecycle_1173.py`
+  - `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`
+  Result: 123 passed / 0 failed / 0 errors.
+- Coverage: `owlbear_mcp_kanban.server` 87% on the scoped run (informational in this no-diff verification pass).
+- Lint: clean on scoped touched paths (`server.py`, `test_server_1170.py`, `test_mcp_lifecycle_tools.py`, `test_mcp_kanban_1197.py`).
+- Commit: none in this pass (no file modifications).
+
+## Post-task Reflection
+- Problem faced: task began from an already-green baseline for `TestFromAC` after prior retries in task history.
+- Workaround applied: performed direct source/fixture conformance checks plus scoped quality verification to avoid unnecessary churn.
+- Pattern discovered: late-stage builder retries can become evidence-validation passes when loop-breaker fixes are already landed.
+- Quality gap: scoped coverage remained below 90% without expanding into unrelated flaky/debt suites; reported as informational for reviewer visibility.
+[[2026-05-01]]
+## Review Evidence
+
+### Test Results
+- quality-runner scoped revised AC6 surface: 123 passed, 0 failed, 0 skipped, 0 errors
+- Scope executed: tests/test_mcp_kanban.py, tests/test_mcp_kanban_1126.py, tests/test_mcp_kanban_1197.py, tests/test_server_1170.py, tests/test_server_1172.py, tests/test_mcp_lifecycle_1173.py, serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py
+
+### Lint
+- Ruff clean on serve/mcp-kanban/src/owlear_mcp_kanban/server.py and the scoped task files
+- VS Code diagnostics: no errors in reviewed source and test files
+
+### Coverage
+- owlbear_mcp_kanban.server: 87%
+- quality-runner reports serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:222 uncovered. That line is the revised AC2 `resolved is None` fallback inside `_canonical_agent_view_for()`.
+
+### Pass 1 — Critical
+#### Security Review
+- No issues found
+
+#### AC Compliance
+| AC Line | Evidence | Status |
+| --- | --- | --- |
+| AC1 — no unittest.mock import in server.py | The import block in serve/mcp-kanban/src/owlbear_mcp_kanban/server.py contains no unittest.mock import, and the structural checks in tests/test_mcp_kanban_1197.py:154-173 are green in the scoped run | PASS |
+| AC2 — canonical resolver simplified; mock-aware logic removed; preserved fallback behavior retained | Live implementation matches the revised structure at serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:212-223 and the lifecycle call sites use `_canonical_agent_view_for()` at lines 415, 513, and 552. But executable proof is incomplete: task-owned coverage leaves line 222 unexecuted, and the current resolver tests only cover the None attribute case at tests/test_server_1170.py:276 and the callable happy path at tests/test_server_1170.py:286. No scoped test proves that a callable `engine.agent_view` returning `None` still produces `None`. | FAIL |
+| AC3 — invoke helpers unchanged; guidance backfill preserved | `_invoke_view_move_task()` and `_invoke_view_end_work()` remain intact at serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:227-319, and guidance backfill for success, block, and fail remains present in `_invoke_view_end_work()` | PASS |
+| AC4 — fixture files use NonCallableMagicMock | tests/test_server_1170.py:89 and serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:113 instantiate `NonCallableMagicMock()` for the default `agent_view` fixture path | PASS |
+| AC5 — legacy patch targets removed; canonical resolver patched instead | The old `_agent_view_for` literal is absent from the verified files, the removal checks in tests/test_mcp_kanban_1197.py:269-298 pass, and sibling suites patch the canonical resolver via dynamic name construction at tests/test_mcp_kanban.py:294-347 and tests/test_mcp_kanban_1126.py:149-226 | PASS |
+| AC6 — revised task-owned MCP server surface passes | quality-runner scoped run: 123 passed, 0 failed, 0 skipped, 0 errors | PASS |
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+| --- | --- | --- | --- |
+| AC1 | tests/test_mcp_kanban_1197.py:154-173 | Yes for the exact banned import and Mock-check forms targeted by the task | COVERED |
+| AC2 | tests/test_mcp_kanban_1197.py:184-258, tests/test_mcp_kanban_1197.py:321-355, tests/test_server_1170.py:276-295 | Not fully. These cover routing, banned mock-aware markers, the None attribute case, and the callable happy path, but they do not prove the revised callable returns None fallback at serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:221-222. | MISSING |
+| AC3 | td:0 line; direct code inspection only | N/A | N/A |
+| AC4 | tests/test_mcp_kanban_1197.py:372-393 plus live fixture reads | Yes in the current suite context because the fixture files actually instantiate `NonCallableMagicMock()` at lines 89 and 113 | COVERED |
+| AC5 | tests/test_mcp_kanban_1197.py:269-298 plus dynamic patch sites in sibling suites | Yes | COVERED |
+| AC6 | quality-runner scoped execution | Yes | COVERED |
+
+#### Test Integrity
+- No weakened or removed task-owned assertions found in the current files
+
+#### Test Quality
+- WEAK for revised AC2 preserved subcase coverage: quality-runner leaves serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:222 unexecuted, so the suite does not prove the callable returns None fallback that the revised AC explicitly preserves
+
+### Deductions
+- -0.09 revised AC2 missing executable proof for the callable returns None fallback
+- -0.03 module coverage remains below 90 percent and the missing line is inside the revised resolver branch, not untouched debt
+- -0.02 repeat-fail confidence penalty: two prior Review Evidence sections already exist in the task body
+
+### Verdict
+- FAIL to backlog
+- Confidence: 0.86
+- This is the third review cycle recorded on task 1197, so the repeat-fail loop-breaker route applies
+
+### Required Follow-up
+- Add a task-owned test that sets `engine.agent_view` to a callable returning `None` and proves `_canonical_agent_view_for()` returns `None`
+- Add a task-owned test that makes callable `engine.agent_view` raise and proves exception suppression still preserves the resolver contract
+- Re-run the revised AC6 scoped surface after the proof gap is closed; no implementation defect is currently identified
+- Because the remaining delta is test-only, the next retry should be owned by test-writer rather than returning to builder
+
+## Post-task Reflection
+- Problem faced: the latest revised Architecture Review supersedes the original AC, so earlier fail notes were stale context and could not be used as the review contract.
+- Workaround applied: anchored the review to the latest refinement, then re-ran scoped verification and re-read the live files instead of trusting task history.
+- Pattern discovered: a green scoped suite can still miss a revised-AC sub-branch; the missing coverage line in the resolver was the decisive signal.
+- Quality gap: the implementation appears correct, but the current proof still misses an explicit test for the callable returns None fallback.
+[[2026-05-01]]
+
+## Architecture Review (Re-approval)
+
+**Verdict:** APPROVED → todo
+
+**Context:** Third cycle re-review after reviewer FAIL. Implementation is now correct — all prior reviewer concerns (mock-aware compatibility wrappers, AC contradictions) have been resolved. The only remaining gap is test proof: no task-owned test exercises the callable-returns-`None` and callable-raises branches in `_canonical_agent_view_for()` (server.py:219-222).
+
+**AC Assessment (revised AC):**
+
+| AC line | Assessment | Status |
+|---------|-----------|--------|
+| AC1 — No `unittest.mock` import | server.py has no mock imports; grep confirms | PASS |
+| AC2 — Canonical resolver simplified, banned patterns removed | Live code at server.py:212-223 is a clean 3-branch resolver; no `_is_default_mock_object`, no class-name checks, no `return_value` identity | PASS |
+| AC3 — Invoke helpers unchanged; guidance backfill preserved | server.py:227-319 unchanged | PASS |
+| AC4 — NonCallableMagicMock in test fixtures | test_server_1170.py:89 and test_mcp_lifecycle_tools.py:113 confirmed | PASS |
+| AC5 — Legacy patches removed (verify only) | No `_agent_view_for` refs in test files; already green | PASS |
+| AC6 — Scoped test gate | 123 passed / 0 failed in last scoped run | PASS |
+
+**Test-writer guidance (loop-breaker recovery):**
+The reviewer's remaining gap is test-only. Add two tests to `tests/test_mcp_kanban_1197.py`:
+1. `test_canonical_resolver_callable_returning_none` — set `engine.agent_view` to a callable that returns `None`; assert `_canonical_agent_view_for(engine)` returns `None`. This covers server.py:221-222.
+2. `test_canonical_resolver_callable_raising` — set `engine.agent_view` to a callable that raises; assert `_canonical_agent_view_for(engine)` returns `None` (exception suppressed). This covers server.py:219-220.
+
+Both tests are unit-level (no async, no fixtures beyond a mock engine) and target the revised AC2 "exception suppression and None-result fallback preserved" clause.
+
+**Challenger:** SKIP — loop-breaker re-approval of already-challenged AC with no structural changes. Prior challenger results (reconsider 0.42) were addressed in the revised AC.
+
+Test-writer: PROCEED (add 2 tests to existing test_mcp_kanban_1197.py)
+
+[[2026-05-01]]
+Re-approved after 3rd cycle review. Implementation is correct — server.py has clean 3-branch resolver, no mock-aware code, NonCallableMagicMock in fixtures. Only gap: 2 missing branch-coverage tests for callable-returns-None and callable-raises paths. Test-writer guidance added for loop-breaker recovery.
+[[2026-05-01]]
+## Test-Writer Notes
+
+- **Retry:** Added 2 proof tests for reviewer gaps. All pass against current impl.
+- **Builder skip:** test-only retry, all tests green.
+
+**Test file:** `tests/test_mcp_kanban_1197.py`
+
+**New tests added (2) — both PASS against current correct implementation:**
+
+`TestFromAC_CanonicalResolverBranches`:
+- `test_canonical_resolver_callable_returning_none` — callable agent_view returning None → `_canonical_agent_view_for` returns None. Covers server.py:221-222.
+- `test_canonical_resolver_callable_raising` — callable agent_view raising RuntimeError → exception suppressed → returns None. Covers server.py:219-220.
+
+**Total tests in file: 16 — all PASS ✓**
+
+**AC coverage gap closed:**
+| AC | New tests |
+|----|-----------|
+| AC2 (revised) callable-returns-None fallback | `test_canonical_resolver_callable_returning_none` |
+| AC2 (revised) exception suppression | `test_canonical_resolver_callable_raising` |
+
+**Lint:** ruff clean
+**Why tests pass (not fail):** Implementation is already correct per prior builder passes and architecture re-approval. These are branch-coverage proof tests for already-implemented behavior — per w-tdd-red Step 1b.1, advancing directly to review.
+[[2026-05-01]]
+## Builder Notes
+- Implementation: no code changes in this pass (verification-only retry closeout).
+- RED/GREEN context: task-owned tests were already green at handoff; this pass re-validated the revised AC6 scoped surface.
+- Scoped quality-runner verification:
+  - tests: `tests/test_mcp_kanban.py`, `tests/test_mcp_kanban_1126.py`, `tests/test_mcp_kanban_1197.py`, `tests/test_server_1170.py`, `tests/test_server_1172.py`, `tests/test_mcp_lifecycle_1173.py`, `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`
+  - result: 125 passed / 0 failed / 0 skipped
+  - lint: clean (ruff 0 violations)
+  - coverage: `owlbear_mcp_kanban.server` = 87%
+- AC status:
+  - AC1/AC2/AC3/AC4/AC5/AC6 satisfied in scoped evidence.
+  - No additional implementation delta required.
+- Commit: none (no files modified in this builder pass).
+
+## Post-task Reflection
+- Problem faced: this cycle began from an already-green implementation and test baseline, so the builder role was primarily evidence confirmation.
+- Workaround applied: ran one authoritative quality-runner scoped pass across the exact revised AC6 surface to avoid unnecessary churn.
+- Pattern discovered: late-cycle retries can be verification-only when test-writer closes the final proof gap.
+- Quality gap: module coverage remains below 90% (87%) but no failing AC gate remains for this task scope.
+[[2026-05-01]]
+## Review Evidence
+
+### Test Results
+- quality-runner scoped revised AC6 surface: 125 passed, 0 failed, 0 skipped
+- Scope executed: `tests/test_mcp_kanban.py`, `tests/test_mcp_kanban_1126.py`, `tests/test_mcp_kanban_1197.py`, `tests/test_server_1170.py`, `tests/test_server_1172.py`, `tests/test_mcp_lifecycle_1173.py`, `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`
+- Parallel fan-out note: `code-reader` returned no response, so I fell back to sequential file review and live source verification
+
+### Lint
+- ruff: clean on `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` and the scoped task files
+- VS Code diagnostics: no errors in reviewed source/test files
+
+### Coverage
+- `owlbear_mcp_kanban.server`: 87% module coverage
+- quality-runner uncovered lines: `48`, `101-110`, `209`, `334-335`, `337`, `377-396`, `520-521`, `577-578`, `605-620`
+- The 1197 resolver/callsite lines under review are exercised: `server.py:212-223`, `415`, `513`, `552` are not in the uncovered set. Per diff-scoped review policy, the 87% module figure is informational, not blocking.
+
+### Pass 1 — Critical
+#### Security Review
+- No issues found. The reviewed production file adds no new dependencies, no shell/path evaluation, no deserialization hazards, and no secret handling.
+
+#### AC Compliance
+| AC Line | Evidence | Status |
+| --- | --- | --- |
+| AC1 — no `unittest.mock` import in `server.py` | Live file review shows no `unittest.mock` import in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py`; task-owned structural checks at `tests/test_mcp_kanban_1197.py:154` and `:164` pass in the scoped run | PASS |
+| AC2 — `_canonical_agent_view_for()` simplified; mock-aware logic removed; callable None/raise behavior preserved | Live implementation at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:212-223` has only the `None` / callable / non-callable branches. Lifecycle tools resolve via `_canonical_agent_view_for()` at `server.py:415`, `:513`, `:552`. Task-owned tests covering callsite routing (`tests/test_mcp_kanban_1197.py:194`, `:216`, `:238`), banned-pattern removal (`:321`, `:331`, `:346`), and callable-returns-None / callable-raises branches (`:409`, `:425`) are green. Negative grep found no `_is_default_mock_object`, mock class-name checks, `"return_value"`, or `def _agent_view_for` in production code. | PASS |
+| AC3 — `_invoke_view_move_task()` / `_invoke_view_end_work()` unchanged; guidance backfill preserved | Helper definitions remain in place at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:227` and `:286`. Guidance backfill remains present at `server.py:318` and `:583`. No contract drift found in sequential code review. | PASS |
+| AC4 — fixture files use `NonCallableMagicMock` for default `agent_view` | Live fixture reads confirm `NonCallableMagicMock()` at `tests/test_server_1170.py:89` and `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py:113`. Task-owned structural checks at `tests/test_mcp_kanban_1197.py:372` and `:384` are green, and the scoped lifecycle surface passes, confirming the non-callable fixture path works end-to-end. | PASS |
+| AC5 — legacy `_agent_view_for` patches/tests removed from targeted files | No `_agent_view_for` matches in `tests/test_mcp_kanban.py`, `tests/test_mcp_kanban_1126.py`, or `tests/test_server_1170.py`. Task-owned removal checks at `tests/test_mcp_kanban_1197.py:269`, `:279`, `:289` pass. Sibling suites patch the canonical resolver via dynamic name construction at `tests/test_mcp_kanban.py:294`, `:319`, `:344` and `tests/test_mcp_kanban_1126.py:149`, `:183`, `:223`. | PASS |
+| AC6 — revised task-owned MCP server surface passes | quality-runner scoped run: 125 passed, 0 failed, 0 skipped | PASS |
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+| --- | --- | --- | --- |
+| AC1 | `test_server_has_no_unittest_mock_import`, `test_server_has_no_isinstance_mock_check` | Yes — exact banned-import / banned-check assertions | COVERED |
+| AC2 | `test_agent_view_for_not_defined_in_server`, `test_move_task_resolves_via_canonical_agent_view_for`, `test_start_work_resolves_via_canonical_agent_view_for`, `test_end_work_resolves_via_canonical_agent_view_for`, `test_canonical_resolver_has_no_is_default_mock_object`, `test_canonical_resolver_has_no_class_name_mock_check`, `test_canonical_resolver_has_no_return_value_string_lookup`, `test_canonical_resolver_callable_returning_none`, `test_canonical_resolver_callable_raising` | Yes — the combined routing, banned-pattern, and branch-behavior tests would fail on the revised AC2 regressions this task is scoped to prevent | COVERED |
+| AC3 | td:0 line; no task-owned TestFromAC proof required | N/A | N/A |
+| AC4 | `test_server_1170_make_engine_mock_uses_noncallable_agent_view`, `test_lifecycle_tools_mock_av_fixture_uses_noncallable_agent_view` | Mostly. The source-presence assertions are coarse on their own, but live fixture verification plus the passing lifecycle suite close the release risk. | LAX |
+| AC5 | `test_mcp_kanban_test_has_no_agent_view_for_references`, `test_mcp_kanban_1126_test_has_no_agent_view_for_references`, `test_server_1170_has_no_agent_view_for_references` | Yes — exact targeted removal assertions | COVERED |
+| AC6 | quality-runner scoped execution | Yes | COVERED |
+
+#### Test Integrity
+- No weakened or removed task-owned `TestFromAC_*` assertions found in the current task files.
+- The latest retry added the missing callable-returns-`None` and callable-raises proof tests at `tests/test_mcp_kanban_1197.py:409` and `:425` without removing prior AC-mapped coverage.
+
+#### Test Quality
+- Assertion specificity: ADEQUATE. AC1/AC2/AC5 use discriminating exact banned-pattern or exact behavior checks. AC4's presence checks are coarse, but the live fixture reads and green lifecycle suites make this non-blocking.
+- Negative/error-path coverage: STRONG for revised AC2 via callable-returns-`None` and callable-raises tests.
+- Manual mutation reasoning: STRONG for the task scope. Reintroducing mock-aware markers, removing exception suppression, removing the callable `None` behavior, or routing lifecycle tools away from canonical resolution would trip the reviewed proof set.
+- Test independence: STRONG.
+- Descriptive naming: STRONG.
+
+#### Data Safety
+- No issues found. The resolver change is local object selection with no persistence, no shared mutable state changes, and no new atomicity risks.
+
+#### Necessity Check
+- Not applicable. This task removes production mock-awareness and introduces no new dependency or integration surface.
+
+### Informational
+- Builder/process quality: historical friction existed, but the loop-breaker worked correctly. The latest retry was test-only strengthening plus verification, not a repeated implementation loop.
+
+### Deductions
+- -0.03 `code-reader` execution error required sequential fallback
+- -0.02 AC4 task-owned structural checks are coarser than the AC2 proof, though live file reads and the passing lifecycle suite close the gap
+- -0.01 module coverage remains 87%, but changed 1197 logic is covered and the diff-scoped gate is satisfied
+
+### Verdict
+- PASS -> docs
+- Confidence: 0.94
+
+### Action
+- Advancing task 1197 to docs.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/mcp-kanban/README.md` covers public tool signatures only; `_canonical_agent_view_for()` and `_agent_view_for()` are private helpers not referenced in any IN-scope prose doc |
+| 2 | Module docstrings | Yes | Verified | `_canonical_agent_view_for()` docstring ("Resolve the authoritative engine AgentView instance when available.") is accurate for the revised 3-branch implementation; `_invoke_view_move_task()` and `_invoke_view_end_work()` unchanged — docstrings already accurate |
+| 3 | External attribution | No | N/A | Internal refactor; no external patterns used |
+| 4 | Research doc | No | N/A | No research phase documented in task body |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/kanban.excalidraw` (describes `serve/mcp-kanban/src/**`) and `share/diagrams/mcp-topology.excalidraw` (describes `serve/mcp-*/src/**`) both matched; footers updated from `0530874a` → `d8600e60`; commit `5e000edc` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted in changed-files set |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` | IN (docstrings) | Verified — docstrings accurate |
+| `tests/test_server_1170.py` | OUT (test file) | N/A |
+| `tests/test_mcp_kanban.py` | OUT (test file) | N/A |
+| `tests/test_mcp_kanban_1126.py` | OUT (test file) | N/A |
+| `tests/test_mcp_kanban_1197.py` | OUT (test file) | N/A |
+| `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py` | OUT (test file) | N/A |
+
+### Files Updated
+- `share/diagrams/kanban.excalidraw` — footer updated to `Last verified: 2026-05-01 (d8600e60)`
+- `share/diagrams/mcp-topology.excalidraw` — footer updated to `Last verified: 2026-05-01 (d8600e60)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1197-*` scratch files found)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 — No `unittest.mock` import | server.py lines 1-30: no mock import present; structural tests green | PASS |
+| AC2 — Canonical resolver simplified; banned patterns removed | server.py:211-223: clean 3-branch resolver (None/callable/non-callable); no `_is_default_mock_object`, no class-name checks, no `return_value` identity | PASS |
+| AC3 — Invoke helpers unchanged; guidance backfill preserved | server.py:227+ intact per reviewer evidence | PASS |
+| AC4 — NonCallableMagicMock in fixtures | test_server_1170.py:89 confirmed; test_mcp_lifecycle_tools.py:113 confirmed | PASS |
+| AC5 — Legacy patches removed | No `_agent_view_for` refs in test files per reviewer evidence | PASS |
+| AC6 — Scoped test gate | Reviewer: 125 passed / 0 failed | PASS |
+
+### Test Results (Full Suite)
+- quality-runner full: 3485 passed, 105 failed
+- All 105 failures in unrelated suites (1196, 1199, cockpit, engine, decisions, guidance, etc.) — zero failures in 1197-scoped files
+- Lint: clean on all 1197 deliverables
+
+### Commit Integrity
+- `986f1ccb` — refactor: remove mock-aware view resolver (#1197, builder)
+- `2436b55f` — refactor: remove compatibility wrapper in lifecycle resolution (#1197, builder)
+- `e2bf4cfb` — test: strengthen AC2 proof and add AC4 fixture checks (#1197, test-writer)
+
+### AC Quality Score: 3/5
+Initial AC was self-contradictory (AC3 "unchanged" vs AC2 "remove mock logic" when the mock logic lived inside the protected helper). Caused 3 failed review cycles before architect revised. Revised AC is excellent (5/5) — specific banned patterns, scoped test gate, explicit builder guidance. Score reflects the initial damage.
+
+### Deductions
+- -0.03 AC quality score ≤ 3
+
+### Confidence: 0.97
+### Action: ARCHIVE
