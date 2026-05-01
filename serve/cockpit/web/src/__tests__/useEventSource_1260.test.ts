@@ -107,6 +107,15 @@ describe('TestFromAC_UseEventSource', () => {
       const { result } = renderHook(() => useEventSource('/api/events'))
       expectTypeOf(result.current).toMatchTypeOf<UseEventSourceResult>()
     })
+
+    it('UseEventSourceResult full object shape matches exactly (no extra or missing properties)', () => {
+      // toEqualTypeOf is structurally exact: fails if extra properties are added or if
+      // UseEventSourceResult is narrowed/widened beyond the AC1 contract.
+      expectTypeOf<UseEventSourceResult>().toEqualTypeOf<{
+        status: 'connecting' | 'open' | 'closed'
+        lastEventMtime: number | null
+      }>()
+    })
   })
 
   // ─── AC2: connection state machine ──────────────────────────────────────────
@@ -402,6 +411,62 @@ describe('TestFromAC_UseEventSource', () => {
       // lastEventMtime must stay 2_000 — stale event from superseded source is inert
       expect(result.current.lastEventMtime).toBe(2_000)
     })
+
+    it('stale onopen from a superseded source does not mutate status after new source is active', async () => {
+      // Regression guard: after retry creates es2, a late onopen from es1 must not call
+      // setStatus('open') — the isCurrentSource identity guard must drop it silently.
+      const { result } = renderHook(() => useEventSource('/api/events'))
+      const es1 = MockEventSource.instances[0]
+
+      // es1 fatal error → closed → retry timer scheduled
+      await act(async () => {
+        es1.simulateFatalError()
+      })
+
+      // 30s → retry fires → es2 created, connecting
+      await act(async () => {
+        vi.advanceTimersByTime(30_000)
+      })
+      const es2 = MockEventSource.instances[1]
+      expect(result.current.status).toBe('connecting')
+
+      // Stale onopen from es1 (e.g. buffered in JS engine after reconnect)
+      await act(async () => {
+        if (es1.onopen) es1.onopen(new Event('open'))
+      })
+
+      // es2 must still be connecting — stale es1 onopen must not flip status to 'open'
+      // and must not close or interfere with es2
+      expect(result.current.status).toBe('connecting')
+      expect(es2.close).not.toHaveBeenCalled()
+    })
+
+    it('only one retry timer active — two consecutive fatal errors schedule exactly one retry', async () => {
+      // AC5 single-timer guarantee: if two fatal errors arrive before the retry fires,
+      // exactly one new EventSource must be created at +30s, not two.
+      // Fails if clearRetryTimer() is removed from the fatal-error path.
+      renderHook(() => useEventSource('/api/events'))
+      const es1 = MockEventSource.instances[0]
+
+      // First fatal error → retry T1 scheduled, eventSourceRef set to null
+      await act(async () => {
+        es1.simulateFatalError()
+      })
+      expect(MockEventSource.instances).toHaveLength(1)
+
+      // Second fatal error from es1 (stale callback; isCurrentSource guard fires)
+      await act(async () => {
+        if (es1.onerror) es1.onerror(new Event('error'))
+      })
+
+      // Advance exactly 30s — only T1 fires; no stacking
+      await act(async () => {
+        vi.advanceTimersByTime(30_000)
+      })
+
+      // Only ONE new instance — timer did not stack
+      expect(MockEventSource.instances).toHaveLength(2)
+    })
   })
 
   // ─── AC6: cleanup on unmount ─────────────────────────────────────────────────
@@ -477,6 +542,32 @@ describe('TestFromAC_UseEventSource', () => {
 
       // No new EventSource instances — all timers and event handlers are inert post-unmount
       expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    it('callbacks firing after unmount do not write status or lastEventMtime (direct state suppression)', async () => {
+      // Direct AC6 proof: result.current must not change after unmount even when
+      // onopen and tasks-changed fire — the isMountedRef guard must suppress setStatus
+      // and setLastEventMtime, not only prevent new instance creation.
+      const { result, unmount } = renderHook(() => useEventSource('/api/events'))
+      const es = MockEventSource.instances[0]
+
+      act(() => {
+        unmount()
+      })
+
+      const statusAtUnmount = result.current.status
+      const mtimeAtUnmount = result.current.lastEventMtime
+
+      // Fire callbacks that would normally mutate status and lastEventMtime
+      await act(async () => {
+        if (es.onopen) es.onopen(new Event('open'))
+        es.simulateEvent('tasks-changed', JSON.stringify({ mtime: 9_999 }))
+        vi.advanceTimersByTime(50_000)
+      })
+
+      // result.current must be identical to values at unmount time
+      expect(result.current.status).toBe(statusAtUnmount)
+      expect(result.current.lastEventMtime).toBe(mtimeAtUnmount)
     })
   })
 
@@ -562,6 +653,66 @@ describe('TestFromAC_UseEventSource', () => {
 
       // lastEventMtime must remain null — stale source cannot repopulate state after disable
       expect(result.current.lastEventMtime).toBeNull()
+    })
+
+    it('disabling while stall timer is pending clears the timer — no retry EventSource created', async () => {
+      // AC7 "clears all timers" proof for active stall timer:
+      // if clearStallTimer() is removed from the disabled path, the stall timer would fire
+      // after disable, transitioning to 'closed' again and scheduling a retry, creating
+      // a spurious new EventSource despite the hook being disabled.
+      let enabled = true
+      const { rerender } = renderHook(() =>
+        useEventSource('/api/events', { enabled }),
+      )
+      const es = MockEventSource.instances[0]
+
+      // Start 15s stall timer
+      await act(async () => {
+        es.simulateStallError()
+      })
+
+      // Disable before stall fires
+      enabled = false
+      await act(async () => {
+        rerender()
+      })
+
+      // Advance past stall (15s) + retry (30s) windows
+      await act(async () => {
+        vi.advanceTimersByTime(50_000)
+      })
+
+      // Stall timer cleared → did not fire → no retry → no new EventSource
+      expect(MockEventSource.instances).toHaveLength(1)
+    })
+
+    it('disabling while retry timer is pending clears the timer — no new EventSource after disable', async () => {
+      // AC7 "clears all timers" proof for active retry timer:
+      // if clearRetryTimer() is removed from the disabled path, the retry would fire
+      // after disable and create a new EventSource despite the hook being disabled.
+      let enabled = true
+      const { rerender } = renderHook(() =>
+        useEventSource('/api/events', { enabled }),
+      )
+
+      // Fatal error → enter 'closed' → retry timer starts
+      await act(async () => {
+        MockEventSource.instances[0].simulateFatalError()
+      })
+
+      // Disable before 30s retry fires
+      enabled = false
+      await act(async () => {
+        rerender()
+      })
+
+      // Advance past the 30s retry window
+      await act(async () => {
+        vi.advanceTimersByTime(35_000)
+      })
+
+      // Retry timer cleared — no new EventSource created
+      expect(MockEventSource.instances).toHaveLength(1)
     })
   })
 })
