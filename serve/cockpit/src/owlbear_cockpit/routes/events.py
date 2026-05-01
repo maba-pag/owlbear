@@ -44,7 +44,7 @@ async def events(request: Request, engine: _Engine) -> EventSourceResponse:
                 break
 
             if not changes:
-                break
+                continue
 
             latest_mtime: int | None = None
             for _change, changed_path in changes:
