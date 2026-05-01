@@ -75,9 +75,11 @@ jobs:
 
       - name: Capture dev metadata
         run: |
-          echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
-          echo "FULL_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "DATE=$(date -u +"%Y-%m-%d")" >> "$GITHUB_ENV"
+          {
+            echo "SHORT_SHA=$(git rev-parse --short HEAD)"
+            echo "FULL_SHA=$(git rev-parse HEAD)"
+            echo "DATE=$(date -u +"%Y-%m-%d")"
+          } >> "$GITHUB_ENV"
 
       - name: Validate selected paths exist on dev
         env:
