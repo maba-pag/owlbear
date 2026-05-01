@@ -15,8 +15,7 @@ AC coverage:
   AC9:  archival_refs contains task's own ID (self-reference) → ERR_ARCHIVAL_REF_SELF (422)
   AC10: archival_refs creates a dependency cycle → ERR_ARCHIVAL_REF_CYCLE (422)
   AC11: Valid archival (completed, done, empty refs) succeeds and persists both
-        fields — SKIPPED: engine pass-through already satisfies this; the test
-        passes at RED so no RED test is possible per w-tdd-red §5.
+        fields — test added in retry cycle per reviewer AC11 gap.
 """
 
 from __future__ import annotations
@@ -348,3 +347,31 @@ class TestFromAC_CockpitViewArchivalValidation:
                 archival_refs=[2],
             )
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_CYCLE"
+
+    # -- AC11: valid archival persists archival_reason and archival_refs --
+
+    def test_valid_archival_persists_reason_and_refs(
+        self, view: CockpitView, engine: KanbanEngine
+    ) -> None:
+        """AC11: move_task on a done task with status='archived',
+        reason='completed', and archival_refs=[] succeeds and persists both
+        fields on the returned response and on a fresh reload.
+
+        Task 1 is seeded at 'done'. reason='completed' requires no refs and
+        the task is already at terminal status, so all validation rules pass.
+        """
+        updated = _get_updated(engine, 1)
+        response = view.move_task(
+            1,
+            "archived",
+            expected_updated=updated,
+            archival_reason="completed",
+            archival_refs=[],
+        )
+        assert response.archival_reason == "completed"
+        assert response.archival_refs == []
+
+        # Verify persistence: reload from disk via engine.
+        reloaded = engine.show_task("1")
+        assert reloaded.archival_reason == "completed"
+        assert reloaded.archival_refs == []
