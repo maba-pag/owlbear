@@ -1,4 +1,5 @@
 import '@porsche-design-system/components-react/jsdom-polyfill'
+import '@testing-library/jest-dom/vitest'
 import { skipPorscheDesignSystemCDNRequestsDuringTests } from '@porsche-design-system/components-react'
 import { vi } from 'vitest'
 
