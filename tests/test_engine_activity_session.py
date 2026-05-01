@@ -183,7 +183,9 @@ class TestFromAC_SessionAgentField:
 
         # Verify the claim event detail IS the agent name (AC-C42)
         events = _read_activity(board)
-        claim_events = [e for e in events if e.get("action") == "claim" and e.get("task_id") == 1]
+        claim_events = [
+            e for e in events if e.get("action") == "claim" and e.get("task_id") == 1
+        ]
         assert claim_events, "Expected a claim event for task 1"
         assert claim_events[-1].get("detail") == expected_agent, (
             f"claim event detail must equal engine agent_name {expected_agent!r}; "
@@ -210,7 +212,9 @@ class TestFromAC_SessionAgentField:
         """
         engine.claim_task("1")
         events = _read_activity(board)
-        claim_events = [e for e in events if e.get("action") == "claim" and e.get("task_id") == 1]
+        claim_events = [
+            e for e in events if e.get("action") == "claim" and e.get("task_id") == 1
+        ]
         assert claim_events, "Expected a claim event for task 1"
         # Engine-emitted events must NOT have an 'actor' field
         assert "actor" not in claim_events[-1], (
@@ -238,7 +242,9 @@ class TestFromAC_SessionAgentField:
         """Blocked session (end_work outcome=block) exposes the correct agent name."""
         expected_agent = engine.agent_name
         engine.claim_task("1")
-        engine.end_work("1", note="blocked", outcome="block", block_reason="dep missing")
+        engine.end_work(
+            "1", note="blocked", outcome="block", block_reason="dep missing"
+        )
         sessions = engine.list_sessions(filter="blocked-or-rejected")
         task_sessions = [s for s in sessions if s.task_id == 1]
         assert task_sessions, "Expected blocked session for task 1"
@@ -392,5 +398,7 @@ class TestFromAC_WorkSessionExport:
         sessions = engine.list_sessions(filter="active")
         assert sessions, "Expected at least one active session"
         for s in sessions:
-            assert hasattr(s, "agent"), "Every session in active filter must have agent field"
+            assert hasattr(s, "agent"), (
+                "Every session in active filter must have agent field"
+            )
             assert s.agent is not None, "Running session agent must not be None"  # type: ignore[attr-defined]

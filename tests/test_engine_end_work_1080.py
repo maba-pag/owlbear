@@ -190,10 +190,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError, match="disk full"),
+        ):
             view.end_work(1, outcome="success", note="Done.")
 
     def test_success_from_terminal_move_failure_no_archive_file(
@@ -209,10 +212,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(1, outcome="success", note="Done.")
 
         assert not any((kanban_dir / "archive").glob("1-*.md")), (
@@ -231,10 +237,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(1, outcome="success", note="Done.")
 
         fresh = KanbanEngine(kanban_dir, activity_log=False)
@@ -255,10 +264,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(1, outcome="success", note="Done.")
 
         fresh = KanbanEngine(kanban_dir, activity_log=False)
@@ -278,17 +290,28 @@ class TestFromAC_EndWorkArchiveRollback:
         """
         original_body = "Original body before end_work."
         view, kanban_dir = _make_view(tmp_path)
-        _write_task(kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS, body=original_body)
+        _write_task(
+            kanban_dir, status="done", claimed_at=_LIVE_CLAIM_TS, body=original_body
+        )
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
-            view.end_work(1, outcome="success", note="Prepended note that must be gone.")
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
+            view.end_work(
+                1, outcome="success", note="Prepended note that must be gone."
+            )
 
         fresh = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh.show_task("1")
-        body_text = restored.body if isinstance(restored.body, str) else "\n".join(restored.body or [])
+        body_text = (
+            restored.body
+            if isinstance(restored.body, str)
+            else "\n".join(restored.body or [])
+        )
         assert "Prepended note that must be gone." not in body_text, (
             "note must NOT be present in restored body after _move_file OSError rollback"
         )
@@ -306,10 +329,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError, match="disk full"):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError, match="disk full"),
+        ):
             view.end_work(
                 1,
                 outcome="reject",
@@ -328,10 +354,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(
                 1,
                 outcome="reject",
@@ -355,10 +384,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(
                 1,
                 outcome="reject",
@@ -385,10 +417,13 @@ class TestFromAC_EndWorkArchiveRollback:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(
                 1,
                 outcome="reject",
@@ -422,10 +457,13 @@ class TestFromAC_EndWorkArchiveRollback:
             body=original_body,
         )
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(
                 1,
                 outcome="reject",
@@ -466,10 +504,13 @@ class TestFromAC_EndWorkArchiveRollback:
             archival_reason="null",
         )
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(
                 1,
                 outcome="reject",
@@ -501,14 +542,23 @@ class TestFromAC_EndWorkArchiveRollback:
         """
         view, kanban_dir = _make_view(tmp_path)
         # Task 1: target (to be rejected to archived)
-        _write_task(kanban_dir, task_id=1, status="in-progress", claimed_at=_LIVE_CLAIM_TS, archival_refs="[]")
+        _write_task(
+            kanban_dir,
+            task_id=1,
+            status="in-progress",
+            claimed_at=_LIVE_CLAIM_TS,
+            archival_refs="[]",
+        )
         # Task 2: the duplicate reference required by archival_reason='duplicate'
         _write_task(kanban_dir, task_id=2, status="done", archival_refs="[]")
 
-        with patch(
-            "owlbear_kanban.engine._move_file",
-            side_effect=OSError("disk full"),
-        ), pytest.raises(OSError):
+        with (
+            patch(
+                "owlbear_kanban.engine._move_file",
+                side_effect=OSError("disk full"),
+            ),
+            pytest.raises(OSError),
+        ):
             view.end_work(
                 1,
                 outcome="reject",
@@ -649,9 +699,7 @@ class TestFromAC_GuidanceExact:
             f" got {result.guidance!r}"
         )
 
-    def test_reject_adjacent_move_guidance_is_empty(
-        self, tmp_path: Path
-    ) -> None:
+    def test_reject_adjacent_move_guidance_is_empty(self, tmp_path: Path) -> None:
         """reject from 'in-progress' (idx=3) to 'todo' (idx=2) → guidance == [] (no skip-warning).
 
         delta=1 → no warning; delta must be strictly > 1 to emit a warning.

@@ -138,9 +138,7 @@ class TestDenySrcWrites:
         }
         assert _is_allowed(_invoke(deny_src_module, payload))
 
-    def test_allows_dunder_tests_file(
-        self, deny_src_module: types.ModuleType
-    ) -> None:
+    def test_allows_dunder_tests_file(self, deny_src_module: types.ModuleType) -> None:
         payload = {
             "tool_name": "create_file",
             "tool_input": {

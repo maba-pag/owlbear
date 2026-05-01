@@ -15,7 +15,12 @@ from owlbear_cockpit.models import (
 from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.errors import NotFoundError
-from owlbear_kanban.models import ActivityEvent, ListTasksResponse, SessionRecord, ShowTaskResponse
+from owlbear_kanban.models import (
+    ActivityEvent,
+    ListTasksResponse,
+    SessionRecord,
+    ShowTaskResponse,
+)
 
 router = APIRouter()
 

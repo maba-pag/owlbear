@@ -134,7 +134,9 @@ class TestFromAC_CockpitViewArchivalValidation:
         """
         updated = _get_updated(engine, 1)
         with pytest.raises(ValidationError) as exc_info:
-            view.move_task(1, "archived", expected_updated=updated, archival_reason=None)
+            view.move_task(
+                1, "archived", expected_updated=updated, archival_reason=None
+            )
         assert exc_info.value.code == "ERR_ARCHIVAL_REASON_REQUIRED"
 
     # -- AC2-AC4: refs forbidden for completed / dropped / wontfix --

@@ -259,7 +259,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
         av = engine.agent_view()
 
         # Swap to a config with no agent_map entries; refresh skips __init__ validation
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         # RED: pick_tasks currently returns PickTasksResponse(waves=[]) without raising
@@ -274,7 +276,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
         engine = KanbanEngine(kanban_dir)
         av = engine.agent_view()
 
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         # RED: pick_tasks currently does not check agent_map completeness
@@ -287,7 +291,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
         engine = KanbanEngine(kanban_dir)
         av = engine.agent_view()
 
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         # RED: no ConfigError raised → exc_info assertion never reached
@@ -304,7 +310,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
         av = engine.agent_view()
 
         # Partial config: research + backlog only; todo/in-progress/review/done absent
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         # RED: no ConfigError raised → assertion never reached
@@ -312,9 +320,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
             av.pick_tasks()
         msg = exc_info.value.user_message
         # Message must mention at least one missing status by name
-        assert any(s in msg for s in ("todo", "in-progress", "review", "done", "missing")), (
-            f"Error message must name missing statuses; got: {msg!r}"
-        )
+        assert any(
+            s in msg for s in ("todo", "in-progress", "review", "done", "missing")
+        ), f"Error message must name missing statuses; got: {msg!r}"
 
     def test_pick_tasks_validates_before_filtering_with_tasks_present(
         self, tmp_path: Path
@@ -329,7 +337,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
         _write_task(kanban_dir, task_id=1, status="todo")
         av = engine.agent_view()
 
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         # RED: pick_tasks currently returns the task instead of raising
@@ -348,7 +358,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
         engine = KanbanEngine(kanban_dir)
         av = engine.agent_view()
 
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         list_tasks_calls: list[tuple] = []
@@ -384,7 +396,9 @@ class TestFromAC_PickTasksValidatesAgentMap:
         engine = KanbanEngine(kanban_dir)
         av = engine.agent_view()
 
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         mock_decisions = MagicMock()
@@ -480,7 +494,9 @@ class TestFromAC_McpPickTasksRaisesForIncompleteAgentMap:
         engine = KanbanEngine(kanban_dir)
 
         # Reload with incomplete agent_map
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_EMPTY_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
@@ -504,7 +520,9 @@ class TestFromAC_McpPickTasksRaisesForIncompleteAgentMap:
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_COMPLETE)
         engine = KanbanEngine(kanban_dir)
 
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)
@@ -516,7 +534,9 @@ class TestFromAC_McpPickTasksRaisesForIncompleteAgentMap:
         with pytest.raises(ToolError) as exc_info:
             await pick_tasks(ctx)
         error_text = str(exc_info.value)
-        assert any(s in error_text for s in ("missing", "agent_map", "todo", "in-progress")), (
+        assert any(
+            s in error_text for s in ("missing", "agent_map", "todo", "in-progress")
+        ), (
             f"ToolError message must reference missing agent_map entries; got: {error_text!r}"
         )
 
@@ -536,7 +556,9 @@ class TestFromAC_McpPickTasksRaisesForIncompleteAgentMap:
         kanban_dir = _make_board(tmp_path, _BASE_CONFIG_COMPLETE)
         engine = KanbanEngine(kanban_dir)
 
-        (kanban_dir / "config.yml").write_text(_BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8")
+        (kanban_dir / "config.yml").write_text(
+            _BASE_CONFIG_PARTIAL_AGENT_MAP, encoding="utf-8"
+        )
         engine.refresh_config()
 
         app_ctx = AppContext(engine=engine, kanban_dir=kanban_dir)

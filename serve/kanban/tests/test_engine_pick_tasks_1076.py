@@ -221,8 +221,12 @@ class TestFromAC_PickTasksAgeSortPrecedence:
         the secondary sort falls through to task.id ASC, yielding [3, 5].
         """
         board = _make_board(tmp_path)
-        _write_task(board, task_id=5, priority="critical", created='"2026-01-01T00:00:00+00:00"')
-        _write_task(board, task_id=3, priority="critical", created='"2026-03-01T00:00:00+00:00"')
+        _write_task(
+            board, task_id=5, priority="critical", created='"2026-01-01T00:00:00+00:00"'
+        )
+        _write_task(
+            board, task_id=3, priority="critical", created='"2026-03-01T00:00:00+00:00"'
+        )
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=2, max_waves=1)
         ordered = _ordered_ids(resp)
@@ -251,9 +255,15 @@ class TestFromAC_PickTasksAgeSortPrecedence:
         of the required [9, 6, 3].
         """
         board = _make_board(tmp_path)
-        _write_task(board, task_id=9, priority="needed", created='"2026-01-01T00:00:00+00:00"')
-        _write_task(board, task_id=6, priority="needed", created='"2026-02-01T00:00:00+00:00"')
-        _write_task(board, task_id=3, priority="needed", created='"2026-03-01T00:00:00+00:00"')
+        _write_task(
+            board, task_id=9, priority="needed", created='"2026-01-01T00:00:00+00:00"'
+        )
+        _write_task(
+            board, task_id=6, priority="needed", created='"2026-02-01T00:00:00+00:00"'
+        )
+        _write_task(
+            board, task_id=3, priority="needed", created='"2026-03-01T00:00:00+00:00"'
+        )
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=3, max_waves=1)
         ordered = _ordered_ids(resp)
@@ -288,10 +298,21 @@ class TestFromAC_PickTasksAgeSortPrecedence:
         full list by id would still fail this assertion.
         """
         board = _make_board(tmp_path)
-        _write_task(board, task_id=10, priority="critical", created='"2026-01-01T00:00:00+00:00"')
-        _write_task(board, task_id=5, priority="critical", created='"2026-03-01T00:00:00+00:00"')
-        _write_task(board, task_id=8, priority="someday", created='"2026-01-01T00:00:00+00:00"')
-        _write_task(board, task_id=2, priority="someday", created='"2026-03-01T00:00:00+00:00"')
+        _write_task(
+            board,
+            task_id=10,
+            priority="critical",
+            created='"2026-01-01T00:00:00+00:00"',
+        )
+        _write_task(
+            board, task_id=5, priority="critical", created='"2026-03-01T00:00:00+00:00"'
+        )
+        _write_task(
+            board, task_id=8, priority="someday", created='"2026-01-01T00:00:00+00:00"'
+        )
+        _write_task(
+            board, task_id=2, priority="someday", created='"2026-03-01T00:00:00+00:00"'
+        )
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks(wave_size=4, max_waves=1)
         ordered = _ordered_ids(resp)
@@ -389,4 +410,3 @@ class TestFromAC_PickTasksArchivedInTasksDir:
         assert 3 in all_dispatched, (
             f"Someday-priority active task (id=3) must be dispatched; got {all_dispatched}"
         )
-

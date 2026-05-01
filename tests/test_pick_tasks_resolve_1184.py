@@ -127,7 +127,9 @@ def _all_ids(resp: PickTasksResponse) -> set[int]:
 def _stub_decisions(return_value: list | None = None) -> MagicMock:
     """Return a MagicMock suitable for injection as owlbear_kanban.decisions."""
     mock = MagicMock()
-    mock.resolve_pending_drs.return_value = return_value if return_value is not None else []
+    mock.resolve_pending_drs.return_value = (
+        return_value if return_value is not None else []
+    )
     return mock
 
 
@@ -169,7 +171,9 @@ class TestFromAC_PickTasksResolveIntegration:
         assertion also confirms the exception path was exercised, not skipped.
         """
         decisions_mock = MagicMock()
-        decisions_mock.resolve_pending_drs.side_effect = RuntimeError("DR resolve failed")
+        decisions_mock.resolve_pending_drs.side_effect = RuntimeError(
+            "DR resolve failed"
+        )
         monkeypatch.setitem(sys.modules, "owlbear_kanban.decisions", decisions_mock)
 
         board = _make_board(tmp_path)
@@ -237,7 +241,9 @@ class TestFromAC_PickTasksResolveIntegration:
         resp = engine.agent_view().pick_tasks()
 
         assert isinstance(resp, PickTasksResponse)
-        assert 1 in _all_ids(resp), "Task 1 must be dispatched when DRs return empty list"
+        assert 1 in _all_ids(resp), (
+            "Task 1 must be dispatched when DRs return empty list"
+        )
         decisions_mock.resolve_pending_drs.assert_called_once()
 
     def test_no_decisions_directory_pick_tasks_works(
@@ -262,5 +268,7 @@ class TestFromAC_PickTasksResolveIntegration:
         resp = engine.agent_view().pick_tasks()
 
         assert isinstance(resp, PickTasksResponse)
-        assert 1 in _all_ids(resp), "Task 1 must be dispatched when decisions/ dir is absent"
+        assert 1 in _all_ids(resp), (
+            "Task 1 must be dispatched when decisions/ dir is absent"
+        )
         decisions_mock.resolve_pending_drs.assert_called_once()

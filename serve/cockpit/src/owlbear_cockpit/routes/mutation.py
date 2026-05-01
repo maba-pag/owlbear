@@ -10,8 +10,17 @@ from pydantic import BaseModel, ConfigDict, Field
 from owlbear_cockpit import adapter
 from owlbear_cockpit.deps import get_view
 from owlbear_cockpit.view import CockpitView
-from owlbear_kanban.errors import ConcurrencyError, ConfigError, NotFoundError, ValidationError
-from owlbear_kanban.models import ActivityCompactionResult, RepairOutcome, SingleTaskResponse
+from owlbear_kanban.errors import (
+    ConcurrencyError,
+    ConfigError,
+    NotFoundError,
+    ValidationError,
+)
+from owlbear_kanban.models import (
+    ActivityCompactionResult,
+    RepairOutcome,
+    SingleTaskResponse,
+)
 
 router = APIRouter()
 
@@ -107,7 +116,11 @@ def _serialize_scan_item(item: Any) -> dict[str, Any]:  # noqa: ANN401
         path = getattr(item, "path", None)
         file_path = str(path) if path is not None else None
 
-    detail = getattr(item, "detail", None) or getattr(item, "user_message", None) or str(item)
+    detail = (
+        getattr(item, "detail", None)
+        or getattr(item, "user_message", None)
+        or str(item)
+    )
 
     return {
         "code": getattr(item, "code", None),
@@ -296,7 +309,9 @@ def edit_task(task_id: int, req: EditRequest, view: _View) -> SingleTaskResponse
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.user_message) from exc
     except ConfigError:
-        raise HTTPException(status_code=500, detail="Invalid board configuration") from None
+        raise HTTPException(
+            status_code=500, detail="Invalid board configuration"
+        ) from None
     return _task_to_single(updated_task)
 
 

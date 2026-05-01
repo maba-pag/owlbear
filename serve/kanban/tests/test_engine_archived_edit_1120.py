@@ -362,9 +362,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-5: file stays in archive/, no duplicate in tasks/
     # ------------------------------------------------------------------
 
-    def test_edit_archived_file_stays_in_archive_dir(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_archived_file_stays_in_archive_dir(self, tmp_path: Path) -> None:
         """AC-5: after a successful edit the task file still exists in archive/."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
@@ -405,9 +403,7 @@ class TestFromAC_ArchivedTaskEditPersistence:
     # AC-6: updated timestamp advances
     # ------------------------------------------------------------------
 
-    def test_edit_archived_updated_timestamp_advances(
-        self, tmp_path: Path
-    ) -> None:
+    def test_edit_archived_updated_timestamp_advances(self, tmp_path: Path) -> None:
         """AC-6: successful edit of an archived task advances the 'updated' timestamp.
 
         The initial timestamp is '2026-01-01T10:00:00+00:00'; any successful edit must advance it.
@@ -672,9 +668,7 @@ class TestFromAC_StorageCoveragePaths:
     # validate_path_containment (lines 119-120, 126-127, 131-133)
     # ------------------------------------------------------------------
 
-    def test_validate_path_containment_null_byte_raises(
-        self, tmp_path: Path
-    ) -> None:
+    def test_validate_path_containment_null_byte_raises(self, tmp_path: Path) -> None:
         """Lines 119-120: path string contains null byte → ValueError.
 
         Uses a minimal path-like object so Path construction issues on
@@ -782,9 +776,7 @@ class TestFromAC_StorageCoveragePaths:
             read_task(task_file)
         assert exc_info.value.code == "ERR_CORRUPT_DELIMITERS"
 
-    def test_read_task_yaml_parse_error_raises_corruption(
-        self, tmp_path: Path
-    ) -> None:
+    def test_read_task_yaml_parse_error_raises_corruption(self, tmp_path: Path) -> None:
         """Lines 316-321: yaml.YAMLError → ERR_CORRUPT_YAML_PARSE."""
         task_file = tmp_path / "1-badyaml.md"
         # Unclosed YAML flow sequence → YAML parse error.
@@ -944,9 +936,7 @@ class TestFromAC_StorageCoveragePaths:
     ) -> None:
         """Lines 436-439: no file found for id → FileNotFoundError."""
         kanban_dir = _make_board(tmp_path)
-        task = Task.model_validate(
-            {**_TASK_DICT, "id": 99, "title": "Absent Task"}
-        )
+        task = Task.model_validate({**_TASK_DICT, "id": 99, "title": "Absent Task"})
         with pytest.raises(FileNotFoundError):
             write_task_if_unchanged(task, "2026-01-01T10:00:00+00:00", kanban_dir)
 
@@ -954,16 +944,12 @@ class TestFromAC_StorageCoveragePaths:
     # list_task_files (lines 461-465)
     # ------------------------------------------------------------------
 
-    def test_list_task_files_empty_dir_returns_empty_list(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_task_files_empty_dir_returns_empty_list(self, tmp_path: Path) -> None:
         """Lines 461-465: no files in tasks/ → []."""
         kanban_dir = _make_board(tmp_path)
         assert list_task_files(kanban_dir) == []
 
-    def test_list_task_files_returns_sorted_md_files(
-        self, tmp_path: Path
-    ) -> None:
+    def test_list_task_files_returns_sorted_md_files(self, tmp_path: Path) -> None:
         """list_task_files returns sorted .md files from tasks/."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, subdir="tasks")
@@ -1014,9 +1000,7 @@ class TestFromAC_StorageCoveragePaths:
         assert dest.parent == kanban_dir / "archive"
         assert not (kanban_dir / "tasks" / "1-task.md").exists()
 
-    def test_move_to_archive_raises_when_file_not_found(
-        self, tmp_path: Path
-    ) -> None:
+    def test_move_to_archive_raises_when_file_not_found(self, tmp_path: Path) -> None:
         """move_to_archive raises FileNotFoundError when no file exists for id."""
         kanban_dir = _make_board(tmp_path)
         with pytest.raises(FileNotFoundError):
@@ -1070,7 +1054,9 @@ class TestFromAC_StorageCoveragePaths:
         """AC-2: write_task without target_dir → parent dir is exactly tasks/, not just a dir
         containing 'tasks' in its name."""
         kanban_dir = _make_board(tmp_path)
-        task = Task.model_validate({**_TASK_DICT, "id": 55, "title": "Canonical Dir Test"})
+        task = Task.model_validate(
+            {**_TASK_DICT, "id": 55, "title": "Canonical Dir Test"}
+        )
         path = write_task(task, kanban_dir)
         assert path.parent == kanban_dir / "tasks"
 
@@ -1085,8 +1071,9 @@ class TestFromAC_StorageCoveragePaths:
         new file created in target_dir, not in tasks/."""
         kanban_dir = _make_board(tmp_path)
         archive_dir = kanban_dir / "archive"
-        task = Task.model_validate({**_TASK_DICT, "id": 77, "title": "Explicit Target Dir"})
+        task = Task.model_validate(
+            {**_TASK_DICT, "id": 77, "title": "Explicit Target Dir"}
+        )
         path = write_task(task, kanban_dir, target_dir=archive_dir)
         assert path.parent == archive_dir
         assert not (kanban_dir / "tasks" / path.name).exists()
-

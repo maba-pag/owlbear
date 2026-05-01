@@ -192,7 +192,12 @@ class TestFromAC_FailOutcome:
         before the note-append path is reached.
         """
         view, kanban_dir = _make_view(tmp_path)
-        _write_task(kanban_dir, status="in-progress", body="Original body.", claimed_at=_LIVE_CLAIM_TS)
+        _write_task(
+            kanban_dir,
+            status="in-progress",
+            body="Original body.",
+            claimed_at=_LIVE_CLAIM_TS,
+        )
 
         note_text = "Fail — approach needs rethink."
         result = view.end_work(1, outcome="fail", note=note_text)
@@ -265,13 +270,17 @@ class TestFromAC_FailOutcome:
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
         with pytest.raises(ValidationError) as exc_info:
-            view.end_work(1, outcome="fail", note="Fail.", block_reason="Blocked reason")
+            view.end_work(
+                1, outcome="fail", note="Fail.", block_reason="Blocked reason"
+            )
 
         assert exc_info.value.code == "ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK", (
             f"Expected ERR_BLOCK_REASON_FORBIDDEN_ON_NON_BLOCK; got {exc_info.value.code!r}"
         )
 
-    def test_fail_outcome_archival_reason_raises_forbidden(self, tmp_path: Path) -> None:
+    def test_fail_outcome_archival_reason_raises_forbidden(
+        self, tmp_path: Path
+    ) -> None:
         """AC3: fail + archival_reason raises ERR_ARCHIVAL_FIELDS_FORBIDDEN_ON_FAIL.
 
         FAIL reason: AgentView.end_work raises ERR_INVALID_OUTCOME for 'fail'
@@ -324,7 +333,6 @@ class TestFromAC_EndWorkParamsFail:
         assert p.outcome == "fail"
 
 
-
 # ---------------------------------------------------------------------------
 # TestFromAC_SkillDocReleaseRow — AC5
 # ---------------------------------------------------------------------------
@@ -334,11 +342,7 @@ class TestFromAC_SkillDocReleaseRow:
     """h-mcp-kanban SKILL.md outcome table includes 'release' row — AC5."""
 
     _SKILL_PATH = (
-        Path(__file__).parent.parent
-        / "share"
-        / "skills"
-        / "h-mcp-kanban"
-        / "SKILL.md"
+        Path(__file__).parent.parent / "share" / "skills" / "h-mcp-kanban" / "SKILL.md"
     )
 
     def test_skill_doc_outcome_table_has_release_row(self) -> None:
@@ -369,7 +373,11 @@ class TestFromAC_SkillDocReleaseRow:
             if (
                 "release" in line.lower()
                 and line.strip().startswith("|")
-                and ("idempotent" in line.lower() or "release claim" in line.lower() or "unclaimed" in line.lower())
+                and (
+                    "idempotent" in line.lower()
+                    or "release claim" in line.lower()
+                    or "unclaimed" in line.lower()
+                )
             ):
                 return  # found matching row
         pytest.fail(
@@ -391,9 +399,7 @@ class TestFromAC_SkillDocReleaseRow:
         has a trailing period — builder must remove it so the cell text exactly
         matches the AC5 string without trailing punctuation.
         """
-        expected = (
-            "Release claim, no status change (note appended if provided; no-op when unclaimed)"
-        )
+        expected = "Release claim, no status change (note appended if provided; no-op when unclaimed)"
         content = self._SKILL_PATH.read_text(encoding="utf-8")
         release_cell: str | None = None
         for line in content.splitlines():
@@ -422,7 +428,9 @@ class TestFromAC_SkillDocReleaseRow:
 class TestFromAC_FailOutcomeCASRecovery:
     """AgentView.end_work(outcome='fail') CAS stale-recovery branch — AC6."""
 
-    def test_fail_outcome_stale_unclaimed_raises_not_claimed(self, tmp_path: Path) -> None:
+    def test_fail_outcome_stale_unclaimed_raises_not_claimed(
+        self, tmp_path: Path
+    ) -> None:
         """AC6(a): ERR_STALE + concurrent release → ValidationError(ERR_NOT_CLAIMED).
 
         Simulation: patch write_task_if_unchanged to release the claim (write
@@ -435,7 +443,9 @@ class TestFromAC_FailOutcomeCASRecovery:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
-        def stale_then_unclaim(_task: object, _expected_updated: str, kdir: Path) -> Path:
+        def stale_then_unclaim(
+            _task: object, _expected_updated: str, kdir: Path
+        ) -> Path:
             # Simulate: concurrent agent releases the claim before our CAS write.
             task_path = next((kdir / "tasks").glob("1-*.md"))
             from owlbear_kanban.storage import read_task as _read, write_task as _write  # noqa: PLC0415
@@ -449,7 +459,10 @@ class TestFromAC_FailOutcomeCASRecovery:
             )
 
         with (
-            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_then_unclaim),
+            patch(
+                "owlbear_kanban.storage.write_task_if_unchanged",
+                side_effect=stale_then_unclaim,
+            ),
             pytest.raises(ValidationError) as exc_info,
         ):
             view.end_work(1, outcome="fail", note="Fail note.")
@@ -459,7 +472,9 @@ class TestFromAC_FailOutcomeCASRecovery:
             f"got {exc_info.value.code!r}"
         )
 
-    def test_fail_outcome_stale_still_claimed_raises_stale(self, tmp_path: Path) -> None:
+    def test_fail_outcome_stale_still_claimed_raises_stale(
+        self, tmp_path: Path
+    ) -> None:
         """AC6(b): ERR_STALE + task still claimed → ConcurrencyError(ERR_STALE).
 
         Simulation: patch write_task_if_unchanged to raise ConcurrencyError(ERR_STALE)
@@ -471,7 +486,9 @@ class TestFromAC_FailOutcomeCASRecovery:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, status="in-progress", claimed_at=_LIVE_CLAIM_TS)
 
-        def stale_keep_claimed(_task: object, _expected_updated: str, _kdir: Path) -> Path:
+        def stale_keep_claimed(
+            _task: object, _expected_updated: str, _kdir: Path
+        ) -> Path:
             # Simulate: concurrent modification without releasing the claim.
             raise ConcurrencyError(
                 code="ERR_STALE",
@@ -479,7 +496,10 @@ class TestFromAC_FailOutcomeCASRecovery:
             )
 
         with (
-            patch("owlbear_kanban.storage.write_task_if_unchanged", side_effect=stale_keep_claimed),
+            patch(
+                "owlbear_kanban.storage.write_task_if_unchanged",
+                side_effect=stale_keep_claimed,
+            ),
             pytest.raises(ConcurrencyError) as exc_info,
         ):
             view.end_work(1, outcome="fail", note="Fail note.")
@@ -488,6 +508,8 @@ class TestFromAC_FailOutcomeCASRecovery:
             f"Expected ERR_STALE when stale write finds still-claimed task; "
             f"got {exc_info.value.code!r}"
         )
-        assert "changed concurrently; reload and retry" in exc_info.value.user_message, (
+        assert (
+            "changed concurrently; reload and retry" in exc_info.value.user_message
+        ), (
             f"Expected retry-guidance in user_message; got {exc_info.value.user_message!r}"
         )

@@ -174,12 +174,14 @@ class TestFromAC_ListTasksParentFilter:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(parent=10)
         ids = [t.id for t in resp.tasks]
-        assert 2 not in ids, "Task without parent must not appear in list_tasks(parent=10)"
-        assert 3 not in ids, "Task with different parent must not appear in list_tasks(parent=10)"
+        assert 2 not in ids, (
+            "Task without parent must not appear in list_tasks(parent=10)"
+        )
+        assert 3 not in ids, (
+            "Task with different parent must not appear in list_tasks(parent=10)"
+        )
 
-    def test_parent_filter_excludes_tasks_with_no_parent(
-        self, tmp_path: Path
-    ) -> None:
+    def test_parent_filter_excludes_tasks_with_no_parent(self, tmp_path: Path) -> None:
         """AC-par-none: list_tasks(parent=5) excludes top-level (parent=null) tasks."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="TopLevel", parent="null")
@@ -187,7 +189,9 @@ class TestFromAC_ListTasksParentFilter:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(parent=5)
         ids = [t.id for t in resp.tasks]
-        assert 1 not in ids, "Top-level task must not appear when parent filter is active"
+        assert 1 not in ids, (
+            "Top-level task must not appear when parent filter is active"
+        )
         assert 2 in ids
 
     def test_parent_filter_returns_empty_when_no_match(self, tmp_path: Path) -> None:
@@ -208,7 +212,9 @@ class TestFromAC_ListTasksParentFilter:
         view = _make_agent_view(kanban_dir)
         resp = view.list_tasks(parent=1)
         assert isinstance(resp, ListTasksResponse)
-        assert hasattr(resp, "guidance"), "ListTasksResponse must carry guidance field (D39)"
+        assert hasattr(resp, "guidance"), (
+            "ListTasksResponse must carry guidance field (D39)"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +381,9 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
             f"sort='title' must produce alphabetical title order [2, 3, 1]; got {ids}"
         )
 
-    def test_sort_id_with_reverse_returns_descending_order(self, tmp_path: Path) -> None:
+    def test_sort_id_with_reverse_returns_descending_order(
+        self, tmp_path: Path
+    ) -> None:
         """reverse=True inverts sort='id' to produce descending ID order through AgentView."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="One")

@@ -173,9 +173,7 @@ _ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 class TestFromAC_TasksEndpointIncludesUpdated:
     """AC2: GET /api/tasks must return ``updated`` (ISO string) for every task."""
 
-    def test_get_tasks_each_task_has_updated_key(
-        self, client: TestClient
-    ) -> None:
+    def test_get_tasks_each_task_has_updated_key(self, client: TestClient) -> None:
         """Happy path: every task in the response carries an 'updated' key."""
         response = client.get("/api/tasks")
         assert response.status_code == 200
@@ -200,9 +198,7 @@ class TestFromAC_TasksEndpointIncludesUpdated:
         response = client.get("/api/tasks")
         assert response.status_code == 200
         for task in response.json()["tasks"]:
-            assert task.get("updated"), (
-                f"Task 'updated' is empty or missing: {task}"
-            )
+            assert task.get("updated"), f"Task 'updated' is empty or missing: {task}"
 
     def test_get_tasks_updated_matches_iso_timestamp_pattern(
         self, client: TestClient
@@ -279,7 +275,9 @@ class TestFromAC_FrontendOCCContract:
         """AC4 tightened: JSON.stringify in KanbanBoard.tsx must include 'updated' in object literal."""
         content = (_SRC / "KanbanBoard.tsx").read_text(encoding="utf-8")
         # Regex specifically matches JSON.stringify({...updated...}) — not just nearby text
-        pattern = re.compile(r"JSON\.stringify\(\s*\{[^}]*\bupdated\b[^}]*\}", re.DOTALL)
+        pattern = re.compile(
+            r"JSON\.stringify\(\s*\{[^}]*\bupdated\b[^}]*\}", re.DOTALL
+        )
         assert pattern.search(content) is not None, (
             "KanbanBoard.tsx: no JSON.stringify call includes 'updated' in its object "
             "literal — AC4 not satisfied (updated may appear in function signature "
@@ -390,7 +388,9 @@ class TestFromAC_MCPFixtureRemediation:
 
     def test_mcp_read_tools_make_task_summary_defaults_include_updated(self) -> None:
         """AC7: _make_task_summary defaults in test_mcp_read_tools.py must include 'updated'."""
-        content = (_MCP_KANBAN_TESTS / "test_mcp_read_tools.py").read_text(encoding="utf-8")
+        content = (_MCP_KANBAN_TESTS / "test_mcp_read_tools.py").read_text(
+            encoding="utf-8"
+        )
         fn_start = content.find("def _make_task_summary")
         assert fn_start >= 0, "_make_task_summary not found in test_mcp_read_tools.py"
         # Scope to just this function body — stops before _make_show_task_response
@@ -405,11 +405,17 @@ class TestFromAC_MCPFixtureRemediation:
 
     def test_mcp_models_1084_archival_refs_construction_includes_updated(self) -> None:
         """AC7: TaskSummary call in test_task_summary_has_archival_refs_int_list must include updated=."""
-        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(encoding="utf-8")
+        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(
+            encoding="utf-8"
+        )
         fn_start = content.find("def test_task_summary_has_archival_refs_int_list")
-        assert fn_start >= 0, "test_task_summary_has_archival_refs_int_list not found in test_mcp_models_1084.py"
+        assert fn_start >= 0, (
+            "test_task_summary_has_archival_refs_int_list not found in test_mcp_models_1084.py"
+        )
         next_fn = content.find("def test_task_summary_has_dep_status", fn_start)
-        assert next_fn > fn_start, "dep_status sentinel not found after archival_refs test"
+        assert next_fn > fn_start, (
+            "dep_status sentinel not found after archival_refs test"
+        )
         section = content[fn_start:next_fn]
         assert "updated=" in section, (
             "test_mcp_models_1084.py: TaskSummary() in test_task_summary_has_archival_refs_int_list "
@@ -417,11 +423,17 @@ class TestFromAC_MCPFixtureRemediation:
             "This construction raises ValidationError: TaskSummary updated Field required."
         )
 
-    def test_mcp_models_1084_dep_status_none_construction_includes_updated(self) -> None:
+    def test_mcp_models_1084_dep_status_none_construction_includes_updated(
+        self,
+    ) -> None:
         """AC7: TaskSummary call in test_task_summary_dep_status_none_when_no_deps must include updated=."""
-        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(encoding="utf-8")
+        content = (_MCP_KANBAN_TESTS / "test_mcp_models_1084.py").read_text(
+            encoding="utf-8"
+        )
         fn_start = content.find("def test_task_summary_dep_status_none_when_no_deps")
-        assert fn_start >= 0, "test_task_summary_dep_status_none_when_no_deps not found in test_mcp_models_1084.py"
+        assert fn_start >= 0, (
+            "test_task_summary_dep_status_none_when_no_deps not found in test_mcp_models_1084.py"
+        )
         # Scope to this function body only
         next_fn = content.find("\n\n\n", fn_start)
         section = content[fn_start : next_fn if next_fn > fn_start else fn_start + 400]

@@ -285,7 +285,9 @@ class TestFromAC_MoveTask:
         view, kanban_dir = _make_view(tmp_path)
         _write_task(kanban_dir, task_id=1, status="todo")
         with pytest.raises(ValidationError) as exc_info:
-            view.move_task(1, "archived", archival_reason="deprecated", archival_refs=[99999])
+            view.move_task(
+                1, "archived", archival_reason="deprecated", archival_refs=[99999]
+            )
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_MISSING"
 
     def test_archival_reason_on_active_status_raises_fields_forbidden(
@@ -315,7 +317,9 @@ class TestFromAC_MoveTask:
         move_task; the call succeeds and the task is moved to "review" unchecked.
         """
         view, kanban_dir = _make_view(tmp_path, _PREDICATE_CONFIG)
-        _write_task(kanban_dir, task_id=1, status="in-progress", body="No test results here.")
+        _write_task(
+            kanban_dir, task_id=1, status="in-progress", body="No test results here."
+        )
         with pytest.raises(ValidationError) as exc_info:
             view.move_task(1, "review")
         assert exc_info.value.code == "ERR_PREDICATE_FAILED"
@@ -331,7 +335,9 @@ class TestFromAC_MoveTask:
         "review" (wrong status).
         """
         view, kanban_dir = _make_view(tmp_path, _PREDICATE_CONFIG)
-        _write_task(kanban_dir, task_id=1, status="in-progress", body="No test results here.")
+        _write_task(
+            kanban_dir, task_id=1, status="in-progress", body="No test results here."
+        )
         with contextlib.suppress(Exception):
             view.move_task(1, "review")
         # Regardless of exception type, the task must remain at "in-progress".
@@ -355,7 +361,9 @@ class TestFromAC_MoveTask:
         result = view.move_task(1, "archived", archival_reason="dropped")
         assert result.claimed_at is None
 
-    def test_archive_cleared_claim_persisted_in_archive_file(self, tmp_path: Path) -> None:
+    def test_archive_cleared_claim_persisted_in_archive_file(
+        self, tmp_path: Path
+    ) -> None:
         """D17 (persistence proof): archiving a claimed task writes claimed_at=null to disk.
 
         The SingleTaskResponse.claimed_at=None only proves the in-memory record is correct;
@@ -382,7 +390,9 @@ class TestFromAC_MoveTask:
         on_disk = fresh_engine.show_task("1")
         assert on_disk.claimed_at is None
 
-    def test_move_skipping_two_columns_emits_skip_guidance(self, tmp_path: Path) -> None:
+    def test_move_skipping_two_columns_emits_skip_guidance(
+        self, tmp_path: Path
+    ) -> None:
         """AC-NEW-5: move_task that skips >1 status position returns non-empty guidance.
 
         Moving from 'research' (index 0) to 'in-progress' (index 3) skips 'backlog'
@@ -419,7 +429,9 @@ class TestFromAC_MoveTask:
             view.move_task(1, "not-a-valid-status-xyz")
         assert exc_info.value.code == "ERR_INVALID_STATUS"
 
-    def test_archive_move_failure_restores_original_task_record(self, tmp_path: Path) -> None:
+    def test_archive_move_failure_restores_original_task_record(
+        self, tmp_path: Path
+    ) -> None:
         """D17 (rollback proof): _move_file OSError during archive restores the original task record.
 
         If _move_file raises OSError after write_task has written the archived record
@@ -436,7 +448,10 @@ class TestFromAC_MoveTask:
             status="todo",
             claimed_at=f'"{original_claimed_at}"',
         )
-        with patch("owlbear_kanban.engine._move_file", side_effect=OSError("disk full")), pytest.raises(OSError):
+        with (
+            patch("owlbear_kanban.engine._move_file", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
             view.move_task(1, "archived", archival_reason="dropped")
         # Rollback must have restored the file to tasks/, not left it in archive/.
         assert any((kanban_dir / "tasks").glob("1-*.md")), (
@@ -448,8 +463,12 @@ class TestFromAC_MoveTask:
         # Fresh engine proves the persisted record matches the pre-archive state.
         fresh_engine = KanbanEngine(kanban_dir, activity_log=False)
         restored = fresh_engine.show_task("1")
-        assert restored.status == "todo", "status must be restored to pre-archive value after rollback"
-        assert restored.claimed_at is not None, "claimed_at must not be cleared on a failed archive"
+        assert restored.status == "todo", (
+            "status must be restored to pre-archive value after rollback"
+        )
+        assert restored.claimed_at is not None, (
+            "claimed_at must not be cleared on a failed archive"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +543,9 @@ class TestFromAC_StartWork:
             view.start_work(99999)
         assert exc_info.value.code == "ERR_NOT_FOUND"
 
-    def test_start_work_already_claimed_raises_already_claimed(self, tmp_path: Path) -> None:
+    def test_start_work_already_claimed_raises_already_claimed(
+        self, tmp_path: Path
+    ) -> None:
         """start_work on an already-claimed (non-expired) task → ConcurrencyError(ERR_ALREADY_CLAIMED).
 
         engine.claim_task raises ValueError('already claimed') when the existing claim
@@ -559,7 +580,9 @@ class TestFromAC_StartWork:
             claimed_at=f'"{stale}"',  # well over 1h ago
         )
         result = view.start_work(1)
-        assert result.claimed_at is not None, "expired claim should be released and re-claimed"
+        assert result.claimed_at is not None, (
+            "expired claim should be released and re-claimed"
+        )
         assert result.claimed_at != stale, (
             "re-claim must issue a new timestamp, not return the stale expired one"
         )

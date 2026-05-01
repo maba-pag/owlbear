@@ -358,9 +358,7 @@ class TestFromAC_EditTaskValidation:
         assert result.blocked is False
         assert result.block_reason is None
 
-    def test_set_nonempty_block_reason_sets_blocked_true(
-        self, tmp_path: Path
-    ) -> None:
+    def test_set_nonempty_block_reason_sets_blocked_true(self, tmp_path: Path) -> None:
         """D53-SET: edit_task with non-empty block_reason on an unblocked task →
         blocked=True, block_reason set to the provided string."""
         view, kanban_dir = _make_view(tmp_path)
@@ -489,15 +487,17 @@ class TestFromAC_EditTaskArchivalRefs:
     also cannot currently locate tasks in the archive directory (raises NotFoundError).
     """
 
-    def test_deprecated_without_refs_raises_refs_required(
-        self, tmp_path: Path
-    ) -> None:
+    def test_deprecated_without_refs_raises_refs_required(self, tmp_path: Path) -> None:
         """§3.2: archival_reason='deprecated' with empty archival_refs →
         ValidationError(ERR_ARCHIVAL_REFS_REQUIRED)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="null", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="null",
+            archival_refs="[]",
         )
         with pytest.raises(ValidationError) as exc_info:
             view.edit_task(1, archival_reason="deprecated", archival_refs=[])
@@ -508,8 +508,12 @@ class TestFromAC_EditTaskArchivalRefs:
         ValidationError(ERR_ARCHIVAL_REFS_REQUIRED)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="null", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="null",
+            archival_refs="[]",
         )
         with pytest.raises(ValidationError) as exc_info:
             view.edit_task(1, archival_reason="duplicate", archival_refs=[])
@@ -526,8 +530,12 @@ class TestFromAC_EditTaskArchivalRefs:
         """
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="completed", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="completed",
+            archival_refs="[]",
         )
         _write_task(kanban_dir, task_id=2, status="done")
         with pytest.raises(ValidationError) as exc_info:
@@ -539,8 +547,12 @@ class TestFromAC_EditTaskArchivalRefs:
         ValidationError(ERR_ARCHIVAL_REFS_FORBIDDEN)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="null", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="null",
+            archival_refs="[]",
         )
         _write_task(kanban_dir, task_id=2)
         with pytest.raises(ValidationError) as exc_info:
@@ -552,36 +564,44 @@ class TestFromAC_EditTaskArchivalRefs:
         ValidationError(ERR_ARCHIVAL_REFS_FORBIDDEN)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="null", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="null",
+            archival_refs="[]",
         )
         _write_task(kanban_dir, task_id=2)
         with pytest.raises(ValidationError) as exc_info:
             view.edit_task(1, archival_reason="wontfix", archival_refs=[2])
         assert exc_info.value.code == "ERR_ARCHIVAL_REFS_FORBIDDEN"
 
-    def test_archival_refs_missing_id_raises_ref_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_refs_missing_id_raises_ref_missing(self, tmp_path: Path) -> None:
         """§3.2: archival_refs element does not exist → ValidationError(ERR_ARCHIVAL_REF_MISSING)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="null", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="null",
+            archival_refs="[]",
         )
         with pytest.raises(ValidationError) as exc_info:
             view.edit_task(1, archival_reason="deprecated", archival_refs=[99999])
         assert exc_info.value.code == "ERR_ARCHIVAL_REF_MISSING"
 
-    def test_archival_refs_self_reference_raises_ref_self(
-        self, tmp_path: Path
-    ) -> None:
+    def test_archival_refs_self_reference_raises_ref_self(self, tmp_path: Path) -> None:
         """§3.2: task.id in archival_refs (self-reference) →
         ValidationError(ERR_ARCHIVAL_REF_SELF)."""
         view, kanban_dir = _make_view(tmp_path)
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="null", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="null",
+            archival_refs="[]",
         )
         with pytest.raises(ValidationError) as exc_info:
             view.edit_task(1, archival_reason="deprecated", archival_refs=[1])
@@ -597,13 +617,21 @@ class TestFromAC_EditTaskArchivalRefs:
         view, kanban_dir = _make_view(tmp_path)
         # Task 2 archived with refs pointing to task 1.
         _write_task(
-            kanban_dir, task_id=2, status="archived", subdir="archive",
-            archival_reason="deprecated", archival_refs="[1]",
+            kanban_dir,
+            task_id=2,
+            status="archived",
+            subdir="archive",
+            archival_reason="deprecated",
+            archival_refs="[1]",
         )
         # Task 1 in archive with no refs yet.
         _write_task(
-            kanban_dir, task_id=1, status="archived", subdir="archive",
-            archival_reason="null", archival_refs="[]",
+            kanban_dir,
+            task_id=1,
+            status="archived",
+            subdir="archive",
+            archival_reason="null",
+            archival_refs="[]",
         )
         with pytest.raises(ValidationError) as exc_info:
             view.edit_task(1, archival_reason="deprecated", archival_refs=[2])

@@ -54,6 +54,7 @@ Shared rules (interaction turns, decision template, handoff contract) are in `h-
 Between M1 and M2, propose an Investment Tier from the table in `h-ideation` (Scratch / Tool / Shared / Production). Present the 4 tiers as askQuestions options with your recommended tier marked. Record the confirmed tier in `decisions.md`.
 
 The tier calibrates all subsequent moments:
+
 - **Scratch:** Lightweight M2, skip panel, thin Brief.
 - **Tool:** Standard M2, selective panel, full Brief.
 - **Shared:** Full panel, research bridge required.
@@ -94,6 +95,7 @@ The tier calibrates all subsequent moments:
    - summarises what was discovered (1–3 sentences)
    - explains whether `synthesis-idea-panel.md` exists and why
    - provides a fenced code block with the exact command to start Phase 2 in a new chat:
+
      ```
      /ideation-mediate .owlbear/briefs/draft-{name}/
      ```

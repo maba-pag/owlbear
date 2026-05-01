@@ -372,7 +372,9 @@ class TestFromAC_LaneAlgorithms:
         content = task_file.read_text(encoding="utf-8")
         assert "claimed_by" not in content
 
-    def test_ac_c33_tasks_lane_adds_all_defaults_with_exact_values(self, tmp_path: Path) -> None:
+    def test_ac_c33_tasks_lane_adds_all_defaults_with_exact_values(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C33 (T4): tasks lane injects ALL _ACTIVE_TASK_DEFAULTS with exact values when absent."""
         kanban_dir = _make_legacy_board(tmp_path)
         task_content = (
@@ -386,10 +388,12 @@ class TestFromAC_LaneAlgorithms:
         content = task_file.read_text(encoding="utf-8")
 
         # None values may render as bare 'key:\n' or explicit 'key: null\n' depending on ruamel.yaml
-        assert "archival_reason: null\n" in content or "archival_reason:\n" in content, (
-            "archival_reason must be null after migration"
+        assert (
+            "archival_reason: null\n" in content or "archival_reason:\n" in content
+        ), "archival_reason must be null after migration"
+        assert "archival_refs: []" in content, (
+            "archival_refs must be [] after migration"
         )
-        assert "archival_refs: []" in content, "archival_refs must be [] after migration"
         assert "tags: []" in content, "tags must be [] after migration"
         assert "parent: null\n" in content or "parent:\n" in content, (
             "parent must be null after migration"
@@ -424,10 +428,16 @@ class TestFromAC_LaneAlgorithms:
         updated_lines = [line for line in lines if line.strip().startswith("updated:")]
         assert created_lines, "created field missing after migration"
         assert updated_lines, "updated field missing after migration"
-        assert "+00:00" in created_lines[0], f"created not normalised to +00:00: {created_lines[0]}"
-        assert "+00:00" in updated_lines[0], f"updated not normalised to +00:00: {updated_lines[0]}"
+        assert "+00:00" in created_lines[0], (
+            f"created not normalised to +00:00: {created_lines[0]}"
+        )
+        assert "+00:00" in updated_lines[0], (
+            f"updated not normalised to +00:00: {updated_lines[0]}"
+        )
 
-    def test_ac_c33_tasks_lane_normalises_nonnull_claimed_at(self, tmp_path: Path) -> None:
+    def test_ac_c33_tasks_lane_normalises_nonnull_claimed_at(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C33 (T3): tasks lane normalises non-null claimed_at timestamps to +00:00."""
         kanban_dir = _make_legacy_board(tmp_path)
         # claimed_at present but naive (no tz offset)
@@ -449,7 +459,9 @@ class TestFromAC_LaneAlgorithms:
         content = task_file.read_text(encoding="utf-8")
 
         lines = content.splitlines()
-        claimed_at_lines = [line for line in lines if line.strip().startswith("claimed_at:")]
+        claimed_at_lines = [
+            line for line in lines if line.strip().startswith("claimed_at:")
+        ]
         assert claimed_at_lines, "claimed_at field missing after migration"
         assert "+00:00" in claimed_at_lines[0], (
             f"claimed_at not normalised to +00:00: {claimed_at_lines[0]}"
@@ -458,7 +470,9 @@ class TestFromAC_LaneAlgorithms:
             "claimed_at must be normalised (preserved), not set to null"
         )
 
-    def test_ac_c33_tasks_lane_preserves_existing_nonnull_values(self, tmp_path: Path) -> None:
+    def test_ac_c33_tasks_lane_preserves_existing_nonnull_values(
+        self, tmp_path: Path
+    ) -> None:
         """AC-C33 (T5): tasks lane preserves existing non-default field values unchanged."""
         kanban_dir = _make_legacy_board(tmp_path)
         # tags: [bug] and parent: 42 exist; archival_reason/archival_refs absent
@@ -484,9 +498,9 @@ class TestFromAC_LaneAlgorithms:
         assert "- bug" in content, "existing tags value must be preserved"
         assert "parent: 42" in content, "existing parent value must be preserved"
         # None values may render as bare 'key:\n' or explicit 'key: null\n'
-        assert "archival_reason: null\n" in content or "archival_reason:\n" in content, (
-            "missing archival_reason must be added with default value null"
-        )
+        assert (
+            "archival_reason: null\n" in content or "archival_reason:\n" in content
+        ), "missing archival_reason must be added with default value null"
         assert "archival_refs: []" in content, (
             "missing archival_refs must be added with default value []"
         )
@@ -542,12 +556,12 @@ class TestFromAC_LaneAlgorithms:
         assert "next_id: 1001" in content, (
             "next_id: 1001 must be preserved from legacy config"
         )
-        assert "wave_size: 4" in content, (
-            "wave_size must be set to 4 (constant)"
-        )
+        assert "wave_size: 4" in content, "wave_size must be set to 4 (constant)"
         # AC-C33 (C4): priorities list must be preserved from legacy config (all 5 values)
         for p in ("someday", "nice-to-have", "important", "needed", "critical"):
-            assert f"- {p}" in content, f"priorities must include '{p}' from legacy config"
+            assert f"- {p}" in content, (
+                f"priorities must include '{p}' from legacy config"
+            )
 
     def test_ac_c35_tasks_idempotency_check_skips_modern_task(
         self, tmp_path: Path

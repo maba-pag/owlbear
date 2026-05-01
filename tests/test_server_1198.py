@@ -18,7 +18,13 @@ from unittest.mock import MagicMock
 import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_mcp_kanban.server import AppContext, edit_task, end_work, move_task, start_work
+from owlbear_mcp_kanban.server import (
+    AppContext,
+    edit_task,
+    end_work,
+    move_task,
+    start_work,
+)
 
 # ---------------------------------------------------------------------------
 # Minimal board config for behavioral tests
@@ -214,7 +220,9 @@ class TestFromAC_IdDirectPassthrough:
     # --- Positive: id routes to the correct task ----------------------------
 
     @pytest.mark.asyncio
-    async def test_move_task_id_routes_to_correct_task(self, app_ctx: AppContext) -> None:
+    async def test_move_task_id_routes_to_correct_task(
+        self, app_ctx: AppContext
+    ) -> None:
         """move_task(id='1') moves task 1; proves id is used directly."""
         ctx = _make_ctx(app_ctx)
         result = await move_task(ctx, id="1", status="backlog")
@@ -223,7 +231,9 @@ class TestFromAC_IdDirectPassthrough:
         )
 
     @pytest.mark.asyncio
-    async def test_edit_task_id_routes_to_correct_task(self, app_ctx: AppContext) -> None:
+    async def test_edit_task_id_routes_to_correct_task(
+        self, app_ctx: AppContext
+    ) -> None:
         """edit_task(id='1') edits task 1 and returns it; proves id is used directly."""
         ctx = _make_ctx(app_ctx)
         result = await edit_task(ctx, id="1", append_body="probe-payload")
@@ -234,28 +244,36 @@ class TestFromAC_IdDirectPassthrough:
     # --- Negative: legacy task_id= kwarg is rejected -----------------------
 
     @pytest.mark.asyncio
-    async def test_move_task_rejects_legacy_task_id_kwarg(self, app_ctx: AppContext) -> None:
+    async def test_move_task_rejects_legacy_task_id_kwarg(
+        self, app_ctx: AppContext
+    ) -> None:
         """move_task(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx(app_ctx)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             await move_task(ctx, task_id="1", status="backlog")  # type: ignore[call-arg]
 
     @pytest.mark.asyncio
-    async def test_edit_task_rejects_legacy_task_id_kwarg(self, app_ctx: AppContext) -> None:
+    async def test_edit_task_rejects_legacy_task_id_kwarg(
+        self, app_ctx: AppContext
+    ) -> None:
         """edit_task(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx(app_ctx)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             await edit_task(ctx, task_id="1", append_body="x")  # type: ignore[call-arg]
 
     @pytest.mark.asyncio
-    async def test_start_work_rejects_legacy_task_id_kwarg(self, app_ctx: AppContext) -> None:
+    async def test_start_work_rejects_legacy_task_id_kwarg(
+        self, app_ctx: AppContext
+    ) -> None:
         """start_work(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx(app_ctx)
         with pytest.raises(TypeError, match="unexpected keyword argument"):
             await start_work(ctx, task_id="1")  # type: ignore[call-arg]
 
     @pytest.mark.asyncio
-    async def test_end_work_rejects_legacy_task_id_kwarg(self, app_ctx: AppContext) -> None:
+    async def test_end_work_rejects_legacy_task_id_kwarg(
+        self, app_ctx: AppContext
+    ) -> None:
         """end_work(task_id=...) raises TypeError — **legacy catch-all is gone."""
         ctx = _make_ctx(app_ctx)
         with pytest.raises(TypeError, match="unexpected keyword argument"):

@@ -39,7 +39,11 @@ from mcp.server.fastmcp.exceptions import ToolError
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
 from owlbear_kanban.errors import ConfigError
-from owlbear_kanban.models import ListTasksResponse, ShowTaskResponse, SingleTaskResponse
+from owlbear_kanban.models import (
+    ListTasksResponse,
+    ShowTaskResponse,
+    SingleTaskResponse,
+)
 from owlbear_mcp_kanban.server import (
     AppContext,
     create_task,
@@ -425,7 +429,9 @@ class TestFromAC_ErrorMapping:
         assert str(exc_info.value) == "title must not be empty", (
             f"ToolError must pass exact user_message; got {exc_info.value!r}"
         )
-        assert not any(word.startswith("ERR_") for word in str(exc_info.value).split()), (
+        assert not any(
+            word.startswith("ERR_") for word in str(exc_info.value).split()
+        ), (
             f"ToolError must not expose machine error code on wire; got {str(exc_info.value)!r}"
         )
 
@@ -563,13 +569,16 @@ class TestFromAC_GuidanceProofRepair:
         """
         user_msg = "Invalid claim_timeout format: 'bad' - expected e.g. '1h', '30m'"
         ctx = _make_ctx(app_ctx)
-        with patch.object(
-            AgentView,
-            "list_tasks",
-            side_effect=ConfigError(
-                code="ERR_INVALID_CLAIM_TIMEOUT", user_message=user_msg
+        with (
+            patch.object(
+                AgentView,
+                "list_tasks",
+                side_effect=ConfigError(
+                    code="ERR_INVALID_CLAIM_TIMEOUT", user_message=user_msg
+                ),
             ),
-        ), pytest.raises(ToolError) as exc_info:
+            pytest.raises(ToolError) as exc_info,
+        ):
             await list_tasks(ctx)
         error_text = str(exc_info.value)
         assert error_text == user_msg, (

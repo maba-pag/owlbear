@@ -170,7 +170,9 @@ class TestFromAC_GetPendingParsing:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """A pending DR file is read, parsed, and returned in the items list."""
-        _write_dr(decisions_dir, stem="10-scope-question", task_id=10, body="Need direction.")
+        _write_dr(
+            decisions_dir, stem="10-scope-question", task_id=10, body="Need direction."
+        )
 
         response = client.get("/api/decisions/pending")
 
@@ -212,7 +214,9 @@ class TestFromAC_GetPendingParsing:
     ) -> None:
         """All pending DR files in pending/ appear in the items list."""
         _write_dr(decisions_dir, stem="20-first-dr", task_id=20, body="First question.")
-        _write_dr(decisions_dir, stem="21-second-dr", task_id=21, body="Second question.")
+        _write_dr(
+            decisions_dir, stem="21-second-dr", task_id=21, body="Second question."
+        )
         _write_dr(decisions_dir, stem="22-third-dr", task_id=22, body="Third question.")
 
         response = client.get("/api/decisions/pending")
@@ -227,7 +231,9 @@ class TestFromAC_GetPendingParsing:
     ) -> None:
         """Returned item fields match exact frontmatter values, not just key presence."""
         # _write_dr writes task_id=10, agent="builder", request_type="scope-decision", created="2026-04-30"
-        _write_dr(decisions_dir, stem="10-metadata-exact", task_id=10, body="Need direction.")
+        _write_dr(
+            decisions_dir, stem="10-metadata-exact", task_id=10, body="Need direction."
+        )
 
         response = client.get("/api/decisions/pending")
 
@@ -253,7 +259,9 @@ class TestFromAC_GetPendingFilter:
             body="Already resolved.",
             response="approved",
         )
-        _write_dr(decisions_dir, stem="31-still-pending", task_id=31, body="Still waiting.")
+        _write_dr(
+            decisions_dir, stem="31-still-pending", task_id=31, body="Still waiting."
+        )
 
         response = client.get("/api/decisions/pending")
 
@@ -286,13 +294,23 @@ class TestFromAC_GetPendingShape:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """Each item in the response has the full required field set."""
-        _write_dr(decisions_dir, stem="40-shape-test", task_id=40, body="Shape test body.")
+        _write_dr(
+            decisions_dir, stem="40-shape-test", task_id=40, body="Shape test body."
+        )
 
         response = client.get("/api/decisions/pending")
 
         assert response.status_code == 200
         item = response.json()["items"][0]
-        required_fields = {"id", "task_id", "agent", "request_type", "created", "title", "body_preview"}
+        required_fields = {
+            "id",
+            "task_id",
+            "agent",
+            "request_type",
+            "created",
+            "title",
+            "body_preview",
+        }
         assert required_fields.issubset(item.keys())
 
     def test_item_id_equals_file_stem(
@@ -339,7 +357,12 @@ class TestFromAC_GetPendingBodyPreview:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """body_preview content comes from the DR body, not the frontmatter."""
-        _write_dr(decisions_dir, stem="51-body-source", task_id=51, body="MARKER-UNIQUE-CONTENT")
+        _write_dr(
+            decisions_dir,
+            stem="51-body-source",
+            task_id=51,
+            body="MARKER-UNIQUE-CONTENT",
+        )
 
         response = client.get("/api/decisions/pending")
 
@@ -391,7 +414,9 @@ class TestFromAC_PostResolveRegistered:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """POST /api/decisions/{id}/resolve is a registered route."""
-        _write_dr(decisions_dir, stem="60-registered-check", task_id=60, body="Check route.")
+        _write_dr(
+            decisions_dir, stem="60-registered-check", task_id=60, body="Check route."
+        )
 
         response = client.post(
             "/api/decisions/60-registered-check/resolve",
@@ -404,7 +429,9 @@ class TestFromAC_PostResolveRegistered:
 class TestFromAC_PostResolveEnum:
     """AC: Accepts {response: enum, notes?: string} — all four valid values (td:2)."""
 
-    @pytest.mark.parametrize("resolution", ["approved", "needs-info", "rejected", "completed"])
+    @pytest.mark.parametrize(
+        "resolution", ["approved", "needs-info", "rejected", "completed"]
+    )
     def test_each_valid_enum_value_is_accepted(
         self, client: TestClient, decisions_dir: Path, resolution: str
     ) -> None:
@@ -436,7 +463,9 @@ class TestFromAC_PostResolveEnum:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """POST body without a notes key is accepted as valid."""
-        _write_dr(decisions_dir, stem="72-no-notes", task_id=72, body="Notes optional test.")
+        _write_dr(
+            decisions_dir, stem="72-no-notes", task_id=72, body="Notes optional test."
+        )
 
         response = client.post(
             "/api/decisions/72-no-notes/resolve",
@@ -449,7 +478,9 @@ class TestFromAC_PostResolveEnum:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """notes as an empty string is accepted (not a validation error)."""
-        _write_dr(decisions_dir, stem="73-empty-notes", task_id=73, body="Empty notes test.")
+        _write_dr(
+            decisions_dir, stem="73-empty-notes", task_id=73, body="Empty notes test."
+        )
 
         response = client.post(
             "/api/decisions/73-empty-notes/resolve",
@@ -466,7 +497,12 @@ class TestFromAC_PostResolvePersistence:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """After resolve, the frontmatter response field matches the submitted value."""
-        _write_dr(decisions_dir, stem="80-fm-update", task_id=80, body="Frontmatter update test.")
+        _write_dr(
+            decisions_dir,
+            stem="80-fm-update",
+            task_id=80,
+            body="Frontmatter update test.",
+        )
 
         client.post(
             "/api/decisions/80-fm-update/resolve",
@@ -481,14 +517,18 @@ class TestFromAC_PostResolvePersistence:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """After resolve, the file contains a ## Response section with the supplied notes."""
-        _write_dr(decisions_dir, stem="81-response-section", task_id=81, body="Section test.")
+        _write_dr(
+            decisions_dir, stem="81-response-section", task_id=81, body="Section test."
+        )
 
         client.post(
             "/api/decisions/81-response-section/resolve",
             json={"response": "rejected", "notes": "Out of scope for this sprint."},
         )
 
-        content = (decisions_dir / "pending" / "81-response-section.md").read_text(encoding="utf-8")
+        content = (decisions_dir / "pending" / "81-response-section.md").read_text(
+            encoding="utf-8"
+        )
         assert "## Response" in content
         assert "Out of scope for this sprint." in content
 
@@ -496,14 +536,18 @@ class TestFromAC_PostResolvePersistence:
         self, client: TestClient, decisions_dir: Path
     ) -> None:
         """## Response section appears even when notes is not supplied."""
-        _write_dr(decisions_dir, stem="82-no-notes-section", task_id=82, body="No notes test.")
+        _write_dr(
+            decisions_dir, stem="82-no-notes-section", task_id=82, body="No notes test."
+        )
 
         client.post(
             "/api/decisions/82-no-notes-section/resolve",
             json={"response": "approved"},
         )
 
-        content = (decisions_dir / "pending" / "82-no-notes-section.md").read_text(encoding="utf-8")
+        content = (decisions_dir / "pending" / "82-no-notes-section.md").read_text(
+            encoding="utf-8"
+        )
         assert "## Response" in content
 
     def test_original_body_is_preserved_after_resolve(
@@ -511,7 +555,9 @@ class TestFromAC_PostResolvePersistence:
     ) -> None:
         """The original DR body content is not lost after resolve."""
         unique_marker = "ORIGINAL-BODY-MARKER-XYZ"
-        _write_dr(decisions_dir, stem="83-body-preserved", task_id=83, body=unique_marker)
+        _write_dr(
+            decisions_dir, stem="83-body-preserved", task_id=83, body=unique_marker
+        )
 
         resp = client.post(
             "/api/decisions/83-body-preserved/resolve",
@@ -519,7 +565,9 @@ class TestFromAC_PostResolvePersistence:
         )
         assert resp.status_code == 200  # proves route is registered; fails in RED
 
-        content = (decisions_dir / "pending" / "83-body-preserved.md").read_text(encoding="utf-8")
+        content = (decisions_dir / "pending" / "83-body-preserved.md").read_text(
+            encoding="utf-8"
+        )
         assert unique_marker in content
 
     def test_response_section_appended_after_original_body(
@@ -534,7 +582,9 @@ class TestFromAC_PostResolvePersistence:
             json={"response": "approved", "notes": "Ordering check."},
         )
 
-        content = (decisions_dir / "pending" / "84-ordering-check.md").read_text(encoding="utf-8")
+        content = (decisions_dir / "pending" / "84-ordering-check.md").read_text(
+            encoding="utf-8"
+        )
         assert body_marker in content
         assert "## Response" in content
         assert content.index(body_marker) < content.index("## Response")
@@ -543,13 +593,18 @@ class TestFromAC_PostResolvePersistence:
 class TestFromAC_PostResolveNotFound:
     """AC: Returns 404 for non-existent DR id (td:1)."""
 
-    def test_unknown_decision_id_returns_404(self, client: TestClient, decisions_dir: Path) -> None:
+    def test_unknown_decision_id_returns_404(
+        self, client: TestClient, decisions_dir: Path
+    ) -> None:
         """POST to a non-existent decision id returns 404 Not Found."""
         # First verify the route is registered (fails in RED if route missing).
         _write_dr(decisions_dir, stem="90-exists", task_id=90, body="Exists.")
-        assert client.post(
-            "/api/decisions/90-exists/resolve", json={"response": "approved"}
-        ).status_code == 200
+        assert (
+            client.post(
+                "/api/decisions/90-exists/resolve", json={"response": "approved"}
+            ).status_code
+            == 200
+        )
 
         response = client.post(
             "/api/decisions/does-not-exist-anywhere/resolve",

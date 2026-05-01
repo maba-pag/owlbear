@@ -349,7 +349,9 @@ def _invoke_view_end_work(  # noqa: PLR0913
     if outcome in {"success", "block", "fail"}:
         with contextlib.suppress(Exception):
             if not task.guidance:
-                task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
+                task.guidance = collect_guidance(
+                    "end_work", None, task, outcome=outcome
+                )
     return task
 
 
@@ -645,7 +647,9 @@ async def end_work(  # noqa: PLR0913
     if outcome in {"success", "block", "fail"}:
         with contextlib.suppress(Exception):
             if not task.guidance:
-                task.guidance = collect_guidance("end_work", None, task, outcome=outcome)
+                task.guidance = collect_guidance(
+                    "end_work", None, task, outcome=outcome
+                )
     return task
 
 
@@ -694,7 +698,9 @@ for _tool_name in (
     "end_work",
 ):
     _tool_obj = next(
-        t for t in mcp._tool_manager._tools.values() if t.name == _tool_name  # noqa: SLF001
+        t
+        for t in mcp._tool_manager._tools.values()
+        if t.name == _tool_name  # noqa: SLF001
     )
     _tool_obj.fn_metadata.output_schema = _single_task_schema
 

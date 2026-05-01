@@ -57,6 +57,7 @@ it on the spot.
 <agents>
 
 None. The memory-curator resolves all issues through its own two modes:
+
 - **Periodic:** defers to `/memories/repo/deferred/`
 - **Manual:** resolves interactively via `askQuestions`
 
@@ -88,6 +89,7 @@ Channel B does not apply — the curation actions and Channel A summary signal a
 - Don't spend tokens on entries already reviewed and stable.
 
 **Systemic process problems** (e.g., agent repeatedly writing the same complaint, finding contradicts a convention in `copilot-instructions.md` or `r-architecture-standards`):
+
 - **Periodic:** write to `/memories/repo/deferred/` with the pattern description and affected entries.
 - **Manual:** present to the user via `askQuestions` for resolution.
 

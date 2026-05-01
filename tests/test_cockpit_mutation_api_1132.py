@@ -190,7 +190,9 @@ class TestFromAC_GetViewDependency:
             f"get_view(engine) must return CockpitView, got {type(result).__name__!r} (AC1)"
         )
 
-    def test_get_view_engine_attribute_is_injected_engine(self, engine: KanbanEngine) -> None:
+    def test_get_view_engine_attribute_is_injected_engine(
+        self, engine: KanbanEngine
+    ) -> None:
         """CockpitView from get_view() has .engine bound to the injected engine (AC1)."""
         from owlbear_cockpit.deps import get_view  # noqa: PLC0415
 
@@ -199,7 +201,9 @@ class TestFromAC_GetViewDependency:
             "CockpitView.engine must be the same engine instance that was injected (AC1)"
         )
 
-    def test_get_view_constructs_cockpit_view_with_engine_arg(self, engine: KanbanEngine) -> None:
+    def test_get_view_constructs_cockpit_view_with_engine_arg(
+        self, engine: KanbanEngine
+    ) -> None:
         """get_view() calls CockpitView(engine) — fails if factory returns wrong type (AC1)."""
         from owlbear_cockpit.deps import get_view  # noqa: PLC0415
 
@@ -563,7 +567,9 @@ class TestFromAC_ReleaseClaim:
         from CockpitView.show_task which correctly reflects claimed_at.
         """
         task = engine.show_task("2")
-        assert task.claimed_at is not None, "Precondition: task 2 must have claimed_at on disk"
+        assert task.claimed_at is not None, (
+            "Precondition: task 2 must have claimed_at on disk"
+        )
         response = client.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200, (
             f"Genuinely claimed task (claimed_at set) must return 200 after G3 fix (AC5), "
@@ -578,7 +584,15 @@ class TestFromAC_ReleaseClaim:
         response = client.post("/api/tasks/2/release", json={"updated": task.updated})
         assert response.status_code == 200
         body = response.json()
-        for field in ("id", "title", "status", "priority", "updated", "claimed", "tags"):
+        for field in (
+            "id",
+            "title",
+            "status",
+            "priority",
+            "updated",
+            "claimed",
+            "tags",
+        ):
             assert field in body, f"Release response must include '{field}' field (AC5)"
 
     def test_release_claimed_task_response_claimed_false_after_release(
@@ -591,7 +605,6 @@ class TestFromAC_ReleaseClaim:
         assert response.json()["claimed"] is False, (
             "Release response must show claimed=False after claim is cleared (AC5)"
         )
-
 
 
 # ---------------------------------------------------------------------------
@@ -669,7 +682,6 @@ class TestFromAC_ResponseAdaptation:
         )
 
 
-
 # ---------------------------------------------------------------------------
 # AC7: POST /release with stale updated token → 409 with stale detail
 # ---------------------------------------------------------------------------
@@ -731,7 +743,9 @@ class TestFromAC_ReleaseActivityLogging:
             f"got {response.status_code}"
         )
         activity_file = board_dir / "activity.jsonl"
-        assert activity_file.exists(), "activity.jsonl must exist after successful release (AC10)"
+        assert activity_file.exists(), (
+            "activity.jsonl must exist after successful release (AC10)"
+        )
         entries = [
             json.loads(line)
             for line in activity_file.read_text(encoding="utf-8").splitlines()

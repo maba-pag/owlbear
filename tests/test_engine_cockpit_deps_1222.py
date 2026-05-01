@@ -136,12 +136,7 @@ class TestFromAC_DepsUsesPublicProperties:
 
     def test_deps_does_not_access_private_tasks_dir(self, project_root: Path) -> None:
         deps_path = (
-            project_root
-            / "serve"
-            / "cockpit"
-            / "src"
-            / "owlbear_cockpit"
-            / "deps.py"
+            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
         )
         content = deps_path.read_text(encoding="utf-8")
         assert "_tasks_dir" not in content, (
@@ -150,12 +145,7 @@ class TestFromAC_DepsUsesPublicProperties:
 
     def test_deps_does_not_access_private_kanban_dir(self, project_root: Path) -> None:
         deps_path = (
-            project_root
-            / "serve"
-            / "cockpit"
-            / "src"
-            / "owlbear_cockpit"
-            / "deps.py"
+            project_root / "serve" / "cockpit" / "src" / "owlbear_cockpit" / "deps.py"
         )
         content = deps_path.read_text(encoding="utf-8")
         assert "_kanban_dir" not in content, (

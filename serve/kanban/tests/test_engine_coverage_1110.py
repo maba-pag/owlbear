@@ -644,9 +644,7 @@ class TestFromAC_EngineEndWorkValidation:
                 "1", note="reject", outcome="reject", move_to="nonexistent-status"
             )
 
-    def test_end_work_block_outcome_marks_task_blocked(
-        self, tmp_path: Path
-    ) -> None:
+    def test_end_work_block_outcome_marks_task_blocked(self, tmp_path: Path) -> None:
         """AC: end_work block outcome sets blocked=True and records block_reason."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1)
@@ -660,9 +658,7 @@ class TestFromAC_EngineEndWorkValidation:
         assert result.blocked is True
         assert result.block_reason == "dependency missing"
 
-    def test_end_work_fail_outcome_preserves_task_status(
-        self, tmp_path: Path
-    ) -> None:
+    def test_end_work_fail_outcome_preserves_task_status(self, tmp_path: Path) -> None:
         """AC: end_work fail outcome leaves the task status unchanged."""
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="in-progress")
@@ -747,7 +743,10 @@ class TestFromAC_EngineEditTaskRollback:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, title="Original Title")
         engine = KanbanEngine(board, activity_log=False)
-        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+        with (
+            patch.object(engine, "_emit_event", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
             engine.edit_task("1", title="New Title")
         # Rollback must have restored original title to disk
         restored = read_task(board / "tasks" / "1-task.md")
@@ -760,7 +759,10 @@ class TestFromAC_EngineEditTaskRollback:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, body="original body content")
         engine = KanbanEngine(board, activity_log=False)
-        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+        with (
+            patch.object(engine, "_emit_event", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
             engine.edit_task("1", append_body="extra appended text")
         restored = read_task(board / "tasks" / "1-task.md")
         assert "extra appended text" not in restored.body
@@ -923,9 +925,7 @@ class TestFromAC_EngineReadLogEntriesErrors:
         assert len(result) == 1
         assert result[0].task_id == 1
 
-    def test_blank_lines_skipped_valid_entry_still_parsed(
-        self, tmp_path: Path
-    ) -> None:
+    def test_blank_lines_skipped_valid_entry_still_parsed(self, tmp_path: Path) -> None:
         """Blank lines surrounding the valid claim entry are skipped gracefully."""
         import json as _json
 
@@ -995,7 +995,10 @@ class TestFromAC_EngineEndWorkRollback:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, body="original body")
         engine = KanbanEngine(board, activity_log=False)
-        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+        with (
+            patch.object(engine, "_emit_event", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
             engine.end_work("1", note="end-work note", outcome="fail")
         # Rollback restores the original body
         restored = read_task(board / "tasks" / "1-task.md")
@@ -1010,7 +1013,10 @@ class TestFromAC_EngineEndWorkRollback:
         # 'done' is the last status → end_work(success) archives the task
         _write_task(board, task_id=1, status="done", body="done body")
         engine = KanbanEngine(board, activity_log=False)
-        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+        with (
+            patch.object(engine, "_emit_event", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
             engine.end_work("1", note="archiving note", outcome="success")
         # Task file must be back in tasks/ (not stranded in archive/)
         task_file = board / "tasks" / "1-task.md"
@@ -1027,8 +1033,13 @@ class TestFromAC_EngineEndWorkRollback:
         board = _make_board(tmp_path)
         _write_task(board, task_id=1, status="done")
         engine = KanbanEngine(board, activity_log=False)
-        with patch.object(engine, "_emit_event", side_effect=OSError("disk full")), pytest.raises(OSError):
+        with (
+            patch.object(engine, "_emit_event", side_effect=OSError("disk full")),
+            pytest.raises(OSError),
+        ):
             engine.end_work("1", note="archiving note", outcome="success")
         # archive/ file must have been moved back (not left in archive/)
         archive_file = board / "archive" / "1-task.md"
-        assert not archive_file.exists(), "archive file was not moved back during rollback"
+        assert not archive_file.exists(), (
+            "archive file was not moved back during rollback"
+        )

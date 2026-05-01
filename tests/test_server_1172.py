@@ -271,9 +271,7 @@ class TestFromAC_StatusNamesDictFormBug:
         """
         sentinel = ["sentinel-guidance-item"]
         ctx = _make_ctx(app_ctx)
-        with patch(
-            "owlbear_mcp_kanban.server.collect_guidance", return_value=sentinel
-        ):
+        with patch("owlbear_mcp_kanban.server.collect_guidance", return_value=sentinel):
             result = await move_task(ctx, id="1", status="todo")
 
         assert result.guidance == sentinel, (

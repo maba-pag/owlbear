@@ -1010,7 +1010,9 @@ class TestFromAC_EndWorkStringFieldContracts:
         """EndWorkParams.block_reason accepts a str value and stores it (§5.8 annotation proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
-        p = EndWorkParams(id=1, outcome="block", block_reason="Waiting for dependency resolution.")
+        p = EndWorkParams(
+            id=1, outcome="block", block_reason="Waiting for dependency resolution."
+        )
         assert p.block_reason == "Waiting for dependency resolution."
         assert isinstance(p.block_reason, str)
 
@@ -1018,7 +1020,12 @@ class TestFromAC_EndWorkStringFieldContracts:
         """EndWorkParams.archival_reason accepts a str value and stores it (§5.8 annotation proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
-        p = EndWorkParams(id=1, outcome="reject", move_to="archived", archival_reason="Superseded by #999.")
+        p = EndWorkParams(
+            id=1,
+            outcome="reject",
+            move_to="archived",
+            archival_reason="Superseded by #999.",
+        )
         assert p.archival_reason == "Superseded by #999."
         assert isinstance(p.archival_reason, str)
 
@@ -1026,7 +1033,9 @@ class TestFromAC_EndWorkStringFieldContracts:
         """move_to annotation is str | None: strict mode accepts str (annotation shape proof)."""
         from owlbear_mcp_kanban.models import EndWorkParams
 
-        p = EndWorkParams.model_validate({"id": 1, "outcome": "reject", "move_to": "todo"}, strict=True)
+        p = EndWorkParams.model_validate(
+            {"id": 1, "outcome": "reject", "move_to": "todo"}, strict=True
+        )
         assert p.move_to == "todo"
 
     def test_end_work_note_strict_mode_accepts_str(self) -> None:
@@ -1041,7 +1050,8 @@ class TestFromAC_EndWorkStringFieldContracts:
         from owlbear_mcp_kanban.models import EndWorkParams
 
         p = EndWorkParams.model_validate(
-            {"id": 1, "outcome": "block", "block_reason": "blocked because"}, strict=True
+            {"id": 1, "outcome": "block", "block_reason": "blocked because"},
+            strict=True,
         )
         assert p.block_reason == "blocked because"
 
@@ -1050,7 +1060,13 @@ class TestFromAC_EndWorkStringFieldContracts:
         from owlbear_mcp_kanban.models import EndWorkParams
 
         p = EndWorkParams.model_validate(
-            {"id": 1, "outcome": "reject", "move_to": "archived", "archival_reason": "done"}, strict=True
+            {
+                "id": 1,
+                "outcome": "reject",
+                "move_to": "archived",
+                "archival_reason": "done",
+            },
+            strict=True,
         )
         assert p.archival_reason == "done"
 

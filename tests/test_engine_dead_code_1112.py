@@ -46,7 +46,9 @@ def _class_method_source(method_name: str, class_name: str = "KanbanEngine") -> 
     raise AssertionError(f"{class_name}.{method_name} not found in engine.py")
 
 
-def _class_method_ast(method_name: str, class_name: str = "KanbanEngine") -> ast.FunctionDef:
+def _class_method_ast(
+    method_name: str, class_name: str = "KanbanEngine"
+) -> ast.FunctionDef:
     """Return the AST node for *method_name* in *class_name*."""
     for node in ast.walk(_ENGINE_TREE):
         if isinstance(node, ast.ClassDef) and node.name == class_name:
@@ -147,9 +149,7 @@ _DICT_STATUS_ISINSTANCE_PATTERN = re.compile(
     r"isinstance\s*\([^)]*,\s*(?:list\[dict\]|dict)\s*\)"
 )
 
-_DICT_FIRST_ISINSTANCE_PATTERN = re.compile(
-    r"isinstance\s*\(\s*\w+\s*,\s*dict\s*\)"
-)
+_DICT_FIRST_ISINSTANCE_PATTERN = re.compile(r"isinstance\s*\(\s*\w+\s*,\s*dict\s*\)")
 
 
 class TestFromAC_DictStatusBranchRemoval:
@@ -240,7 +240,10 @@ class TestFromAC_Win32PragmaAnnotation:
         """_exclusive_file_lock must still contain the win32 branch (annotated, not deleted)."""
         found = False
         for node in ast.walk(_ENGINE_TREE):
-            if isinstance(node, ast.FunctionDef) and node.name == "_exclusive_file_lock":
+            if (
+                isinstance(node, ast.FunctionDef)
+                and node.name == "_exclusive_file_lock"
+            ):
                 src = "\n".join(_ENGINE_LINES[node.lineno - 1 : node.end_lineno])
                 found = "win32" in src
                 break
@@ -321,11 +324,15 @@ class TestFromAC_StrStatusBehaviouralContracts:
         returned_statuses = [t.status for t in tasks]
 
         config_order = [
-            "research", "backlog", "todo", "in-progress", "review", "docs", "done"
+            "research",
+            "backlog",
+            "todo",
+            "in-progress",
+            "review",
+            "docs",
+            "done",
         ]
-        expected_order = sorted(
-            returned_statuses, key=config_order.index
-        )
+        expected_order = sorted(returned_statuses, key=config_order.index)
         assert returned_statuses == expected_order, (
             f"list_tasks(sort='status') returned {returned_statuses!r}; "
             f"expected config order {expected_order!r}. "

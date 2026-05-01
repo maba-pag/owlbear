@@ -132,16 +132,14 @@ class CockpitView:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REFS_REQUIRED",
                 user_message=(
-                    "archival_refs required for "
-                    f"archival_reason='{archival_reason}'"
+                    f"archival_refs required for archival_reason='{archival_reason}'"
                 ),
             )
         if archival_reason in {"completed", "dropped", "wontfix"} and archival_refs:
             raise ValidationError(
                 code="ERR_ARCHIVAL_REFS_FORBIDDEN",
                 user_message=(
-                    "archival_refs forbidden for "
-                    f"archival_reason='{archival_reason}'"
+                    f"archival_refs forbidden for archival_reason='{archival_reason}'"
                 ),
             )
         if archival_reason == "completed" and not can_mark_completed:
@@ -228,7 +226,9 @@ class CockpitView:
         except FileNotFoundError as exc:
             raise self._not_found(task_id) from exc
         except ValueError as exc:
-            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+            raise ValidationError(
+                code="ERR_INVALID_STATUS", user_message=str(exc)
+            ) from exc
         return self._to_single_response(task)
 
     def move_task(
@@ -263,7 +263,9 @@ class CockpitView:
         except FileNotFoundError as exc:
             raise self._not_found(task_id) from exc
         except ValueError as exc:
-            raise ValidationError(code="ERR_INVALID_STATUS", user_message=str(exc)) from exc
+            raise ValidationError(
+                code="ERR_INVALID_STATUS", user_message=str(exc)
+            ) from exc
         return self._to_single_response(task)
 
     def release_task(

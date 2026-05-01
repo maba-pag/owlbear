@@ -493,11 +493,7 @@ class TestFromAC_PickTasksAgent:
         _write_task(board, task_id=2, status="todo")
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
-        by_id = {
-            entry.id: entry.agent
-            for wave in resp.waves
-            for entry in wave.tasks
-        }
+        by_id = {entry.id: entry.agent for wave in resp.waves for entry in wave.tasks}
         assert by_id.get(1) == "researcher", (
             f"research task must have agent='researcher'; got {by_id.get(1)!r}"
         )
@@ -516,9 +512,7 @@ class TestFromAC_PickTasksArchivedDeps:
     AC28: deprecated-archived dep → dep_status='redirect', NOT excluded.
     """
 
-    def test_wontfix_archived_dep_excludes_dependent_task(
-        self, tmp_path: Path
-    ) -> None:
+    def test_wontfix_archived_dep_excludes_dependent_task(self, tmp_path: Path) -> None:
         """AC27: task whose only dep is wontfix-archived gets dep_status='blocked' → excluded.
 
         Task 1 depends on archived task 99 (archival_reason='wontfix').
@@ -559,9 +553,13 @@ class TestFromAC_PickTasksArchivedDeps:
         board = _make_board(tmp_path)
         _write_archived_task(board, task_id=98, archival_reason="wontfix")
         _write_archived_task(board, task_id=99, archival_reason="deprecated")
-        _write_task(board, task_id=1, status="todo", depends_on="[98]")  # blocked → excluded
-        _write_task(board, task_id=2, status="todo", depends_on="[99]")  # redirect → included
-        _write_task(board, task_id=3, status="todo")                      # clean → included
+        _write_task(
+            board, task_id=1, status="todo", depends_on="[98]"
+        )  # blocked → excluded
+        _write_task(
+            board, task_id=2, status="todo", depends_on="[99]"
+        )  # redirect → included
+        _write_task(board, task_id=3, status="todo")  # clean → included
         engine = KanbanEngine(board, activity_log=False)
         resp = engine.agent_view().pick_tasks()
         ids = _all_ids(resp)
@@ -605,7 +603,9 @@ class TestFromAC_PickTasksDefaults:
         _write_task(board, task_id=2, priority="needed")
         _write_task(board, task_id=3, priority="critical")
         engine = KanbanEngine(board, activity_log=False)
-        resp = engine.agent_view().pick_tasks(max_waves=3)  # no wave_size arg -> uses config
+        resp = engine.agent_view().pick_tasks(
+            max_waves=3
+        )  # no wave_size arg -> uses config
         assert len(resp.waves) == 3, (
             f"With config wave_size=1 and 3 tasks, expect 3 waves; got {len(resp.waves)}"
         )
@@ -777,7 +777,9 @@ class TestFromAC_PickTasksDepStatusString:
     dep_status='redirect' from dep_status='ok' by inclusion alone.
     """
 
-    def test_wontfix_archived_dep_sets_dep_status_blocked_string(self, tmp_path: Path) -> None:
+    def test_wontfix_archived_dep_sets_dep_status_blocked_string(
+        self, tmp_path: Path
+    ) -> None:
         """AC27 string contract: show_task returns dep_status='blocked' for wontfix-archived dep.
 
         Task 1 depends on wontfix-archived task 99.  show_task(1) must return
@@ -795,7 +797,9 @@ class TestFromAC_PickTasksDepStatusString:
             f"dep_status='blocked' but got {resp.dep_status!r}"
         )
 
-    def test_deprecated_archived_dep_sets_dep_status_redirect_string(self, tmp_path: Path) -> None:
+    def test_deprecated_archived_dep_sets_dep_status_redirect_string(
+        self, tmp_path: Path
+    ) -> None:
         """AC28 string contract: show_task returns dep_status='redirect' for deprecated-archived dep.
 
         Task 2 depends on deprecated-archived task 99.  show_task(2) must return

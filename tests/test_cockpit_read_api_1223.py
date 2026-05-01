@@ -104,7 +104,9 @@ def client_with_session(board_with_session_dir: Path):
     from fastapi.testclient import TestClient  # noqa: PLC0415
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
 
-    eng = KanbanEngine(board_with_session_dir, agent_name="test-1223-s", activity_log=True)
+    eng = KanbanEngine(
+        board_with_session_dir, agent_name="test-1223-s", activity_log=True
+    )
     eng.list_tasks()
     app.dependency_overrides[get_engine] = lambda: eng
     try:
@@ -165,9 +167,7 @@ class TestFromAC_SessionsEnvelope:
         )
         assert "sessions" in body, f"Response missing 'sessions' key: {body!r}"
 
-    def test_sessions_empty_board_wraps_empty_list(
-        self, client: TestClient
-    ) -> None:
+    def test_sessions_empty_board_wraps_empty_list(self, client: TestClient) -> None:
         """Edge: board with no sessions returns {"sessions": []}, not []."""
         response = client.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
@@ -180,9 +180,7 @@ class TestFromAC_SessionsEnvelope:
             f"body['sessions'] must be a list, got: {sessions!r}"
         )
 
-    def test_sessions_envelope_has_only_sessions_key(
-        self, client: TestClient
-    ) -> None:
+    def test_sessions_envelope_has_only_sessions_key(self, client: TestClient) -> None:
         """Boundary: SessionsResponse has one field — response dict has exactly 'sessions' key."""
         response = client.get("/api/sessions", params={"filter": "all"})
         assert response.status_code == 200
@@ -206,9 +204,7 @@ class TestFromAC_SessionsEnvelope:
         field = SessionsResponse.model_fields["sessions"]
         origin = typing.get_origin(field.annotation)
         args = typing.get_args(field.annotation)
-        assert origin is list, (
-            f"Expected list as container type, got {origin!r}"
-        )
+        assert origin is list, f"Expected list as container type, got {origin!r}"
         assert len(args) == 1, f"Expected single type arg, got args={args!r}"
         assert args[0] is SessionRecord, (
             f"Expected list[SessionRecord] annotation, got args={args!r}"

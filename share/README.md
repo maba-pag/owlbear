@@ -33,12 +33,14 @@ Content reaches agents through four mechanisms, ordered by cost:
 ### Belts and Suspenders
 
 For important skills, use both tiers:
+
 - **Belt:** List the skill in the agent's `<required_reading>` (guarantees it's loaded)
 - **Suspenders:** Provide an `applyTo` instruction stub that fires when the agent touches relevant files (catches agents that skip required_reading)
 
 ### Transitive Dependencies
 
 Skills can declare companion skills that consumers should load when needed:
+
 - **Level 0 (direct):** Agent → skill, listed in `<required_reading>`
 - **Level 1 (transitive):** Skill A → skill B, declared in A's companion table or Step 0
 - Only Level 0 goes in `<required_reading>`. Level 1 is the skill's responsibility.
@@ -130,6 +132,7 @@ Stubs catch agents editing files without the relevant skill loaded. They do not 
 ## File Interconnections
 
 See [WIRING.md](WIRING.md) for the full two-way mapping:
+
 - **Table 1:** Agent/Prompt → relevant files (regularly vs. seldom, with connection method)
 - **Table 2:** File → consuming agents/prompts (inverse)
 

@@ -181,9 +181,7 @@ class TestFromAC_CreateTaskAdapter:
         await create_task(ctx, title="My Feature")
         call = mock_av.create_task.call_args
         title_val = call.args[0] if call.args else call.kwargs.get("title")
-        assert title_val == "My Feature", (
-            "title not forwarded to AgentView.create_task"
-        )
+        assert title_val == "My Feature", "title not forwarded to AgentView.create_task"
 
     @pytest.mark.asyncio
     async def test_create_task_forwards_body(
@@ -411,9 +409,9 @@ class TestFromAC_EditTaskAdapter:
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="1", archival_reason="dropped")
         mock_av.edit_task.assert_called_once()
-        assert "archival_reason can only be set on archived tasks" in str(exc_info.value), (
-            "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
-        )
+        assert "archival_reason can only be set on archived tasks" in str(
+            exc_info.value
+        ), "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
 
     @pytest.mark.asyncio
     async def test_edit_task_archival_refs_on_non_archived_raises_tool_error(
@@ -429,9 +427,9 @@ class TestFromAC_EditTaskAdapter:
         with pytest.raises(ToolError) as exc_info:
             await edit_task(ctx, id="1", archival_refs=[42])
         mock_av.edit_task.assert_called_once()
-        assert "archival_refs can only be set on archived tasks" in str(exc_info.value), (
-            "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
-        )
+        assert "archival_refs can only be set on archived tasks" in str(
+            exc_info.value
+        ), "ToolError must carry the ERR_ARCHIVAL_FIELDS_FORBIDDEN user_message"
 
     @pytest.mark.asyncio
     async def test_edit_task_no_op_raises_tool_error(

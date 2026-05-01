@@ -469,9 +469,7 @@ class TestFromAC_DepStatus:
             f"but got {task_a.dep_status!r}"
         )
 
-    def test_dep_status_blocked_when_dep_archived_dropped(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dep_status_blocked_when_dep_archived_dropped(self, tmp_path: Path) -> None:
         """dep_status='blocked' when dep is archived with reason 'dropped' (§3.3)."""
         kanban_dir = _make_board(tmp_path)
         _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2]")
@@ -535,7 +533,9 @@ class TestFromAC_DepStatus:
         §3.3 precedence: blocked > redirect → result must be 'blocked'.
         """
         kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]")
+        _write_task(
+            kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]"
+        )
         _write_task(
             kanban_dir,
             task_id=2,
@@ -561,15 +561,15 @@ class TestFromAC_DepStatus:
             f"expected 'blocked' but got {task_a.dep_status!r}"
         )
 
-    def test_dep_status_redirect_beats_ok_with_mixed_deps(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dep_status_redirect_beats_ok_with_mixed_deps(self, tmp_path: Path) -> None:
         """Task with two deps: one archived/duplicate (→redirect), one active (→ok).
 
         §3.3 precedence: redirect > ok → result must be 'redirect'.
         """
         kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]")
+        _write_task(
+            kanban_dir, task_id=1, title="A", status="todo", depends_on="[2, 3]"
+        )
         _write_task(
             kanban_dir,
             task_id=2,
@@ -802,14 +802,7 @@ class TestFromAC_ShowTaskSectionGuidance:
     ) -> None:
         """AC12: guidance must mention occurrence count when >1 sections matched."""
         kanban_dir = _make_board(tmp_path)
-        body = (
-            "## Goals\n"
-            "First goal.\n\n"
-            "## Notes\n"
-            "A note.\n\n"
-            "## Goals\n"
-            "Second goal.\n"
-        )
+        body = "## Goals\nFirst goal.\n\n## Notes\nA note.\n\n## Goals\nSecond goal.\n"
         _write_task(kanban_dir, task_id=20, title="GuidanceTest", body=body)
         view = _make_view(kanban_dir)
         view.engine.list_tasks()

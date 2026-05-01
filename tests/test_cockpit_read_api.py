@@ -1011,7 +1011,9 @@ class TestFromAC_CacheHitShortCircuit:
         cache: MtimeScanCache,
     ) -> None:
         """cache.last_mtime is updated after the first GET /api/tasks."""
-        assert cache.last_mtime == 0, "Cache must start with last_mtime=0 before any request"
+        assert cache.last_mtime == 0, (
+            "Cache must start with last_mtime=0 before any request"
+        )
         cache_client.get("/api/tasks")
         assert cache.last_mtime > 0, (
             "cache.last_mtime must be updated after GET /api/tasks — "
@@ -1209,7 +1211,9 @@ class TestFromAC_CacheHitShortCircuit:
 
         second = empty_cache_client.get("/api/tasks")
         assert second.status_code == 200
-        assert second.json()["tasks"] == [], "Second empty-board response must also be empty"
+        assert second.json()["tasks"] == [], (
+            "Second empty-board response must also be empty"
+        )
         assert call_count == 0, (
             f"engine.list_tasks() called {call_count} times on second unchanged empty-board request — cached [] must be treated as a valid cache hit"
         )

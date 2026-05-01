@@ -93,6 +93,7 @@ Cross-pollinated entries re-enter the pending queue and are evaluated in the nex
 ## Step 5 — Return Channel A signal
 
 Return per `r-pipeline-protocol`:
+
 - Periodic mode: `DONE | {N} promoted, {M} pruned` (add `— {K} items need manual curation` when `deferred_count > 0`)
 - Manual mode: summary of actions taken (promotions, resolutions, deletions)
 

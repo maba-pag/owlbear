@@ -135,6 +135,7 @@ AC lines without `(td:N)` annotations default to td:1.
 When a reviewer FAIL cites only test-proof gaps (no implementation fixes), and the test-writer's retry confirms all new tests PASS against current code, the builder dispatch is redundant. The test-writer advances directly to `review` (see `w-tdd-red` Step 1b.1).
 
 **Conditions for builder-skip:**
+
 1. Reviewer's Required Follow-up contains ONLY test/proof gaps (no "fix X in source" items)
 2. All new tests PASS against current implementation
 3. No lint or coverage issues detected by the test-writer

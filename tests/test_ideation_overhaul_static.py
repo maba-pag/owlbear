@@ -56,7 +56,6 @@ class TestFromAC_IdeationFilesExist:
             "share/skills/w-ideation-discovery/SKILL.md",
             "share/skills/w-ideation-mediation/SKILL.md",
             "share/skills/h-ideation-panel/SKILL.md",
-
             "share/agents/ideation-discoverer.agent.md",
             "share/agents/ideation-mediator.agent.md",
             "share/agents/ideation-firstprinciples.agent.md",
@@ -242,8 +241,6 @@ class TestFromAC_AgentContracts:
         )
 
 
-
-
 class TestFromAC_BlackboardDocs:
     """Blackboard docs preserve the multi-file contract and handoff artifacts."""
 
@@ -337,9 +334,7 @@ class TestFromAC_GoldenScenarioFixtures:
             "existing-feature/refactor",
             "overscoped request",
         ]:
-            assert label in text, (
-                f"Golden-scenario README missing class label: {label}"
-            )
+            assert label in text, f"Golden-scenario README missing class label: {label}"
 
     def test_overscoped_scenario_has_conditional_denoise_artifact(self) -> None:
         path = f"{self._ROOT}/03-overscoped-request/synthesis-idea-panel.md"
@@ -380,8 +375,7 @@ class TestFromAC_EarlyChallengeLane:
     def test_early_lane_always_invokes_simplifier_and_firstprinciples(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
         assert (
-            "Always invoke `ideation-simplifier` and `ideation-firstprinciples`"
-            in text
+            "Always invoke `ideation-simplifier` and `ideation-firstprinciples`" in text
         ), (
             "Panel handbook missing the default-roster 'always invoke' rule for "
             "simplifier and firstprinciples"
@@ -392,13 +386,13 @@ class TestFromAC_EarlyChallengeLane:
         assert (
             "Invoke `ideation-outsider` only when the discovery agent sees "
             "tunnel vision" in text
-        ), (
-            "Panel handbook missing the conditional-outsider selection rule"
-        )
+        ), "Panel handbook missing the conditional-outsider selection rule"
 
     def test_critic_excluded_from_default_early_lane(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
-        assert "Do not use `ideation-critic` as the default early challenger." in text, (
+        assert (
+            "Do not use `ideation-critic` as the default early challenger." in text
+        ), (
             "Panel handbook missing the explicit critic-exclusion rule for the early lane"
         )
 
@@ -491,9 +485,7 @@ class TestFromAC_ProposalRoundContracts:
 
     def test_propose_mode_skips_critic_loop(self) -> None:
         text = _read("share/skills/h-ideation-panel/SKILL.md")
-        assert (
-            "In propose mode, panelists skip the embedded Critic loop" in text
-        ), (
+        assert "In propose mode, panelists skip the embedded Critic loop" in text, (
             "Panel handbook missing Critic-skip rule for propose mode"
         )
 
@@ -549,9 +541,7 @@ class TestFromAC_ProposalRoundContracts:
     @pytest.mark.parametrize(("name", "path"), _PANELIST_AGENTS)
     def test_panelist_agents_support_propose_mode(self, name: str, path: str) -> None:
         text = _read(path)
-        assert "PROPOSE mode" in text, (
-            f"{path} missing PROPOSE mode contract"
-        )
+        assert "PROPOSE mode" in text, f"{path} missing PROPOSE mode contract"
         assert f"stances/{name}-proposal.md" in text, (
             f"{path} missing stances/{name}-proposal.md output reference"
         )
@@ -618,4 +608,3 @@ class TestFromAC_ProposalRoundContracts:
             "Briefs README must contain the exact M3.5 conditionality statement: "
             "'*-proposal.md`) are optional and appear only when'"
         )
-

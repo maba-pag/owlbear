@@ -116,10 +116,10 @@ class TestFromAC_DecisionIdValidation:
         "bad_id",
         [
             "../../etc/passwd",  # classic path traversal
-            "foo/bar",           # embedded slash
-            "..\\secret",        # backslash traversal vector
-            "",                  # empty string — no match for ^[a-zA-Z0-9]…
-            ".hidden",           # starts with dot, not [a-zA-Z0-9]
+            "foo/bar",  # embedded slash
+            "..\\secret",  # backslash traversal vector
+            "",  # empty string — no match for ^[a-zA-Z0-9]…
+            ".hidden",  # starts with dot, not [a-zA-Z0-9]
         ],
     )
     def test_invalid_id_raises_http422(self, bad_id: str, tmp_path: Path) -> None:
@@ -197,7 +197,10 @@ class TestFromAC_ValidationBeforeFilesystemIO:
             exists_calls.append(str(self))
             return False
 
-        with patch.object(Path, "exists", spy_exists), pytest.raises(HTTPException) as exc_info:
+        with (
+            patch.object(Path, "exists", spy_exists),
+            pytest.raises(HTTPException) as exc_info,
+        ):
             _find_decision_path(tmp_path, "../../etc/passwd")
 
         assert exc_info.value.status_code == 422, (
@@ -216,7 +219,10 @@ class TestFromAC_ValidationBeforeFilesystemIO:
             exists_calls.append(str(self))
             return False
 
-        with patch.object(Path, "exists", spy_exists), pytest.raises(HTTPException) as exc_info:
+        with (
+            patch.object(Path, "exists", spy_exists),
+            pytest.raises(HTTPException) as exc_info,
+        ):
             _find_decision_path(tmp_path, "")
 
         assert exc_info.value.status_code == 422

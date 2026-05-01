@@ -145,17 +145,15 @@ class TestFromAC_CreateDrTool:
         assert _kwargs.get("task_id") == 1 or (len(_args) > 0 and _args[0] == 1), (
             "create_dr did not forward task_id to decisions.create_dr"
         )
-        assert _kwargs.get("agent") == "builder" or (len(_args) > 1 and _args[1] == "builder"), (
-            "create_dr did not forward agent to decisions.create_dr"
-        )
-        assert _kwargs.get("request_type") == "decision" or (len(_args) > 2 and _args[2] == "decision"), (
-            "create_dr did not forward request_type to decisions.create_dr"
-        )
+        assert _kwargs.get("agent") == "builder" or (
+            len(_args) > 1 and _args[1] == "builder"
+        ), "create_dr did not forward agent to decisions.create_dr"
+        assert _kwargs.get("request_type") == "decision" or (
+            len(_args) > 2 and _args[2] == "decision"
+        ), "create_dr did not forward request_type to decisions.create_dr"
         assert _kwargs.get("body") == "## Question\nShould we proceed?" or (
             len(_args) > 3 and _args[3] == "## Question\nShould we proceed?"
-        ), (
-            "create_dr did not forward body to decisions.create_dr"
-        )
+        ), "create_dr did not forward body to decisions.create_dr"
         assert result["created"] is True
         assert result["path"] == "decisions/pending/1-decision.md", (
             "create_dr must return a workspace-relative path"
@@ -174,10 +172,15 @@ class TestFromAC_CreateDrTool:
         assert callable(fn), "owlbear_mcp_kanban.server.create_dr must exist"
 
         ctx = _make_mcp_ctx(app_ctx)
-        with patch(
-            "owlbear_mcp_kanban.server.decisions.create_dr",
-            side_effect=NotFoundError(code="ERR_NOT_FOUND", user_message="task 999 not found"),
-        ), pytest.raises(ToolError, match="task 999 not found"):
+        with (
+            patch(
+                "owlbear_mcp_kanban.server.decisions.create_dr",
+                side_effect=NotFoundError(
+                    code="ERR_NOT_FOUND", user_message="task 999 not found"
+                ),
+            ),
+            pytest.raises(ToolError, match="task 999 not found"),
+        ):
             await fn(
                 ctx,
                 task_id="999",
@@ -196,7 +199,9 @@ class TestFromAC_CreateDrTool:
         assert callable(fn), "owlbear_mcp_kanban.server.create_dr must exist"
 
         ctx = _make_mcp_ctx(app_ctx)
-        collision_path = app_ctx.kanban_dir / "decisions" / "pending" / "1-decision-2.md"
+        collision_path = (
+            app_ctx.kanban_dir / "decisions" / "pending" / "1-decision-2.md"
+        )
 
         with patch(
             "owlbear_mcp_kanban.server.decisions.create_dr", return_value=collision_path
@@ -209,7 +214,10 @@ class TestFromAC_CreateDrTool:
                 body="## Q",
             )
 
-        assert result == {"created": True, "path": "decisions/pending/1-decision-2.md"}, (
+        assert result == {
+            "created": True,
+            "path": "decisions/pending/1-decision-2.md",
+        }, (
             "create_dr must preserve collision suffix path returned by decisions.create_dr"
         )
 
@@ -243,15 +251,18 @@ class TestFromAC_CreateDrTool:
         assert result["path"] == "decisions/pending/1-action.md"
 
     @pytest.mark.asyncio
-    async def test_create_dr_rejects_invalid_request_type(self, app_ctx: AppContext) -> None:
+    async def test_create_dr_rejects_invalid_request_type(
+        self, app_ctx: AppContext
+    ) -> None:
         import owlbear_mcp_kanban.server as server_mod
 
         fn = getattr(server_mod, "create_dr", None)
         assert callable(fn), "owlbear_mcp_kanban.server.create_dr must exist"
 
         ctx = _make_mcp_ctx(app_ctx)
-        with patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr, pytest.raises(
-            ToolError, match=r"decision|action"
+        with (
+            patch("owlbear_mcp_kanban.server.decisions.create_dr") as mock_create_dr,
+            pytest.raises(ToolError, match=r"decision|action"),
         ):
             await fn(
                 ctx,

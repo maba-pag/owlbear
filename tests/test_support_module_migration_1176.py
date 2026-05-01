@@ -290,7 +290,7 @@ class TestFromAC_CorruptionSubmodelMigration:
             "---\n"
             "id: 3\n"
             "title: Priority Split\n"
-            "status: root-status\n"        # valid in root
+            "status: root-status\n"  # valid in root
             "priority: pipeline-priority\n"  # valid in pipeline only
             "created: 2026-01-01T00:00:00+00:00\n"
             "updated: 2026-01-01T00:00:00+00:00\n"

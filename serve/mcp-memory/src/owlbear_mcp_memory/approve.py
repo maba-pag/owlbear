@@ -75,7 +75,6 @@ def _build_server(db_path: Path) -> FastMCP:
     return server
 
 
-
 def _parse_list_result(content: list) -> list[dict]:
     """Parse FastMCP content items into a list of entry dicts.
 
@@ -98,9 +97,7 @@ def _parse_list_result(content: list) -> list[dict]:
 def _print_table(entries: list[dict]) -> None:
     """Print pending entries as a numbered table to stdout."""
     col_width = _CONTENT_PREVIEW_LEN + 3  # content + "..."
-    header = (
-        f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}"
-    )
+    header = f"{'#':>3}  {'ID':8}  {'Category':<12}  {'Content Preview':<{col_width}}"
     print(header)  # noqa: T201
     print("-" * len(header))  # noqa: T201
     for i, entry in enumerate(entries, 1):

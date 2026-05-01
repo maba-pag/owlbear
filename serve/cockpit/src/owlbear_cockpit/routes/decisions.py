@@ -35,7 +35,9 @@ def _parse_dr(path: Path) -> tuple[dict[str, object], str]:
     content = path.read_text(encoding="utf-8")
     lines = content.splitlines()
 
-    if not lines or lines[0].strip() != "---":  # pragma: no cover - malformed file guard
+    if (
+        not lines or lines[0].strip() != "---"
+    ):  # pragma: no cover - malformed file guard
         msg = f"Invalid decision file (missing opening delimiter): {path}"
         raise ValueError(msg)
 
@@ -154,12 +156,20 @@ def resolve_decision(
     try:
         path = _find_decision_path(decisions_dir, decision_id)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Decision {decision_id!r} not found") from None
+        raise HTTPException(
+            status_code=404, detail=f"Decision {decision_id!r} not found"
+        ) from None
 
     try:
         meta, body = _parse_dr(path)
-    except (TypeError, ValueError, YAMLError) as exc:  # pragma: no cover - defensive malformed file guard
-        raise HTTPException(status_code=422, detail="Invalid decision file format") from exc
+    except (
+        TypeError,
+        ValueError,
+        YAMLError,
+    ) as exc:  # pragma: no cover - defensive malformed file guard
+        raise HTTPException(
+            status_code=422, detail="Invalid decision file format"
+        ) from exc
 
     updated = dict(meta)
     updated["response"] = req.response

@@ -95,9 +95,13 @@ def board_dir(tmp_path: Path) -> Path:
     kanban_dir = _make_board(tmp_path)
     seed = KanbanEngine(kanban_dir, agent_name="seed")
     seed.create_task("Alpha task", status="todo", priority="important")
-    seed.create_task("Beta blocked", status="todo", priority="needed", tags=["scope:cockpit"])
+    seed.create_task(
+        "Beta blocked", status="todo", priority="needed", tags=["scope:cockpit"]
+    )
     seed.list_tasks()  # populate id→filename cache
-    seed.edit_task("2", blocked=True, block_reason="setup block", add_tags=["block:user"])
+    seed.edit_task(
+        "2", blocked=True, block_reason="setup block", add_tags=["block:user"]
+    )
     return kanban_dir
 
 
@@ -255,7 +259,9 @@ class TestFromAC_BlockUserTagLifecycle:
         assert response.status_code == 200
         body = response.json()
         assert body["blocked"] is False
-        assert "block:user" not in body["tags"]  # FAIL: no remove_tag via _apply_block_kwargs
+        assert (
+            "block:user" not in body["tags"]
+        )  # FAIL: no remove_tag via _apply_block_kwargs
 
     def test_edit_block_reason_with_other_tags_adds_block_user_tag(
         self, client: TestClient, engine: KanbanEngine
@@ -282,7 +288,9 @@ class TestFromAC_BlockUserTagLifecycle:
         body = response.json()
         tags = set(body["tags"])
         assert "scope:test" in tags
-        assert "block:user" in tags  # FAIL: _apply_block_kwargs not called alongside tags diff
+        assert (
+            "block:user" in tags
+        )  # FAIL: _apply_block_kwargs not called alongside tags diff
 
 
 # ---------------------------------------------------------------------------
@@ -330,7 +338,9 @@ class TestFromAC_BlockUserTagConflict:
         assert response.status_code == 200
         body = response.json()
         # block_reason wins: block:user must survive despite tags diff requesting removal
-        assert "block:user" in body["tags"]  # FAIL: no conflict resolution; diff removes block:user
+        assert (
+            "block:user" in body["tags"]
+        )  # FAIL: no conflict resolution; diff removes block:user
         assert "scope:cockpit" in body["tags"]
 
     def test_tags_diff_keeps_block_user_but_null_block_reason_overrides(
@@ -363,5 +373,7 @@ class TestFromAC_BlockUserTagConflict:
         body = response.json()
         assert body["blocked"] is False
         # unblock wins: block:user must be removed despite tags diff being no-op
-        assert "block:user" not in body["tags"]  # FAIL: no _apply_block_kwargs + conflict resolution
+        assert (
+            "block:user" not in body["tags"]
+        )  # FAIL: no _apply_block_kwargs + conflict resolution
         assert "scope:cockpit" in body["tags"]
