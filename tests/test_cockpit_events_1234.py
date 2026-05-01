@@ -92,12 +92,25 @@ def engine(board_dir: Path):
 
 @pytest.fixture
 def client(engine):
-    """FastAPI TestClient with engine injected via dependency_overrides."""
+    """FastAPI TestClient with engine injected via dependency_overrides.
+
+    Patches awatch to return immediately because Starlette's sync TestClient
+    cannot signal ASGI disconnect on SSE streams (receive waits for
+    response_complete which never fires while more_body=True).
+    Tests using this fixture only check headers/status, not stream content.
+    """
     from fastapi.testclient import TestClient  # noqa: PLC0415
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
 
+    async def _noop_awatch(*_a, **_kw):
+        return
+        yield  # pragma: no cover — makes this a valid async generator
+
     app.dependency_overrides[get_engine] = lambda: engine
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with (
+        patch("owlbear_cockpit.routes.events.awatch", _noop_awatch),
+        TestClient(app, raise_server_exceptions=False) as c,
+    ):
         yield c
     app.dependency_overrides.clear()
 
@@ -172,12 +185,20 @@ class TestFromAC_EventSourceResponseEndpoint:
         engine_a = KanbanEngine(board_dir, agent_name="cockpit")
         engine_b = KanbanEngine(board_dir, agent_name="cockpit")
 
+        async def _noop_awatch(*_a, **_kw):
+            return
+            yield  # pragma: no cover
+
         # Each override produces its own engine; endpoint must use the injected one
+        # awatch patched: sync TestClient cannot disconnect SSE streams (header-only check)
         for eng in [engine_a, engine_b]:
             app.dependency_overrides[get_engine] = lambda e=eng: e
-            with TestClient(app, raise_server_exceptions=False).stream(
-                "GET", "/api/events"
-            ) as response:
+            with (
+                patch("owlbear_cockpit.routes.events.awatch", _noop_awatch),
+                TestClient(app, raise_server_exceptions=False).stream(
+                    "GET", "/api/events"
+                ) as response,
+            ):
                 assert response.status_code in {200, 307}, (
                     f"Endpoint must accept DI-overridden engine, got {response.status_code}"
                 )
