@@ -1,10 +1,10 @@
 ---
 id: 1239
 title: 'Test: MoveRequest archival fields and route pass-through'
-status: docs
+status: archived
 priority: needed
 created: 2026-05-01T03:07:50.539456+00:00
-updated: 2026-05-01T04:20:33.906342+00:00
+updated: 2026-05-01T05:40:59.982145+00:00
 tags:
 - scope:backend
 parent: 1238
@@ -157,3 +157,64 @@ Brief: `.owlbear/briefs/draft-archival-ux/brief.md` — Backend Changes B1, B2
 - Builder's note about missing coverage attribution did not reproduce in the reviewer run; scoped coverage now reports owlbear_cockpit.routes.mutation directly.
 - Mock-based route pass-through tests needed a live-path compatibility check against CockpitView.move_task() to rule out signature false-greens.
 - Module-level coverage remains slightly below 90%, but the uncovered lines do not overlap this task's touched span.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | N/A | `serve/cockpit/README.md` move route row describes high-level behavior only; does not enumerate request body fields. New optional `archival_reason`/`archival_refs` fields with safe defaults don't change the documented behavioral contract. No update needed. |
+| 2 | Module docstrings | Yes | N/A | `mutation.py` MoveRequest class docstring `"""Request body for POST /tasks/{id}/move."""` remains accurate; no field-level docstring convention in this codebase. No update needed. |
+| 3 | External attribution | No | N/A | Builder notes cite no external patterns or sources. |
+| 4 | Research doc | No | N/A | No research doc referenced in task body. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/src/**` — matches changed file. Footer updated from `Last verified: 2026-05-01 (e11271c1)` → `Last verified: 2026-05-01 (c9ac7a5d)`. Committed: a80f1cdf. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/src/owlbear_cockpit/routes/mutation.py | IN (docstrings) | No docstring update needed |
+| tests/test_cockpit_mutation_api_1239.py | OUT (test file) | No action |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw (footer: e11271c1 → c9ac7a5d)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found
+[[2026-05-01]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| MoveRequest with no archival fields deserialises correctly (backwards-compatible) | mutation.py:42-43 (defaults); tests/test_cockpit_mutation_api_1239.py:136-146 | PASS |
+| MoveRequest with archival_reason="completed" and archival_refs=[1,2] deserialises with correct types | mutation.py:42-43; tests/test_cockpit_mutation_api_1239.py:150-200 | PASS |
+| extra="forbid" still rejects unknown fields (no regression) | mutation.py:39; tests/test_cockpit_mutation_api_1239.py:204-223 | PASS |
+| Move route handler calls view.move_task() with archival_reason and archival_refs forwarded | mutation.py:165-166; tests/test_cockpit_mutation_api_1239.py:237-301 | PASS |
+| Move route with default values passes through without error | mutation.py:42-43,165-166; tests/test_cockpit_mutation_api_1239.py:303-363 | PASS |
+
+### Test Results
+- pytest full suite: 3378 passed, 108 failed (none in task scope), 4 skipped
+- Task tests (12/12): all pass
+- Regression suite (test_cockpit_mutation_api.py): all pass
+- ruff: 9 violations (none in task files)
+
+### Architect Quality: 5/5
+Specific, complete, testable. Each AC maps directly to concrete model/route behavior. Backward compat, type safety, regression guard, and default forwarding all covered. No builder improvisation required.
+
+### Deduction Breakdown
+- Start: 1.00
+- AC lines without evidence: 0 (none, -0.00)
+- Lint violations in task scope: 0 (-0.00)
+- AC quality score: 5 (-0.00)
+- Reviewer evidence: present, detailed, PASS verdict (-0.00)
+- Full-suite failures in task scope: 0 (-0.00)
+
+### Confidence: 1.00
+### Action: archive
+
+### Upstream Commits Verified
+- 77ef875d feat: forward archival move fields (#1239, builder)
