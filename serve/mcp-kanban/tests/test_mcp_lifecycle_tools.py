@@ -12,7 +12,7 @@ Module: serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, NonCallableMagicMock
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
@@ -110,7 +110,7 @@ def mock_av() -> MagicMock:
     No spec=AgentView: AgentView.move_task is not yet implemented (builder task),
     so spec would block attribute access on the mock.
     """
-    av = MagicMock()
+    av = NonCallableMagicMock()
     resp = _make_response()
     av.move_task.return_value = resp
     av.start_work.return_value = resp

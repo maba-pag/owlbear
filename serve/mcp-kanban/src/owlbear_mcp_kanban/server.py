@@ -220,21 +220,6 @@ def _canonical_agent_view_for(engine: KanbanEngine) -> object | None:
             resolved = candidate()
         if resolved is None:
             return None
-
-        def _is_default_mock_object(value: object) -> bool:
-            return value.__class__.__name__ in {"Mock", "MagicMock", "AsyncMock"}
-
-        lifecycle_methods = ("move_task", "start_work", "end_work")
-        if getattr(candidate, "return_value", object()) is resolved and any(
-            (
-                callable(getattr(candidate, method_name, None))
-                and not _is_default_mock_object(
-                    getattr(getattr(candidate, method_name), "return_value", None)
-                )
-            )
-            for method_name in lifecycle_methods
-        ):
-            return candidate
         return resolved
     return candidate
 
