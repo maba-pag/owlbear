@@ -1,7 +1,6 @@
-"""Mode-6 rename collision guard — exists-guard in attempt_repair.
+"""Durable tests for mode-6 rename collision guarding in attempt_repair.
 
-Task:  #1109
-AC:    AC-1, AC-2, AC-3, AC-4
+Promoted from archived task #1109 during test curation.
 """
 
 from __future__ import annotations
@@ -13,6 +12,8 @@ from owlbear_kanban.corruption import (
     attempt_repair,
 )
 from owlbear_kanban.storage import load_config
+
+# Promoted from archived task #1109.
 
 # ---------------------------------------------------------------------------
 # Board helpers
@@ -117,9 +118,7 @@ class TestFromAC_Mode6CollisionGuard:
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
 
-        # Pre-existing valid file occupying the rename target
         _write(kanban_dir / "tasks" / "42-my-task.md", _VALID_TASK_42)
-        # Corrupt file: filename says 999, frontmatter says 42
         corrupt = kanban_dir / "tasks" / "999-wrong.md"
         _write(corrupt, _CORRUPT_999_WRONG)
 
@@ -140,11 +139,9 @@ class TestFromAC_Mode6CollisionGuard:
 
         attempt_repair(corrupt, ERR_CORRUPT_ID_FILENAME_MISMATCH, config)
 
-        # Corrupt file must have been moved — no longer in tasks/
         assert not corrupt.exists(), (
             "Corrupt file must be removed from tasks/ after quarantine"
         )
-        # Must appear in quarantine/
         quarantine_file = kanban_dir / "quarantine" / "999-wrong.md"
         assert quarantine_file.exists(), "Corrupt file must be present in quarantine/"
 
@@ -153,7 +150,6 @@ class TestFromAC_Mode6CollisionGuard:
         kanban_dir = _make_board(tmp_path)
         config = load_config(kanban_dir)
 
-        # No pre-existing 42-my-task.md — target is free
         corrupt = kanban_dir / "tasks" / "999-wrong.md"
         _write(corrupt, _CORRUPT_999_WRONG)
 

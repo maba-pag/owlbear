@@ -26,10 +26,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest import mock
 
 import pytest
 
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.errors import ConcurrencyError
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
@@ -202,6 +204,44 @@ class TestFromAC_MoveTask:
         assert response.status_code == 404
         assert "999" in response.json()["detail"]
 
+    def test_move_missing_updated_returns_422(self, client: TestClient) -> None:
+        """Missing required 'updated' field in move request returns 422."""
+        response = client.post("/api/tasks/1/move", json={"status": "in-progress"})
+        assert response.status_code == 422
+
+    def test_move_stale_updated_returns_409(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """Stale OCC token in move request returns 409."""
+        task = engine.show_task("1")
+        stale_updated = task.updated
+        engine.edit_task("1", title="Concurrent mutation bumps updated")
+
+        response = client.post(
+            "/api/tasks/1/move",
+            json={"status": "in-progress", "updated": stale_updated},
+        )
+
+        assert response.status_code == 409
+
+    def test_move_concurrency_error_returns_409_with_stale_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """Engine ConcurrencyError during move maps to 409 with stale detail."""
+        task = engine.show_task("1")
+        exc = ConcurrencyError(code="ERR_STALE", user_message="stale")
+
+        with mock.patch.object(engine, "move_task", side_effect=exc):
+            response = client.post(
+                "/api/tasks/1/move",
+                json={"status": "in-progress", "updated": task.updated},
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "Task was modified since your last load (stale snapshot)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC: POST /api/tasks/{id}/edit
@@ -371,6 +411,24 @@ class TestFromAC_EditTask:
         assert response.status_code == 404
         assert "999" in response.json()["detail"]
 
+    def test_edit_concurrency_error_returns_409_with_stale_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """Engine ConcurrencyError during edit maps to 409 with stale detail."""
+        task = engine.show_task("1")
+        exc = ConcurrencyError(code="ERR_STALE", user_message="stale")
+
+        with mock.patch.object(engine, "edit_task", side_effect=exc):
+            response = client.post(
+                "/api/tasks/1/edit",
+                json={"updated": task.updated, "title": "Concurrency probe"},
+            )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == (
+            "Task was modified since your last load (stale snapshot)"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC: POST /api/tasks/{id}/release
@@ -422,6 +480,25 @@ class TestFromAC_ReleaseTask:
         response = client.post("/api/tasks/999/release", json={"updated": token})
         assert response.status_code == 404
         assert "999" in response.json()["detail"]
+
+    def test_release_without_body_returns_422(self, client: TestClient) -> None:
+        """Release requires a request body with the current updated token."""
+        response = client.post("/api/tasks/2/release")
+        assert response.status_code == 422
+
+    def test_release_stale_updated_returns_409_with_stale_detail(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """Claimed task with stale release token returns 409 stale detail."""
+        task = engine.show_task("2")
+        stale_updated = task.updated
+        engine.edit_task("2", title="Concurrent release mutation bumps updated")
+
+        response = client.post("/api/tasks/2/release", json={"updated": stale_updated})
+
+        assert response.status_code == 409
+        detail = response.json()["detail"].lower()
+        assert "stale" in detail or "modified" in detail
 
 
 # ---------------------------------------------------------------------------

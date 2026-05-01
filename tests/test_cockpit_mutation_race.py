@@ -1,4 +1,6 @@
-"""GREEN characterization tests for cockpit mutation route OCC gaps (#1131).
+"""Cockpit mutation route OCC and response-shape regression tests.
+
+Promoted from the task-scoped suite for task #1131.
 
 These tests document CURRENT (broken) behavior in the cockpit mutation HTTP routes:
   - G1 (confirmed): Edit route precheck-only TOCTOU — engine CAS (expected_updated)
@@ -37,6 +39,8 @@ from unittest import mock
 import pytest
 
 from owlbear_kanban import KanbanEngine
+
+# Provenance: promoted from task-scoped suite for task #1131.
 
 
 # ---------------------------------------------------------------------------
@@ -220,9 +224,7 @@ class TestFromAC_ReleaseGuardBroken:
 
         No mocking: proves the live route behavior when claimed_at IS on disk.
         """
-        # Write claimed_at to disk via engine
         engine.claim_task("1")
-        # Precondition: prove the task is genuinely claimed on disk before the POST
         claimed_task = engine.show_task("1")
         assert claimed_task.claimed_at is not None, (
             "Precondition: engine.claim_task must have written claimed_at to disk"
@@ -261,7 +263,6 @@ class TestFromAC_409DetailStrings:
         self, client, engine: KanbanEngine
     ) -> None:
         """Release on unclaimed task 1 → 409 with exact 'Task {id} is not currently claimed'."""
-        # Task 1 is unclaimed in the fixture
         task = engine.show_task("1")
         response = client.post("/api/tasks/1/release", json={"updated": task.updated})
         assert response.status_code == 409

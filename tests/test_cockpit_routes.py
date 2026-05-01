@@ -1,6 +1,6 @@
-"""Failing tests for #1144 — reconcile durable cockpit suites with Brief-B contract.
+"""Cockpit route contract regression tests.
 
-RED phase — all tests must fail until route fixes are implemented.
+Promoted from the task-scoped suite for task #1144.
 
 AC coverage:
   G1: GET /api/tasks route uses cockpit-specific response model with mtime injected
@@ -25,6 +25,8 @@ from owlbear_kanban import KanbanEngine
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
+
+# Provenance: promoted from task-scoped suite for task #1144.
 
 
 # ---------------------------------------------------------------------------

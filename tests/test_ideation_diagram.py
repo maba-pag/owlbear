@@ -1,4 +1,10 @@
-"""Tests for ideation diagram file — task #1034, 6th-cycle rewrite.
+"""Durable tests for ideation diagram coverage.
+
+Promoted from archived task #1034 during test curation.
+
+Historical task context from the original task-scoped suite:
+
+Tests for ideation diagram file — task #1034, 6th-cycle rewrite.
 
 Reflects the current two-phase ideation model as specified in the 6th-cycle
 Architecture Review. All tests for the obsolete single-agent orchestrator model
@@ -24,6 +30,7 @@ AC coverage:
   AC5  — descriptive (not authoritative) note is present
   AC6  — 6 mechanical Excalidraw convention sub-criteria (unchanged from 4th cycle)
   AC-idx — doc-index includes ideation.excalidraw entry with all 6 required globs
+
 """
 
 from __future__ import annotations
@@ -36,6 +43,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_tools.doc_index import generate_index
+# Promoted from archived task #1034.
 
 # ---------------------------------------------------------------------------
 # Constants

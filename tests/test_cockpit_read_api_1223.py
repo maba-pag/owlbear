@@ -220,7 +220,7 @@ class TestFromAC_SessionsEnvelope:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """AC2 (filter proof): explicit ?filter=all is forwarded to CockpitView.list_sessions."""
-        from owlbear_kanban.engine import CockpitView  # noqa: PLC0415
+        from owlbear_cockpit.view import CockpitView  # noqa: PLC0415
 
         captured_filters: list[str] = []
         original = CockpitView.list_sessions

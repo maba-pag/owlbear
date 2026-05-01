@@ -1,6 +1,8 @@
-"""Failing tests for #1133: Add expected_updated CAS param to engine.release_task.
+"""Release-task OCC regression tests.
 
-AC coverage:
+Promoted from the task-scoped suite for task #1133.
+
+AC coverage preserved from the task-scoped suite:
   ac1-sig       — engine.release_task accepts optional expected_updated (default None)
   ac2-cas-write — claimed task + fresh token → write_task_if_unchanged, claim cleared
   ac3-stale     — claimed task + stale token → ConcurrencyError(ERR_STALE)
@@ -12,8 +14,6 @@ AC coverage:
   ac6-facade-err — CockpitView: stale token propagates ConcurrencyError(ERR_STALE)
   ac6-facade-noop-fresh — CockpitView: unclaimed + fresh token → no-op
   ac6-facade-noop-stale — CockpitView: unclaimed + stale token → ConcurrencyError(ERR_STALE)
-
-All tests FAIL (RED phase).
 """
 
 from __future__ import annotations
@@ -24,9 +24,11 @@ from unittest import mock
 
 import pytest
 
+from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.engine import CockpitView
 from owlbear_kanban.models import ConcurrencyError, SingleTaskResponse
+
+# Provenance: promoted from task-scoped suite for task #1133.
 
 # ---------------------------------------------------------------------------
 # Board / task helpers

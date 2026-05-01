@@ -1,16 +1,6 @@
-"""RED-phase tests for #1173 — P2-01: Engine sub-model accessor migration.
+"""Engine accessor migration regression tests.
 
-All tests FAIL until the builder migrates the ~59 engine.py access sites:
-  - config.paths.tasks_dir   (was config.tasks_dir forwarding property)
-  - config.paths.archive_dir (was config.archive_dir forwarding property)
-  - config.pipeline.entry_status, .terminal_status, .wave_size,
-    .claim_timeout, .default_priority, .statuses, .priorities
-  - config.agents.agent_map, .agent_types, .agent_compatibility
-  - config.policy.archival_reasons, .status_predicates
-  - config.pipeline.default_priority (was config.defaults.priority)
-
-Adds PipelineConfig.statuses and PipelineConfig.priorities fields to support
-config.pipeline.statuses / config.pipeline.priorities access from the engine.
+Promoted from archived task-scoped suites for tasks #1173 and #1174.
 """
 
 from __future__ import annotations
@@ -22,6 +12,8 @@ from pathlib import Path
 import owlbear_kanban.engine as _engine_mod
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.models import PipelineConfig
+
+# Provenance: promoted from task-scoped suites for tasks #1173 and #1174.
 
 # Engine source loaded once at module level — all inspection tests use this.
 _ENGINE_SOURCE = inspect.getsource(_engine_mod)
@@ -104,11 +96,7 @@ def _make_board(base_dir: Path, config_yaml: str = _GROUPED_CONFIG) -> Path:
 
 
 class TestFromAC_SubmodelAccessPaths:
-    """AC1 — engine.py must reference sub-model paths for all 59 config access sites.
-
-    Each test checks that the engine source contains the expected sub-model pattern.
-    ALL tests FAIL in RED phase because engine.py currently uses forwarding properties.
-    """
+    """AC1 — engine.py must reference sub-model paths for all config access sites."""
 
     # -- paths group ---------------------------------------------------------
 
@@ -223,14 +211,7 @@ class TestFromAC_SubmodelAccessPaths:
 
 
 class TestFromAC_GroupedFixtures:
-    """AC2 — PipelineConfig must expose statuses/priorities for engine sub-model access.
-
-    The engine migration (AC1) requires config.pipeline.statuses and
-    config.pipeline.priorities to be valid attributes. PipelineConfig must grow
-    these fields and the engine must use them.
-
-    ALL tests FAIL in RED phase because PipelineConfig currently lacks statuses/priorities.
-    """
+    """AC2 — PipelineConfig must expose statuses and priorities for engine access."""
 
     def test_pipeline_config_has_statuses_field(self) -> None:
         """PipelineConfig must declare a 'statuses' field to support pipeline.statuses access."""
@@ -255,7 +236,6 @@ class TestFromAC_GroupedFixtures:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         cfg = engine.board_config()
-        # Will raise AttributeError until PipelineConfig gains 'statuses' field.
         assert cfg.pipeline.statuses == ["research", "backlog", "todo", "done"], (  # type: ignore[attr-defined]
             f"board_config().pipeline.statuses must equal statuses list; got {cfg.pipeline!r}"
         )
@@ -267,7 +247,6 @@ class TestFromAC_GroupedFixtures:
         kanban_dir = _make_board(tmp_path)
         engine = KanbanEngine(kanban_dir)
         cfg = engine.board_config()
-        # Will raise AttributeError until PipelineConfig gains 'priorities' field.
         assert cfg.pipeline.priorities == ["someday", "important", "critical"], (  # type: ignore[attr-defined]
             f"board_config().pipeline.priorities must equal priorities list; got {cfg.pipeline!r}"
         )
@@ -279,16 +258,7 @@ class TestFromAC_GroupedFixtures:
 
 
 class TestFromAC_NoForwardingProperties:
-    """AC4 — engine.py must contain NO forwarding property calls after migration.
-
-    Each test asserts that the banned pattern is absent from engine source.
-    ALL tests FAIL in RED phase because engine.py currently uses all of these
-    forwarding properties extensively.
-
-    Note: these tests scan the full module source including docstrings. If the
-    builder uses patterns only in docstrings/comments, the test will still fail;
-    the builder must update all occurrences.
-    """
+    """AC4 — engine.py must contain no forwarding property calls after migration."""
 
     # -- paths group ---------------------------------------------------------
 
@@ -392,13 +362,7 @@ class TestFromAC_NoForwardingProperties:
         )
 
     def test_no_raw_statuses_forwarding_call(self) -> None:
-        """engine.py must contain ZERO code-level config.statuses calls after migration.
-
-        Uses string-stripped source to exclude the user_message string literal at
-        engine.py line 117 ('config.statuses must contain at least one status').
-        The two remaining code-level reads at lines ~2962 and ~3043 cause this
-        test to FAIL in RED phase.
-        """
+        """engine.py must contain zero code-level config.statuses calls after migration."""
         code_hits = _CODE_SOURCE.count("config.statuses")
         assert code_hits == 0, (
             f"engine.py still has {code_hits} code-level 'config.statuses' accessor(s) — "
@@ -407,11 +371,7 @@ class TestFromAC_NoForwardingProperties:
         )
 
     def test_no_raw_priorities_forwarding_call(self) -> None:
-        """engine.py must contain ZERO code-level config.priorities calls after migration.
-
-        Uses string-stripped source to exclude the user_message string literal
-        ('config.priorities must contain at least one priority').
-        """
+        """engine.py must contain zero code-level config.priorities calls after migration."""
         code_hits = _CODE_SOURCE.count("config.priorities")
         assert code_hits == 0, (
             f"engine.py still has {code_hits} code-level 'config.priorities' accessor(s) — "
@@ -432,15 +392,7 @@ class TestFromAC_NoForwardingProperties:
 
 
 class TestFromAC_GroupedRegressionGate:
-    """AC4 — engine.py must contain >= 50 occurrences of grouped config accessor patterns.
-
-    Prevents a silent mass-revert of the sub-model migration: if every grouped
-    accessor (paths., pipeline., agents., policy.) were reverted, this count
-    would drop well below the threshold.
-
-    Pattern: paths./pipeline./agents./policy. matches any grouped sub-model
-    accessor in the engine source, including string/docstring contexts.
-    """
+    """AC4 — engine.py must retain a high count of grouped config accessor patterns."""
 
     def test_grouped_pattern_count_meets_regression_threshold(self) -> None:
         """Total occurrences of paths./pipeline./agents./policy. in engine source >= 50."""
@@ -449,4 +401,301 @@ class TestFromAC_GroupedRegressionGate:
         assert count >= 50, (
             f"engine.py contains only {count} grouped accessor pattern occurrence(s) — "
             "expected >= 50; a mass-revert of the sub-model migration may have occurred"
+        )
+
+
+_KANBAN_TESTS = Path(__file__).parent.parent / "serve" / "kanban" / "tests"
+
+_ENGINE_COVERAGE_FILE = _KANBAN_TESTS / "test_engine_coverage_1068.py"
+_ENGINE_INIT_FILE = _KANBAN_TESTS / "test_engine_init_1068.py"
+_ENGINE_END_WORK_FILE = _KANBAN_TESTS / "test_engine_end_work_1077.py"
+_ENGINE_CREATE_EDIT_FILE = _KANBAN_TESTS / "test_engine_create_edit_1070.py"
+_ENGINE_READS_FILE = _KANBAN_TESTS / "test_engine_reads_1069.py"
+_ENGINE_PICK_TASKS_FILE = _KANBAN_TESTS / "test_engine_pick_tasks_1074.py"
+
+
+# ---------------------------------------------------------------------------
+# AC3 — Engine test YAML fixtures must use grouped schema format
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_FixtureGroupedYaml:
+    """AC3 — engine test YAML config strings must contain 'schema: grouped'."""
+
+    def test_engine_coverage_base_config_uses_grouped_schema(self) -> None:
+        """test_engine_coverage_1068.py must contain 'schema: grouped' in its YAML config."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "schema: grouped" in src, (
+            "test_engine_coverage_1068.py: _BASE_CONFIG still uses flat config format; "
+            "must be migrated to 'schema: grouped' with pipeline/agents/policy sub-sections"
+        )
+
+    def test_engine_init_base_config_uses_grouped_schema(self) -> None:
+        """test_engine_init_1068.py must contain 'schema: grouped' in its YAML config."""
+        src = _ENGINE_INIT_FILE.read_text(encoding="utf-8")
+        assert "schema: grouped" in src, (
+            "test_engine_init_1068.py: _BASE_CONFIG still uses flat config format; "
+            "must be migrated to 'schema: grouped' with pipeline/agents/policy sub-sections"
+        )
+
+    def test_engine_end_work_base_config_uses_grouped_schema(self) -> None:
+        """test_engine_end_work_1077.py must contain 'schema: grouped' in its YAML config."""
+        src = _ENGINE_END_WORK_FILE.read_text(encoding="utf-8")
+        assert "schema: grouped" in src, (
+            "test_engine_end_work_1077.py: _BASE_CONFIG still uses flat config format; "
+            "must be migrated to 'schema: grouped' with pipeline/agents/policy sub-sections"
+        )
+
+    def test_engine_create_edit_base_config_uses_grouped_schema(self) -> None:
+        """test_engine_create_edit_1070.py must contain 'schema: grouped' in its YAML config."""
+        src = _ENGINE_CREATE_EDIT_FILE.read_text(encoding="utf-8")
+        assert "schema: grouped" in src, (
+            "test_engine_create_edit_1070.py: _BASE_CONFIG still uses flat config format; "
+            "must be migrated to 'schema: grouped' with pipeline/agents/policy sub-sections"
+        )
+
+    def test_engine_reads_base_config_uses_grouped_schema(self) -> None:
+        """test_engine_reads_1069.py must contain 'schema: grouped' in its YAML config."""
+        src = _ENGINE_READS_FILE.read_text(encoding="utf-8")
+        assert "schema: grouped" in src, (
+            "test_engine_reads_1069.py: _BASE_CONFIG still uses flat config format; "
+            "must be migrated to 'schema: grouped' with pipeline/agents/policy sub-sections"
+        )
+
+    def test_engine_pick_tasks_base_config_uses_grouped_schema(self) -> None:
+        """test_engine_pick_tasks_1074.py must contain 'schema: grouped' in its YAML config."""
+        src = _ENGINE_PICK_TASKS_FILE.read_text(encoding="utf-8")
+        assert "schema: grouped" in src, (
+            "test_engine_pick_tasks_1074.py: _BASE_CONFIG still uses flat config format; "
+            "must be migrated to 'schema: grouped' with pipeline/agents/policy sub-sections"
+        )
+
+    def test_engine_coverage_config_has_pipeline_section(self) -> None:
+        """test_engine_coverage_1068.py _BASE_CONFIG must contain 'pipeline:' sub-section."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "pipeline:" in src, (
+            "test_engine_coverage_1068.py: _BASE_CONFIG lacks 'pipeline:' sub-section; "
+            "entry_status/terminal_status/wave_size/claim_timeout must move under pipeline:"
+        )
+
+    def test_engine_coverage_config_has_agents_section(self) -> None:
+        """test_engine_coverage_1068.py _BASE_CONFIG must contain 'agents:' sub-section."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "agents:" in src, (
+            "test_engine_coverage_1068.py: _BASE_CONFIG lacks 'agents:' sub-section; "
+            "agent_map/agent_types/agent_compatibility must move under agents:"
+        )
+
+    def test_engine_init_config_has_pipeline_section(self) -> None:
+        """test_engine_init_1068.py _BASE_CONFIG must contain 'pipeline:' sub-section."""
+        src = _ENGINE_INIT_FILE.read_text(encoding="utf-8")
+        assert "pipeline:" in src, (
+            "test_engine_init_1068.py: _BASE_CONFIG lacks 'pipeline:' sub-section; "
+            "entry_status/terminal_status/wave_size must move under pipeline:"
+        )
+
+    def test_engine_init_config_has_agents_section(self) -> None:
+        """test_engine_init_1068.py _BASE_CONFIG must contain 'agents:' sub-section."""
+        src = _ENGINE_INIT_FILE.read_text(encoding="utf-8")
+        assert "agents:" in src, (
+            "test_engine_init_1068.py: _BASE_CONFIG lacks 'agents:' sub-section; "
+            "agent_map/agent_types/agent_compatibility must move under agents:"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3 — Direct BoardConfig() construction must use sub-model args
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_FixtureDirectConstruction:
+    """AC3 — direct BoardConfig() calls must use grouped sub-model construction."""
+
+    def test_engine_coverage_imports_agents_config(self) -> None:
+        """test_engine_coverage_1068.py must import AgentsConfig for grouped construction."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "AgentsConfig" in src, (
+            "test_engine_coverage_1068.py does not import AgentsConfig; "
+            "_make_valid_config() still uses flat 'agent_map=' kwarg — "
+            "migrate to 'agents=AgentsConfig(agent_map=...)'"
+        )
+
+    def test_engine_init_imports_agents_config(self) -> None:
+        """test_engine_init_1068.py must import AgentsConfig for grouped construction."""
+        src = _ENGINE_INIT_FILE.read_text(encoding="utf-8")
+        assert "AgentsConfig" in src, (
+            "test_engine_init_1068.py does not import AgentsConfig; "
+            "direct BoardConfig() calls still use flat 'agent_map=' kwarg — "
+            "migrate all call sites to 'agents=AgentsConfig(agent_map=...)'"
+        )
+
+    def test_engine_coverage_make_valid_config_uses_agents_submodel(self) -> None:
+        """test_engine_coverage_1068.py _make_valid_config must use agents=AgentsConfig(...)."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "agents=AgentsConfig(" in src, (
+            "test_engine_coverage_1068.py: _make_valid_config() still calls "
+            "BoardConfig(agent_map=...) — must use agents=AgentsConfig(agent_map=...)"
+        )
+
+    def test_engine_init_boardconfig_calls_use_agents_submodel(self) -> None:
+        """test_engine_init_1068.py direct BoardConfig() calls must use agents=AgentsConfig(...)."""
+        src = _ENGINE_INIT_FILE.read_text(encoding="utf-8")
+        assert "agents=AgentsConfig(" in src, (
+            "test_engine_init_1068.py: BoardConfig() call sites still use flat "
+            "'agent_map=' kwarg — migrate all to agents=AgentsConfig(agent_map=...)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3 — Predicate YAML in str.replace() expansions must be correctly nested
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PredicateYamlNesting:
+    """AC3 — predicate YAML replacements must nest keys under status_predicates."""
+
+    def test_create_edit_predicate_research_indentation_is_correct(self) -> None:
+        """test_engine_create_edit_1070.py: 'research:' must be at 8-space indent in the string literal."""
+        src = _ENGINE_CREATE_EDIT_FILE.read_text(encoding="utf-8")
+        assert '"        research:' in src, (
+            "test_engine_create_edit_1070.py: predicate replacement string has 'research:' "
+            "at only 4-space indent — in grouped schema this makes it a sibling of "
+            "'status_predicates:' rather than a child; fix the string literal to use 8-space indent"
+        )
+
+    def test_end_work_predicate_review_indentation_is_correct(self) -> None:
+        """test_engine_end_work_1077.py: 'review:' must be at 8-space indent in the string literal."""
+        src = _ENGINE_END_WORK_FILE.read_text(encoding="utf-8")
+        assert '"        review:' in src, (
+            "test_engine_end_work_1077.py: predicate replacement string has 'review:' "
+            "at only 4-space indent — in grouped schema this makes it a sibling of "
+            "'status_predicates:' rather than a child; fix the string literal to use 8-space indent"
+        )
+
+    def test_create_edit_predicate_not_at_sibling_indent(self) -> None:
+        """test_engine_create_edit_1070.py: 4-space 'research:' (sibling indent) must be absent."""
+        src = _ENGINE_CREATE_EDIT_FILE.read_text(encoding="utf-8")
+        assert '"    research:' not in src, (
+            "test_engine_create_edit_1070.py: predicate replacement still uses 4-space "
+            "indent for 'research:' — this produces malformed YAML in grouped schema "
+            "where status_predicates: is itself at 4-space indent under policy:"
+        )
+
+    def test_end_work_predicate_not_at_sibling_indent(self) -> None:
+        """test_engine_end_work_1077.py: 4-space 'review:' (sibling indent) must be absent."""
+        src = _ENGINE_END_WORK_FILE.read_text(encoding="utf-8")
+        assert '"    review:' not in src, (
+            "test_engine_end_work_1077.py: predicate replacement still uses 4-space "
+            "indent for 'review:' — this produces malformed YAML in grouped schema "
+            "where status_predicates: is itself at 4-space indent under policy:"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC5 (td:2) — TestFromAC_ValidateEngineConfig mutation sites use sub-model paths
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_MutationSubModelPaths:
+    """AC5 — mutation sites in TestFromAC_ValidateEngineConfig must use sub-model paths."""
+
+    def test_pipeline_entry_status_mutation_uses_submodel(self) -> None:
+        """config.pipeline.entry_status = ... must appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.pipeline.entry_status =" in src, (
+            "test_engine_coverage_1068.py: mutation site still uses forwarding property "
+            "'config.entry_status =' — migrate to 'config.pipeline.entry_status ='"
+        )
+
+    def test_pipeline_terminal_status_mutation_uses_submodel(self) -> None:
+        """config.pipeline.terminal_status = ... must appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.pipeline.terminal_status =" in src, (
+            "test_engine_coverage_1068.py: mutation site still uses forwarding property "
+            "'config.terminal_status =' — migrate to 'config.pipeline.terminal_status ='"
+        )
+
+    def test_pipeline_claim_timeout_mutation_uses_submodel(self) -> None:
+        """config.pipeline.claim_timeout = ... must appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.pipeline.claim_timeout =" in src, (
+            "test_engine_coverage_1068.py: mutation site still uses forwarding property "
+            "'config.claim_timeout =' — migrate to 'config.pipeline.claim_timeout ='"
+        )
+
+    def test_agents_agent_map_mutation_uses_submodel(self) -> None:
+        """config.agents.agent_map = ... must appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.agents.agent_map =" in src, (
+            "test_engine_coverage_1068.py: mutation site still uses forwarding property "
+            "'config.agent_map =' — migrate to 'config.agents.agent_map ='"
+        )
+
+    def test_agents_agent_compatibility_mutation_uses_submodel(self) -> None:
+        """config.agents.agent_compatibility = ... must appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.agents.agent_compatibility =" in src, (
+            "test_engine_coverage_1068.py: mutation site still uses forwarding property "
+            "'config.agent_compatibility =' — migrate to 'config.agents.agent_compatibility ='"
+        )
+
+    def test_no_flat_entry_status_mutation(self) -> None:
+        """config.entry_status = ... must not appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.entry_status =" not in src, (
+            "test_engine_coverage_1068.py: forwarding property mutation 'config.entry_status =' "
+            "is still present — this raises AttributeError at runtime; migrate to "
+            "'config.pipeline.entry_status ='"
+        )
+
+    def test_no_flat_terminal_status_mutation(self) -> None:
+        """config.terminal_status = ... must not appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.terminal_status =" not in src, (
+            "test_engine_coverage_1068.py: forwarding property mutation 'config.terminal_status =' "
+            "is still present — this raises AttributeError at runtime; migrate to "
+            "'config.pipeline.terminal_status ='"
+        )
+
+    def test_no_flat_agent_map_mutation(self) -> None:
+        """config.agent_map = ... must not appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.agent_map =" not in src, (
+            "test_engine_coverage_1068.py: forwarding property mutation 'config.agent_map =' "
+            "is still present — this raises AttributeError at runtime; migrate to "
+            "'config.agents.agent_map ='"
+        )
+
+    def test_no_flat_claim_timeout_mutation(self) -> None:
+        """config.claim_timeout = ... must not appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.claim_timeout =" not in src, (
+            "test_engine_coverage_1068.py: forwarding property mutation 'config.claim_timeout =' "
+            "is still present — this raises AttributeError at runtime; migrate to "
+            "'config.pipeline.claim_timeout ='"
+        )
+
+    def test_no_flat_agent_compatibility_mutation(self) -> None:
+        """config.agent_compatibility = ... must not appear in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        assert "config.agent_compatibility =" not in src, (
+            "test_engine_coverage_1068.py: forwarding property mutation 'config.agent_compatibility =' "
+            "is still present — this raises AttributeError at runtime; migrate to "
+            "'config.agents.agent_compatibility ='"
+        )
+
+    def test_all_five_submodel_mutation_patterns_present(self) -> None:
+        """All five sub-model mutation patterns must be present together in test_engine_coverage_1068.py."""
+        src = _ENGINE_COVERAGE_FILE.read_text(encoding="utf-8")
+        patterns = [
+            "config.pipeline.entry_status =",
+            "config.pipeline.terminal_status =",
+            "config.pipeline.claim_timeout =",
+            "config.agents.agent_map =",
+            "config.agents.agent_compatibility =",
+        ]
+        missing = [pattern for pattern in patterns if pattern not in src]
+        assert not missing, (
+            f"test_engine_coverage_1068.py: {len(missing)} sub-model mutation pattern(s) "
+            f"not yet migrated: {missing}"
         )

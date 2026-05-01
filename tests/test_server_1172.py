@@ -142,7 +142,7 @@ class TestFromAC_StatusNamesDictFormBug:
         FAILS: TypeError at L481 swallowed → guidance stays [].
         """
         ctx = _make_ctx(app_ctx)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0, (
             f"Expected non-empty guidance for research→todo skip, got {result.guidance!r}"
         )
@@ -156,7 +156,7 @@ class TestFromAC_StatusNamesDictFormBug:
         FAILS: guidance is [] due to suppressed TypeError at L481.
         """
         ctx = _make_ctx(app_ctx)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0, (
             "No guidance returned — TypeError at L481 still suppressed"
         )
@@ -173,7 +173,7 @@ class TestFromAC_StatusNamesDictFormBug:
         FAILS: guidance is [] due to suppressed TypeError at L481.
         """
         ctx = _make_ctx(app_ctx)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0, (
             "No guidance returned — TypeError at L481 still suppressed"
         )
@@ -196,7 +196,7 @@ class TestFromAC_StatusNamesDictFormBug:
         with patch(
             "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
         ) as mock_cg:
-            await move_task(ctx, task_id="1", status="todo")
+            await move_task(ctx, id="1", status="todo")
 
         assert mock_cg.called, (
             "collect_guidance was never called — TypeError at L481 is still suppressed"
@@ -223,7 +223,7 @@ class TestFromAC_StatusNamesDictFormBug:
         """
         ctx = _make_ctx(app_ctx)
         # research(0) → review(4): delta=4, 3 columns skipped
-        result = await move_task(ctx, task_id="1", status="review")
+        result = await move_task(ctx, id="1", status="review")
         assert len(result.guidance) > 0, (
             f"Expected skip guidance for research→review (4 slots), got {result.guidance!r}"
         )
@@ -245,7 +245,7 @@ class TestFromAC_StatusNamesDictFormBug:
         with patch(
             "owlbear_mcp_kanban.server.collect_guidance", return_value=[]
         ) as mock_cg:
-            await move_task(ctx, task_id="1", status="todo")
+            await move_task(ctx, id="1", status="todo")
 
         assert mock_cg.called, (
             "collect_guidance was never called — fallback path not reached"
@@ -274,7 +274,7 @@ class TestFromAC_StatusNamesDictFormBug:
         with patch(
             "owlbear_mcp_kanban.server.collect_guidance", return_value=sentinel
         ):
-            result = await move_task(ctx, task_id="1", status="todo")
+            result = await move_task(ctx, id="1", status="todo")
 
         assert result.guidance == sentinel, (
             f"result.guidance should equal sentinel {sentinel!r}, got {result.guidance!r}"

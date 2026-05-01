@@ -1,21 +1,12 @@
-"""TDD RED: C-18 — engine activity/session wiring tests.
+"""Engine activity/session regression tests.
 
-Task: #1063 (Brief C #1043) — paper-c.md §7, §8.9
-Module: serve/kanban/src/owlbear_kanban/engine.py
-AC:
+Promoted from the task-scoped suite for task #1063.
+
+Original coverage preserved from the task-scoped suite:
   AC-C42: Engine methods (claim, edit, move, end_work, sweep) emit ActivityEvent
           entries via append_activity_event.
   AC-C43: list_sessions(filter=...) derives SessionRecord values from activity.jsonl
-          with active/all/blocked-or-rejected/released filter semantics per §7.2.
-
-Note: AC-C42 emission is comprehensively covered by existing GREEN tests in
-serve/kanban/tests/test_engine_activity.py (27 tests, all pass). The missing
-implementation for #1063 is in AC-C43: the claim event's `detail` (agent name)
-must be surfaced on the session record via an `agent` field, and a `duration` field
-(seconds float) must complement the existing `duration_s` field. All tests below
-target this gap and FAIL against the current implementation.
-
-All tests FAIL (RED phase).
+          with active/all/blocked-or-rejected/released filter semantics per spec.
 """
 
 from __future__ import annotations
@@ -26,6 +17,8 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban import KanbanEngine
+
+# Provenance: promoted from task-scoped suite for task #1063.
 
 # ---------------------------------------------------------------------------
 # Board helpers
@@ -147,9 +140,6 @@ def engine(board: Path) -> KanbanEngine:
 # AC-C42 mandates that claim events store the agent name in detail.
 # AC-C43 mandates that list_sessions() derives SessionRecord values from
 # activity.jsonl — including surfacing the agent name as session.agent.
-#
-# Current gap: SessionRecord has no `agent` field.  All tests below FAIL
-# with AttributeError: 'SessionRecord' object has no attribute 'agent'.
 # ---------------------------------------------------------------------------
 
 
@@ -288,11 +278,6 @@ class TestFromAC_SessionAgentField:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_SessionDurationField — AC-C43
-#
-# SessionRecord currently exposes `duration_s` but not `duration`.
-# AC-C43 requires the derived session to carry a `duration` attribute
-# (seconds float, mirroring the WorkSession dataclass contract).
-# All tests below FAIL with AttributeError.
 # ---------------------------------------------------------------------------
 
 
@@ -360,9 +345,6 @@ class TestFromAC_SessionDurationField:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_WorkSessionExport — AC-C43 (WorkSession public contract)
-#
-# WorkSession is already exported from owlbear_kanban.__init__ but
-# list_sessions() currently returns SessionRecord (incompatible type).
 # ---------------------------------------------------------------------------
 
 

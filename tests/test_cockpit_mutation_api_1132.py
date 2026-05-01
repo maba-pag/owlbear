@@ -32,8 +32,8 @@ from unittest import mock
 
 import pytest
 
+from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.engine import CockpitView
 from owlbear_kanban.errors import ConcurrencyError, NotFoundError, ValidationError
 
 if TYPE_CHECKING:

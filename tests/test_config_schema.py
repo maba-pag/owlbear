@@ -1,7 +1,6 @@
-"""Tests for #1171 — Config sub-models, detection cascade, and forwarding properties.
+"""Config schema grouping, detection cascade, and forwarding regression tests.
 
-Phase 1 of 3: Schema Infrastructure (config.yml schema grouping).
-All tests must FAIL until #1172 implements the grouped schema.
+Promoted from the task-scoped suite for task #1171.
 
 AC coverage:
   AC1: PathsConfig, PipelineConfig, AgentsConfig, PolicyConfig sub-models
@@ -33,6 +32,8 @@ from owlbear_kanban.models import (
 )
 from owlbear_kanban.migrate import _migrate_config
 from owlbear_kanban.storage import load_config, save_config
+
+# Provenance: promoted from task-scoped suite for task #1171.
 
 # ---------------------------------------------------------------------------
 # Shared YAML fixtures
@@ -670,5 +671,3 @@ class TestFromAC_ModelValidationBoundary:
         )
         assert cfg.statuses == ["research", "done"]
         assert cfg.agents.agent_map == {}
-
-

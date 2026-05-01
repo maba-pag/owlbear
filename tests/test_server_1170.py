@@ -15,8 +15,6 @@ Uncovered paths addressed:
   - _show_validated FileNotFoundError (line 332)
   - _invoke_engine_end_work asyncio.to_thread (lines 345-346)
   - _invoke_view_end_work all branches (lines 359, 361-362, 374-375, 378-379, 396)
-  - _extract_task_id_compat branches (lines 413-424)
-  - _resolve_tool_id conflict and None (lines 442-443)
   - show_task PydanticValidationError (line 463)
   - create_task success and error (lines 474-478)
   - edit_task full body (lines 508-592)
@@ -38,11 +36,9 @@ from owlbear_mcp_kanban.server import (
     AppContext,
     _agent_view_for,
     _canonical_agent_view_for,
-    _extract_task_id_compat,
     _invoke_engine_end_work,
     _invoke_view_end_work,
     _invoke_view_move_task,
-    _resolve_tool_id,
     _show_validated,
     _to_single_task_response,
     create_task,
@@ -591,92 +587,6 @@ class TestFromAC_InvokeViewEndWork:
 
 
 # ---------------------------------------------------------------------------
-# TestFromAC_ExtractTaskIdCompat — lines 413-424
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ExtractTaskIdCompat:
-    """_extract_task_id_compat handles all branches."""
-
-    def test_no_task_id_key_returns_none(self) -> None:
-        """No task_id in dict → returns None without modifying dict (line 413).
-
-        FAILS: if the None return is changed to raise.
-        """
-        legacy = {"other": "value"}
-        result = _extract_task_id_compat(legacy)
-        assert result is None
-        assert "other" in legacy
-
-    def test_string_task_id_returned_and_consumed(self) -> None:
-        """String task_id returned; key consumed from dict (lines 414-415).
-
-        FAILS: if the task_id is not removed from legacy.
-        """
-        legacy = {"task_id": "42"}
-        result = _extract_task_id_compat(legacy)
-        assert result == "42"
-        assert "task_id" not in legacy
-
-    def test_integer_task_id_coerced_to_string(self) -> None:
-        """Integer task_id coerced to string via _coerce_to_str (lines 423-424).
-
-        FAILS: if int→str coercion is removed.
-        """
-        legacy = {"task_id": 99}
-        result = _extract_task_id_compat(legacy)
-        assert result == "99"
-
-    def test_invalid_type_raises_tool_error(self) -> None:
-        """Non-str/int task_id raises ToolError (lines 419-421).
-
-        FAILS: if the type check is removed.
-        """
-        legacy: dict[str, object] = {"task_id": [1, 2, 3]}
-        with pytest.raises(ToolError, match="task_id must be a string or integer"):
-            _extract_task_id_compat(legacy)
-
-
-# ---------------------------------------------------------------------------
-# TestFromAC_ResolveToolId — lines 442-443
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ResolveToolId:
-    """_resolve_tool_id conflict and None cases."""
-
-    def test_conflicting_id_and_legacy_raises_tool_error(self) -> None:
-        """Conflicting id and legacy_task_id raises ToolError (line 442).
-
-        FAILS: if the conflict check is removed.
-        """
-        with pytest.raises(ToolError, match="conflicting id and task_id"):
-            _resolve_tool_id("1", "2", tool="move_task")
-
-    def test_both_none_raises_tool_error(self) -> None:
-        """Both id and legacy_task_id None → ToolError (line 443).
-
-        FAILS: if the None guard is removed.
-        """
-        with pytest.raises(ToolError, match="id is required"):
-            _resolve_tool_id(None, None, tool="move_task")
-
-    def test_id_only_returned(self) -> None:
-        """id_value returned when legacy is None.
-
-        FAILS: if id_value is not preferred over None legacy.
-        """
-        assert _resolve_tool_id("42", None, tool="move_task") == "42"
-
-    def test_legacy_only_returned(self) -> None:
-        """legacy_task_id returned when id_value is None.
-
-        FAILS: if legacy fallback is missing.
-        """
-        assert _resolve_tool_id(None, "99", tool="move_task") == "99"
-
-
-# ---------------------------------------------------------------------------
 # TestFromAC_ShowTaskPydanticError — line 463
 # ---------------------------------------------------------------------------
 
@@ -834,21 +744,6 @@ class TestFromAC_EditTaskCoverage:
         await edit_task(ctx, id="42", block_reason="Waiting for design review")
         _, kwargs = av.edit_task.call_args
         assert kwargs.get("block_reason") == "Waiting for design review"
-
-    @pytest.mark.asyncio
-    async def test_legacy_title_becomes_append_body_when_no_body(self) -> None:
-        """edit_task: legacy title kwarg → kwargs['append_body'] = str(title) (lines 570+).
-
-        FAILS: if the legacy title→append_body conversion branch is removed.
-        """
-        av = MagicMock()
-        av.edit_task.return_value = _make_single_task_response()
-        engine = MagicMock()
-        engine.agent_view.return_value = av
-        ctx = _make_ctx_from_engine(engine)
-        await edit_task(ctx, id="42", title="Legacy note")  # type: ignore[call-arg]
-        _, kwargs = av.edit_task.call_args
-        assert kwargs.get("append_body") == "Legacy note"
 
     @pytest.mark.asyncio
     async def test_edit_task_kanban_error_mapped_to_tool_error(self) -> None:

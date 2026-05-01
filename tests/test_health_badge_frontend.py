@@ -1,18 +1,17 @@
-"""
-RED-phase structural guard for #1158: HealthBadge frontend component.
+"""HealthBadge frontend structural regression tests.
+
+Promoted from the task-scoped suite for task #1158.
 
 These tests verify that:
   1. The component file exists at the expected path.
   2. The Vitest test file exists at the expected path.
-
-Both checks FAIL in RED phase (files not yet created).
-The builder implements the component, moves the tsx test from
-.owlbear/scratch/HealthBadge_1158.test.tsx to the correct location,
-then these structural guards turn GREEN.
 """
+
 from __future__ import annotations
 
 import pathlib
+
+# Provenance: promoted from task-scoped suite for task #1158.
 
 
 ROOT = pathlib.Path(__file__).parent.parent

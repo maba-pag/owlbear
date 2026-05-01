@@ -161,6 +161,26 @@ class TestFromAC_DecisionIdValidation:
             _find_decision_path(tmp_path, ".hidden")
         assert exc_info.value.status_code == 422
 
+    def test_valid_id_returns_pending_path(self, tmp_path: Path) -> None:
+        """AC3: valid allowlisted id '1234-some-slug' passes validation and returns file path.
+
+        Proves the success branch of _find_decision_path() is reachable — a regression
+        that incorrectly rejects allowlisted ids would raise here rather than return a path.
+        """
+        decisions_dir = tmp_path / "decisions"
+        pending_dir = decisions_dir / "pending"
+        pending_dir.mkdir(parents=True)
+        (decisions_dir / "resolved").mkdir()
+        decision_file = pending_dir / "1234-some-slug.md"
+        decision_file.write_text(
+            "---\nresponse: pending\n---\n# Test DR\n", encoding="utf-8"
+        )
+
+        result = _find_decision_path(decisions_dir, "1234-some-slug")
+
+        assert result == decision_file, (
+            f"Expected _find_decision_path to return {decision_file!r}, got {result!r}"
+        )
 
 
 class TestFromAC_ValidationBeforeFilesystemIO:

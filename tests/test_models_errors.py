@@ -1,10 +1,10 @@
-"""RED-phase tests for Brief B B-02: models + errors (task #1066).
+"""Durable tests for Brief B B-02 models and errors behavior.
+
+Promoted from archived task #1066 during test curation.
 
 Covers AC items specific to 1066 not already addressed by B-01 (#1065):
 
-  - Error classes importable from ``owlbear_kanban.errors`` module (errors.py
-    listed in task Module: field — file does not exist yet, causing ImportError
-    in RED phase).
+  - Error classes importable from ``owlbear_kanban.errors`` module.
   - KANBAN_ERROR_CODES accessible from ``owlbear_kanban.errors``.
   - Error classes from ``owlbear_kanban.errors`` are the *same objects* as
     those re-exported from ``owlbear_kanban.models`` (backward-compat contract).
@@ -14,16 +14,12 @@ Covers AC items specific to 1066 not already addressed by B-01 (#1065):
     restriction; enum validation belongs at write sites, not the model (§3.1).
   - ``archival_refs`` on TaskSummary is ``list[int]`` (not ``list[str]``),
     defaulting to the empty list.
-
-All tests fail in RED phase: the top-level import of
-``owlbear_kanban.errors`` raises ImportError at collection time.
 """
 
 from __future__ import annotations
 
 import pytest
 
-# This import block causes ImportError until errors.py is created — all tests fail.
 from owlbear_kanban.errors import (
     KANBAN_ERROR_CODES,
     ConcurrencyError,
@@ -34,6 +30,8 @@ from owlbear_kanban.errors import (
     ValidationError,
 )
 from owlbear_kanban.models import Task, TaskFull, TaskSummary
+
+# Promoted from archived task #1066.
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -106,9 +104,9 @@ class TestFromAC_ErrorsModuleAccess:
 
     def test_errors_module_classes_usable(self) -> None:
         """Error classes imported from errors module must be instantiable."""
-        e = ValidationError(code="ERR_NO_OP", user_message="no-op")
-        assert e.code == "ERR_NO_OP"
-        assert e.user_message == "no-op"
+        error = ValidationError(code="ERR_NO_OP", user_message="no-op")
+        assert error.code == "ERR_NO_OP"
+        assert error.user_message == "no-op"
 
     def test_errors_module_not_found_error_raiseable(self) -> None:
         with pytest.raises(NotFoundError):
@@ -189,8 +187,8 @@ class TestFromAC_DepStatusNotStored:
 
     def test_task_model_excludes_dep_status_in_serialization(self) -> None:
         """Serialized Task dict must not include dep_status key."""
-        t = _make_task()
-        dumped = t.model_dump()
+        task = _make_task()
+        dumped = task.model_dump()
         assert "dep_status" not in dumped
 
     def test_dep_status_present_on_task_summary(self) -> None:
@@ -217,26 +215,26 @@ class TestFromAC_ArchivalReasonModelLevel:
 
     def test_task_summary_accepts_arbitrary_archival_reason(self) -> None:
         """Model must not restrict archival_reason to the enum set (§3.1)."""
-        s = _make_summary(archival_reason="custom_non_enum_reason")
-        assert s.archival_reason == "custom_non_enum_reason"
+        summary = _make_summary(archival_reason="custom_non_enum_reason")
+        assert summary.archival_reason == "custom_non_enum_reason"
 
     def test_task_full_accepts_arbitrary_archival_reason(self) -> None:
-        f = _make_full(archival_reason="completely_arbitrary_string")
-        assert f.archival_reason == "completely_arbitrary_string"
+        full = _make_full(archival_reason="completely_arbitrary_string")
+        assert full.archival_reason == "completely_arbitrary_string"
 
     def test_task_summary_archival_reason_accepts_none(self) -> None:
-        s = _make_summary(archival_reason=None)
-        assert s.archival_reason is None
+        summary = _make_summary(archival_reason=None)
+        assert summary.archival_reason is None
 
     def test_task_full_archival_reason_accepts_none(self) -> None:
-        f = _make_full(archival_reason=None)
-        assert f.archival_reason is None
+        full = _make_full(archival_reason=None)
+        assert full.archival_reason is None
 
     def test_task_summary_archival_reason_accepts_all_enum_values(self) -> None:
         """Enum values are a subset of accepted strings — all five must round-trip."""
         for reason in ("completed", "deprecated", "dropped", "duplicate", "wontfix"):
-            s = _make_summary(archival_reason=reason)
-            assert s.archival_reason == reason
+            summary = _make_summary(archival_reason=reason)
+            assert summary.archival_reason == reason
 
 
 # ---------------------------------------------------------------------------
@@ -248,27 +246,26 @@ class TestFromAC_ArchivalRefsTyping:
     """archival_refs is list[int] with default [] on TaskSummary and TaskFull."""
 
     def test_task_summary_archival_refs_default_is_empty_list(self) -> None:
-        s = _make_summary()
-        assert s.archival_refs == []
+        summary = _make_summary()
+        assert summary.archival_refs == []
 
     def test_task_full_archival_refs_default_is_empty_list(self) -> None:
-        f = _make_full()
-        assert f.archival_refs == []
+        full = _make_full()
+        assert full.archival_refs == []
 
     def test_task_summary_archival_refs_elements_are_int(self) -> None:
-        s = _make_summary(archival_refs=[10, 20, 30])
-        assert all(isinstance(ref, int) for ref in s.archival_refs)
+        summary = _make_summary(archival_refs=[10, 20, 30])
+        assert all(isinstance(ref, int) for ref in summary.archival_refs)
 
     def test_task_full_archival_refs_elements_are_int(self) -> None:
-        f = _make_full(archival_refs=[42])
-        assert all(isinstance(ref, int) for ref in f.archival_refs)
+        full = _make_full(archival_refs=[42])
+        assert all(isinstance(ref, int) for ref in full.archival_refs)
 
     def test_task_summary_archival_refs_annotation_is_list_of_int(self) -> None:
         """Field annotation must reflect list[int], not list[str] (§2.1)."""
         from typing import get_args, get_origin
 
         field = TaskSummary.model_fields["archival_refs"]
-        # Pydantic stores annotation; confirm the inner type is int
         annotation = field.annotation
         assert get_origin(annotation) is list
         (inner,) = get_args(annotation)

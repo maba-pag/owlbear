@@ -1,18 +1,14 @@
-"""RED-phase tests for AgentView.end_work release-outcome note appending (task #1127).
+"""AgentView.end_work release-note regression tests.
 
-Tests:
+Promoted from the task-scoped suite for task #1127.
+
+Coverage preserved from the task-scoped suite:
   AC1 — AgentView.end_work(outcome="release", note=...) on a claimed task appends the
          timestamped note to the task body before releasing the claim
   AC2 — AgentView.end_work(outcome="release", note=...) on an unclaimed task is a
-         pure no-op (regression guard — verifies existing correct behavior is preserved)
-  AC3 — The note uses the same timestamped format as other outcomes:
-         now.replace(microsecond=0).isoformat() + newline + note text
+         pure no-op (regression guard)
+  AC3 — The note uses the same timestamped format as other outcomes
   AC4 — Activity event for release remains action="release", detail="released by agent"
-         (regression guard — verifies no change to session classification)
-
-All AC1 and AC3 tests are expected to FAIL (RED phase — note not yet appended).
-AC2 and AC4 are regression guards for behavior that already works correctly; they
-may pass immediately and are documented as such per w-tdd-red "X unchanged" exception.
 """
 
 from __future__ import annotations
@@ -26,6 +22,8 @@ import pytest
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
 from owlbear_kanban.storage import read_task
+
+# Provenance: promoted from task-scoped suite for task #1127.
 
 # ---------------------------------------------------------------------------
 # Board helpers (mirrored from test_engine_end_work_fail_1125.py convention)
@@ -321,7 +319,6 @@ class TestFromAC_ReleaseNoteAppending:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ReleaseUnclaimedNoop — AC2: unclaimed release is pure no-op
-# (Regression guard — verifies existing correct no-op behavior is preserved)
 # ---------------------------------------------------------------------------
 
 
@@ -331,7 +328,7 @@ class TestFromAC_ReleaseUnclaimedNoop:
     These tests verify that the builder's implementation does NOT accidentally
     apply the note to unclaimed-task release paths. They may pass immediately
     on current code (behavior already correct) and are included as pre-emptive
-    regression guards per w-tdd-red "X unchanged" exception.
+    regression guards.
     """
 
     def test_unclaimed_release_body_not_modified_in_memory(self, tmp_path: Path) -> None:
@@ -391,7 +388,6 @@ class TestFromAC_ReleaseUnclaimedNoop:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ReleaseActivityEvent — AC4: activity event unchanged
-# (Regression guard — verifies existing correct activity event is preserved)
 # ---------------------------------------------------------------------------
 
 
@@ -401,7 +397,7 @@ class TestFromAC_ReleaseActivityEvent:
     These tests verify that the builder's implementation does NOT change the
     activity event emitted for claimed-task releases. They may pass immediately
     on current code (event already correct) and are included as pre-emptive
-    regression guards per w-tdd-red "X unchanged" exception.
+    regression guards.
     """
 
     def test_release_claimed_emits_release_action(self, tmp_path: Path) -> None:
@@ -499,18 +495,11 @@ class TestFromAC_ReleaseActivityEvent:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ReleaseAtomicity — rollback of release_task(note=...) under emit failure
-# (Reviewer-requested: prove the appended note rolls back with the rest of the snapshot)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_ReleaseAtomicity:
     """release_task(note=...) body mutation must roll back on emit failure.
-
-    The reviewer noted that existing atomicity tests in
-    serve/kanban/tests/test_engine_atomicity_1104.py call release_task("1001")
-    without note=, leaving the newly added note-appending rollback path unproven.
-    A bug that restores claim fields but leaves the appended body behind after emit
-    failure would escape the current suite.
 
     These tests verify that when append_activity_event raises OSError after the
     task write, the body mutation (appended note) is rolled back along with all
@@ -591,9 +580,6 @@ class TestFromAC_ReleaseAtomicity:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_ReleaseUnclaimedNoopNL — AC2 newline-sensitive fixture
-# Architecture Review Cycle 2 required: seed a body with trailing \n to prove
-# persisted-state D55 no-op even when _parse_task_file trailing-newline is present.
-# (Regression guard — verifies existing correct persisted-state no-op behavior)
 # ---------------------------------------------------------------------------
 
 
@@ -604,10 +590,6 @@ class TestFromAC_ReleaseUnclaimedNoopNL:
     ``_task_body_as_text().rstrip("\\n")`` response normalization invisible.
     These tests seed bodies that end with ``\\n`` so that persistent-state
     invariants are explicitly verified against the newline case.
-
-    D55 no-op contract (revised scope): no note appended to stored body,
-    no ``updated`` timestamp advanced, no file write.  Response-body
-    normalization (``rstrip("\\n")``) is pre-existing and out of scope.
     """
 
     def test_unclaimed_release_newline_body_disk_unchanged(self, tmp_path: Path) -> None:
@@ -662,20 +644,14 @@ class TestFromAC_ReleaseUnclaimedNoopNL:
 
 # ---------------------------------------------------------------------------
 # TestFromAC_DirectEngineUnclaimedRelease — direct KanbanEngine.release_task(note=...)
-# Architecture Review Cycle 2 required: prove the engine-level early-return path
-# (engine.py:1292) is tested directly, not only via AgentView.
-# (Regression guard — verifies builder's early-return preserves D55 no-op contract)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_DirectEngineUnclaimedRelease:
     """Direct ``KanbanEngine.release_task(note=...)`` unclaimed-path regression guard.
 
-    The builder added an early-return at ``engine.py:1292`` when ``claimed_at is None``.
-    Existing atomicity tests (``test_engine_atomicity_1104.py``) call
-    ``release_task("1001")`` without ``note=``, leaving the note-aware unclaimed path
-    unproven.  These tests exercise ``release_task`` directly (not via ``AgentView``)
-    to prove the D55 no-op contract at the engine boundary.
+    These tests exercise ``release_task`` directly (not via ``AgentView``)
+    to prove the no-op contract at the engine boundary.
     """
 
     def test_direct_engine_unclaimed_release_note_not_in_disk_body(

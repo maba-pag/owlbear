@@ -376,3 +376,429 @@ class TestFromAC_KanbanTaskIoRemoval:
             "owlbear_kanban source files must not import deleted owlbear_kanban.task_io; "
             "found violations:\n" + "\n".join(f"  {entry}" for entry in violations)
         )
+
+
+# Promoted from archived task #1064.
+
+_REPO_ROOT = Path(__file__).parent.parent
+_KANBAN_SRC = _REPO_ROOT / "serve" / "kanban" / "src" / "owlbear_kanban"
+_KANBAN_TESTS = _REPO_ROOT / "serve" / "kanban" / "tests"
+
+
+def _find_storage_imports(py_file: Path) -> list[int]:  # noqa: C901
+    """Return line numbers where ``owlbear_kanban.storage`` is imported in *py_file*."""
+    source = py_file.read_text(encoding="utf-8")
+    if "storage" not in source:
+        return []
+    tree = ast.parse(source, filename=str(py_file))
+    bound_strings = _collect_string_bindings(tree)
+    lines: list[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if (
+                module == "owlbear_kanban.storage"
+                or module.startswith("owlbear_kanban.storage.")
+                or (module == "owlbear_kanban" and any(a.name == "storage" for a in node.names))
+            ):
+                lines.append(node.lineno)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "owlbear_kanban.storage" or alias.name.startswith(
+                    "owlbear_kanban.storage."
+                ):
+                    lines.append(node.lineno)
+        elif isinstance(node, ast.Call) and _call_arg_is_storage(node, bound_strings):
+            if isinstance(node.func, ast.Name) and node.func.id == "__import__":
+                lines.append(node.lineno)
+            if isinstance(node.func, ast.Attribute) and node.func.attr == "import_module":
+                lines.append(node.lineno)
+    return lines
+
+
+def _collect_string_bindings(tree: ast.AST) -> dict[str, str]:
+    """Collect simple name-to-string bindings in module scope and function scope."""
+    bound: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if (
+                isinstance(target, ast.Name)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                bound[target.id] = node.value.value
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            bound[node.target.id] = node.value.value
+    return bound
+
+
+def _call_arg_is_storage(node: ast.Call, bound_strings: dict[str, str]) -> bool:
+    """Return True if *node* dynamically imports an owlbear_kanban.storage module."""
+    if not node.args:
+        return False
+    first_arg = node.args[0]
+    module_name: str | None = None
+    if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
+        module_name = first_arg.value
+    elif isinstance(first_arg, ast.Name):
+        module_name = bound_strings.get(first_arg.id)
+    return bool(
+        module_name
+        and (
+            module_name == "owlbear_kanban.storage"
+            or module_name.startswith("owlbear_kanban.storage.")
+        )
+    )
+
+
+def _call_arg_is_task_io(node: ast.Call) -> bool:
+    """Return True if *node* is a dynamic import call with a task_io argument."""
+    return (
+        node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+        and "task_io" in node.args[0].value
+    )
+
+
+def _find_task_io_references(py_file: Path) -> list[tuple[str, int]]:
+    """Return (kind, lineno) tuples for every reference to ``task_io`` in *py_file*."""
+    source = py_file.read_text(encoding="utf-8")
+    if "task_io" not in source:
+        return []
+    tree = ast.parse(source, filename=str(py_file))
+    hits: list[tuple[str, int]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and "task_io" in (node.module or ""):
+            hits.append(("from-import", node.lineno))
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if "task_io" in alias.name:
+                    hits.append(("import", node.lineno))
+        elif isinstance(node, ast.Call) and _call_arg_is_task_io(node):
+            if isinstance(node.func, ast.Name) and node.func.id == "__import__":
+                hits.append(("__import__", node.lineno))
+            elif isinstance(node.func, ast.Attribute) and node.func.attr == "import_module":
+                hits.append(("import_module", node.lineno))
+    return hits
+
+
+class TestFromAC_KanbanInternalBoundary1064:
+    """AC-C45 refinements promoted from task #1064."""
+
+    def test_only_engine_may_import_owlbear_kanban_storage(self) -> None:
+        violations: list[str] = []
+        for py_file in sorted(_KANBAN_SRC.glob("*.py")):
+            if py_file.name in {"engine.py", "__init__.py"}:
+                continue
+            lines = _find_storage_imports(py_file)
+            for lineno in lines:
+                violations.append(f"  {py_file.name}:{lineno}")
+        assert not violations, (
+            "Only engine.py may import from owlbear_kanban.storage; "
+            "violations found (update these files to import from storage_io, "
+            "body_parser, activity_store, or corruption directly):\n"
+            + "\n".join(violations)
+        )
+
+    def test_storage_io_dynamic_import_not_flagged_as_storage_violation(
+        self, tmp_path: Path
+    ) -> None:
+        synthetic = tmp_path / "synthetic_module.py"
+        synthetic.write_text(
+            'import importlib\nimportlib.import_module("owlbear_kanban.storage_io")\n',
+            encoding="utf-8",
+        )
+        violations = _find_storage_imports(synthetic)
+        assert violations == [], (
+            "importlib.import_module('owlbear_kanban.storage_io') must not be flagged as "
+            "an owlbear_kanban.storage boundary violation — storage_io is not the storage "
+            "surface module.  Fix _call_arg_is_storage to use exact equality instead of "
+            f"startswith().  Lines flagged: {violations}"
+        )
+
+    def test_scanner_detects_variable_held_storage_import(self, tmp_path: Path) -> None:
+        synthetic = tmp_path / "synthetic_variable.py"
+        synthetic.write_text(
+            'import importlib\n'
+            'module_name = "owlbear_kanban.storage"\n'
+            'importlib.import_module(module_name)\n',
+            encoding="utf-8",
+        )
+        violations = _find_storage_imports(synthetic)
+        assert violations, (
+            "_find_storage_imports must detect importlib.import_module calls whose "
+            "argument is a variable holding 'owlbear_kanban.storage'.  Currently only "
+            "literal ast.Constant string arguments are detected, leaving a bypass path "
+            "for variable-indirected dynamic imports."
+        )
+
+    def test_durable_suite_detects_importlib_storage_import(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "dispatch.py").write_text(
+            "import importlib\n"
+            'importlib.import_module("owlbear_kanban.storage")\n',
+            encoding="utf-8",
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, (
+            "_find_kanban_storage_import_violations (tests/test_package_boundary.py) must "
+            "detect importlib.import_module('owlbear_kanban.storage') in non-engine source "
+            "files.  The durable helper currently only checks ast.ImportFrom and ast.Import "
+            "nodes, leaving dynamic imports undetected.  Refined AC-C45 requires both "
+            "static and dynamic import forms to be covered by the durable boundary suite."
+        )
+
+    def test_durable_suite_detects_dunder_import_storage_call(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "corruption.py").write_text(
+            '__import__("owlbear_kanban.storage")\n',
+            encoding="utf-8",
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, (
+            "_find_kanban_storage_import_violations must detect "
+            "__import__('owlbear_kanban.storage') calls in non-engine source files.  "
+            "The current durable helper only scans ast.ImportFrom / ast.Import nodes and "
+            "misses the __import__() dynamic form.  Refined AC-C45 requires coverage of "
+            "this bypass path in the durable boundary suite."
+        )
+
+    def test_durable_suite_detects_from_owlbear_kanban_import_storage(
+        self, tmp_path: Path
+    ) -> None:
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "engine.py").write_text("", encoding="utf-8")
+        (kanban_src / "__init__.py").write_text("", encoding="utf-8")
+        (kanban_src / "bad.py").write_text(
+            "from owlbear_kanban import storage\n", encoding="utf-8"
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper _find_kanban_storage_import_violations must detect "
+            "'from owlbear_kanban import storage' (alias import form) in non-engine "
+            "source files.  Fix: add "
+            "`or (module == 'owlbear_kanban' and any(a.name == 'storage' for a in node.names))` "
+            "to the ast.ImportFrom branch at tests/test_package_boundary.py:~136-138."
+        )
+        assert any("bad.py" in violation for violation in violations), (
+            "The violation entry must identify bad.py as the offending file."
+        )
+
+    def test_durable_suite_alias_form_in_init_not_flagged(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "__init__.py").write_text(
+            "from owlbear_kanban import storage\n", encoding="utf-8"
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert not violations, (
+            "AC-C45a (v4) explicitly exempts __init__.py from the storage-import "
+            "boundary.  `from owlbear_kanban import storage` in __init__.py must NOT "
+            "be flagged as a violation.  The durable helper's skip-list must include "
+            "both 'engine.py' and '__init__.py'; removing __init__.py from the skip-list "
+            "violates the arch v4 decision.\n"
+            f"Current violations returned: {violations}"
+        )
+
+    def test_durable_suite_detects_direct_static_storage_import(
+        self, tmp_path: Path
+    ) -> None:
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "engine.py").write_text("", encoding="utf-8")
+        (kanban_src / "bad.py").write_text(
+            "from owlbear_kanban.storage import read_task\n", encoding="utf-8"
+        )
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper must detect direct 'from owlbear_kanban.storage import X' "
+            "in non-engine source files"
+        )
+        assert any("bad.py" in violation for violation in violations)
+
+    def test_durable_suite_detects_bare_import_storage(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_kanban_storage_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "engine.py").write_text("", encoding="utf-8")
+        (kanban_src / "bad.py").write_text("import owlbear_kanban.storage\n", encoding="utf-8")
+        violations = _find_kanban_storage_import_violations(tmp_path)
+        assert violations, "Durable helper must detect bare 'import owlbear_kanban.storage'"
+        assert any("bad.py" in violation for violation in violations)
+
+
+class TestFromAC_TaskIoGlobalRemoval:
+    """4th AC: no import of removed ``task_io`` module anywhere in the codebase."""
+
+    def test_no_task_io_reference_in_kanban_test_suite(self) -> None:
+        violations: list[str] = []
+        for py_file in sorted(_KANBAN_TESTS.rglob("*.py")):
+            hits = _find_task_io_references(py_file)
+            for kind, lineno in hits:
+                violations.append(f"  {py_file.name}:{lineno} ({kind})")
+        assert not violations, (
+            "serve/kanban/tests/ files must not reference the deleted task_io "
+            "module; these references must be updated to use storage or "
+            "storage_io:\n" + "\n".join(violations)
+        )
+
+    def test_no_task_io_reference_anywhere_in_codebase(
+        self, project_root: Path
+    ) -> None:
+        serve_root = project_root / "serve"
+        tests_root = project_root / "tests"
+        violations: list[str] = []
+        for root in (serve_root, tests_root):
+            for py_file in sorted(root.rglob("*.py")):
+                hits = _find_task_io_references(py_file)
+                for kind, lineno in hits:
+                    rel = py_file.relative_to(project_root)
+                    violations.append(f"  {rel}:{lineno} ({kind})")
+        assert not violations, (
+            "These files reference the deleted owlbear_kanban.task_io module "
+            "and must be updated:\n" + "\n".join(violations)
+        )
+
+
+class TestFromAC_StorageTestIsolation:
+    """AC-C46: ``tests/test_deny_code_writes.py`` must exist."""
+
+    def test_deny_code_writes_test_file_exists(self, project_root: Path) -> None:
+        deny_file = project_root / "tests" / "test_deny_code_writes.py"
+        assert deny_file.exists(), (
+            "tests/test_deny_code_writes.py does not exist; "
+            "create it with enforcement tests that verify storage test files "
+            "(serve/kanban/tests/test_storage*.py, test_activity_store*.py, "
+            "test_corruption*.py) are isolated to tmp_path (AC-C46)"
+        )
+
+
+class TestFromAC_NewModuleLayout:
+    """3rd AC: boundary enforcement for the new layout is permanent, not just task-scoped."""
+
+    def test_durable_boundary_suite_includes_intra_kanban_storage_check(
+        self, project_root: Path
+    ) -> None:
+        boundary_file = project_root / "tests" / "test_package_boundary.py"
+        content = boundary_file.read_text(encoding="utf-8")
+        assert "engine.py" in content, (
+            "tests/test_package_boundary.py must reference 'engine.py' as part of a "
+            "permanent intra-kanban storage boundary test.  Currently this enforcement "
+            "exists only in the task-scoped test_package_boundary_1064.py.  Add a "
+            "TestFromAC_KanbanInternalBoundary (or equivalent) class to the durable suite "
+            "so the AC-C45 constraint survives post-archive cleanup."
+        )
+
+
+class TestFromAC_KanbanTaskIoRemoval1064:
+    """AC-C45b refinements promoted from task #1064."""
+
+    def test_durable_suite_task_io_helper_detects_static_import(
+        self, tmp_path: Path
+    ) -> None:
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "dispatch.py").write_text(
+            "from owlbear_kanban.task_io import write_task\n",
+            encoding="utf-8",
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, (
+            "_find_task_io_import_violations (tests/test_package_boundary.py) must "
+            "detect 'from owlbear_kanban.task_io import write_task' in non-engine "
+            "source files.  Add this helper to the durable suite per refined AC-C45b."
+        )
+
+    def test_durable_suite_task_io_init_py_exemption_in_place(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "__init__.py").write_text(
+            "from owlbear_kanban.task_io import write_task\n", encoding="utf-8"
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert not violations, (
+            "AC-C45b (v5) explicitly exempts __init__.py from the task_io-import "
+            "boundary scanner.  `from owlbear_kanban.task_io import write_task` in "
+            "__init__.py must NOT be flagged as a violation — a deleted-module import "
+            "there would fail at import time with ModuleNotFoundError, making the "
+            "structural guard redundant.  The durable helper's skip-list must include "
+            "'__init__.py'; removing it violates the arch v5 decision.\n"
+            f"Current violations returned: {violations}"
+        )
+
+    def test_durable_suite_detects_dynamic_task_io_import(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "dispatch.py").write_text(
+            'import importlib\nimportlib.import_module("owlbear_kanban.task_io")\n',
+            encoding="utf-8",
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper must detect importlib.import_module('owlbear_kanban.task_io') "
+            "in source files"
+        )
+        assert any("dispatch.py" in violation for violation in violations)
+
+    def test_durable_suite_detects_bare_import_task_io(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "bad.py").write_text("import owlbear_kanban.task_io\n", encoding="utf-8")
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, "Durable helper must detect bare 'import owlbear_kanban.task_io'"
+        assert any("bad.py" in violation for violation in violations)
+
+    def test_durable_suite_detects_dunder_import_task_io(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "bad.py").write_text(
+            '__import__("owlbear_kanban.task_io")\n', encoding="utf-8"
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, (
+            "Durable helper must detect __import__('owlbear_kanban.task_io') in source files"
+        )
+        assert any("bad.py" in violation for violation in violations)
+
+    def test_durable_suite_detects_alias_form_task_io_import(self, tmp_path: Path) -> None:
+        from tests.test_package_boundary import _find_task_io_import_violations
+
+        kanban_src = tmp_path / "serve" / "kanban" / "src" / "owlbear_kanban"
+        kanban_src.mkdir(parents=True)
+        (kanban_src / "bad.py").write_text(
+            "from owlbear_kanban import task_io\n", encoding="utf-8"
+        )
+        violations = _find_task_io_import_violations(tmp_path)
+        assert violations, "Durable helper must detect 'from owlbear_kanban import task_io'"
+        assert any("bad.py" in violation for violation in violations)

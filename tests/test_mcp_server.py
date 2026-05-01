@@ -1,6 +1,8 @@
-"""RED phase tests — MCP read tool adapters: show_task unconditional call + suite rollout (#1090).
+"""Durable tests for MCP read tool adapter behavior and suite rollout.
 
-AC Coverage (failing tests):
+Promoted from archived task #1090 during test curation.
+
+AC coverage:
 - AC2+AC7: show_task makes single unconditional call view.show_task(task_id=params.id,
            section=params.section). When section=None, None passes through — NOT "".
            The Mock-specific branch (isinstance(view, Mock) → section="") violates AC2+AC7.
@@ -26,6 +28,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from owlbear_kanban.models import ShowTaskResponse
+
+# Promoted from archived task #1090.
 
 # ---------------------------------------------------------------------------
 # Helpers for boundary model tests
@@ -153,8 +157,6 @@ class TestFromAC_ShowTaskUnconditionalCall:
         The current Mock-specific branch sets view_section="" whenever the view is a
         Mock instance and section is None (server.py:337-338). This violates both
         AC2 (unconditional call) and AC7 (no isinstance(view, Mock)).
-
-        FAILS: kw.get("section") == "" because the Mock branch is still active.
         """
         from owlbear_mcp_kanban.server import show_task
 
@@ -179,8 +181,6 @@ class TestFromAC_ShowTaskUnconditionalCall:
         This branch must be removed. The Mock import at module level may stay
         (used by _agent_view_for), but isinstance(view, Mock) must not appear
         in the show_task function body.
-
-        FAILS: inspect.getsource(show_task) contains "isinstance(view, Mock)".
         """
         import inspect
 
@@ -211,8 +211,6 @@ class TestFromAC_DurableSuiteRollout:
         test_show_task_id_forwarded_exact (test_mcp_read_tools.py ~L807) still asserts
         kw.get("id") == 77, which is the WRONG kwarg name for the engine call.
         The assertion must be updated to kw.get("task_id") == 77.
-
-        FAILS: test_mcp_read_tools.py contains 'kw.get("id") ==' at ~L807.
         """
         read_tools_file = (
             Path(__file__).parent.parent
@@ -234,9 +232,8 @@ class TestFromAC_DurableSuiteRollout:
 
 
 # ---------------------------------------------------------------------------
-# Notes: already implemented — no failing tests possible
+# Notes: already implemented — no failing test possible
 # AC3: pick_tasks delegates to AgentView.pick_tasks — verified by durable suite.
 # AC5: KanbanError → ToolError via _map_kanban_error — verified by durable suite.
 # AC6: list_tasks output_schema = ListTasksResponse.model_json_schema() — already set.
 # ---------------------------------------------------------------------------
-

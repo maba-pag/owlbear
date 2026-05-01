@@ -15,6 +15,7 @@ AC coverage:
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -24,6 +25,8 @@ from owlbear_kanban import KanbanEngine
 
 if TYPE_CHECKING:
     from fastapi.testclient import TestClient
+
+    from owlbear_cockpit.cache import MtimeScanCache
 
 
 # ---------------------------------------------------------------------------
@@ -116,16 +119,98 @@ def engine(board_dir: Path) -> KanbanEngine:
 
 
 @pytest.fixture
-def client(engine: KanbanEngine):
+def client(engine: KanbanEngine, cache: MtimeScanCache):
     """FastAPI TestClient with engine injected via dependency_overrides.
 
     In RED phase, ``get_engine`` does not exist in ``owlbear_cockpit.main``
     so this fixture raises ImportError — all tests using it will ERROR (RED).
     """
     from fastapi.testclient import TestClient  # noqa: PLC0415
+    from owlbear_cockpit.deps import get_cache  # noqa: PLC0415
     from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415  # ImportError in RED
 
     app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_cache] = lambda: cache
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def empty_board_dir(tmp_path: Path) -> Path:
+    """Minimal kanban board with no tasks."""
+    base = tmp_path / "empty"
+    base.mkdir()
+    return _make_board(base)
+
+
+@pytest.fixture
+def empty_engine(empty_board_dir: Path) -> KanbanEngine:
+    """KanbanEngine pointed at an empty board."""
+    return KanbanEngine(empty_board_dir, agent_name="test-cockpit-empty")
+
+
+@pytest.fixture
+def empty_client(empty_engine: KanbanEngine, empty_cache: MtimeScanCache):
+    """FastAPI TestClient with an empty-board engine injected."""
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+    from owlbear_cockpit.deps import get_cache  # noqa: PLC0415
+    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+    app.dependency_overrides[get_engine] = lambda: empty_engine
+    app.dependency_overrides[get_cache] = lambda: empty_cache
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def cache(board_dir: Path) -> MtimeScanCache:
+    """Known MtimeScanCache instance for the test board's tasks directory."""
+    from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+    return MtimeScanCache(board_dir / "tasks")
+
+
+@pytest.fixture
+def cache_client(engine: KanbanEngine, cache: MtimeScanCache) -> TestClient:
+    """TestClient with get_engine and get_cache both overridden."""
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from owlbear_cockpit.deps import get_cache  # noqa: PLC0415
+    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+    app.dependency_overrides[get_engine] = lambda: engine
+    app.dependency_overrides[get_cache] = lambda: cache
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def empty_cache(empty_board_dir: Path) -> MtimeScanCache:
+    """Known MtimeScanCache instance for the empty board's tasks directory."""
+    from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+    return MtimeScanCache(empty_board_dir / "tasks")
+
+
+@pytest.fixture
+def empty_cache_client(
+    empty_engine: KanbanEngine,
+    empty_cache: MtimeScanCache,
+) -> TestClient:
+    """TestClient with get_engine and get_cache overridden for the empty board."""
+    from fastapi.testclient import TestClient  # noqa: PLC0415
+
+    from owlbear_cockpit.deps import get_cache  # noqa: PLC0415
+    from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+    app.dependency_overrides[get_engine] = lambda: empty_engine
+    app.dependency_overrides[get_cache] = lambda: empty_cache
     try:
         yield TestClient(app)
     finally:
@@ -426,7 +511,7 @@ class TestFromAC_Sessions:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """GET /api/sessions (no filter param) defaults to active and returns HTTP 200."""
-        from owlbear_kanban.engine import CockpitView
+        from owlbear_cockpit.view import CockpitView
 
         called_filter: str | None = None
         original = CockpitView.list_sessions
@@ -681,3 +766,450 @@ class TestFromAC_TaskDetailClaimedFields:
             assert "claimed_by" not in body, (
                 f"claimed_by must be absent for task {task_id}, got keys {list(body.keys())}"
             )
+
+
+class TestFromAC_NewModulesImportable:
+    """Coverage for read API module boundaries promoted from archived task tests."""
+
+    def test_cache_module_importable(self) -> None:
+        """owlbear_cockpit.cache.MtimeScanCache is importable."""
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415, F401
+
+    def test_routes_read_router_importable(self) -> None:
+        """owlbear_cockpit.routes.read exposes a FastAPI APIRouter named router."""
+        from fastapi import APIRouter  # noqa: PLC0415
+        from owlbear_cockpit.routes.read import router  # noqa: PLC0415
+
+        assert isinstance(router, APIRouter), (
+            f"routes.read.router must be an APIRouter, got {type(router).__name__}"
+        )
+
+
+class TestFromAC_PydanticResponseModels:
+    """Response models remain importable Pydantic models."""
+
+    def test_board_out_is_pydantic_model(self) -> None:
+        """BoardOut is a pydantic BaseModel subclass."""
+        from pydantic import BaseModel  # noqa: PLC0415
+        from owlbear_cockpit.models import BoardOut  # noqa: PLC0415
+
+        assert issubclass(BoardOut, BaseModel), "BoardOut must be a pydantic BaseModel"
+
+
+class TestFromAC_EmptyBoardEdgeCase:
+    """GET /api/tasks on a board with zero task files must not raise an exception."""
+
+    def test_empty_board_tasks_returns_200(self, empty_client: TestClient) -> None:
+        """GET /api/tasks on a board with no task files returns HTTP 200."""
+        response = empty_client.get("/api/tasks")
+        assert response.status_code == 200
+
+    def test_empty_board_tasks_list_is_empty(self, empty_client: TestClient) -> None:
+        """GET /api/tasks on an empty board returns an empty task list."""
+        response = empty_client.get("/api/tasks")
+        assert response.status_code == 200
+        body = response.json()
+        assert "tasks" in body
+        assert body["tasks"] == [], (
+            f"Expected empty tasks list for empty board, got {body['tasks']!r}"
+        )
+
+    def test_empty_board_tasks_mtime_is_zero(self, empty_client: TestClient) -> None:
+        """GET /api/tasks on an empty board returns mtime=0."""
+        response = empty_client.get("/api/tasks")
+        assert response.status_code == 200
+        body = response.json()
+        assert "mtime" in body
+        assert body["mtime"] == 0, (
+            f"Expected mtime=0 for empty board, got {body['mtime']!r}"
+        )
+
+
+class TestFromAC_MtimeScanCacheUnit:
+    """Direct unit coverage for MtimeScanCache."""
+
+    def test_mtime_scan_cache_instantiable_with_path(self, tmp_path: Path) -> None:
+        """MtimeScanCache can be instantiated with a Path argument."""
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+        cache = MtimeScanCache(tmp_path)
+        assert cache is not None
+
+    def test_empty_dir_scan_returns_zero(self, tmp_path: Path) -> None:
+        """MtimeScanCache.scan() returns 0 for an empty directory."""
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+        cache = MtimeScanCache(tmp_path)
+        assert cache.scan() == 0, (
+            "Empty tasks dir must return mtime=0 (max with default=0)"
+        )
+
+    def test_non_empty_dir_scan_returns_positive_int(self, tmp_path: Path) -> None:
+        """MtimeScanCache.scan() returns a positive integer when files are present."""
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+        (tmp_path / "1-task.md").write_text("# task", encoding="utf-8")
+        cache = MtimeScanCache(tmp_path)
+        result = cache.scan()
+        assert isinstance(result, int), (
+            f"scan() must return int, got {type(result).__name__}"
+        )
+        assert result > 0, "scan() must return positive mtime_ns when files are present"
+
+    def test_scan_returns_max_mtime_across_files(self, tmp_path: Path) -> None:
+        """MtimeScanCache.scan() returns the maximum mtime_ns across files."""
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+        first = tmp_path / "1-task.md"
+        first.write_text("# task 1", encoding="utf-8")
+        time.sleep(0.01)
+        second = tmp_path / "2-task.md"
+        second.write_text("# task 2", encoding="utf-8")
+
+        expected_max = max(first.stat().st_mtime_ns, second.stat().st_mtime_ns)
+        cache = MtimeScanCache(tmp_path)
+        assert cache.scan() == expected_max, (
+            "scan() must return the maximum mtime_ns, not the first or minimum"
+        )
+
+    def test_scan_is_repeatable_with_no_changes(self, tmp_path: Path) -> None:
+        """Two consecutive scan() calls with no file changes return the same value."""
+        from owlbear_cockpit.cache import MtimeScanCache  # noqa: PLC0415
+
+        (tmp_path / "1-task.md").write_text("# task", encoding="utf-8")
+        cache = MtimeScanCache(tmp_path)
+        assert cache.scan() == cache.scan(), (
+            "scan() must return a stable value when files are unchanged"
+        )
+
+
+class TestFromAC_EngineReloadOnMtimeChange:
+    """New tasks created between requests must be reflected in the task list."""
+
+    def test_new_task_appears_in_list_after_creation(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """A task created after the first request appears in a subsequent request."""
+        first = client.get("/api/tasks")
+        assert first.status_code == 200
+        count_before = len(first.json()["tasks"])
+
+        engine.create_task("New task via engine", status="todo", priority="important")
+
+        second = client.get("/api/tasks")
+        assert second.status_code == 200
+        count_after = len(second.json()["tasks"])
+        assert count_after > count_before, (
+            "New task must appear in subsequent GET /api/tasks response "
+            f"(before={count_before}, after={count_after})"
+        )
+
+    def test_mtime_increases_after_new_task_created(
+        self, client: TestClient, engine: KanbanEngine
+    ) -> None:
+        """Creating a new task file increases the mtime returned by GET /api/tasks."""
+        first = client.get("/api/tasks")
+        assert first.status_code == 200
+        mtime_before = first.json()["mtime"]
+
+        engine.create_task("Another new task", status="backlog", priority="someday")
+
+        second = client.get("/api/tasks")
+        assert second.status_code == 200
+        mtime_after = second.json()["mtime"]
+        assert mtime_after > mtime_before, (
+            "mtime must increase after a new task file is created "
+            f"(before={mtime_before}, after={mtime_after})"
+        )
+
+
+class TestBuilderDiscoveredReadApiAdapter:
+    """Thin adapter-wrapper coverage promoted from archived task tests."""
+
+    def test_adapter_list_tasks_is_callable_via_engine(
+        self, engine: KanbanEngine
+    ) -> None:
+        """adapter.list_tasks(engine) delegates to engine.list_tasks and returns a list."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.list_tasks(engine)
+        assert isinstance(result, list)
+
+    def test_adapter_show_task_is_callable_via_engine(
+        self, engine: KanbanEngine
+    ) -> None:
+        """adapter.show_task(engine, task_id) returns the matching task object."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        tasks = engine.list_tasks()
+        task_id = str(tasks[0].id)
+        result = adapter.show_task(engine, task_id)
+        assert result is not None
+        assert str(result.id) == task_id
+
+    def test_adapter_board_config_is_callable_via_engine(
+        self, engine: KanbanEngine
+    ) -> None:
+        """adapter.board_config(engine) returns a config object with statuses."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.board_config(engine)
+        assert result is not None
+        assert hasattr(result, "statuses")
+
+    def test_adapter_valid_transitions_is_callable_via_engine(
+        self, engine: KanbanEngine
+    ) -> None:
+        """adapter.valid_transitions(engine, status) returns a collection of strings."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.valid_transitions(engine, "todo")
+        assert isinstance(result, (set, frozenset, list))
+
+    def test_adapter_list_sessions_is_callable_via_engine(
+        self, engine: KanbanEngine
+    ) -> None:
+        """adapter.list_sessions(engine) returns a list."""
+        from owlbear_cockpit import adapter  # noqa: PLC0415
+
+        result = adapter.list_sessions(engine)
+        assert isinstance(result, list)
+
+
+class TestFromAC_CacheHitShortCircuit:
+    """Cache hits return cached tasks without reloading through the engine."""
+
+    def test_cache_hit_skips_engine_call(
+        self,
+        cache_client: TestClient,
+        engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """engine.list_tasks() is not called on second GET /api/tasks when mtime is unchanged."""
+        first = cache_client.get("/api/tasks")
+        assert first.status_code == 200
+
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting)
+
+        second = cache_client.get("/api/tasks")
+        assert second.status_code == 200
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on cache hit, expected 0"
+        )
+
+    def test_has_changed_called_updates_last_mtime(
+        self,
+        cache_client: TestClient,
+        cache: MtimeScanCache,
+    ) -> None:
+        """cache.last_mtime is updated after the first GET /api/tasks."""
+        assert cache.last_mtime == 0, "Cache must start with last_mtime=0 before any request"
+        cache_client.get("/api/tasks")
+        assert cache.last_mtime > 0, (
+            "cache.last_mtime must be updated after GET /api/tasks — "
+            "has_changed() must be called in the route handler"
+        )
+
+    def test_status_filter_on_cache_hit_skips_engine(
+        self,
+        cache_client: TestClient,
+        engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """engine.list_tasks() is not called when a status filter is applied on cache hit."""
+        cache_client.get("/api/tasks")
+
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting)
+
+        response = cache_client.get("/api/tasks?status=todo")
+        assert response.status_code == 200
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on status-filtered cache hit, expected 0"
+        )
+
+    def test_priority_filter_on_cache_hit_skips_engine(
+        self,
+        cache_client: TestClient,
+        engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """engine.list_tasks() is not called when a priority filter is applied on cache hit."""
+        cache_client.get("/api/tasks")
+
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting)
+
+        response = cache_client.get("/api/tasks?priority=important")
+        assert response.status_code == 200
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on priority-filtered cache hit, expected 0"
+        )
+
+    def test_tag_filter_on_cache_hit_skips_engine(
+        self,
+        cache_client: TestClient,
+        engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """engine.list_tasks() is not called when a tag filter is applied on cache hit."""
+        cache_client.get("/api/tasks")
+
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting)
+
+        response = cache_client.get("/api/tasks?tag=scope%3Ax")
+        assert response.status_code == 200
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on tag-filtered cache hit, expected 0"
+        )
+
+    def test_blocked_filter_on_cache_hit_skips_engine(
+        self,
+        cache_client: TestClient,
+        engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """engine.list_tasks() is not called when a blocked filter is applied on cache hit."""
+        cache_client.get("/api/tasks")
+
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting)
+
+        response = cache_client.get("/api/tasks?blocked=false")
+        assert response.status_code == 200
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on blocked-filtered cache hit, expected 0"
+        )
+
+    def test_status_filter_returns_correct_tasks_on_cache_hit(
+        self,
+        cache_client: TestClient,
+        engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Status filtering on a cache hit returns only matching tasks."""
+        cache_client.get("/api/tasks")
+
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting)
+
+        response = cache_client.get("/api/tasks?status=todo")
+        assert response.status_code == 200
+        assert call_count == 0, "engine.list_tasks() must not be called on cache hit"
+        tasks = response.json()["tasks"]
+        assert len(tasks) > 0, "Expected at least 1 'todo' task in test board"
+        assert all(task["status"] == "todo" for task in tasks), (
+            f"All returned tasks must have status='todo' on filtered cache hit, got {tasks!r}"
+        )
+
+    def test_multiple_consecutive_requests_all_skip_engine(
+        self,
+        cache_client: TestClient,
+        engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """engine.list_tasks() is not called on later unchanged requests."""
+        cache_client.get("/api/tasks")
+
+        call_count = 0
+        original = engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(engine, "list_tasks", counting)
+
+        for _ in range(3):
+            response = cache_client.get("/api/tasks")
+            assert response.status_code == 200
+
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times across 3 consecutive cache-hit requests, expected 0"
+        )
+
+    def test_first_request_populates_cache_tasks(
+        self,
+        cache_client: TestClient,
+        cache: MtimeScanCache,
+    ) -> None:
+        """cache.tasks is populated with all tasks after the first GET /api/tasks."""
+        assert cache.tasks == [], "cache.tasks must start empty"
+        cache_client.get("/api/tasks")
+        assert len(cache.tasks) > 0, (
+            "cache.tasks must be populated after first GET /api/tasks — "
+            "the route must store engine results in cache.tasks on cache miss"
+        )
+
+    def test_empty_board_second_request_skips_engine_call(
+        self,
+        empty_cache_client: TestClient,
+        empty_engine: KanbanEngine,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """A cached empty task list is treated as a valid cache hit."""
+        first = empty_cache_client.get("/api/tasks")
+        assert first.status_code == 200
+        assert first.json()["tasks"] == [], "Empty board must return empty task list"
+
+        call_count = 0
+        original = empty_engine.list_tasks
+
+        def counting(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(empty_engine, "list_tasks", counting)
+
+        second = empty_cache_client.get("/api/tasks")
+        assert second.status_code == 200
+        assert second.json()["tasks"] == [], "Second empty-board response must also be empty"
+        assert call_count == 0, (
+            f"engine.list_tasks() called {call_count} times on second unchanged empty-board request — cached [] must be treated as a valid cache hit"
+        )

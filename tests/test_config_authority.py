@@ -1,4 +1,6 @@
-"""Tests for #1177 — Clarify authority and validation for root vs pipeline statuses/priorities.
+"""Config authority and validation regression tests.
+
+Promoted from the task-scoped suite for task #1177.
 
 AC coverage:
   AC1 (td:1): ERR_CONFLICT_STATUS registered in KANBAN_ERROR_CODES in errors.py
@@ -13,14 +15,6 @@ AC coverage:
   AC5 (td:1): round-trip load -> save -> reload -> config.pipeline.statuses == config.statuses
               (regression guard)
   AC6 (td:0): docstring on _normalise_legacy -- skip
-
-All AC1/AC2 tests MUST FAIL until the builder:
-  - Adds ERR_CONFLICT_STATUS to KANBAN_ERROR_CODES in errors.py
-  - Adds conflict-detection logic in _normalise_legacy grouped branch
-
-AC3/AC4/AC5 tests are explicit regression guards (required by w-tdd-red Step 4) and
-currently PASS because the guarded behaviour already exists. They ensure the builder
-does not break backward-compat while implementing the new validation.
 """
 
 from __future__ import annotations
@@ -34,6 +28,8 @@ import yaml
 from owlbear_kanban.errors import KANBAN_ERROR_CODES, ConfigError
 from owlbear_kanban.models import BoardConfig
 from owlbear_kanban.storage import load_config, save_config
+
+# Provenance: promoted from task-scoped suite for task #1177.
 
 # ---------------------------------------------------------------------------
 # Shared constants and helpers

@@ -175,7 +175,7 @@ class TestFromAC_MoveTaskGuidanceViaMock:
         PASSES: after builder fixes mock to list[str].
         """
         ctx = _make_fallback_ctx(before_dict=_RESEARCH_TASK, after_dict=_TODO_TASK)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0, (
             f"Expected non-empty guidance for research→todo forward-skip, "
             f"got {result.guidance!r}. "
@@ -190,7 +190,7 @@ class TestFromAC_MoveTaskGuidanceViaMock:
         PASSES: after builder fixes mock to list[str].
         """
         ctx = _make_fallback_ctx(before_dict=_RESEARCH_TASK, after_dict=_TODO_TASK)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0, (
             f"Expected guidance message for research→todo, got {result.guidance!r}"
         )
@@ -206,7 +206,7 @@ class TestFromAC_MoveTaskGuidanceViaMock:
         PASSES: after builder fixes mock to list[str].
         """
         ctx = _make_fallback_ctx(before_dict=_RESEARCH_TASK, after_dict=_TODO_TASK)
-        result = await move_task(ctx, task_id="1", status="todo")
+        result = await move_task(ctx, id="1", status="todo")
         assert len(result.guidance) > 0, (
             f"Expected guidance message for research→todo, got {result.guidance!r}"
         )

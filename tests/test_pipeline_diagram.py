@@ -1,6 +1,6 @@
-"""Failing tests for pipeline diagram file (#1033).
+"""Durable tests for the pipeline diagram file.
 
-RED phase — all tests must fail until share/diagrams/pipeline.excalidraw is created.
+Promoted from archived task #1033 during test curation.
 
 AC coverage:
   AC1: file exists at share/diagrams/pipeline.excalidraw, valid JSON, "source": "owlbear"
@@ -25,6 +25,8 @@ import pytest
 
 from owlbear_tools.doc_index import generate_index
 
+# Promoted from archived task #1033.
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -32,7 +34,6 @@ from owlbear_tools.doc_index import generate_index
 _PROJECT_ROOT = Path(__file__).parent.parent
 _DIAGRAM_PATH = _PROJECT_ROOT / "share" / "diagrams" / "pipeline.excalidraw"
 
-# AC2 — required pipeline stages in order
 _REQUIRED_STAGES = [
     "research",
     "backlog",
@@ -44,7 +45,6 @@ _REQUIRED_STAGES = [
     "archived",
 ]
 
-# AC2 — 7 stage-transition dispatch agents (refined AC: planner/orchestrator are auxiliary)
 _STAGE_AGENTS = [
     "researcher",
     "architect",
@@ -55,18 +55,13 @@ _STAGE_AGENTS = [
     "auditor",
 ]
 
-# AC3 — required globs (from refined AC)
 _REQUIRED_DESCRIBES_GLOBS = [
     "share/instructions/owlbear-system.instructions.md",
     "share/skills/r-pipeline-protocol/**",
     "share/agents/*.agent.md",
 ]
 
-# AC3 — must NOT be present
 _VOLATILE_GLOB = ".owlbear/kanban/**"
-
-# AC4 — footer pattern: Last verified: YYYY-MM-DD (short-hash)
-# Note: _all_element_text() lowercases all text, so pattern must be lowercase too
 _FOOTER_RE = re.compile(r"last verified: \d{4}-\d{2}-\d{2} \([0-9a-f]+\)")
 
 
@@ -77,11 +72,7 @@ _FOOTER_RE = re.compile(r"last verified: \d{4}-\d{2}-\d{2} \([0-9a-f]+\)")
 
 @pytest.fixture(scope="module")
 def diagram_data() -> dict:
-    """Parse pipeline.excalidraw and return the top-level dict.
-
-    Raises FileNotFoundError (fixture ERROR) if the file does not yet exist —
-    this is the expected RED-phase failure for all tests using this fixture.
-    """
+    """Parse pipeline.excalidraw and return the top-level dict."""
     return json.loads(_DIAGRAM_PATH.read_text())
 
 
@@ -102,42 +93,27 @@ def _all_element_text(data: dict) -> str:
     return " ".join(parts).lower()
 
 
-# ===========================================================================
-# TestFromAC_PipelineDiagramFile — AC1
-# ===========================================================================
-
-
 class TestFromAC_PipelineDiagramFile:
     """AC1: file exists, is valid JSON, has required top-level fields."""
 
     def test_file_exists_at_expected_path(self) -> None:
-        """Happy: share/diagrams/pipeline.excalidraw exists in the workspace."""
         assert _DIAGRAM_PATH.exists(), f"Diagram not found: {_DIAGRAM_PATH}"
 
     def test_file_is_valid_json(self) -> None:
-        """Happy: file content parses as valid JSON without error."""
         text = _DIAGRAM_PATH.read_text()
         data = json.loads(text)
         assert isinstance(data, dict)
 
     def test_json_source_field_is_owlbear(self, diagram_data: dict) -> None:
-        """Happy: top-level 'source' field equals 'owlbear'."""
         assert diagram_data.get("source") == "owlbear"
 
     def test_json_has_elements_list(self, diagram_data: dict) -> None:
-        """Happy: top-level 'elements' key is present and is a non-empty list."""
         elements = diagram_data.get("elements")
         assert isinstance(elements, list)
         assert len(elements) > 0, "Diagram has no elements"
 
     def test_json_type_is_excalidraw(self, diagram_data: dict) -> None:
-        """Happy: top-level 'type' field is 'excalidraw'."""
         assert diagram_data.get("type") == "excalidraw"
-
-
-# ===========================================================================
-# TestFromAC_PipelineStagesAndAgents — AC2
-# ===========================================================================
 
 
 class TestFromAC_PipelineStagesAndAgents:
@@ -145,7 +121,6 @@ class TestFromAC_PipelineStagesAndAgents:
 
     @pytest.mark.parametrize("stage", _REQUIRED_STAGES)
     def test_pipeline_stage_label_present(self, diagram_data: dict, stage: str) -> None:
-        """Happy: each of the 8 pipeline stage names appears as text in the diagram."""
         all_text = _all_element_text(diagram_data)
         assert stage in all_text, f"Stage '{stage}' not found in diagram text"
 
@@ -153,12 +128,10 @@ class TestFromAC_PipelineStagesAndAgents:
     def test_stage_transition_agent_label_present(
         self, diagram_data: dict, agent: str
     ) -> None:
-        """Happy: each of the 7 stage-transition agents appears as a label in the diagram."""
         all_text = _all_element_text(diagram_data)
         assert agent in all_text, f"Agent '{agent}' not found in diagram text"
 
     def test_planner_appears_as_auxiliary_annotation(self, diagram_data: dict) -> None:
-        """Edge: 'planner' appears in the diagram as auxiliary sub-dispatch annotation."""
         all_text = _all_element_text(diagram_data)
         assert "planner" in all_text, (
             "planner must appear as an auxiliary annotation "
@@ -168,7 +141,6 @@ class TestFromAC_PipelineStagesAndAgents:
     def test_orchestrator_appears_as_auxiliary_annotation(
         self, diagram_data: dict
     ) -> None:
-        """Edge: 'orchestrator' appears in the diagram as auxiliary supervisory layer."""
         all_text = _all_element_text(diagram_data)
         assert "orchestrator" in all_text, (
             "orchestrator must appear as an auxiliary supervisory annotation, "
@@ -176,24 +148,16 @@ class TestFromAC_PipelineStagesAndAgents:
         )
 
     def test_stage_order_left_to_right(self, diagram_data: dict) -> None:
-        """Boundary: stages appear in correct pipeline order when sorted by x-position.
-
-        Checks the leftmost-to-rightmost ordering of stage-labelled elements
-        matches the canonical pipeline sequence.
-        """
         elements = diagram_data.get("elements", [])
-        # Collect elements whose text matches a stage label
         stage_positions: dict[str, float] = {}
         for elem in elements:
             text = (elem.get("text") or "").lower().strip()
             if text in _REQUIRED_STAGES:
                 stage_positions[text] = elem.get("x", 0)
-        # Every stage must have been found
-        missing = [s for s in _REQUIRED_STAGES if s not in stage_positions]
+        missing = [stage for stage in _REQUIRED_STAGES if stage not in stage_positions]
         assert not missing, f"Stages not found as element text: {missing}"
-        # Verify they are in pipeline order by x-position
         ordered = sorted(stage_positions.items(), key=lambda kv: kv[1])
-        ordered_stages = [k for k, _ in ordered]
+        ordered_stages = [key for key, _ in ordered]
         assert ordered_stages == _REQUIRED_STAGES, (
             f"Stage elements not in pipeline order.\n"
             f"Expected: {_REQUIRED_STAGES}\n"
@@ -201,61 +165,44 @@ class TestFromAC_PipelineStagesAndAgents:
         )
 
 
-# ===========================================================================
-# TestFromAC_DescribesField — AC3
-# ===========================================================================
-
-
 class TestFromAC_DescribesField:
     """AC3: 'describes' is a list of file-path globs; volatile glob absent."""
 
     def test_describes_field_exists(self, diagram_data: dict) -> None:
-        """Happy: top-level 'describes' key is present."""
         assert "describes" in diagram_data, "Missing 'describes' field"
 
     def test_describes_is_a_list(self, diagram_data: dict) -> None:
-        """Happy: 'describes' is a list, not a string or other type."""
         assert isinstance(diagram_data.get("describes"), list)
 
     def test_describes_is_not_empty(self, diagram_data: dict) -> None:
-        """Happy: 'describes' list has at least one entry."""
         assert len(diagram_data.get("describes", [])) > 0
 
     @pytest.mark.parametrize("glob", _REQUIRED_DESCRIBES_GLOBS)
     def test_required_glob_present_in_describes(
         self, diagram_data: dict, glob: str
     ) -> None:
-        """Happy: each of the 3 required file-path globs appears in 'describes'."""
         describes: list = diagram_data.get("describes", [])
         assert glob in describes, (
             f"Required glob '{glob}' not found in describes: {describes}"
         )
 
     def test_volatile_kanban_glob_absent(self, diagram_data: dict) -> None:
-        """Edge: '.owlbear/kanban/**' must NOT appear in describes (too volatile)."""
         describes: list = diagram_data.get("describes", [])
         assert _VOLATILE_GLOB not in describes, (
             f"Volatile glob '{_VOLATILE_GLOB}' must be excluded from describes"
         )
 
 
-# ===========================================================================
-# TestFromAC_FooterElement — AC4
-# ===========================================================================
-
-
 class TestFromAC_FooterElement:
     """AC4: footer text element with 'Last verified: YYYY-MM-DD (commit-hash)' format."""
 
     def test_footer_element_contains_last_verified(self, diagram_data: dict) -> None:
-        """Happy: at least one diagram element contains the text 'Last verified:'."""
         all_text = _all_element_text(diagram_data)
         assert "last verified:" in all_text, (
             "No element contains 'Last verified:' — footer element missing"
         )
 
     def test_footer_text_matches_date_hash_pattern(self, diagram_data: dict) -> None:
-        """Boundary: footer text matches 'Last verified: YYYY-MM-DD (short-hash)' pattern."""
         all_text = _all_element_text(diagram_data)
         assert _FOOTER_RE.search(all_text), (
             f"Footer does not match pattern {_FOOTER_RE.pattern!r}.\n"
@@ -263,62 +210,46 @@ class TestFromAC_FooterElement:
         )
 
 
-# ===========================================================================
-# TestFromAC_ExcalidrawConventions — AC6
-# ===========================================================================
-
-
 class TestFromAC_ExcalidrawConventions:
     """AC6: h-excalidraw-diagram conventions — unique IDs, fontSize >= 16."""
 
     def test_all_elements_have_unique_ids(self, diagram_data: dict) -> None:
-        """Boundary: every element has an 'id' field and no two IDs are the same."""
         elements = diagram_data.get("elements", [])
-        ids = [e.get("id") for e in elements]
-        missing = [i for i, eid in enumerate(ids) if eid is None]
+        ids = [elem.get("id") for elem in elements]
+        missing = [index for index, element_id in enumerate(ids) if element_id is None]
         assert not missing, f"Elements at indices {missing} are missing 'id'"
-        duplicates = {eid for eid in ids if ids.count(eid) > 1}
+        duplicates = {element_id for element_id in ids if ids.count(element_id) > 1}
         assert not duplicates, f"Duplicate element IDs found: {duplicates}"
 
     def test_text_elements_font_size_at_least_16(self, diagram_data: dict) -> None:
-        """Boundary: no text element has fontSize < 16px (per h-excalidraw-diagram)."""
         elements = diagram_data.get("elements", [])
         violators = [
-            e.get("id", f"idx:{i}")
-            for i, e in enumerate(elements)
-            if e.get("type") == "text"
-            and isinstance(e.get("fontSize"), (int, float))
-            and e["fontSize"] < 16
+            elem.get("id", f"idx:{index}")
+            for index, elem in enumerate(elements)
+            if elem.get("type") == "text"
+            and isinstance(elem.get("fontSize"), (int, float))
+            and elem["fontSize"] < 16
         ]
         assert not violators, f"Text elements with fontSize < 16px: {violators}"
 
     def test_arrow_elements_have_bindings(self, diagram_data: dict) -> None:
-        """Boundary: arrow elements must have at least one binding (start or end)
-        to connect stages — floating arrows violate diagram conventions."""
         elements = diagram_data.get("elements", [])
-        arrows = [e for e in elements if e.get("type") == "arrow"]
+        arrows = [elem for elem in elements if elem.get("type") == "arrow"]
         assert len(arrows) > 0, (
             "Diagram has no arrow elements — stages must be connected"
         )
         floating = [
-            e.get("id", f"idx:{i}")
-            for i, e in enumerate(arrows)
-            if not e.get("startBinding") and not e.get("endBinding")
+            elem.get("id", f"idx:{index}")
+            for index, elem in enumerate(arrows)
+            if not elem.get("startBinding") and not elem.get("endBinding")
         ]
         assert not floating, f"Arrow elements with no bindings (floating): {floating}"
-
-
-# ===========================================================================
-# TestFromAC_DocIndexIntegration — AC7
-# ===========================================================================
 
 
 class TestFromAC_DocIndexIntegration:
     """AC7: uv run doc-index includes a describes entry for pipeline.excalidraw."""
 
     def test_doc_index_entry_includes_describes_line(self, tmp_path: Path) -> None:
-        """Happy: generate_index on a tree containing pipeline.excalidraw emits
-        a 'describes:' line in the entry for that file."""
         dest = tmp_path / "share" / "diagrams" / "pipeline.excalidraw"
         dest.parent.mkdir(parents=True)
         shutil.copy(_DIAGRAM_PATH, dest)
@@ -340,7 +271,6 @@ class TestFromAC_DocIndexIntegration:
         )
 
     def test_doc_index_entry_includes_all_required_globs(self, tmp_path: Path) -> None:
-        """Happy: all 3 required globs appear in the pipeline.excalidraw doc-index entry."""
         dest = tmp_path / "share" / "diagrams" / "pipeline.excalidraw"
         dest.parent.mkdir(parents=True)
         shutil.copy(_DIAGRAM_PATH, dest)

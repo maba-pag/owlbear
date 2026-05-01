@@ -1,4 +1,6 @@
-"""Tests for task #1201 — Unify error hierarchy: CorruptionError → KanbanError subclass.
+"""Error hierarchy regression tests.
+
+Promoted from the task-scoped suite for task #1201.
 
 AC coverage:
 - AC1: CorruptionError inherits from KanbanError (td:2)
@@ -29,6 +31,8 @@ from owlbear_kanban.corruption import (
     ERR_CORRUPT_TYPE_MISMATCH,
     ERR_CORRUPT_YAML_PARSE,
 )
+
+# Provenance: promoted from task-scoped suite for task #1201.
 
 _ALL_NINE_CODES = [
     "ERR_CORRUPT_DELIMITERS",

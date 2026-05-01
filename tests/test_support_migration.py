@@ -1,4 +1,10 @@
-"""Tests for Phase 3 support module migration and compat layer removal (#1175).
+"""Durable tests for support module migration and compat cleanup.
+
+Promoted from archived task #1175 during test curation.
+
+Historical task context from the original task-scoped suite:
+
+Tests for Phase 3 support module migration and compat layer removal (#1175).
 
 Validates:
 - corruption.py uses sub-model access paths (not forwarding properties) for all sites
@@ -13,6 +19,7 @@ AC coverage:
   AC3 → TestFromAC_CompatLayerRemoval
   AC4 → TestFromAC_LiveConfigGroupedFormat
   AC5 → TestFromAC_LiveConfigTerminalStatus
+
 """
 
 from __future__ import annotations
@@ -26,6 +33,7 @@ import pytest
 import yaml
 
 from owlbear_kanban.config_loader import load_config
+# Promoted from archived task #1175.
 
 # ---------------------------------------------------------------------------
 # Minimal config double — no forwarding properties, sub-model structure only.

@@ -1,6 +1,8 @@
-"""Coverage-uplift tests for owlbear_kanban.engine (task #1113).
+"""Engine coverage regression tests.
 
-Targets genuinely uncovered code paths identified from architecture review:
+Promoted from the task-scoped suite for task #1113.
+
+Coverage targets preserved from the task-scoped suite:
   - edit_task field mutations: title, body, priority, status, parent
   - edit_task tag operations: add_tags (with dedup), remove_tags
   - edit_task dep operations: add_deps (with dedup), remove_deps
@@ -17,6 +19,8 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban import KanbanEngine
+
+# Provenance: promoted from task-scoped suite for task #1113.
 
 # ---------------------------------------------------------------------------
 # Board helpers (mirrored from test_engine_coverage_1110.py conventions)
