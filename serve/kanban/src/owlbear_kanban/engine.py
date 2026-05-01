@@ -45,7 +45,7 @@ from owlbear_kanban import storage
 from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.config_loader import load_config
-from owlbear_kanban.corruption import CorruptionError
+from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID, CorruptionError
 from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
@@ -748,12 +748,7 @@ class KanbanEngine:
             id_seen: dict[int, str] = {}
             for task in tasks:
                 if task.id in id_seen:
-                    from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID  # noqa: PLC0415
-                    from owlbear_kanban.corruption import (
-                        CorruptionError as _CorruptionError,
-                    )  # noqa: PLC0415
-
-                    raise _CorruptionError(
+                    raise CorruptionError(
                         code=ERR_CORRUPT_DUPLICATE_ID,
                         detail=f"task id={task.id} appears in multiple files",
                     )
