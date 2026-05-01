@@ -1,10 +1,10 @@
 ---
 id: 1224
 title: Backend — relocate CockpitView from kanban to cockpit package
-status: backlog
+status: review
 priority: needed
 created: 2026-04-30 16:31:18.599723+00:00
-updated: 2026-05-01T03:33:22.279332+00:00
+updated: 2026-05-01T09:28:03.619543+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -243,3 +243,324 @@ Challenger returned `block` (confidence 0.43) citing: (1) under-scoped import fi
 - The task-owned suite is strong at detecting relocation/removal but weak at proving behavioral equivalence after deleting older CockpitView tests.
 - The destination root suite already has substantial CockpitView coverage, but not for the specific list/show/board_config contracts this task retired.
 - The live kanban baseline makes `all kanban tests pass` an architect-level gating problem.
+[[2026-05-01]]
+
+## Architecture Review — Cycle 2 (Post-Reviewer Rejection)
+
+### Superseding Acceptance Criteria
+
+The following AC replaces the original. Changes: AC2 adds import-boundary proof requirement; AC5 split into 5a (removal expanded with ParentForwarding) and 5b (specific behavioral re-homing contracts); AC9 narrowed to regression scope; AC10 added for agent_name cleanup.
+
+- [ ] AC1: `CockpitView` class lives in `serve/cockpit/src/owlbear_cockpit/view.py` `(td:2)` [satisfied in cycle 1]
+- [ ] AC2: `engine.py` has no `class CockpitView`, no `def cockpit_view`, no `_cockpit_view` attribute, and no `import` or `from` referencing `owlbear_cockpit`; task-owned test includes text scan asserting zero `owlbear_cockpit` import hits in `engine.py` `(td:2)` [import-boundary scan missing — test-writer must add]
+- [ ] AC3: Source consumers (`deps.py`, `routes/read.py`, `routes/mutation.py`) import from `owlbear_cockpit.view` `(td:2)` [satisfied in cycle 1]
+- [ ] AC4: Listed test files import from `owlbear_cockpit.view` `(td:2)` [satisfied in cycle 1]
+- [ ] AC5a: CockpitView-specific test classes removed from kanban suite: `test_engine_init_1067.py` constructability check, `test_engine_init_1068.py` (`TestFromAC_CockpitViewMethodStubs`, `TestFromAC_ViewsConstructedAtInit` CockpitView subtests), `test_engine_list_show_1071.py` (`TestFromAC_CockpitViewListTasks`, `TestFromAC_CockpitViewShowTask`, `TestFromAC_CockpitViewParentForwarding`); remove `_make_cockpit_view` helper and `CockpitView` import from `test_engine_list_show_1071.py` if no remaining CockpitView references `(td:2)` [ParentForwarding + helper + import not yet removed]
+- [ ] AC5b: Behavioral tests added to `tests/test_cockpit_view_1224.py`: (1) `CockpitView.list_tasks()` returns task list matching engine, (2) `CockpitView.list_tasks(parent=N)` filters to matching children only, (3) `CockpitView.list_tasks(parent=N)` returns empty when no match, (4) `CockpitView.show_task(id)` returns correct single-task response, (5) `CockpitView.board_config()` returns board configuration `(td:2)` [not done — was falsely claimed as pre-existing in cycle 1 AC]
+- [ ] AC6: `view.py` uses no `engine._*` private attributes `(td:1)` [satisfied in cycle 1]
+- [ ] AC7: README `cockpit_view()` row removed `(td:1)` [satisfied in cycle 1]
+- [ ] AC8: All cockpit tests pass `(td:0)` [satisfied in cycle 1]
+- [ ] AC9: No new kanban test failures from this task; reviewer compares post-change failing test names against the 41-failure pre-existing baseline from cycle 1 `(td:0)` [narrowed from absolute — baseline infeasible]
+- [ ] AC10: Task-owned tests use `KanbanEngine(kanban_dir)` without `agent_name` parameter; avoids latent conflict with D33 contract in `test_engine_init_1067.py` `(td:1)` [new — fixes test-substrate contradiction flagged by reviewer]
+
+### Updated Files
+
+#### Source (unchanged from cycle 1)
+- `serve/cockpit/src/owlbear_cockpit/view.py` — CockpitView class
+- `serve/cockpit/src/owlbear_cockpit/deps.py` — import update
+- `serve/cockpit/src/owlbear_cockpit/routes/read.py` — import update
+- `serve/cockpit/src/owlbear_cockpit/routes/mutation.py` — import update
+- `serve/kanban/src/owlbear_kanban/engine.py` — CockpitView removal
+
+#### Tests (cycle 2 delta)
+- `tests/test_cockpit_view_1224.py` — add AC2 import-boundary test, AC5b behavioral tests, AC10 agent_name cleanup
+- `serve/kanban/tests/test_engine_list_show_1071.py` — remove `TestFromAC_CockpitViewParentForwarding`, `_make_cockpit_view` helper, CockpitView import
+
+#### Tests (no further changes — kanban boundary allowed)
+- `serve/kanban/tests/test_engine_pick_tasks_1074.py` — imports CockpitView for negative role-separation proof; duplicated in root suite `TestFromAC_CockpitViewRoleSeparation`; acceptable cross-package test import
+
+#### Docs (unchanged from cycle 1)
+- `serve/kanban/README.md`
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One logical change: relocate CockpitView + clean up all references |
+| Interface clarity | PASS | AC now enumerates all affected files; behavioral contracts specified per-method |
+| Dependency correctness | PASS | #1222 archived; no other deps needed |
+| Module layering | PASS | Source boundary clean — kanban imports nothing from cockpit; test imports acceptable for integration/negative proofs |
+| TDD compliance | PASS | Test-writer will extend existing test_cockpit_view_1224.py for cycle 2 delta |
+| KISS/YAGNI | PASS | Pure refactor; behavioral tests replace removed kanban-side coverage |
+| Premise challenge | PASS | Genuine layering violation being corrected; cockpit-domain class belongs in cockpit package |
+| Pattern consistency | PASS | Follows existing facade pattern |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | Cockpit domain |
+
+### Failure Mode Map
+
+| Codepath | Failure Mode | Exception | Handled? | User Impact |
+|----------|--------------|-----------|----------|-------------|
+| Stale `_make_cockpit_view` helper in kanban tests | Dead code importing cockpit in kanban suite | Lint noise | AC5a requires removal | None |
+| `agent_name` in task suite vs D33 contract | Future D33 build breaks task suite | TypeError | AC10 removes agent_name usage | None at runtime |
+| AC5b tests pass immediately (impl exists) | Not truly RED | N/A | Expected for cycle 2 refinement — test-writer notes GREEN-from-start | None |
+
+### Challenger Results (Cycle 2)
+
+Challenger returned `reconsider` (0.56) citing:
+1. AC5b too coarse — **accepted**: enumerated 5 specific behavioral contracts
+2. Test ownership ambiguity — **accepted**: clarified kanban test CockpitView imports acceptable for role-separation proofs; CockpitView behavioral tests belong in cockpit suite
+3. AC9 evidence standard undefined — **accepted**: specified baseline comparison method
+4. agent_name contradiction not harmless — **accepted**: added AC10 for cleanup
+5. AC2 proof gap understated — **accepted**: upgraded from guidance to testable AC clause
+
+All 5 challenger concerns addressed in refined AC. Overriding `reconsider` → APPROVE because the architectural design is sound and all identified gaps have concrete, verifiable AC lines.
+
+### Test Depth
+- Max depth: 2
+- Test-writer: PROCEED (AC2, AC5a, AC5b, AC10 need new/updated tests)
+
+### Cycle 2 Architect Correction
+The cycle 1 AC5 contained a false factual claim: "equivalent coverage lives in tests/test_engine_cockpit_view.py." The root suite has NO behavioral tests for `list_tasks`, `show_task`, or `board_config`. This architect error propagated through the pipeline — the builder followed the AC literally. AC5b now correctly requires these tests to be written.
+
+### Verdict: APPROVE
+### Action Taken: AC refined (AC2 import-boundary, AC5 split + ParentForwarding, AC9 narrowed, AC10 agent_name) → todo
+[[2026-05-01]]
+Cycle 2 architecture review after reviewer rejection (0.48 confidence). Refined AC: AC2 adds import-boundary proof, AC5 split into removal (expanded with ParentForwarding) + specific behavioral re-homing (5 contracts), AC9 narrowed to regression scope (41-failure baseline infeasible), AC10 added for agent_name cleanup. Challenger addressed all 5 concerns. Architect correction: cycle 1 AC5 falsely claimed behavioral coverage existed in root suite.
+[[2026-05-01]]
+## Test-Writer Notes
+- Test file: tests/test_cockpit_view_1224.py
+- Cycle 2 retry — filled reviewer gaps from Required Follow-up + Cycle 2 AC
+- Classes: TestFromAC_CockpitViewNewModule, TestFromAC_EngineCleanup, TestFromAC_SourceConsumersImport, TestFromAC_TestFileImportUpdates, TestFromAC_KanbanTestCleanup, TestFromAC_ViewNoPrivateAccess, TestFromAC_ReadmeCleanup, TestFromAC_CockpitViewBehavior
+- Changes from cycle 1:
+  - AC10: Removed `agent_name="test-1224"` from all KanbanEngine() constructor calls in existing tests (8 sites)
+  - AC2: Added `test_engine_py_has_no_owlbear_cockpit_import` text scan to TestFromAC_EngineCleanup
+  - AC5a expanded: Added 3 new tests to TestFromAC_KanbanTestCleanup for TestFromAC_CockpitViewParentForwarding, _make_cockpit_view helper, and CockpitView import still present in test_engine_list_show_1071.py
+  - AC5b: New TestFromAC_CockpitViewBehavior class with 6 behavioral tests: list_tasks empty, list_tasks returns tasks, list_tasks(parent) filters, list_tasks(parent) empty-when-no-match, show_task, board_config
+- Tests per category: happy 20, edge 12, error 0, boundary 10
+- Total: 42 tests
+- FAIL: 3 (AC5a — test_engine_list_show_1071.py still has TestFromAC_CockpitViewParentForwarding + _make_cockpit_view + CockpitView import — builder must remove)
+- PASS: 39 (32 original + AC2 import-boundary + AC5b behavioral + AC10 fix)
+- ruff: clean
+- AC coverage: AC1(8) AC2(6) AC3(6) AC4(6) AC5a(8) AC5b(6) AC6(1) AC7(1) — AC8+AC9 td:0, AC10 substrate fix (no new test)
+[[2026-05-01]]
+## Builder Notes
+- Implementation:
+  - Updated `serve/kanban/tests/test_engine_list_show_1071.py` to complete AC5a cleanup by removing the stale `CockpitView` import, `_make_cockpit_view` helper, and `TestFromAC_CockpitViewParentForwarding` block.
+  - Removed remaining legacy `CockpitView` mentions in the module docstring that were still triggering task-owned text-scan checks.
+
+- RED verification (quality-runner, scoped):
+  - `tests/test_cockpit_view_1224.py`: 39 passed, 3 failed (all expected AC5a cleanup failures before implementation).
+
+- GREEN verification (quality-runner, scoped):
+  - First rerun: 41 passed, 1 failed (residual docstring reference).
+  - Final rerun: 42 passed, 0 failed.
+
+- Lint:
+  - Ruff on changed scope (`serve/kanban/tests/test_engine_list_show_1071.py`, `tests/test_cockpit_view_1224.py`): clean.
+
+- Coverage:
+  - Scoped report for `owlbear_cockpit.view`: 23% (informational for this cleanup-only delta).
+
+- Evidence summary:
+  - Task-owned AC cleanup checks now pass with no remaining `CockpitView` import/reference/helper/class in `serve/kanban/tests/test_engine_list_show_1071.py`.
+  - No production source behavior changed in this cycle; change is surgical to the kanban-suite cleanup target.
+
+- Commit:
+  - `971096dd` — `test: remove stale CockpitView references in kanban suite (#1224, builder)`
+
+- Post-task reflection:
+  - Text-scan AC checks can fail on docstrings/comments even after code-level cleanup, so final source-string verification is critical.
+  - Keeping the fix to a single test file avoided regression risk in already-relocated CockpitView runtime code.
+  - Scoped quality-runner loops gave fast signal and prevented unnecessary reruns across unrelated red baselines.
+  - The retry path (one targeted follow-up after first GREEN attempt) resolved the only remaining failure cleanly.
+[[2026-05-01]]
+## Review Evidence
+### Scope
+- Prior `## Review Evidence` already exists in the task body, so this is a second review failure. Per pipeline loop-breaker rules, any FAIL routes to `backlog`.
+- Builder cycle-2 commit recorded in task body: `971096dd`. Direct `git diff` enumeration was not available in this reviewer session, so commit scope was reconstructed from builder notes plus live file inspection.
+
+### Test Results
+- Scoped task suite via quality-runner: `tests/test_cockpit_view_1224.py` -> 42 passed, 0 failed.
+- Scoped lint via quality-runner: clean.
+- Scoped coverage via quality-runner: `owlbear_cockpit.view` 23% module coverage (informational only).
+- Isolated cockpit verification for AC8:
+  - `tests/test_cockpit_models.py` -> 28 passed, 1 failed: `TestFromAC_TaskDetailKeysConstantFix::test_task_detail_keys_does_not_contain_claimed_by`
+  - `tests/test_cockpit_react_compiler_1015.py` -> 15 passed, 5 failed, 4 skipped; failures include `test_vite_config_passes_babel_plugin_to_react_plugin`, `test_vite_config_react_plugin_not_bare_call`, `test_npm_build_succeeds_clean`, `test_vitest_suite_no_unhandled_errors`, `test_playwright_e2e_passes`
+- Broad kanban verification for AC9: `serve/kanban/tests/` captured 1130 passed, 33 failed before interruption. Current failing names were available, but the cycle-1 41-failure baseline names were not recorded in the task body, so the required name-by-name comparison is not provable from task evidence.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test / Evidence | Would Fail If AC Violated? | Verdict |
+|---------|-------------------------|---------------------------|---------|
+| AC1 new `view.py` module | `TestFromAC_CockpitViewNewModule`; `serve/cockpit/src/owlbear_cockpit/view.py:26` | Yes | COVERED |
+| AC2 engine cleanup + no cockpit import | `TestFromAC_EngineCleanup`; direct read of `serve/kanban/src/owlbear_kanban/engine.py:1-80` shows no `CockpitView`, `cockpit_view`, `_cockpit_view`, or `owlbear_cockpit` references | Yes | COVERED |
+| AC3 source consumers import new path | `TestFromAC_SourceConsumersImport`; live imports at `serve/cockpit/src/owlbear_cockpit/deps.py:12`, `serve/cockpit/src/owlbear_cockpit/routes/read.py:15`, `serve/cockpit/src/owlbear_cockpit/routes/mutation.py:12` | Yes | COVERED |
+| AC4 listed durable tests import new path | Live code is correct at `tests/test_engine_cockpit_view.py:25`, `tests/test_engine_release_task_occ.py:27`, `tests/test_cockpit_mutation_api_1132.py:35`, `tests/test_cockpit_read_api.py:514`, `tests/test_cockpit_read_api_1223.py:219`, `tests/test_cockpit_kanban_routes.py:761`; task-owned proof in `tests/test_cockpit_view_1224.py:331-337` only bans the old import string | No, several wrong states would still pass | LAX |
+| AC5a remove kanban-side CockpitView test surface | `TestFromAC_KanbanTestCleanup`; `serve/kanban/tests/test_engine_list_show_1071.py:1-80` no longer contains CockpitView helper/import/test blocks | Yes | COVERED |
+| AC5b add behavioral tests in task suite | `TestFromAC_CockpitViewBehavior`; tests exist, but assertions at `tests/test_cockpit_view_1224.py:586-589`, `:635-638`, `:648-651` only check subsets rather than exact delegation parity against `serve/cockpit/src/owlbear_cockpit/view.py:32-68` and `:336-338` | No, truncated/extra/misaligned output could survive | LAX |
+| AC6 no private engine access | `TestFromAC_ViewNoPrivateAccess`; direct read of `serve/cockpit/src/owlbear_cockpit/view.py:24-80` | Yes | COVERED |
+| AC7 README cleanup | `TestFromAC_ReadmeCleanup`; `serve/kanban/README.md:44-45` retains `board_config()` and `agent_view()` only | Yes | COVERED |
+| AC8 all cockpit tests pass | Independent quality-runner reruns show live cockpit failures in `tests/test_cockpit_models.py` and `tests/test_cockpit_react_compiler_1015.py` | No | FAIL |
+| AC9 no new kanban failures vs cycle-1 baseline | Current kanban suite is still red/interrupted; cycle-1 failing test names were not preserved in task evidence, so the required comparison cannot be performed | No | FAIL |
+| AC10 task-owned tests stop passing `agent_name` | Current task suite instantiates `KanbanEngine(kanban_dir)` without `agent_name` (for example `tests/test_cockpit_view_1224.py:565-600`) | Yes | COVERED |
+
+#### Security Review
+- No issues found. The relocated facade remains thin delegation over existing engine APIs and does not introduce shell, SQL, path, secret, or deserialization risk.
+
+#### Test Integrity
+- No builder weakening/removal of current `TestFromAC_*` assertions detected in this cycle. The cycle-2 builder change completed cleanup in `serve/kanban/tests/test_engine_list_show_1071.py` without mutating the task-owned assertions.
+
+#### Test Quality
+- WEAK: AC4 proof is negative-only. `tests/test_cockpit_view_1224.py:331-337` proves the old import spelling is absent, but it does not positively assert the canonical new import in each listed durable suite.
+- WEAK: AC5b behavioral checks are subset assertions only. `tests/test_cockpit_view_1224.py:586-589` checks titles are present, `:635-638` checks only id/title, and `:648-651` checks type plus one status. They do not compare exact output or direct parity against the delegated engine surface in `serve/cockpit/src/owlbear_cockpit/view.py`.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gaps
+- The live relocation appears correct, but the task-owned suite does not prove exact parity for `list_tasks`, `show_task`, or `board_config`; several delegation regressions would still pass.
+- AC9 is not reviewable as written from current task evidence because the required cycle-1 failing test-name ledger is absent.
+
+#### Necessity Check
+- Not applicable. This is a relocation/refactor, not a new dependency or external capability.
+
+#### Builder Process Quality
+- CLEAN for the current cycle: one focused retry, no loop inside the builder notes.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | `serve/cockpit/src/owlbear_cockpit/view.py:26`; task suite green | PASS |
+| AC2 | Direct engine read + task cleanup test | PASS |
+| AC3 | Live imports in `deps.py`, `routes/read.py`, `routes/mutation.py` | PASS |
+| AC4 | Live imports are correct, but task-owned proof is lax | PASS |
+| AC5a | Old kanban-side CockpitView surface removed | PASS |
+| AC5b | Required tests were added, but they are weak td:2 proof | PASS |
+| AC6 | No `engine._*` access in `view.py` | PASS |
+| AC7 | README accessor row removed | PASS |
+| AC8 | Live cockpit suites are red | FAIL |
+| AC9 | Baseline comparison required by AC is not provable; current kanban suite remains red | FAIL |
+| AC10 | Task-owned suite no longer passes `agent_name` | PASS |
+
+### Deductions
+- `-0.18` Test quality is WEAK for AC4: negative-only import assertions are insufficient for td:2 proof.
+- `-0.20` Test quality is WEAK for AC5b: subset assertions do not prove exact delegated behavior.
+- `-0.17` AC8 is false in the live workspace: isolated cockpit verification still fails.
+- `-0.15` AC9 is not provable from current task evidence and current broad kanban evidence is still red.
+
+### Verdict
+- FAIL -> backlog
+- Confidence: 0.30
+
+### Required Follow-up
+- Rework AC8/AC9 at architect level against the current workspace baseline. AC8 is currently infeasible as an absolute green gate; AC9 requires a preserved cycle-1 failing-test ledger if name-by-name comparison is the intended proof.
+- Strengthen AC4 proof to assert the canonical new import in each listed durable suite, not just absence of the old string.
+- Strengthen AC5b proof to compare `CockpitView.list_tasks()`, `show_task()`, and `board_config()` outputs against exact engine results or exact expected structures.
+- Preserve the current relocation implementation; the fail is on review-gate proof and baseline feasibility, not on an observed runtime relocation bug.
+
+### Reflection
+- The relocation itself is largely correct; the review failure is coming from td:2 proof strength and absolute subsystem-green AC against a live red workspace.
+- Isolated reruns were necessary because the broad cockpit pass was interrupted; they confirmed AC8 is genuinely red rather than just timeout noise.
+- AC9 now depends on historical failing test names that were not captured in the task body, which makes the gate unverifiable for downstream reviewers.
+[[2026-05-01]]
+
+## Architecture Review — Cycle 3 (Post-Reviewer Rejection #2)
+
+### Superseding Acceptance Criteria
+
+Changes from cycle 2: AC4 adds positive-assertion clause; AC5b specifies count/IDs/order parity against engine output; AC8 narrowed with specific test-name exclusions; AC9 includes all 4 modified files with principled exclusion of unmodified test classes.
+
+- [ ] AC1: `CockpitView` class lives in `serve/cockpit/src/owlbear_cockpit/view.py` `(td:2)` [satisfied]
+- [ ] AC2: `engine.py` has no `class CockpitView`, no `def cockpit_view`, no `_cockpit_view` attribute, and no `import`/`from` referencing `owlbear_cockpit`; task-owned test includes text scan asserting zero `owlbear_cockpit` import hits in `engine.py` `(td:2)` [satisfied]
+- [ ] AC3: Source consumers (`deps.py`, `routes/read.py`, `routes/mutation.py`) import from `owlbear_cockpit.view` `(td:2)` [satisfied]
+- [ ] AC4: Listed test files import `CockpitView` from `owlbear_cockpit.view`; task-owned tests assert BOTH: (a) no `from owlbear_kanban.engine import ... CockpitView` in each listed file, AND (b) `from owlbear_cockpit.view import CockpitView` (or `as` alias) string is present in each listed file `(td:2)` [cycle 3: add positive assertion]
+- [ ] AC5a: CockpitView-specific test classes removed from kanban suite (same scope as cycle 2) `(td:2)` [satisfied]
+- [ ] AC5b: Behavioral tests in `tests/test_cockpit_view_1224.py` prove delegation: (1) `view.list_tasks()` returns same task count and same set of task IDs as `engine.agent_view().list_tasks()`; (2) `view.list_tasks(parent=N)` returns only children of N and empty when no match; (3) `view.show_task(id)` returns `ShowTaskResponse` with matching id, title, and status; (4) `view.board_config()` returns `BoardConfig` with same statuses list as `engine.board_config()` `(td:2)` [cycle 3: strengthen to count/IDs/type parity]
+- [ ] AC6: `view.py` uses no `engine._*` private attributes `(td:1)` [satisfied]
+- [ ] AC7: README `cockpit_view()` row removed `(td:1)` [satisfied]
+- [ ] AC8: No cockpit test regressions from this task; pre-existing failures excluded by name: `test_cockpit_models.py::TestFromAC_TaskDetailKeysConstantFix::test_task_detail_keys_does_not_contain_claimed_by`, `test_cockpit_react_compiler_1015.py::test_vite_config_passes_babel_plugin_to_react_plugin`, `test_cockpit_react_compiler_1015.py::test_vite_config_react_plugin_not_bare_call`, `test_cockpit_react_compiler_1015.py::test_npm_build_succeeds_clean`, `test_cockpit_react_compiler_1015.py::test_vitest_suite_no_unhandled_errors`, `test_cockpit_react_compiler_1015.py::test_playwright_e2e_passes` `(td:0)` [cycle 3: test-name exclusion replaces file-level]
+- [ ] AC9: Kanban tests in task-modified files pass: `test_engine_init_1067.py`, `test_engine_init_1068.py`, `test_engine_list_show_1071.py`, `test_engine_pick_tasks_1074.py`; failures in test classes NOT modified by this task are excluded from the gate `(td:0)` [cycle 3: includes all 4 files with principled exclusion]
+- [ ] AC10: Task-owned tests use `KanbanEngine(kanban_dir)` without `agent_name` parameter `(td:1)` [satisfied]
+
+### Cycle 3 Delta for Test-Writer
+
+Only AC4 and AC5b need test changes. No source changes needed.
+
+**AC4**: Add positive assertion to each test in `TestFromAC_TestFileImportUpdates` — after confirming old import absent, also assert `from owlbear_cockpit.view import CockpitView` (or `from owlbear_cockpit.view import CockpitView as`) string is present in the file.
+
+**AC5b**: Replace subset assertions in `TestFromAC_CockpitViewBehavior` with parity assertions:
+- `test_list_tasks_returns_created_tasks`: compare `len(view.list_tasks().tasks)` and `set(t.id for t in view.list_tasks().tasks)` against `engine.agent_view().list_tasks()`
+- `test_show_task_returns_correct_task`: assert result type is `ShowTaskResponse` and check `.id`, `.title`, `.status`
+- `test_board_config_returns_board_name`: compare `config.statuses` equality against `engine.board_config().statuses`
+
+This is a builder-skip scenario per pipeline protocol: reviewer follow-up contains only test/proof gaps, no "fix X in source" items.
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One logical change: relocate CockpitView + clean references |
+| Interface clarity | PASS | AC4/AC5b now specify exact proof requirements |
+| Dependency correctness | PASS | #1222 archived; no other deps |
+| Module layering | PASS | Explore audit: 0 old-path imports, 0 cockpit_view() calls |
+| TDD compliance | PASS | Test-writer extends existing suite for cycle 3 delta |
+| KISS/YAGNI | PASS | Pure refactor; test-proof strengthening only |
+| Premise challenge | PASS | Genuine layering fix; mutation logic already covered by durable suite |
+| Pattern consistency | PASS | Follows existing facade pattern |
+| Security surface | PASS | No new system boundaries |
+| Single domain | PASS | Cockpit domain |
+
+### Challenger Results (Cycle 3)
+
+Challenger returned `reconsider` (0.62) citing 3 concerns:
+1. **AC9 excluding test_engine_init_1067.py** — ACCEPTED: now included with principled exclusion of unmodified test classes
+2. **AC5b parity overclaim** — PARTIALLY ACCEPTED: strengthened to count/IDs/type parity; full field-by-field parity of all engine-computed fields (dep_status, guidance, missing_sections) is engine-level testing out of scope for a relocation wrapper
+3. **AC8 file-level exclusion** — ACCEPTED: switched to specific test-name exclusion list
+
+Challenger blind spot about mutation logic: CockpitView.edit_task/move_task/release_task are already tested by `tests/test_engine_cockpit_view.py` (OCC, edit-title, sweep, activity, sessions, compact, role separation). AC5b is specifically about list/show/config methods that lost kanban-side coverage.
+
+Overriding `reconsider` → APPROVE: all 3 concerns addressed in refined AC. Architecture is sound, implementation verified correct by Explore audit, cycle 3 is test-proof-only.
+
+### Verdict: APPROVE → todo
+
+[[2026-05-01]]
+Cycle 3 architecture review after reviewer rejection #2 (0.30 confidence). Refined AC: AC4 adds positive import assertion, AC5b strengthens to count/IDs/type parity against engine output, AC8 narrows to test-name exclusions (not file-level), AC9 includes all 4 modified kanban files with principled exclusion of unmodified test classes. Challenger addressed 3/3 concerns. Builder-skip eligible: test-proof-only delta (AC4 + AC5b).
+[[2026-05-01]]
+## Test-Writer Notes
+- Test file: tests/test_cockpit_view_1224.py
+- Cycle 3 retry — filled reviewer gaps from Required Follow-up + Cycle 3 AC
+- Classes: TestFromAC_CockpitViewNewModule, TestFromAC_EngineCleanup, TestFromAC_SourceConsumersImport, TestFromAC_TestFileImportUpdates, TestFromAC_KanbanTestCleanup, TestFromAC_ViewNoPrivateAccess, TestFromAC_ReadmeCleanup, TestFromAC_CockpitViewBehavior
+- Changes from cycle 2:
+  - AC4 cycle 3: Added `_assert_new_import_present()` helper + 6 new positive import tests (one per listed file) to TestFromAC_TestFileImportUpdates — asserts `from owlbear_cockpit.view import CockpitView` string present in each durable suite file
+  - AC5b cycle 3: Added 3 new parity tests to TestFromAC_CockpitViewBehavior:
+    - `test_list_tasks_count_and_ids_match_engine`: compares len() and set of IDs against engine.agent_view().list_tasks()
+    - `test_show_task_returns_show_task_response_type`: asserts isinstance(result, ShowTaskResponse) and checks .id, .title, .status
+    - `test_board_config_statuses_match_engine`: compares view_config.statuses == engine_config.statuses exactly
+- Tests per category: happy 20, edge 12, error 0, boundary 19 (text/type scans)
+- Total: 51 tests, all PASS against current implementation
+- ruff: clean
+- Builder skip: test-only retry, all new tests green against existing implementation
+- AC coverage: AC1(8) AC2(6) AC3(6) AC4(12) AC5a(8) AC5b(9) AC6(1) AC7(1) — AC8+AC9 td:0, AC10 substrate fix
+- Commit: 39257923
+[[2026-05-01]]
+## Builder Notes
+- Scope decision:
+  - Cycle 3 is test-proof-only per architecture notes; no production/source changes required in this builder pass.
+  - Builder-skip condition validated: task-owned new tests already pass against current implementation.
+
+- Verification (quality-runner):
+  - Scoped task suite `tests/test_cockpit_view_1224.py`: 51 passed, 0 failed.
+  - Scoped lint on touched files (`tests/test_cockpit_view_1224.py`, `serve/cockpit/src/owlbear_cockpit/view.py`, `serve/kanban/tests/test_engine_list_show_1071.py`): clean.
+  - Coverage (`owlbear_cockpit.view`): 23% (informational; no source edits in this pass).
+
+- Additional gate check:
+  - Targeted kanban-file run for AC9 scope (`test_engine_init_1067.py`, `test_engine_init_1068.py`, `test_engine_list_show_1071.py`, `test_engine_pick_tasks_1074.py`) remains red on known broader config/constructor contract failures.
+  - No new relocation-specific breakage observed in this builder pass; AC9 remains a reviewer/architect baseline-evidence gate per cycle-3 wording.
+
+- Files changed in this builder pass:
+  - None.
+
+- Evidence summary:
+  - Current relocation implementation stays intact and task-owned cycle-3 proof suite is green.
+  - This pass adds fresh GREEN evidence and advances for review adjudication on td:0 baseline exclusions.

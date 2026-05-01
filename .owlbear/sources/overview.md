@@ -13,6 +13,21 @@ External repos and resources studied during OwlBear development.
 | samuelcolvin/watchfiles (GitHub) | <https://github.com/samuelcolvin/watchfiles> | Rust-backed async file watcher (Pydantic author); OS-native FSEvents/inotify, async-friendly API | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
 | uvicorn.org — Settings (concurrency limits) | <https://www.uvicorn.org/settings/> | Worker count, connection limits, async model reference for SSE deployment impact assessment | `.owlbear/research/1233-realtime-cockpit-updates.md` | 2026-04-30 |
 
+## EventSource Client Implementation (Task #1235)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| WHATWG HTML Spec §9.2 — Server-sent events | <https://html.spec.whatwg.org/multipage/server-sent-events.html> | Normative EventSource API: readyState semantics (CONNECTING/OPEN/CLOSED), auto-reconnect behavior, connection failure rules, event parsing | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
+| reactuse.com — useEventSource hook | <https://reactuse.com/browser/useeventsource/> | React hook pattern for EventSource: status tracking, open/close control, data extraction | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
+| suqingdong/useEventSource (GitHub) | <https://github.com/suqingdong/useEventSource> | React SSE hook library: reconnect, terminate, data state management pattern | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
+
+## SSE Endpoint Implementation (Task #1234)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| sse-starlette v3.4.1 (PyPI) | <https://pypi.org/project/sse-starlette/> | EventSourceResponse API, configuration options, shutdown handling, test patterns | `.owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
+| watchfiles v1.1.1 — awatch API docs | <https://watchfiles.helpmanual.io/api/watch/> | Async file watcher API: awatch signature, stop_event, debounce, filter, recursive params | `.owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
+
 ## Version Field Semantics (Task #1170)
 
 | Source | URL | What | Where Used | Date |

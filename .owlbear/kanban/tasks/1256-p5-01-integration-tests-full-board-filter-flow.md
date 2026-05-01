@@ -4,11 +4,12 @@ title: 'P5-01: Integration tests — full board filter flow'
 status: research
 priority: important
 created: 2026-05-01T04:35:07.029411+00:00
-updated: 2026-05-01T04:37:37.094211+00:00
+updated: 2026-05-01T08:30:28.777206+00:00
 tags:
 - phase-5
 - scope:cockpit-web
 - test:integration
+- type:test
 parent: 1247
 depends_on:
 - 1255
