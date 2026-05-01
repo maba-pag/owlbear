@@ -1,10 +1,10 @@
 ---
 id: 1259
 title: Add paused option to usePollingFetch
-status: done
+status: archived
 priority: nice-to-have
 created: 2026-05-01T09:34:21.381409+00:00
-updated: 2026-05-01T21:25:02.807680+00:00
+updated: 2026-05-01T21:29:54.921057+00:00
 tags:
 - cockpit
 - frontend
@@ -13,7 +13,7 @@ depends_on:
 - 1235
 blocked: false
 block_reason:
-claimed_at: 2026-05-01T21:25:02.807680+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -315,3 +315,44 @@ Test-only retry — all new tests pass against current impl. Builder skip: advan
 
 ### Scratch Files Cleaned
 - None found (.owlbear/scratch/1259-* — no matches)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: paused option + result unchanged | `usePollingFetch.ts:7` adds `paused?: boolean`; result interface unchanged at lines 16-19; lifecycle test at `usePollingFetch_1259.test.ts:76-96` | PASS |
+| AC2: interval skips poll when paused | Guard at `usePollingFetch.ts:101`; tests at `usePollingFetch_1259.test.ts:102-134` | PASS |
+| AC3: pendingPollRef drain skips when paused | Guard at `usePollingFetch.ts:89`; tests at `usePollingFetch_1259.test.ts:142-192` | PASS |
+| AC4: refetch() still works when paused | Direct `poll()` call at `usePollingFetch.ts:117-118`; tests at `usePollingFetch_1259.test.ts:199-260` | PASS |
+| AC5: initial mount fires regardless of paused | Unconditional `void poll()` at `usePollingFetch.ts:98`; test at `usePollingFetch_1259.test.ts:267-281` | PASS |
+| AC6: toggle does not teardown timer | `pausedRef.current` update at line 44, not in effect deps (line 111); timer-stability test at `usePollingFetch_1259.test.ts:350-398` | PASS |
+| AC7: existing 1227 tests pass | 13/13 passed in scoped run (28 total with 1259 suite) | PASS |
+
+### Test Results
+- Vitest (task-scoped): 28 passed, 0 failed
+- Vitest (full suite): pre-existing jsdom env failures in unrelated files (useRepairFlow_1165, useScanPolling_1157); NOT caused by this task
+- pytest (full backend): 3492 passed, 113 failed (all failures in unrelated tasks: 973, 1015, migration); no regression from #1259
+- ESLint: clean on usePollingFetch.ts and usePollingFetch_1259.test.ts
+
+### Architect Quality: 5/5
+Specific, complete, clean implementation path. 7 AC lines with test-depth annotations. Challenger surfaced AC3 gap which was addressed before development. No builder improvisation needed.
+
+### Deduction Breakdown
+- No AC lines without evidence: 0
+- No lint violations: 0
+- AC quality 5/5: 0
+- Reviewer evidence present and detailed: 0
+- No task-scope test failures: 0
+- Pre-existing full-suite failures (not task-caused): informational, no deduction
+
+### Confidence: 0.98
+### Action: archive
+
+### Commits Verified
+| Commit | Type | Attribution |
+|--------|------|-------------|
+| e5d06f07 | test (RED) | test-writer |
+| df62a068 | feat (GREEN) | builder |
+| 3b80c85a | test (retry) | test-writer |
+| 056e5b8c | docs (diagram) | doc-writer |
