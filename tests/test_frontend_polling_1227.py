@@ -163,3 +163,106 @@ class TestFromAC_ShellHealthFromTasksPoll:
             "After AC4 state-lifting, KanbanBoard must receive board+tasks via props "
             "from Shell — not own the tasks poll."
         )
+
+
+# ---------------------------------------------------------------------------
+# AC4 (retry, cycle 2): LegacyKanbanBoard fallback must be removed
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_KanbanBoardLegacyRemoval:
+    """AC4 (refined): LegacyKanbanBoard backwards-compat fallback must not exist.
+
+    The first-cycle test used ``= useBoard()`` (whitespace-sensitive) and missed
+    the live ``boardState=useBoard()`` invocation inside LegacyKanbanBoard.
+    These tests use regex and literal substring checks that are whitespace-agnostic.
+    """
+
+    def test_legacy_kanbanboard_function_removed(self) -> None:
+        """KanbanBoard.tsx must not define a LegacyKanbanBoard function."""
+        import re
+
+        kb_file = ROOT / "serve" / "cockpit" / "web" / "src" / "KanbanBoard.tsx"
+        assert kb_file.exists(), "KanbanBoard.tsx missing."
+        content = kb_file.read_text()
+        assert not re.search(r"\bLegacyKanbanBoard\b", content), (
+            "KanbanBoard.tsx still defines/references LegacyKanbanBoard. "
+            "AC4 (refined) requires removal of the backwards-compat fallback so "
+            "KanbanBoard has no useBoard() call on any code path."
+        )
+
+    def test_kanbanboard_tsx_no_useboard_invocation_whitespace_agnostic(self) -> None:
+        """KanbanBoard.tsx must have no useBoard() call in any form (whitespace-agnostic).
+
+        The first-cycle check ``assert "= useBoard()" not in content`` missed
+        ``const boardState=useBoard()`` (no spaces around ``=``).
+        This test uses a regex that matches regardless of surrounding whitespace.
+        """
+        import re
+
+        kb_file = ROOT / "serve" / "cockpit" / "web" / "src" / "KanbanBoard.tsx"
+        assert kb_file.exists(), "KanbanBoard.tsx missing."
+        content = kb_file.read_text()
+        # Match any form: `= useBoard()`, `=useBoard()`, `boardState=useBoard()`, etc.
+        # Excludes the re-export line `export { useBoard } from './hooks/useBoard'`
+        # and import line, which contain 'useBoard' but not as a call invocation.
+        invocation = re.search(r"\buseBoard\s*\(\s*\)", content)
+        assert invocation is None, (
+            f"KanbanBoard.tsx still invokes useBoard() at: "
+            f"{content[max(0, invocation.start() - 40):invocation.end() + 40]!r}. "
+            "After AC4 state-lifting and LegacyKanbanBoard removal, KanbanBoard "
+            "must not call useBoard() on any code path."
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC6 (new, cycle 2): Durable suites aligned to new polling architecture
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_DurableSuiteAlignment:
+    """AC6 (new): Durable suites must be updated to assert the new architecture.
+
+    Shell_966.test.tsx: must not assert the removed ``usePolling('/health')`` wiring.
+    KanbanBoard.test.tsx: must not render ``<KanbanBoard />`` without board/tasks props
+    after LegacyKanbanBoard removal.
+    """
+
+    TESTS_DIR = ROOT / "serve" / "cockpit" / "web" / "src" / "__tests__"
+
+    def test_shell_966_no_health_polling_assertion(self) -> None:
+        """Shell_966.test.tsx must not assert the removed /health endpoint wiring.
+
+        The durable suite currently contains
+        ``expect(vi.mocked(usePolling)).toHaveBeenCalledWith('/health')``
+        which encodes the old contract that AC1 explicitly removed.  The builder
+        must replace it with an assertion against the new useBoard health source.
+        """
+        suite = self.TESTS_DIR / "Shell_966.test.tsx"
+        assert suite.exists(), "Shell_966.test.tsx missing."
+        content = suite.read_text()
+        assert "toHaveBeenCalledWith('/health')" not in content, (
+            "Shell_966.test.tsx still asserts usePolling('/health') wiring. "
+            "AC6 requires this durable suite to be updated so it asserts the new "
+            "health-from-useBoard contract instead of the removed /health endpoint."
+        )
+
+    def test_kanbanboard_test_tsx_no_bare_render_without_props(self) -> None:
+        """KanbanBoard.test.tsx must not render <KanbanBoard /> without board/tasks props.
+
+        After LegacyKanbanBoard is removed, a bare ``<KanbanBoard />`` render
+        receives no board state and would fail at runtime.  The durable suite
+        must be updated to provide board, tasks, loading, error, and refetchTasks
+        props so it exercises the real component contract.
+        """
+        import re
+
+        suite = self.TESTS_DIR / "KanbanBoard.test.tsx"
+        assert suite.exists(), "KanbanBoard.test.tsx missing."
+        content = suite.read_text()
+        bare_render = re.search(r"<KanbanBoard\s*/>", content)
+        assert bare_render is None, (
+            "KanbanBoard.test.tsx renders <KanbanBoard /> without required props. "
+            "AC6 requires this suite to provide board, tasks, loading, error, and "
+            "refetchTasks props after LegacyKanbanBoard removal."
+        )
