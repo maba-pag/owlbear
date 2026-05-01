@@ -1,10 +1,10 @@
 ---
 id: 1221
 title: Engine — lazy agent_map validation at pick_tasks only
-status: backlog
+status: todo
 priority: needed
 created: 2026-04-30 16:31:18.568412+00:00
-updated: 2026-05-01T01:07:50.924190+00:00
+updated: 2026-05-01T02:05:38.435060+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -540,3 +540,65 @@ Post-task reflection:
 - Exact placement ACs need ordered-call or precedence tests, not just eventual exception assertions.
 - Broad legacy suite runs can surface unrelated red; scoped reruns are necessary for fair gating.
 - Reflog evidence is workable for commit presence when raw diff access is unavailable, but it carries a small confidence cost.
+
+## AC Update (Round 3 Arch Review)
+
+**AC4 correction:** MCP `pick_tasks` raises `ToolError` (wrapping `ConfigError` user_message via MCP adapter at `server.py:76`) when `agent_map` is incomplete — not `ConfigError` directly. The original AC4 wording was stale; tests already assert `ToolError`.
+
+**New AC lines:**
+- [ ] AC6 (`td:1`): `tests/test_engine_lazy_agent_map_1221.py` — ordering proof: `resolve_pending_drs` is **never called** when `agent_map` is incomplete. Test: monkeypatch `sys.modules["owlbear_kanban.decisions"]` with a `MagicMock()` before calling `av.pick_tasks()`; assert `mock_decisions.resolve_pending_drs.call_count == 0`.
+- [ ] AC7 (`td:1`): `tests/test_engine_lazy_agent_map_1221.py` — `effective_wave` conflict proof: config with `wave_size: 0` AND `agent_map: {}` loaded via `refresh_config()`; `av.pick_tasks()` (no explicit `wave_size` arg) must raise `ValidationError(code="ERR_INVALID_WAVE_PARAM")`, not `ConfigError`; proves the `effective_wave < 1` guard at `engine.py:2327` executes before the agent_map check at `engine.py:2333`. Test must import `ValidationError` from `owlbear_kanban.errors`.
+
+**Builder note for next pass:** Source is already correct (commit `062b2644`). Builder must skip implementation and run quality-runner verification only (scoped run on `tests/test_engine_lazy_agent_map_1221.py`).
+
+[[2026-05-01]]
+## Architecture Review (Round 3)
+### Context
+Task returned from reviewer (Round 2 sweep, loop-breaker route). Implementation at `engine.py:2333–2338` is correct (verified live: guard after effective_wave check at line 2327, before `resolve_pending_drs` at line 2348, before `list_tasks` at line 2352). 14/14 task-owned tests pass. Two test proofs were missing.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Unchanged from Round 2 |
+| Interface clarity | PASS | AC6/AC7 add explicit proof requirements; AC4 corrected |
+| Dependency correctness | PASS | No new deps |
+| Module layering | PASS | Validation stays in engine.py |
+| TDD compliance | PASS | Test-writer adds AC6+AC7 tests |
+| KISS/YAGNI | PASS | Minimal scope — test proof only |
+| Premise challenge | PASS | Unchanged |
+| Pattern consistency | PASS | Unchanged |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | kanban-engine only |
+
+### AC Refinements Applied
+| AC | Change | Reason |
+|----|--------|--------|
+| AC4 | Corrected to `ToolError` (not `ConfigError`) | Live MCP adapter raises `ToolError`; stale AC4 text said `ConfigError` |
+| AC6 (new, td:1) | `resolve_pending_drs` non-call proof via `sys.modules` monkeypatch | Reviewer required: no test binds "before resolve_pending_drs" placement |
+| AC7 (new, td:1) | `effective_wave < 1` conflict: config `wave_size: 0` + no explicit param → `ERR_INVALID_WAVE_PARAM` wins | Challenger: `wave_size=0` explicit param hits line 2319 (wrong guard); config-driven 0 correctly targets `effective_wave < 1` at line 2327 |
+
+### Challenger Results
+- Challenger: reconsider (0.48) — three concerns raised; all resolved:
+  - Critical (AC7 proof mismatch): corrected — AC7 now uses config `wave_size: 0` + no explicit `wave_size` param, targeting `effective_wave < 1` guard at line 2327 specifically
+  - Moderate (AC4 stale wording): corrected — `ToolError` replaces `ConfigError`
+  - Minor (routing): noted — builder-skip instruction added
+
+### Test Depth
+- AC6: (td:1), AC7: (td:1)
+- Test-writer: PROCEED (add 2 tests to `tests/test_engine_lazy_agent_map_1221.py`; builder skips implementation — source is already correct)
+
+### Verdict: APPROVE (after REFINE)
+### Action Taken: AC4 corrected, AC6+AC7 added; approved to todo
+[[2026-05-01]]
+## Architecture Review (Round 3)
+
+REFINE → APPROVE.
+
+AC changes:
+- AC4 corrected: "ToolError (wrapping ConfigError)" — the MCP adapter raises ToolError, not ConfigError; stale original wording fixed.
+- AC6 added (td:1): resolve_pending_drs non-call proof — monkeypatch sys.modules["owlbear_kanban.decisions"] with MagicMock, call av.pick_tasks(), assert mock_decisions.resolve_pending_drs.call_count == 0.
+- AC7 added (td:1): effective_wave conflict proof — config with wave_size: 0 AND agent_map: {} loaded via refresh_config(); av.pick_tasks() (no explicit wave_size arg) must raise ValidationError(code="ERR_INVALID_WAVE_PARAM"), proving effective_wave < 1 guard at engine.py:2327 executes before agent_map check at engine.py:2333.
+
+Challenger: reconsider (0.48) — all three concerns resolved: AC7 proof-contract mismatch corrected (config-driven zero, not explicit param), AC4 stale wording fixed, builder-skip noted.
+
+Implementation at engine.py:2333–2338 is correct. 14/14 task-owned tests pass. Test-writer: add 2 tests. Builder: skip implementation, run verification only.

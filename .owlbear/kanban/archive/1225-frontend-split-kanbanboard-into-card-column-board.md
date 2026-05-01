@@ -1,10 +1,10 @@
 ---
 id: 1225
 title: Frontend — split KanbanBoard into Card + Column + Board
-status: review
+status: archived
 priority: needed
 created: 2026-04-30 16:31:18.609234+00:00
-updated: 2026-05-01T01:24:51.869193+00:00
+updated: 2026-05-01T02:09:22.374351+00:00
 tags:
 - cockpit
 - frontend
@@ -281,3 +281,172 @@ Verdict: APPROVE — implementation correct, AC corrected to match. Test-writer 
 - Retry cycles after AC correction may require verification-only builder passes; forcing edits in those cases adds risk without value.
 - For frontend refactors, Vitest suite evidence is the decisive behavioral parity proof; Python quality-runner remains useful for adjacent suite health checks.
 - Keeping dependency direction explicit (`KanbanBoard -> Column -> Card`) prevents unnecessary top-level imports and preserves component encapsulation.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- Quality-runner scoped Python gate: 27 passed, 0 failed, 0 skipped across `tests/test_kanban_board_split_1225.py` and `tests/test_occ_frontend_wire_1137.py`.
+- Quality-runner scoped frontend gate: 70 passed, 0 failed across `serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx`, `serve/cockpit/web/src/__tests__/KanbanBoard_933.test.tsx`, `serve/cockpit/web/src/__tests__/KanbanBoard_959.test.tsx`, and `serve/cockpit/web/src/__tests__/useBoard.test.ts`.
+
+### Lint
+- Ruff: clean on the scoped Python suites.
+- ESLint: exit 0 on the scoped frontend source and test files. One non-blocking warning remained in unchanged file `serve/cockpit/web/src/__tests__/KanbanBoard_933.test.tsx` for an unused `beforeEach` import.
+
+### Coverage
+- Python quality-runner reported 30 percent overall coverage; non-gating here because no Python source changed.
+- Frontend scoped run did not measure coverage; non-gating here because this task is a pure TSX extraction and the required durable Vitest suites were rerun independently and passed.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| `Card` extracted to `components/Card.tsx` with `PRIORITY_COLORS` and `Task` import | `test_card_tsx_exists`, `test_card_tsx_has_priority_colors`, `test_card_tsx_imports_task_from_useboard` | Yes. File absence, missing constant, or wrong import path would fail the assertions at lines 24, 31, and 39 in `tests/test_kanban_board_split_1225.py`. | COVERED |
+| `Column` extracted to `components/Column.tsx`, imports `Card` from `./Card` and `Task` from `../hooks/useBoard` | `test_column_tsx_exists`, `test_column_tsx_imports_card_from_card`, `test_column_tsx_imports_task_from_useboard` | Yes. Missing file or wrong import paths would fail the assertions at lines 51, 58, and 66 in `tests/test_kanban_board_split_1225.py`. | COVERED |
+| `Card.tsx` and `Column.tsx` do not introduce `React.memo`, `useMemo`, or `useCallback` wrappers | `test_card_tsx_no_memo_wrappers`, `test_column_tsx_no_memo_wrappers` | Yes. Any forbidden wrapper string would fail the assertions at lines 82 and 98 in `tests/test_kanban_board_split_1225.py`. | COVERED |
+
+#### Security Review
+- No new boundary, persistence, path, template, or command-execution surface was introduced. The change remains a presentational UI extraction only.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---|---|---|
+| `TestFromAC_CardExtraction` methods at lines 24, 31, 39 | No builder-side changes detected in the live snapshot; retry builder note explicitly states no code changes in this pass. | PRESERVED |
+| `TestFromAC_ColumnExtraction` methods at lines 51, 58, 66 | No builder-side changes detected in the live snapshot; retry builder note explicitly states no code changes in this pass. | PRESERVED |
+| `TestFromAC_NoMemoWrappers` methods at lines 82, 98 | No builder-side changes detected in the live snapshot; retry builder note explicitly states no code changes in this pass. | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|---|---|---|
+| Assertion specificity | STRONG | The task-owned tests assert exact file presence, exact import paths, constant presence, and exact forbidden-wrapper absence. |
+| Negative or error-path coverage | ADEQUATE | This refactor AC is structural, not error-path driven; runtime regressions are covered by the rerun durable Vitest suites. |
+| Manual mutation reasoning | STRONG | Removing `PRIORITY_COLORS`, changing `./Card` or `../hooks/useBoard`, or adding memo wrappers would turn the task-owned suite red immediately. |
+| Test independence | STRONG | The task-owned tests are pure file reads with no shared mutable state. |
+| Descriptive names | STRONG | The `TestFromAC_*` methods name the enforced contract directly. |
+
+#### Data Safety
+- No issues observed.
+
+#### Implementation-Aware Test Gap Analysis
+- No blocking gap remains in task scope.
+- Corrected AC line 3 is satisfied by live code: `serve/cockpit/web/src/KanbanBoard.tsx` imports only `Column` at line 2, imports `useBoard` and `Task` at line 3, preserves `export { useBoard }` at line 5, and keeps the default export at line 17.
+- The extracted files satisfy their source-shape contract: `serve/cockpit/web/src/components/Card.tsx` imports `Task` at line 1, defines `PRIORITY_COLORS` at line 3, exports `CardProps` at line 11, and exports `Card` at line 18. `serve/cockpit/web/src/components/Column.tsx` imports `Card` at line 2, imports `Task` at line 3, exports `ColumnProps` at line 5, and exports `Column` at line 15.
+- No `Card` or `Column` re-export is present in `KanbanBoard.tsx`, and no in-repo import of `Card` or `Column` from `KanbanBoard` was found.
+- The independently rerun durable Vitest suites still exercise the extracted runtime paths: column count and empty-state rendering in `KanbanBoard.test.tsx` lines 172 and 182; per-column sort order in line 223; card title tooltip in line 243; block badge and running indicator in lines 260 and 290; context menu and transition flow in lines 318, 332, 616, and 654; board root and large-DOM invariants in `KanbanBoard_959.test.tsx` lines 168, 183, and 211; priority border styling in `KanbanBoard_933.test.tsx` lines 264 and 274.
+
+#### Necessity Check
+- Skipped. Pure refactor.
+
+#### Builder Process Quality
+- CLEAN. There are two `## Builder Notes` sections, but the second is a verification-only retry after the architect corrected the AC text; this is not a repeated implementation loop.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| `Card` component and `CardProps` interface extracted to `serve/cockpit/web/src/components/Card.tsx`; `PRIORITY_COLORS` co-located there; `Task` imported from `../hooks/useBoard` | `Card.tsx` line 1 imports `Task`, line 3 defines `PRIORITY_COLORS`, line 11 exports `CardProps`, line 18 exports `Card`; task-owned tests at lines 24, 31, 39 passed. | `test_card_tsx_exists`, `test_card_tsx_has_priority_colors`, `test_card_tsx_imports_task_from_useboard` | PASS |
+| `Column` component and `ColumnProps` interface extracted to `serve/cockpit/web/src/components/Column.tsx`; imports `Card` from `./Card` and `Task` from `../hooks/useBoard` | `Column.tsx` line 2 imports `Card`, line 3 imports `Task`, line 5 exports `ColumnProps`, line 15 exports `Column`; task-owned tests at lines 51, 58, 66 passed. | `test_column_tsx_exists`, `test_column_tsx_imports_card_from_card`, `test_column_tsx_imports_task_from_useboard` | PASS |
+| `KanbanBoard.tsx` retains default export and `export { useBoard }` re-export; imports only `Column` from `./components/Column`; does not re-export `Card` or `Column` | `KanbanBoard.tsx` line 2 imports only `Column`, line 5 re-exports `useBoard`, line 17 keeps the default export; no `Card` or `Column` re-export matches were found in the file. | Durable source-shape check | PASS |
+| `Card.tsx` and `Column.tsx` do not introduce `React.memo()`, `useMemo()`, or `useCallback()` wrappers | No matches for those wrapper names were found in either extracted component; task-owned tests at lines 82 and 98 passed. | `test_card_tsx_no_memo_wrappers`, `test_column_tsx_no_memo_wrappers` | PASS |
+| All existing Vitest suites (`KanbanBoard.test.tsx`, `KanbanBoard_933.test.tsx`, `KanbanBoard_959.test.tsx`) pass without modification | Quality-runner frontend gate reran those suites independently and reported 56 passed, 0 failed inside the 70-test scoped run. | Required durable Vitest suites | PASS |
+| `test_occ_frontend_wire_1137.py` continues to pass without modification; `test_cockpit_react_compiler_1015.py` excluded by latest architect refinement | Quality-runner Python gate reported 27 passed, 0 failed across the task suite and `test_occ_frontend_wire_1137.py`. | Required durable pytest suite | PASS |
+| `useBoard.test.ts` import from `../KanbanBoard` resolves without change | `serve/cockpit/web/src/__tests__/useBoard.test.ts` line 11 still imports `useBoard` from `../KanbanBoard`; the scoped frontend run passed that suite. | Existing `useBoard.test.ts` | PASS |
+| No net change to rendered DOM — same `data-testid` attributes, event handlers, and inline styles | Independent reruns stayed green on the durable DOM suites covering board root, card count, column counts, empty state, context-menu items, move-error rendering, block badge, running indicator, and border styling. | Existing Vitest suites | PASS |
+
+### Deductions
+- 0.01 deduction: scoped frontend lint surfaced one unused-import warning in unchanged test file `serve/cockpit/web/src/__tests__/KanbanBoard_933.test.tsx`.
+- 0.01 deduction: frontend coverage was not measured in scoped mode, but this is offset by the independent green rerun of the required durable suites for this extraction task.
+
+### Verdict
+- PASS with confidence 0.98.
+
+### Action
+- Advance to docs.
+
+### Post-task Reflection
+- Frontend review tasks can obtain independent Vitest evidence through quality-runner even when the handbook examples are Python-heavy.
+- On looped tasks, the latest architecture refinement is the binding contract; earlier failed review notes remain historical context only.
+- For pure TSX extractions, task-owned source-shape tests plus independently rerun durable behavior suites provide stronger proof than a generic coverage number.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | All changed files are TSX source (`KanbanBoard.tsx`, `Card.tsx`, `Column.tsx`). No IN-scope prose docs reference these specific component internals. `serve/cockpit/README.md` describes launch/API only — no component-level prose affected. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. TSX-only extraction. |
+| 3 | External attribution | No | N/A | Pure internal refactor; no external patterns, articles, or repos cited in task body. |
+| 4 | Research doc | No | N/A | No research phase doc produced for this task. |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**, serve/cockpit/web/src/**` — matches all three changed files. Footer updated from `9cc65998` to `e11271c1` (current HEAD as of docs gate). Commit: `f16861b8`. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. Two new files added (`Card.tsx`, `Column.tsx`); no IN-scope docs reference them as prior stale entries. |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/cockpit/web/src/KanbanBoard.tsx` | OUT (app source) | N/A — diagram footer covers it |
+| `serve/cockpit/web/src/components/Card.tsx` | OUT (app source) | N/A — diagram footer covers it |
+| `serve/cockpit/web/src/components/Column.tsx` | OUT (app source) | N/A — diagram footer covers it |
+| `share/diagrams/cockpit.excalidraw` | IN (diagram) | Updated footer |
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer updated to `Last verified: 2026-05-01 (e11271c1)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1225-*` scratch files found)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `Card` extracted to `components/Card.tsx`; `PRIORITY_COLORS` co-located; `Task` imported from `../hooks/useBoard` | File confirmed at `serve/cockpit/web/src/components/Card.tsx`; reviewer verified lines 1, 3, 11, 18; task suite tests at lines 24, 31, 39 — PASS | PASS |
+| `Column` extracted to `components/Column.tsx`; imports `Card` from `./Card` and `Task` from `../hooks/useBoard` | File confirmed at `serve/cockpit/web/src/components/Column.tsx`; reviewer verified lines 2, 3, 5, 15; task suite tests at lines 51, 58, 66 — PASS | PASS |
+| `KanbanBoard.tsx` retains default export + `export { useBoard }`; imports only `Column` (corrected AC) | Reviewer verified `KanbanBoard.tsx` line 2 imports only `Column`, line 5 re-exports `useBoard`, line 17 keeps default export | PASS |
+| `Card.tsx` and `Column.tsx` — no memo wrappers | Reviewer confirmed no `React.memo`/`useMemo`/`useCallback` matches; task suite tests at lines 82, 98 — PASS | PASS |
+| All existing Vitest suites pass without modification | Second reviewer ran quality-runner frontend gate: 70 passed, 0 failed | PASS |
+| `test_occ_frontend_wire_1137.py` passes; `test_cockpit_react_compiler_1015.py` excluded (corrected AC) | Quality-runner Python gate: 27 passed, 0 failed | PASS |
+| `useBoard.test.ts` import from `../KanbanBoard` resolves | Reviewer confirmed line 11 import intact; included in 70-test frontend gate | PASS |
+| No net DOM change — same `data-testid`, event handlers, inline styles | Independent rerun of durable Vitest suites covering board root, card count, context-menu, block badge, border styling — all green | PASS |
+
+### Test Results (Full Suite)
+- quality-runner `mode=full`: 3329 passed, 104 failed, 4 skipped
+- Task-owned tests `test_kanban_board_split_1225.py` — not in failed list
+- Adjacent gate `test_occ_frontend_wire_1137.py` — not in failed list
+- All 104 failures are pre-existing baseline failures in unrelated task suites (oldest: task 1050, 1068; unrelated cockpit/server/guidance suites)
+
+### Lint
+- Full-suite ruff: 7 violations, all in unrelated files (knowledge, mcp-knowledge, mcp-memory, orchestrator, test_error_hierarchy, test_guidance_text, test_health_badge_frontend)
+- No violations in task-owned Python test or any TSX deliverable
+
+### Commit Integrity
+- Builder commit `9945b9d2` — `refactor: split KanbanBoard components (#1225, builder)` — confirmed in `git log` for all three changed TSX files
+- Docs commit `f16861b8` — `docs: update cockpit diagram footer for KanbanBoard split (#1225, doc-writer)` — confirmed in `git log` for `share/diagrams/cockpit.excalidraw`
+- Second builder pass: no commit (no file changes — AC correction only)
+
+### Reviewer Evidence
+- Detailed `## Review Evidence` section present (second review)
+- PASS verdict at confidence 0.98
+- Independent frontend Vitest rerun evidence present
+
+### AC Quality Score
+**3/5** — Two AC defects required full architect re-review and a second pipeline cycle:
+1. AC Line 3 mis-specified `KanbanBoard.tsx` importing `Card` directly — inverted the correct `KanbanBoard → Column → Card` dependency chain
+2. AC Line 6 named an already-red test suite (`test_cockpit_react_compiler_1015.py`) as a must-pass gate — infeasible requirement
+
+Implementation was architecturally correct throughout; the AC was wrong. Follow-up created for architect calibration.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| AC quality score ≤ 3 | −.03 |
+| **Total deductions** | **−.03** |
+
+### Confidence Score
+**0.97** → ARCHIVE
+
+### Action
+Archive. Follow-up created for architect calibration on dependency-graph mis-specification and infeasible test gate patterns.

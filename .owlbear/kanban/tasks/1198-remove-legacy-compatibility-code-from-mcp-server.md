@@ -1,10 +1,10 @@
 ---
 id: 1198
 title: Remove legacy compatibility code from MCP server
-status: todo
+status: backlog
 priority: needed
 created: 2026-04-30 15:28:54.145200+00:00
-updated: 2026-05-01T01:28:50.882480+00:00
+updated: 2026-05-01T01:54:45.446838+00:00
 tags:
 - audit-kanban
 - mcp-server
@@ -464,3 +464,56 @@ Challenger: SKIPPED — all new AC lines are td:0, no design decisions.
 
 ### Verdict: REFINE → APPROVE
 ### Action Taken: Appended 10 explicit per-file migration AC lines to task body; advancing to todo.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry: migrated `task_id=` → `id=` in 9 durable MCP contract suites + fixed exposed stale kwarg names.
+
+### Changes (test files only)
+- `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py`: 31 `task_id=` → `id=` (move_task, start_work, end_work call sites)
+- `serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py`: 11 `task_id=` → `id=` (edit_task call sites)
+- `serve/mcp-kanban/tests/test_mcp_guidance_1089.py`: 7 `task_id=` → `id=`
+- `serve/mcp-kanban/tests/test_guidance_edit_task_973.py`: 4 `task_id=` → `id=`; additionally fixed stale kwarg names exposed by compat removal: `block=` → `block_reason=`, `unblock=True` → `block_reason=""`, `title=` → `priority=`
+- `serve/mcp-kanban/tests/test_guidance_server_980.py`: 6 `task_id=` → `id=`; additionally fixed `title=` → `priority=` in 2 call sites
+- `serve/mcp-kanban/tests/test_guidance_end_work_973.py`: 5 `task_id=` → `id=`
+- `serve/mcp-kanban/tests/test_guidance_move_task_973.py`: 5 `task_id=` → `id=`
+- `tests/test_mcp_kanban_1091.py`: 1 `task_id=` → `id=`
+- `tests/test_mcp_kanban_1092.py`: 3 `task_id=` → `id=`
+
+### Commit
+- `e11271c1`: test: migrate task_id= → id= in durable MCP contract suites (#1198, test-writer)
+
+### Quality Results (broad MCP contract slice, 15 files)
+- 186 passed
+- 15 failed — all pre-existing, NOT caused by #1198:
+  - 11 from `test_mcp_kanban_1196.py` (RED tests for task #1196, separate task)
+  - 1 from `test_mcp_guidance_1089.py` (guidance text mismatch, pre-existing)
+  - 1 from `test_guidance_end_work_973.py` (reject guidance behavior, pre-existing)
+  - 2 from `test_guidance_edit_task_973.py` (block:user tag removal not implemented in server.edit_task — behavior gap, not caused by compat removal)
+- ruff: clean (0 violations)
+- owlbear_mcp_kanban.server: 90% coverage
+
+### All 64 TypeError: task_id failures cited by second reviewer are resolved.
+[[2026-05-01]]
+## Builder Notes
+- No source edits in this pass. The implementation for legacy-compat removal remains in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py` (commit `706cc2f7`).
+- Canonical verification was executed via `quality-runner`.
+
+### Verification Evidence
+- Broad MCP slice (`serve/mcp-kanban/tests/` + `tests/test_mcp_kanban_*.py` + `tests/test_server_1198.py`): 348 passed, 16 failed, ruff clean.
+- Focused 1198 migration/proof slice (`tests/test_server_1198.py` + 9 refined migration files): 114 passed, 4 failed, ruff clean.
+
+### Blocking Failures (not 1198 implementation regressions)
+- `serve/mcp-kanban/tests/test_mcp_guidance_1089.py::TestFromAC_GuidancePassthrough::test_end_work_block_action_request_hint_guidance` (guidance text expectation mismatch)
+- `serve/mcp-kanban/tests/test_guidance_end_work_973.py::TestFromAC_EndWorkGuidanceIntegration::test_reject_outcome_returns_empty_guidance` (status-skip guidance now present)
+- `serve/mcp-kanban/tests/test_guidance_edit_task_973.py::TestFromAC_EditTaskGuidanceIntegration::test_block_removes_block_user_tag_if_present` (`block:user` not removed)
+- `serve/mcp-kanban/tests/test_guidance_edit_task_973.py::TestFromAC_EditTaskGuidanceIntegration::test_unblock_no_dr_guidance_and_removes_block_user_tag` (`block:user` not removed)
+
+### AC/Scope Assessment
+- 1198 source-level AC remains satisfied (legacy compat helpers removed, no `**legacy` signatures, direct `id` path, strengthened `tests/test_server_1198.py` still green in slice).
+- Refined AC gate requiring broad non-compat slice to be fully green is currently blocked by unrelated open behavior debt in guidance/end_work pathways.
+- This is an AC/prerequisite mismatch, not a builder implementation defect for 1198.
+
+## Post-task Reflection
+- Running both broad and focused quality-runner slices was necessary to separate 1198 correctness from adjacent red suites.
+- The current blocker is stable and reproducible across reruns, with clean lint each time.
+- No surgical source change exists that can close these unrelated failing contracts without scope expansion beyond 1198.
