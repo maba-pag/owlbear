@@ -124,7 +124,8 @@ describe('TestFromAC_UsePollingFetch', () => {
   // ─── Edge cases: inFlight guard and boolean coalesce ─────────────────────
 
   describe('edge cases: inFlight guard', () => {
-    it('inFlight guard: a concurrent poll call while the first is in-flight does not fire a duplicate fetch', async () => {
+    it('inFlight guard: a concurrent poll call while the first is in-flight ' +
+    'does not fire a duplicate fetch', async () => {
       let resolveFetch!: () => void
       const slowFetch = vi.fn(
         () =>
@@ -254,7 +255,8 @@ describe('TestFromAC_UseBoardHealthTransition', () => {
     expect(result.current.health).toBe('green')
   })
 
-  it('health degrades to yellow after 6000ms elapses with no successful tasks poll (AC1: elapsed-time model)', async () => {
+  it('health degrades to yellow after 6000ms elapses with no successful tasks poll ' +
+    '(AC1: elapsed-time model)', async () => {
     // Mount succeeds → health = green.  Subsequent polls fail.  After two 3s
     // ticks (total 6000ms elapsed since last healthy), computeHealth(6000) = 'yellow'.
     let callCount = 0
@@ -285,7 +287,9 @@ describe('TestFromAC_UseBoardHealthTransition', () => {
     expect(result.current.health).toBe('yellow')
   })
 
-  it('health recovers to green after a successful poll following yellow degradation — removing markHealthy() from onSuccess would leave lastHealthyAt stale and health stuck at yellow (AC1: discriminating recovery path)', async () => {
+  it('health recovers to green after a successful poll following yellow degradation — ' +
+    'removing markHealthy() from onSuccess would leave lastHealthyAt stale and health stuck ' +
+    'at yellow (AC1: discriminating recovery path)', async () => {
     // Phase control: mount success → fail polls degrade to yellow → recovery
     // success resets lastHealthyAt via markHealthy().
     //

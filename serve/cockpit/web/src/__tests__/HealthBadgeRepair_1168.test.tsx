@@ -338,7 +338,8 @@ describe('TestFromAC_RepairConfirmCopyExact', () => {
     const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
     const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
     expect(text).toContain(
-      'This will attempt to repair 3 corrupted files. Fixed files are restored, unfixable files are quarantined. Continue?',
+      'This will attempt to repair 3 corrupted files. ' +
+        'Fixed files are restored, unfixable files are quarantined. Continue?',
     )
   })
 
@@ -348,7 +349,8 @@ describe('TestFromAC_RepairConfirmCopyExact', () => {
     const dialog = container.querySelector('[data-testid="repair-confirm-dialog"]')
     const text = (dialog?.textContent ?? '').replace(/\s+/g, ' ').trim()
     expect(text).toContain(
-      'This will attempt to repair 42 corrupted files. Fixed files are restored, unfixable files are quarantined. Continue?',
+      'This will attempt to repair 42 corrupted files. ' +
+        'Fixed files are restored, unfixable files are quarantined. Continue?',
     )
   })
 })

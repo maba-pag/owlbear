@@ -202,7 +202,8 @@ describe('TestFromAC_DRStatusIndicatorShellIntegration', () => {
       expect(() => lastProps.onItemClick('dr-001')).not.toThrow()
     })
 
-    it('onItemClick reference is stable when DRStatusIndicator re-renders with changed count (React state setter proof)', () => {
+    it('onItemClick reference is stable when DRStatusIndicator re-renders ' +
+      'with changed count (React state setter proof)', () => {
       // React Compiler memoizes DRStatusIndicator when props are unchanged.
       // Changing count forces DRStatusIndicator to re-render with fresh props.
       // A real setSelectedDRId has guaranteed stable identity (React contract);

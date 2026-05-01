@@ -136,7 +136,9 @@ function Shell() {
         <p-tabs ref={tabsRef}>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
             <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
-              {selectedTaskId === null ? <div data-testid="detail-placeholder">Select a task to view details.</div> : null}
+              {selectedTaskId === null
+                ? <div data-testid="detail-placeholder">Select a task to view details.</div>
+                : null}
               <DetailTab
                 key={selectedTaskId ?? -1}
                 task={selectedTask}

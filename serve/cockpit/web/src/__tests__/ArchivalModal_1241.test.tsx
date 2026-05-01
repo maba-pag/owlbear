@@ -490,7 +490,8 @@ describe('TestFromAC_ArchivalModal', () => {
       })
     })
 
-    it('sends status="archived", updated=expectedUpdated, archival_reason, archival_refs=[] for non-refs reason', async () => {
+    it('sends status="archived", updated=expectedUpdated, archival_reason, ' +
+      'archival_refs=[] for non-refs reason', async () => {
       const fetchMock = vi.fn(() =>
         Promise.resolve({ ok: true, json: () => Promise.resolve({}) }),
       )
@@ -543,7 +544,8 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const modal = container.querySelector('[role="dialog"]') as HTMLElement
       const focusable = modal.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), [href], input:not([disabled]), ' +
+          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       )
       expect(focusable.length).toBeGreaterThan(1)
 
@@ -562,7 +564,8 @@ describe('TestFromAC_ArchivalModal', () => {
 
       const modal = container.querySelector('[role="dialog"]') as HTMLElement
       const focusable = modal.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), [href], input:not([disabled]), ' +
+          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       )
       expect(focusable.length).toBeGreaterThan(1)
 

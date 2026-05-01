@@ -73,7 +73,8 @@ describe('TestFromAC_PausedOption', () => {
     })
   })
 
-  it('contract: isFetching and hasFetched have correct lifecycle values — would fail if either were dropped from UsePollingFetchResult', async () => {
+  it('contract: isFetching and hasFetched have correct lifecycle values — ' +
+    'would fail if either were dropped from UsePollingFetchResult', async () => {
     // Discriminating proof for "UsePollingFetchResult unchanged" (AC1).
     // Uses a slow fetch so we can assert the in-flight state before resolution.
     const { fn: slowFetch, resolve } = makeSlowFetch()
@@ -334,7 +335,8 @@ describe('TestFromAC_PausedOption', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })
 
-    it('timer-stability: interval fires at original timer offset after pause/unpause — would fail if implementation recreated the interval on toggle', async () => {
+    it('timer-stability: interval fires at original timer offset after pause/unpause — ' +
+      'would fail if implementation recreated the interval on toggle', async () => {
       // Ref-based approach: pausedRef updates each render, timer stays stable.
       // Conditional-interval approach: clearInterval+setInterval on each toggle → timer resets.
       // Test: pause at t=500ms, unpause at t=600ms, advance to t=1000ms.

@@ -363,7 +363,8 @@ describe('TestFromAC_HandleTransitionClickArchive', () => {
   // the live tasks snapshot at intercept time (= 'in-progress' after the poll).
   // brief.md F3 lines 165-170: "taskStatus — task.status at intercept time".
 
-  it('taskStatus passed to ArchivalModal reflects task.status at archived-click time, not context-menu-open time', async () => {
+  it('taskStatus passed to ArchivalModal reflects task.status at archived-click time, ' +
+    'not context-menu-open time', async () => {
     const FROZEN_UPDATED = '2026-01-01T00:00:00+00:00'
     const POLLED_UPDATED = '2026-02-01T00:00:00+00:00'
 

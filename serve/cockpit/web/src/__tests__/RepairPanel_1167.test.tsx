@@ -598,9 +598,15 @@ describe('TestFromAC_RepairPanel_RenderCoverage', () => {
         },
       })
       const { container } = renderPanel(4)
-      expect(container.querySelector('[data-testid="repair-results-fixed"]')!.querySelectorAll('li')).toHaveLength(2)
-      expect(container.querySelector('[data-testid="repair-results-quarantined"]')!.querySelectorAll('li')).toHaveLength(1)
-      expect(container.querySelector('[data-testid="repair-results-failed"]')!.querySelectorAll('li')).toHaveLength(1)
+      expect(
+        container.querySelector('[data-testid="repair-results-fixed"]')!.querySelectorAll('li'),
+      ).toHaveLength(2)
+      expect(
+        container.querySelector('[data-testid="repair-results-quarantined"]')!.querySelectorAll('li'),
+      ).toHaveLength(1)
+      expect(
+        container.querySelector('[data-testid="repair-results-failed"]')!.querySelectorAll('li'),
+      ).toHaveLength(1)
     })
   })
 })

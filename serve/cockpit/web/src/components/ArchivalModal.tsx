@@ -85,7 +85,8 @@ export default function ArchivalModal({
 
     return Array.from(
       root.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'button:not([disabled]), [href], input:not([disabled]), ' +
+          'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
     )
   }
@@ -220,6 +221,7 @@ export default function ArchivalModal({
           Refs
           <input
             type="text"
+            placeholder="e.g., 1230, 1229"
             value={refsRaw}
             onChange={(event) => {
               setRefsRaw(event.target.value)

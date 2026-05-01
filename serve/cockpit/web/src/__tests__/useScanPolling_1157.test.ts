@@ -176,7 +176,9 @@ describe('TestFromAC_useScanPolling', () => {
     })
 
     it('sets items to [] when the 200 OK response payload is not an array (non-array JSON guard)', async () => {
-      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ not: 'an array' }) })))
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({
+        ok: true, status: 200, json: () => Promise.resolve({ not: 'an array' }),
+      })))
       const { result } = renderHook(() => useScanPolling())
       await act(async () => {})
       expect(result.current.items).toEqual([])
@@ -218,8 +220,12 @@ describe('TestFromAC_useScanPolling', () => {
       expect(result.current.error).toBeNull()
     })
 
-    it('wraps a non-Error thrown value in an Error instance for the error state (rejection normalization)', async () => {
-      vi.stubGlobal('fetch', vi.fn(() => Promise.reject('network failure string')))
+    it('wraps a non-Error thrown value in an Error instance for the error state ' +
+      '(rejection normalization)', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.reject('network failure string')),
+      )
       const { result } = renderHook(() => useScanPolling())
       await act(async () => {})
       expect(result.current.error).toBeInstanceOf(Error)
