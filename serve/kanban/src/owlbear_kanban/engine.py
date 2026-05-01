@@ -523,6 +523,16 @@ class KanbanEngine:
         """Per-instance write counter; incremented on every mutating operation."""
         return self._revision
 
+    @property
+    def tasks_dir(self) -> Path:
+        """Configured tasks directory for the active board."""
+        return self._tasks_dir
+
+    @property
+    def kanban_dir(self) -> Path:
+        """Root kanban directory for the active board."""
+        return self._kanban_dir
+
     # ------------------------------------------------------------------
     # Config-derived rank maps
     # ------------------------------------------------------------------
