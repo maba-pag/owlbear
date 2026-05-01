@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Column } from './components/Column'
 import ArchivalModal from './components/ArchivalModal'
-import { useBoard, type Task } from './hooks/useBoard'
+import { useBoard, type Board, type Task } from './hooks/useBoard'
 
-export { useBoard }
+export { useBoard } from './hooks/useBoard'
 
 // ─── KanbanBoard ──────────────────────────────────────────────────────────────
 
@@ -21,12 +21,45 @@ interface ArchivalModalState {
   expectedUpdated: string
 }
 
-export default function KanbanBoard() {
-  const { board, tasks, loading, error, refetchTasks } = useBoard()
+interface DragSourceState {
+  status: string
+  taskId: number
+  taskUpdated: string
+}
+
+export interface KanbanBoardProps {
+  board?: Board | null
+  tasks?: Task[]
+  loading?: boolean
+  error?: string | null
+  refetchTasks?: () => void
+  selectedId?: number | null
+  onSelectTask?: (taskId: number) => void
+}
+
+interface ResolvedKanbanBoardProps {
+  board: Board | null
+  tasks: Task[]
+  loading: boolean
+  error: string | null
+  refetchTasks: () => void
+  selectedId: number | null
+  onSelectTask?: (taskId: number) => void
+}
+
+function KanbanBoardContent({
+  board,
+  tasks,
+  loading,
+  error,
+  refetchTasks,
+  selectedId,
+  onSelectTask,
+}: ResolvedKanbanBoardProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [archivalModal, setArchivalModal] = useState<ArchivalModalState | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
-  const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null)
+  const [dragSource, setDragSource] = useState<DragSourceState | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -63,12 +96,44 @@ export default function KanbanBoard() {
     })
   }
 
-  const handleDragStart = (status: string) => {
-    setDragSourceStatus(status)
+  const handleDragStart = (status: string, taskId: number, taskUpdated: string) => {
+    setDragSource({ status, taskId, taskUpdated })
   }
 
   const handleDragEnd = () => {
-    setDragSourceStatus(null)
+    setDragSource(null)
+  }
+
+  async function handleDrop(targetStatus: string) {
+    if (!dragSource) {
+      return
+    }
+
+    const { taskId, taskUpdated } = dragSource
+    setMoveError(null)
+    setDragSource(null)
+
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: targetStatus, updated: taskUpdated }),
+      })
+      if (res.ok) {
+        refetchTasks()
+        return
+      }
+
+      if (res.status === 409) {
+        setMoveError('Move failed: stale snapshot (409)')
+        refetchTasks()
+        return
+      }
+
+      setMoveError(`Move failed: ${res.status}`)
+    } catch {
+      setMoveError('Move failed: network error')
+    }
   }
 
   const tasksByStatus = tasks.reduce<Record<string, Task[]>>((acc, task) => {
@@ -126,12 +191,15 @@ export default function KanbanBoard() {
             status={name}
             tasks={colTasks}
             priorities={board.priorities}
+            selectedId={selectedId}
+            onSelectTask={onSelectTask}
             onContextMenu={handleContextMenu}
             onDragStart={handleDragStart}
+            onDrop={handleDrop}
             onDragEnd={handleDragEnd}
             isValidDragTarget={
-              dragSourceStatus !== null &&
-              (board.valid_transitions[dragSourceStatus] ?? []).includes(name)
+              dragSource !== null &&
+              (board.valid_transitions[dragSource.status] ?? []).includes(name)
             }
           />
         )
@@ -179,5 +247,53 @@ export default function KanbanBoard() {
         </div>
       )}
     </div>
+  )
+}
+
+function LegacyKanbanBoard({ selectedId, onSelectTask }: Pick<ResolvedKanbanBoardProps, 'selectedId' | 'onSelectTask'>) {
+  const boardState=useBoard()
+  return (
+    <KanbanBoardContent
+      board={boardState.board}
+      tasks={boardState.tasks}
+      loading={boardState.loading}
+      error={boardState.error}
+      refetchTasks={boardState.refetchTasks}
+      selectedId={selectedId}
+      onSelectTask={onSelectTask}
+    />
+  )
+}
+
+export default function KanbanBoard({
+  board,
+  tasks,
+  loading,
+  error,
+  refetchTasks,
+  selectedId = null,
+  onSelectTask,
+}: KanbanBoardProps) {
+  const hasExternalBoardState =
+    board !== undefined &&
+    tasks !== undefined &&
+    loading !== undefined &&
+    error !== undefined &&
+    refetchTasks !== undefined
+
+  if (!hasExternalBoardState) {
+    return <LegacyKanbanBoard selectedId={selectedId} onSelectTask={onSelectTask} />
+  }
+
+  return (
+    <KanbanBoardContent
+      board={board}
+      tasks={tasks}
+      loading={loading}
+      error={error}
+      refetchTasks={refetchTasks}
+      selectedId={selectedId}
+      onSelectTask={onSelectTask}
+    />
   )
 }

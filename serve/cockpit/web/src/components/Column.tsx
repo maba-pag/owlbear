@@ -6,8 +6,11 @@ export interface ColumnProps {
   status: string
   tasks: Task[]
   priorities: string[]
+  selectedId?: number | null
+  onSelectTask?: (taskId: number) => void
   onContextMenu: (e: React.MouseEvent, task: Task) => void
-  onDragStart: (status: string) => void
+  onDragStart: (status: string, taskId: number, updated: string) => void
+  onDrop: (targetStatus: string) => void
   onDragEnd: () => void
   isValidDragTarget: boolean
 }
@@ -16,8 +19,11 @@ export function Column({
   status,
   tasks,
   priorities,
+  selectedId,
+  onSelectTask,
   onContextMenu,
   onDragStart,
+  onDrop,
   onDragEnd,
   isValidDragTarget,
 }: ColumnProps) {
@@ -25,8 +31,8 @@ export function Column({
 
   const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
 
-  const handleCardDragStart = () => {
-    onDragStart(status)
+  const handleCardDragStart = (task: Task) => {
+    onDragStart(status, task.id, task.updated)
   }
 
   return (
@@ -41,8 +47,12 @@ export function Column({
       }}
       onDragLeave={() => setIsDragOver(false)}
       onDrop={(e) => {
-        e.preventDefault()
         setIsDragOver(false)
+        if (!isValidDragTarget) {
+          return
+        }
+        e.preventDefault()
+        onDrop(status)
       }}
       style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 56px)' }}
     >
@@ -57,8 +67,10 @@ export function Column({
           <Card
             key={task.id}
             task={task}
+            selected={selectedId === task.id}
+            onSelect={onSelectTask}
             onContextMenu={onContextMenu}
-            onDragStart={handleCardDragStart}
+            onDragStart={() => handleCardDragStart(task)}
             onDragEnd={onDragEnd}
           />
         ))
