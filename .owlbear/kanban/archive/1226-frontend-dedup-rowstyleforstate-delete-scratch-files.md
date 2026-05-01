@@ -1,10 +1,10 @@
 ---
 id: 1226
 title: Frontend — dedup rowStyleForState + delete scratch files
-status: review
+status: archived
 priority: nice-to-have
 created: 2026-04-30 16:31:18.617727+00:00
-updated: 2026-05-01T09:38:09.316662+00:00
+updated: 2026-05-01T12:55:46.428656+00:00
 tags:
 - cockpit
 - frontend
@@ -224,3 +224,99 @@ Re-review after reviewer FAIL. Refined AC1 td:1→td:2 (all 3 branches: blocked/
   - Re-review AC refinement (td:2 branch coverage + scoped AC4 gate) resolved prior structural infeasibility cleanly.
   - Running scoped quality checks isolated task evidence from unrelated frontend baseline debt.
   - No additional implementation risk observed; helper behavior is fully branch-proven in task-owned tests.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner scoped: 4 passed, 0 failed, 0 skipped on `serve/cockpit/web/src/__tests__/styles_1226.test.ts`
+
+### Lint
+- quality-runner caveat: its lint leg is Python/ruff-only and does not validate TypeScript files.
+- Independent frontend check: `get_errors` reported no errors on `serve/cockpit/web/src/components/ActivityTab.tsx`, `serve/cockpit/web/src/components/HistorySubtab.tsx`, `serve/cockpit/web/src/utils/styles.ts`, and `serve/cockpit/web/src/__tests__/styles_1226.test.ts`.
+
+### Coverage
+- quality-runner could not report TypeScript coverage for `serve/cockpit/web/src/utils/styles.ts`.
+- Branch proof is still explicit in the task-owned suite: blocked/rejected branch (`styles.ts:4-8`) is exercised by tests at `styles_1226.test.ts:15-31`; stuck branch (`styles.ts:12-16`) by `styles_1226.test.ts:33-40`; default branch (`styles.ts:20-22`) by `styles_1226.test.ts:42-48`.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: shared helper under `src/utils/` with blocked/rejected, stuck, and default branches | `returns error-styled object for blocked state`; `returns error-styled object for rejected state`; `returns warning-styled object for stuck state`; `returns default low-contrast style for any other state` | Yes. Each test asserts concrete style values, and the default-path test also asserts `backgroundColor` is absent. | COVERED |
+| AC2: both components import shared helper; no local copy remains | td:0 direct code proof | Yes. Symbol search shows the only definition at `serve/cockpit/web/src/utils/styles.ts:3`; component references are imports/usages at `ActivityTab.tsx:3,72` and `HistorySubtab.tsx:1,26`. | PASS |
+| AC3: `.owlbear-scratch-*` files and `.owlbear/scratch/` removed | td:0 workspace inspection | Yes. `file_search` returned no matches for `serve/cockpit/web/.owlbear-scratch-*` or `serve/cockpit/web/.owlbear/scratch/**`; `serve/cockpit/web/.owlbear` is empty. | PASS |
+| AC4: task-owned Vitest + task-touched lint clean | quality-runner + diagnostics | Yes. Scoped Vitest passed 4/4, and diagnostics reported no errors on all task-touched TS/TSX files. | PASS |
+
+#### Security Review
+- No issues found. `serve/cockpit/web/src/utils/styles.ts:3-23` is a pure state-to-style mapper, and the changed call sites only pass existing session state strings into inline styles.
+
+#### Test Integrity
+- No issues found. The live `TestFromAC_RowStyleExtraction` suite strengthens the original proof with rejected/stuck/default cases; no weakened or removed assertions were introduced.
+
+#### Test Quality
+- STRONG for AC1. Assertions are concrete and branch-specific, not presence-only.
+- Code-reader flagged missing executable proof for AC2/AC3, but I did not apply that as a failure: the refined AC explicitly marks those lines `td:0`, so direct code/workspace inspection is the correct proof mode under `w-code-review`.
+
+#### Data Safety
+- No issues found. The helper returns fresh object literals and introduces no shared mutable state, persistence, or unsafe input handling.
+
+#### Implementation-Aware Gaps
+- No issues found. The helper’s three behavioral branches are directly exercised, component rewiring is exact in the live snapshot, and the filesystem cleanup contract is independently verified.
+
+#### Necessity Check
+- Not applicable. Local refactor/cleanup only; no new dependency or external capability.
+
+#### Builder Process Quality
+- CLEAN. Two `## Builder Notes` sections are present (initial implementation plus verification-only re-review) with no repeated identical retry loop.
+
+### AC Compliance Table
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | `serve/cockpit/web/src/utils/styles.ts:3-23` plus task-owned branch assertions at `serve/cockpit/web/src/__tests__/styles_1226.test.ts:15-48` | `TestFromAC_RowStyleExtraction` | PASS |
+| AC2 | shared-helper import/use at `serve/cockpit/web/src/components/ActivityTab.tsx:3,72` and `serve/cockpit/web/src/components/HistorySubtab.tsx:1,26`; only definition at `serve/cockpit/web/src/utils/styles.ts:3` | direct code inspection / symbol usage | PASS |
+| AC3 | no matches for `serve/cockpit/web/.owlbear-scratch-*` or `serve/cockpit/web/.owlbear/scratch/**`; `.owlbear` directory empty | direct workspace inspection | PASS |
+| AC4 | quality-runner: 4 passed, 0 failed on `serve/cockpit/web/src/__tests__/styles_1226.test.ts`; `get_errors`: no errors on all task-touched files | quality-runner + diagnostics | PASS |
+
+### Deductions
+- -0.06 tooling limitation: `quality-runner` cannot validate TypeScript lint or coverage directly, so lint proof uses VS Code diagnostics and branch proof uses direct AC-to-test mapping.
+
+### Verdict
+- PASS -> docs
+- Confidence: 0.94
+
+### Action
+- Advance to docs. No follow-up required.
+[[2026-05-01]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Changed files are TS/TSX frontend sources; no IN-scope prose doc (README, setup guide, share/README) references these cockpit utility files by name |
+| 2 | Module docstrings | No | N/A | No Python files touched |
+| 3 | External attribution | No | N/A | Pure internal refactoring; no external patterns referenced in AC or builder notes |
+| 4 | Research doc | No | N/A | No research phase; task originated from architecture review |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**`; matched changed files (`ActivityTab.tsx`, `HistorySubtab.tsx`, `styles.ts`). Footer updated from `276c941d` → `ee836394`; committed `be37ffd9` |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested |
+| 7 | Deletion detection | No | N/A | Deleted files are `.owlbear-scratch-*` scratch artifacts and `.owlbear/scratch/` directory — not IN-scope docs; no IN-scope docs reference these scratch artifacts |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/cockpit/web/src/components/ActivityTab.tsx` | OUT | N/A (application source) |
+| `serve/cockpit/web/src/components/HistorySubtab.tsx` | OUT | N/A (application source) |
+| `serve/cockpit/web/src/utils/styles.ts` | OUT | N/A (application source) |
+| `serve/cockpit/web/.owlbear-scratch-*` (deleted) | OUT | N/A (scratch artifacts, not IN-scope docs) |
+| `serve/cockpit/web/.owlbear/scratch/` (deleted) | OUT | N/A (scratch artifacts, not IN-scope docs) |
+| `serve/cockpit/web/src/__tests__/styles_1226.test.ts` | OUT | N/A (test file) |
+| `share/diagrams/cockpit.excalidraw` | IN | Footer updated (describes match) |
+
+### Files Updated
+- `share/diagrams/cockpit.excalidraw` — footer updated to `Last verified: 2026-05-01 (ee836394)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- No `.owlbear/scratch/1226-*` files found
+
+[[2026-05-01]]
+## Audit\n### AC Verification\n| AC Line | Evidence | Status |\n|---------|----------|--------|\n| AC1: `rowStyleForState` extracted to `src/utils/` with all branches | `styles.ts:3-25` (3 branches), `styles_1226.test.ts:15-55` (4 tests, all branches) | PASS |\n| AC2: Both components import shared; no local copy | Imports at `ActivityTab.tsx:3` and `HistorySubtab.tsx:1`; grep for local definition in components: 0 matches | PASS |\n| AC3: Scratch files removed | file_search for `.owlbear-scratch-*` and `.owlbear/scratch/` under `serve/cockpit/web/`: no matches | PASS |\n| AC4: Scoped Vitest + ESLint clean | Reviewer quality-runner: 4/4 passed, 0 failed; IDE diagnostics: no errors on task-touched files | PASS |\n\n### Test Results\n- pytest (full): 3483 passed, 105 failed (all pre-existing — engine init, MCP kanban, storage, etc.), 4 skipped. No regressions in task scope.\n- ruff: 4 violations (all pre-existing, none in task scope)\n\n### Architect Quality: 4/5\nInitial AC4 was structurally infeasible (global-green gate on red baseline), requiring reviewer rejection and re-review. Re-review was responsive: td:1→td:2, AC4 scoped. Otherwise clear and specific.\n\n### Deduction Breakdown\n- -0.02: tooling gap — quality-runner cannot natively validate TypeScript lint/coverage; proof relies on IDE diagnostics and reviewer reports\n\n### Confidence: 0.98\n### Action: archive\n\n### Commits Verified\n| Commit | Type | Files | Tasks |\n|--------|------|-------|-------|\n| fd4de7f0 | test | styles_1226.test.ts | #1226 |\n| 276c941d | feat | styles.ts, ActivityTab.tsx, HistorySubtab.tsx, scratch deletions | #1226 |\n| a0b396a0 | test | styles_1226.test.ts (branch coverage) | #1226 |
