@@ -370,9 +370,9 @@ describe('TestFromAC_PdsMigration_Text', () => {
         ),
       )
       const { container } = renderArchival()
-      // Submit with a valid reason
-      const select = container.querySelector('select') as HTMLSelectElement
-      if (select) fireEvent.change(select, { target: { value: 'dropped' } })
+      // Submit with a valid reason — drive p-select with CustomEvent matching readControlValue
+      const pSelect = container.querySelector('p-select')
+      if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'dropped' }, bubbles: true }))
       const submitBtn = container.querySelector('[data-testid="archival-submit"]')
       if (submitBtn) fireEvent.click(submitBtn)
 
@@ -389,8 +389,8 @@ describe('TestFromAC_PdsMigration_Text', () => {
         ),
       )
       const { container } = renderArchival()
-      const select = container.querySelector('select') as HTMLSelectElement
-      if (select) fireEvent.change(select, { target: { value: 'dropped' } })
+      const pSelect = container.querySelector('p-select')
+      if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'dropped' }, bubbles: true }))
       const submitBtn = container.querySelector('[data-testid="archival-submit"]')
       if (submitBtn) fireEvent.click(submitBtn)
 
@@ -402,9 +402,9 @@ describe('TestFromAC_PdsMigration_Text', () => {
   describe('AC3: ArchivalModal refs hint uses PText', () => {
     it('renders p-text for "Required — enter at least one task ID" hint when refs visible', () => {
       const { container } = renderArchival()
-      // Select a reason that requires refs
-      const select = container.querySelector('select') as HTMLSelectElement
-      if (select) fireEvent.change(select, { target: { value: 'deprecated' } })
+      // Select a reason that requires refs — drive p-select with CustomEvent
+      const pSelect = container.querySelector('p-select')
+      if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'deprecated' }, bubbles: true }))
 
       // The inline hint paragraph must be p-text
       expect(container.querySelector('p-text')).not.toBeNull()
@@ -412,8 +412,8 @@ describe('TestFromAC_PdsMigration_Text', () => {
 
     it('renders no raw <p> hint text (replaced by PText)', () => {
       const { container } = renderArchival()
-      const select = container.querySelector('select') as HTMLSelectElement
-      if (select) fireEvent.change(select, { target: { value: 'deprecated' } })
+      const pSelect = container.querySelector('p-select')
+      if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'deprecated' }, bubbles: true }))
       // After migration, no standalone <p> inside the refs label
       expect(container.querySelector('label p')).toBeNull()
     })
@@ -480,16 +480,16 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
   describe('AC4 happy: ArchivalModal refs input uses PInputText when visible', () => {
     it('renders p-input-text for refs when reason requires refs', () => {
       const { container } = renderArchival()
-      // Select deprecated to show refs
-      const select = container.querySelector('select') as HTMLSelectElement
-      if (select) fireEvent.change(select, { target: { value: 'deprecated' } })
+      // Select deprecated to show refs — drive p-select with CustomEvent
+      const pSelect = container.querySelector('p-select')
+      if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'deprecated' }, bubbles: true }))
       expect(container.querySelector('p-input-text')).not.toBeNull()
     })
 
     it('renders no raw <input type="text"> for refs field', () => {
       const { container } = renderArchival()
-      const select = container.querySelector('select') as HTMLSelectElement
-      if (select) fireEvent.change(select, { target: { value: 'deprecated' } })
+      const pSelect = container.querySelector('p-select')
+      if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'deprecated' }, bubbles: true }))
       expect(container.querySelector('input[type="text"]')).toBeNull()
     })
   })
@@ -591,8 +591,8 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
 
     it('p-input-text for refs does NOT have hide-label (has visible label wrapper)', () => {
       const { container } = renderArchival()
-      const select = container.querySelector('select') as HTMLSelectElement
-      if (select) fireEvent.change(select, { target: { value: 'duplicate' } })
+      const pSelect = container.querySelector('p-select')
+      if (pSelect) fireEvent(pSelect, new CustomEvent('change', { detail: { value: 'duplicate' }, bubbles: true }))
       const pInput = container.querySelector('p-input-text')
       expect(pInput?.hasAttribute('hide-label')).toBe(false)
     })
