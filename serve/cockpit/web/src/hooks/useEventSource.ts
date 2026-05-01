@@ -49,8 +49,11 @@ export function useEventSource(
       eventSourceRef.current = null
     }
 
+    const isCurrentSource = (source: EventSource) =>
+      eventSourceRef.current === source
+
     const openConnection = () => {
-      if (!isMountedRef.current || !enabled) {
+      if (!isMountedRef.current) {
         return
       }
 
@@ -60,12 +63,10 @@ export function useEventSource(
       const eventSource = new EventSource(url)
       eventSourceRef.current = eventSource
 
-      if (isMountedRef.current) {
-        setStatus('connecting')
-      }
+      setStatus('connecting')
 
       eventSource.onopen = () => {
-        if (!isMountedRef.current) {
+        if (!isMountedRef.current || !isCurrentSource(eventSource)) {
           return
         }
         clearStallTimer()
@@ -74,7 +75,7 @@ export function useEventSource(
       }
 
       eventSource.onerror = () => {
-        if (!isMountedRef.current) {
+        if (!isMountedRef.current || !isCurrentSource(eventSource)) {
           return
         }
 
@@ -92,14 +93,12 @@ export function useEventSource(
         if (eventSource.readyState === EventSource.CONNECTING) {
           clearStallTimer()
           stallTimerRef.current = setTimeout(() => {
-            if (!isMountedRef.current) {
+            if (!isMountedRef.current || !isCurrentSource(eventSource)) {
               return
             }
 
             eventSource.close()
-            if (eventSourceRef.current === eventSource) {
-              eventSourceRef.current = null
-            }
+            eventSourceRef.current = null
 
             setStatus('closed')
             clearRetryTimer()
@@ -111,7 +110,7 @@ export function useEventSource(
       }
 
       eventSource.addEventListener('tasks-changed', (event: Event) => {
-        if (!isMountedRef.current) {
+        if (!isMountedRef.current || !isCurrentSource(eventSource)) {
           return
         }
 
