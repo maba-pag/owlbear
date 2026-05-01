@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Column } from './components/Column'
+import ArchivalModal from './components/ArchivalModal'
 import { useBoard, type Task } from './hooks/useBoard'
 
 export { useBoard }
@@ -14,9 +15,16 @@ interface ContextMenuState {
   y: number
 }
 
+interface ArchivalModalState {
+  taskId: number
+  taskStatus: string
+  expectedUpdated: string
+}
+
 export default function KanbanBoard() {
   const { board, tasks, loading, error, refetchTasks } = useBoard()
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [archivalModal, setArchivalModal] = useState<ArchivalModalState | null>(null)
   const [moveError, setMoveError] = useState<string | null>(null)
   const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -79,9 +87,19 @@ export default function KanbanBoard() {
     )
   }
 
-  async function handleTransitionClick(taskId: number, targetStatus: string, updated: string) {
+  async function handleTransitionClick(taskId: number, targetStatus: string, taskStatus: string, updated: string) {
     setContextMenu(null)
     setMoveError(null)
+
+    if (targetStatus === 'archived') {
+      setArchivalModal({
+        taskId,
+        taskStatus,
+        expectedUpdated: updated,
+      })
+      return
+    }
+
     try {
       const res = await fetch(`/api/tasks/${taskId}/move`, {
         method: 'POST',
@@ -121,6 +139,18 @@ export default function KanbanBoard() {
 
       {moveError && <div data-testid="move-error">{moveError}</div>}
 
+      {archivalModal && (
+        <ArchivalModal
+          taskId={archivalModal.taskId}
+          taskStatus={archivalModal.taskStatus}
+          expectedUpdated={archivalModal.expectedUpdated}
+          onClose={() => {
+            setArchivalModal(null)
+          }}
+          onRefresh={refetchTasks}
+        />
+      )}
+
       {contextMenu && (
         <div
           ref={menuRef}
@@ -134,7 +164,14 @@ export default function KanbanBoard() {
               data-testid="transition-item"
               data-status={target}
               role="menuitem"
-              onClick={() => void handleTransitionClick(contextMenu.taskId, target, contextMenu.taskUpdated)}
+              onClick={() =>
+                void handleTransitionClick(
+                  contextMenu.taskId,
+                  target,
+                  contextMenu.taskStatus,
+                  contextMenu.taskUpdated,
+                )
+              }
             >
               → {target}
             </div>
