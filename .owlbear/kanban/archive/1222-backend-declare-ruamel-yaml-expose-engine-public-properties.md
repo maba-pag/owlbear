@@ -1,10 +1,10 @@
 ---
 id: 1222
 title: Backend — declare ruamel.yaml + expose engine public properties
-status: review
+status: archived
 priority: needed
 created: 2026-04-30 16:31:18.578610+00:00
-updated: 2026-05-01T00:52:27.551463+00:00
+updated: 2026-05-01T01:33:45.669078+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -372,3 +372,151 @@ Retry pass-through: all 9 tests green against existing implementation. Builder m
   - `serve/cockpit/pyproject.toml` earlier landed via non-conformant message.
   - Initial `engine.py` property attempt had prior task-scope attribution bleed.
 - Current builder pass records a conformant #1222 commit and restores task-local commit hygiene for active deliverables.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner scoped regression gate: 121 passed, 0 failed, 0 skipped across `tests/test_engine_cockpit_deps_1222.py`, `tests/test_cockpit_read_api.py`, `tests/test_cockpit_routes.py`, `tests/test_cockpit_decisions_api.py`, and `tests/test_decisions_1218.py`
+- clean collection/runtime on the current durable adjacency suites; an older adjacent-cluster shortlist contained stale file names and was replaced during review
+
+### Lint
+- clean on `serve/cockpit/src/owlbear_cockpit/deps.py`, `serve/kanban/src/owlbear_kanban/engine.py`, and `serve/cockpit/pyproject.toml`
+
+### Coverage
+- quality-runner emitted 34% overall for the broader adjacency run; informational only
+- diff-scoped evidence is adequate for td:1 AC1-AC3 and td:0 AC4-AC5
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| `serve/cockpit/pyproject.toml` lists `ruamel.yaml` | `test_ruamel_yaml_in_cockpit_pyproject` | Yes — removing the dependency string fails the direct file assertion | COVERED |
+| `KanbanEngine` exposes read-only `tasks_dir` | `test_tasks_dir_property_accessible`, `test_tasks_dir_returns_expected_path`, `test_tasks_dir_is_read_only` | Yes — missing property, wrong value, or writable property fails | COVERED |
+| `KanbanEngine` exposes read-only `kanban_dir` | `test_kanban_dir_property_accessible`, `test_kanban_dir_returns_expected_path`, `test_kanban_dir_is_read_only` | Yes — missing property, wrong value, or writable property fails | COVERED |
+| `deps.py` uses public properties instead of private attrs | `test_deps_does_not_access_private_tasks_dir`, `test_deps_does_not_access_private_kanban_dir` | Yes — reintroducing `_tasks_dir` / `_kanban_dir` fails the negative source assertions | COVERED |
+| No regressions introduced | td:0 by architect | td:0 | SKIPPED |
+| `deps.py` is committed with a conformant `#1222, builder` message | td:0 by architect | td:0 | SKIPPED |
+
+#### Security Review
+- No issues found.
+- `ruamel.yaml` is necessary, not speculative: `serve/cockpit/src/owlbear_cockpit/routes/decisions.py:12-13` directly imports it.
+- No new injection, path traversal, secret exposure, or unsafe deserialization paths were introduced by these changes.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `tests/test_engine_cockpit_deps_1222.py::TestFromAC_*` | No builder weakening observed. The current file still contains the 9 declared TestFromAC methods at lines 64, 80, 89, 96, 104, 113, 120, 137, and 151. | PRESERVED |
+
+#### Test Quality
+- Assertion specificity: STRONG
+- Negative/error-path coverage: ADEQUATE for td:1 smoke scope
+- Manual mutation reasoning: STRONG
+- Test independence: STRONG
+- Descriptive naming: STRONG
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gap Analysis
+- No significant untested path found in the changed logic.
+- `serve/kanban/src/owlbear_kanban/engine.py:527-534` is two trivial read-only property bodies.
+- `serve/cockpit/src/owlbear_cockpit/deps.py:44` and `:55` are the relevant public-path call sites; no `_tasks_dir` / `_kanban_dir` matches remain in that file.
+- Durable adjacency suites for cockpit read routes and decisions routes stayed green.
+
+#### Necessity Check
+- PASS. `serve/cockpit/pyproject.toml:6` declares `ruamel.yaml`, and cockpit code imports it at `serve/cockpit/src/owlbear_cockpit/routes/decisions.py:12-13`.
+
+#### Builder Process Quality
+- FRICTION. Three `## Builder Notes` sections exist, but retries varied approach (initial implementation, post-AC4 verification, commit-hygiene follow-up). No loop pattern.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| `serve/cockpit/pyproject.toml` lists `ruamel.yaml` | `serve/cockpit/pyproject.toml:6`; import usage at `serve/cockpit/src/owlbear_cockpit/routes/decisions.py:12-13` | `test_ruamel_yaml_in_cockpit_pyproject` | PASS |
+| `KanbanEngine` exposes `tasks_dir` and `kanban_dir` as public read-only properties | `serve/kanban/src/owlbear_kanban/engine.py:527-534` | `test_tasks_dir_property_accessible`, `test_tasks_dir_returns_expected_path`, `test_tasks_dir_is_read_only`, `test_kanban_dir_property_accessible`, `test_kanban_dir_returns_expected_path`, `test_kanban_dir_is_read_only` | PASS |
+| `serve/cockpit/src/owlbear_cockpit/deps.py` uses public properties instead of `engine._tasks_dir` / `engine._kanban_dir` | `serve/cockpit/src/owlbear_cockpit/deps.py:44` uses `engine.tasks_dir`; `serve/cockpit/src/owlbear_cockpit/deps.py:55` uses `engine.kanban_dir`; no private-attr matches remain | `test_deps_does_not_access_private_tasks_dir`, `test_deps_does_not_access_private_kanban_dir` | PASS |
+| No regressions introduced — task-owned suite passes green; any full-suite failures are demonstrably pre-existing and unrelated to changed files | quality-runner rerun: 121 passed, 0 failed, 0 skipped across task-owned + durable adjacency suites (`test_engine_cockpit_deps_1222`, `test_cockpit_read_api`, `test_cockpit_routes`, `test_cockpit_decisions_api`, `test_decisions_1218`); prior independent audit baseline in this task body established the repo remains red outside the changed files | td:0 | PASS |
+| `serve/cockpit/src/owlbear_cockpit/deps.py` is committed with a conformant `#1222, builder` message | `.git/logs/refs/heads/dev:1138` and `.git/logs/HEAD:1178` record `bb04d6fc87d7e48eda067f57d2c0e00ce76b2185 fix: expose engine path properties for cockpit deps (#1222, builder)` | td:0 | PASS |
+
+### Deductions
+- `-0.02` commit presence/message was verified via `.git/logs/**`, but I could not inspect the full commit diff or current git status with the available tools
+- `-0.02` AC4 did not receive a fresh full-suite rerun in this cycle; non-regression is grounded instead in the prior independent audit baseline plus the current 121-test durable adjacency rerun because this retry was commit-hygiene/docstring-only
+
+### Reflection
+- Older adjacent test names from the previous cycle had gone stale; switching to current durable read/route/decisions suites produced stronger regression evidence.
+- `.git/logs/**` is enough to prove commit presence/message, but not enough to prove full diff scope; that limitation should always cost confidence.
+- For commit-hygiene retries with no meaningful behavior change, durable adjacency suites are a better use of review effort than blindly re-running speculative stale task files.
+
+### Verdict
+- PASS -> docs | confidence 0.92
+
+### Action
+- Advanced to `docs`.
+[[2026-05-01]]
+## Docs Gate (Pass 2)
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/cockpit/README.md` Dependencies table was missing `ruamel.yaml` — re-added. The row was added in the prior gate commit `e5358131` but collaterally removed by `de1c6714` (decisions endpoint fix). `ruamel.yaml` still imported at `serve/cockpit/src/owlbear_cockpit/routes/decisions.py:12-13` and declared in `serve/cockpit/pyproject.toml`. Row restored. |
+| 2 | Module docstrings | Yes | N/A | `engine.py:527-534` — `tasks_dir` and `kanban_dir` properties have accurate docstrings. `deps.py` — builder docstring clarification is accurate; module-level docstring and all public functions correct. No edits needed. |
+| 3 | External attribution | No | N/A | No external patterns used. |
+| 4 | Research doc | No | N/A | No research doc produced. |
+| 5 | Diagram maintenance | Yes | Updated | Four describes-matches: `cockpit.excalidraw` (serve/cockpit/src/**), `kanban.excalidraw` (serve/kanban/src/**), `mcp-topology.excalidraw` (serve/kanban/src/**), `project-overview.excalidraw` (serve/*/pyproject.toml). All footers updated from stale hashes to `Last verified: 2026-05-01 (9cc65998)`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No deleted files. No orphaned IN-scope docs. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/kanban/src/owlbear_kanban/engine.py` | IN (py docstrings) | Verified — docstrings accurate, no edit needed |
+| `serve/cockpit/src/owlbear_cockpit/deps.py` | IN (py docstrings) | Verified — docstrings accurate, no edit needed |
+| `serve/cockpit/pyproject.toml` | OUT (config) | N/A — prose doc updated instead |
+
+### Files Updated
+- `serve/cockpit/README.md` — re-added `ruamel.yaml` to Dependencies table (collateral removal by `de1c6714` restored)
+- `share/diagrams/cockpit.excalidraw` — footer updated to `2026-05-01 (9cc65998)`
+- `share/diagrams/kanban.excalidraw` — footer updated to `2026-05-01 (9cc65998)`
+- `share/diagrams/mcp-topology.excalidraw` — footer updated to `2026-05-01 (9cc65998)`
+- `share/diagrams/project-overview.excalidraw` — footer updated to `2026-05-01 (9cc65998)`
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1222-* scratch files present)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| `serve/cockpit/pyproject.toml` lists `ruamel.yaml` | Confirmed at `pyproject.toml:6` via independent grep | PASS |
+| `KanbanEngine` exposes `tasks_dir` and `kanban_dir` as public read-only properties | `engine.py:526-534` — `@property tasks_dir` returning `self._tasks_dir`; `@property kanban_dir` returning `self._kanban_dir`; no setters | PASS |
+| `deps.py` uses public properties instead of private attrs | `deps.py:44` uses `engine.tasks_dir`; `deps.py:55` uses `engine.kanban_dir`; no `_tasks_dir`/`_kanban_dir` matches in file | PASS |
+| No regressions introduced (td:0) | Task-owned 9/0 green; 173 full-suite failures are in unrelated packages (storage, corruption, engine config fields, MCP lifecycle, cockpit models); none touching path properties or deps.py call sites | PASS |
+| `deps.py` committed with conformant `#1222, builder` message | `bb04d6fc fix: expose engine path properties for cockpit deps (#1222, builder)` confirmed via git log; covers both deps.py and engine.py | PASS |
+
+### Test Results
+- task-owned scoped gate: 9 passed, 0 failed (reviewer evidence; consistent with all AC lines independently verified)
+- full suite (quality-runner mode=full): 3251 passed, 173 failed, 4 skipped
+- lint (scoped): clean (deps.py, engine.py, pyproject.toml)
+
+### Baseline Drift Note
+Full-suite failure count increased from reviewer baseline (129) to audit run (173) — 44 additional failures. Sample failures are in `test_engine_coverage_1068`, `test_storage_1050`, `test_corruption`, `test_engine_init_1068`, `test_mcp_lifecycle_tools`, `test_cockpit_models`. None touch the three changed files or their domains. Drift attributed to other tasks processed since the reviewer's baseline; not caused by this task.
+
+### Reviewer Evidence
+Present, detailed, PASS verdict at 0.92 across two passes. Code-level findings trusted. Second reviewer pass strengthened adjacency evidence by replacing stale test names with current durable suites.
+
+### Architect Quality: 4/5
+AC1-AC3 specific and verifiable. AC4 required one refinement (infeasible "all existing tests pass" replaced by verifiable regression gate). AC5 added post-auditor-rejection to encode commit hygiene requirement. Three architect passes total — architect responded correctly to each trigger. One point deducted for AC4 needing mid-cycle repair.
+
+### Deduction Breakdown
+| Criterion | Deduction | Reason |
+|-----------|-----------|--------|
+| No AC lines without specific evidence | 0 | All 5 AC lines have independent evidence |
+| Lint violations | 0 | Clean on scoped files |
+| AC quality score above 3 | 0 | Score 4/5 |
+| Reviewer evidence present | 0 | Detailed, PASS verdict |
+| Task-owned suite failures | 0 | 9/0 green |
+
+### Confidence: 0.97
+### Action: archive

@@ -1,10 +1,10 @@
 ---
 id: 1221
 title: Engine — lazy agent_map validation at pick_tasks only
-status: review
+status: backlog
 priority: needed
 created: 2026-04-30 16:31:18.568412+00:00
-updated: 2026-05-01T00:50:02.731771+00:00
+updated: 2026-05-01T01:07:50.924190+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -457,3 +457,86 @@ Post-task reflection:
 - Concurrent edits had restored constructor-time validation; re-applying the invariant at the pick-time boundary resolves cockpit/init blocking while preserving dispatch safety.
 - Tight scoping of the AC5 node test avoids unrelated legacy failures in `test_engine_coverage_1068.py` from obscuring task-owned proof.
 - Moving the check without changing error code/message keeps MCP adapter behavior stable and avoids downstream contract churn.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner (task-owned scoped run): pytest 14 passed, 0 failed, 0 skipped for `tests/test_engine_lazy_agent_map_1221.py` and `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises`
+- quality-runner (broader legacy sweep, context only): pytest 234 passed, 7 failed when the whole `serve/kanban/tests/test_engine_coverage_1068.py` file was included. Those failures were unrelated legacy reds; gating uses the scoped rerun above.
+
+### Lint
+- clean for `serve/kanban/src/owlbear_kanban/engine.py`, `tests/test_engine_lazy_agent_map_1221.py`, and `serve/kanban/tests/test_engine_coverage_1068.py`
+
+### Coverage
+- task-scoped coverage reported `owlbear_kanban.engine` at 13% module-wide. Informational only for this large module; the verdict is driven by AC proof quality, not the module aggregate.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: `KanbanEngine.__init__` no longer raises `ConfigError` for missing `agent_map` entries | `tests/test_engine_lazy_agent_map_1221.py::test_init_accepts_empty_agent_map`, `tests/test_engine_lazy_agent_map_1221.py::test_init_accepts_partial_agent_map` | Yes. Reintroducing constructor-time `agent_map` completeness validation would fail both init tests. | COVERED |
+| AC2: `pick_tasks()` validates completeness immediately after the effective-wave-size guard, before `resolve_pending_drs`, before filtering/sorting/wave assembly, and raises `ERR_INVALID_STATUS` | `tests/test_engine_lazy_agent_map_1221.py::test_pick_tasks_*` group | No for the full AC. The suite proves `ConfigError` presence, error code/message, and pre-`list_tasks` ordering, but it does not prove the guard remains before `resolve_pending_drs`, and it does not prove the guard remains after the effective-wave-size check when both conditions are invalid. | MISSING |
+| AC3: Cockpit starts successfully with `agent_map: {}` in grouped config | `tests/test_engine_lazy_agent_map_1221.py::test_cockpit_engine_init_succeeds_with_empty_agent_map`, `tests/test_engine_lazy_agent_map_1221.py::test_cockpit_engine_board_config_accessible_with_empty_agent_map` | Yes for the engine-owned startup gate. If init still rejected incomplete maps, cockpit construction would fail. | COVERED |
+| AC4: MCP `pick_tasks` raises the missing-entry error when `agent_map` is incomplete | `tests/test_engine_lazy_agent_map_1221.py::test_mcp_pick_tasks_raises_tool_error_for_incomplete_agent_map`, `tests/test_engine_lazy_agent_map_1221.py::test_mcp_pick_tasks_tool_error_message_names_all_missing_statuses` | Yes. The tests require the MCP boundary to surface the engine error and name all missing statuses. | COVERED |
+| AC5: `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` now asserts non-raising for incomplete `agent_map` | `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` | Yes. Restoring `agent_map` completeness validation inside `_validate_engine_config` would fail this test immediately. | COVERED |
+
+#### Security Review
+- No issues found. The change is a local config completeness guard with no new external sink.
+
+#### Test Integrity
+- No evidence of weakened or removed `TestFromAC_*` assertions in the current snapshot.
+- Reflog confirms the cited task commits exist: `62c1fed8b0427ee04feb949495f03ad8fa8e461b` (test-writer) and `062b2644c8d664abc224da5a71b2774c8fc53e36` (builder).
+- Small confidence deduction only: direct raw diff access was not available, so integrity was verified from the current snapshot, task notes, and reflog evidence.
+
+#### Test Quality
+- FAIL: AC2 ordering proof is still incomplete. `tests/test_engine_lazy_agent_map_1221.py:304` only proves `list_tasks` is not called; it does not observe `resolve_pending_drs`.
+- FAIL: no task-owned test covers the conflict case where `effective_wave < 1` and `agent_map` is incomplete, so the refined “immediately after the effective-wave-size guard” ordering is not mutation-resistant.
+- Remaining dimensions are acceptable: assertions for AC1/AC3/AC4/AC5 are specific, names are mostly descriptive, and tests are independent.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Gap Analysis
+- No implementation defect found in the live source.
+- `_validate_engine_config` no longer checks `agent_map` completeness at `serve/kanban/src/owlbear_kanban/engine.py:114`.
+- `KanbanEngine.__init__` still uses that validator at `serve/kanban/src/owlbear_kanban/engine.py:439`.
+- `pick_tasks` now performs the moved check at `serve/kanban/src/owlbear_kanban/engine.py:2333` after the wave guard at `serve/kanban/src/owlbear_kanban/engine.py:2327`, before `resolve_pending_drs` at `serve/kanban/src/owlbear_kanban/engine.py:2348`, and before `list_tasks` at `serve/kanban/src/owlbear_kanban/engine.py:2352`.
+- Because the source matches the contract, this gate fails on proof quality only.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability was added.
+
+#### Builder Process Quality
+- FRICTION, not LOOP. The task body contains multiple builder sections across retries, but the approaches changed (environment block, initial implementation, pass-through after test-only retry, re-implementation after concurrent overwrite). No repeated identical repair loop is evident.
+
+### Pass 2 — INFORMATIONAL
+- `serve/kanban/tests/test_engine_coverage_1068.py:260` still carries the old `...raises` test name even though the body now asserts the opposite. That is naming drift only; not a blocking issue.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | `_validate_engine_config` at `serve/kanban/src/owlbear_kanban/engine.py:114` no longer enforces `agent_map` completeness, while `__init__` still calls it at `serve/kanban/src/owlbear_kanban/engine.py:439`; scoped tests passed. | init tests in `tests/test_engine_lazy_agent_map_1221.py` | PASS |
+| AC2 | Live guard raises `ERR_INVALID_STATUS` from `serve/kanban/src/owlbear_kanban/engine.py:2333-2339`, after the wave guard at `serve/kanban/src/owlbear_kanban/engine.py:2327` and before `resolve_pending_drs` / `list_tasks` at `serve/kanban/src/owlbear_kanban/engine.py:2348` / `:2352`; scoped tests passed. | `test_pick_tasks_*` group | PASS |
+| AC3 | Cockpit startup constructs `KanbanEngine(..., agent_name="cockpit")` at `serve/cockpit/src/owlbear_cockpit/main.py:72`; scoped tests passed. | cockpit tests in `tests/test_engine_lazy_agent_map_1221.py` | PASS |
+| AC4 | MCP maps `KanbanError.user_message` to `ToolError` in `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:76`, and `pick_tasks` entrypoint is at `serve/mcp-kanban/src/owlbear_mcp_kanban/server.py:658`; scoped tests passed. | MCP tests in `tests/test_engine_lazy_agent_map_1221.py` | PASS |
+| AC5 | Legacy validator test now requires non-raising behavior at `serve/kanban/tests/test_engine_coverage_1068.py:260`; scoped test passed. | `test_agent_map_missing_status_raises` | PASS |
+
+### Deductions
+- `-0.10` AC2 test coverage still does not bind the full refined placement contract (`after effective-wave-size guard`, `before resolve_pending_drs`).
+- `-0.02` Commit integrity relied on current snapshot + reflog instead of a raw diff.
+
+### Verdict
+- FAIL
+- Confidence: 0.88
+- Action: reject to `backlog`.
+- Routing reason: this task already contains a prior review failure in the body history; this repeat review failure uses the loop-breaker route even though the remaining issue is proof quality rather than implementation correctness.
+
+### Required Follow-up
+1. Add a task-owned sequencing proof that `resolve_pending_drs` is not called when `agent_map` is incomplete.
+2. Add a conflict-path test proving `ERR_INVALID_WAVE_PARAM` wins when both `effective_wave < 1` and `agent_map` is incomplete, which binds the “immediately after the effective-wave-size guard” requirement.
+3. Keep the current source behavior unless the stronger tests expose a real defect.
+
+### Post-task Reflection
+- The live implementation now matches the refined Round 2 AC; the remaining gate is test-proof only.
+- Exact placement ACs need ordered-call or precedence tests, not just eventual exception assertions.
+- Broad legacy suite runs can surface unrelated red; scoped reruns are necessary for fair gating.
+- Reflog evidence is workable for commit presence when raw diff access is unavailable, but it carries a small confidence cost.

@@ -1,10 +1,10 @@
 ---
 id: 1198
 title: Remove legacy compatibility code from MCP server
-status: backlog
+status: todo
 priority: needed
 created: 2026-04-30 15:28:54.145200+00:00
-updated: 2026-05-01T00:19:35.282322+00:00
+updated: 2026-05-01T01:28:50.882480+00:00
 tags:
 - audit-kanban
 - mcp-server
@@ -400,3 +400,67 @@ All 4 fail with `AssertionError: {fn} still has **legacy catch-all` — VAR_KEYW
 - The task-owned proof is no longer the blocker; the remaining failure is unmigrated public-call-shape coverage in older MCP suites.
 - Additional workspace grep after the broad fail found more stale `task_id=` references outside the executed slice, so the retry should audit remaining MCP adapter tests comprehensively.
 - Because the task already had a prior review rejection, the correct route is the backlog loop-breaker even though the remaining delta is test-only.
+
+## Architecture Review (2nd pass — refine)
+
+### Refined AC — Stale Suite Migration
+
+The vague "Existing non-compat test suite passes" line has failed twice. Replaced with explicit per-file entries below. All are `td:0` (mechanical call-site substitution only — no new assertions needed).
+
+**Test-writer:** migrate `task_id=` → `id=` in ALL files below. Do NOT modify `test_mcp_models_1084.py` or `test_mcp_create_dr_1182.py` (excluded — see notes).
+
+- [ ] Migrate `task_id=` → `id=` in `serve/mcp-kanban/tests/test_mcp_lifecycle_tools.py` (~29 call sites; `move_task`, `start_work`, `end_work`) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `serve/mcp-kanban/tests/test_mcp_mutation_tools_1087.py` (~11 call sites; `edit_task`) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `serve/mcp-kanban/tests/test_mcp_guidance_1089.py` (~7 call sites) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `serve/mcp-kanban/tests/test_guidance_edit_task_973.py` (4 call sites) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `serve/mcp-kanban/tests/test_guidance_server_980.py` (~6 call sites) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `serve/mcp-kanban/tests/test_guidance_end_work_973.py` (5 call sites) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `serve/mcp-kanban/tests/test_guidance_move_task_973.py` (5 call sites) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `tests/test_mcp_kanban_1091.py` (1 call site) (td:0)
+- [ ] Migrate `task_id=` → `id=` in `tests/test_mcp_kanban_1092.py` (3 call sites: lines 200, 240, 282) (td:0)
+- [ ] Broader MCP contract slice (`serve/mcp-kanban/tests/` + `tests/test_mcp_kanban_*.py`) passes after migration with 0 failures (td:0)
+
+**Excluded from migration:**
+- `serve/mcp-kanban/tests/test_mcp_models_1084.py` — `task_id=` calls wrapped in `pytest.raises(ValidationError)` are intentional rejection probes; already passing.
+- `serve/mcp-kanban/tests/test_mcp_create_dr_1182.py` — `task_id=` is a legitimate named parameter of `create_dr` (unaffected tool); already passing in narrow slice.
+
+**Source implementation:** Committed as `706cc2f7`. No builder source changes needed this pass.
+
+[[2026-05-01]]
+## Architecture Review (2nd pass)
+
+### Situation
+Task returned from second reviewer FAIL → backlog. Source implementation (commit `706cc2f7`) is correct. Task-owned test suite (`tests/test_server_1198.py`, 18 tests) is adequate and green. Only remaining failure: 9 durable MCP contract suites still call removed `task_id=` public kwarg, producing 64 TypeErrors in the broad contract slice.
+
+### AC Assessment
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| `_extract_task_id_compat()` / `_resolve_tool_id()` deleted (td:0) | PASS — confirmed absent | None |
+| `**legacy` removed from 4 signatures (td:0) | PASS — signatures confirmed | None |
+| Legacy `title` shim removed from `edit_task` (td:0) | PASS — confirmed | None |
+| Tool functions use `id: StrId` directly — no resolution indirection (td:1) | PASS — implemented and proved by 14 tests in `test_server_1198.py` | None |
+| Compat tests deleted from `test_server_1170.py` (td:0) | PASS — confirmed absent | None |
+| Existing non-compat test suite passes (td:0) | FAIL (64 failures, stale `task_id=` call sites) | REFINED: replaced with 10 explicit per-file migration AC lines; appended to task body |
+
+### Architecture Notes
+- No new design decisions; this is mechanical migration completion.
+- `test_mcp_models_1084.py` explicitly excluded — `task_id=` calls are `pytest.raises(ValidationError)` rejection probes; already passing.
+- `test_mcp_create_dr_1182.py` explicitly excluded — `task_id=` is a legitimate named parameter of `create_dr` (unaffected tool); already passing.
+- 9 stale files confirmed via grep: 7 in `serve/mcp-kanban/tests/`, 2 in `tests/`.
+
+### Dependency Analysis
+Dependency #1199 confirmed done/archived (per prior pass). No new dependencies.
+
+### Design Diverge
+Skipped — no design decisions. Pure mechanical test call-site migration.
+
+### Challenge Results
+Challenger: SKIPPED — all new AC lines are td:0, no design decisions.
+
+### Test Depth
+- Max depth: td:1 (unchanged; td:1 line already covered by strengthened test suite)
+- New lines: all td:0 (call-site substitution only)
+- Test-writer: PROCEED — handle the 10 new migration AC lines (td:0)
+
+### Verdict: REFINE → APPROVE
+### Action Taken: Appended 10 explicit per-file migration AC lines to task body; advancing to todo.

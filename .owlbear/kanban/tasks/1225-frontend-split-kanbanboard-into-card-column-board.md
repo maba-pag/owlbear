@@ -1,10 +1,10 @@
 ---
 id: 1225
 title: Frontend — split KanbanBoard into Card + Column + Board
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30 16:31:18.609234+00:00
-updated: 2026-05-01T00:02:52.307787+00:00
+updated: 2026-05-01T01:24:51.869193+00:00
 tags:
 - cockpit
 - frontend
@@ -256,3 +256,28 @@ Verdict: APPROVE — implementation correct, AC corrected to match. Test-writer 
 - Reviewer Required Follow-up was two AC text defects (both resolved at AC level by architect); no missing tests were cited.
 - Existing 8 tests (`TestFromAC_CardExtraction`, `TestFromAC_ColumnExtraction`, `TestFromAC_NoMemoWrappers`) cover all td:1 AC lines and ALL PASS against current implementation.
 - Builder skip: test-only retry path — implementation already satisfies corrected AC; sending directly to review.
+[[2026-05-01]]
+## Builder Notes
+- Implementation: no code changes in this retry pass; existing split implementation remains in:
+  - serve/cockpit/web/src/KanbanBoard.tsx
+  - serve/cockpit/web/src/components/Card.tsx
+  - serve/cockpit/web/src/components/Column.tsx
+- Why no edit: architect re-review corrected AC wording; live code already conforms to corrected dependency graph (`KanbanBoard -> Column -> Card`) and export contract (`export { useBoard }` preserved).
+- RED/GREEN context: task-scoped `TestFromAC_*` suite was previously RED during initial implementation; retry pass validates current GREEN state after AC correction.
+- Tests (quality-runner scoped):
+  - `tests/test_kanban_board_split_1225.py`
+  - `tests/test_occ_frontend_wire_1137.py`
+  - Result: 27 passed, 0 failed, 0 skipped.
+- Frontend suites (AC-required Vitest):
+  - `src/__tests__/KanbanBoard.test.tsx`
+  - `src/__tests__/KanbanBoard_933.test.tsx`
+  - `src/__tests__/KanbanBoard_959.test.tsx`
+  - Result: 56 passed, 0 failed, 0 skipped.
+- Ruff: clean on scoped Python suites.
+- Coverage: quality-runner reported Python-package coverage output (overall 30%); non-gating for this TSX-only extraction retry. Behavioral parity evidenced by passing required Vitest suites.
+- Commit: none in this pass (no file changes required).
+
+### Post-task Reflection
+- Retry cycles after AC correction may require verification-only builder passes; forcing edits in those cases adds risk without value.
+- For frontend refactors, Vitest suite evidence is the decisive behavioral parity proof; Python quality-runner remains useful for adjacent suite health checks.
+- Keeping dependency direction explicit (`KanbanBoard -> Column -> Card`) prevents unnecessary top-level imports and preserves component encapsulation.
