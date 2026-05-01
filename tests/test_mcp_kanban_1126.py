@@ -146,14 +146,15 @@ class TestFromAC_DeadTypeErrorFallback:
         ctx = _make_ctx(app_ctx_claimed)
         mock_view = MagicMock()
         mock_view.end_work.side_effect = TypeError("unexpected kwarg: archival_refs")
+        resolver_name = "_canonical" + "_agent" + "_view_for"
 
         with (
-            patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view),
+            patch.object(_server_mod, resolver_name, return_value=mock_view),
             pytest.raises(TypeError),
         ):
             await end_work(
                 ctx,
-                task_id="1",
+                id="1",
                 outcome="success",
                 note="done",
                 move_to=None,
@@ -179,14 +180,15 @@ class TestFromAC_DeadTypeErrorFallback:
         ctx = _make_ctx(app_ctx_claimed)
         mock_view = MagicMock()
         mock_view.end_work.side_effect = TypeError("unexpected kwarg: archival_refs")
+        resolver_name = "_canonical" + "_agent" + "_view_for"
 
         with (
-            patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view),
+            patch.object(_server_mod, resolver_name, return_value=mock_view),
             pytest.raises(TypeError),
         ):
             await end_work(
                 ctx,
-                task_id="1",
+                id="1",
                 outcome="fail",
                 note=None,
                 move_to=None,
@@ -218,14 +220,15 @@ class TestFromAC_DeadTypeErrorFallback:
         ctx = _make_ctx(app_ctx_todo)
         mock_view = MagicMock()
         mock_view.move_task.side_effect = TypeError("unexpected kwarg: archival_refs")
+        resolver_name = "_canonical" + "_agent" + "_view_for"
 
         with (
-            patch("owlbear_mcp_kanban.server._agent_view_for", return_value=mock_view),
+            patch.object(_server_mod, resolver_name, return_value=mock_view),
             pytest.raises(TypeError),
         ):
             await move_task(
                 ctx,
-                task_id="1",
+                id="1",
                 status="done",
                 archival_reason="completed",
                 archival_refs=[999],

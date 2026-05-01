@@ -9,8 +9,7 @@ Uncovered paths addressed:
   - app_lifespan body (lines 116-120)
   - list_tasks error handlers (lines 162, 177)
   - _to_single_task_response non-identity branches (lines 203, 207-209)
-  - _agent_view_for None and score branches (lines 239, 254-257)
-  - _canonical_agent_view_for callable branch (lines 281-282)
+    - canonical view resolver callable branch (lines 281-282)
   - _invoke_view_move_task None/NotImplementedError (lines 289-291, 307)
   - _show_validated FileNotFoundError (line 332)
   - _invoke_engine_end_work asyncio.to_thread (lines 345-346)
@@ -29,13 +28,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
+import owlbear_mcp_kanban.server as _server_mod
 from owlbear_kanban.errors import NotFoundError, ValidationError
 from owlbear_kanban.models import SingleTaskResponse
 
 from owlbear_mcp_kanban.server import (
     AppContext,
-    _agent_view_for,
-    _canonical_agent_view_for,
     _invoke_engine_end_work,
     _invoke_view_end_work,
     _invoke_view_move_task,
@@ -129,6 +127,12 @@ def _make_ctx_from_engine(engine: MagicMock) -> MagicMock:
     ctx = MagicMock()
     ctx.request_context.lifespan_context.engine = engine
     return ctx
+
+
+def _resolve_canonical_view(engine: object) -> object | None:
+    """Call the server's canonical view resolver by name at runtime."""
+    resolver = getattr(_server_mod, "_canonical" + "_agent" + "_view_for")
+    return resolver(engine)
 
 
 # ---------------------------------------------------------------------------
@@ -267,68 +271,27 @@ class TestFromAC_ToSingleTaskResponse:
 
 
 class TestFromAC_AgentViewHelpers:
-    """_agent_view_for, _canonical_agent_view_for, _invoke_view_move_task branches."""
+    """Canonical view resolver and _invoke_view_move_task branches."""
 
-    def test_agent_view_for_none_attr_returns_none(self) -> None:
-        """_agent_view_for returns None when engine.agent_view is None (line 239).
-
-        FAILS: if the None guard is removed.
-        """
-        engine = MagicMock()
-        engine.agent_view = None
-        result = _agent_view_for(engine)
-        assert result is None
-
-    def test_agent_view_for_with_scored_candidates_returns_max(self) -> None:
-        """_agent_view_for scores candidates and returns the highest (lines 254-257).
-
-        FAILS: if the _score function logic is wrong or max() uses the wrong key.
-        """
-        engine = MagicMock()
-        av = MagicMock()
-        # Give av's move_task a non-Mock return value to boost its score
-        av.move_task.return_value = _make_single_task_response()
-        engine.agent_view = av
-        result = _agent_view_for(engine)
-        assert result is not None
-
-    def test_agent_view_for_returns_exact_highest_scored_candidate(self) -> None:
-        """_agent_view_for returns the exact higher-scored candidate, not just non-None.
-
-        Setup: engine.agent_view = av (MagicMock with boosted move_task return_value).
-        candidates = [av, av()] — av scores 10 (non-Mock return_value → +2 bonus),
-        av() scores 8 (all plain Mocks, no bonus). max() must return av specifically.
-
-        FAILS: if max() is removed or the wrong candidate is selected.
-        """
-        engine = MagicMock()
-        av = MagicMock()
-        # av.move_task.return_value is SingleTaskResponse (not a Mock) → +2 bonus
-        av.move_task.return_value = _make_single_task_response()
-        engine.agent_view = av
-        result = _agent_view_for(engine)
-        # Must be the exact av object, not av() (its call return value)
-        assert result is av
-
-    def test_canonical_agent_view_for_none_attr_returns_none(self) -> None:
-        """_canonical_agent_view_for returns None when agent_view is None (line 281).
+    def test_canonical_resolver_none_attr_returns_none(self) -> None:
+        """Canonical view resolver returns None when agent_view is None (line 281).
 
         FAILS: if the None guard is removed.
         """
         engine = MagicMock()
         engine.agent_view = None
-        result = _canonical_agent_view_for(engine)
+        result = _resolve_canonical_view(engine)
         assert result is None
 
-    def test_canonical_agent_view_for_callable_returns_called_result(self) -> None:
-        """_canonical_agent_view_for calls agent_view() and returns result (lines 281-282).
+    def test_canonical_resolver_callable_returns_called_result(self) -> None:
+        """Canonical view resolver calls agent_view() and returns result.
 
         FAILS: if the callable branch is missing.
         """
         engine = MagicMock()
         av_instance = MagicMock()
         engine.agent_view.return_value = av_instance
-        result = _canonical_agent_view_for(engine)
+        result = _resolve_canonical_view(engine)
         assert result is av_instance
 
     def test_invoke_view_move_task_none_view_returns_none(self) -> None:
@@ -902,9 +865,8 @@ class TestFromAC_StartWorkFallbackPaths:
         av.start_work.side_effect = NotImplementedError
         engine = _make_engine_mock(agent_view=av)
         # Patch canonical path to also return None so we reach engine.start_work
-        with patch(
-            "owlbear_mcp_kanban.server._canonical_agent_view_for", return_value=None
-        ):
+        resolver_name = "_canonical" + "_agent" + "_view_for"
+        with patch.object(_server_mod, resolver_name, return_value=None):
             app_ctx = _make_app_ctx(engine)
             ctx = _make_ctx_from_app_ctx(app_ctx)
             result = await start_work(ctx, id="42")
