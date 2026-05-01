@@ -136,7 +136,7 @@ def _serialize_scan_item(item: Any) -> dict[str, Any]:  # noqa: ANN401
 
 @router.post("/tasks/{task_id}/move", response_model=SingleTaskResponse)
 def move_task(task_id: int, req: MoveRequest, view: _View) -> SingleTaskResponse:
-    """Move task to a new status. Validates OCC token then valid_transitions."""
+    """Move task to a new status. Validates OCC token then valid_transitions; archived skips transition check."""
     try:
         task = view.engine.show_task(str(task_id))
     except FileNotFoundError:
