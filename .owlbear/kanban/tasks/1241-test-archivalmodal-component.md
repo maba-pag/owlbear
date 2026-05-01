@@ -27,6 +27,7 @@ archival_refs: []
 - Submit button is disabled when no reason is selected
 - Submit button is disabled when reason requires refs and refs field is empty
 - Submit button is disabled while `isSubmitting === true`
+- When the refs field is visible, a hint text is displayed below it: "Required — enter at least one task ID"
 - Non-numeric token in the refs field produces a client-side inline error; no HTTP request is fired
 - On 422 response: modal stays open; `error.detail` is displayed verbatim
 - On 409 response: modal stays open; a modal-local stale-snapshot error message is shown

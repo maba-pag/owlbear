@@ -27,6 +27,7 @@ archival_refs: []
   - `completed` option hidden when `taskStatus !== "done"`
   - Refs field visible only for `deprecated` and `duplicate`; refs state cleared on reason change
   - Submit disabled when no reason, when refs required and empty, or when `isSubmitting`
+  - Hint text displayed below refs field when visible: "Required — enter at least one task ID"
   - Client-side NaN guard before firing POST; inline error shown on validation failure
   - 422: stays open, renders `error.detail` verbatim; 409: stays open, stale error; success: close and refresh
 - All tests from #1241 pass

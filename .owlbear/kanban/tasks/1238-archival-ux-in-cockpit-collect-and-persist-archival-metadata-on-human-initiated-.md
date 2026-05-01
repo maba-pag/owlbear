@@ -1,6 +1,6 @@
 ---
 id: 1238
-title: Archival UX in Cockpit — collect and persist archival metadata on 
+title: Archival UX in Cockpit — collect and persist archival metadata on
   human-initiated archive
 status: todo
 priority: important

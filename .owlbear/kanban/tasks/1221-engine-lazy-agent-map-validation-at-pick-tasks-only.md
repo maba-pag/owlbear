@@ -4,7 +4,7 @@ title: Engine — lazy agent_map validation at pick_tasks only
 status: done
 priority: needed
 created: 2026-04-30 16:31:18.568412+00:00
-updated: 2026-05-01T02:56:28.644455+00:00
+updated: 2026-05-01T03:14:54.085667+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -12,7 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-01T03:14:54.085667+00:00
 archival_reason:
 archival_refs: []
 ---

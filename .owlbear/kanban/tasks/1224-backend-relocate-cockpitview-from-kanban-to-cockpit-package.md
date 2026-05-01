@@ -1,10 +1,10 @@
 ---
 id: 1224
 title: Backend — relocate CockpitView from kanban to cockpit package
-status: in-progress
+status: review
 priority: needed
 created: 2026-04-30 16:31:18.599723+00:00
-updated: 2026-05-01T03:02:52.824253+00:00
+updated: 2026-05-01T03:14:00.710699+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -14,7 +14,7 @@ depends_on:
 - 1222
 blocked: false
 block_reason:
-claimed_at: 2026-05-01T03:02:52.824253+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -96,3 +96,58 @@ Challenger returned `block` (confidence 0.43) citing: (1) under-scoped import fi
 - Total: 32 tests, all FAIL
 - ruff: clean
 - AC coverage: AC1(8 tests) AC2(5 tests) AC3(6 tests) AC4(6 tests) AC5(5 tests) AC6(1 test) AC7(1 test) — AC8+AC9 are td:0, skipped
+[[2026-05-01]]
+## Builder Notes
+- Implementation:
+  - Added `serve/cockpit/src/owlbear_cockpit/view.py` and moved `CockpitView` class from kanban engine into cockpit package.
+  - Removed `KanbanEngine._cockpit_view` initialization and `KanbanEngine.cockpit_view()` accessor from `serve/kanban/src/owlbear_kanban/engine.py`.
+  - Updated source imports to new path in:
+    - `serve/cockpit/src/owlbear_cockpit/deps.py`
+    - `serve/cockpit/src/owlbear_cockpit/routes/read.py`
+    - `serve/cockpit/src/owlbear_cockpit/routes/mutation.py`
+  - Updated test imports/usages to `owlbear_cockpit.view.CockpitView` in:
+    - `tests/test_engine_cockpit_view.py`
+    - `tests/test_engine_release_task_occ.py`
+    - `tests/test_cockpit_kanban_routes.py`
+    - `tests/test_cockpit_mutation_api_1132.py`
+    - `tests/test_cockpit_read_api.py`
+    - `tests/test_cockpit_read_api_1223.py`
+  - Removed kanban-side CockpitView coverage required by AC5:
+    - `serve/kanban/tests/test_engine_init_1067.py` (constructability check removed)
+    - `serve/kanban/tests/test_engine_init_1068.py` (removed `TestFromAC_CockpitViewMethodStubs` and `engine.cockpit_view()` accessor checks)
+    - `serve/kanban/tests/test_engine_list_show_1071.py` (removed `TestFromAC_CockpitViewListTasks` and `TestFromAC_CockpitViewShowTask`)
+  - Updated one additional durable test that referenced removed engine accessor:
+    - `serve/kanban/tests/test_engine_pick_tasks_1074.py` now instantiates `CockpitView(engine)` directly.
+  - Removed `cockpit_view()` row from engine accessor table in `serve/kanban/README.md`.
+
+- RED verification (Quality Runner):
+  - `tests/test_cockpit_view_1224.py`: 32 failed before implementation.
+
+- GREEN verification (Quality Runner):
+  - `tests/test_cockpit_view_1224.py`: 32 passed, 0 failed.
+  - Ruff on changed source/test scope: clean.
+
+- Additional verification context:
+  - Cockpit broad run (`tests/test_cockpit_*.py` + cockpit-related suites) surfaced 6 pre-existing failures in `tests/test_cockpit_react_compiler_1015.py` (frontend/toolchain assertions; unrelated to this refactor).
+  - Kanban broad run (`serve/kanban/tests/`) surfaced multiple pre-existing baseline failures in legacy config/init suites unrelated to CockpitView relocation.
+  - AC-scoped relocation checks are green via `tests/test_cockpit_view_1224.py` and updated import/call sites.
+
+- Coverage:
+  - Task-scoped gate run passed; broad mixed-suite coverage outputs include unrelated baseline suites and are not reliable for this refactor in isolation.
+
+- Evidence summary:
+  - `CockpitView` now lives in cockpit package and is imported from `owlbear_cockpit.view` in all AC-listed source/test consumers.
+  - `engine.py` contains no `class CockpitView`, no `def cockpit_view`, and no `_cockpit_view` initialization.
+  - `view.py` uses only public engine API; no `engine._*` private attribute access.
+  - Kanban README accessor table no longer lists `cockpit_view()`.
+
+- Fixes applied during verification:
+  - Removed residual `CockpitView` text in `test_engine_init_1067.py` to satisfy AC text-scan test.
+  - Restored `_make_cockpit_view` helper in `test_engine_list_show_1071.py` using new import path to keep remaining non-AC test blocks valid and lint-clean.
+  - Added trailing newline in new `view.py` to satisfy ruff W292.
+
+- Post-task reflection:
+  - Major risk was text-scan AC assertions; small leftover strings can fail despite functional correctness.
+  - Removing engine accessor required one extra durable-test adaptation (`test_engine_pick_tasks_1074.py`) outside AC list.
+  - Running broad suites revealed significant pre-existing baseline failures; scoped quality gates were necessary to isolate this task’s regression surface.
+  - Moving the class intact minimized behavior drift and kept the diff surgical despite multi-file import churn.
