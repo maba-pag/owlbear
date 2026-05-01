@@ -16,6 +16,8 @@ ENABLE_LINTERS:
   - JSON_JSONLINT
   - MARKDOWN_MARKDOWNLINT
   - YAML_YAMLLINT
+  # Shell
+  - BASH_SHELLCHECK
   # Tooling
   - ACTION_ACTIONLINT
   - EDITORCONFIG_EDITORCONFIG_CHECKER
@@ -56,6 +58,9 @@ PYTHON_RUFF_CLI_LINT_MODE: project
 # Without this, MegaLinter uses its own bundled .ruff.toml (different settings).
 PYTHON_DEFAULT_STYLE: ruff
 PYTHON_RUFF_FORMAT_CLI_LINT_MODE: project
+
+# TypeScript — scope to Cockpit web (only dir with eslint.config.js).
+TYPESCRIPT_ES_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.(ts|tsx)$'
 
 # CSS — use the Cockpit web policy instead of MegaLinter defaults.
 CSS_STYLELINT_FILTER_REGEX_INCLUDE: '^serve/cockpit/web/.*\.css$'

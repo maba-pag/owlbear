@@ -1,0 +1,21 @@
+# Python — Ruff handles formatting
+*.py
+
+# Generated / vendored
+dist/
+coverage/
+node_modules/
+.venv/
+uv.lock
+store/
+
+# OwlBear internal data
+.owlbear/kanban/
+.owlbear/scratch/
+.owlbear/sources/
+.owlbear/decisions/
+.owlbear/research/
+.owlbear/briefs/
+
+# Excalidraw (JSON with embedded base64)
+*.excalidraw
