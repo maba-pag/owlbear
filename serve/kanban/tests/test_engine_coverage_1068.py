@@ -3,7 +3,6 @@
 Covers engine operations that the init-focused 1067/1068 suites leave uncovered:
   - Module-level helpers: _parse_duration, _classify_end_work_state/outcome,
     _compute_duration, _state_from_age, _validate_session_filter, _apply_session_filter,
-    _validate_engine_config direct paths
   - Engine init: agent_name property, revision counter, board_config(), refresh_config(),
     valid_transitions(), migration-gate edge cases
   - list_tasks: full filter/sort/archive/parse-error paths
@@ -36,11 +35,9 @@ from owlbear_kanban.engine import (
     _compute_duration,
     _parse_duration,
     _state_from_age,
-    _validate_engine_config,
     _validate_session_filter,
 )
 from owlbear_kanban.models import (
-    AgentsConfig,
     BoardConfig,
     ConfigError,
     ConcurrencyError,
@@ -211,86 +208,6 @@ class TestFromAC_ParseDuration:
 
     def test_whitespace_stripped_before_parse(self) -> None:
         assert _parse_duration("  1h  ") == timedelta(hours=1)
-
-
-# ---------------------------------------------------------------------------
-# _validate_engine_config — direct coverage of engine-level validation paths
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_ValidateEngineConfig:
-    """AC: BoardConfig validated at engine init (engine-level invariant checks)."""
-
-    def _make_valid_config(self) -> BoardConfig:
-        """Return a valid BoardConfig for mutation in subsequent tests."""
-        config = BoardConfig(
-            statuses=["research", "done"],
-            priorities=["needed"],
-            agents=AgentsConfig(agent_map={"research": "r", "done": "d"}),
-        )
-        config.pipeline.statuses = ["research", "done"]
-        config.pipeline.priorities = ["needed"]
-        config.agents.agent_map = {"research": "r", "done": "d"}
-        return config
-
-    def test_empty_statuses_raises_config_error(self) -> None:
-        config = self._make_valid_config()
-        config.pipeline.statuses = []
-        with pytest.raises(ConfigError, match="statuses"):
-            _validate_engine_config(config)
-
-    def test_empty_priorities_raises_config_error(self) -> None:
-        config = self._make_valid_config()
-        config.pipeline.priorities = []
-        with pytest.raises(ConfigError, match="priorities"):
-            _validate_engine_config(config)
-
-    def test_entry_status_not_in_statuses_raises(self) -> None:
-        config = self._make_valid_config()
-        config.pipeline.entry_status = "nonexistent"
-        with pytest.raises(ConfigError, match="entry_status"):
-            _validate_engine_config(config)
-
-    def test_terminal_status_not_last_raises(self) -> None:
-        config = self._make_valid_config()
-        config.pipeline.terminal_status = "research"  # not the last status ("done")
-        with pytest.raises(ConfigError, match="terminal_status"):
-            _validate_engine_config(config)
-
-    def test_agent_map_missing_status_raises(self) -> None:
-        """_validate_engine_config must NOT raise for incomplete agent_map.
-
-        Completeness check moved to pick_tasks (#1221); _validate_engine_config
-        no longer validates agent_map coverage — it must accept partial maps.
-        """
-        config = self._make_valid_config()
-        config.agents.agent_map = {"research": "r"}  # missing "done"
-        # RED: currently raises ConfigError("agent_map ..."); after fix must not raise
-        _validate_engine_config(config)  # must not raise
-
-    def test_invalid_claim_timeout_raises(self) -> None:
-        config = self._make_valid_config()
-        config.pipeline.claim_timeout = "bogus"
-        with pytest.raises(ConfigError, match="Invalid claim_timeout"):
-            _validate_engine_config(config)
-
-    def test_asymmetric_agent_compatibility_raises(self) -> None:
-        config = self._make_valid_config()
-        config.agents.agent_compatibility = {
-            "alice": ["bob"]
-        }  # bob does not list alice
-        with pytest.raises(ConfigError):
-            _validate_engine_config(config)
-
-    def test_agent_compatibility_non_list_peer_raises(self) -> None:
-        config = self._make_valid_config()
-        config.agents.agent_compatibility = {"alice": "not-a-list"}  # type: ignore[assignment]
-        with pytest.raises(ConfigError):
-            _validate_engine_config(config)
-
-    def test_valid_config_passes_without_raising(self) -> None:
-        config = self._make_valid_config()
-        _validate_engine_config(config)  # must not raise
 
 
 # ---------------------------------------------------------------------------

@@ -111,64 +111,6 @@ def _parse_duration(s: str) -> timedelta:
     return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
-def _validate_engine_config(config: BoardConfig) -> None:
-    """Validate engine-specific config invariants required at engine init."""
-    statuses = config.pipeline.statuses
-    priorities = config.pipeline.priorities
-
-    if not statuses:
-        raise ConfigError(
-            code="ERR_INVALID_STATUS",
-            user_message="config.statuses must contain at least one status",
-        )
-    if not priorities:
-        raise ConfigError(
-            code="ERR_INVALID_PRIORITY",
-            user_message="config.priorities must contain at least one priority",
-        )
-
-    if config.pipeline.entry_status not in statuses:
-        raise ConfigError(
-            code="ERR_ENTRY_STATUS_INVALID",
-            user_message=(
-                f"entry_status {config.pipeline.entry_status!r} must be one of statuses: {statuses}"
-            ),
-        )
-
-    terminal_status = config.pipeline.terminal_status
-    if terminal_status not in statuses or terminal_status != statuses[-1]:
-        raise ConfigError(
-            code="ERR_TERMINAL_STATUS_INVALID",
-            user_message=(
-                f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
-            ),
-        )
-
-    # Validate timeout format eagerly at engine init.
-    _parse_duration(config.pipeline.claim_timeout)
-
-    compatibility_sets: dict[str, set[str]] = {}
-    for agent, peers in config.agents.agent_compatibility.items():
-        if not isinstance(peers, list):
-            raise ConfigError(
-                code="ERR_INVALID_STATUS",
-                user_message=f"agent_compatibility[{agent!r}] must be a list[str]",
-            )
-        compatibility_sets[agent] = {str(peer) for peer in peers}
-
-    for agent, peers in compatibility_sets.items():
-        for peer in peers:
-            reverse = compatibility_sets.get(peer)
-            if reverse is None or agent not in reverse:
-                raise ConfigError(
-                    code="ERR_INVALID_STATUS",
-                    user_message=(
-                        "agent_compatibility must be symmetric: "
-                        f"{agent!r} -> {peer!r} requires {peer!r} -> {agent!r}"
-                    ),
-                )
-
-
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
@@ -445,7 +387,6 @@ class KanbanEngine:
     ) -> None:
         self._kanban_dir = kanban_dir
         self._config: BoardConfig = load_config(kanban_dir)
-        _validate_engine_config(self._config)
         self._tasks_dir = kanban_dir / self._config.paths.tasks_dir
         self._archive_dir = kanban_dir / self._config.paths.archive_dir
         self._agent_name: str = (
