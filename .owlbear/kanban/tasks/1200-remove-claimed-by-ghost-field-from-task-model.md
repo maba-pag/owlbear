@@ -1,10 +1,10 @@
 ---
 id: 1200
 title: Remove claimed_by ghost field from Task model
-status: backlog
+status: in-progress
 priority: needed
 created: 2026-04-30 15:28:55.673059+00:00
-updated: 2026-05-01T15:45:36.019520+00:00
+updated: 2026-05-01T19:59:01.249567+00:00
 tags:
 - audit-kanban
 parent:
@@ -47,7 +47,7 @@ Task model has `extra="allow"`. Without the field declaration + `exclude=True`, 
 - [ ] No `record.claimed_by` or `cleared.claimed_by` assignments in `serve/kanban/src/owlbear_kanban/engine.py` (td:0)
 - [ ] On-disk legacy handling unchanged: storage.py pop, corruption.py detection, migrate.py, migration gate (td:1)
 - [ ] Tests updated per scope list: 4 assertion removals + 3 constructor kwarg removals (td:0)
-- [ ] All `serve/kanban/` and `serve/mcp-kanban/` test suites pass (td:0)
+- [ ] No new test failures introduced in `serve/kanban/` or `serve/mcp-kanban/` suites by this change (td:0)
 
 ## Finding: 4.4
 
@@ -179,3 +179,50 @@ Strategy: AC3 regression guards gate on the AC1 assertion so all 5 tests fail in
 ### Action
 - The narrow implementation appears correct, but the task contract is not satisfied because the package-wide green-suite AC remains red.
 - This is not a direct builder fix for task 1200. Architect should either re-scope the AC to task-owned evidence or create prerequisite baseline-fix work for the broad kanban and mcp-kanban suites before this task re-enters review.
+[[2026-05-01]]
+
+
+[[2026-05-01]]
+## Architecture Re-Review
+
+**Verdict:** APPROVE — AC5 refined to no-regression scope.
+
+### AC Assessment
+
+| AC line | Assessment | Action |
+|---------|-----------|--------|
+| `claimed_by` not in `Task.model_fields` (td:1) | Verified by reviewer, task test passes | No change |
+| No `record.claimed_by` assignments in engine.py (td:0) | Verified by reviewer via source audit | No change |
+| On-disk legacy handling unchanged (td:1) | Verified by reviewer, 4 task tests pass | No change |
+| Tests updated per scope list (td:0) | Verified by reviewer, scoped selectors pass | No change |
+| ~~All `serve/kanban/` and `serve/mcp-kanban/` test suites pass~~ (td:0) | **Unachievable** — 48 pre-existing failures unrelated to claimed_by cleanup | **Refined** to no-regression scope (see below) |
+
+### AC5 Refinement Rationale
+
+The reviewer found 48 broad-suite failures (e.g. `test_release_action_produces_released_session`, `test_all_timestamp_fields_end_with_utc_offset`, `test_constructor_signature_excludes_agent_name`) — none traceable to the claimed_by removal. Task-owned tests (13/13) pass. The original AC5 conflates baseline suite health with task correctness. Refined to: no new failures introduced.
+
+### Architecture Notes
+
+No architectural concerns. Implementation was validated as correct through the full pipeline. This re-review addresses only the AC scoping defect that caused the reviewer FAIL.
+
+### Challenger: SKIP (all changes validated in prior cycle; AC-only refinement)
+[[2026-05-01]]
+AC5 refined from "All suites pass" to "No new test failures introduced" — the original gate was unachievable due to 48 pre-existing failures unrelated to this task. Reviewer evidence confirmed task-owned 13/13 green and no regressions. Implementation validated in prior cycle; no architectural concerns.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry cycle (reviewer FAIL → architect AC5 refinement → test-writer re-entry)
+- Test file: tests/test_engine_ghost_field_1200.py
+- Classes: TestFromAC_ClaimedByFieldRemoval, TestFromAC_LegacyOnDiskHandling
+- Total: 5 tests — all PASS against current implementation (builder already committed)
+- ruff: clean
+
+AC coverage:
+| AC line | td | Tests |
+|---------|-----|-------|
+| claimed_by not in Task.model_fields | td:1 | test_claimed_by_not_in_task_model_fields |
+| No record.claimed_by assignments in engine.py | td:0 | (skipped) |
+| On-disk legacy handling unchanged (storage pop, corruption detection, migrate, migration gate) | td:1 | 4 tests (one per handler) |
+| Tests updated per scope list | td:0 | (skipped) |
+| No new test failures introduced in serve/kanban/ or serve/mcp-kanban/ suites | td:0 | (skipped — AC5 refined by architect to "no new failures", not full suite green) |
+
+Builder skip: reviewer cited AC5 scope (not missing tests). Architect refined AC5. Implementation already correct. All 5 tests green against current code. No builder action needed.

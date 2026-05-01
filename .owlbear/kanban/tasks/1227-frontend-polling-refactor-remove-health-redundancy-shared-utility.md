@@ -1,10 +1,10 @@
 ---
 id: 1227
 title: 'Frontend — polling refactor: remove /health redundancy + shared utility'
-status: todo
+status: review
 priority: needed
 created: 2026-04-30 16:31:18.626374+00:00
-updated: 2026-05-01T15:38:07.132137+00:00
+updated: 2026-05-01T19:58:21.234840+00:00
 tags:
 - cockpit
 - frontend
@@ -820,3 +820,52 @@ The implementation correctly transitions useBoard health through the green→yel
 
 [[2026-05-01]]
 Architecture Review (Cycle 5): REFINE → APPROVE. Tightened AC1 from non-discriminating "green after first success" to discriminating recovery path (degrade → success → green). The mount-optimistic default (health='green', lastHealthyAt=Date.now()) made the old first-success assertion pass even without markHealthy(). The new recovery assertion fails without markHealthy() because lastHealthyAt stays stale. AC2-7 unchanged — all passing since cycle 3/4. Challenger confidence 0.74 (reconsider) — overridden: contract authority concern is procedural (resolved by this edit), refetchTasks concern is same codepath (refetch → poll → onSuccess → markHealthy). See Refined Acceptance Criteria (cycle 5) section.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry cycle 5 — surgical fill for AC1 discriminating recovery gap
+- Test file: `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts` (modified)
+- New test added to `TestFromAC_UseBoardHealthTransition` (1 test)
+- Prior 12 tests: all PASS (unmodified)
+- Total new: 1 test — PASS against current implementation
+- TS diagnostics: no errors
+- Commit: `7c4fb582`
+
+### Step 1b.1 — Direct-to-review advance (test-only retry)
+All three conditions met:
+- Reviewer's required follow-up was test-proof gap only (no implementation fixes needed)
+- New test PASSES against current code (implementation already correct — markHealthy() present)
+- No lint or TS errors detected
+
+### AC coverage (cycle-5 retry gap)
+| AC line | Tests |
+|---------|-------|
+| AC1 discriminating recovery proof: degrade → success → green | `health recovers to green after a successful poll following yellow degradation` — PASS (regression guard). Removing `markHealthy()` from `useBoard.onSuccess` leaves `lastHealthyAt` at t=0; at t=9000ms elapsed=9000ms → `computeHealth(9000)='red'` → test would FAIL. With `markHealthy()`: `lastHealthyAt=9000ms`, elapsed≈0 → green ✓ |
+
+### Note on direct-to-review advance
+13/13 vitest tests pass. The new recovery assertion proves the `markHealthy()` codepath is load-bearing — it is no longer possible for a broken implementation to silently satisfy AC1. Builder skip applies.
+[[2026-05-01]]
+## Builder Notes
+- Implementation: no code changes in this builder cycle; this was a verification-only closeout after cycle-5 test-writer proof updates.
+- Tests: 109 passed, 0 failed, 0 skipped (scoped gate)
+  - `tests/test_frontend_polling_1227.py`: 21 passed
+  - Vitest scoped suites: 88 passed across:
+    - `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts`
+    - `serve/cockpit/web/src/__tests__/Shell_1227.test.tsx`
+    - `serve/cockpit/web/src/__tests__/Shell_966.test.tsx`
+    - `serve/cockpit/web/src/__tests__/useBoard_967.test.ts`
+    - `serve/cockpit/web/src/__tests__/useBoard.test.ts`
+    - `serve/cockpit/web/src/__tests__/KanbanBoard_1242.test.tsx`
+    - `serve/cockpit/web/src/__tests__/KanbanBoard_959.test.tsx`
+    - `serve/cockpit/web/src/__tests__/KanbanBoard_933.test.tsx`
+- Lint: clean (`ruff` exit 0; no violations).
+- Coverage (module-level):
+  - `usePollingFetch.ts`: 100%
+  - `useBoard.ts`: 95.12%
+  - `Shell.tsx`: 75%
+  - `KanbanBoard.tsx`: 73.42%
+- Evidence summary: cycle-5 AC gate satisfied under the refined scope (task-owned + AC6 durable suites), with no failing tests in the canonical quality-runner report.
+
+### Reflection
+- Verification-only builder cycles still require a full quality-runner gate to produce comparable evidence.
+- The discriminating recovery-path test added in cycle 5 closes the prior AC1 proof-quality gap.
+- Scoped AC ownership prevented unrelated RED-phase suites from blocking closure while preserving strict local evidence.

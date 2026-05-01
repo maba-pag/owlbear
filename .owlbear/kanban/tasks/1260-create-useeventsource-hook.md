@@ -4,7 +4,7 @@ title: Create useEventSource hook
 status: in-progress
 priority: nice-to-have
 created: 2026-05-01T09:34:24.718353+00:00
-updated: 2026-05-01T15:55:24.348183+00:00
+updated: 2026-05-01T20:05:48.575933+00:00
 tags:
 - cockpit
 - frontend
@@ -142,3 +142,88 @@ Codebase verified: hook placement in `hooks/` matches existing pattern (`usePoll
 
 ### Mock pattern
 `vi.stubGlobal('EventSource', MockEventSource)` with full state machine simulation: `simulateOpen()`, `simulateStallError()` (readyState===CONNECTING), `simulateFatalError()` (readyState===CLOSED), `simulateEvent(type, data)`. Consistent with `vi.stubGlobal('fetch', ...)` pattern from `usePollingFetch_1227.test.ts`.
+[[2026-05-01]]
+## Builder Notes
+- Implementation: added `serve/cockpit/web/src/hooks/useEventSource.ts` with native EventSource state machine and named exports `useEventSource` + `UseEventSourceResult`.
+- Behavior delivered: connecting/open/closed status transitions, `tasks-changed` JSON parsing to `lastEventMtime`, 15s stall timeout, 30s retry after closed, enabled toggle handling, and full cleanup on unmount.
+- Tests: 24/24 task-scoped tests passed (`serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`).
+- Coverage: 95.78% on touched module (`useEventSource.ts`), functions 100%, lines 100%.
+- Lint: ESLint clean for changed source and task test file.
+- RED evidence: pre-implementation quality-runner reported expected import-resolution failure (`../hooks/useEventSource` missing), confirming true RED state.
+- Commit: `c9e001a6` (`feat: implement useEventSource hook (#1260, builder)`).
+- Post-task reflection:
+  - RED validation for missing-module tasks can present as 0 collected + import error; still valid failure evidence.
+  - Ref-managed timer clearing on every transition was the key to AC4/AC5 single-timer guarantees.
+  - Mounted-guard checks in callbacks prevented post-unmount state activity and timer-driven reconnects.
+  - Branch-only guard paths remained the main residual uncovered area despite full AC pass coverage.
+[[2026-05-01]]
+## Review Evidence
+### Scope
+- First review cycle confirmed: no prior `## Review Evidence` section in `.owlbear/kanban/tasks/1260-create-useeventsource-hook.md`.
+- Commit presence confirmed in `.git/logs/HEAD` for `c9e001a6`.
+- Changed scope reconstructed from task body, symbol search, and workspace inspection: `serve/cockpit/web/src/hooks/useEventSource.ts`, `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`.
+- Downstream callers: none beyond the task test file.
+
+### Test Results
+- vitest: 24 passed, 0 failed on `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`.
+
+### Lint
+- Quality-runner lint is Python-only, so no TypeScript lint ran in that report.
+- VS Code diagnostics on the changed TS files: no errors.
+
+### Coverage
+- `useEventSource.ts`: 95.78% overall, 80% branch, 100% functions, 100% lines.
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | `serve/cockpit/web/src/hooks/useEventSource.ts:3` exports the named type, but the test file only imports the hook at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:16` and only checks callability / runtime property presence at lines 90 and 94. Removing the named type export would stay green. | FAIL |
+| AC2 | State-machine tests at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:102-134` exercise initial connecting, native EventSource creation, open transition, and fatal-close transition implemented in `serve/cockpit/web/src/hooks/useEventSource.ts:60-89`. | PASS |
+| AC3 | Listener registration and mtime update are exercised at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:146-160` against `serve/cockpit/web/src/hooks/useEventSource.ts:113-122`. | PASS |
+| AC4 | Stall-timeout and boundary coverage at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:169-244` matches the timer logic in `serve/cockpit/web/src/hooks/useEventSource.ts:92-109`. | PASS |
+| AC5 | Retry happy paths pass, but stale callbacks from an older source can still force `setStatus('closed')`, `closeActiveSource()`, and a retry from `serve/cockpit/web/src/hooks/useEventSource.ts:76-88` after a newer source has already been installed at line 61. Current tests at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:250-320` never exercise superseded-source callbacks. | FAIL |
+| AC6 | Unmount cleanup behavior is covered at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:326-396`, and the mounted guard exists in `serve/cockpit/web/src/hooks/useEventSource.ts:68,77,95,114`. | PASS |
+| AC7 | Disabled-state reset is implemented at `serve/cockpit/web/src/hooks/useEventSource.ts:130-135`, but because the next effect re-arms `isMountedRef.current = true` at line 31 and the `tasks-changed` handler at lines 113-122 does not verify that its callback belongs to the current source, a late event from the old source can repopulate `lastEventMtime` after disable. The test at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:413` only checks status/close and does not seed mtime or late callbacks. | FAIL |
+
+#### Security Review
+- No security issues found in the scoped change. The hook creates a browser `EventSource`, parses event JSON, and adds no dependency or filesystem / command surface.
+
+#### Test Integrity
+- No `TestFromAC_*` weakening found. The task suite remains intact and unskipped.
+
+#### Test Quality
+- WEAK.
+- AC1 proof is non-discriminating: function-callability and property presence do not prove the named type export contract.
+- The suite does not cover late callbacks from superseded EventSource instances after retry or disable, so the failing implementation path stays green.
+- The post-unmount callback test at `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts:381` only checks instance count, not the absence of forbidden state mutation.
+
+#### Data Safety
+- FAIL: stale EventSource callbacks are not tied to the currently active instance.
+- `serve/cockpit/web/src/hooks/useEventSource.ts:31` re-arms mounted state on every effect run.
+- `serve/cockpit/web/src/hooks/useEventSource.ts:61` swaps in the new active source.
+- The `onopen`, `onerror`, and `tasks-changed` handlers at lines 68-122 only check mounted state, not source identity.
+- The fatal-error path at lines 81-88 can call `closeActiveSource()` on whatever source is current, and the event handler at lines 113-122 can repopulate `lastEventMtime` after the disable reset at lines 130-135.
+
+#### Implementation-Aware Test Gap Analysis
+- No test simulates a late `onerror` or `tasks-changed` event from a superseded source after retry or after an enabled true to false transition.
+- That gap is exactly why the stale-source race above escaped.
+
+#### Necessity Check
+- No issue. A local hook around native EventSource is necessary for this frontend behavior.
+
+#### Builder Process Quality
+- CLEAN. First review cycle, one builder attempt, no loop evidence.
+
+### Confidence
+- 0.66
+
+### Verdict
+- FAIL
+
+### Action
+- Rejected to `in-progress` because this is an implementation issue with associated proof gaps.
+
+### Required Follow-up
+- Guard `onopen`, `onerror`, stall-timeout, and `tasks-changed` handlers so only the current EventSource instance can mutate state or close / retry the connection.
+- Strengthen task tests to prove the AC1 named type export and to cover stale callbacks after retry and after disabling, including `lastEventMtime` reset preservation.

@@ -1,10 +1,10 @@
 ---
 id: 1242
 title: 'Test: handleTransitionClick archive intercept'
-status: review
+status: archived
 priority: needed
 created: 2026-05-01T03:07:57.562942+00:00
-updated: 2026-05-01T15:47:54.385690+00:00
+updated: 2026-05-01T20:24:50.490244+00:00
 tags:
 - scope:frontend
 parent: 1238
@@ -436,3 +436,152 @@ Re-review after audit reject. Refined AC: added AC5 (taskStatus live at intercep
 - problems_faced: quality-runner lint stage is Python/ruff-only and reports expected parse errors on TSX paths.
 - workarounds_applied: relied on scoped Vitest pass + VS Code diagnostics for frontend safety evidence.
 - patterns_discovered: when a builder task re-enters after test-only retries and implementation is already committed, a no-op builder verification pass is sufficient before advancing.
+
+[[2026-05-01]]
+## Review Evidence
+### Source Scope
+- Latest binding contract is the re-review Architecture Review refinement in the task body: AC1-AC5 with max depth `td:2`.
+- Verified builder commit presence in git logs: `869d5d05` appears in `.git/logs/HEAD:1328`; original test-writer commit `805fd6f3` appears in `.git/logs/HEAD:1298`.
+- Reviewed live source and tests in `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/__tests__/KanbanBoard_1242.test.tsx`, `serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx`, `serve/cockpit/web/src/components/ArchivalModal.tsx`, `serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx`, and the bound brief section `.owlbear/briefs/draft-archival-ux/brief.md:165-170`.
+- `handleTransitionClick` has one live call-site in `KanbanBoard.tsx`; usage tracing shows the archived click passes live `taskStatus` from `tasks.find(...).status ?? contextMenu.taskStatus` while preserving frozen `contextMenu.taskUpdated`.
+
+### Test Results
+- quality-runner scoped run: 89 passed, 0 failed, 0 skipped.
+- Suites: `KanbanBoard_1242.test.tsx` 8 passed, `KanbanBoard.test.tsx` 35 passed, `ArchivalModal_1241.test.tsx` 46 passed.
+- One React `act()` warning surfaced in an adjacent ArchivalModal test; warning only, no failing assertion.
+
+### Lint / Diagnostics
+- quality-runner does not execute TypeScript/ESLint, so there is no canonical frontend lint report from that agent.
+- VS Code diagnostics report no errors in `serve/cockpit/web/src/KanbanBoard.tsx`, `serve/cockpit/web/src/components/ArchivalModal.tsx`, `serve/cockpit/web/src/__tests__/KanbanBoard_1242.test.tsx`, and `serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx`.
+
+### Coverage
+- quality-runner produced TSX coverage for `KanbanBoard.tsx`: 81.81% statements / 80.00% branches / 75.00% functions / 82.41% lines.
+- Uncovered lines reported by quality-runner (`98`, `102`, `106-133`, `214`) are outside the archived-click diff path. The changed archived-intercept lines are exercised directly by the task-owned suite and durable board/modal suites.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line / Bound Contract | Mapped Test | Would Fail If Violated? | Verdict |
+|---|---|---|---|
+| Clicking `→ archived` opens `ArchivalModal`; no immediate move request fires | `KanbanBoard_1242.test.tsx:163-193` plus archived branch return in `KanbanBoard.tsx:153-163` | Yes; modal render is asserted and move-call count must stay zero | COVERED |
+| Other transitions remain immediate move requests | `KanbanBoard_1242.test.tsx:202-226` plus durable exact POST assertion in `KanbanBoard.test.tsx:661-676` | Yes; surviving non-archived path still must POST the expected URL/body | COVERED |
+| `ArchivalModal` receives `taskId`, `taskStatus`, and `expectedUpdated` props | `KanbanBoard_1242.test.tsx:231-268` and split proof at `:366-449` | Yes; all three props are checked with exact equality | COVERED |
+| `expectedUpdated` stays frozen at context-menu-open time | `KanbanBoard_1242.test.tsx:277-353` | Yes; rerendered task data changes to a polled value and the frozen value is still required | COVERED |
+| Brief F3 timing split: live `taskStatus`, frozen `expectedUpdated` | `KanbanBoard_1242.test.tsx:366-449` | Yes; the test changes status after menu-open, then requires live `in-progress` status and frozen updated token together | COVERED |
+
+#### Security Review
+- No security findings in scoped code. The change only routes local UI state into an existing same-origin task flow and introduces no new dependency, dynamic execution path, or external input surface.
+
+#### Test Integrity
+- No evidence that the builder weakened or removed any `TestFromAC_*` assertions.
+- The retry added the previously missing AC5 timing-split proof instead of relaxing earlier checks.
+- Informational only: one happy-path test name still mentions context-menu-open timing for `taskStatus`, but the dedicated AC5 split test now proves the real live-status contract.
+
+#### Test Quality
+- PASS: task-owned assertions are exact-value checks, not presence checks. They distinguish modal-open versus POST behavior, exact prop values, frozen `expectedUpdated`, and live `taskStatus` under rerendered task data.
+- PASS: the durable board suite closes the remaining proof gap on the surviving non-archived request shape by asserting exact POST URL/body at `KanbanBoard.test.tsx:661-676`.
+- Informational only: the archived no-POST test observes a short settle window, but direct control-flow inspection shows the archived branch returns before the fetch path and does not schedule delayed work.
+
+#### Data Safety
+- No data-safety finding. The implementation freezes the OCC token (`expectedUpdated`) from menu-open state while sourcing the behavior-driving `taskStatus` from the live task snapshot at archived-click time.
+
+#### Implementation-Aware Gap Analysis
+- `KanbanBoard.tsx:153-163` opens `ArchivalModal` and returns immediately for `targetStatus === 'archived'`.
+- `KanbanBoard.tsx:237-238` passes `tasks.find((task) => task.id === contextMenu.taskId)?.status ?? contextMenu.taskStatus` together with frozen `contextMenu.taskUpdated`, matching the brief’s split contract in `.owlbear/briefs/draft-archival-ux/brief.md:165-170`.
+- `ArchivalModal.tsx:205` uses `taskStatus` to gate the `completed` reason, and adjacent modal tests at `ArchivalModal_1241.test.tsx:155-170` verify both hidden and visible branches.
+- No untested significant path remains inside the refined AC scope. The nullish fallback to `contextMenu.taskStatus` is a defensive out-of-scope branch, not a missing acceptance-path proof.
+
+#### Necessity Check
+- Not applicable; no new dependency, integration, tool, or speculative capability was added.
+
+#### Builder Process Quality
+- CLEAN: one earlier review failure was corrected via the AC5 proof and live-status implementation fix. Current cycle shows no retry loop or repeated identical approach.
+
+### AC Compliance Table
+| AC Line / Bound Contract | Evidence | Status |
+|---|---|---|
+| Clicking `→ archived` opens `ArchivalModal`; no immediate move request fires | `KanbanBoard.tsx:153-163`; `KanbanBoard_1242.test.tsx:163-193` | PASS |
+| Other transitions remain immediate move requests | `KanbanBoard.tsx:166-175`; `KanbanBoard_1242.test.tsx:202-226`; `KanbanBoard.test.tsx:661-676` | PASS |
+| `ArchivalModal` receives correct props | `KanbanBoard.tsx:209-214`, `:237-238`; `KanbanBoard_1242.test.tsx:231-268`, `:366-449` | PASS |
+| `expectedUpdated` is frozen at context-menu-open time | `KanbanBoard.tsx:91`, `:238`; `KanbanBoard_1242.test.tsx:277-353` | PASS |
+| Brief F3 split timing: live `taskStatus`, frozen `expectedUpdated` | `.owlbear/briefs/draft-archival-ux/brief.md:165-170`; `KanbanBoard.tsx:237-238`; `ArchivalModal.tsx:205`; `KanbanBoard_1242.test.tsx:366-449` | PASS |
+
+### Deductions
+- `-0.03` frontend lint evidence relies on VS Code diagnostics because quality-runner does not run ESLint/TypeScript lint.
+- `-0.02` task-owned archived no-POST proof uses a short settle window, though direct control-flow inspection and durable request-shape assertions make this non-blocking.
+
+### Verdict
+- PASS, confidence 0.95.
+
+### Required Follow-up
+- None.
+
+### Action
+- Advance to docs.
+
+### Reflection
+- Durable-suite review mattered here; the task-owned suite proved the archived split, but the adjacent board suite supplied the exact surviving non-archived POST-shape proof.
+- For polling-sensitive UI flows, the safe pattern is to freeze OCC tokens like `updated` while deriving behavior-driving fields like `status` from live state at action time.
+- Frontend review confidence is strongest when exact-value Vitest assertions are paired with direct control-flow inspection and diagnostics, not coverage percentage alone.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No IN-scope prose doc references `handleTransitionClick`, `KanbanBoard.tsx`, or `ArchivalModal.tsx` by behavior |
+| 2 | Module docstrings | No | N/A | No Python files modified |
+| 3 | External attribution | No | N/A | No external patterns sourced |
+| 4 | Research doc | No | N/A | No research doc produced or referenced |
+| 5 | Diagram maintenance (describes match) | Yes | Updated | `share/diagrams/cockpit.excalidraw` describes `serve/cockpit/web/src/**` — footer updated to `Last verified: 2026-05-01 (df62a068)`. Commit: 40fa995d |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/KanbanBoard.tsx | OUT | Application source — no doc edit |
+| serve/cockpit/web/src/__tests__/KanbanBoard_1242.test.tsx | OUT | Test file — no doc edit |
+| serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx | OUT | Test file — no doc edit |
+| serve/cockpit/web/src/components/ArchivalModal.tsx | OUT | Application source — no doc edit |
+| serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx | OUT | Test file — no doc edit |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw (footer only)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (.owlbear/scratch/1242-* — no files found)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Clicking → archived opens ArchivalModal; no POST fires | `KanbanBoard.tsx:153-163` (archived branch sets modal, returns); test `:163-193` asserts modal + zero move calls | PASS |
+| AC2: Other transitions still fire move immediately | `KanbanBoard.tsx:166-175` (non-archived path POSTs); test `:202-226`; durable suite 35/35 | PASS |
+| AC3: ArchivalModal receives taskId, taskStatus, expectedUpdated | `KanbanBoard.tsx:209-214` render with all 3 props; tests `:231-268` exact-value checks | PASS |
+| AC4: expectedUpdated frozen at menu-open time | `KanbanBoard.tsx:91,238` (contextMenu.taskUpdated); test `:277-353` polling race proof | PASS |
+| AC5: taskStatus live at intercept time (brief F3 split) | `KanbanBoard.tsx:237` `tasks.find(...)?.status ?? contextMenu.taskStatus`; test `:366-450` proves rerendered status passes through | PASS |
+
+### Test Results
+- Frontend (task-scoped): 89 passed, 0 failed (KanbanBoard_1242: 8, KanbanBoard: 35, ArchivalModal_1241: 46)
+- Python full suite: 3494 passed, 107 failed, 4 skipped — no failures in task scope
+- Ruff lint: 4 violations — none in task-scoped files
+
+### Commit Integrity
+- `805fd6f3` test-writer: original test suite
+- `c6ad561b` builder: intercept archived transition click
+- `869d5d05` builder: fix live status at archived click
+- `b3b631bc` #1265 fixture fix (includes 8th test for AC5)
+- All committed, working tree clean
+
+### Architect Quality: 3/5
+Original AC omitted the brief F3 split-timing contract (AC5), requiring a full reject-retry cycle. Re-review refined the AC set to 5 specific, testable lines. No follow-up needed (≤2 threshold not met; gap was caught and corrected within the pipeline).
+
+### Deduction Breakdown
+- −0.03: AC quality ≤ 3 (original architect gap required reject cycle)
+
+### Confidence: 0.97
+### Action: archive

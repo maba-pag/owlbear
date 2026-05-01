@@ -1,10 +1,10 @@
 ---
 id: 1259
 title: Add paused option to usePollingFetch
-status: in-progress
+status: todo
 priority: nice-to-have
 created: 2026-05-01T09:34:21.381409+00:00
-updated: 2026-05-01T16:00:02.380724+00:00
+updated: 2026-05-01T20:11:01.845838+00:00
 tags:
 - cockpit
 - frontend
@@ -103,3 +103,90 @@ APPROVED #1259 → todo. Refined AC from prose into 7 verifiable lines with test
 - AC3 tests: pause guard must be added to the `pendingPollRef` finalizer inside `poll()`, not just to the interval callback.
 - AC4 boundary: `refetch()` while in-flight + paused → pendingPollRef queued → drain suppressed by pause (intersection with AC3).
 - Approach A (ref-based): add `pausedRef = useRef(options?.paused ?? false)`, update on every render, guard in setInterval callback AND in pendingPollRef finalizer. No effect dep change — timer stays stable.
+[[2026-05-01]]
+## Builder Notes
+- Implementation: updated `serve/cockpit/web/src/hooks/usePollingFetch.ts`.
+- Changes applied:
+  - Added `paused?: boolean` to `UsePollingFetchOptions` (default behavior remains false via `pausedRef` assignment).
+  - Added `pausedRef` synced each render from `options?.paused ?? false`.
+  - Interval callback now skips `poll()` while paused.
+  - `pendingPollRef` drain in `poll()` finalizer now skips recursive `poll()` while paused.
+  - `refetch()` remains unchanged and still calls `poll()` directly.
+- RED verification before implementation:
+  - `src/__tests__/usePollingFetch_1259.test.ts`: 13/13 failed (expected).
+- GREEN verification after implementation:
+  - `npx vitest run src/__tests__/usePollingFetch_1259.test.ts src/__tests__/usePollingFetch_1227.test.ts` -> 26/26 passed.
+- Coverage evidence:
+  - `npx vitest run ... --coverage.include=src/hooks/usePollingFetch.ts` -> statements 98.43%, lines 98.41%, functions 100% on touched module.
+- Lint/diagnostics:
+  - ESLint on changed file clean (`npx eslint src/hooks/usePollingFetch.ts`).
+  - VS Code diagnostics for changed file: no errors.
+  - quality-runner full run reported unrelated Python-suite failures and confirmed Ruff is not valid for TypeScript linting; frontend gate evidence therefore uses Vitest + ESLint + diagnostics per `h-quality-runner` guidance.
+- Commit:
+  - `feat: add paused option to usePollingFetch (#1259, builder)`
+
+- Reflection:
+  - Full quality-runner invocation is noisy for frontend-only tasks; scoped Vitest + ESLint gives accurate task signal.
+  - Keeping timer lifecycle unchanged (no effect dependency changes) satisfied resume semantics without burst behavior.
+  - Guarding both interval tick and pending-drain paths was necessary; interval-only guard leaves AC3 failing.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner scoped Vitest: 26 passed, 0 failed, 0 skipped
+- `serve/cockpit/web/src/__tests__/usePollingFetch_1259.test.ts`: 13/13 passed
+- `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts`: 13/13 passed
+- VS Code diagnostics: no errors in `usePollingFetch.ts`, the task test, the regression test, or live callers `useBoard.ts`, `usePendingDRs.ts`, `useScanPolling.ts`
+
+### Lint
+- quality-runner Ruff output is not applicable for this TypeScript-only scope
+- TypeScript/editor diagnostics are clean on the reviewed source, tests, and callers
+
+### Coverage
+- `serve/cockpit/web/src/hooks/usePollingFetch.ts`: statements 98.43%, lines 98.41%, functions 100%, branch 80%
+- Uncovered line reported by quality-runner is outside the paused-path change; changed paused logic is exercised by the scoped suites
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | `paused?: boolean` exists in `usePollingFetch.ts` and is exercised by the task suite, but the `UsePollingFetchResult unchanged` clause is not proved by a discriminating `TestFromAC` assertion. The task suite comment names that contract at `usePollingFetch_1259.test.ts:5`, yet the suite only exercises `result.current.refetch()` at lines 134, 192, 206, 207, and 231. No task test would fail if `isFetching` or `hasFetched` were dropped from the returned result even though the unchanged contract remains declared in `usePollingFetch.ts` lines 15-18 and is consumed by `usePendingDRs.ts:40` and `useScanPolling.ts:29`. | FAIL (missing proof) |
+| AC2 | Interval callback is guarded by `!pausedRef.current` in `usePollingFetch.ts:100-101`; covered by paused interval tests in `usePollingFetch_1259.test.ts` lines 83, 95, and 107. | PASS |
+| AC3 | Pending-drain guard is enforced at `usePollingFetch.ts:89`; covered by in-flight queued-repoll tests at `usePollingFetch_1259.test.ts` lines 118 and 145. | PASS |
+| AC4 | `refetch()` still calls `poll()` directly at `usePollingFetch.ts:117`; covered by paused refetch tests at `usePollingFetch_1259.test.ts` lines 175, 189, and 206. | PASS |
+| AC5 | Initial mount still calls `poll()` before the interval is established in `usePollingFetch.ts:96`; covered at `usePollingFetch_1259.test.ts:243`. | PASS |
+| AC6 | Idle pause/unpause behavior is covered by `usePollingFetch_1259.test.ts` lines 263, 293, and 318, and the stable-timer implementation is visible in `usePollingFetch.ts` where `pausedRef.current` is updated at line 44 without adding `paused` to the effect dependencies. | PASS |
+| AC7 | Existing `usePollingFetch_1227.test.ts` suite passed 13/13 in the independent quality-runner run, and no test modifications were identified in the reviewed change scope. | PASS |
+
+#### Security Review
+- No security issues found in scope. The change is limited to a frontend hook option/ref guard and introduces no new dependency, input surface, persistence, or dynamic execution path.
+
+#### Test Integrity
+- No evidence of weakened or removed `TestFromAC_*` assertions in scope.
+- Scoped change reconstruction from builder notes and live source indicates the implementation change is limited to `serve/cockpit/web/src/hooks/usePollingFetch.ts`.
+- Existing regression suite `usePollingFetch_1227.test.ts` remains intact and passes.
+
+#### Test Quality
+- Blocking issue: AC1 proof is incomplete. The task suite proves the new option is accepted and behavior changes, but it does not add a discriminating assertion for the unchanged returned result contract.
+- Non-blocking note: AC6 proof would be stronger if the suite directly observed timer lifecycle stability rather than only fetch counts, but live source evidence is sufficient to keep AC6 itself green for this review.
+
+#### Data Safety
+- No issues found. Existing in-flight coalescing and unmount cleanup remain in place.
+
+#### Builder Process Quality
+- CLEAN. One builder attempt documented; commit presence was verified in `.git/logs/refs/heads/dev` for `feat: add paused option to usePollingFetch (#1259, builder)`.
+- No prior `## Review Evidence` section exists in the task file, so this is the first review failure and does not trigger the loop-breaker route.
+
+### Deductions
+- -0.10: AC1 lacks a discriminating `TestFromAC` assertion for the unchanged `UsePollingFetchResult` contract.
+- -0.02: AC6 timer-stability clause is proved mostly by source inspection rather than by mutation-resistant test assertions.
+
+### Verdict
+- Confidence: 0.88
+- FAIL -> `todo`
+
+### Required Follow-up
+- Test-writer: strengthen AC1 so the suite would fail if `UsePollingFetchResult` changed. The proof needs to cover the returned contract, not just `paused` acceptance and `refetch()` availability.
+- Optional hardening while you are in the file: add a more discriminating AC6 assertion around timer stability so an implementation that tears down/recreates the interval on pause toggles would fail.
+
+### Action
+- Rejected to `todo` because the implementation appears correct, but the `TestFromAC` proof is not yet strong enough to certify AC1.

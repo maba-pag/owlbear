@@ -1,10 +1,10 @@
 ---
 id: 1249
 title: 'P1-02: GREEN — filterTasks pure function + FilterState type'
-status: review
+status: done
 priority: critical
 created: 2026-05-01T04:34:45.636679+00:00
-updated: 2026-05-01T15:32:20.430646+00:00
+updated: 2026-05-01T20:12:45.033435+00:00
 tags:
 - phase-1
 - scope:cockpit-web
@@ -14,7 +14,7 @@ depends_on:
 - 1248
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-01T20:12:45.033435+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -261,3 +261,124 @@ Reviewer-confirmed builder-skip applies — task can advance directly to review.
 - Re-running independent quality-runner evidence in builder phase prevents stale-green handoffs.
 - For frontend TypeScript tasks, ESLint + Vitest coverage is the relevant gate; ruff is not applicable.
 - Keeping this pass surgical (no source edits) avoids unnecessary churn and preserves clear ownership boundaries.
+[[2026-05-01]]
+## Review Evidence
+### Scope
+- Builder commit hash was not present in the task body, so changed-file scope was reconstructed from builder notes and live files.
+- Builder source scope reviewed: `serve/cockpit/web/src/utils/filterTasks.ts`
+- Task-owned proof reviewed: `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts`, `serve/cockpit/web/src/__tests__/filterTasks_1249.test.ts`
+
+### Test Results
+- quality-runner scoped run: 23 passed, 0 failed, 0 skipped
+- Per-file breakdown:
+  - `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts`: 19 passed
+  - `serve/cockpit/web/src/__tests__/filterTasks_1249.test.ts`: 4 passed
+
+### Lint
+- ESLint scoped to `src/utils/filterTasks.ts` and both task-owned test files: clean
+- VS Code diagnostics: no errors in `serve/cockpit/web/src/utils/filterTasks.ts`, `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts`, or `serve/cockpit/web/src/__tests__/filterTasks_1249.test.ts`
+
+### Coverage
+- `serve/cockpit/web/src/utils/filterTasks.ts`: 100% statements, 100% branches, 100% functions, 100% lines
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| filterTasks function exported from utils/filterTasks.ts (td:2) | `serve/cockpit/web/src/utils/filterTasks.ts:10` exports `filterTasks`; both suites import it successfully at `filterTasks_1248.test.ts:19` and `filterTasks_1249.test.ts:21`; quality-runner reports 23/23 GREEN | `filterTasks_1248.test.ts`, `filterTasks_1249.test.ts` | PASS |
+| FilterState interface exported from the same module (td:0) | `serve/cockpit/web/src/utils/filterTasks.ts:3` exports `FilterState`; typed imports resolve at `filterTasks_1248.test.ts:19` and `filterTasks_1249.test.ts:21`; no diagnostics in scoped files. td:0 does not require executable runtime proof. | td:0 structural evidence | PASS |
+| All #1248 unit tests pass (GREEN) (td:2) | quality-runner reports `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts`: 19 passed, 0 failed | `filterTasks_1248.test.ts` | PASS |
+| Pure function — no React imports, no side effects (td:1) | Source has only a type import at `serve/cockpit/web/src/utils/filterTasks.ts:1` and a local predicate implementation at `serve/cockpit/web/src/utils/filterTasks.ts:10-20`; purity smoke tests pass at `filterTasks_1249.test.ts:55`, `:71`, `:89`, `:107` with discriminating assertions at `:60-62`, `:81`, `:98`, `:117-118` | `filterTasks_1249.test.ts` | PASS |
+| AND semantics across all four dimensions (td:2) | Implementation returns `matchesText && matchesPriority && matchesTags && matchesBlocked` at `serve/cockpit/web/src/utils/filterTasks.ts:20`; exact multi-dimension proof passes at `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts:166` with expectation at `:187` | `filterTasks_1248.test.ts` | PASS |
+
+#### Security Review
+- No issues found. The production change is an in-memory predicate over task fields only. No filesystem, network, subprocess, template, eval, deserialization, or persistence surface is present in `serve/cockpit/web/src/utils/filterTasks.ts`.
+
+#### Test Integrity
+| Original Test | Change Made | Assessment |
+|---------------|-------------|------------|
+| `TestFromAC_FilterTasks` | No weakening observed in the current handoff; exact behavioral assertions remain intact across text, priority, tags, blocked, AND, and edge cases | PRESERVED |
+| `TestFromAC_FilterTasksPurity` | Strengthened by test-writer after prior review reject; current handoff preserves the strengthened assertions and builder reported no test edits in this pass | PRESERVED |
+
+#### Test Quality
+| Dimension | Rating | Evidence |
+|-----------|--------|----------|
+| Assertion specificity | STRONG | Core behavior uses exact `toEqual(...)` assertions, including priority exactness at `filterTasks_1248.test.ts:102-108`, blocked filtering at `:148-152`, undefined-tag handling at `:200-205`, and four-way AND at `:166-187` |
+| Negative/error-path coverage | ADEQUATE | Exclusion paths are exercised for text, priority, tags, blocked, and undefined tags in the #1248 suite |
+| Manual mutation reasoning | STRONG | Changing tag AND semantics or the final conjunction would fail the exact expectations at `filterTasks_1248.test.ts:166-187`; direct React import and input mutation would fail `filterTasks_1249.test.ts:60-62`, `:81`, and `:98` |
+| Test independence | STRONG | Both suites build fresh fixtures locally; no shared mutable state |
+| Descriptive names | STRONG | Test names map directly to the AC and expected behavior |
+
+#### Data Safety
+- No issues found. The function performs a synchronous in-memory projection with no shared mutable state, no persistence, and no multi-step write path.
+
+#### Implementation-Aware Gaps
+- No significant untested implementation branches found in the live source. Pass-through branches and the undefined-tags guard are covered, and scoped coverage is 100%.
+
+#### Necessity Check
+- Not applicable. No new dependency, integration, or external capability was introduced.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 |
+| Approach variation | Initial implementation, then builder-skip pass after test-only retry |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- `vscode_listCodeUsages` shows no live consumer outside the two task-owned suites, so there is no current downstream caller regression surface for the exported utility signature.
+- The code-reader subagent raised two concerns: lack of runtime proof for the td:0 `FilterState` export and incomplete proof against hypothetical non-mutating external side effects. I did not count either as a gate failure because the AC explicitly marks `FilterState` as td:0, and the purity line is td:1 where the current smoke suite plus direct source inspection is sufficient under review policy.
+- Minor structural note: `serve/cockpit/web/src/utils/filterTasks.ts:1` imports `Task` from a hook-named module via `import type`; this does not create a runtime React dependency, but it does couple the utility to a hooks namespace.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| filterTasks function exported from utils/filterTasks.ts (td:2) | `serve/cockpit/web/src/utils/filterTasks.ts:10`; imports resolve in both task suites; 23/23 total GREEN | `filterTasks_1248.test.ts`, `filterTasks_1249.test.ts` | PASS |
+| FilterState interface exported from the same module (td:0) | `serve/cockpit/web/src/utils/filterTasks.ts:3`; typed imports resolve with clean diagnostics in scoped files | td:0 structural evidence | PASS |
+| All #1248 unit tests pass (GREEN) (td:2) | quality-runner: `filterTasks_1248.test.ts` 19 passed, 0 failed | `filterTasks_1248.test.ts` | PASS |
+| Pure function — no React imports, no side effects (td:1) | source review at `serve/cockpit/web/src/utils/filterTasks.ts:1-20` plus passing purity smoke tests at `serve/cockpit/web/src/__tests__/filterTasks_1249.test.ts:55-118` | `filterTasks_1249.test.ts` | PASS |
+| AND semantics across all four dimensions (td:2) | conjunction at `serve/cockpit/web/src/utils/filterTasks.ts:20`; exact combined-dimensions proof at `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts:166-187` | `filterTasks_1248.test.ts` | PASS |
+
+### Deductions
+- -0.03: Purity evidence is partly structural (source inspection + smoke tests) rather than a complete test-only proof for every hypothetical side effect variant.
+
+### Confidence: 0.95
+### Verdict: PASS
+### Action
+- Advance to `docs`.
+
+### Post-task Reflection
+- Frontend review gating for this task was correctly handled with Vitest, ESLint, VS Code diagnostics, and targeted source inspection; Python-only lint signals would have been misleading here.
+- The prior reject was resolved cleanly by stronger proof without unnecessary source churn; builder-skip was the right retry path.
+- td:0 and td:1 annotations materially changed the review outcome: they prevented over-demanding runtime proof for a type export while still requiring a concrete smoke-level purity check.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | No README or setup guide references filterTasks utility |
+| 2 | Module docstrings | No | N/A | TypeScript file — not a Python module |
+| 3 | External attribution | No | N/A | Standard Array.filter predicate composition; no external source |
+| 4 | Research doc | No | N/A | No .owlbear/research/ doc produced |
+| 5 | Diagram maintenance (describes match) | No | N/A | No diagram describes serve/cockpit/web/src/utils/filterTasks.ts |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body |
+| 7 | Deletion detection | No | N/A | No files deleted |
+
+### Scope Classification
+
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/utils/filterTasks.ts | OUT | N/A |
+| serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts | OUT | N/A |
+| serve/cockpit/web/src/__tests__/filterTasks_1249.test.ts | OUT | N/A |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no 1249-* scratch files found)
