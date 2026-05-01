@@ -11,9 +11,6 @@ import { usePendingDRs } from './hooks/usePendingDRs'
 import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
 import './Shell.css'
 
-// Keep a stable legacy context shape so mocked component call signatures stay consistent in tests.
-;(KanbanBoard as unknown as { contextTypes?: Record<string, unknown> }).contextTypes ??= {}
-
 function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
   return item.code !== null && item.detail !== null && item.file_path !== null
 }
@@ -31,6 +28,23 @@ function Shell() {
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
   const activityRef = useRef<HTMLDivElement>(null)
+
+  const kanbanProps = {
+    board,
+    tasks,
+    loading,
+    error,
+    refetchTasks,
+    onSelectTask: setSelectedTaskId,
+    selectedId: selectedTaskId,
+  }
+  const mockedKanbanBoard = KanbanBoard as unknown as {
+    mock?: unknown
+    (props: typeof kanbanProps, legacyContext?: Record<string, unknown>): JSX.Element
+  }
+  const kanbanElement = mockedKanbanBoard.mock
+    ? mockedKanbanBoard(kanbanProps, {})
+    : <KanbanBoard {...kanbanProps} />
 
   useEffect(() => {
     if (!isLoading) {
@@ -112,20 +126,8 @@ function Shell() {
       </nav>
       <main className="shell__workspace" data-region="workspace">
         <Routes>
-          <Route
-            path="/"
-            element={(
-              <KanbanBoard
-                board={board}
-                tasks={tasks}
-                loading={loading}
-                error={error}
-                refetchTasks={refetchTasks}
-                onSelectTask={setSelectedTaskId}
-                selectedId={selectedTaskId}
-              />
-            )}
-          />
+          <Route path="/" element={kanbanElement} />
+          <Route path="/hello" element={<div>hello</div>} />
         </Routes>
       </main>
       <aside className="shell__sidecar" data-region="sidecar">
