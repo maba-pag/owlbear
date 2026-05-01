@@ -161,7 +161,7 @@ class TestFromAC_PickTasksResolveIntegration:
 
         decisions_mock.resolve_pending_drs.assert_called_once_with(engine)
 
-    def test_resolve_exceptions_do_not_propagate(
+    def test_unexpected_exception_from_resolve_propagates(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """AC2 (updated per task #1202 BLE001 fix): RuntimeError from resolve_pending_drs propagates.
