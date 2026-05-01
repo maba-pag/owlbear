@@ -1,10 +1,10 @@
 ---
 id: 1259
 title: Add paused option to usePollingFetch
-status: todo
+status: done
 priority: nice-to-have
 created: 2026-05-01T09:34:21.381409+00:00
-updated: 2026-05-01T20:11:01.845838+00:00
+updated: 2026-05-01T21:25:02.807680+00:00
 tags:
 - cockpit
 - frontend
@@ -13,7 +13,7 @@ depends_on:
 - 1235
 blocked: false
 block_reason:
-claimed_at:
+claimed_at: 2026-05-01T21:25:02.807680+00:00
 archival_reason:
 archival_refs: []
 ---
@@ -190,3 +190,128 @@ APPROVED #1259 → todo. Refined AC from prose into 7 verifiable lines with test
 
 ### Action
 - Rejected to `todo` because the implementation appears correct, but the `TestFromAC` proof is not yet strong enough to certify AC1.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry cycle: added 2 new tests addressing reviewer's Required Follow-up gaps.
+- Test file: serve/cockpit/web/src/__tests__/usePollingFetch_1259.test.ts
+- Classes: TestFromAC_PausedOption (existing)
+
+### New tests added
+
+**AC1 discriminating (added to "AC1: paused option type contract" describe):**
+- `contract: isFetching and hasFetched have correct lifecycle values — would fail if either were dropped from UsePollingFetchResult`
+  - Uses makeSlowFetch to assert isFetching=true/hasFetched=false in-flight, then isFetching=false/hasFetched=true after resolve. Would fail (undefined ≠ boolean) if either field were dropped.
+
+**AC6 timer-stability discriminating (added to "AC6: resume on next tick" describe):**
+- `timer-stability: interval fires at original timer offset after pause/unpause — would fail if implementation recreated the interval on toggle`
+  - Pause at t=500ms, unpause at t=600ms, advance to t=1000ms. Stable timer fires at t=1000ms (fetch #2). Recreated timer would fire at t=1600ms — still 1 fetch at t=1000ms. Discriminating against conditional-interval implementations.
+
+### Verification
+- Total: 15 tests (13 existing preserved + 2 new), all PASS against current implementation
+- usePollingFetch_1227.test.ts: 13/13 still green
+- Vitest: 28/28 passed
+- Commit: 3b80c85a
+
+### AC Coverage delta
+| AC | New tests | Notes |
+|----|-----------|-------|
+| AC1 | +1 (lifecycle contract) | Now directly proves isFetching/hasFetched lifecycle — would fail if fields dropped |
+| AC6 | +1 (timer-stability) | Now proves no teardown/setup on pause toggle — mutation-resistant |
+
+### Builder skip
+All new tests PASS against current implementation. Reviewer's Required Follow-up contained only test-proof gaps — no implementation fixes needed. Advancing directly to review per w-tdd-red §Step 1b.1.
+[[2026-05-01]]
+Test-only retry — all new tests pass against current impl. Builder skip: advancing directly to review per w-tdd-red §Step 1b.1.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run: 28 passed, 0 failed, 0 skipped
+- `serve/cockpit/web/src/__tests__/usePollingFetch_1259.test.ts`: 15/15 passed
+- `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts`: 13/13 passed
+- VS Code diagnostics: no errors in `usePollingFetch.ts`, the task suite, the regression suite, or live callers `useBoard.ts`, `usePendingDRs.ts`, and `useScanPolling.ts`
+
+### Lint
+- ESLint clean on `serve/cockpit/web/src/hooks/usePollingFetch.ts`, `serve/cockpit/web/src/__tests__/usePollingFetch_1259.test.ts`, and `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts`
+
+### Coverage
+- `serve/cockpit/web/src/hooks/usePollingFetch.ts`: 98.43% statements, 80% branch, 100% functions, 98.41% lines
+- quality-runner reported one uncovered line outside the paused-path change (`line 76`); no implementation-aware gap was identified in the changed logic
+
+### Pass 1 - CRITICAL
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | `UsePollingFetchOptions` includes `paused?: boolean` and `UsePollingFetchResult` still exposes `isFetching`, `hasFetched`, and `refetch` in `serve/cockpit/web/src/hooks/usePollingFetch.ts:5-18`. The retry test proves the runtime lifecycle contract for `isFetching`/`hasFetched` and presence of `refetch` at `serve/cockpit/web/src/__tests__/usePollingFetch_1259.test.ts:76-96`. Live callers still compile clean at `usePendingDRs.ts:40-72` and `useScanPolling.ts:29-57`. | `usePollingFetch_1259.test.ts:59-96` | PASS |
+| AC2 | Interval callback remains guarded by `!pausedRef.current` at `serve/cockpit/web/src/hooks/usePollingFetch.ts:100-102`; exact-count paused tick tests would fail if the guard were removed. | `usePollingFetch_1259.test.ts:102-134` | PASS |
+| AC3 | Pending-drain suppression is implemented at `serve/cockpit/web/src/hooks/usePollingFetch.ts:89-91`; queued refetch and queued interval-drain tests both stay at one fetch after resolve. | `usePollingFetch_1259.test.ts:142-192` | PASS |
+| AC4 | `refetch()` still calls `poll()` directly at `serve/cockpit/web/src/hooks/usePollingFetch.ts:117-118`; paused refetch tests distinguish direct refetch from the paused interval path. | `usePollingFetch_1259.test.ts:199-260` | PASS |
+| AC5 | Initial mount still performs `poll()` unconditionally at `serve/cockpit/web/src/hooks/usePollingFetch.ts:98`; the mount test proves one immediate fetch even when `paused=true`. | `usePollingFetch_1259.test.ts:267-281` | PASS |
+| AC6 | Pause/unpause resume behavior is covered by next-tick, no-burst, timer-stability, and multi-cycle tests at `serve/cockpit/web/src/__tests__/usePollingFetch_1259.test.ts:287-398`. The new timer-stability test is discriminating against reset-on-toggle implementations. | `usePollingFetch_1259.test.ts:287-398` | PASS |
+| AC7 | The unchanged regression suite `serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts:56-207` passed 13/13 in the independent quality-runner run. No weakened or removed assertions were identified in scope. | `usePollingFetch_1227.test.ts:56-207` | PASS |
+
+#### Security Review
+- No issues found. Scope is limited to a local frontend polling hook and task-scoped tests; no new dependency, persistence, shelling, path handling, or dynamic execution surface was introduced.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions found.
+- Retry changes strengthen proof with an AC1 lifecycle test and an AC6 timer-stability test.
+- Existing `usePollingFetch_1227.test.ts` assertions remain intact in the reviewed scope.
+
+#### Test Quality
+- PASS. Assertions are specific and mutation-resistant on the changed behavior.
+- AC1 now has direct runtime proof for the unchanged result fields; the remaining theoretical gap is only exact type-level equality of the exported interface, which is informational rather than a blocking AC failure for this runtime-focused task.
+
+#### Data Safety
+- No issues found. In-flight coalescing, abort cleanup, and paused gating remain component-local and bounded.
+
+#### Builder Process Quality
+- CLEAN. One builder implementation attempt, then one test-only retry by test-writer after the prior review failure. The retry changed approach by adding discriminating assertions rather than repeating the earlier proof shape.
+
+### Informational
+- `vscode_listCodeUsages` shows live hook consumers at `useBoard.ts:57`, `usePendingDRs.ts:40`, and `useScanPolling.ts:29`; all remain compatible with the unchanged result contract.
+- Code-reader noted that AC1 does not include an exact type-equality assertion for `UsePollingFetchResult`, but the current runtime contract and downstream caller surface are sufficiently proved for this gate.
+
+### Deductions
+- -0.05: AC1 proof is runtime-focused rather than an exact exported-type equality assertion.
+
+### Verdict
+- Confidence: 0.95
+- PASS -> `docs`
+
+### Action
+- Advanced to `docs`. The prior proof gap is closed; no blocking implementation, security, or test-integrity defects remain.
+
+### Reflection
+- Scoped frontend evidence was the right gate here: Vitest, ESLint, diagnostics, and code-reading were sufficient without pulling unrelated backend noise into the decision.
+- The retry materially improved proof quality instead of only increasing test count; the AC6 timer-stability test now protects against a realistic refactor regression.
+- AC1 is now strong enough for review, but if the team later wants airtight type-contract enforcement on exported interfaces, that should become an explicit test-writer convention rather than an ad hoc review requirement.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | `serve/cockpit/README.md` does not mention `usePollingFetch` or polling hooks. No other IN-scope prose doc references this internal hook. |
+| 2 | Module docstrings | No | N/A | Changed file is TypeScript (`usePollingFetch.ts`) — not a Python module. |
+| 3 | External attribution | Yes | Verified | Dan Abramov and TanStack Query rows already present in `.owlbear/sources/overview.md` lines 35–36, added during research phase. |
+| 4 | Research doc | Yes | Verified | `.owlbear/research/1259-paused-option-usepollingfetch.md` exists; linked from task body under `## Research`. |
+| 5 | Diagram maintenance | Yes | Updated | `share/diagrams/cockpit.excalidraw` has `describes: serve/cockpit/src/**, serve/cockpit/web/src/**` — matches `serve/cockpit/web/src/hooks/usePollingFetch.ts`. Footer updated from `(7cf28a5d)` to `(81354270)`, date 2026-05-01. Committed as `056e5b8c`. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted; no orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/hooks/usePollingFetch.ts | OUT (TS source) | N/A |
+| serve/cockpit/web/src/__tests__/usePollingFetch_1259.test.ts | OUT (test) | N/A |
+| serve/cockpit/web/src/__tests__/usePollingFetch_1227.test.ts | OUT (test) | N/A |
+| share/diagrams/cockpit.excalidraw | IN (diagram) | Footer updated |
+
+### Files Updated
+- share/diagrams/cockpit.excalidraw (footer timestamp only)
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None found (.owlbear/scratch/1259-* — no matches)

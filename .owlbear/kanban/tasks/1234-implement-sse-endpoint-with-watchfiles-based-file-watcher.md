@@ -1,10 +1,10 @@
 ---
 id: 1234
 title: Implement SSE endpoint with watchfiles-based file watcher
-status: todo
+status: backlog
 priority: nice-to-have
 created: 2026-04-30 16:48:42.978432+00:00
-updated: 2026-05-01T19:59:03.813123+00:00
+updated: 2026-05-01T21:23:54.147564+00:00
 tags:
 - cockpit
 - backend
@@ -547,3 +547,131 @@ Task returned from 3rd review cycle (confidence 0.70, trending from 0.38). Imple
 ### Test Depth
 - Max depth: td:2
 - Test-writer: PROCEED
+[[2026-05-01]]
+## Test-Writer Notes
+- Test file: tests/test_cockpit_events_1234.py
+- Retry: filled AC1/AC5/AC7 proof gaps per loop-breaker architect approval and reviewer Required Follow-up
+- 4 new tests added to existing TestFromAC_ classes:
+  - TestFromAC_EventsModuleExists: `test_events_router_registered_in_main_exact_pattern` (AC1 — exact `include_router(events_router, prefix="/api")` string check)
+  - TestFromAC_MissingDirGuard: `test_missing_tasks_dir_awatch_unreachable_on_consumed_path` (AC5 combined proof — patches awatch to raise-if-called as an async generator, consumes stream body via httpx.AsyncClient, asserts zero event:/data: lines)
+  - TestFromAC_ProjDependencies: `test_sse_starlette_in_project_dependencies_section`, `test_watchfiles_in_project_dependencies_section` (AC7 — tomllib structural parse asserting membership in [project.dependencies] list)
+- Total: 34 tests (30 original + 4 new)
+- Results: 34 PASS, 0 FAIL — all new tests pass against current impl
+- ruff: clean
+- commit: 7cf28a5d
+
+Builder skip: test-only retry — all new tests green against current implementation. Advancing directly to review (Step 1b.1).
+
+AC coverage (new tests only):
+| AC | New Test | Status |
+|----|----------|--------|
+| AC1 exact wiring | test_events_router_registered_in_main_exact_pattern | PASS |
+| AC5 combined proof | test_missing_tasks_dir_awatch_unreachable_on_consumed_path | PASS |
+| AC7 structural sse-starlette | test_sse_starlette_in_project_dependencies_section | PASS |
+| AC7 structural watchfiles | test_watchfiles_in_project_dependencies_section | PASS |
+[[2026-05-01]]
+## Builder Notes
+- Implementation: No source changes required in this builder pass.
+- Files changed: none.
+- Tests: 34 TestFromAC tests passed (`tests/test_cockpit_events_1234.py`).
+- Coverage: 100% on `owlbear_cockpit.routes.events`.
+- ruff: clean.
+- Evidence summary: quality-runner scoped verification returned `failed: []`, `clean: true`, and module coverage 100%.
+- Approach: Test-only retry path already resolved by test-writer; builder performed canonical GREEN verification and advanced task without additional code edits.
+
+- Post-task reflection:
+  - patterns_discovered: Builder-skip scenarios still benefit from one canonical quality-runner verification before release.
+  - workarounds_applied: Used scoped lint/test/coverage targeting to avoid unrelated-suite noise.
+  - quality_gaps: none observed in this pass.
+[[2026-05-01]]
+## Review Evidence
+### Source Scope
+- Reviewed against the refined loop-breaker AC in .owlbear/kanban/tasks/1234-implement-sse-endpoint-with-watchfiles-based-file-watcher.md:342-346, not the stale top-of-file AC3/AC5/AC6 wording.
+- Current runtime/test surface checked: serve/cockpit/src/owlbear_cockpit/routes/events.py, serve/cockpit/src/owlbear_cockpit/main.py, serve/cockpit/pyproject.toml, tests/test_cockpit_events_1234.py.
+- Loop-breaker basis: the task file already contained three prior `## Review Evidence` sections at .owlbear/kanban/tasks/1234-implement-sse-endpoint-with-watchfiles-based-file-watcher.md:140, :238, and :423 before this review, so any new FAIL routes to backlog.
+
+### Test Results
+- pytest (quality-runner, scoped): 34 passed, 0 failed (`tests/test_cockpit_events_1234.py`)
+
+### Lint
+- ruff: clean for serve/cockpit/src/owlbear_cockpit/routes/events.py, serve/cockpit/src/owlbear_cockpit/main.py, and tests/test_cockpit_events_1234.py
+
+### Coverage
+- quality-runner coverage attribution was unusable on this pass: it reported scope-mismatch / "No data was collected" warnings and did not return an independent module percentage for `owlbear_cockpit.routes.events`.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC | Mapped Test | Would fail if violated? | Verdict |
+|----|-------------|-------------------------|---------|
+| AC1 `include_router(events_router, prefix="/api")` wiring | `test_events_router_registered_in_main_exact_pattern`, `test_get_api_events_not_404` | Yes. Missing registration or wrong `/api` prefix would fail against main.py:19,30 and tests/test_cockpit_events_1234.py:162. | COVERED |
+| AC2 `EventSourceResponse` + injected engine | `test_endpoint_content_type_is_text_event_stream`, `test_endpoint_uses_injected_engine_tasks_dir` | Yes. Wrong response type/content type or DI bypass would fail against routes/events.py:28-65 and tests/test_cockpit_events_1234.py:172,208. | COVERED |
+| AC3 revised `awatch(engine.tasks_dir, watch_filter=_watch_filter, recursive=False)` | `TestFromAC_WatchFilter` block, `test_awatch_call_site_receives_correct_arguments` | Yes. Wrong filter behavior or wrong `awatch(...)` arguments would fail against routes/events.py:18-40 and tests/test_cockpit_events_1234.py:263,297. | COVERED |
+| AC4 `tasks-changed` payload + skip only when no stat-able files remain | `test_event_name_is_tasks_changed`, `test_event_data_contains_mtime_integer`, `test_event_skipped_when_changed_file_deleted_before_stat` | No. The suite proves one live file (tests/test_cockpit_events_1234.py:398) and an all-deleted batch (tests/test_cockpit_events_1234.py:438), but it never exercises the mixed live+deleted batch branch that exists in the per-file `FileNotFoundError` path at routes/events.py:53. A handler that dropped the whole batch on the first missing file would stay green. | LAX |
+| AC5 revised missing-dir empty stream + `awatch` unreachable on consumed path | `test_missing_tasks_dir_stream_is_empty`, `test_missing_tasks_dir_awatch_unreachable_on_consumed_path` | Yes. The consumed path asserts zero event/data lines and raises immediately if `awatch` is reached, matching the refined AC at task line 343. | COVERED |
+| AC6a `yield_on_timeout=True` | `test_awatch_receives_yield_on_timeout_true` | Yes. Missing the kwarg would fail against routes/events.py:40 and tests/test_cockpit_events_1234.py:660. | COVERED |
+| AC6b disconnect terminates the stream | `test_generator_terminates_on_disconnect_executable` | No. The test proves eventual termination and bounded `awatch` iterations (tests/test_cockpit_events_1234.py:748), but it does not assert zero emitted chunks when `is_disconnected()` is already true from the start. A mutation that yields one event before breaking would still pass. | LAX |
+| AC6c empty changeset continues and later real change emits | `test_generator_continues_on_empty_changeset` | Yes. Breaking on the empty changeset would fail against routes/events.py:46 and tests/test_cockpit_events_1234.py:791. | COVERED |
+| AC7 direct dependencies in `[project.dependencies]` | `test_sse_starlette_in_project_dependencies_section`, `test_watchfiles_in_project_dependencies_section` | Yes. Removing either dependency from serve/cockpit/pyproject.toml:12-13 would fail the structured TOML assertions at tests/test_cockpit_events_1234.py:856,869. | COVERED |
+
+#### Security Review
+- No security issues found. The route is read-only, uses the engine-owned task directory, and the new dependencies are explicitly declared in serve/cockpit/pyproject.toml:12-13.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions were proven from the live snapshot.
+- Small confidence deduction applied because diff-level immutability could not be independently verified from the available review tooling.
+
+#### Test Quality
+- WEAK: AC4 proof does not exercise the mixed live/deleted change-set branch. The implementation deliberately continues past `FileNotFoundError` (routes/events.py:53), but the task-owned suite only proves one live file and all-deleted batches (tests/test_cockpit_events_1234.py:398,438).
+- WEAK: AC6b proof does not discriminate ordering. The executable disconnect test at tests/test_cockpit_events_1234.py:748 would still stay green if the disconnect check moved below the first yield, because it only asserts eventual termination and `awatch` iteration count.
+
+#### Data Safety
+- No data-safety issues found.
+
+#### Implementation-Aware Test Gaps
+- Significant untested runtime branch: a single `awatch` batch containing one deleted file and one surviving file. Current tests do not prove that the surviving file still produces a `tasks-changed` event after the `FileNotFoundError` branch at routes/events.py:53.
+- Significant untested ordering branch: disconnected-before-first-yield behavior at routes/events.py:43-47. Current tests do not prove that the generator emits zero chunks once `request.is_disconnected()` is already true.
+- The live implementation itself looks aligned with the refined AC surface: missing-dir guard before `awatch` at routes/events.py:32-33, correct call-site wiring at :36-40, disconnect break at :43-44, idle-timeout continue at :46-47, and dependency declarations at pyproject.toml:12-13.
+
+#### Necessity Check
+- PASS. `sse-starlette` and `watchfiles` are task-required, directly used, and properly declared.
+
+#### Builder Process Quality
+- FRICTION only, not builder-loop failure. The task has multiple historical retries, but the approaches changed across passes. Backlog routing here is from repeat review failure plus remaining proof-quality gaps, not from identical builder looping.
+
+### Pass 2 — INFORMATIONAL
+- tests/test_cockpit_events_1234.py:1-10 still summarizes the pre-refinement AC shape. The executable tests reflect the refined task, but the header comment is stale.
+- quality-runner coverage output was noisy; I did not take builder self-reported `100%` as independent evidence.
+
+### AC Compliance
+| AC | Evidence | Mapped Test | Status |
+|----|----------|-------------|--------|
+| AC1 | main.py:19,30; tests/test_cockpit_events_1234.py:162 | `test_events_router_registered_in_main_exact_pattern`, `test_get_api_events_not_404` | PASS |
+| AC2 | routes/events.py:28-65; tests/test_cockpit_events_1234.py:172,208 | `test_endpoint_content_type_is_text_event_stream`, `test_endpoint_uses_injected_engine_tasks_dir` | PASS |
+| AC3 revised | routes/events.py:18-40; tests/test_cockpit_events_1234.py:263,297 | `TestFromAC_WatchFilter`, `test_awatch_call_site_receives_correct_arguments` | PASS |
+| AC4 | routes/events.py:52-53; tests/test_cockpit_events_1234.py:398,438 | `test_event_data_contains_mtime_integer`, `test_event_skipped_when_changed_file_deleted_before_stat` | FAIL |
+| AC5 revised | routes/events.py:32-33,65; tests/test_cockpit_events_1234.py:560,606 | `test_missing_tasks_dir_stream_is_empty`, `test_missing_tasks_dir_awatch_unreachable_on_consumed_path` | PASS |
+| AC6a | routes/events.py:40; tests/test_cockpit_events_1234.py:660 | `test_awatch_receives_yield_on_timeout_true` | PASS |
+| AC6b | routes/events.py:43-44; tests/test_cockpit_events_1234.py:748 | `test_generator_terminates_on_disconnect_executable` | FAIL |
+| AC6c | routes/events.py:46-47; tests/test_cockpit_events_1234.py:791 | `test_generator_continues_on_empty_changeset` | PASS |
+| AC7 | serve/cockpit/pyproject.toml:12-13; tests/test_cockpit_events_1234.py:856,869 | `test_sse_starlette_in_project_dependencies_section`, `test_watchfiles_in_project_dependencies_section` | PASS |
+
+### Deductions
+- -0.13: AC4 mixed live/deleted batch branch is still unproven by the task-owned suite.
+- -0.13: AC6b disconnect test proves eventual termination but not zero emitted chunks once disconnected.
+- -0.03: diff-level TestFromAC immutability could not be independently verified from the available review tooling.
+- -0.02: quality-runner coverage attribution was unusable on this pass.
+
+### Verdict
+- FAIL -> backlog
+- Confidence: 0.69
+
+### Required Follow-up
+- Add one AC4 proof test where `awatch` yields a batch containing both a deleted path and a live `.md` path, then assert the stream still emits `tasks-changed` with the surviving file's `st_mtime_ns`.
+- Tighten AC6b proof so a request that is already disconnected yields zero chunks before termination, not just eventual completion.
+- Keep the runtime implementation unchanged unless the stronger tests expose a real defect; the current handler in serve/cockpit/src/owlbear_cockpit/routes/events.py:28-65 appears correct against the refined contract.
+- Routing remains `backlog` because task 1234 already had three prior review failures before this pass.
+
+### Post-task Reflection
+- patterns_discovered: SSE tests can prove eventual shutdown while still missing first-yield ordering defects.
+- quality_gaps: mixed live/deleted watcher batches are an easy false-green hole when a suite only checks single-live and all-deleted cases.
+- time_sinks: coverage attribution was noisy, so proof quality had to come from test semantics plus live-source inspection rather than module coverage metrics.

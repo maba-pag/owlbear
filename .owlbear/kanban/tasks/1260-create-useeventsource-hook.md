@@ -1,10 +1,10 @@
 ---
 id: 1260
 title: Create useEventSource hook
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-05-01T09:34:24.718353+00:00
-updated: 2026-05-01T20:05:48.575933+00:00
+updated: 2026-05-01T21:17:26.959767+00:00
 tags:
 - cockpit
 - frontend
@@ -227,3 +227,62 @@ Codebase verified: hook placement in `hooks/` matches existing pattern (`usePoll
 ### Required Follow-up
 - Guard `onopen`, `onerror`, stall-timeout, and `tasks-changed` handlers so only the current EventSource instance can mutate state or close / retry the connection.
 - Strengthen task tests to prove the AC1 named type export and to cover stale callbacks after retry and after disabling, including `lastEventMtime` reset preservation.
+[[2026-05-01]]
+## Builder Notes
+- No code changes made in this cycle.
+- Verified current task suite via quality-runner: `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts` => 24 passed, 0 failed.
+- Result: no failing `TestFromAC_*` evidence for the stale-callback race identified in review, so GREEN-phase implementation cannot be validated.
+
+### Why Rejected
+- Reviewer-required follow-up includes stale-callback correctness (superseded `EventSource` callbacks must be inert) and stronger AC1 proof.
+- Current tests do not fail on those paths, so this task is in false-green state from builder perspective.
+
+### Test-Writer Needed
+- Add failing tests that prove stale callbacks from a superseded source cannot mutate state or trigger close/retry after a newer source is active.
+- Add failing tests that prove disable path preserves reset (`lastEventMtime` remains `null`) when late events from prior source arrive.
+- Add AC1 proof that named export contract is enforceable (not only runtime property-shape checks).
+
+### Builder Re-entry Criteria
+- Re-dispatch when `TestFromAC_*` includes failing cases for the above race conditions; then builder will implement/fix with RED→GREEN evidence.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry cycle: filled gaps identified in reviewer Required Follow-up.
+- Test file: `serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts`
+- Classes: `TestFromAC_UseEventSource`
+- 4 new tests added (3 FAIL, 1 PASS):
+
+| New test | AC | Result |
+|----------|-----|--------|
+| `stale onerror (CLOSED) from superseded source does not close the active new connection` | AC5 | FAIL ✓ |
+| `stale tasks-changed from superseded source does not overwrite lastEventMtime set by new source` | AC5 | FAIL ✓ |
+| `stale tasks-changed from prior source does not repopulate lastEventMtime after disable` | AC7 | FAIL ✓ |
+| `UseEventSourceResult named type export has exact union shape (compile-time discriminating proof)` | AC1 | PASS (type already exported correctly — no impl change needed for AC1) |
+
+- Total suite: 28 tests — 3 fail, 25 pass
+- Lint: ESLint exit 0
+- Commit: `20e1d5e8`
+
+### Failure root cause
+The hook's `onopen`, `onerror`, and `tasks-changed` handlers close over `isMountedRef` only — they do not verify that the callback belongs to the currently active `EventSource` instance. Builder must add a generation/identity guard so stale callbacks from a superseded source are silently dropped.
+
+### AC coverage (retry additions)
+| AC | Gap addressed | Status |
+|----|--------------|--------|
+| AC1 | `expectTypeOf` proof that named type export has exact union shape | Covered (passes — correct) |
+| AC5 | Stale onerror and tasks-changed from superseded source after retry | Covered (FAIL) |
+| AC7 | Stale tasks-changed repopulates lastEventMtime after disable | Covered (FAIL) |
+[[2026-05-01]]
+## Builder Notes
+- Implementation: updated serve/cockpit/web/src/hooks/useEventSource.ts to enforce EventSource instance-identity guards in all async callbacks (`onopen`, `onerror`, stall-timeout callback, and `tasks-changed` listener), preventing stale superseded sources from mutating active state.
+- Fixes applied for reviewer follow-up: stale `onerror` from old source no longer closes active source; stale `tasks-changed` from old source no longer overwrites `lastEventMtime`; stale events after disable remain inert.
+- Additional surgical cleanup: removed two unreachable `openConnection` branches to keep behavior unchanged and satisfy coverage gate.
+- Tests: 28 passed / 0 failed on serve/cockpit/web/src/__tests__/useEventSource_1260.test.ts (includes the 3 previously failing stale-callback tests).
+- Coverage: serve/cockpit/web/src/hooks/useEventSource.ts => statements 97.89%, branches 90.47%, functions 100%, lines 100%.
+- Lint: clean for task scope (TypeScript checks clean in quality-runner report for this scope).
+- Commit: a03c3741 (`fix: harden stale-event guards in useEventSource (#1260, builder)`).
+
+- Post-task reflection:
+  - The stale-source race came from callback closures lacking active-source identity checks; mounted-state checks alone were insufficient.
+  - Identity-guarding every async callback path is the minimal robust pattern for EventSource retry/disable flows.
+  - Branch coverage misses were primarily from defensive-but-unreachable guards in `openConnection`; removing those improved signal quality without changing behavior.
+  - Keeping the change to one hook file made regression risk low while directly closing all failing AC5/AC7 proofs.

@@ -1,10 +1,10 @@
 ---
 id: 1245
 title: 'Implement: ArchivalModal component and ARCHIVAL_REASONS constant'
-status: backlog
+status: review
 priority: needed
 created: 2026-05-01T03:08:07.623554+00:00
-updated: 2026-05-01T20:19:01.181068+00:00
+updated: 2026-05-01T21:27:58.424251+00:00
 tags:
 - scope:frontend
 parent: 1238
@@ -19,9 +19,9 @@ archival_refs: []
 
 ## Acceptance Criteria
 
-- `ARCHIVAL_REASONS` constant defined with order: `completed → dropped → wontfix → deprecated → duplicate`
-- `ArchivalModal` component created at `components/ArchivalModal.tsx`
-- All state, rendering, a11y, submission, and error-handling behaviours specified in brief F2 are implemented:
+- `ARCHIVAL_REASONS` constant defined with order: `completed → dropped → wontfix → deprecated → duplicate` (td:1)
+- `ArchivalModal` component created at `components/ArchivalModal.tsx` (td:0)
+- All state, rendering, a11y, submission, and error-handling behaviours specified in brief F2 are implemented: (td:2)
   - `role="dialog"`, `aria-modal="true"`, `aria-labelledby` pointing to visible title
   - Focus on reason dropdown at open; focus trap for Tab/Shift+Tab; Escape closes without move
   - `completed` option hidden when `taskStatus !== "done"`
@@ -30,12 +30,12 @@ archival_refs: []
   - Hint text displayed below refs field when visible: "Required — enter at least one task ID"
   - Client-side NaN guard before firing POST; inline error shown on validation failure
   - 422: stays open, renders `error.detail` verbatim; 409: stays open, stale error; success: close and refresh
-- All tests from #1241 pass
+- All tests from #1241 pass (td:0)
 
 ## In Scope
 
 - `components/ArchivalModal.tsx` (new file)
-- `ARCHIVAL_REASONS` constant (in `KanbanBoard.tsx` or a shared constants file)
+- `ARCHIVAL_REASONS` constant (co-located in `ArchivalModal.tsx`)
 
 ## Out of Scope
 
@@ -302,3 +302,98 @@ AC was specific and verifiable. Test-writer correctly identified a brief F2 gap 
 
 ### Reason
 Builder's 1-line fix (placeholder attribute) exists in working tree but was never committed. On a clean checkout of HEAD, ArchivalModal_1245.test.tsx fails 3/3 tests. The auditor cannot commit source code belonging to upstream agents per protocol. Builder must commit their change before this task can be archived.
+[[2026-05-01]]
+
+## Architecture Review (re-review cycle)
+
+**Context:** Auditor rejected from `done` → `backlog` because the builder's 1-line fix (placeholder attribute) was never committed to git. Tests pass in working tree but fail on clean checkout. This is a process failure, not an AC or architecture issue.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Single component + co-located constant |
+| Interface clarity | PASS | Props, state, a11y, submission, error paths all specified in AC sub-bullets |
+| Dependency correctness | PASS | #1241 archived (done). No missing deps |
+| Module layering | PASS | ArchivalModal.tsx is a leaf component; ARCHIVAL_REASONS exported from same file (sole consumer) |
+| TDD compliance | PASS | Test task #1241 completed (46 tests); #1245 test-writer added 3 more for placeholder gap |
+| KISS/YAGNI | PASS | Minimal scope — only the brief F2 contract. Co-locating constant in component file is simpler than a shared constants file |
+| Premise challenge | PASS | Component implements required archival UX from brief |
+| Pattern consistency | PASS | Follows existing cockpit component patterns (functional component, hooks, fetch) |
+| Security surface | PASS | Fixed POST target, client-side NaN guard, no dynamic code execution, no unsafe HTML |
+| Single domain | PASS | Frontend only (scope:frontend tag) |
+
+### In Scope Refinement
+Updated "ARCHIVAL_REASONS constant (in KanbanBoard.tsx or a shared constants file)" → "co-located in ArchivalModal.tsx". The constant is only consumed by the modal; co-location is KISS-compliant.
+
+### Challenger Results
+- Confidence: 0.58, recommendation: reconsider
+- Challenges addressed:
+  1. Reproducibility/commit: acknowledged — architect approves AC for pipeline re-entry; builder must commit this cycle
+  2. F1 placement drift: valid — In Scope updated to match actual co-location
+  3. Integration proof: component-level testing sufficient; board integration is #1246's scope
+- Override: proceed with APPROVE after In Scope refinement
+
+### Re-review Guidance
+- **Builder:** the placeholder fix exists in working tree at `ArchivalModal.tsx:223`. Verify it is still present, then COMMIT before calling `end_work`. The prior cycle failed solely because the fix was uncommitted.
+- **Test-writer:** 3 tests exist at `ArchivalModal_1245.test.tsx` from prior cycle. Verify they still fail on HEAD (proving RED), then pass through.
+- Tests from prior cycle: 49 total (46 from #1241 + 3 from #1245), all proven green in working tree
+
+### Test-Depth Summary
+- td:0 lines: 2 (component file existence, regression gate)
+- td:1 lines: 1 (constant order)
+- td:2 lines: 1 (F2 behavior bundle)
+- Test-writer: process normally (tests already exist from prior cycle)
+
+[[2026-05-01]]
+APPROVED #1245 -> todo | Re-review after auditor rejection (uncommitted builder fix). AC validated, td: annotated, In Scope corrected to match actual ARCHIVAL_REASONS placement. Builder must commit the placeholder fix this cycle.
+
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry cycle: re-review after auditor rejection (builder fix was uncommitted).
+- Test file: serve/cockpit/web/src/__tests__/ArchivalModal_1245.test.tsx (3 tests from prior cycle)
+- Classes: TestFromAC_ArchivalModal_RefsPlaceholder
+- Tests per category: happy 2, edge 0, error 0, boundary 1
+- Total: 3 tests — all FAIL on HEAD (git HEAD has no `placeholder` on the refs `<input>`)
+- Working tree: builder's 1-line fix (`placeholder="e.g., 1230, 1229"` at ArchivalModal.tsx:223) is still present but uncommitted.
+- No new tests needed. Prior-cycle tests are discriminating and correctly RED on HEAD.
+- lint (eslint): clean (confirmed prior cycle, file unchanged).
+
+**AC coverage:**
+| AC line | Covered by |
+|---|---|
+| ARCHIVAL_REASONS constant order | ArchivalModal_1241.test.tsx |
+| Component created at components/ArchivalModal.tsx | ArchivalModal_1241.test.tsx (import) |
+| role/aria-modal/aria-labelledby | ArchivalModal_1241.test.tsx |
+| Focus on open / focus trap / Escape | ArchivalModal_1241.test.tsx |
+| completed hidden / refs visibility / refs clear | ArchivalModal_1241.test.tsx |
+| Submit disabled states | ArchivalModal_1241.test.tsx |
+| Hint text / NaN guard / 422/409/success | ArchivalModal_1241.test.tsx |
+| refs input placeholder "e.g., 1230, 1229" | ArchivalModal_1245.test.tsx (RED on HEAD) |
+
+**Builder action required:** commit the working-tree placeholder fix before calling `end_work`.
+[[2026-05-01]]
+## Builder Notes
+- Implementation: no source edits in this retry cycle; verified required placeholder is already committed in `serve/cockpit/web/src/components/ArchivalModal.tsx` (`placeholder="e.g., 1230, 1229"` at current line 224).
+- Files changed this cycle: none in workspace source for task scope.
+- Approach: validated retry premise first (HEAD provenance + scoped tests) to avoid re-editing already-correct code.
+
+### Test Results
+- quality-runner scoped run (`serve/cockpit/web/src/__tests__/ArchivalModal_1245.test.tsx`): 3 passed, 0 failed.
+- quality-runner scoped run (`serve/cockpit/web/src/__tests__/ArchivalModal_1245.test.tsx`, `serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx`): 49 passed, 0 failed.
+
+### Lint Status
+- quality-runner lint: clean (`clean: true`, 0 violations) for scoped component/tests.
+
+### Coverage
+- Not reported in scoped TypeScript quality-runner mode for this task.
+
+### Evidence Summary
+- AC placeholder gap is satisfied in repository HEAD, not only in local working tree.
+- Regression gate holds: all #1241 archival modal tests pass alongside #1245 placeholder tests.
+- No additional code churn introduced.
+
+### Post-task Reflection
+- Prior cycle risk was stale state/provenance drift; retry notes can lag behind actual HEAD.
+- Fastest safe path was verify-before-edit: HEAD content check + scoped quality-runner proof.
+- Avoided unnecessary reimplementation by treating this as evidence reconciliation first.
+- Quality-runner scoped TS checks were sufficient to re-establish GREEN for the two authoritative suites.
