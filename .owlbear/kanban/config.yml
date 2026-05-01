@@ -13,7 +13,7 @@ priorities:
 - important
 - needed
 - critical
-next_id: 1259
+next_id: 1266
 activity_log: false
 paths:
   tasks_dir: tasks
