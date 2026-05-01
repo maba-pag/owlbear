@@ -31,8 +31,8 @@ export function Column({
 
   const sorted = [...tasks].sort((a, b) => priorities.indexOf(b.priority) - priorities.indexOf(a.priority))
 
-  const handleCardDragStart = (task: Task) => {
-    onDragStart(status, task.id, task.updated)
+  const handleCardDragStart = (taskId: number, updated: string) => {
+    onDragStart(status, taskId, updated)
   }
 
   return (
@@ -70,7 +70,7 @@ export function Column({
             selected={selectedId === task.id}
             onSelect={onSelectTask}
             onContextMenu={onContextMenu}
-            onDragStart={() => handleCardDragStart(task)}
+            onDragStart={handleCardDragStart}
             onDragEnd={onDragEnd}
           />
         ))
