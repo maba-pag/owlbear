@@ -4,7 +4,7 @@ title: Ideate cockpit consumption of new kanban engine maintenance surface
 status: archived
 priority: nice-to-have
 created: 2026-04-21 08:08:06.219579+00:00
-updated: 2026-04-28T17:45:37.329324+00:00
+updated: 2026-05-01T17:00:34.987446+00:00
 tags:
 - phase:cockpit
 - type:ideation
@@ -16,7 +16,6 @@ block_reason: 'User Decision-Request: review the engine capabilities and UX seed
   in the body. Decide whether to build cockpit operator-console UI (which seeds, which
   to drop), defer, or close as wontfix. Do not unblock without an explicit scope direction
   or wontfix decision.'
-claimed_by:
 claimed_at:
 archival_reason:
 archival_refs: []
@@ -72,20 +71,3 @@ This task transitions to `backlog` (or further) only after:
 @user — please review and either:
 - Unblock with rough scope direction (which seeds appeal, which to drop), OR
 - Mark this task `wontfix` if cockpit stays as a board viewer/editor only.
-
-
-
-## Decision Record (2026-04-28)
-
-### Seeds decided:
-1. **Activity timeline panel** → Drop. Raw events add noise; sessions cover 95% of the audit need.
-2. **Session history polish** → Build. Created #1156 with AC1–AC6 (filters, visual indicators, click-through, release shortcut).
-3. **Health badge** → Build. Decomposed into #1157–#1162 (TDD: poll hook, badge component, Shell integration).
-4. **Repair flow** → Build. Decomposed into #1163–#1168 (TDD: API client, hook, panel; chained after #1162).
-5. **Stuck-session inspector** → Folded into #1156 as AC6 (release shortcut for stuck/blocked sessions).
-6. **Manual compact button** → Drop. YAGNI — engine auto-compacts at >1MB.
-
-### Scope: 13 tasks (#1156–#1168)
-- Session polish (#1156)
-- Health badge (#1157–#1162)
-- Repair flow (#1163–#1168)

@@ -1,10 +1,10 @@
 ---
 id: 1231
 title: Ideation — archiving workflow from cockpit
-status: backlog
+status: archived
 priority: nice-to-have
-created: '2026-04-30 16:31:18.665338+00:00'
-updated: '2026-04-30 16:33:23.456287+00:00'
+created: 2026-04-30 16:31:18.665338+00:00
+updated: 2026-05-01T17:00:34.989323+00:00
 tags:
 - cockpit
 - needs-ideation

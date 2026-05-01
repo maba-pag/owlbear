@@ -1,10 +1,10 @@
 ---
 id: 1232
 title: Ideation — filter/search in kanban view
-status: backlog
+status: archived
 priority: important
-created: '2026-04-30 16:31:18.673614+00:00'
-updated: '2026-04-30 16:33:23.461432+00:00'
+created: 2026-04-30 16:31:18.673614+00:00
+updated: 2026-05-01T17:00:34.991221+00:00
 tags:
 - cockpit
 - needs-ideation

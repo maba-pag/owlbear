@@ -1,14 +1,15 @@
 ---
 id: 1242
 title: 'Test: handleTransitionClick archive intercept'
-status: backlog
+status: review
 priority: needed
 created: 2026-05-01T03:07:57.562942+00:00
-updated: 2026-05-01T10:04:43.149034+00:00
+updated: 2026-05-01T15:47:54.385690+00:00
 tags:
 - scope:frontend
 parent: 1238
-depends_on: []
+depends_on:
+- 1265
 blocked: false
 block_reason:
 claimed_at:
@@ -347,3 +348,91 @@ Original AC omitted the split-timing contract between `taskStatus` (live at inte
 
 ### Process Concern
 `start_work` on a `done`-status task unexpectedly archived it (moved file to archive/, set status to archived). Manual restoration was required.
+[[2026-05-01]]
+
+## Architecture Review (re-review after audit reject)
+
+### Context
+
+Auditor rejected to backlog (confidence 0.92) citing:
+1. Task-scoped tests fail 8/8 — cross-task regression from #1227 (internal-fetch → prop-based)
+2. Architect quality 3/5 — original AC missed the brief F3 split-timing contract
+3. Created follow-up #1265 to fix stale test fixtures
+
+Implementation is committed and code-correct (builder commit 869d5d05, reviewer PASS 0.95).
+The only remaining gap is test fixture staleness, addressed by #1265.
+
+### AC Refinement
+
+Refined AC with timing-split requirement (AC5) and test-depth annotations:
+
+1. Clicking `→ archived` opens `ArchivalModal`; no `POST /api/tasks/{id}/move` fires immediately (td:1)
+2. Other status transitions remain unaffected — still fire the move request immediately (td:1)
+3. `ArchivalModal` receives `taskId`, `taskStatus`, and `expectedUpdated` as props (td:1)
+4. `expectedUpdated` equals `task.updated` frozen at context-menu-open time (td:2)
+5. `taskStatus` reflects live `task.status` at archived-click/intercept time, not context-menu-open time — per brief F3 split timing contract `.owlbear/briefs/draft-archival-ux/brief.md:169-170` (td:2)
+
+### Evaluation
+
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: archived transition intercept in KanbanBoard |
+| Interface clarity | PASS | AC specifies exact prop sources and timing contracts |
+| Dependency correctness | PASS | Added `depends_on: [1265]` — test fixture fix must complete first |
+| Module layering | PASS | KanbanBoard → ArchivalModal (parent→child); verified import at KanbanBoard.tsx:9 |
+| TDD compliance | PASS | Test file exists with 8 tests covering all 5 AC lines; #1265 fixes stale fixtures |
+| KISS/YAGNI | PASS | Minimal scope: one conditional branch + prop forwarding |
+| Premise challenge | PASS | Brief F3 requires this intercept; no existing capability covers it |
+| Pattern consistency | PASS | Follows existing context-menu → handler → modal pattern in KanbanBoard |
+| Security surface | N/A | Same-origin UI state routing only |
+| Single domain | PASS | Frontend only (scope:frontend tag) |
+
+### Dependency Analysis
+
+- `depends_on: [1265]` — #1265 fixes stale test fixtures in KanbanBoard_1242.test.tsx
+- Parent: #1238 (closeout, depends on #1246 which depends on #1242)
+- Downstream: #1246 (implement F3 intercept) depends on #1242
+
+### Challenge Results
+
+- Challenger: `block` (0.34) — core argument: task-owned proof is currently broken
+- Architect response: rebutted. The dependency on #1265 gates pipeline re-entry until
+  tests are fixed. Challenger's concern about current evidence state is valid but
+  addressed by the gating mechanism, not by holding the task indefinitely in backlog.
+  Menu staleness blind spot is out of F3 scope. Stale test comments are cosmetic
+  cleanup for #1265.
+
+### Test Depth
+
+- Max depth: td:2 (AC4, AC5 — polling race proofs)
+- Test-writer: PROCEED (existing tests cover all AC lines; test-writer should verify
+  post-#1265 fixture updates and pass through if green)
+
+### Verdict: APPROVE
+### Action Taken: Added AC5 (timing-split), td annotations, depends_on #1265. Task will
+re-enter pipeline after #1265 fixes test fixtures. Implementation is committed (869d5d05);
+pipeline agents should verify green tests and pass through existing work.
+[[2026-05-01]]
+Re-review after audit reject. Refined AC: added AC5 (taskStatus live at intercept time per brief F3 split timing), td annotations on all 5 AC lines. Added depends_on #1265 (test fixture fix). Implementation committed (869d5d05), reviewer PASS 0.95 — pipeline re-entry gated on #1265 completion. Challenger block (0.34) rebutted: broken proof concern addressed by dependency gate.
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry: verified post-#1265 fixture updates — all 8 tests GREEN against current implementation.
+- Builder skip: test-only retry; implementation committed (869d5d05, 805fd6f3), all tests pass.
+- Test file: serve/cockpit/web/src/__tests__/KanbanBoard_1242.test.tsx
+- Classes: TestFromAC_HandleTransitionClickArchive
+- Tests: 8/8 PASS (prop-based fixtures confirmed working after #1265 fix)
+- ESLint: clean
+- AC coverage: AC1–AC5 (incl. Brief F3 timing-split proof at test 8) all covered and green
+
+[[2026-05-01]]
+## Builder Notes
+- Implementation: no new code changes in this builder run; existing committed implementation already present for AC1-AC5.
+- Files changed: none.
+- Tests: 89 passed, 0 failed, 0 skipped across scoped frontend suites (`KanbanBoard_1242.test.tsx`, `KanbanBoard.test.tsx`, `ArchivalModal_1241.test.tsx`).
+- Lint/diagnostics: quality-runner ruff is not applicable to TSX paths; VS Code diagnostics report no errors in `KanbanBoard.tsx`, `ArchivalModal.tsx`, or `KanbanBoard_1242.test.tsx`.
+- Coverage: TSX percentage detail not emitted by quality-runner in this run; test gate evidence is full scoped green suite.
+- Evidence summary: task-scoped retry proof is green in current snapshot, including the F3 timing split behavior (`taskStatus` live at intercept time, `expectedUpdated` frozen at context-menu-open time).
+
+- problems_faced: quality-runner lint stage is Python/ruff-only and reports expected parse errors on TSX paths.
+- workarounds_applied: relied on scoped Vitest pass + VS Code diagnostics for frontend safety evidence.
+- patterns_discovered: when a builder task re-enters after test-only retries and implementation is already committed, a no-op builder verification pass is sufficient before advancing.
