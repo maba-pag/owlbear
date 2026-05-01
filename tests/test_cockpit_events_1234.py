@@ -183,6 +183,43 @@ class TestFromAC_EventSourceResponseEndpoint:
                 )
         app.dependency_overrides.clear()
 
+    @pytest.mark.asyncio
+    async def test_endpoint_uses_injected_engine_tasks_dir(self, tmp_path) -> None:
+        """DI contract: the endpoint must call awatch with the overridden engine's tasks_dir, not a default."""
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        board_b = _make_board(tmp_path / "board_b")
+        engine_b = KanbanEngine(board_b, agent_name="cockpit")
+        awatch_paths: list = []
+
+        async def _capture_path(path, **_kwargs):
+            awatch_paths.append(path)
+            return
+            yield  # makes this a valid async generator
+
+        app.dependency_overrides[get_engine] = lambda: engine_b
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", new=_capture_path):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    assert response.status_code == 200
+                    async for _ in response.aiter_lines():
+                        pass  # consume stream to ensure generator ran
+        finally:
+            app.dependency_overrides.clear()
+
+        assert len(awatch_paths) == 1, (
+            f"awatch must be called exactly once per connection, got {len(awatch_paths)}"
+        )
+        assert Path(awatch_paths[0]) == Path(engine_b.tasks_dir), (
+            f"Endpoint must use injected engine_b.tasks_dir ({engine_b.tasks_dir!r}); "
+            f"got {awatch_paths[0]!r} — DI is not propagating the engine to the watcher."
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC3: Watch filter — accepts .md, rejects .tmp- prefix and non-.md (td:2)
@@ -234,6 +271,51 @@ class TestFromAC_WatchFilter:
         from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
 
         assert _watch_filter(None, "/tasks/.tmp-.md") is False
+
+    @pytest.mark.asyncio
+    async def test_awatch_call_site_receives_correct_arguments(self, board_dir) -> None:
+        """AC3 (revised): awatch() must be called with engine.tasks_dir, watch_filter=_watch_filter, recursive=False."""
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_cockpit.routes.events import _watch_filter  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        awatch_calls: list[tuple] = []
+
+        async def _capture_and_stop(*args, **kwargs):
+            awatch_calls.append((args, kwargs))
+            return
+            yield  # makes this a valid async generator
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", new=_capture_and_stop):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    assert response.status_code == 200
+                    async for _ in response.aiter_lines():
+                        pass  # consume entire (empty) stream to ensure generator ran
+        finally:
+            app.dependency_overrides.clear()
+
+        assert len(awatch_calls) == 1, (
+            f"awatch must be called exactly once per connection, got {len(awatch_calls)}"
+        )
+        args, kwargs = awatch_calls[0]
+        assert Path(args[0]) == Path(engine.tasks_dir), (
+            f"awatch first arg must be engine.tasks_dir ({engine.tasks_dir!r}), "
+            f"got {args[0]!r}"
+        )
+        assert kwargs.get("watch_filter") is _watch_filter, (
+            f"awatch must receive watch_filter=_watch_filter; "
+            f"got watch_filter={kwargs.get('watch_filter')!r}"
+        )
+        assert kwargs.get("recursive") is False, (
+            f"awatch must receive recursive=False; got recursive={kwargs.get('recursive')!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +535,39 @@ class TestFromAC_MissingDirGuard:
         finally:
             app.dependency_overrides.clear()
 
+    @pytest.mark.asyncio
+    async def test_missing_tasks_dir_stream_is_empty(self, tmp_path) -> None:
+        """AC5 (revised): Missing tasks_dir must produce zero SSE event/data lines when stream body is consumed."""
+        import shutil  # noqa: PLC0415
+
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        kanban_dir = _make_board(tmp_path)
+        engine = KanbanEngine(kanban_dir, agent_name="cockpit")
+        shutil.rmtree(engine.tasks_dir)
+        assert not engine.tasks_dir.exists(), "Test setup: tasks_dir must not exist"
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        try:
+            transport = httpx.ASGITransport(app=app)
+            async with (
+                httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                ac.stream("GET", "/api/events") as response,
+            ):
+                assert response.status_code == 200
+                event_lines: list[str] = []
+                async for line in response.aiter_lines():
+                    if line.startswith(("event:", "data:")):
+                        event_lines.append(line)
+        finally:
+            app.dependency_overrides.clear()
+
+        assert not event_lines, (
+            f"Missing-dir path must produce a truly empty SSE stream (zero event:/data: lines). "
+            f"Got: {event_lines}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC6: Generator terminates cleanly on disconnect / shutdown (td:2)
@@ -518,6 +633,116 @@ class TestFromAC_GeneratorCleanup:
 
         assert inspect.iscoroutinefunction(events), (
             "events() must be declared 'async def' to support the async SSE generator pattern"
+        )
+
+    @pytest.mark.asyncio
+    async def test_awatch_receives_yield_on_timeout_true(self, board_dir) -> None:
+        """AC6a (td:1): awatch() must receive yield_on_timeout=True for periodic disconnect checks."""
+        from owlbear_cockpit.routes.events import events  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        mock_request = AsyncMock()
+        mock_request.is_disconnected = AsyncMock(return_value=False)
+        awatch_kwargs: list[dict] = []
+
+        async def _capture_kwargs(*_args, **kwargs):
+            awatch_kwargs.append(kwargs)
+            return
+            yield  # makes this a valid async generator
+
+        with patch("owlbear_cockpit.routes.events.awatch", new=_capture_kwargs):
+            response = await events(mock_request, engine)
+            async for _ in response.body_iterator:
+                pass  # consume the (empty) generator to ensure awatch was called
+
+        assert len(awatch_kwargs) == 1, (
+            f"awatch must be called exactly once, got {len(awatch_kwargs)}"
+        )
+        assert awatch_kwargs[0].get("yield_on_timeout") is True, (
+            "awatch() must receive yield_on_timeout=True (AC6a) so the generator can "
+            "check request.is_disconnected() during idle periods (no file changes). "
+            f"Got: yield_on_timeout={awatch_kwargs[0].get('yield_on_timeout')!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_generator_terminates_on_disconnect_executable(self, board_dir) -> None:
+        """AC6b: When is_disconnected() returns True, generator exits the watch loop — proven by consuming body_iterator."""
+        import asyncio  # noqa: PLC0415
+
+        from owlbear_cockpit.routes.events import events  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        fake_path = board_dir / "tasks" / "task-d2.md"
+        fake_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
+
+        mock_request = AsyncMock()
+        disconnect_calls = [0]
+
+        async def _always_disconnected():
+            disconnect_calls[0] += 1
+            return True
+
+        mock_request.is_disconnected = _always_disconnected
+        awatch_yields = [0]
+
+        async def _infinite_changes(*_args, **_kwargs):
+            while True:
+                awatch_yields[0] += 1
+                yield {(MagicMock(), str(fake_path))}
+
+        with patch("owlbear_cockpit.routes.events.awatch", _infinite_changes):
+            response = await events(mock_request, engine)
+            # Iterate the body_iterator with a timeout — generator must terminate,
+            # not loop infinitely, once is_disconnected() returns True.
+            async with asyncio.timeout(3.0):
+                async for _ in response.body_iterator:
+                    pass
+
+        assert disconnect_calls[0] >= 1, (
+            "is_disconnected() was never called — generator does not check for client disconnect"
+        )
+        assert awatch_yields[0] <= 1, (
+            f"Generator must exit after is_disconnected()=True; "
+            f"awatch was iterated {awatch_yields[0]} times — generator did not break."
+        )
+
+    @pytest.mark.asyncio
+    async def test_generator_continues_on_empty_changeset(self, board_dir) -> None:
+        """AC6c: An empty awatch yield (idle timeout) must NOT terminate the stream; a subsequent real change must still produce an event."""
+        import asyncio  # noqa: PLC0415
+
+        from owlbear_cockpit.routes.events import events  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        real_path = board_dir / "tasks" / "task-real.md"
+        real_path.write_text("---\nid: 1\n---\n", encoding="utf-8")
+
+        mock_request = AsyncMock()
+        mock_request.is_disconnected = AsyncMock(return_value=False)
+
+        # First yield: empty (simulates idle timeout with no file changes)
+        # Second yield: real file change — must reach the generator and produce an event
+        async def _empty_then_real(*_args, **_kwargs):
+            yield set()
+            yield {(MagicMock(), str(real_path))}
+
+        with patch("owlbear_cockpit.routes.events.awatch", _empty_then_real):
+            response = await events(mock_request, engine)
+            events_yielded: list[dict] = []
+            async with asyncio.timeout(3.0):
+                async for chunk in response.body_iterator:
+                    if isinstance(chunk, dict) and chunk.get("event") == "tasks-changed":
+                        events_yielded.append(chunk)
+                    if events_yielded:
+                        break  # got the expected event, stop consuming
+
+        assert events_yielded, (
+            "Generator must continue after an empty changeset (idle timeout), "
+            "then emit the subsequent real change as a 'tasks-changed' event. "
+            "No event was produced — generator likely broke on the empty yield instead of continuing."
         )
 
 
