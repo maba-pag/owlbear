@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.engine import AgentView, CockpitView
+from owlbear_kanban.engine import AgentView
 from owlbear_kanban.models import AgentsConfig, BoardConfig
 
 # ---------------------------------------------------------------------------
@@ -304,50 +304,12 @@ class TestFromAC_AgentViewMethodStubs:
 
 
 # ---------------------------------------------------------------------------
-# CockpitView method surface (implementations are now live)
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_CockpitViewMethodStubs:
-    """CockpitView must expose the required cockpit-facing methods.
-
-    Note: CockpitView methods are implemented. This class keeps interface
-    availability checks; retired stub-phase NotImplementedError assertions were
-    removed after implementations went live.
-    """
-
-    def test_cockpit_view_has_list_tasks_stub(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        assert callable(getattr(view, "list_tasks", None)), "CockpitView.list_tasks missing"
-
-    def test_cockpit_view_has_show_task_stub(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        assert callable(getattr(view, "show_task", None)), "CockpitView.show_task missing"
-
-    def test_cockpit_view_has_edit_task_stub(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        assert callable(getattr(view, "edit_task", None)), "CockpitView.edit_task missing"
-
-    def test_cockpit_view_has_move_task_stub(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        assert callable(getattr(view, "move_task", None)), "CockpitView.move_task missing"
-
-    def test_cockpit_view_has_release_task_stub(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        assert callable(getattr(view, "release_task", None)), "CockpitView.release_task missing"
-
-    def test_cockpit_view_has_board_config_stub(self, tmp_path: Path) -> None:
-        view = CockpitView(_make_engine(tmp_path))
-        assert callable(getattr(view, "board_config", None)), "CockpitView.board_config missing"
-
-
-# ---------------------------------------------------------------------------
-# Role-view accessors on KanbanEngine (engine.agent_view / engine.cockpit_view)
+# Role-view accessor on KanbanEngine (engine.agent_view)
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_RoleViewAccessors:
-    """AC: AgentView and CockpitView constructed at init and accessible via engine accessors."""
+    """AC: AgentView constructed at init and accessible via engine accessor."""
 
     def test_engine_agent_view_returns_agent_view_instance(self, tmp_path: Path) -> None:
         """engine.agent_view() must return an AgentView instance."""
@@ -357,26 +319,11 @@ class TestFromAC_RoleViewAccessors:
             f"engine.agent_view() must return AgentView, got {type(view).__name__}"
         )
 
-    def test_engine_cockpit_view_returns_cockpit_view_instance(self, tmp_path: Path) -> None:
-        """engine.cockpit_view() must return a CockpitView instance."""
-        engine = _make_engine(tmp_path)
-        view = engine.cockpit_view()
-        assert isinstance(view, CockpitView), (
-            f"engine.cockpit_view() must return CockpitView, got {type(view).__name__}"
-        )
-
     def test_engine_agent_view_same_instance_across_calls(self, tmp_path: Path) -> None:
         """engine.agent_view() must return the same cached instance on repeated calls."""
         engine = _make_engine(tmp_path)
         assert engine.agent_view() is engine.agent_view(), (
             "engine.agent_view() must return the same cached AgentView instance"
-        )
-
-    def test_engine_cockpit_view_same_instance_across_calls(self, tmp_path: Path) -> None:
-        """engine.cockpit_view() must return the same cached instance on repeated calls."""
-        engine = _make_engine(tmp_path)
-        assert engine.cockpit_view() is engine.cockpit_view(), (
-            "engine.cockpit_view() must return the same cached CockpitView instance"
         )
 
     def test_engine_agent_view_has_engine_reference(self, tmp_path: Path) -> None:
@@ -385,14 +332,6 @@ class TestFromAC_RoleViewAccessors:
         view = engine.agent_view()
         assert view.engine is engine, (
             "AgentView.engine must reference the engine that constructed it"
-        )
-
-    def test_engine_cockpit_view_has_engine_reference(self, tmp_path: Path) -> None:
-        """CockpitView returned by engine.cockpit_view() must hold a reference to the engine."""
-        engine = _make_engine(tmp_path)
-        view = engine.cockpit_view()
-        assert view.engine is engine, (
-            "CockpitView.engine must reference the engine that constructed it"
         )
 
 

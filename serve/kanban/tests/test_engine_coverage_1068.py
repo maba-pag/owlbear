@@ -258,10 +258,15 @@ class TestFromAC_ValidateEngineConfig:
             _validate_engine_config(config)
 
     def test_agent_map_missing_status_raises(self) -> None:
+        """_validate_engine_config must NOT raise for incomplete agent_map.
+
+        Completeness check moved to pick_tasks (#1221); _validate_engine_config
+        no longer validates agent_map coverage — it must accept partial maps.
+        """
         config = self._make_valid_config()
         config.agents.agent_map = {"research": "r"}  # missing "done"
-        with pytest.raises(ConfigError, match="agent_map"):
-            _validate_engine_config(config)
+        # RED: currently raises ConfigError("agent_map ..."); after fix must not raise
+        _validate_engine_config(config)  # must not raise
 
     def test_invalid_claim_timeout_raises(self) -> None:
         config = self._make_valid_config()

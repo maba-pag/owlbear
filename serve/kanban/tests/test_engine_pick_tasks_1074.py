@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.errors import ValidationError
 from owlbear_kanban.models import PickTasksResponse
@@ -755,7 +756,7 @@ class TestFromAC_PickTasksViewScope:
         """
         board = _make_board(tmp_path)
         engine = KanbanEngine(board, activity_log=False)
-        cockpit = engine.cockpit_view()
+        cockpit = CockpitView(engine)
         assert not hasattr(cockpit, "pick_tasks"), (
             "CockpitView must NOT expose pick_tasks — it is an AgentView-only operation"
         )

@@ -23,11 +23,11 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
-from owlbear_kanban.engine import AgentView, CockpitView
+from owlbear_kanban.engine import AgentView
 from owlbear_kanban.models import (
     ListTasksResponse,
-    NotFoundError,
     ShowTaskResponse,
     ValidationError,
 )
@@ -324,110 +324,6 @@ class TestFromAC_ShowTaskDepStatus:
         assert resp.dep_status == "blocked", (
             f"blocked > redirect per §3.3; expected 'blocked' but got {resp.dep_status!r}"
         )
-
-
-# ---------------------------------------------------------------------------
-# AC-cv-list: CockpitView.list_tasks — identical signature and behaviour
-# Expectation: CockpitView.list_tasks delegates to engine with same contract.
-# Current state: raises NotImplementedError → tests FAIL.
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_CockpitViewListTasks:
-    """AC-cv-list: CockpitView.list_tasks has identical signature/behaviour to AgentView."""
-
-    def test_cockpit_list_tasks_returns_list_tasks_response(
-        self, tmp_path: Path
-    ) -> None:
-        """CockpitView.list_tasks() returns a ListTasksResponse."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="Task A")
-        view = _make_cockpit_view(kanban_dir)
-        resp = view.list_tasks()
-        assert isinstance(resp, ListTasksResponse), (
-            f"CockpitView.list_tasks must return ListTasksResponse; got {type(resp)!r}"
-        )
-
-    def test_cockpit_list_tasks_status_filter_works(self, tmp_path: Path) -> None:
-        """CockpitView.list_tasks(status='todo') returns matching tasks only."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="Todo Task", status="todo")
-        _write_task(kanban_dir, task_id=2, title="Research Task", status="research")
-        view = _make_cockpit_view(kanban_dir)
-        resp = view.list_tasks(status="todo")
-        ids = [t.id for t in resp.tasks]
-        assert 1 in ids, "todo task must appear in list_tasks(status='todo')"
-        assert 2 not in ids, "research task must not appear in list_tasks(status='todo')"
-
-    def test_cockpit_list_tasks_ids_filter_works(self, tmp_path: Path) -> None:
-        """CockpitView.list_tasks(ids=[N]) returns only the requested task."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="Task A")
-        _write_task(kanban_dir, task_id=2, title="Task B")
-        view = _make_cockpit_view(kanban_dir)
-        resp = view.list_tasks(ids=[1])
-        ids = [t.id for t in resp.tasks]
-        assert ids == [1], f"ids=[1] must return exactly task 1; got {ids!r}"
-
-    def test_cockpit_list_tasks_ids_exclusive_with_status_raises(
-        self, tmp_path: Path
-    ) -> None:
-        """CockpitView.list_tasks(ids=[1], status='todo') → ERR_IDS_EXCLUSIVE."""
-        view = _make_cockpit_view(_make_board(tmp_path))
-        with pytest.raises(ValidationError) as exc_info:
-            view.list_tasks(ids=[1], status="todo")
-        assert exc_info.value.code == "ERR_IDS_EXCLUSIVE"
-
-
-# ---------------------------------------------------------------------------
-# AC-cv-show: CockpitView.show_task — identical signature and behaviour
-# Expectation: CockpitView.show_task(id, section) delegates to engine.
-# Current state: raises NotImplementedError → tests FAIL.
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_CockpitViewShowTask:
-    """AC-cv-show: CockpitView.show_task has identical signature/behaviour to AgentView."""
-
-    def test_cockpit_show_task_returns_show_task_response(self, tmp_path: Path) -> None:
-        """CockpitView.show_task(id) returns a ShowTaskResponse."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="Show Me")
-        view = _make_cockpit_view(kanban_dir)
-        resp = view.show_task(1)
-        assert isinstance(resp, ShowTaskResponse), (
-            f"CockpitView.show_task must return ShowTaskResponse; got {type(resp)!r}"
-        )
-        assert resp.id == 1
-
-    def test_cockpit_show_task_section_filter_returns_filtered_body(
-        self, tmp_path: Path
-    ) -> None:
-        """CockpitView.show_task(id, section='Goals') returns section-filtered body."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(
-            kanban_dir,
-            task_id=2,
-            title="Sectioned",
-            body="## Goals\nGoal content.\n\n## Notes\nNote content.\n",
-        )
-        view = _make_cockpit_view(kanban_dir)
-        view.engine.list_tasks()  # warm _id_to_filename index
-        resp = view.show_task(2, section="Goals")
-        assert resp.body is not None, "Section-matched body must not be None"
-        assert "Goal content." in resp.body
-        assert "Note content." not in resp.body, (
-            "Section filter must exclude unmatched headings"
-        )
-
-    def test_cockpit_show_task_not_found_raises_err_not_found(
-        self, tmp_path: Path
-    ) -> None:
-        """CockpitView.show_task(99999) → NotFoundError(ERR_NOT_FOUND)."""
-        view = _make_cockpit_view(_make_board(tmp_path))
-        with pytest.raises(NotFoundError) as exc_info:
-            view.show_task(99999)
-        assert exc_info.value.code == "ERR_NOT_FOUND"
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ Covers:
   - D29: claim_timeout extended format — Ns and Nd accepted without error
   - D33: engine constructor has no agent_name parameter
   - D63: agent_compatibility not symmetric → ConfigError at init
-  - Role views: AgentView + CockpitView constructable from a valid engine
+    - Role views: AgentView constructable from a valid engine
 
 All tests FAIL in RED phase — validation logic and role-view classes are not yet
 implemented in owlbear_kanban.engine.
@@ -229,12 +229,12 @@ class TestFromAC_AgentCompatibilitySymmetry:
 
 
 # ---------------------------------------------------------------------------
-# Role views — AgentView + CockpitView constructable from a valid engine
+# Role views — AgentView constructable from a valid engine
 # ---------------------------------------------------------------------------
 
 
 class TestFromAC_ValidConfigAndRoleViews:
-    """Valid config constructs engine + AgentView + CockpitView without error."""
+    """Valid config constructs engine + AgentView without error."""
 
     def test_agent_view_constructable_from_valid_engine(self, tmp_path: Path) -> None:
         from owlbear_kanban.engine import AgentView  # noqa: PLC0415
@@ -243,14 +243,6 @@ class TestFromAC_ValidConfigAndRoleViews:
         engine = KanbanEngine(kanban_dir)
         agent_view = AgentView(engine)
         assert agent_view is not None
-
-    def test_cockpit_view_constructable_from_valid_engine(self, tmp_path: Path) -> None:
-        from owlbear_kanban.engine import CockpitView  # noqa: PLC0415
-
-        kanban_dir = _make_board(tmp_path)
-        engine = KanbanEngine(kanban_dir)
-        cockpit_view = CockpitView(engine)
-        assert cockpit_view is not None
 
 
 # ---------------------------------------------------------------------------
