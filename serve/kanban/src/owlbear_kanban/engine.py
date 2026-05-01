@@ -111,7 +111,7 @@ def _parse_duration(s: str) -> timedelta:
     return timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
 
 
-def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
+def _validate_engine_config(config: BoardConfig) -> None:
     """Validate engine-specific config invariants required at engine init."""
     statuses = config.pipeline.statuses
     priorities = config.pipeline.priorities
@@ -142,13 +142,6 @@ def _validate_engine_config(config: BoardConfig) -> None:  # noqa: C901
             user_message=(
                 f"terminal_status {terminal_status!r} must equal statuses[-1] ({statuses[-1]!r})"
             ),
-        )
-
-    missing_statuses = [status for status in statuses if status not in config.agents.agent_map]
-    if missing_statuses:
-        raise ConfigError(
-            code="ERR_INVALID_STATUS",
-            user_message=f"agent_map missing status entries: {missing_statuses}",
         )
 
     # Validate timeout format eagerly at engine init.
@@ -2272,19 +2265,22 @@ class AgentView:
     ) -> PickTasksResponse:
         """Select dispatchable tasks and arrange them into dependency-disjoint waves.
 
-        Runs a five-step pipeline:
+          Runs a six-step pipeline:
 
-        1. **Resolve** — attempt to resolve any pending Decision Requests via
+          1. **Validate** — ensure every status in ``config.pipeline.statuses``
+              has an ``agent_map`` entry.
+
+          2. **Resolve** — attempt to resolve any pending Decision Requests via
            ``owlbear_kanban.decisions.resolve_pending_drs``; exceptions are
            suppressed so dispatch is never blocked.
-        2. **Filter** — exclude claimed, archived, ``blocked=True``, and
+          3. **Filter** — exclude claimed, archived, ``blocked=True``, and
            ``dep_status="blocked"`` tasks.
-        3. **Sort** — deterministic ordering: ``priority_rank ASC``,
+          4. **Sort** — deterministic ordering: ``priority_rank ASC``,
            age (oldest first) ``DESC``, ``id ASC``.
-        4. **Greedy wave assembly** — fill waves respecting three constraints:
+          5. **Greedy wave assembly** — fill waves respecting three constraints:
            wave size cap, dependency disjointness (no intra-wave dep edges),
            and agent-bucket compatibility.
-        5. **Agent assignment** — each :class:`DispatchEntry` carries the full
+          6. **Agent assignment** — each :class:`DispatchEntry` carries the full
            ``BoardConfig.agent_map`` value for the task's status.
 
         Args:
@@ -2302,6 +2298,8 @@ class AgentView:
             ValidationError: ``wave_size < 1``, ``max_waves < 1``, or the
                              effective wave size resolved from config is
                              ``< 1`` (``ERR_INVALID_WAVE_PARAM``).
+            ConfigError: when ``agent_map`` is missing status entries
+                         (``ERR_INVALID_STATUS``).
         """
         if max_waves < 1:
             raise ValidationError(
@@ -2320,6 +2318,15 @@ class AgentView:
             raise ValidationError(
                 code="ERR_INVALID_WAVE_PARAM",
                 user_message="wave_size must be >= 1",
+            )
+
+        missing_statuses = [
+            status for status in config.pipeline.statuses if status not in config.agents.agent_map
+        ]
+        if missing_statuses:
+            raise ConfigError(
+                code="ERR_INVALID_STATUS",
+                user_message=f"agent_map missing status entries: {missing_statuses}",
             )
 
         try:
