@@ -73,6 +73,29 @@ describe('TestFromAC_PausedOption', () => {
     })
   })
 
+  it('contract: isFetching and hasFetched have correct lifecycle values — would fail if either were dropped from UsePollingFetchResult', async () => {
+    // Discriminating proof for "UsePollingFetchResult unchanged" (AC1).
+    // Uses a slow fetch so we can assert the in-flight state before resolution.
+    const { fn: slowFetch, resolve } = makeSlowFetch()
+    vi.stubGlobal('fetch', slowFetch)
+
+    const { result } = renderHook(() =>
+      usePollingFetch('/api/tasks', { intervalMs: 1_000 }),
+    )
+    await act(async () => {}) // effects settled; mount fetch is in-flight
+
+    // In-flight: isFetching must be true, hasFetched must be false.
+    // If either field were dropped, these assertions would throw (undefined ≠ boolean).
+    expect(result.current.isFetching).toBe(true)
+    expect(result.current.hasFetched).toBe(false)
+    expect(typeof result.current.refetch).toBe('function')
+
+    // After fetch resolves: isFetching must flip false, hasFetched must flip true.
+    await act(async () => { resolve() })
+    expect(result.current.isFetching).toBe(false)
+    expect(result.current.hasFetched).toBe(true)
+  })
+
   // ─── AC2: Interval callback skips poll() when paused ─────────────────────
 
   describe('AC2: interval skips poll when paused=true', () => {
@@ -308,6 +331,42 @@ describe('TestFromAC_PausedOption', () => {
 
       // Confirm poll resumes on the next tick
       await act(async () => { vi.advanceTimersByTime(1_000) })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('timer-stability: interval fires at original timer offset after pause/unpause — would fail if implementation recreated the interval on toggle', async () => {
+      // Ref-based approach: pausedRef updates each render, timer stays stable.
+      // Conditional-interval approach: clearInterval+setInterval on each toggle → timer resets.
+      // Test: pause at t=500ms, unpause at t=600ms, advance to t=1000ms.
+      //   Stable timer:      fires at t=1000ms (original 1000ms tick) → fetch #2.
+      //   Recreated timer:   fires at t=1600ms (1000ms from toggle at t=600ms) → still 1 fetch.
+      const fetchMock = makeOkFetch()
+      vi.stubGlobal('fetch', fetchMock)
+
+      const { rerender } = renderHook(
+        (props: UsePollingFetchOptions<unknown>) => usePollingFetch('/api/tasks', props),
+        { initialProps: { intervalMs: 1_000, paused: false } as UsePollingFetchOptions<unknown> },
+      )
+      await act(async () => {})
+      expect(fetchMock).toHaveBeenCalledTimes(1) // mount
+
+      // t=500ms: interval not yet due
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      // Pause at t=500ms
+      rerender({ intervalMs: 1_000, paused: true })
+
+      // t=600ms: still paused
+      await act(async () => { vi.advanceTimersByTime(100) })
+
+      // Unpause at t=600ms
+      rerender({ intervalMs: 1_000, paused: false })
+
+      // t=1000ms: original 1000ms tick fires
+      // Stable: poll() called → fetch #2
+      // Recreated (new timer from t=600ms): fires at t=1600ms → no second fetch yet
+      await act(async () => { vi.advanceTimersByTime(400) })
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })
 
