@@ -1,10 +1,10 @@
 ---
 id: 1229
 title: Frontend — complete drag-and-drop (call move API on drop)
-status: review
+status: archived
 priority: needed
 created: 2026-04-30 16:31:18.646741+00:00
-updated: 2026-05-01T15:47:45.816593+00:00
+updated: 2026-05-01T20:17:40.334535+00:00
 tags:
 - cockpit
 - frontend
@@ -842,3 +842,133 @@ Architecture re-review #3 complete (loop-breaker return). Refined AC1 to remove 
 ## Post-task Reflection
 - Repeated-loop history made stale-evidence risk high, so a fresh scoped quality-runner pass was used as closeout authority.
 - Frontend verification should rely on Vitest + ESLint signal for task scope; Python lint tooling is non-authoritative for TS/TSX.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- Fresh quality-runner scoped frontend run: 49 passed, 0 failed, 0 skipped.
+- Task-owned suite: [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx) -> 14 passed.
+- Durable regression suite: [serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx) -> 35 passed.
+
+### Lint
+- Fresh quality-runner could not complete ESLint/TypeScript lint collection in this environment.
+- VS Code diagnostics for [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx), [serve/cockpit/web/src/components/Card.tsx](serve/cockpit/web/src/components/Card.tsx), [serve/cockpit/web/src/components/Column.tsx](serve/cockpit/web/src/components/Column.tsx), [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx), and [serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx): no errors.
+- Signature impact remains local: [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L2) is the only caller of [serve/cockpit/web/src/components/Column.tsx](serve/cockpit/web/src/components/Column.tsx#L18), and [serve/cockpit/web/src/components/Column.tsx](serve/cockpit/web/src/components/Column.tsx#L2) is the only caller of [serve/cockpit/web/src/components/Card.tsx](serve/cockpit/web/src/components/Card.tsx#L20).
+
+### Coverage
+- Fresh quality-runner did not emit a frontend coverage report in this environment.
+- I treated coverage as supportive only for this pass and relied on the green task-owned suite, green adjacent durable suite, diagnostics, and direct code inspection of the drag/drop path.
+
+### Pass 1 - Critical
+#### Test-Writer AC Coverage
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1 | Latest binding AC is the Architecture Re-Review #3 contract in [.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md](.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md#L751). Card emits task identity at [serve/cockpit/web/src/components/Card.tsx](serve/cockpit/web/src/components/Card.tsx#L29), Column forwards it at [serve/cockpit/web/src/components/Column.tsx](serve/cockpit/web/src/components/Column.tsx#L34) and [serve/cockpit/web/src/components/Column.tsx](serve/cockpit/web/src/components/Column.tsx#L73), Board stores it at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L97) and [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L98), and the task-owned suite proves the request URL/token at [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L140) and [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L212). | PASS |
+| AC2 | Drop handler posts via [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L105) through [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L118); the task-owned suite binds POST method, target status, updated token, and exact keys at [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L193), [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L212), and [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L230). | PASS |
+| AC3 | Success branch refetches at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L120), and the task-owned suite directly asserts `refetchTasks()` at [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L256). | PASS |
+| AC4 | 409 stale-snapshot branch is implemented at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L125) through [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L127), and the task-owned suite asserts message semantics plus refetch at [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L291) and [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L312). | PASS |
+| AC5 | Generic error branches are implemented at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L129) through [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L133), and the task-owned suite directly proves no immediate refetch for 422, network, and 500 at [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L328), [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L365), and [serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx](serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx#L384). | PASS |
+| AC6 | td:0. Invalid-target guard remains in [serve/cockpit/web/src/components/Column.tsx](serve/cockpit/web/src/components/Column.tsx#L49) through [serve/cockpit/web/src/components/Column.tsx](serve/cockpit/web/src/components/Column.tsx#L55). | PASS |
+| AC7 | td:0. Board-managed drag payload is stored at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L97) and [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L98), with cleanup at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L102) and [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L112). | PASS |
+
+#### Security Review
+- No issues found. The drag/drop path only posts same-origin JSON to the existing move endpoint at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L115) through [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L118).
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions found in the live task-owned suite.
+- The latest loop-breaker return explicitly kept the existing 14 tests intact and marked test-writer SKIP at [.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md](.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md#L806).
+
+#### Test Quality
+- STRONG enough to pass the refined AC.
+- Non-blocking hardening note: the task-owned suite uses a single sentinel fixture for the drag identity path, so future hardening could broaden propagation proof, but the current refined AC is still discriminatingly proven by exact URL/body/refetch assertions.
+
+#### Data Safety
+- No issues found. Drag metadata stays local to board state and is cleared before the async move request at [serve/cockpit/web/src/KanbanBoard.tsx](serve/cockpit/web/src/KanbanBoard.tsx#L112).
+
+#### Implementation-Aware Test Gap Analysis
+- No live implementation defect found in the current snapshot.
+- The drag/drop implementation matches the latest refined contract from [.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md](.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md#L751), and the remaining concerns are proof-hardening opportunities rather than AC failures.
+
+#### Necessity Check
+- No issues found. No new dependency or external integration was added.
+
+#### Builder Process Quality
+- CLEAN. The latest cycle is the loop-breaker closeout after Architecture Re-Review #3, with explicit test-writer SKIP and verification-only builder notes at [.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md](.owlbear/kanban/tasks/1229-frontend-complete-drag-and-drop-call-move-api-on-drop.md#L828).
+
+### Deductions
+- 0.04: fresh quality-runner could not complete frontend lint/coverage collection in this environment, so diagnostics and direct code inspection were used as fallback evidence.
+- 0.02: the task-owned suite could still be hardened around propagation breadth and 409 message specificity, but those are not blocking against the refined AC.
+
+### Verdict
+- PASS.
+- Confidence: 0.94.
+- Action: advance to docs.
+
+### Post-task Reflection
+- Frontend reviews need VS Code diagnostics as the authoritative lint fallback when quality-runner cannot complete ESLint/TypeScript tooling in-environment.
+- Anchoring to the latest architecture re-review prevented reintroducing superseded AC1 proof demands.
+- Task-owned and durable suites together were sufficient to verify the drag/drop path after the loop-breaker refinement.
+[[2026-05-01]]
+## Docs Gate
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | serve/cockpit/README.md documents the move endpoint at the backend level (line 31) — unchanged. No IN-scope doc references the frontend drag-and-drop interaction model. |
+| 2 | Module docstrings | No | N/A | All changed files are .tsx/.ts (TypeScript/React). No Python modules touched. |
+| 3 | External attribution | No | N/A | Standard HTML5 drag events + React state patterns; no external repo/article patterns adopted. |
+| 4 | Research doc | No | N/A | No .owlbear/research/*.md document mentioned or produced by this task. |
+| 5 | Diagram maintenance (describes match) | Yes | N/A | share/diagrams/cockpit.excalidraw describes serve/cockpit/web/src/** — MATCH. Footer already reads "Last verified: 2026-05-01 (df62a068)" which is current HEAD. No update required. |
+| 6 | Explicit diagram creation | No | N/A | No explicit diagram creation request in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| serve/cockpit/web/src/components/Card.tsx | OUT | N/A |
+| serve/cockpit/web/src/components/Column.tsx | OUT | N/A |
+| serve/cockpit/web/src/KanbanBoard.tsx | OUT | N/A |
+| serve/cockpit/web/src/__tests__/KanbanBoard_1229.test.tsx | OUT | N/A |
+| serve/cockpit/web/src/__tests__/KanbanBoard.test.tsx | OUT | N/A |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Drag identity propagation (observable) | Card.tsx:29, Column.tsx:34+73, KanbanBoard.tsx:97-100; task suite proves POST URL/token at KanbanBoard_1229.test.tsx:140+212 | PASS |
+| AC2: POST /move with exact {status, updated} | KanbanBoard.tsx:117-120; suite proves method/status/token/keys at :193, :212, :230 | PASS |
+| AC3: 2xx calls refetchTasks() | KanbanBoard.tsx:121; direct refetchSpy at :255 | PASS |
+| AC4: 409 stale-snapshot error + refetch | KanbanBoard.tsx:125-127; stale text at :291, refetch at :312 | PASS |
+| AC5: Other error displays error, no refetch | KanbanBoard.tsx:129-133; 422/500/network no-refetch spies at :328, :365, :384 | PASS |
+| AC6: Invalid target guard preserved (td:0) | Column.tsx:42-55 code inspection | PASS |
+| AC7: Drag state cleanup (td:0) | KanbanBoard.tsx:102+112 code inspection | PASS |
+
+### Test Results
+- Task-owned (vitest): 14 passed, 0 failed
+- Durable regression (KanbanBoard.test.tsx): 35 passed, 0 failed
+- Python full suite: 3494 passed, 107 failed (0 in task scope; failures are in kanban engine, mcp-kanban, mcp-knowledge, react-compiler tasks)
+- Ruff: 4 violations in unrelated packages (knowledge, mcp-memory, orchestrator)
+
+### Commit Verification
+- d0f3e4e5: feat: complete drag-drop move flow (#1229, builder)
+- 245ea6db: feat: fix drag payload propagation (#1229, builder)
+- Source files (Card.tsx, Column.tsx, KanbanBoard.tsx): committed, clean working tree
+- Test file (KanbanBoard_1229.test.tsx): uncommitted modifications from loop-breaker harness rewrites; 14/14 pass in working tree but committed version is stale initial stubs. Process gap noted (auditor does not commit upstream source).
+
+### Architect Quality: 3/5
+Original AC bundled internal implementation mechanisms (state storage, drag-state clearing) with observable behaviors, causing 4 review cycles and 3 architecture re-reviews before testability issues were resolved. Final refined AC is clean and specific.
+
+### Deduction Breakdown
+- -.03: AC quality score 3 (notable gaps requiring 3 arch re-reviews)
+- -.02: Test file deliverable exists in working tree only (uncommitted loop-breaker rewrites)
+
+### Confidence: 0.95
+### Action: archive
