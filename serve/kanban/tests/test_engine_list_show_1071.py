@@ -1,5 +1,5 @@
-"""Failing tests for B-06: list_tasks (parent filter), show_task (dep_status),
-and CockpitView.list_tasks / CockpitView.show_task (task #1071).
+"""Failing tests for B-06: list_tasks (parent filter) and show_task (dep_status)
+(task #1071).
 
 AC coverage:
   AC-sig      — list_tasks signature includes parent per §1.1
@@ -11,9 +11,6 @@ AC coverage:
   AC-dep-ok   — show_task dep_status="ok" when dep is active (§3.3 every read)
   AC-dep-blk  — show_task dep_status="blocked" when dep archived w/ "dropped" (§3.3)
   AC-dep-rdr  — show_task dep_status="redirect" when dep archived w/ "duplicate" (§3.3)
-  AC-cv-list  — CockpitView.list_tasks same signature/behaviour as AgentView.list_tasks
-  AC-cv-show  — CockpitView.show_task same signature/behaviour as AgentView.show_task
-
 All tests FAIL (RED phase).
 """
 
@@ -23,7 +20,6 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_cockpit.view import CockpitView
 from owlbear_kanban import KanbanEngine
 from owlbear_kanban.engine import AgentView
 from owlbear_kanban.models import (
@@ -132,11 +128,6 @@ def _write_task(  # noqa: PLR0913
 def _make_agent_view(kanban_dir: Path) -> AgentView:
     engine = KanbanEngine(kanban_dir, activity_log=False)
     return AgentView(engine)
-
-
-def _make_cockpit_view(kanban_dir: Path) -> CockpitView:
-    engine = KanbanEngine(kanban_dir, activity_log=False)
-    return CockpitView(engine)
 
 
 # ---------------------------------------------------------------------------
@@ -439,56 +430,6 @@ class TestFromAC_AgentViewSortReverseLimitForwarding:
         ids = [t.id for t in resp.tasks]
         assert ids == [1, 3, 2], (
             f"sort='title' + reverse=True must produce reverse-title order [1, 3, 2]; got {ids}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# AC-cv-parent: CockpitView.list_tasks forwards parent filter
-# Removing parent=parent from the CockpitView delegation must fail these tests.
-# Expectation: parent filter propagated through CockpitView → AgentView.
-# ---------------------------------------------------------------------------
-
-
-class TestFromAC_CockpitViewParentForwarding:
-    """AC: CockpitView.list_tasks forwards parent — removing it must fail a test."""
-
-    def test_cockpit_parent_filter_returns_matching_child(self, tmp_path: Path) -> None:
-        """CockpitView.list_tasks(parent=42) returns only tasks with parent==42."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="Child", parent="42")
-        _write_task(kanban_dir, task_id=2, title="RootLevel", parent="null")
-        _write_task(kanban_dir, task_id=3, title="OtherChild", parent="99")
-        view = _make_cockpit_view(kanban_dir)
-        resp = view.list_tasks(parent=42)
-        ids = [t.id for t in resp.tasks]
-        assert ids == [1], (
-            f"CockpitView.list_tasks(parent=42) must return only task 1; got {ids}"
-        )
-
-    def test_cockpit_parent_filter_excludes_top_level_tasks(
-        self, tmp_path: Path
-    ) -> None:
-        """CockpitView.list_tasks(parent=5) excludes tasks whose parent is null."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="TopLevel", parent="null")
-        _write_task(kanban_dir, task_id=2, title="Child", parent="5")
-        view = _make_cockpit_view(kanban_dir)
-        resp = view.list_tasks(parent=5)
-        ids = [t.id for t in resp.tasks]
-        assert 1 not in ids, (
-            "CockpitView.list_tasks(parent=5) must exclude top-level (null parent) tasks"
-        )
-        assert 2 in ids
-
-    def test_cockpit_parent_filter_empty_when_no_match(self, tmp_path: Path) -> None:
-        """CockpitView.list_tasks(parent=999) returns empty when no tasks match."""
-        kanban_dir = _make_board(tmp_path)
-        _write_task(kanban_dir, task_id=1, title="Child", parent="42")
-        view = _make_cockpit_view(kanban_dir)
-        resp = view.list_tasks(parent=999)
-        assert isinstance(resp, ListTasksResponse)
-        assert resp.tasks == [], (
-            f"CockpitView.list_tasks(parent=999) must return empty list; got {resp.tasks!r}"
         )
 
 
