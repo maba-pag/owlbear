@@ -284,4 +284,45 @@ describe('TestFromAC_UseBoardHealthTransition', () => {
     await act(async () => { vi.advanceTimersByTime(3000) })
     expect(result.current.health).toBe('yellow')
   })
+
+  it('health recovers to green after a successful poll following yellow degradation — removing markHealthy() from onSuccess would leave lastHealthyAt stale and health stuck at yellow (AC1: discriminating recovery path)', async () => {
+    // Phase control: mount success → fail polls degrade to yellow → recovery
+    // success resets lastHealthyAt via markHealthy().
+    //
+    // Discriminating: WITHOUT markHealthy(), lastHealthyAt stays at t=0.
+    // At t=9 000ms: elapsed = 9 000 - 0 = 9 000ms → computeHealth(9000) = 'red' (FAIL).
+    // WITH markHealthy():   lastHealthyAt = 9 000ms → elapsed ≈ 0 → 'green' (PASS).
+    let phase: 'success' | 'fail' | 'recover' = 'success'
+    const fetchMock = vi.fn((url: string) => {
+      if ((url as string).includes('/api/board')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(BOARD) })
+      }
+      if (phase === 'fail') {
+        return Promise.reject(new Error('network failure'))
+      }
+      const mtime = phase === 'recover' ? 2 : 1
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ tasks: [], mtime }) })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => useBoard())
+    await act(async () => {})
+    // Mount success → lastHealthyAt = t=0 → health = green
+    expect(result.current.health).toBe('green')
+
+    // t = 3 000ms: first failing poll → elapsed = 3 000ms < 6 000ms → green
+    phase = 'fail'
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(result.current.health).toBe('green')
+
+    // t = 6 000ms: second failing poll → elapsed = 6 000ms → yellow
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(result.current.health).toBe('yellow')
+
+    // t = 9 000ms: recovery poll succeeds → markHealthy() resets lastHealthyAt
+    // → elapsed ≈ 0 → computeHealth(0) = 'green'
+    phase = 'recover'
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(result.current.health).toBe('green')
+  })
 })
