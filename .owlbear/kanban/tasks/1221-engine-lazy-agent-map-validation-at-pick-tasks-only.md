@@ -1,10 +1,10 @@
 ---
 id: 1221
 title: Engine — lazy agent_map validation at pick_tasks only
-status: done
+status: review
 priority: needed
 created: 2026-04-30 16:31:18.568412+00:00
-updated: 2026-04-30T22:50:37.685048+00:00
+updated: 2026-05-01T00:50:02.731771+00:00
 tags:
 - cockpit
 - kanban-engine
@@ -12,7 +12,7 @@ parent:
 depends_on: []
 blocked: false
 block_reason:
-claimed_at: 2026-04-30T22:50:37.685048+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -22,9 +22,10 @@ Move agent_map completeness validation from engine __init__ to pick_tasks() so n
 
 ## Acceptance Criteria
 - [ ] `KanbanEngine.__init__` no longer raises ConfigError for missing agent_map entries (td:1)
-- [ ] `pick_tasks()` validates agent_map completeness at the top of the method, before filtering/sorting/wave assembly — raises `ConfigError(ERR_INVALID_STATUS)` when any status in `config.pipeline.statuses` is absent from `config.agents.agent_map` (td:2)
+- [ ] `pick_tasks()` validates agent_map completeness immediately after the effective-wave-size guard, before the `resolve_pending_drs` call and before filtering/sorting/wave assembly — raises `ConfigError(ERR_INVALID_STATUS)` when any status in `config.pipeline.statuses` is absent from `config.agents.agent_map` (td:2)
 - [ ] Cockpit starts successfully with `agent_map: {}` in grouped config (td:1)
 - [ ] MCP pick_tasks raises ConfigError with missing-entry message when agent_map is incomplete (td:1)
+- [ ] `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` updated to assert that `_validate_engine_config` does NOT raise when `agent_map` is incomplete — the completeness check was moved to `pick_tasks`; `_validate_engine_config` no longer validates agent_map coverage (td:1)
 
 ## Files
 - `serve/kanban/src/owlbear_kanban/engine.py`
@@ -317,3 +318,142 @@ Post-task reflection:
 
 ### Scratch Files
 None — no `1221-*` scratch files found.
+[[2026-04-30]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: `__init__` no longer raises ConfigError for missing agent_map entries | `_validate_engine_config` at engine.py:112 no longer contains agent_map check; constructor still calls helper at engine.py:446; task tests pass. | PASS |
+| AC2: `pick_tasks()` validates at top before filtering/sorting/wave assembly, raises `ERR_INVALID_STATUS` | Guard at engine.py:2330–2336; `test_pick_tasks_validates_before_list_tasks_is_called` proves ordering via monkeypatched list_tasks (call count == 0 after ConfigError). | PASS |
+| AC3: Cockpit starts with `agent_map: {}` in grouped config | Cockpit startup path constructs `KanbanEngine(..., agent_name="cockpit")` at cockpit/main.py:72; task tests pass; cockpit launch regression suite passed. | PASS |
+| AC4: MCP `pick_tasks` surfaces missing-entry ConfigError as ToolError | MCP adapter at server.py:74/658 maps KanbanError.user_message → ToolError; `test_mcp_pick_tasks_tool_error_message_names_all_missing_statuses` asserts all 4 missing statuses individually. | PASS |
+
+### Test Results
+- **Full suite (quality-runner):** 3510 passed, 138 failed, 8 skipped — pytest exit 1
+- **Task suite:** 13 passed, 0 failed (tests/test_engine_lazy_agent_map_1221.py) — green
+- **Lint:** clean (engine.py, task test file, serve/kanban/README.md)
+- **Coverage DB:** corruption detected during report; does not affect pass/fail verdict
+
+### Full-Suite Regression Analysis
+Of the 138 failures, 137 are pre-existing failures from other in-flight tasks (#1223 sessions envelope, #1202, #1201, #1225, task 1068 other tests, etc.) that pre-date or are independent of #1221.
+
+**1 failure is directly caused by #1221:**
+- `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises`
+
+This test (last modified by task #1174's builder at 3fc7f105 — before #1221) asserts that `KanbanEngine.__init__` raises `ConfigError` matching `"agent_map"` when entries are missing. After commit 151ab35d, `__init__` deliberately no longer raises → test fails. This is a cross-task regression introduced by #1221's implementation. The builder changed engine.py but did not update the stale test from task #1068.
+
+The architect's notes acknowledged "test suites encoding old behavior will be updated by builder" — this did not happen for test_engine_coverage_1068.py.
+
+### Commit Integrity
+- 151ab35d — `fix: defer agent_map validation to pick_tasks (#1221, builder)` — engine.py only, 20+/8− lines ✓
+- 62c1fed8 — `test: strengthen AC2 ordering proof and AC4 exact message assertion (#1221, test-writer)` — task test file only, 65 insertions ✓
+- 0de43485 — `docs: update pick_tasks docs for lazy agent_map validation (#1221, doc-writer)` — README.md, engine.py (docstring), kanban.excalidraw ✓
+
+### Architect Quality: 4/5
+AC is specific, placement-constrained, and well-scoped. Minor gap: AC1 did not note that existing init-time agent_map validation tests (test_engine_coverage_1068.py) needed migration/removal as part of the deliberate contract change. This omission contributed to the builder leaving a stale test.
+
+### Deductions
+| Criterion | Deduction |
+|-----------|-----------|
+| Cross-task regression: test_engine_coverage_1068.py::test_agent_map_missing_status_raises broken by 151ab35d | −0.05 |
+| No direct diff access; integrity verified via current snapshot + reflog | −0.02 |
+
+### Confidence: 0.93
+
+### Action: Reject to backlog
+
+**Required fix:** Update `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` to reflect the new contract: assert that `__init__` does NOT raise for incomplete agent_map, or convert the test to verify that `pick_tasks` raises instead. No source change should be needed.
+[[2026-05-01]]
+## Architecture Review (Round 2)
+### Context
+Task returned from auditor via backlog-reject. Auditor required: update stale test in `test_engine_coverage_1068.py`. Implementation also regressed — a concurrent in-flight task overwrote `engine.py`; current live code still has the agent_map check in `_validate_engine_config` (line 143) and `pick_tasks` has no guard. Builder must re-implement.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | Same as Round 1 — one validation moved from init to use-site |
+| Interface clarity | PASS | AC2 refined: placement now specifies "after effective-wave-size guard, before resolve_pending_drs" |
+| Dependency correctness | PASS | Single-module change, no new deps |
+| Module layering | PASS | Validation stays in engine.py |
+| TDD compliance | PASS | Tests in test_engine_lazy_agent_map_1221.py exist (currently RED due to implementation regression) |
+| KISS/YAGNI | PASS | No scope change |
+| Premise challenge | PASS | Cockpit blocking remains the valid reason; unchanged |
+| Pattern consistency | PASS | Validation-at-use-site, same as wave_size check |
+| Security surface | PASS | No new boundaries |
+| Single domain | PASS | kanban-engine only |
+
+### AC Refinements Applied
+| AC | Change | Reason |
+|----|--------|--------|
+| AC2 | Added "immediately after the effective-wave-size guard, before the `resolve_pending_drs` call" to pin exact placement | Challenger: prior wording left placement ambiguous relative to resolve_pending_drs |
+| AC5 (new) | `test_engine_coverage_1068.py::test_agent_map_missing_status_raises` must assert non-raising for incomplete agent_map | Auditor required fix; challenger confirmed it was only in rejection notes, not the AC block |
+
+### Implementation Regression Note
+Live `engine.py` has the agent_map check at `_validate_engine_config:143` and `pick_tasks` has no guard (concurrent task overwrote the change). Builder must re-implement from scratch. The 13 tests in `test_engine_lazy_agent_map_1221.py` are currently RED — correct RED baseline for builder.
+
+### Challenge Results
+- Challenger: reconsider (confidence 0.56)
+- Concerns: AC5 not in AC block, AC2 placement ambiguous vs resolve_pending_drs, live code regressed
+- Architect response: Accepted all three — added AC5 to AC block, refined AC2 placement, noted implementation regression. Design itself unchanged and sound.
+
+### Test Depth
+- Max depth: 2 (AC2)
+- Test-writer: PROCEED (validate existing tests are RED; add AC5 test to test_engine_coverage_1068.py)
+
+### Verdict: APPROVE (after REFINE)
+### Action Taken: Added AC5, refined AC2 placement, noted implementation regression; approved to todo
+[[2026-04-30]]
+## Architecture Review (Round 2) — Summary
+
+REFINE → APPROVE.
+
+AC changes:
+- AC2 refined: placement now explicitly "immediately after the effective-wave-size guard, before the `resolve_pending_drs` call" — pins exact location in pick_tasks.
+- AC5 added: `test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` must be updated to assert non-raising for incomplete agent_map (td:1). This was the auditor's required fix; challenger confirmed it was only in the rejection note, not the AC block.
+
+Implementation regression detected: concurrent task overwrote `engine.py`; live code still has agent_map check in `_validate_engine_config:143` and `pick_tasks` has no guard. The 13 task tests are currently RED — correct baseline. Builder must re-implement from scratch.
+
+Challenger: reconsider (0.56) — accepted all three concerns; all resolved by AC refinements above.
+
+All 10 criteria PASS. Design sound and unchanged.
+
+[[2026-05-01]]
+## Test-Writer Notes
+- Retry (Round 2 arch review): existing 13 tests verified RED + AC5 test updated in separate file.
+- Test files:
+  - `tests/test_engine_lazy_agent_map_1221.py` — 13 tests (unchanged, all RED due to implementation regression)
+  - `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises` — updated to assert non-raising (RED: currently raises ConfigError)
+- Classes: TestFromAC_InitNoLongerRaises, TestFromAC_PickTasksValidatesAgentMap, TestFromAC_CockpitInitWithEmptyAgentMap, TestFromAC_McpPickTasksRaisesForIncompleteAgentMap
+- Tests per category: happy 0, edge 2, error 9, boundary 2 (unchanged 1221 file) + 1 AC5 update
+- Total: 14 tests, all FAIL
+- ruff: clean (serve/kanban/tests/test_engine_coverage_1068.py)
+
+AC coverage:
+| AC line | Tests |
+|---------|-------|
+| AC1: __init__ no longer raises | test_init_accepts_empty_agent_map, test_init_accepts_partial_agent_map |
+| AC2: pick_tasks validates at top, before wave assembly | test_pick_tasks_raises_config_error_for_empty_agent_map, test_pick_tasks_raises_config_error_for_partial_agent_map, test_pick_tasks_error_code_is_err_invalid_status, test_pick_tasks_error_message_names_missing_statuses, test_pick_tasks_validates_before_filtering_with_tasks_present, test_pick_tasks_validates_before_list_tasks_is_called |
+| AC3: Cockpit starts with empty agent_map | test_cockpit_engine_init_succeeds_with_empty_agent_map, test_cockpit_engine_board_config_accessible_with_empty_agent_map |
+| AC4: MCP raises ToolError with all missing statuses named | test_mcp_pick_tasks_raises_tool_error_for_incomplete_agent_map, test_mcp_pick_tasks_tool_error_message_contains_missing_entries, test_mcp_pick_tasks_tool_error_message_names_all_missing_statuses |
+| AC5: test_engine_coverage_1068.py::test_agent_map_missing_status_raises asserts non-raising | updated in-place — old `pytest.raises(ConfigError)` replaced with plain call, RED because impl still raises |
+
+Round 2 scope: no new tests written; existing 13 remain RED from implementation regression. AC5 required updating stale test in test_engine_coverage_1068.py from expects-raise to expects-no-raise (now RED, will green after builder removes agent_map check from _validate_engine_config).
+[[2026-05-01]]
+## Builder Notes
+- Implementation: moved `agent_map` completeness validation out of `_validate_engine_config` and into `AgentView.pick_tasks` immediately after effective-wave-size validation and before `resolve_pending_drs` in `serve/kanban/src/owlbear_kanban/engine.py`.
+- Contract update: `pick_tasks` docstring now reflects the upfront validation step and `ConfigError(ERR_INVALID_STATUS)` raise condition for incomplete `agent_map`.
+- Files changed: `serve/kanban/src/owlbear_kanban/engine.py`
+- Commit: `062b2644c8d664abc224da5a71b2774c8fc53e36`
+- RED verification (quality-runner): task-owned tests were failing before implementation (constructor raised on incomplete map; pick_tasks missing guard).
+- GREEN verification (quality-runner, scoped): 14 passed, 0 failed, 0 skipped for:
+  - `tests/test_engine_lazy_agent_map_1221.py`
+  - `serve/kanban/tests/test_engine_coverage_1068.py::TestFromAC_ValidateEngineConfig::test_agent_map_missing_status_raises`
+- Lint (quality-runner): clean for `serve/kanban/src/owlbear_kanban/engine.py`, `tests/test_engine_lazy_agent_map_1221.py`, and `serve/kanban/tests/test_engine_coverage_1068.py`.
+- Coverage (quality-runner scoped): `owlbear_kanban.engine` 13% (module-wide in a large file); AC-targeted paths for moved validation are covered by the 14 passing task-owned tests.
+- Regression spot-check (quality-runner): 71 passed, 0 failed across `serve/kanban/tests/test_engine_pick_tasks_1074.py` and `serve/mcp-kanban/tests/test_mcp_read_tools.py`.
+
+Post-task reflection:
+- Concurrent edits had restored constructor-time validation; re-applying the invariant at the pick-time boundary resolves cockpit/init blocking while preserving dispatch safety.
+- Tight scoping of the AC5 node test avoids unrelated legacy failures in `test_engine_coverage_1068.py` from obscuring task-owned proof.
+- Moving the check without changing error code/message keeps MCP adapter behavior stable and avoids downstream contract churn.

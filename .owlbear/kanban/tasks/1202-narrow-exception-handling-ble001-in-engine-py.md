@@ -1,10 +1,10 @@
 ---
 id: 1202
 title: Narrow exception handling (BLE001) in engine.py
-status: backlog
+status: todo
 priority: important
 created: 2026-04-30 15:28:57.610272+00:00
-updated: 2026-04-30T22:46:54.102440+00:00
+updated: 2026-05-01T00:44:32.227506+00:00
 tags:
 - audit-kanban
 - safety
@@ -148,3 +148,154 @@ Post-task reflection:
 - Workaround applied: completed all engine.py-targeted narrowing first, then validated via quality-runner to isolate residual failure to AC7 only.
 - Pattern discovered: using `--ignore-noqa` on package path can pull in pre-existing debt unrelated to a narrowly scoped task.
 - Quality gap: AC7 should be aligned with objective scope or explicitly expanded with planned decomposition.
+
+## AC7 Correction (Architect Re-review)
+
+AC7 refined to engine-scope only. Replace:
+
+> `ruff check serve/kanban` exits clean (td:1)
+
+With:
+
+> `ruff check serve/kanban/src/owlbear_kanban/engine.py --select BLE001` exits clean (td:1)
+
+**Rationale:** The task objective is 5 BLE001 sites in engine.py. Package-wide BLE001 cleanup in activity_store.py, corruption.py, decisions.py, migrate.py is pre-existing debt outside this task's scope. Checking the whole package via `_SERVE_KANBAN` pulls in those violations; scoping to `_ENGINE_PY` is correct.
+
+**Test update required:** `TestFromAC_RuffClean::test_ruff_ble001_check_passes` — change `str(_SERVE_KANBAN)` → `str(_ENGINE_PY)` in the subprocess args. No other changes needed; engine.py BLE001 violations are already resolved per builder notes (12/13 pass).
+
+[[2026-04-30]]
+## Architecture Review
+
+**Verdict:** REFINE → APPROVE — AC7 scoped to engine.py. Advancing to `todo`.
+
+### Context
+
+Builder returned task to backlog after completing all 5 BLE001 narrowing changes in engine.py (12/13 TestFromAC pass). Sole blocker: `TestFromAC_RuffClean::test_ruff_ble001_check_passes` runs `ruff check serve/kanban --select BLE001 --ignore-noqa` (package-wide), which pulls in pre-existing BLE001 violations in activity_store.py, corruption.py, decisions.py, migrate.py — all outside this task's scope.
+
+### AC Assessment
+
+| AC line | Assessment | Action |
+|---------|------------|--------|
+| AC1-AC5 (site-specific narrowing) | Verified by 10/10 tests passing | No change |
+| AC6 (no noqa: BLE001 in engine.py) | Verifiable, engine-scoped (td:1) | No change |
+| AC7 `ruff check serve/kanban` exits clean (td:1) | Scope too wide — catches pre-existing debt in unrelated modules | **Refined** to `ruff check serve/kanban/src/owlbear_kanban/engine.py --select BLE001` exits clean (td:1) |
+| AC8 existing tests pass (td:0) | No change | No change |
+
+### Architecture Notes
+
+- Builder's Option A is architecturally correct. Package-wide BLE001 cleanup (activity_store.py, corruption.py, decisions.py, migrate.py) is separate scope; add a follow-up `audit-kanban` task if desired.
+- No new failure modes introduced by AC refinement — narrower scope means the test will pass once `_SERVE_KANBAN` → `_ENGINE_PY` substitution is made in the test.
+- The `--ignore-noqa` flag in the test remains appropriate (forces ruff to report actual violations regardless of suppression comments).
+
+### Dependency Analysis
+
+- Depends on #1203 (archived/done). Satisfied.
+
+### Design Diverge
+
+Skipped — single approach (narrow scope to engine.py). No competing approaches with split criteria.
+
+### Challenge Results
+
+- Challenger: SKIPPED — REFINE verdict (AC correction only, no design decision to challenge).
+
+### Test Depth
+
+- Max depth: td:2
+- Test-writer: PROCEED — update `test_ruff_ble001_check_passes` to use `_ENGINE_PY` instead of `_SERVE_KANBAN` in subprocess args.
+
+### Verdict: REFINE → APPROVE
+
+AC7 narrowed to engine.py scope. Test-writer to update the one failing test. Builder has already implemented all 5 BLE001 narrowing changes; this cycle completes the task.
+[[2026-04-30]]
+## Test-Writer Notes
+- Retry: updated `TestFromAC_RuffClean::test_ruff_ble001_check_passes` — changed `str(_SERVE_KANBAN)` → `str(_ENGINE_PY)` per AC7 refinement (engine.py scope only, not package-wide).
+- Updated module docstring and class/method docstrings to reflect narrowed scope.
+- Builder skip: test-only retry — all 13 tests pass against current implementation (builder already narrowed all 5 BLE001 sites in engine.py).
+- ruff: clean
+[[2026-04-30]]
+## Builder Notes
+- Implementation status: verified all AC-targeted exception handlers in serve/kanban/src/owlbear_kanban/engine.py now use narrow catches (list_tasks archive/main scans, sweep, repair_storage, pick_tasks import/call split).
+- Code changes in this pass: no additional net diff to commit (working tree for serve/kanban/src/owlbear_kanban/engine.py is clean).
+- Tests (quality-runner scoped): 13/13 passed in tests/test_engine_ble001_1202.py; failed: 0.
+- Expanded verification (quality-runner): 59/59 passed across tests/test_engine_ble001_1202.py, tests/test_engine_coverage.py, tests/test_engine_coverage_1113.py.
+- Lint (quality-runner scoped): ruff clean for serve/kanban/src/owlbear_kanban/engine.py and tests/test_engine_ble001_1202.py.
+- Coverage evidence: owlbear_kanban.engine measured at 21% in scoped coverage runs (module-wide denominator; task AC does not require module-wide 90%).
+
+Evidence summary:
+- AC1-AC5 behavior verified by propagation tests in TestFromAC_* suites (all green).
+- AC6 verified: no '# noqa: BLE001' remains in engine.py.
+- AC7 verified: BLE001 check on engine.py scope passes.
+
+Post-task reflection:
+- Problem faced: initial scoped quality run returned full RED despite task history indicating prior GREEN.
+- Workaround applied: revalidated from current snapshot with scoped and expanded quality-runner passes until stable green evidence was produced.
+- Pattern discovered: task history can lag current code reality; only live quality-runner output should gate release.
+- Quality gap: module-wide coverage percentage is not a reliable gate for narrow exception-handling tasks in very large modules.
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner scoped: 13 passed, 0 failed, 0 skipped in tests/test_engine_ble001_1202.py
+- quality-runner broader regression spotcheck: 75 passed, 1 failed, 0 skipped across tests/test_pick_tasks_resolve.py and tests/test_engine_cockpit_view_1078.py
+- failing existing test: tests/test_pick_tasks_resolve.py::TestFromAC_PickTasksResolveIntegration::test_resolve_exceptions_do_not_propagate -> RuntimeError: DR resolve failed
+
+### Lint
+- clean for serve/kanban/src/owlbear_kanban/engine.py and tests/test_engine_ble001_1202.py
+
+### Coverage
+- scoped report: owlbear_kanban.engine 17%, overall 21%
+- informational only: module-wide denominator on a very large file; not used as a gate here
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage / AC Compliance
+| AC | Evidence | Status |
+|---|---|---|
+| AC1 archive scan narrows to CorruptionError | engine.py:696 is correct, but tests/test_engine_ble001_1202.py:120 and :132 only assert RuntimeError/AttributeError propagation; they would still pass if the CorruptionError catch were removed | FAIL |
+| AC2 main scan narrows to CorruptionError | engine.py:732 is correct, but tests/test_engine_ble001_1202.py:163 and :180 only assert RuntimeError/OSError propagation; no CorruptionError continue-path proof | FAIL |
+| AC3 sweep narrows to (FileNotFoundError, ValueError, KeyError, CorruptionError) | engine.py:1583 is correct, but tests/test_engine_ble001_1202.py:206 and :223 only assert RuntimeError/PermissionError propagation; no caught-tuple proof | FAIL |
+| AC4 repair_storage narrows to (ValueError, KanbanError, OSError) | engine.py:1670 is correct, but tests/test_engine_ble001_1202.py:259 and :277 only assert RuntimeError/TypeError propagation; no ValueError/KanbanError/OSError failed-RepairOutcome proof | FAIL |
+| AC5 pick_tasks split import/call handling with WARNING logs | engine.py:2327-2333 matches AC, but tests/test_engine_ble001_1202.py:303, :325, and :343 do not cover import-time ImportError or caught KanbanError/OSError/ValueError branches and never assert the WARNING logs at engine.py:2328 and :2333. Broader spotcheck also fails tests/test_pick_tasks_resolve.py:152 because that durable suite still expects RuntimeError from resolve_pending_drs to be swallowed | FAIL |
+| AC6 no BLE001 suppressions remain in engine.py | tests/test_engine_ble001_1202.py:363 directly scans for the forbidden token; grep found no BLE001 suppression in engine.py | PASS |
+| AC7 Ruff BLE001 check on engine.py exits clean | tests/test_engine_ble001_1202.py:400 asserts exit code 0; quality-runner ruff exit code was 0 | PASS |
+| AC8 all existing tests pass | Broader quality-runner spotcheck found 1 failing existing test: tests/test_pick_tasks_resolve.py::TestFromAC_PickTasksResolveIntegration::test_resolve_exceptions_do_not_propagate | FAIL |
+
+#### Security Review
+- No issues found. The changes are limited to exception narrowing and WARNING logs.
+
+#### Test Integrity
+- No weakened or removed TestFromAC assertions detected in the current snapshot.
+
+#### Test Quality
+- WEAK. AC1-AC5 tests prove only that unexpected exceptions now propagate. They do not prove that the newly allowed catch branches are still handled, and AC5 does not prove either WARNING log path.
+
+#### Data Safety
+- No issues found.
+
+#### Implementation-Aware Test Gaps
+- Missing CorruptionError continue-path tests for list_tasks archive and main scans.
+- Missing caught-tuple tests for sweep.
+- Missing caught-tuple tests for repair_storage that assert the failed RepairOutcome path.
+- Missing pick_tasks warning-path tests for import-time ImportError and caught KanbanError/OSError/ValueError from resolve_pending_drs.
+- Existing durable pick_tasks suite at tests/test_pick_tasks_resolve.py is stale relative to the refined AC5 contract.
+
+#### Builder Process Quality
+- CLEAN. Two Builder Notes sections, but they represent implementation then live revalidation after AC7 refinement, not repeated identical retries.
+
+### Deductions
+- -0.08 AC1 proof gap
+- -0.08 AC2 proof gap
+- -0.08 AC3 proof gap
+- -0.08 AC4 proof gap
+- -0.12 AC5 proof gap plus stale durable-suite failure
+- -0.10 AC8 existing-suite failure
+- Confidence: 0.66
+
+### Verdict
+- FAIL -> todo
+- Reason: implementation appears aligned to the refined AC, but the task-owned tests are lax for AC1-AC5 and an existing durable pick_tasks suite is still red under the new contract.
+
+### Required Follow-up
+1. Update tests/test_pick_tasks_resolve.py:152 so unexpected RuntimeError from resolve_pending_drs is expected to propagate, and add explicit proof for the caught ImportError/KanbanError/OSError/ValueError warning paths.
+2. Strengthen tests/test_engine_ble001_1202.py so AC1-AC4 exercise the allowed catch branches, not only unexpected-exception propagation.
+3. Add explicit WARNING-log assertions for both AC5 branches at engine.py:2328 and :2333.
+4. Re-run the task suite plus affected existing suites before returning to review.

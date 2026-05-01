@@ -1,10 +1,10 @@
 ---
 id: 1233
 title: Research — WebSocket/SSE real-time updates for cockpit
-status: todo
+status: backlog
 priority: nice-to-have
 created: 2026-04-30 16:31:18.682845+00:00
-updated: 2026-04-30T22:49:33.757109+00:00
+updated: 2026-05-01T00:08:45.483487+00:00
 tags:
 - cockpit
 - architecture
@@ -297,3 +297,110 @@ Test-writer: SKIP
 Added `research` tag — required for test-writer pass-through routing. Tags: cockpit, architecture, research.
 
 ### Verdict: APPROVE → todo
+[[2026-04-30]]
+## Test-Writer Notes
+- Non-implementation task (tagged research) — no testable Python interfaces, no AC lines.
+- Architect confirmed: all AC lines td:0, test-writer skip.
+- Passing through to builder.
+[[2026-04-30]]
+## Builder Notes
+- Scope classification: non-implementation research pass-through (confirmed by `## Test-Writer Notes` in task body: no testable Python interfaces, no AC lines).
+- Files changed: none.
+- quality-runner (scoped, empty paths): 0 passed, 0 failed, 0 skipped.
+- Lint status: clean=true, 0 violations.
+- Coverage: N/A (no implementation scope / no target modules).
+- Evidence summary: mechanical gate run confirms expected no-op for research-only task; no code or test artifacts were in builder scope.
+- Fixes applied: none (no implementation work required).
+
+[[2026-05-01]]
+## Review Evidence
+### Test Results
+- quality-runner: 0 passed, 0 failed, 0 skipped
+- Scope note: td:0 research-only task. The canonical no-op quality-runner pass used empty scoped inputs and returned pytest exit 5 (no tests collected), which is expected for a non-implementation task with no owned test paths.
+
+### Lint
+- quality-runner: clean=true, 0 violations
+- Scope note: empty lint scope for a research-only pass-through cycle.
+
+### Coverage
+- N/A — td:0 research-only task with no builder-owned implementation scope.
+
+### Review Scope
+- Builder scope in this cycle was pass-through only: no source files changed, no task-scoped tests changed, no runtime surface changed.
+- Review therefore focused on research-artifact correctness, live-state drift, decision authority, and handoff integrity for spawned follow-up tasks.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- N/A — research-only task, no `TestFromAC_*` classes and no testable Python interface.
+
+#### Security Review
+- No code changes or new runtime surface were introduced in the reviewed builder cycle.
+
+#### Test Integrity
+- N/A — no task-scoped tests in this cycle.
+
+#### Test Quality
+- N/A — no task-scoped tests in this cycle.
+
+#### Data Safety
+- N/A — no implementation changes.
+
+#### Implementation-Aware Test Gap Analysis
+- N/A — no implementation changes.
+
+#### Necessity Check
+- PASS. The research artifact still compares SSE vs. WebSocket directly and records the chosen invalidation-only/watchfiles approach in the research doc.
+
+#### Builder Process Quality
+- CLEAN. Prior reviewer section already exists in the task body and the current builder section is a single pass-through note only.
+
+### Research Question Coverage
+| Research question | Evidence | Status |
+|---|---|---|
+| WebSocket vs SSE — which fits FastAPI + React better? | `.owlbear/research/1233-realtime-cockpit-updates.md:26` and `.owlbear/research/1233-realtime-cockpit-updates.md:97` | PASS |
+| How to detect mutations? | `.owlbear/research/1233-realtime-cockpit-updates.md:44` | PASS |
+| Impact on deployment? | `.owlbear/research/1233-realtime-cockpit-updates.md:87` | PASS |
+| Fallback to polling when connection drops? | `.owlbear/research/1233-realtime-cockpit-updates.md:73` | PASS |
+
+### Live-State Verification
+- Current cockpit board flow is still polling-based: `serve/cockpit/web/src/hooks/useBoard.ts:52`, `serve/cockpit/web/src/hooks/useBoard.ts:53`, `serve/cockpit/web/src/hooks/useBoard.ts:85`, `serve/cockpit/web/src/hooks/useBoard.ts:112`, `serve/cockpit/web/src/hooks/useBoard.ts:121`.
+- Adjacent polling surfaces still exist at 60s, matching the follow-up research scope for #1236: `serve/cockpit/web/src/hooks/useScanPolling.ts:3`, `serve/cockpit/web/src/hooks/useScanPolling.ts:77`, `serve/cockpit/web/src/hooks/usePendingDRs.ts:3`, `serve/cockpit/web/src/hooks/usePendingDRs.ts:85`.
+- The resolved T3 decision exists and approves SSE: `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md:3`, `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md:4`, `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md:15`.
+- The source ledger exists and the watchfiles dependency claim is corrected: `.owlbear/sources/overview.md:5`, `.owlbear/sources/overview.md:10`, `.owlbear/sources/overview.md:11`, `.owlbear/sources/overview.md:13`, `.owlbear/sources/overview.md:14`, `.owlbear/research/1233-realtime-cockpit-updates.md:106`, `.owlbear/research/1233-realtime-cockpit-updates.md:110`.
+
+### Critical Findings
+1. **Live authority is still contradictory after the approved T3 decision, and the task overclaims the downstream fix.**
+   - The resolved decision approves SSE: `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md:3-4`.
+   - The live cockpit authority still forbids SSE and still locks polling: `.owlbear/briefs/draft-cockpit/decisions.md:19`, `.owlbear/briefs/draft-cockpit/decisions.md:65`, `.owlbear/briefs/draft-cockpit/brief.md:71`, `.owlbear/briefs/draft-cockpit/brief.md:92`, `.owlbear/briefs/draft-cockpit/brief.md:119`.
+   - The task body says the brief must be amended and explicitly claims a separate backlog task was created for that D6 update: `.owlbear/kanban/tasks/1233-research-websocket-sse-real-time-updates-for-cockpit.md:241`, `.owlbear/kanban/tasks/1233-research-websocket-sse-real-time-updates-for-cockpit.md:244`.
+   - Board/task searches for the promised follow-up did not find one: `list_tasks(search="brief")` returned only #1042 and #1233; `list_tasks(search="amend")`, `list_tasks(search="cockpit decisions")`, and `list_tasks(search="remove lock")` returned no matching task; grep over `.owlbear/kanban/tasks/**` found only #1233's own claim plus child tasks #1234/#1235/#1236.
+   - Conclusion: **FAIL.** The task body asserts a handoff artifact that is not present, while the live brief remains contradictory to the approved decision.
+
+2. **Spawned child tasks can now proceed without durable authority reconciliation.**
+   - Child tasks exist and depend on #1233: `.owlbear/kanban/tasks/1234-implement-sse-endpoint-with-watchfiles-based-file-watcher.md:12-14`, `.owlbear/kanban/tasks/1235-replace-useboard-polling-with-eventsource-client.md:12-14`, `.owlbear/kanban/tasks/1236-research-extend-sse-to-decisions-and-activity-polling.md:12-14`.
+   - Their bodies operationalize SSE directly but do not reference the resolved T3 decision that overturned the polling lock: `.owlbear/kanban/tasks/1234-implement-sse-endpoint-with-watchfiles-based-file-watcher.md:21`, `.owlbear/kanban/tasks/1235-replace-useboard-polling-with-eventsource-client.md:21`, `.owlbear/kanban/tasks/1236-research-extend-sse-to-decisions-and-activity-polling.md:21`.
+   - Because #1233 is the only dependency, passing this task would release follow-up work while the canonical cockpit brief still says "no SSE/WebSocket in v1." Downstream agents would inherit contradictory authority.
+   - Conclusion: **FAIL.** This is a handoff-usability defect in the parent research task, not a harmless documentation nit.
+
+### Informational Findings
+- The research content itself is now materially complete: the four original research questions are answered, the sources ledger exists, and the watchfiles dependency is correctly recorded as a new explicit dependency.
+
+### Deductions
+- -0.18 live brief/decision authority contradiction remains unresolved
+- -0.12 promised brief-amendment follow-up task not found on the board
+- -0.08 child-task handoff does not carry the resolved authority, so downstream work can inherit stale brief guidance
+- Confidence: 0.62
+
+### Required Follow-up
+1. Create the missing backlog task that amends `.owlbear/briefs/draft-cockpit/brief.md` and `.owlbear/briefs/draft-cockpit/decisions.md` to reflect the approved SSE direction, or amend those authority docs directly in the proper upstream phase.
+2. Update the child-task handoff so downstream agents have durable authority for the SSE direction instead of only a resolved DR that is disconnected from the brief substrate.
+3. Re-run architecture review after the authority substrate is reconciled; the current task body should not claim that a separate task exists unless that task is visible on the board.
+
+### Verdict
+- FAIL -> backlog
+- Routing basis: second review failure on the same task (`## Review Evidence` already present at `.owlbear/kanban/tasks/1233-research-websocket-sse-real-time-updates-for-cockpit.md:65`), so backlog loop-breaker applies.
+
+### Post-task Reflection
+- Research-only tasks can still fail on handoff integrity when resolved decisions are not propagated into the live authority substrate.
+- A resolved DR is not enough if the brief still says the opposite and the follow-up task that should reconcile it cannot be found.
+- Board searches are useful review evidence when a task body claims a follow-up exists; absence matters when that claim is load-bearing for downstream agents.
