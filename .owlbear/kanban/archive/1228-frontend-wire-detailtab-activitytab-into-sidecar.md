@@ -1,10 +1,10 @@
 ---
 id: 1228
 title: Frontend — wire DetailTab + ActivityTab into sidecar
-status: todo
+status: archived
 priority: needed
 created: 2026-04-30 16:31:18.636409+00:00
-updated: 2026-05-01T09:36:02.882159+00:00
+updated: 2026-05-01T13:30:58.959611+00:00
 tags:
 - cockpit
 - frontend
@@ -391,3 +391,212 @@ Confidence: 0.64 → reconsider. Addressed:
 Post-refinement confidence: 0.88 — all critical challenger concerns resolved via AC encoding.
 
 ### Verdict: APPROVE → todo
+[[2026-05-01]]
+## Test-Writer Notes (retry)
+
+**Test file:** `serve/cockpit/web/src/__tests__/Shell_1228_integration.test.tsx`
+
+**Classes:**
+- `TestFromAC_CardSelection_Integration` — AC1 live-component proof (no KanbanBoard mock)
+- `TestFromAC_TaskDetailReinit_Integration` — AC2 live-component proof (no DetailTab mock)
+- `TestFromAC_HelloRouteRemoval_Integration` — AC6 tighter route-absence proof
+
+**Results:** 5 PASS, 1 FAIL
+
+| Test | Result |
+|------|--------|
+| AC1: clicking real card sets data-selected="true" | PASS |
+| AC1: clicking second card moves data-selected | PASS |
+| AC2: title re-initialises from new task after edit + switch | **FAIL** |
+| AC2 boundary: stale title absent while new task loading | PASS |
+| AC6: root "/" renders real kanban board (positive control) | PASS |
+| AC6 tight: /hello → empty workspace (childElementCount=0) | PASS |
+
+**Failing test root cause:**
+`DetailTab` mounts with `task=null` (key remount at `selectedTaskId` change fires before the `useEffect` clears stale and before the fetch resolves). `useState(null?.title ?? '')` initializes `title=''`. When `task=TASK_DETAIL` arrives as a prop update later, `useState` does not reinitialize — title stays `''`. Input shows `''` not `'Task Forty-Two'`.
+
+**Builder fix required:** Add `useEffect([task?.id])` in `DetailTab.tsx` to sync `title`, `priority`, `body` from `task` props when the task id changes. This is the minimal fix consistent with the key-remount strategy.
+
+**Existing tests:** `Shell_1228.test.tsx` — 13/13 PASS, no regressions.
+
+**AC coverage:**
+| AC line | Tests |
+|---------|-------|
+| AC1 (td:2) integration: real card click → data-selected + Shell state | 2 tests in TestFromAC_CardSelection_Integration (PASS) |
+| AC2 (td:2) integration: DetailTab state reinit on task switch | 2 tests in TestFromAC_TaskDetailReinit_Integration (1 FAIL, 1 PASS) |
+| AC6 integration tight: /hello route removal → empty workspace | 2 tests in TestFromAC_HelloRouteRemoval_Integration (PASS) |
+[[2026-05-01]]
+## Builder Notes
+- Implementation: updated `serve/cockpit/web/src/components/DetailTab.tsx` to synchronize local editable state (`title`, `priority`, `body`) when the incoming `task.id` changes.
+- Approach: minimal GREEN-phase fix from retry RED evidence; added `useEffect([task?.id])` to reinitialize local state from latest task props after selection change.
+- Tests (quality-runner, scoped): 42 passed, 0 failed, 0 skipped.
+  - Vitest: `serve/cockpit/web/src/__tests__/Shell_1228_integration.test.tsx`, `serve/cockpit/web/src/__tests__/Shell_1228.test.tsx`, `serve/cockpit/web/src/__tests__/Shell.test.tsx`
+  - Pytest: `tests/test_cockpit_adapter_1228.py`
+- Coverage: not collected for `owlbear_cockpit.adapter` in this scoped run (`source_pkgs` configuration excludes that module); functional test gate passed.
+- Lint: ruff clean on Python lint scope; VS Code diagnostics show no TS/TSX errors for touched files.
+- Commit: `07c5b2ae` — `fix: sync detail tab state on task switch (#1228, builder)`.
+
+### Post-task Reflection
+- Key-remount alone is insufficient when a component instance first mounts with `task=null`; explicit prop-to-state sync on `task.id` is the robust minimal guard.
+- Keeping this retry to one-file source change reduced regression risk in a dirty worktree.
+- Running the exact integration proof suite from test-writer notes provided a direct closure signal for the reported failure.
+[[2026-05-01]]
+## Review Evidence
+
+### Test Results
+- quality-runner scoped run: 140 passed, 0 failed, 0 skipped.
+- Covered files: `Shell_1228_integration.test.tsx` (6), `Shell_1228.test.tsx` (13), `Shell.test.tsx` (18), `DetailTab.test.tsx` (34), `ActivityTab.test.tsx` (15), `ActivityTab_1156.test.tsx` (49), `test_cockpit_adapter_1228.py` (5).
+- Adjacent retention proof: `tests/test_cockpit_mutation_api_1132.py` passed 28/28; its move-route tests patch `owlbear_cockpit.adapter.valid_transitions`, proving the retained symbol is still present and consumable by mutation routes.
+
+### Lint
+- Ruff clean on `serve/cockpit/src/owlbear_cockpit/adapter.py` and `tests/test_cockpit_adapter_1228.py`.
+- VS Code diagnostics: no errors in reviewed TS/TSX/Python files.
+- Limitation: quality-runner does not lint TS/TSX; frontend lint evidence here is clean diagnostics plus green Vitest.
+
+### Coverage
+- `owlbear_cockpit.adapter`: 80% in the task-scoped coverage run (line 15 unhit).
+- Not blocking: the adjacent mutation suite proves `adapter.valid_transitions` is still present and used by the move route; frontend proof comes from the passing live integration and durable Vitest slices rather than coverage output.
+
+### Pass 1 - CRITICAL
+
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---------|-------------|---------------------------|---------|
+| AC1: real card click sets `data-selected="true"`, Shell owns selection, second click moves selection, visible selected state rendered | `Shell_1228.test.tsx` selection wiring + `Shell_1228_integration.test.tsx` real-card selection/reselection | Yes for the latest architecture-refined td:2 proof. The live Shell→KanbanBoard→Column→Card chain is exercised, and the selected border/background in `Card.tsx` ride the same `selected` branch proven by the integration tests. | COVERED |
+| AC2: fetch selected task, pass to DetailTab, re-initialise local state on task change, null selection shows placeholder | `Shell_1228.test.tsx` fetch/placeholder tests + `Shell_1228_integration.test.tsx` live re-init and stale-clear tests | Yes. The prior stale-detail regression is directly covered by the new live integration suite. | COVERED |
+| AC3: DetailTab mounted in sidecar Detail panel; edit/save functional in sidecar context | `Shell_1228.test.tsx` sidecar mount + `DetailTab.test.tsx` save behavior + `Shell_1228_integration.test.tsx` real DetailTab render inside Shell | Yes. Shell integration proves sidecar mount; durable DetailTab tests prove save remains functional. | COVERED |
+| AC4: ActivityTab mounted in sidecar Activity panel; self-fetches on mount; session-row click selects task via Shell wiring | `Shell_1228.test.tsx` ActivityTab wiring + `ActivityTab.test.tsx` row-click behavior + `ActivityTab_1156.test.tsx` exact `filter=all` fetch | Yes. Real ActivityTab behavior is covered durably, and Shell wiring is covered in the task suite. | COVERED |
+| AC5: dead adapter wrappers removed; `valid_transitions` retained; `__all__` updated; stale adapter test class removed | `test_cockpit_adapter_1228.py` + adjacent `test_cockpit_mutation_api_1132.py` retention proof | Yes. Dead wrappers are gone, `__all__` is reduced, the stale adapter class is absent, and adjacent mutation tests still patch the retained `adapter.valid_transitions` symbol successfully. | COVERED |
+| AC6: `/hello` route removed; associated Shell assertions updated | `Shell_1228_integration.test.tsx` root positive-control + empty-workspace `/hello` proof, supplemented by `Shell_1228.test.tsx` and `Shell.test.tsx` | Yes. The new integration proof is strong enough to show that `/hello` no longer matches a workspace route. | COVERED |
+
+#### Security Review
+- No issues found. The reviewed changes stay on same-origin cockpit endpoints and a thin adapter delegate. I found no new injection, path, secret, deserialization, or dependency-risk sinks.
+
+#### Test Integrity
+- No weakened or removed `TestFromAC_*` assertions found in the current snapshot.
+- The new `Shell_1228_integration.test.tsx` file strengthens the exact td:2 gaps that caused the prior loop-breaker rejection.
+
+#### Test Quality
+- ADEQUATE.
+- The prior td:2 proof gap is closed: the task now has live real-card selection tests and a live DetailTab re-initialisation test that reproduces the earlier stale-state bug.
+- Non-blocking hardening opportunity: add an explicit selected-style assertion in the AC1 integration suite if the team wants direct visual-branch proof rather than relying on the source-coupled `selected` branch in `Card.tsx`.
+
+#### Data Safety
+- No issues found. `Shell.tsx` now clears stale detail state before non-null selection changes and aborts stale fetch work, so the prior cross-task save hazard is closed.
+
+#### Implementation-Aware Test Gap Analysis
+- No objective AC blockers remain.
+- Informational only: non-OK/network fallback branches in `Shell.tsx` and the silent ActivityTab fetch-failure branch remain lightly covered, but those paths are outside the named AC for this task.
+
+#### Necessity Check
+- No issues found. This task rewires existing cockpit UI state and removes dead adapter exports; it adds no new dependency or external integration.
+
+#### Builder Process Quality
+- CLEAN. One focused builder retry after the earlier review rejection; no loop pattern in the current cycle.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| AC1 | `Shell.tsx` owns `selectedTaskId` and passes `selectedId`/`onSelectTask`; `Column.tsx` forwards selection props; `Card.tsx` renders `data-selected` plus selected border/background styles. | `Shell_1228.test.tsx`, `Shell_1228_integration.test.tsx` | PASS |
+| AC2 | `Shell.tsx` fetches `/api/tasks/{id}` with cancellation, clears stale detail state on selection change, remounts `DetailTab` with `key={selectedTaskId ?? -1}`, and shows the placeholder on null selection; `DetailTab.tsx` now resyncs editable state on `task.id` change. | `Shell_1228.test.tsx`, `Shell_1228_integration.test.tsx` | PASS |
+| AC3 | `DetailTab` is mounted in the sidecar detail panel in `Shell.tsx`, and durable DetailTab tests still prove save behavior against `/api/tasks/{id}/edit`. | `Shell_1228.test.tsx`, `DetailTab.test.tsx` | PASS |
+| AC4 | `ActivityTab` is mounted in the sidecar activity panel, self-fetches `/api/sessions?filter=all`, and row clicks call `onSelectTask(task_id, 'history')`; Shell wiring propagates that callback. | `Shell_1228.test.tsx`, `ActivityTab.test.tsx`, `ActivityTab_1156.test.tsx` | PASS |
+| AC5 | `adapter.py` exports only `valid_transitions`; removed wrappers are absent; `mutation.py` still imports `adapter` and calls `adapter.valid_transitions(...)`; `TestBuilderDiscoveredReadApiAdapter` is absent from `tests/test_cockpit_read_api.py`. | `test_cockpit_adapter_1228.py`, `test_cockpit_mutation_api_1132.py` | PASS |
+| AC6 | `Shell.tsx` declares only the root route, and the integration suite proves `/` renders the board while `/hello` leaves the workspace empty. | `Shell_1228_integration.test.tsx`, `Shell.test.tsx`, `Shell_1228.test.tsx` | PASS |
+
+### Deductions
+- -0.04 TS/TSX lint evidence is limited to clean editor diagnostics plus green Vitest because quality-runner only lints the Python slice.
+- -0.03 AC1 does not have a dedicated assertion on the selected border/background styles, though the latest Architecture Review refinement required the live card/data-selected proof that now exists and the current source keeps styling on the same `selected` branch.
+
+### Verdict
+- PASS.
+- Confidence: 0.93.
+- Action: advance to docs.
+- Subagent divergence: code-reader proposed blocking AC1 style-proof and AC5 retention-proof gaps. After re-checking the latest Architecture Review refinement and running the adjacent mutation-route suite, I treat both as covered; the remaining style assertion gap is a hardening opportunity, not a release blocker.
+
+### Informational For Docs
+- `serve/cockpit/README.md` still documents removed adapter read wrappers (`list_tasks`, `show_task`, `board_config`, `list_sessions`). That drift is non-blocking for this review but should be reconciled in the docs phase.
+
+### Post-task Reflection
+- On looped tasks, the latest Architecture Review refinement is the binding proof target; stale earlier review notes are context, not authority.
+- Mixed cockpit review work benefits from one task-scoped pass plus one adjacent durable suite when a retained shared helper is questioned.
+- quality-runner remains Python-lint-only; clean TS/TSX diagnostics plus green Vitest are still necessary reviewer evidence.
+- The final builder retry fixed the real stale-detail regression; the remaining review work was about proof strength, not a lingering behavior bug.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | Yes | Updated | `serve/cockpit/README.md` "Via adapter (read-only)" table listed 5 removed adapter wrappers (`list_tasks`, `show_task`, `board_config`, `list_sessions`, `list_activity`) plus the retained `valid_transitions`. Section preamble incorrectly stated "All read access goes through adapter.py." Updated table to only show `valid_transitions`; updated preamble to reflect that read routes now call engine/CockpitView directly. |
+| 2 | Module docstrings | Yes | Updated | `adapter.py` module docstring said "thin wrappers over allowed KanbanEngine read methods" — stale after all read wrappers removed. Updated to "thin shim exposing valid_transitions for mutation routes." Function docstring on `valid_transitions` is accurate; no change needed. |
+| 3 | External attribution | No | N/A | Task used no external patterns; no new attribution row needed. |
+| 4 | Research doc | No | N/A | No research doc was produced for this task. |
+| 5 | Diagram maintenance | No | N/A | Doc-index consulted; no `describes` glob matches the changed files. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No IN-scope doc was deleted; stale entries in README updated in-place (not a deletion candidate). |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| `serve/cockpit/web/src/Shell.tsx` | OUT | N/A (source code) |
+| `serve/cockpit/web/src/KanbanBoard.tsx` | OUT | N/A (source code) |
+| `serve/cockpit/web/src/components/Column.tsx` | OUT | N/A (source code) |
+| `serve/cockpit/web/src/components/Card.tsx` | OUT | N/A (source code) |
+| `serve/cockpit/web/src/components/DetailTab.tsx` | OUT | N/A (source code) |
+| `serve/cockpit/web/src/components/ActivityTab.tsx` | OUT | N/A (source code) |
+| `serve/cockpit/src/owlbear_cockpit/adapter.py` | IN | Docstring updated |
+| `serve/cockpit/README.md` | IN | Stale adapter table updated |
+| Test files | OUT | N/A (tests) |
+
+### Files Updated
+- `serve/cockpit/README.md` — removed 5 stale adapter-wrapper rows; updated section preamble and heading
+- `serve/cockpit/src/owlbear_cockpit/adapter.py` — module docstring updated
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no scratch files found for task 1228)
+
+Commit: `0530874a` — `docs: update cockpit README and adapter docstring for adapter pruning (#1228, doc-writer)`
+[[2026-05-01]]
+## Audit
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| AC1: Card selection sets data-selected, visible highlight, Shell selectedTaskId state | Shell.tsx:25 owns state, passes selectedId/onSelectTask to KanbanBoard; Card.tsx:26,34 renders data-selected + selected styling; integration test Shell_1228_integration.test.tsx clicks real cards | PASS |
+| AC2: Task detail fetch, DetailTab re-init on task change, null placeholder | Shell.tsx:68-100 fetches with AbortController, clears stale state on selection change; Shell.tsx:141 key={selectedTaskId}; DetailTab.tsx:40-44 useEffect syncs state on task.id change; Shell.tsx:139 placeholder | PASS |
+| AC3: DetailTab mounted in sidecar Detail panel, edit/save functional | Shell.tsx:138-145 mounts DetailTab in sidecar; DetailTab.test.tsx:213 proves save behavior | PASS |
+| AC4: ActivityTab mounted in sidecar Activity panel, onSelectTask wired | Shell.tsx:147-150 mounts ActivityTab; ActivityTab.tsx:30-38 self-fetches sessions; callback wired to Shell selection | PASS |
+| AC5: Dead adapter wrappers removed, valid_transitions retained, __all__ updated, stale test class removed | adapter.py exports only valid_transitions with __all__=["valid_transitions"]; TestBuilderDiscoveredReadApiAdapter absent from test_cockpit_read_api.py; mutation.py still imports adapter.valid_transitions | PASS |
+| AC6: /hello route removed, Shell assertions updated | Shell.tsx:132 declares only root route; integration test proves /hello yields empty workspace | PASS |
+
+### Test Results
+- pytest + vitest (full suite via quality-runner): 3485 passed, 105 failed, 4 skipped
+- All 105 failures in unrelated modules (kanban engine, storage, corruption, react-compiler, support migration, MCP knowledge); 0 failures in task scope
+- ruff: 4 violations in unrelated modules (knowledge, MCP-knowledge, MCP-memory, orchestrator); 0 in task scope
+
+### Reviewer Evidence
+Present and thorough (3rd review after loop-breaker). All 6 AC lines COVERED. Confidence 0.93. Detailed integration test coverage table, security review, data safety confirmation (stale-detail bug verified fixed).
+
+### Architect Quality: 4/5
+AC was specific with testable assertions and td annotations. Architecture notes guided state management well (selection state, key remount, AbortController pattern). Minor gaps: stale-detail edge case not caught by initial AC (caught by reviewer), /hello initially misclassified as td:0. Architect re-entry after loop-breaker effectively refined td:2 integration requirements and enabled builder-skip path. Overall adequate with minor gaps filled by review cycle.
+
+### Deduction Breakdown
+- AC lines without evidence: 0 (all 6 verified) = 0
+- Lint violations in task scope: 0 = 0
+- AC quality score: 4/5 (above 3 threshold) = 0
+- Missing reviewer evidence: not missing = 0
+- Full-suite failures in task scope: 0 = 0
+- TSX lint gap (quality-runner cannot lint TSX; evidence limited to editor diagnostics + green Vitest): -0.02
+
+### Confidence: 0.98
+### Action: archive
+
+### Upstream Commits Verified
+- 7cb62d66 test: add failing tests (#1228, test-writer)
+- 7323c6d3 feat: wire sidecar detail/activity (#1228, builder)
+- c85af4c3 fix: resolve shell route and selection sync regressions (#1228, builder)
+- 07c5b2ae fix: sync detail tab state on task switch (#1228, builder)
+- 0530874a docs: update cockpit README and adapter docstring (#1228, doc-writer)
