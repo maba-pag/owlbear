@@ -21,6 +21,13 @@ External repos and resources studied during OwlBear development.
 | reactuse.com — useEventSource hook | <https://reactuse.com/browser/useeventsource/> | React hook pattern for EventSource: status tracking, open/close control, data extraction | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
 | suqingdong/useEventSource (GitHub) | <https://github.com/suqingdong/useEventSource> | React SSE hook library: reconnect, terminate, data state management pattern | `.owlbear/research/1235-eventsource-client-implementation.md` | 2026-05-01 |
 
+## useEventSource Hook (Task #1260)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| ReactUse — useEventSource | <https://reactuse.com/browser/useeventsource/> | React hook API pattern: status types (CONNECTING/CONNECTED/DISCONNECTED), autoReconnect options, open/close methods | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
+| NepeinAV/react-sse-hooks (GitHub) | <https://github.com/NepeinAV/react-sse-hooks> | Provider-based SSE hook library: EventSourceProvider, useEventSource, useEventSourceListener patterns | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
+
 ## SSE Endpoint Implementation (Task #1234)
 
 | Source | URL | What | Where Used | Date |
