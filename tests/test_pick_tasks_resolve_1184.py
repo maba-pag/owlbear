@@ -164,11 +164,11 @@ class TestFromAC_PickTasksResolveIntegration:
     def test_resolve_exceptions_do_not_propagate(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """AC2: Exceptions from resolve_pending_drs must not reach the pick_tasks caller.
+        """AC2 (updated per task #1202 BLE001 fix): RuntimeError from resolve_pending_drs propagates.
 
-        The try/except guard in the implementation must swallow all exceptions so
-        that pick_tasks always returns a valid PickTasksResponse. The call
-        assertion also confirms the exception path was exercised, not skipped.
+        The narrowed handler `except (KanbanError, OSError, ValueError)` in pick_tasks
+        does NOT catch RuntimeError. Only the specific exception types in the tuple are
+        swallowed; unexpected exceptions propagate to the pick_tasks caller.
         """
         decisions_mock = MagicMock()
         decisions_mock.resolve_pending_drs.side_effect = RuntimeError(
@@ -180,13 +180,9 @@ class TestFromAC_PickTasksResolveIntegration:
         _write_task(board, task_id=1)
         engine = KanbanEngine(board, activity_log=False)
 
-        # Must not propagate — pick_tasks must return normally despite the exception.
-        resp = engine.agent_view().pick_tasks()
-
-        assert isinstance(resp, PickTasksResponse), (
-            "pick_tasks must return PickTasksResponse even when resolve_pending_drs raises"
-        )
-        decisions_mock.resolve_pending_drs.assert_called_once_with(engine)
+        # RuntimeError is not in (KanbanError, OSError, ValueError) — must propagate.
+        with pytest.raises(RuntimeError, match="DR resolve failed"):
+            engine.agent_view().pick_tasks()
 
     def test_resolve_runs_before_task_filtering(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

@@ -12,6 +12,7 @@ AC coverage:
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -19,8 +20,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.corruption import CorruptionError
 from owlbear_kanban.engine import AgentView
-from owlbear_kanban.models import RepairOutcome
+from owlbear_kanban.errors import KanbanError
+from owlbear_kanban.models import PickTasksResponse, RepairOutcome
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -366,6 +369,314 @@ class TestFromAC_PickTasksImportRestructuring:
             pytest.raises(RuntimeError, match="dr-crash"),
         ):
             view.pick_tasks()
+
+
+# ---------------------------------------------------------------------------
+# AC1 catch-branch: list_tasks archive scan — CorruptionError is caught
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListTasksArchiveScanCatchBranch:
+    """AC1 catch-branch proof: CorruptionError from read_task in archive scan is caught."""
+
+    def test_archive_scan_corruption_error_is_caught(self, tmp_path: Path) -> None:
+        """CorruptionError during archive read_task → caught → archived_reasons set → no propagation.
+
+        After fix: except CorruptionError: matches → archived_reasons[id] = None.
+        Currently (broad except Exception:): also caught, but by the wrong handler.
+        This test proves the NARROWED handler still catches CorruptionError.
+        """
+        board = _make_board(tmp_path)
+        (board / "archive" / "1-task.md").write_text(_PLACEHOLDER, encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        with patch(
+            "owlbear_kanban.engine.read_task",
+            side_effect=CorruptionError("ERR_CORRUPT_DELIMITERS"),
+        ):
+            result = engine.list_tasks()  # must not raise
+
+        assert isinstance(result, list), (
+            "list_tasks must return a list when archive scan hits CorruptionError"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC2 catch-branch: list_tasks main scan — CorruptionError is caught
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_ListTasksMainScanCatchBranch:
+    """AC2 catch-branch proof: CorruptionError from read_task in main task scan is caught."""
+
+    def test_main_scan_corruption_error_is_caught(self, tmp_path: Path) -> None:
+        """CorruptionError during main task read_task → caught → task skipped → no propagation.
+
+        After fix: except CorruptionError: matches → continue (task is skipped).
+        This test proves the NARROWED handler still catches CorruptionError.
+        """
+        board = _make_board(tmp_path)
+        (board / "tasks" / "1-task.md").write_text(_PLACEHOLDER, encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        with patch(
+            "owlbear_kanban.engine.read_task",
+            side_effect=CorruptionError("ERR_CORRUPT_DELIMITERS"),
+        ):
+            result = engine.list_tasks()  # must not raise
+
+        assert isinstance(result, list), (
+            "list_tasks must return a list when main scan hits CorruptionError"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC3 catch-branch: sweep — tuple exceptions are caught
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_SweepCatchBranch:
+    """AC3 catch-branch proof: FileNotFoundError/ValueError/KeyError/CorruptionError caught in sweep."""
+
+    def test_sweep_file_not_found_error_is_caught(self, tmp_path: Path) -> None:
+        """FileNotFoundError during sweep read_task → caught → task skipped → sweep returns normally."""
+        board = _make_board(tmp_path)
+        (board / "tasks" / "1-task.md").write_text(_PLACEHOLDER, encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        with patch(
+            "owlbear_kanban.engine.read_task",
+            side_effect=FileNotFoundError("gone"),
+        ):
+            released = engine.sweep()
+
+        assert released == [], "sweep must return [] when FileNotFoundError is caught"
+
+    def test_sweep_value_error_is_caught(self, tmp_path: Path) -> None:
+        """ValueError during sweep read_task → caught → task skipped → sweep returns normally."""
+        board = _make_board(tmp_path)
+        (board / "tasks" / "1-task.md").write_text(_PLACEHOLDER, encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        with patch(
+            "owlbear_kanban.engine.read_task",
+            side_effect=ValueError("bad yaml"),
+        ):
+            released = engine.sweep()
+
+        assert released == []
+
+    def test_sweep_key_error_is_caught(self, tmp_path: Path) -> None:
+        """KeyError during sweep read_task → caught → task skipped → sweep returns normally."""
+        board = _make_board(tmp_path)
+        (board / "tasks" / "1-task.md").write_text(_PLACEHOLDER, encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        with patch(
+            "owlbear_kanban.engine.read_task",
+            side_effect=KeyError("missing field"),
+        ):
+            released = engine.sweep()
+
+        assert released == []
+
+    def test_sweep_corruption_error_is_caught(self, tmp_path: Path) -> None:
+        """CorruptionError during sweep read_task → caught → task skipped → sweep returns normally."""
+        board = _make_board(tmp_path)
+        (board / "tasks" / "1-task.md").write_text(_PLACEHOLDER, encoding="utf-8")
+        engine = KanbanEngine(board, activity_log=False)
+
+        with patch(
+            "owlbear_kanban.engine.read_task",
+            side_effect=CorruptionError("ERR_CORRUPT_DELIMITERS"),
+        ):
+            released = engine.sweep()
+
+        assert released == []
+
+
+# ---------------------------------------------------------------------------
+# AC4 catch-branch: repair_storage — ValueError/KanbanError/OSError create failed RepairOutcome
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_RepairStorageCatchBranch:
+    """AC4 catch-branch proof: ValueError/KanbanError/OSError from create_task → failed RepairOutcome."""
+
+    def _fake_quarantine_outcome(self) -> RepairOutcome:
+        return RepairOutcome(
+            task_id=1,
+            file_path="/fake/1-task.md",
+            code="ERR_CORRUPT_DELIMITERS",
+            action="quarantined",
+            detail="test delimiter missing",
+        )
+
+    def test_repair_storage_value_error_creates_failed_outcome(
+        self, tmp_path: Path
+    ) -> None:
+        """ValueError from create_task → failed RepairOutcome appended (not propagated).
+
+        Currently: except Exception as _exc: -> creates failure RepairOutcome.
+        After fix: except (ValueError, KanbanError, OSError): -> same behaviour.
+        This test proves ValueError is still caught by the NARROWED handler.
+        """
+        engine = _make_engine(tmp_path)
+        outcome = self._fake_quarantine_outcome()
+
+        with (
+            patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
+            patch.object(
+                KanbanEngine, "create_task", side_effect=ValueError("bad title")
+            ),
+        ):
+            results = engine.repair_storage()
+
+        assert len(results) == 1
+        assert results[0].action == "failed", (
+            "ValueError from create_task must produce a failed RepairOutcome"
+        )
+        assert "AR creation failed" in (results[0].detail or "")
+
+    def test_repair_storage_kanban_error_creates_failed_outcome(
+        self, tmp_path: Path
+    ) -> None:
+        """KanbanError from create_task → failed RepairOutcome appended (not propagated)."""
+        engine = _make_engine(tmp_path)
+        outcome = self._fake_quarantine_outcome()
+
+        with (
+            patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
+            patch.object(
+                KanbanEngine, "create_task", side_effect=KanbanError("ERR_NOT_FOUND", "kanban-err")
+            ),
+        ):
+            results = engine.repair_storage()
+
+        assert len(results) == 1
+        assert results[0].action == "failed", (
+            "KanbanError from create_task must produce a failed RepairOutcome"
+        )
+
+    def test_repair_storage_oserror_creates_failed_outcome(
+        self, tmp_path: Path
+    ) -> None:
+        """OSError from create_task → failed RepairOutcome appended (not propagated)."""
+        engine = _make_engine(tmp_path)
+        outcome = self._fake_quarantine_outcome()
+
+        with (
+            patch("owlbear_kanban.corruption.scan_and_fix", return_value=[outcome]),
+            patch.object(
+                KanbanEngine, "create_task", side_effect=OSError("disk full")
+            ),
+        ):
+            results = engine.repair_storage()
+
+        assert len(results) == 1
+        assert results[0].action == "failed", (
+            "OSError from create_task must produce a failed RepairOutcome"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AC5 warning-log proof: pick_tasks logs WARNING for both caught branches
+# ---------------------------------------------------------------------------
+
+
+class TestFromAC_PickTasksWarningLogs:
+    """AC5 warning-log proof: WARNING is logged for ImportError (import) and caught resolve errors."""
+
+    def test_pick_tasks_import_error_is_caught_and_logged(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """ImportError from importlib.import_module → caught → WARNING logged → pick_tasks returns.
+
+        After fix: except ImportError as exc: → LOGGER.warning(…) → else branch skipped.
+        """
+        view = _make_view(tmp_path)
+
+        with (
+            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
+            patch("importlib.import_module", side_effect=ImportError("no decisions")),
+        ):
+            result = view.pick_tasks()
+
+        assert isinstance(result, PickTasksResponse), (
+            "pick_tasks must return PickTasksResponse even when import raises ImportError"
+        )
+        warning_msgs = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert any("Failed to import decisions module" in msg for msg in warning_msgs), (
+            "WARNING must be logged when importlib.import_module raises ImportError"
+        )
+
+    def test_pick_tasks_kanban_error_from_resolve_is_caught_and_logged(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """KanbanError from resolve_pending_drs → caught → WARNING logged → pick_tasks returns."""
+        view = _make_view(tmp_path)
+        mock_decisions = MagicMock()
+        mock_decisions.resolve_pending_drs.side_effect = KanbanError("ERR_NOT_FOUND", "kanban-err")
+
+        with (
+            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
+            patch("importlib.import_module", return_value=mock_decisions),
+        ):
+            result = view.pick_tasks()
+
+        assert isinstance(result, PickTasksResponse)
+        warning_msgs = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
+            "WARNING must be logged when resolve_pending_drs raises KanbanError"
+        )
+
+    def test_pick_tasks_oserror_from_resolve_is_caught_and_logged(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """OSError from resolve_pending_drs → caught → WARNING logged → pick_tasks returns."""
+        view = _make_view(tmp_path)
+        mock_decisions = MagicMock()
+        mock_decisions.resolve_pending_drs.side_effect = OSError("io-error")
+
+        with (
+            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
+            patch("importlib.import_module", return_value=mock_decisions),
+        ):
+            result = view.pick_tasks()
+
+        assert isinstance(result, PickTasksResponse)
+        warning_msgs = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
+            "WARNING must be logged when resolve_pending_drs raises OSError"
+        )
+
+    def test_pick_tasks_value_error_from_resolve_is_caught_and_logged(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """ValueError from resolve_pending_drs → caught → WARNING logged → pick_tasks returns."""
+        view = _make_view(tmp_path)
+        mock_decisions = MagicMock()
+        mock_decisions.resolve_pending_drs.side_effect = ValueError("val-error")
+
+        with (
+            caplog.at_level(logging.WARNING, logger="owlbear_kanban.engine"),
+            patch("importlib.import_module", return_value=mock_decisions),
+        ):
+            result = view.pick_tasks()
+
+        assert isinstance(result, PickTasksResponse)
+        warning_msgs = [
+            r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING
+        ]
+        assert any("Failed to resolve pending DRs" in msg for msg in warning_msgs), (
+            "WARNING must be logged when resolve_pending_drs raises ValueError"
+        )
 
 
 # ---------------------------------------------------------------------------
