@@ -1,10 +1,10 @@
 ---
 id: 1247
 title: Filter/Search UX for Kanban Board
-status: in-progress
+status: review
 priority: important
 created: 2026-05-01T04:32:36.348648+00:00
-updated: 2026-05-01T08:47:12.779177+00:00
+updated: 2026-05-01T09:37:32.975023+00:00
 tags:
 - type:config
 parent:
@@ -209,3 +209,12 @@ The brief at `.owlbear/briefs/draft-filter-search-ux/brief.md` still references 
 - Decomposition defects resolved by architect: path contract corrected on #1249, `type:test` tag added to #1256.
 - Subtask pipeline proceeds normally: #1248 already in-progress with 19 RED tests.
 - Passing through to builder.
+[[2026-05-01]]
+## Builder Notes
+- Scope: decomposition/config parent task only (`type:config`), no implementation files owned by this task.
+- Files changed: none.
+- Tests: N/A (quality-runner scoped run with empty `test_paths`). Result: 0 passed, 0 failed, 0 skipped.
+- Coverage: N/A (no `coverage_modules` in scope).
+- Lint: N/A (quality-runner scoped run with empty `lint_paths`).
+- Evidence summary: Quality-runner confirmed this task is planning-only and all executable quality gates are not applicable; downstream quality validation belongs to child implementation tasks #1248–#1256.
+- Fixes applied: none (no code surface in scope).

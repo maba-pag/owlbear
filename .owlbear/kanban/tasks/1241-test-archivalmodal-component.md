@@ -1,10 +1,10 @@
 ---
 id: 1241
 title: 'Test: ArchivalModal component'
-status: in-progress
+status: review
 priority: needed
 created: 2026-05-01T03:07:55.116658+00:00
-updated: 2026-05-01T08:48:20.271874+00:00
+updated: 2026-05-01T09:37:52.543058+00:00
 tags:
 - scope:frontend
 parent: 1238
@@ -400,3 +400,18 @@ REFINE → APPROVE. Loop-breaker return from reviewer (2× FAIL, confidence 0.78
 - Total: 46 tests (41 existing preserved + 5 new), all PASS
 - ESLint: clean
 - Implementation handles all 3 addendum AC lines correctly; proof gaps closed.
+[[2026-05-01]]
+## Builder Notes
+- Non-implementation builder pass-through on retry: Test-Writer added 5 addendum proofs and reported all tests passing; no source changes required in this builder cycle.
+- Quality-runner verification (scoped) on current snapshot:
+  - Tests: 46 passed, 0 failed, 0 skipped (`serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx`)
+  - Lint: clean on `serve/cockpit/web/src/components/ArchivalModal.tsx`, `serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx`, `serve/cockpit/web/vitest.setup.ts`
+  - Coverage (`serve/cockpit/web/src/components/ArchivalModal.tsx`): statements 95.74%, branches 90.00%, functions 100%, lines 95.74%
+- Evidence summary: addendum AC proofs are now present and passing (whitespace/mixed refs tokenization + non-409/422 HTTP generic error + network-failure generic error).
+- Commit: none in this builder cycle (test-only retry pass-through).
+
+## Post-task Reflection
+- Problem faced: task state included prior builder/reviewer loops; needed to confirm whether new implementation work was still required.
+- Workaround applied: treated this as a strict verification-only builder pass-through and re-ran quality-runner evidence instead of making speculative code edits.
+- Pattern discovered: loop-breaker returns can convert builder responsibility from implementation to verification gatekeeping when retries are test-only.
+- Quality gap: one non-blocking React `act(...)` warning remains in the scoped run; assertions still pass and lint remains clean.

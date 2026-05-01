@@ -28,6 +28,13 @@ External repos and resources studied during OwlBear development.
 | sse-starlette v3.4.1 (PyPI) | <https://pypi.org/project/sse-starlette/> | EventSourceResponse API, configuration options, shutdown handling, test patterns | `.owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
 | watchfiles v1.1.1 — awatch API docs | <https://watchfiles.helpmanual.io/api/watch/> | Async file watcher API: awatch signature, stop_event, debounce, filter, recursive params | `.owlbear/research/1234-sse-endpoint-implementation.md` | 2026-05-01 |
 
+## Extend SSE to Decisions and Activity (Task #1236)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| watchfiles — awatch multi-path + recursive docs | <https://watchfiles.helpmanual.io/api/watch/> | Confirmed awatch(*paths) supports multiple dirs/files; recursive=True catches new subdirs | `.owlbear/research/1236-extend-sse-decisions-activity.md` | 2026-05-01 |
+| sysid/sse-starlette — typed events (README v3.4.1) | <https://github.com/sysid/sse-starlette> | yield dict with "event" key for typed SSE events; EventSourceResponse configuration | `.owlbear/research/1236-extend-sse-decisions-activity.md` | 2026-05-01 |
+
 ## Version Field Semantics (Task #1170)
 
 | Source | URL | What | Where Used | Date |

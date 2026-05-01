@@ -1,10 +1,10 @@
 ---
 id: 1229
 title: Frontend — complete drag-and-drop (call move API on drop)
-status: backlog
+status: todo
 priority: needed
 created: 2026-04-30 16:31:18.646741+00:00
-updated: 2026-05-01T09:26:25.864177+00:00
+updated: 2026-05-01T09:36:34.830257+00:00
 tags:
 - cockpit
 - frontend
@@ -14,7 +14,7 @@ depends_on:
 - 1225
 blocked: false
 block_reason:
-claimed_at: 2026-05-01T09:26:25.864177+00:00
+claimed_at:
 archival_reason:
 archival_refs: []
 ---
@@ -342,3 +342,59 @@ Note: tests were verified with `vitest run --reporter=verbose` which completed q
 - TSX review required combining quality-runner evidence with VS Code diagnostics because TypeScript tasks do not map cleanly to the Python-first lint conventions in the broader pipeline.
 - The second review hinged on distinguishing a fixed live implementation from still-insufficient AC proof; green suites were not enough.
 - Counting actual `## Review Evidence` headings in the task file prevented an incorrect route back to `todo` and correctly triggered the loop-breaker path.
+[[2026-05-01]]
+
+
+## Architecture Re-Review (loop-breaker return)
+
+### Root Cause of Review Loop
+AC3 and AC5 bundled "clear drag state" with response-specific behaviors. Drag state clearing happens at `setDragSource(null)` (KanbanBoard.tsx:114) BEFORE the async fetch — it is unconditional, not response-dependent. The browser's `dragEnd` event also fires `handleDragEnd` → `setDragSource(null)` (line 104) synchronously after `drop`. Column's `onDrop` independently clears `isDragOver` (Column.tsx:53). No user interaction path can observe state during the zero-width gap between `drop` and `dragEnd`. The test suite correctly proved response-specific behaviors but could not prove an inherently internal, unconditional operation — resulting in two FAIL verdicts for unverifiable clauses.
+
+### AC Refinement
+The following AC lines supersede the original block. AC1, AC2, AC4, AC6 are unchanged. AC3, AC5 are tightened; AC7 is new.
+
+- [x] AC1: Dragging a card stores its taskId and updated token in KanbanBoard state (Card.onDragStart propagates task identity through Column to Board) (td:1)
+- [x] AC2: Dropping on a valid target column calls POST /api/tasks/{id}/move with `{status: targetStatus, updated: storedToken}` body (td:2)
+- [x] AC3: On success (2xx): call refetchTasks() (td:1)
+- [x] AC4: On 409 response: display stale-snapshot error via moveError state, call refetchTasks() to sync fresh updated tokens (td:2)
+- [ ] AC5: On other error (4xx/5xx/network): display error via moveError state, no immediate refetch — polling handles eventual consistency (td:2)
+- [x] AC6: Dropping on invalid target (isValidDragTarget=false) does nothing — existing Column onDragOver guard preserved (td:0)
+- [x] AC7: Drag state is cleared before the async move request; browser dragEnd provides redundant cleanup (td:0)
+
+**AC5 promoted to td:2** because the challenger identified a false-green risk: the current no-refetch tests capture `taskFetchesBefore` AFTER `waitFor` for error display, so an incorrect early refetch (before error render) would be hidden in the baseline. The test-writer must capture the fetch count baseline BEFORE the drop event, not after waiting for the error element.
+
+AC3 and AC5 no longer include "clear drag state" — that concern is captured in AC7 (td:0) since it's unconditional and unobservable in isolation.
+
+### Evaluation
+| Criterion | Assessment | Notes |
+|-----------|-----------|-------|
+| Single responsibility | PASS | One concern: wire drag-drop to existing move API |
+| Interface clarity | PASS | AC now separates response-specific behavior from unconditional drag-state cleanup |
+| Dependency correctness | PASS | #1225 archived |
+| Module layering | PASS | Card→Column→Board prop chain; no upward imports |
+| TDD compliance | PASS | AC5 no-refetch baseline timing fix requires test-writer pass |
+| KISS/YAGNI | PASS | Reuses existing move endpoint, moveError state, refetchTasks |
+| Premise challenge | PASS | Drag-drop complements existing context-menu move |
+| Pattern consistency | PASS | React prop-drilling pattern from #1225; fetch pattern matches existing handlers |
+| Security surface | PASS | No new endpoints; OCC token prevents stale mutations |
+| Single domain | PASS | Frontend cockpit only |
+
+### Failure Mode Map
+Unchanged from first review — all failure modes covered.
+
+### Challenge Results
+- Challenger: reconsider (0.36)
+- Issues raised: (1) contract drift — procedural, refinement now written; (2) td:0 quality weakening — rebutted: browser dragEnd fires synchronously after drop, Column independently clears isDragOver, no user interaction can observe the gap; (3) AC5 false-green from baseline timing — ACCEPTED, AC5 promoted to td:2 with explicit test-writer note; (4) duplicated move handlers — informational, out of scope per task Notes
+- Architect response: accepted concern 3, rebutted concerns 2 and 4, addressed concern 1 procedurally
+
+### Test Depth
+- Max depth: 2
+- Test-writer: PROCEED — must fix AC5 no-refetch baseline timing (capture before drop, not after waitFor)
+
+### Existing Test Disposition
+The builder's implementation is complete and correct. 14 task-owned tests and 35 durable-suite tests pass. The AC5 baseline-timing fix is the only test change needed — all other tests remain valid.
+
+### Verdict: APPROVE
+### Action Taken: Refined AC3/AC5 to remove untestable drag-state clauses (moved to AC7 td:0). Promoted AC5 to td:2 for no-refetch baseline timing fix. Checked AC1-AC4/AC6 against existing implementation — already proven. Advanced to todo.
+[[2026-05-01]]
+Architecture re-review complete (loop-breaker return). Refined AC3/AC5 to remove untestable drag-state clauses — moved to new AC7 (td:0). Promoted AC5 to td:2: challenger identified false-green risk in no-refetch baseline timing (captured after waitFor instead of before drop). All 10 criteria PASS. Implementation is correct; only AC5 test baseline timing needs test-writer fix.

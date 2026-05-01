@@ -1,10 +1,10 @@
 ---
 id: 1226
 title: Frontend — dedup rowStyleForState + delete scratch files
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-04-30 16:31:18.617727+00:00
-updated: 2026-05-01T09:01:27.889396+00:00
+updated: 2026-05-01T09:38:09.316662+00:00
 tags:
 - cockpit
 - frontend
@@ -208,3 +208,19 @@ Re-review after reviewer FAIL. Refined AC1 td:1→td:2 (all 3 branches: blocked/
 | AC2: imports from shared module | td:0 | skipped |
 | AC3: scratch files removed | td:0 | skipped |
 | AC4: Vitest + ESLint scoped to task-touched files | td:0 | skipped (scoped pass confirmed by quality-runner output above) |
+[[2026-05-01]]
+## Builder Notes
+- Change scope this cycle: verification-only; no new code edits required because implementation from prior builder pass already satisfies refined AC.
+- AC verification:
+  - AC1: `rowStyleForState` shared in `serve/cockpit/web/src/utils/styles.ts` with blocked/rejected, stuck, and default branches.
+  - AC2: `ActivityTab.tsx` and `HistorySubtab.tsx` import shared helper; no local duplicate function remains.
+  - AC3: no root `serve/cockpit/web/.owlbear-scratch-*` files; `serve/cockpit/web/.owlbear/scratch/` absent.
+  - AC4 (scoped): task-owned Vitest file and ESLint on task-touched files pass.
+- Quality-runner evidence:
+  - Tests: 4 passed, 0 failed on `serve/cockpit/web/src/__tests__/styles_1226.test.ts`.
+  - Lint: clean on `ActivityTab.tsx`, `HistorySubtab.tsx`, `styles.ts`, `styles_1226.test.ts`.
+  - Coverage (`src/utils/styles.ts`): 100% statements, 100% branches, 100% functions, 100% lines.
+- Post-task reflection:
+  - Re-review AC refinement (td:2 branch coverage + scoped AC4 gate) resolved prior structural infeasibility cleanly.
+  - Running scoped quality checks isolated task evidence from unrelated frontend baseline debt.
+  - No additional implementation risk observed; helper behavior is fully branch-proven in task-owned tests.

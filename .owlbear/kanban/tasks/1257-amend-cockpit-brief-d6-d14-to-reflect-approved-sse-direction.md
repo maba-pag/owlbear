@@ -1,10 +1,10 @@
 ---
 id: 1257
 title: Amend cockpit brief D6/D14 to reflect approved SSE direction
-status: in-progress
+status: review
 priority: nice-to-have
 created: 2026-05-01T05:33:27.534058+00:00
-updated: 2026-05-01T09:04:30.342615+00:00
+updated: 2026-05-01T09:40:50.443619+00:00
 tags:
 - docs
 - cockpit
@@ -168,3 +168,18 @@ Non-implementation pass-through. All AC lines are `td:0` (docs-only amendments t
 
 ### Action
 - Reject to in-progress. This is an implementation issue in the documentation artifact, not a test-gap issue.
+[[2026-05-01]]
+## Builder Notes
+- Files changed: `.owlbear/briefs/draft-cockpit/brief.md`
+- Fix applied: added explicit resolved-DR authority references to all SSE/polling statements that were amended under this task, including outcomes, backend/frontend phase rows, risk rows, out-of-scope note, and condensed D6.
+- Test results (quality-runner scoped): 0 passed, 0 failed, pytest exit 5 (`test_paths=[]`, no tests collected; expected for td:0 docs-only task).
+- Coverage: N/A (docs-only scope; no executable modules touched).
+- Lint status (quality-runner scoped): clean with 0 violations (no lint targets provided for markdown docs; ruff exit 0).
+- Evidence summary: AC1-AC3 remained satisfied; AC4 now satisfied because brief amendments now carry explicit authority to resolved DR `.owlbear/decisions/resolved/1233-cockpit-polling-vs-sse.md` alongside already-correct decisions.md references.
+- Commit: `23e18214` (`docs: align SSE authority refs in cockpit brief (#1257, builder)`).
+
+Post-task reflection:
+- Problem faced: prior brief updates were semantically correct but lacked explicit authority attribution on every amended SSE/polling mention required by AC text.
+- Workaround applied: standardized inline authority references directly on each affected row/statement rather than relying on nearby implicit references.
+- Pattern discovered: for docs AC phrased as "all changes reference authority," reviewers enforce per-change explicit citation, not just section-level intent.
+- Quality gap avoided: removed shorthand DR mentions and normalized to the full resolved decision path to prevent another ambiguity-based reject.
