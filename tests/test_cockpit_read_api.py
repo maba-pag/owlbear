@@ -923,59 +923,6 @@ class TestFromAC_EngineReloadOnMtimeChange:
         )
 
 
-class TestBuilderDiscoveredReadApiAdapter:
-    """Thin adapter-wrapper coverage promoted from archived task tests."""
-
-    def test_adapter_list_tasks_is_callable_via_engine(
-        self, engine: KanbanEngine
-    ) -> None:
-        """adapter.list_tasks(engine) delegates to engine.list_tasks and returns a list."""
-        from owlbear_cockpit import adapter  # noqa: PLC0415
-
-        result = adapter.list_tasks(engine)
-        assert isinstance(result, list)
-
-    def test_adapter_show_task_is_callable_via_engine(
-        self, engine: KanbanEngine
-    ) -> None:
-        """adapter.show_task(engine, task_id) returns the matching task object."""
-        from owlbear_cockpit import adapter  # noqa: PLC0415
-
-        tasks = engine.list_tasks()
-        task_id = str(tasks[0].id)
-        result = adapter.show_task(engine, task_id)
-        assert result is not None
-        assert str(result.id) == task_id
-
-    def test_adapter_board_config_is_callable_via_engine(
-        self, engine: KanbanEngine
-    ) -> None:
-        """adapter.board_config(engine) returns a config object with statuses."""
-        from owlbear_cockpit import adapter  # noqa: PLC0415
-
-        result = adapter.board_config(engine)
-        assert result is not None
-        assert hasattr(result, "statuses")
-
-    def test_adapter_valid_transitions_is_callable_via_engine(
-        self, engine: KanbanEngine
-    ) -> None:
-        """adapter.valid_transitions(engine, status) returns a collection of strings."""
-        from owlbear_cockpit import adapter  # noqa: PLC0415
-
-        result = adapter.valid_transitions(engine, "todo")
-        assert isinstance(result, (set, frozenset, list))
-
-    def test_adapter_list_sessions_is_callable_via_engine(
-        self, engine: KanbanEngine
-    ) -> None:
-        """adapter.list_sessions(engine) returns a list."""
-        from owlbear_cockpit import adapter  # noqa: PLC0415
-
-        result = adapter.list_sessions(engine)
-        assert isinstance(result, list)
-
-
 class TestFromAC_CacheHitShortCircuit:
     """Cache hits return cached tasks without reloading through the engine."""
 

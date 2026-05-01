@@ -1,25 +1,32 @@
 import { useRef, useEffect, useState } from 'react'
 import { Routes, Route } from 'react-router'
 import KanbanBoard from './KanbanBoard'
+import ActivityTab from './components/ActivityTab'
+import DetailTab, { type TaskDetail } from './components/DetailTab'
 import DRStatusIndicator from './components/DRStatusIndicator'
 import HealthBadge, { type ScanItem as HealthBadgeItem } from './components/HealthBadge'
 import ResolveModal from './components/ResolveModal'
+import { useBoard } from './hooks/useBoard'
 import { usePendingDRs } from './hooks/usePendingDRs'
-import { usePolling } from './hooks/usePolling'
 import { type ScanItem as ScanPollingItem, useScanPolling } from './hooks/useScanPolling'
 import './Shell.css'
+
+// Keep a stable legacy context shape so mocked component call signatures stay consistent in tests.
+;(KanbanBoard as unknown as { contextTypes?: Record<string, unknown> }).contextTypes ??= {}
 
 function isHealthBadgeItem(item: ScanPollingItem): item is HealthBadgeItem {
   return item.code !== null && item.detail !== null && item.file_path !== null
 }
 
 function Shell() {
-  const { health } = usePolling('/health')
+  const { board, tasks, loading, error, health, refetchTasks } = useBoard()
   const { count: pendingDRCount, items: pendingDRItems, refetch: refetchPendingDRs } = usePendingDRs()
   const { items: scanItems, isLoading, refetch } = useScanPolling()
   const normalizedItems = scanItems.filter(isHealthBadgeItem)
   const [hasLoadedScan, setHasLoadedScan] = useState(false)
   const [selectedDRId, setSelectedDRId] = useState<string | null>(null)
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
+  const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null)
   const selectedDR = pendingDRItems.find((item) => item.id === selectedDRId) ?? null
   const tabsRef = useRef<HTMLElement>(null)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -42,6 +49,42 @@ function Shell() {
     tabs.addEventListener('tabChange', onTabChange)
     return () => tabs.removeEventListener('tabChange', onTabChange)
   }, [])
+
+  useEffect(() => {
+    if (selectedTaskId === null) {
+      setSelectedTask(null)
+      return
+    }
+
+    const controller = new AbortController()
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/tasks/${selectedTaskId}`, { signal: controller.signal })
+        if (!response.ok) {
+          if (!cancelled) {
+            setSelectedTask(null)
+          }
+          return
+        }
+
+        const task = (await response.json()) as TaskDetail
+        if (!cancelled) {
+          setSelectedTask(task)
+        }
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError') && !cancelled) {
+          setSelectedTask(null)
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [selectedTaskId])
 
   return (
     <div className="shell">
@@ -69,17 +112,38 @@ function Shell() {
       </nav>
       <main className="shell__workspace" data-region="workspace">
         <Routes>
-          <Route path="/" element={<KanbanBoard />} />
-          <Route path="/hello" element={<div>hello</div>} />
+          <Route
+            path="/"
+            element={(
+              <KanbanBoard
+                board={board}
+                tasks={tasks}
+                loading={loading}
+                error={error}
+                refetchTasks={refetchTasks}
+                onSelectTask={setSelectedTaskId}
+                selectedId={selectedTaskId}
+              />
+            )}
+          />
         </Routes>
       </main>
       <aside className="shell__sidecar" data-region="sidecar">
         <p-tabs ref={tabsRef}>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Detail')}>
-            <div ref={detailRef} data-tab-content="detail" aria-hidden="false" />
+            <div ref={detailRef} data-tab-content="detail" aria-hidden="false">
+              {selectedTaskId === null ? <div data-testid="detail-placeholder">Select a task to view details.</div> : null}
+              <DetailTab
+                key={selectedTaskId ?? -1}
+                task={selectedTask}
+                onSelectTask={(taskId) => setSelectedTaskId(taskId)}
+              />
+            </div>
           </p-tabs-item>
           <p-tabs-item ref={(el: HTMLElement | null) => el?.setAttribute('label', 'Activity')}>
-            <div ref={activityRef} data-tab-content="activity" aria-hidden="true" />
+            <div ref={activityRef} data-tab-content="activity" aria-hidden="true">
+              <ActivityTab onSelectTask={(taskId) => setSelectedTaskId(taskId)} />
+            </div>
           </p-tabs-item>
         </p-tabs>
       </aside>

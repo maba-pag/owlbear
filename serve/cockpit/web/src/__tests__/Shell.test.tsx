@@ -94,10 +94,10 @@ describe('TestFromAC_AppShell', () => {
       expect(workspace?.querySelector('[data-testid="loading-indicator"]')).not.toBeNull()
     })
 
-    it('route "/hello" renders hello content in workspace region', () => {
+    it('route "/hello" does not render hello content in workspace region', () => {
       const { container } = renderShell('/hello')
       const workspace = container.querySelector('[data-region="workspace"]')
-      expect(workspace?.textContent?.toLowerCase()).toContain('hello')
+      expect(workspace?.textContent?.toLowerCase()).not.toContain('hello')
     })
 
     it('route "/hello" keeps all 5 grid regions present (shell layout unchanged)', () => {
