@@ -1,10 +1,10 @@
 ---
 id: 1247
 title: Filter/Search UX for Kanban Board
-status: review
+status: archived
 priority: important
 created: 2026-05-01T04:32:36.348648+00:00
-updated: 2026-05-01T09:37:32.975023+00:00
+updated: 2026-05-01T12:45:17.571859+00:00
 tags:
 - type:config
 parent:
@@ -218,3 +218,136 @@ The brief at `.owlbear/briefs/draft-filter-search-ux/brief.md` still references 
 - Lint: N/A (quality-runner scoped run with empty `lint_paths`).
 - Evidence summary: Quality-runner confirmed this task is planning-only and all executable quality gates are not applicable; downstream quality validation belongs to child implementation tasks #1248–#1256.
 - Fixes applied: none (no code surface in scope).
+[[2026-05-01]]
+## Review Evidence
+### Review Scope
+- Parent decomposition/config task (`type:config`) with no implementation files owned by this task.
+- Max depth is td:0 per latest architecture refinement at `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:198`; per review protocol this means quality-runner only and no code-reader fan-out.
+- Task 1247 still has no explicit `## Acceptance Criteria` block, so this review is grounded in the planning artifact plus the latest architecture refinement after the prior rejection.
+
+### Test Results
+- quality-runner: N/A.
+- Independent scoped run used `test_paths=[]` and confirmed empty scoped tests are treated as not applicable, not pass/fail.
+- Structured result: 0 passed, 0 failed, 0 skipped.
+
+### Lint
+- quality-runner: N/A.
+- Independent scoped run used `lint_paths=[]` and confirmed empty lint scope is not applicable for this parent task.
+- Structured result: clean execution, no files in scope.
+
+### Coverage
+- N/A. `coverage_modules=[]` and no implementation modules are owned by task 1247.
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+- Skipped correctly. No `TestFromAC_*` classes belong to this parent decomposition task.
+
+#### Security Review
+- No executable code changes are in scope. Latest builder notes state `no implementation files owned by this task` at `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:214`.
+
+#### Test Integrity
+- N/A. Builder did not modify any `TestFromAC_*` content for this parent task.
+
+#### Test Quality
+- N/A. No task-owned tests.
+
+#### Data Safety
+- No issues in scope. This task owns planning/decomposition artifacts only.
+
+#### Implementation-Aware Gaps
+- No blocking gaps remain.
+- Prior rejection defect 1 is fixed: child task 1249 now carries a binding path correction at `.owlbear/kanban/tasks/1249-p1-02-green-filtertasks-pure-function-filterstate-type.md:41` and `.owlbear/kanban/tasks/1249-p1-02-green-filtertasks-pure-function-filterstate-type.md:42`, aligning the downstream implementation target with the RED test import at `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts:19` and the committed stub in `serve/cockpit/web/src/utils/filterTasks.ts:11`.
+- Prior rejection defect 2 is fixed: child task 1256 now includes both `test:integration` and `type:test` at `.owlbear/kanban/tasks/1256-p5-01-integration-tests-full-board-filter-flow.md:11` and `.owlbear/kanban/tasks/1256-p5-01-integration-tests-full-board-filter-flow.md:12`.
+- The latest architecture refinement explicitly resolves brief/task authority: `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:180` states the stale brief path is superseded by implemented reality and the corrected task AC takes precedence.
+
+#### Builder Process Quality
+| Metric | Value |
+|--------|-------|
+| Builder Notes sections | 2 |
+| Approach variation | Pass-through retry after reviewer rejection; no repeated ineffective implementation attempt |
+| Assessment | CLEAN |
+
+### Pass 2 — INFORMATIONAL
+- Structural decomposition remains valid: 9 subtasks, 5 dependency layers, and 5 phases at `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:22`, `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:23`, and `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:24`.
+- Historical stale notes remain in the parent body, but the latest refinement after the rejection is explicit and internally consistent. This is not a current contract defect.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---------|----------|-------------|--------|
+| Decompose the feature into a linear 5-phase TDD chain | Planning artifact shows 9 subtasks across 5 dependency layers and 5 phases at `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:22`, `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:23`, `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:24`. | N/A | PASS |
+| Child-task contracts are internally consistent after the prior review rejection | 1249 correction note at `.owlbear/kanban/tasks/1249-p1-02-green-filtertasks-pure-function-filterstate-type.md:41` and `.owlbear/kanban/tasks/1249-p1-02-green-filtertasks-pure-function-filterstate-type.md:42`; aligned with RED import at `serve/cockpit/web/src/__tests__/filterTasks_1248.test.ts:19` and module stub at `serve/cockpit/web/src/utils/filterTasks.ts:11`. | N/A | PASS |
+| Downstream test task routes correctly through the pipeline | 1256 tags now include both required entries at `.owlbear/kanban/tasks/1256-p5-01-integration-tests-full-board-filter-flow.md:11` and `.owlbear/kanban/tasks/1256-p5-01-integration-tests-full-board-filter-flow.md:12`. | N/A | PASS |
+| Parent task correctly remains planning-only with executable quality gates marked N/A | Latest architecture review marks td:0 at `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:198`; builder notes confirm no implementation scope at `.owlbear/kanban/tasks/1247-filter-search-ux-for-kanban-board.md:214`; quality-runner independently confirmed tests/lint/coverage are N/A for empty scoped inputs. | N/A | PASS |
+
+### Deductions
+- `0.04` deduction for having to ground the review in the planning artifact plus late architecture refinement rather than an explicit acceptance-criteria section.
+
+### Confidence: .96
+### Verdict: PASS
+### Action
+- Advanced to docs.
+
+### Reflection
+- Problem faced: the task body retains stale historical failure notes, so the review had to anchor on the latest refinement rather than earlier sections.
+- Workaround applied: verified the live child-task files directly instead of trusting the re-approval summary.
+- Pattern discovered: decomposition-parent reviews should treat appended post-rejection architecture refinements as the binding authority when they explicitly supersede stale brief/task text.
+[[2026-05-01]]
+## Docs Gate
+
+### Checklist
+| # | Check | Applies? | Status | Evidence |
+|---|-------|----------|--------|----------|
+| 1 | Descriptive prose docs | No | N/A | Builder notes: "Files changed: none." No behavior, API, CLI, config, or package structure changes owned by this task. |
+| 2 | Module docstrings | No | N/A | No Python modules created or modified. |
+| 3 | External attribution | No | N/A | No external patterns used — greenfield decomposition planning only. |
+| 4 | Research doc | No | N/A | No `.owlbear/research/` doc produced for this parent task. |
+| 5 | Diagram maintenance (describes match) | No | N/A | `cockpit.excalidraw` describes `serve/cockpit/web/src/**`, but #1247 owns no changed files in that path. Referenced files (`filterTasks_1248.test.ts`, `utils/filterTasks.ts`) are child task #1248 artifacts, not owned by #1247. |
+| 6 | Explicit diagram creation | No | N/A | No diagram creation requested in task body. |
+| 7 | Deletion detection | No | N/A | No files deleted. No orphaned IN-scope docs detected. |
+
+### Scope Classification
+| File | Scope | Action |
+|------|-------|--------|
+| (none — builder confirmed "Files changed: none") | — | N/A |
+
+### Files Updated
+- None
+
+### Child Tasks Created
+- None
+
+### Scratch Files Cleaned
+- None (no `1247-*` scratch files found)
+[[2026-05-01]]
+## Audit
+
+### AC Verification
+| AC Line | Evidence | Status |
+|---------|----------|--------|
+| Decompose feature into linear 5-phase TDD chain | 9 subtasks, 5 phases, mermaid dependency graph in task body; all 9 child task files exist in kanban/tasks/ | PASS |
+| Child-task contracts internally consistent | #1249 path correction note appended (utils/filterTasks.ts); RED import and stub align at serve/cockpit/web/src/utils/filterTasks.ts | PASS |
+| Downstream test task routes correctly | #1256 tags confirmed: phase-5, scope:cockpit-web, test:integration, type:test | PASS |
+| Parent remains planning-only with N/A quality gates | No code changes; builder/test-writer both noted N/A; quality-runner confirmed empty scope | PASS |
+
+### Test Results
+- pytest (full suite, no-cov): 1541 passed, 53 failed, 4 skipped
+- All 53 failures are pre-existing debt in tasks #1196, #1199, #1176; none in #1247 scope
+- ruff (full): 4 violations in knowledge, mcp-knowledge, mcp-memory, orchestrator; none in scope
+
+### Reviewer Evidence
+Present and thorough. Two-pass pipeline: first review correctly caught two decomposition defects (confidence .73 FAIL), second review confirmed fixes (confidence .96 PASS). Reviewer work was high quality.
+
+### Architect Quality: 3/5
+Decomposition structure is clean (9 tasks, 5 phases, linear TDD chain). However, two defects (path drift, missing routing tag) were documented in the architecture review but not corrected before advancing, causing a reviewer rejection and full pipeline re-cycle. No explicit AC section on the parent task forced reviewer to synthesize AC from the planning artifact.
+
+### Deduction Breakdown
+| Criterion | Deduction |
+|-----------|-----------|
+| AC lines with no evidence | 0 (all 4 have evidence) |
+| Lint violations in scope | 0 |
+| AC quality score 3 (lte 3) | -0.03 |
+| Missing reviewer evidence | 0 |
+| Test failures in scope | 0 |
+
+### Confidence: .97
+### Action: archive
