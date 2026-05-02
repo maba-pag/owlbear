@@ -1861,9 +1861,6 @@ class AgentView:
     def _compute_dep_status(
         self,
         task: Task,
-        *,
-        active_ids: set[int],
-        archived_reasons: dict[int, str | None],
     ) -> str | None:
         deps = task.depends_on or []
         if not deps:
@@ -1871,12 +1868,14 @@ class AgentView:
 
         status = "ok"
         for dep_id in deps:
-            if dep_id in active_ids:
-                continue
-            if dep_id not in archived_reasons:
+            try:
+                dep_task = self.engine.show_task(str(dep_id))
+            except (FileNotFoundError, CorruptionError, ValueError, KeyError):
                 return "blocked"
+            if dep_task.status != "archived":
+                continue
 
-            dep_effect = self._dep_effect_from_archival_reason(archived_reasons[dep_id])
+            dep_effect = self._dep_effect_from_archival_reason(dep_task.archival_reason)
             if dep_effect == "blocked":
                 return "blocked"
             if dep_effect == "redirect":
@@ -2167,16 +2166,7 @@ class AgentView:
         if isinstance(payload.get("body"), list):
             payload["body"] = None
 
-        active_ids = {summary.id for summary in self.engine.list_tasks(archived=False)}
-        archived_reasons = {
-            summary.id: summary.archival_reason
-            for summary in self.engine.list_tasks(archived=True)
-        }
-        payload["dep_status"] = self._compute_dep_status(
-            task,
-            active_ids=active_ids,
-            archived_reasons=archived_reasons,
-        )
+        payload["dep_status"] = self._compute_dep_status(task)
 
         guidance: list[str] = []
         missing_sections: list[str] | None = None
