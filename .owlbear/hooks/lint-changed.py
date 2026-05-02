@@ -87,7 +87,7 @@ def main() -> None:
 
     try:
         result = subprocess.run(  # noqa: S603
-            [
+            [  # noqa: S607 — uv must be found via PATH
                 "uv",
                 "run",
                 "--quiet",
@@ -96,7 +96,7 @@ def main() -> None:
                 "--ignore",
                 "INP001",
                 *existing_py,
-            ],  # noqa: S607
+            ],
             capture_output=True,
             text=True,
             check=False,
