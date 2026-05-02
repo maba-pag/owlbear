@@ -46,6 +46,7 @@ from owlbear_kanban.agent_names import ADJECTIVES, NOUNS
 from owlbear_kanban.body_parser import parse_body
 from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.corruption import ERR_CORRUPT_DUPLICATE_ID, CorruptionError
+from owlbear_kanban.dispatch import PRIORITY_RANK, STATUS_RANK
 from owlbear_kanban.models import (
     ActivityCompactionResult,
     ActivityEvent,
@@ -170,6 +171,33 @@ def _compute_duration(claim_ts: str, close_ts: str) -> float:
 def _task_body_as_text(body: object) -> str:
     """Return a string body for task mutation operations."""
     return body if isinstance(body, str) else ""
+
+
+def _validate_dispatch_rank_coverage(config: BoardConfig) -> None:
+    """Ensure dispatch rank maps cover every configured priority and status."""
+    unranked_priorities = [
+        value for value in config.priorities if value not in PRIORITY_RANK
+    ]
+    if unranked_priorities:
+        names = ", ".join(unranked_priorities)
+        raise ConfigError(
+            code="ERR_DISPATCH_PRIORITY_MISMATCH",
+            user_message=(
+                "dispatch priority ranks missing configured values: "
+                f"{names}"
+            ),
+        )
+
+    unranked_statuses = [value for value in config.statuses if value not in STATUS_RANK]
+    if unranked_statuses:
+        names = ", ".join(unranked_statuses)
+        raise ConfigError(
+            code="ERR_DISPATCH_STATUS_MISMATCH",
+            user_message=(
+                "dispatch status ranks missing configured values: "
+                f"{names}"
+            ),
+        )
 
 
 def _restore_snapshot_if_unchanged(
@@ -387,6 +415,7 @@ class KanbanEngine:
     ) -> None:
         self._kanban_dir = kanban_dir
         self._config: BoardConfig = load_config(kanban_dir)
+        _validate_dispatch_rank_coverage(self._config)
         self._tasks_dir = kanban_dir / self._config.paths.tasks_dir
         self._archive_dir = kanban_dir / self._config.paths.archive_dir
         self._agent_name: str = (
@@ -511,6 +540,7 @@ class KanbanEngine:
         scan and rebuilds the id→filename index.
         """
         self._config = load_config(self._kanban_dir)
+        _validate_dispatch_rank_coverage(self._config)
         self._tasks_dir = self._kanban_dir / self._config.paths.tasks_dir
         self._archive_dir = self._kanban_dir / self._config.paths.archive_dir
         self._task_cache = {}
