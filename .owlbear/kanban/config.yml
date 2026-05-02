@@ -14,7 +14,7 @@ priorities:
   - important
   - needed
   - critical
-next_id: 1266
+next_id: 1275
 activity_log: false
 paths:
   tasks_dir: tasks
@@ -61,3 +61,6 @@ archival_reasons:
   - duplicate
   - wontfix
 status_predicates: {}
+defaults:
+  status: research
+  priority: important
