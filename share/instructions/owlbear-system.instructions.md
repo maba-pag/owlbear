@@ -1,5 +1,5 @@
 ---
-description: "OwlBear system instructions — decision heuristics, system awareness, memory governance, and operational fundamentals"
+description: "System instructions — decision heuristics, system awareness, memory governance, and operational fundamentals"
 applyTo: "**"
 ---
 
@@ -32,21 +32,6 @@ applyTo: "**"
 ```
 research → (researcher) → backlog → (architect) → todo → (test-writer) → in-progress → (builder) → review → (reviewer) → docs → (doc-writer) → done → (auditor) → archived
 ```
-
-### Directory Structure
-
-| Directory | Purpose |
-|-----------|---------|
-| `serve/` | Python workspace packages (orchestrator, knowledge, browser, MCP servers) |
-| `share/agents/` | Agent definitions (`.agent.md`) |
-| `share/skills/` | Agent skills (`SKILL.md` — `w-`, `r-`, `h-` prefixed) |
-| `share/instructions/` | Instruction stubs (`.instructions.md` — pointers to skills); `pipeline-agents.instructions.md` is the authoritative Channel B protocol and per-agent section-header mapping |
-| `share/prompts/` | Prompt files (`.prompt.md` — user-facing one-shot commands) |
-| `.owlbear/` | Project ops data: kanban board, decisions, research, sources, scratch, scripts, hooks |
-| `store/` | Knowledge and memory data |
-| `seed/` | Template files copied to new projects by `setup/init.py` |
-| `setup/` | Workspace initialiser (`init.py`), setup guide, sharing guide |
-| `scripts/` | Legacy setup script and pre-commit hooks (see `setup/init.py`) |
 
 For file placement rules, commit format, priorities, and tags, see `r-project-standards`.
 
