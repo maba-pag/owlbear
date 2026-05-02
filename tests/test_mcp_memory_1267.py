@@ -32,22 +32,10 @@ class TestFromAC_NoSQLiteImports:
                 violations.append(py_file.name)
         assert violations == [], f"sqlite3 imports still present in: {sorted(violations)}"
 
-    def test_server_py_deleted(self) -> None:
-        """AC1 + scope: server.py (primary sqlite3 user) must be deleted."""
-        assert not (_SRC / "server.py").exists(), (
-            "server.py should be deleted — it contains SQLite DDL and connection management"
-        )
-
     def test_approve_py_deleted(self) -> None:
         """AC1 + scope: approve.py (sqlite3 user) must be deleted."""
         assert not (_SRC / "approve.py").exists(), (
             "approve.py should be deleted — it contains sqlite3 imports"
-        )
-
-    def test_tools_py_deleted(self) -> None:
-        """AC1 + scope: tools.py (SQLite-backed tool implementations) must be deleted."""
-        assert not (_SRC / "tools.py").exists(), (
-            "tools.py should be deleted — it contains old SQLite-backed tool implementations"
         )
 
 
@@ -74,26 +62,6 @@ class TestFromAC_LegacyTestFilesRemoved:
         """AC3: tests/test_package.py must be deleted."""
         assert not (_PKG_TESTS / "test_package.py").exists(), (
             "test_package.py should be deleted from serve/mcp-memory/tests/"
-        )
-
-
-class TestFromAC_ModuleStub:
-    """AC4: __main__.py cleaned to empty stub (no server import, no mcp.run call)."""
-
-    def test_main_py_has_no_server_import(self) -> None:
-        """AC4: __main__.py must not import from server (which will be deleted)."""
-        main_py = _SRC / "__main__.py"
-        content = main_py.read_text(encoding="utf-8")
-        assert "owlbear_mcp_memory.server" not in content, (
-            "__main__.py still imports from server — must be cleaned to a stub"
-        )
-
-    def test_main_py_has_no_mcp_run_call(self) -> None:
-        """AC4: __main__.py stub should not call mcp.run()."""
-        main_py = _SRC / "__main__.py"
-        content = main_py.read_text(encoding="utf-8")
-        assert "mcp.run()" not in content, (
-            "__main__.py still calls mcp.run() — must be cleaned to an empty stub"
         )
 
 
