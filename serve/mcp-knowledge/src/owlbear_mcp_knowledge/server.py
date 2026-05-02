@@ -632,8 +632,8 @@ async def export_scope(
 async def sync_from_global(ctx: Context) -> str:
     """Import all documents from the global knowledge DB into the local DB under scope='global'.
 
-    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
-    env var).  Duplicate documents (same content hash) are skipped.
+    Global DB path resolution via ``owlbear-project.json`` has been removed (see #1296).
+    This tool always returns an ``error: `` string until a replacement resolver is provided.
 
     Returns a count string on success, or an ``error: `` string on failure.
     """
@@ -671,8 +671,8 @@ async def sync_from_global(ctx: Context) -> str:
 async def sync_to_global(ctx: Context) -> str:
     """Export local documents with scope='global' into the global knowledge DB.
 
-    Resolves the global DB path via ``owlbear-project.json`` (or ``OWLBEAR_GLOBAL_KB_PATH``
-    env var).  Creates the global DB file (with schema) if it doesn't exist yet.
+    Global DB path resolution via ``owlbear-project.json`` has been removed (see #1296).
+    This tool always returns an ``error: `` string until a replacement resolver is provided.
     Only documents with ``scope='global'`` in the local DB are exported.
     Duplicate documents (same content hash) are skipped.
 
