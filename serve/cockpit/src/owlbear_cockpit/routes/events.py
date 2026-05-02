@@ -1,4 +1,4 @@
-"""Cockpit SSE routes for task-list invalidation events."""
+"""Cockpit SSE routes for kanban surface invalidation events."""
 
 from __future__ import annotations
 
@@ -18,25 +18,76 @@ router = APIRouter()
 _Engine = Annotated[KanbanEngine, Depends(get_engine)]
 
 
-def _watch_filter(_change: object, path: str) -> bool:
-    """Accept only task markdown files and ignore temporary write artifacts."""
-    name = Path(path).name
-    return name.endswith(".md") and not name.startswith(".tmp-")
+def _resolve(path: Path | str) -> Path:
+    """Normalize a path without requiring it to exist on disk."""
+    return Path(path).resolve(strict=False)
+
+
+def _is_direct_md(path: Path, parent_dir: Path) -> bool:
+    """Return True for direct child markdown files only."""
+    try:
+        relative = path.relative_to(parent_dir)
+    except ValueError:
+        return False
+    return len(relative.parts) == 1 and relative.suffix == ".md"
+
+
+def _build_watch_filter(
+    tasks_dir: Path, decisions_pending_dir: Path, activity_path: Path
+) -> callable:
+    """Build a board-specific watch filter for tasks, decisions, and activity."""
+    tasks_dir_r = _resolve(tasks_dir)
+    decisions_pending_dir_r = _resolve(decisions_pending_dir)
+    activity_path_r = _resolve(activity_path)
+
+    def _watch_filter(_change: object, path: str) -> bool:
+        candidate = _resolve(path)
+        name = candidate.name
+        if candidate == activity_path_r:
+            return True
+        if name.startswith(".tmp-"):
+            return False
+        return _is_direct_md(candidate, tasks_dir_r) or _is_direct_md(
+            candidate, decisions_pending_dir_r
+        )
+
+    return _watch_filter
+
+
+def _classify_path(
+    changed_path: Path,
+    tasks_dir: Path,
+    decisions_pending_dir: Path,
+    activity_path: Path,
+) -> str | None:
+    """Map a changed path to its typed SSE event or None."""
+    if changed_path == activity_path:
+        return "activity-changed"
+    if _is_direct_md(changed_path, tasks_dir):
+        return "tasks-changed"
+    if _is_direct_md(changed_path, decisions_pending_dir):
+        return "decisions-changed"
+    return None
 
 
 @router.get("/events")
 async def events(request: Request, engine: _Engine) -> EventSourceResponse:
-    """Stream task invalidation events to clients via SSE."""
+    """Stream typed kanban invalidation events to clients via SSE."""
 
     async def _stream() -> object:
-        tasks_dir = Path(engine.tasks_dir)
-        if not tasks_dir.exists():  # noqa: ASYNC240
+        kanban_dir = _resolve(engine.kanban_dir)
+        if not kanban_dir.exists():
             return
 
+        tasks_dir = _resolve(engine.tasks_dir)
+        decisions_pending_dir = _resolve(kanban_dir / "decisions" / "pending")
+        activity_path = _resolve(kanban_dir / "activity.jsonl")
+        watch_filter = _build_watch_filter(tasks_dir, decisions_pending_dir, activity_path)
+
         async for changes in awatch(
-            tasks_dir,
-            watch_filter=_watch_filter,
-            recursive=False,
+            kanban_dir,
+            watch_filter=watch_filter,
+            recursive=True,
             yield_on_timeout=True,
             rust_timeout=100,
         ):
@@ -46,20 +97,27 @@ async def events(request: Request, engine: _Engine) -> EventSourceResponse:
             if not changes:
                 continue
 
-            latest_mtime: int | None = None
+            latest_mtimes: dict[str, int] = {}
             for _change, changed_path in changes:
+                changed_path_obj = _resolve(changed_path)
+                event_name = _classify_path(
+                    changed_path_obj,
+                    tasks_dir,
+                    decisions_pending_dir,
+                    activity_path,
+                )
+                if event_name is None:
+                    continue
                 try:
-                    mtime = Path(changed_path).stat().st_mtime_ns  # noqa: ASYNC240
+                    mtime = changed_path_obj.stat().st_mtime_ns
                 except FileNotFoundError:
                     continue
-                latest_mtime = mtime if latest_mtime is None else max(latest_mtime, mtime)
+                latest_mtimes[event_name] = max(latest_mtimes.get(event_name, 0), mtime)
 
-            if latest_mtime is None:
-                continue
-
-            yield {
-                "event": "tasks-changed",
-                "data": json.dumps({"mtime": latest_mtime}),
-            }
+            for event_name, latest_mtime in latest_mtimes.items():
+                yield {
+                    "event": event_name,
+                    "data": json.dumps({"mtime": latest_mtime}),
+                }
 
     return EventSourceResponse(_stream(), ping=1)
