@@ -354,6 +354,54 @@ describe('TestFromAC_FilterPanel', () => {
         blocked: true,
       })
     })
+
+    it('changing priority from a multi-field active state preserves text, tags, and blocked', () => {
+      // Sibling-field preservation: start from all-active state, change only priority
+      const onFilterChange = vi.fn()
+      const multiActive: FilterState = { text: 'search', priority: 'needed', tags: ['bug'], blocked: true }
+      const { container } = renderPanel({ filter: multiActive, onFilterChange })
+      const select = getPrioritySelect(container) as HTMLSelectElement
+      fireEvent.change(select, { target: { value: 'critical' } })
+      expect(onFilterChange).toHaveBeenCalledTimes(1)
+      expect(onFilterChange).toHaveBeenCalledWith({
+        text: 'search',
+        priority: 'critical',
+        tags: ['bug'],
+        blocked: true,
+      })
+    })
+
+    it('toggling blocked from a multi-field active state preserves text, priority, and tags', () => {
+      // Sibling-field preservation: start from all-active state, toggle only blocked
+      const onFilterChange = vi.fn()
+      const multiActive: FilterState = { text: 'search', priority: 'needed', tags: ['bug'], blocked: true }
+      const { container } = renderPanel({ filter: multiActive, onFilterChange })
+      const blocked = getBlockedControl(container) as HTMLElement
+      fireEvent.click(blocked)
+      expect(onFilterChange).toHaveBeenCalledTimes(1)
+      expect(onFilterChange).toHaveBeenCalledWith({
+        text: 'search',
+        priority: 'needed',
+        tags: ['bug'],
+        blocked: false,
+      })
+    })
+
+    it('changing tags from a multi-field active state preserves text, priority, and blocked', () => {
+      // Sibling-field preservation: start from all-active state, change only tags
+      const onFilterChange = vi.fn()
+      const multiActive: FilterState = { text: 'search', priority: 'needed', tags: ['bug'], blocked: true }
+      const { container } = renderPanel({ filter: multiActive, onFilterChange, availableTags: TAGS })
+      const tagsControl = getTagsControl(container) as Element
+      fireEvent(tagsControl, new CustomEvent('update', { bubbles: true, detail: { value: ['feature'] } }))
+      expect(onFilterChange).toHaveBeenCalledTimes(1)
+      expect(onFilterChange).toHaveBeenCalledWith({
+        text: 'search',
+        priority: 'needed',
+        tags: ['feature'],
+        blocked: true,
+      })
+    })
   })
 
   // ─── AC7: Does not render controls when open=false ────────────────────────
