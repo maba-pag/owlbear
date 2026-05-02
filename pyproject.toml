@@ -11,6 +11,7 @@ dev = [
   "pytest>=9.0.3",
   "pytest-asyncio>=1.3.0",
   "pytest-cov>=7.1.0",
+  "pytest-timeout>=2.4.0",
   "pytest-xdist>=3.8.0",
   "pyyaml>=6.0.3",
   "ruff>=0.15.12",
@@ -24,6 +25,8 @@ validation = [
 testpaths = ["tests", "serve"]
 pythonpath = ["serve/kanban/src", "serve/tools/src"]
 addopts = "--import-mode=importlib -m 'not e2e' -n auto --dist loadfile -p no:logfire -p no:pytest_logfire"
+timeout = 30
+session_timeout = 300
 asyncio_mode = "strict"
 markers = [
   "api: tests that require API integrations or network services",
