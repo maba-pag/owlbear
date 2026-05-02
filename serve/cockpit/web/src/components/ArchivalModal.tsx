@@ -263,7 +263,7 @@ export default function ArchivalModal({
               setError(null)
             }}
           />
-          <PText>Required - enter at least one task ID</PText>
+          <PText>Required — enter at least one task ID</PText>
         </label>
       ) : null}
 
