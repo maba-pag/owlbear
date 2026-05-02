@@ -32,7 +32,7 @@ markers = [
   "api: tests that require API integrations or network services",
   "slow: tests that are long-running",
   "integration: marks tests that require the kanban-md binary (deselect with -m 'not integration')",
-  "e2e: end-to-end tests requiring Copilot CLI on PATH (run explicitly with -m e2e)",
+  "e2e: end-to-end tests requiring VS Code agent runtime prerequisites (run explicitly with -m e2e)",
 ]
 
 [tool.ruff]
