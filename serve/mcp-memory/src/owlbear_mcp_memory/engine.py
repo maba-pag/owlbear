@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import re
+import secrets
+import string
+from contextlib import suppress
 from pathlib import Path
+from tempfile import mkstemp
 
 import yaml
 from pydantic import ValidationError
@@ -11,6 +17,9 @@ from pydantic import ValidationError
 from owlbear_mcp_memory.models import MemoryEntry
 
 _FRONTMATTER_PARTS = 3
+_SUFFIX_ALPHABET = string.ascii_lowercase + string.digits
+_SUFFIX_LEN = 6
+_LOGGER = logging.getLogger(__name__)
 
 
 def _slugify(value: str) -> str:
@@ -18,6 +27,10 @@ def _slugify(value: str) -> str:
     if not slug:
         return "entry"
     return slug[:40]
+
+
+def _random_suffix(length: int = _SUFFIX_LEN) -> str:
+    return "".join(secrets.choice(_SUFFIX_ALPHABET) for _ in range(length))
 
 
 class MtimeScanCache:
@@ -70,7 +83,7 @@ class MemoryEngine:
             target_path = existing
         else:
             slug = _slugify(entry.title)
-            target_path = self._memory_dir / f"{slug}-{entry.id[:6]}.md"
+            target_path = self._memory_dir / f"{slug}-{_random_suffix()}.md"
 
         frontmatter = {
             "id": entry.id,
@@ -89,9 +102,18 @@ class MemoryEngine:
             f"{entry.content}\n"
         )
 
-        tmp_path = target_path.with_suffix(".md.tmp")
-        tmp_path.write_text(content, encoding="utf-8")
-        tmp_path.replace(target_path)
+        fd, tmp_name = mkstemp(dir=str(target_path.parent), suffix=".tmp")
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+                tmp_file.write(content)
+                tmp_file.flush()
+                os.fsync(tmp_file.fileno())
+            tmp_path.replace(target_path)
+        except Exception:
+            with suppress(OSError):
+                tmp_path.unlink()
+            raise
         return target_path
 
     def get_entry(self, entry_id: str) -> MemoryEntry:
@@ -113,16 +135,20 @@ class MemoryEngine:
         raw = file_path.read_text(encoding="utf-8")
         parts = raw.split("---", 2)
         if len(parts) < _FRONTMATTER_PARTS:
+            _LOGGER.warning("Skipping malformed memory file without frontmatter: %s", file_path)
             return None
         _, frontmatter_raw, body = parts
         try:
             data = yaml.safe_load(frontmatter_raw) or {}
-        except yaml.YAMLError:
+        except yaml.YAMLError as exc:
+            _LOGGER.warning("Skipping malformed memory YAML in %s: %s", file_path, exc)
             return None
         if not isinstance(data, dict):
+            _LOGGER.warning("Skipping memory file with non-object frontmatter: %s", file_path)
             return None
         data["content"] = body.strip()
         try:
             return MemoryEntry(**data)
-        except ValidationError:
+        except ValidationError as exc:
+            _LOGGER.warning("Skipping invalid memory entry in %s: %s", file_path, exc)
             return None
