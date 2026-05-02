@@ -23,9 +23,10 @@ from unittest.mock import patch
 
 import pytest
 
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.corruption import ERR_CORRUPT_INVALID_STATUS, CorruptionError
 from owlbear_kanban.models import BoardConfig
-from owlbear_kanban.storage import load_config, read_task
+from owlbear_kanban.storage import read_task
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -158,7 +159,7 @@ class TestFromAC_ReadTaskCachedConfig:
         """AC1: when config is provided, load_config must NOT be called."""
         _, task_path = _make_board_with_task(tmp_path)
         config = _make_config()
-        with patch("owlbear_kanban.storage.load_config") as mock_load:
+        with patch("owlbear_kanban.config_loader.load_config") as mock_load:
             # Will TypeError pre-impl before the assertion is reached
             read_task(task_path, config=config)
         mock_load.assert_not_called()
@@ -252,7 +253,7 @@ class TestFromAC_ReadTaskCachedConfig:
     def test_ac3_explicit_none_calls_load_config(self, tmp_path: Path) -> None:
         """AC3: when config=None, load_config is still called from disk."""
         _, task_path = _make_board_with_task(tmp_path)
-        with patch("owlbear_kanban.storage.load_config", wraps=load_config) as mock_load:
+        with patch("owlbear_kanban.config_loader.load_config", wraps=load_config) as mock_load:
             # Pre-impl: TypeError before mock can capture the call
             read_task(task_path, config=None)
         mock_load.assert_called_once()

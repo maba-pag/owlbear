@@ -31,6 +31,7 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.engine import AgentView
 from owlbear_kanban.models import ConcurrencyError, Task
 from owlbear_kanban.storage import (
@@ -40,7 +41,6 @@ from owlbear_kanban.storage import (
     generate_slug,
     list_archive_files,
     list_task_files,
-    load_config,
     make_task_filename,
     move_to_archive,
     move_to_quarantine,

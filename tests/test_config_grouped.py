@@ -18,8 +18,9 @@ from pathlib import Path
 
 import yaml
 
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.migrate import _migrate_config
-from owlbear_kanban.storage import load_config, save_config
+from owlbear_kanban.storage import save_config
 
 # Provenance: promoted from task-scoped suite for task #1172.
 

@@ -14,12 +14,10 @@ from unittest.mock import patch
 import pytest
 
 from owlbear_kanban import KanbanEngine
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.engine import (
     MigrationRequiredError,
 )  # NEW exception — AttributeError in RED
-from owlbear_kanban.storage import (  # NEW module — ImportError in RED
-    load_config,
-)
 from owlbear_kanban.corruption import CorruptionError  # NEW module — ImportError in RED
 
 # ---------------------------------------------------------------------------

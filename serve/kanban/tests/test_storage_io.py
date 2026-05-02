@@ -15,13 +15,13 @@ from unittest.mock import patch
 
 import pytest
 
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.storage_io import atomic_write  # NEW module — ImportError in RED
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
     ConcurrencyError,
     allocate_next_id,
     list_archive_files,
     list_task_files,
-    load_config,
     save_config,
     write_task,
     write_task_if_unchanged,

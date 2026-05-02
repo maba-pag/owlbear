@@ -17,10 +17,11 @@ from pathlib import Path
 import pytest
 
 import owlbear_kanban.migrate as _migrate_mod
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.corruption import detect_corruption
 from owlbear_kanban.engine import KanbanEngine, MigrationRequiredError
 from owlbear_kanban.models import Task
-from owlbear_kanban.storage import load_config, write_task
+from owlbear_kanban.storage import write_task
 
 # ---------------------------------------------------------------------------
 # Board helper

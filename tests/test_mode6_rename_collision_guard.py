@@ -11,7 +11,7 @@ from owlbear_kanban.corruption import (
     ERR_CORRUPT_ID_FILENAME_MISMATCH,
     attempt_repair,
 )
-from owlbear_kanban.storage import load_config
+from owlbear_kanban.config_loader import load_config
 
 # Promoted from archived task #1109.
 

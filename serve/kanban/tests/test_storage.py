@@ -10,9 +10,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
     detect_corruption,
-    load_config,
     move_to_quarantine,
     read_task,
     write_task,

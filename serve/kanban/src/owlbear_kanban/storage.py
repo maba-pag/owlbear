@@ -11,7 +11,7 @@ It re-exports all types and delegates to the lower-level modules:
 Public API (per Brief C §1.3):
   read_task, write_task, write_task_if_unchanged
   list_task_files, list_archive_files, move_to_archive, move_to_quarantine
-  allocate_next_id, load_config, save_config
+    allocate_next_id, save_config
   parse_body, render_body
   append_activity_event, list_activity_events, compact_activity_log
   scan_and_fix, detect_corruption, attempt_repair
@@ -214,27 +214,6 @@ _TS_RE = re.compile(
 # ---------------------------------------------------------------------------
 
 
-def load_config(kanban_dir: Path) -> BoardConfig:
-    """Load ``config.yml`` from *kanban_dir* and return a :class:`BoardConfig`.
-
-    Accepts legacy (dict statuses), flat Brief-C (string statuses with flat
-    top-level keys), and grouped (``schema: grouped`` with sub-model sections)
-    variants via the ``BoardConfig._normalise_legacy`` validator.
-    Validates ``claim_timeout`` format and raises :class:`ConfigError` on
-    invalid values (AC-C50).
-
-    Raises:
-        FileNotFoundError: when ``config.yml`` is absent.
-        ConfigError: when ``claim_timeout`` has an invalid format.
-    """
-    from owlbear_kanban.config_loader import _validate_claim_timeout  # noqa: PLC0415
-    from owlbear_kanban.config_loader import load_config as _load  # noqa: PLC0415
-
-    config = _load(kanban_dir)
-    _validate_claim_timeout(config)
-    return config
-
-
 def save_config(config: BoardConfig, kanban_dir: Path) -> None:
     """Write *config* to ``config.yml`` in *kanban_dir* using atomic write.
 
@@ -382,7 +361,9 @@ def read_task(path: Path, *, config: BoardConfig | None = None) -> Task:
     else:
         config_path = board_dir / "config.yml"
         if config_path.exists():
-            loaded_config = load_config(board_dir)
+            from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+            loaded_config = _load_config(board_dir)
             corruption = detect_corruption(path, loaded_config)
             if corruption is not None:
                 raise corruption
@@ -418,7 +399,9 @@ def write_task(task: Task, kanban_dir: Path, *, target_dir: Path | None = None) 
     Returns:
         Absolute path of the written file.
     """
-    config = load_config(kanban_dir)
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    config = _load_config(kanban_dir)
     tasks_dir = target_dir or (kanban_dir / config.paths.tasks_dir)
 
     # Find existing file with this ID to keep filename stable
@@ -480,9 +463,10 @@ def write_task_if_unchanged(
         ConcurrencyError: code="ERR_STALE" when on-disk version is newer.
         FileNotFoundError: Task file not found in tasks/ or archive/.
     """
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
     from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
 
-    config = load_config(kanban_dir)
+    config = _load_config(kanban_dir)
     tasks_dir = kanban_dir / config.paths.tasks_dir
     archive_dir = kanban_dir / config.paths.archive_dir
     lock_path = tasks_dir / f".{task.id}.lock"
@@ -510,7 +494,9 @@ def write_task_if_unchanged(
 
 def list_task_files(kanban_dir: Path) -> list[Path]:
     """Return sorted list of all task ``.md`` files, excluding temp/lock files."""
-    config = load_config(kanban_dir)
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    config = _load_config(kanban_dir)
     tasks_dir = kanban_dir / config.paths.tasks_dir
     if not tasks_dir.exists():
         return []
@@ -526,7 +512,9 @@ def list_task_files(kanban_dir: Path) -> list[Path]:
 
 def list_archive_files(kanban_dir: Path) -> list[Path]:
     """Return sorted list of all archive ``.md`` files, excluding temp/lock files."""
-    config = load_config(kanban_dir)
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+    config = _load_config(kanban_dir)
     archive_dir = kanban_dir / config.paths.archive_dir
     if not archive_dir.exists():
         return []
@@ -547,9 +535,10 @@ def list_archive_files(kanban_dir: Path) -> list[Path]:
 
 def move_to_archive(task_id: int, kanban_dir: Path) -> Path:
     """Move the task file for *task_id* from ``tasks/`` to ``archive/``."""
+    from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
     from owlbear_kanban.engine import _exclusive_file_lock  # noqa: PLC0415
 
-    config = load_config(kanban_dir)
+    config = _load_config(kanban_dir)
     tasks_dir = kanban_dir / config.paths.tasks_dir
     archive_dir = kanban_dir / config.paths.archive_dir
     archive_dir.mkdir(parents=True, exist_ok=True)
@@ -600,7 +589,9 @@ def allocate_next_id(kanban_dir: Path) -> int:
 
     lock_path = kanban_dir / ".next_id.lock"
     with _exclusive_file_lock(lock_path):
-        config = load_config(kanban_dir)
+        from owlbear_kanban.config_loader import load_config as _load_config  # noqa: PLC0415
+
+        config = _load_config(kanban_dir)
         new_id = config.next_id
         config.next_id = new_id + 1
         save_config(config, kanban_dir)
@@ -629,7 +620,6 @@ __all__ = [
     "list_activity_events",
     "list_archive_files",
     "list_task_files",
-    "load_config",
     "make_task_filename",
     "move_to_archive",
     "move_to_quarantine",

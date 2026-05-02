@@ -600,7 +600,7 @@ class TestFromAC_ForwardingPropertiesRemoved:
 
     def _load_live_config(self) -> BoardConfig:
         """Load the live config from .owlbear/kanban/config.yml."""
-        from owlbear_kanban.storage import load_config  # noqa: PLC0415
+        from owlbear_kanban.config_loader import load_config  # noqa: PLC0415
 
         assert _LIVE_CONFIG_PATH.exists(), (
             f"Live config not found at {_LIVE_CONFIG_PATH}"

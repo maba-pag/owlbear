@@ -486,7 +486,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
         (kanban_dir / "tasks").mkdir(parents=True)
         config = _MinimalConfig()
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.list_task_files(kanban_dir)
 
         assert result == []
@@ -503,7 +503,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
         (kanban_dir / "archive").mkdir(parents=True)
         config = _MinimalConfig()
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.list_archive_files(kanban_dir)
 
         assert result == []
@@ -527,7 +527,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
         )
         config = _MinimalConfig()
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.move_to_archive(1, kanban_dir)
 
         assert result.parent.name == "archive"
@@ -560,7 +560,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             updated="2026-01-01T10:00:00+00:00",
         )
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.write_task(task, kanban_dir)
 
         assert result.parent.name == "sentinel_tasks", (
@@ -599,7 +599,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             )
         )
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.write_task_if_unchanged(
                 task, expected_updated, kanban_dir
             )
@@ -628,7 +628,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             )
         )
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.list_task_files(kanban_dir)
 
         assert result == [task_path], (
@@ -657,7 +657,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             )
         )
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.list_archive_files(kanban_dir)
 
         assert result == [archive_path], (
@@ -689,7 +689,7 @@ class TestFromAC_StorageNonSaveConfigPaths:
             )
         )
 
-        with patch("owlbear_kanban.storage.load_config", return_value=config):
+        with patch("owlbear_kanban.config_loader.load_config", return_value=config):
             result = _storage.move_to_archive(1, kanban_dir)
 
         assert result.parent.name == "sentinel_archive", (

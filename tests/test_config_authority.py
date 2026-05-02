@@ -25,9 +25,10 @@ from typing import Any
 import pytest
 import yaml
 
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.errors import KANBAN_ERROR_CODES, ConfigError
 from owlbear_kanban.models import BoardConfig
-from owlbear_kanban.storage import load_config, save_config
+from owlbear_kanban.storage import save_config
 
 # Provenance: promoted from task-scoped suite for task #1177.
 

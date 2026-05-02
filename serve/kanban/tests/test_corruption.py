@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_kanban.config_loader import load_config
 from owlbear_kanban.corruption import (  # NEW module — ImportError in RED
     CorruptionError,
     detect_corruption,
@@ -18,7 +19,6 @@ from owlbear_kanban.corruption import (  # NEW module — ImportError in RED
 from owlbear_kanban.storage import (  # NEW module — ImportError in RED
     read_task,
     scan_and_fix,
-    load_config,
 )
 
 # ---------------------------------------------------------------------------
