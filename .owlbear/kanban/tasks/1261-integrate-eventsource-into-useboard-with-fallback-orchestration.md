@@ -1,10 +1,10 @@
 ---
 id: 1261
 title: Integrate EventSource into useBoard with fallback orchestration
-status: review
+status: in-progress
 priority: nice-to-have
 created: 2026-05-01T09:34:27.630685+00:00
-updated: 2026-05-02T02:44:28.698649+00:00
+updated: 2026-05-02T07:32:37.145230+00:00
 tags:
 - cockpit
 - frontend
@@ -138,3 +138,244 @@ MockEventSource defined per-suite (same shape as useEventSource_1260.test.ts). N
 ### Evidence Summary
 - quality-runner scoped verification: vitest exit 0, eslint exit 0, no failures.
 - Initial post-edit run had 4 failing tests; resolved by stabilizing SSE-triggered refetch effect dependencies.
+[[2026-05-02]]
+## Review Evidence
+### Test Results
+- vitest: 44 passed, 0 failed, 0 skipped
+- Suites: useBoard_1261.test.ts (12), useBoard_967.test.ts (19), Shell_966.test.tsx (4), Shell_1227.test.tsx (9)
+
+### Lint
+- eslint: clean on serve/cockpit/web/src/hooks/useBoard.ts, serve/cockpit/web/vitest.setup.ts, and serve/cockpit/web/src/__tests__/useBoard_1261.test.ts
+
+### Coverage
+- serve/cockpit/web/src/hooks/useBoard.ts: 95.91% statements/lines, 69.23% branches, 100% functions
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC | Evidence | Mapped test(s) | Verdict |
+|---|---|---|---|
+| 1 | useBoard calls useEventSource('/api/events') at useBoard.ts:56 | useBoard_1261.test.ts:132 | COVERED |
+| 2 | paused is driven by sseStatus === 'open' at useBoard.ts:61 | useBoard_1261.test.ts:143 | COVERED |
+| 3 | SSE event refetch gate is at useBoard.ts:87 | useBoard_1261.test.ts:205 | COVERED |
+| 4 | useBoard.ts:61 distinguishes open vs not-open; useBoard_1261.test.ts:254 proves resume after closed; useBoard_967.test.ts:87 proves polling with the global closed stub | Missing proof that polling still runs when SSE remains connecting across a full interval | MISSING |
+| 5 | health mapping is local at useBoard.ts:127 and returned unchanged at useBoard.ts:136 | useBoard_1261.test.ts:313 proves open->green; useBoard_1261.test.ts:333 proves connecting->yellow; no test proves closed->polling-health fallback | MISSING |
+| 6 | useConnectionHealth stays generic at useConnectionHealth.ts:11-24; override stays local to useBoard.ts:127-136 | static inspection | COVERED |
+| 7 | Global EventSource stub added at vitest.setup.ts:50-78 | quality-runner green on useBoard_967.test.ts plus the new suite | COVERED |
+| 8 | health field name remains health at useBoard.ts:136 | useBoard_967.test.ts:246, Shell_966.test.tsx:116, Shell_1227.test.tsx:147 and :219 | COVERED |
+
+#### Security Review
+- No issues found.
+
+#### Test Integrity
+- No weakening evidence found in the reviewed tests.
+- Small confidence deduction: no commit diff was available to prove TestFromAC immutability against the original pre-builder snapshot.
+
+#### Test Quality
+- FAIL: proof quality is insufficient for td:2 on two natural branches.
+- AC4 misses the connecting-not-open branch. Current pause tests open the EventSource before or during the boundary; a regression that pauses while connecting would survive.
+- AC5 misses the closed fallback branch. Current health tests prove open->green and connecting->yellow, but not the required closed->polling-health behavior.
+
+#### Data Safety
+- No issues found.
+
+#### Builder Process Quality
+- CLEAN: one builder cycle, no loop pattern detected.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| 1. useBoard calls useEventSource('/api/events') | useBoard.ts:56 | useBoard_1261.test.ts:132 | PASS |
+| 2. paused=true when SSE is open | useBoard.ts:61 | useBoard_1261.test.ts:143 | PASS |
+| 3. lastEventMtime change triggers refetchTasks() while open | useBoard.ts:87 | useBoard_1261.test.ts:205 | PASS |
+| 4. polling resumes when SSE is not open (connecting or closed) | useBoard.ts:61 plus useBoard_1261.test.ts:254 and useBoard_967.test.ts:87 only prove closed-after-open / closed-default paths | missing connecting full-interval proof | FAIL |
+| 5. health is green/open, yellow/connecting, polling fallback/closed | useBoard.ts:127-136 plus useBoard_1261.test.ts:313 and :333 prove open and connecting only | missing closed fallback proof | FAIL |
+| 6. useConnectionHealth.ts is not modified for override logic | useConnectionHealth.ts:11-24 | static inspection | PASS |
+| 7. existing useBoard tests pass with EventSource stub/mock | quality-runner: useBoard_967.test.ts passed | runtime evidence | PASS |
+| 8. existing Shell tests pass unchanged with health field preserved | quality-runner: Shell_966.test.tsx and Shell_1227.test.tsx passed; useBoard.ts:136 still returns health | runtime evidence | PASS |
+
+### Deductions
+- -0.10: AC4 connecting branch unproved
+- -0.07: AC5 closed fallback unproved
+- -0.02: TestFromAC immutability confidence reduced without diff access
+- Confidence: 0.81
+
+### Verdict
+- FAIL -> todo
+- Rationale: scoped suites are green and the implementation reads correct, but the review gate cannot pass because the task-specific proof misses two td:2 branches.
+
+### Required Follow-up
+1. Add a test that keeps EventSource in connecting state for a full 3s interval and proves polling still fires.
+2. Add a test that leaves SSE closed and proves useBoard.health falls through to the polling-based useConnectionHealth value with an exact color assertion.
+3. Re-run the same scoped frontend suites after the test additions. No source-code change is required unless the strengthened tests expose a defect.
+[[2026-05-02]]
+## Test-Writer Notes
+- Retry: added 2 tests for reviewer-cited gaps. Both PASS against current implementation.
+- Builder skip: test-only retry, all tests green — advancing directly to review.
+
+### New tests added to `serve/cockpit/web/src/__tests__/useBoard_1261.test.ts`
+
+| Gap (from Review Evidence) | New test | Result |
+|---|---|---|
+| AC4: connecting-branch unproved | `polling fires on schedule when SSE remains in connecting state for a full interval` | PASS |
+| AC5: closed-fallback unproved | `health falls through to polling-based value (green) when SSE is closed` | PASS |
+
+### Scoped run results (all 4 suites from review)
+- useBoard_1261.test.ts: 14 tests (12 original + 2 new) — all pass
+- useBoard_967.test.ts: 19 tests — all pass
+- Shell_966.test.tsx: 4 tests — all pass
+- Shell_1227.test.tsx: 9 tests — all pass
+- Total: 46 passed, 0 failed
+
+### ESLint: clean (no violations on test file)
+
+### Commit: 88595659 (test: add connecting-branch and closed-fallback proof tests (#1261, test-writer))
+[[2026-05-02]]
+## Builder Notes
+- Non-implementation pass-through on retry cycle: prior builder implementation already landed; this cycle only required verification after test-writer proof additions.
+- Validation run via quality-runner (scoped): 46 passed, 0 failed, 0 skipped across `useBoard_1261`, `useBoard_967`, `Shell_966`, `Shell_1227`.
+- Lint: clean on `src/hooks/useBoard.ts`, `vitest.setup.ts`, and `src/__tests__/useBoard_1261.test.ts`.
+- Coverage (scoped): `src/hooks/useBoard.ts` statements/lines 95.91%, functions 100%, branches 69.23%.
+- Files changed in this builder cycle: none.
+
+### Evidence Summary
+- Existing implementation behavior remains green after reviewer-requested proof expansion.
+- No source changes were required in this pass.
+[[2026-05-02]]
+## Review Evidence
+### Test Results
+- quality-runner: 46 passed, 0 failed, 0 skipped
+- Suites: useBoard_1261.test.ts (14), useBoard_967.test.ts (19), Shell_966.test.tsx (4), Shell_1227.test.tsx (9)
+
+### Lint
+- quality-runner: eslint clean on serve/cockpit/web/src/hooks/useBoard.ts, serve/cockpit/web/vitest.setup.ts, serve/cockpit/web/src/__tests__/useBoard_1261.test.ts, serve/cockpit/web/src/__tests__/useBoard_967.test.ts, serve/cockpit/web/src/__tests__/Shell_966.test.tsx, and serve/cockpit/web/src/__tests__/Shell_1227.test.tsx
+
+### Coverage
+- quality-runner: serve/cockpit/web/src/hooks/useBoard.ts -> 95.91% statements, 69.23% branches, 100% functions, 95.91% lines
+- Uncovered lines reported: 101, 110 (informational only)
+
+### Pass 1 — CRITICAL
+#### Test-Writer AC Coverage
+| AC | Evidence | Mapped test(s) | Verdict |
+|---|---|---|---|
+| 1 | useBoard.ts:56 calls useEventSource('/api/events') | useBoard_1261.test.ts:132 | COVERED |
+| 2 | useBoard.ts:61 passes paused when sseStatus === 'open'; open-state pause is exercised across normal, repeated, and boundary intervals | useBoard_1261.test.ts:143-200 | COVERED |
+| 3 | useBoard.ts:87-89 refetches on open + lastEventMtime change | useBoard_1261.test.ts:205-249 | COVERED |
+| 4 | useBoard.ts:61 makes paused false when SSE is not open; closed-state resume is covered and the retry-added connecting-state interval proof is now discriminating | useBoard_1261.test.ts:254-308, 367-383 | COVERED |
+| 5 | useBoard.ts:126-136 maps open->green, connecting->yellow, closed->health; open/connecting are proved, but the closed retry test only asserts green after a healthy poll | useBoard_1261.test.ts:313-344, 388-408 | LAX |
+| 6 | useConnectionHealth.ts remains unchanged; override stays local in useBoard.ts:126-136 | static inspection | COVERED |
+| 7 | vitest.setup.ts:50-78 provides a global closed-by-default EventSource stub and existing useBoard suites stay green | runtime + static inspection | COVERED |
+| 8 | health field name is still returned at useBoard.ts:136 and existing durable suites stay green | useBoard_967.test.ts plus Shell_966.test.tsx and Shell_1227.test.tsx runtime evidence | COVERED |
+
+#### Security Review
+- No issues found. The reviewed change uses fixed same-origin endpoints only and adds in-memory test scaffolding only.
+
+#### Test Integrity
+- No weakening or removal evidence found in the reviewed tests.
+- Small confidence deduction: git logs confirm commits 2b26a212 and 88595659 exist, but no diff-scoped proof was available to verify TestFromAC immutability against the original pre-builder snapshot.
+
+#### Test Quality
+- FAIL: AC5 still lacks discriminating proof for the named closed-state fallback semantics.
+- Source behavior is `sseStatus === 'open' ? 'green' : sseStatus === 'connecting' ? 'yellow' : health` at useBoard.ts:126-127.
+- The retry-added closed-state test at useBoard_1261.test.ts:388-408 first makes polling health green, then closes SSE, then asserts green.
+- A mutation to `closed => 'green'` would still pass that test, so the test proves the symptom value, not the required fallback-to-polling-source behavior.
+
+#### Data Safety
+- No issues found.
+
+#### Builder Process Quality
+- CLEAN: no builder loop detected in the implementation cycle.
+- Review loop-breaker applies separately: this task already contains one prior `## Review Evidence` section, and the same AC5 proof-quality concern persists on this second review.
+
+### AC Compliance
+| AC Line | Evidence | Mapped Test | Status |
+|---|---|---|---|
+| 1. useBoard calls useEventSource('/api/events') | useBoard.ts:56 | useBoard_1261.test.ts:132 | PASS |
+| 2. paused=true when SSE is open | useBoard.ts:61 | useBoard_1261.test.ts:143-200 | PASS |
+| 3. lastEventMtime change triggers refetchTasks() while open | useBoard.ts:87-89 | useBoard_1261.test.ts:205-249 | PASS |
+| 4. polling resumes when SSE is not open (connecting or closed) | useBoard.ts:61 plus closed resume and connecting interval tests | useBoard_1261.test.ts:254-308, 367-383 | PASS |
+| 5. health is green/open, yellow/connecting, polling fallback/closed | useBoard.ts:126-136; open and connecting proved, closed fallback source semantics not discriminating | useBoard_1261.test.ts:313-344, 388-408 | FAIL |
+| 6. useConnectionHealth.ts is not modified for override logic | useConnectionHealth.ts:11-24 | static inspection | PASS |
+| 7. existing useBoard tests pass with EventSource stub/mock | quality-runner green on useBoard_967.test.ts and task suite | runtime evidence | PASS |
+| 8. existing Shell tests pass unchanged with health field preserved | quality-runner green on Shell_966.test.tsx and Shell_1227.test.tsx; useBoard.ts:136 still returns `health` | runtime evidence | PASS |
+
+### Deductions
+- -0.09: AC5 closed-state fallback proof is still lax
+- -0.02: TestFromAC immutability confidence reduced without diff-scoped proof
+- Confidence: 0.87
+
+### Verdict
+- FAIL -> backlog
+- Rationale: the independent frontend run is green, but the task still fails review because AC5's closed-state branch is not proved in a way that would fail a plausible wrong implementation. This is the second review failure on the same task, so the loop-breaker route applies.
+
+### Required Follow-up
+1. Redesign the AC5 closed-state proof so it cannot pass if `useBoard` hardcodes green on close. The test should drive polling health to a non-green value while SSE is closed and assert exact equality with the underlying polling-based health.
+2. Keep the new AC4 connecting-state test; that gap is now closed.
+3. Re-run the same 4 frontend suites after strengthening AC5. Only send the task back to builder if the stronger proof exposes a real implementation defect.
+
+### Reflection
+- The retry fixed the prior AC4 objection cleanly.
+- Green Vitest output was not enough here because the surviving AC5 test still permits a false-green mutation.
+- Commit presence was verifiable from git logs, but lack of diff access kept test-immutability confidence slightly below maximum.
+[[2026-05-02]]
+## Architecture Review (retry)
+
+**Verdict:** APPROVE — AC unchanged, test proof guidance added for retry cycle.
+
+### Context
+
+Task returned from review via loop-breaker. Two review cycles failed on the same issue: AC5 closed-state fallback test is non-discriminating. The implementation is correct (`useBoard.ts:126-127` falls through to polling `health` when `sseStatus === 'closed'`). All 46 tests green, lint clean, coverage at 95.91%.
+
+### AC Assessment
+
+| AC Line | Assessment | Action |
+|---------|-----------|--------|
+| 1–4 | Previously approved, review-confirmed | No change |
+| 5 | AC text is already precise ("falls through to polling-based useConnectionHealth value") — the deficiency is test proof quality, not AC clarity | No change to AC |
+| 6–8 | Previously approved, review-confirmed | No change |
+
+### Reviewer Gap Analysis
+
+The existing closed-fallback test (`useBoard_1261.test.ts:388`) drives polling health to `green`, closes SSE, then asserts `green`. A mutation `closed => 'green'` would pass. The test proves the symptom value, not the fallback mechanism.
+
+### Test-Writer Guidance for Retry
+
+Rewrite the AC5 closed-state test to be discriminating:
+1. After initial render, advance fake timers by ≥15 000 ms so `computeHealth(elapsed)` in `useConnectionHealth` returns `'red'` (or ≥6 000 ms for `'yellow'`).
+2. Trigger `updateHealth()` (via the polling interval callback) so the polling-based `health` state becomes non-green.
+3. Close SSE via `simulateFatalClose()`.
+4. Assert `result.current.health` equals the non-green polling health value (e.g., `'red'`).
+
+This proves the fallback mechanism — if `useBoard` hardcoded any value on close, the non-green assertion would catch it.
+
+### Architecture Notes
+
+- No AC changes needed. AC5 already specifies "falls through to polling-based useConnectionHealth value" — unambiguous.
+- No implementation changes expected. The code is correct; only the test proof needs strengthening.
+- Dependencies #1235, #1259, #1260 remain archived/done.
+[[2026-05-02]]
+## Test-Writer Notes
+- Retry: added 1 discriminating test for reviewer AC5 gap. Passes against current implementation → direct-to-review advance.
+- Builder skip: test-only retry, all tests green.
+
+### New test added to `serve/cockpit/web/src/__tests__/useBoard_1261.test.ts`
+
+| Gap (from Review Evidence) | New test | Result |
+|---|---|---|
+| AC5: closed-fallback non-discriminating — prior test asserted 'green' when polling health was already green | `health falls through to degraded polling health (red) when SSE closes — discriminating AC5 proof` | PASS |
+
+### Why this test is discriminating
+- Uses `makeFailFetch()` so `markHealthy()` is never called → polling health degrades
+- Advances fake timers 15 001 ms: 5 failed polls drive `computeHealth(elapsed)` to `'red'`
+- Closes SSE via `simulateFatalClose()` → sseStatus = `'closed'`
+- Asserts `result.current.health === 'red'` — a mutation `closed => 'green'` fails this assertion
+
+### Scoped run results (all 4 suites from review)
+- useBoard_1261.test.ts: 15 tests (14 prior + 1 new) — all pass
+- useBoard_967.test.ts: 19 tests — all pass
+- Shell_966.test.tsx: 4 tests — all pass
+- Shell_1227.test.tsx: 9 tests — all pass
+- Total: 47 passed, 0 failed
+
+### ESLint: clean (no violations on test file)
+
+### Commit: 9f2b7bdd (test: add discriminating AC5 closed-fallback proof (#1261, test-writer))
