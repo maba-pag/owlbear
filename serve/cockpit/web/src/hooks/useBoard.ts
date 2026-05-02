@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useConnectionHealth, type HealthState } from './useConnectionHealth'
 import { usePollingFetch } from './usePollingFetch'
+import { useEventSource } from './useEventSource'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -52,10 +53,12 @@ export function useBoard(): UseBoardResult {
   const [error, setError] = useState<string | null>(null)
   const [isStale, setIsStale] = useState(false)
   const mtimeRef = useRef<number | null>(null)
+  const { status: sseStatus, lastEventMtime } = useEventSource('/api/events')
   const { health, markHealthy, updateHealth } = useConnectionHealth()
 
   const { isFetching, refetch: refetchTasks } = usePollingFetch<TasksResponse>('/api/tasks', {
     intervalMs: 3000,
+    paused: sseStatus === 'open',
     onSuccess: async (data) => {
       if (data.mtime !== mtimeRef.current) {
         mtimeRef.current = data.mtime
@@ -74,6 +77,17 @@ export function useBoard(): UseBoardResult {
       updateHealth()
     },
   })
+
+  const refetchTasksRef = useRef(refetchTasks)
+  useEffect(() => {
+    refetchTasksRef.current = refetchTasks
+  }, [refetchTasks])
+
+  useEffect(() => {
+    if (sseStatus === 'open' && lastEventMtime !== null) {
+      refetchTasksRef.current()
+    }
+  }, [lastEventMtime, sseStatus])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -109,6 +123,17 @@ export function useBoard(): UseBoardResult {
   }, [])
 
   const loading = !boardReady || !tasksReady
+  const effectiveHealth: HealthState =
+    sseStatus === 'open' ? 'green' : sseStatus === 'connecting' ? 'yellow' : health
 
-  return { board, tasks, loading, error, isFetching, isStale, health, refetchTasks }
+  return {
+    board,
+    tasks,
+    loading,
+    error,
+    isFetching,
+    isStale,
+    health: effectiveHealth,
+    refetchTasks,
+  }
 }

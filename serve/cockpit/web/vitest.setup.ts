@@ -46,3 +46,34 @@ if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.attachInternals
     }),
   )
 }
+
+// jsdom has no native EventSource. Provide a closed-by-default stub so tests
+// can opt into richer behavior per-suite without crashing on construction.
+if (typeof globalThis.EventSource === 'undefined') {
+  class MockEventSource {
+    static readonly CONNECTING = 0
+    static readonly OPEN = 1
+    static readonly CLOSED = 2
+
+    readonly url: string
+    readonly withCredentials: boolean
+    readyState: number
+    onopen: ((event: Event) => void) | null = null
+    onerror: ((event: Event) => void) | null = null
+
+    constructor(url: string, eventSourceInitDict?: EventSourceInit) {
+      this.url = url
+      this.withCredentials = eventSourceInitDict?.withCredentials ?? false
+      this.readyState = MockEventSource.CLOSED
+    }
+
+    addEventListener(): void {}
+    removeEventListener(): void {}
+
+    close(): void {
+      this.readyState = MockEventSource.CLOSED
+    }
+  }
+
+  globalThis.EventSource = MockEventSource as unknown as typeof EventSource
+}
