@@ -362,6 +362,52 @@ describe('TestFromAC_UseBoardSSEIntegration', () => {
     expect(result.current.health).toBe('green')
   })
 
+  // ─── AC4 (retry): polling fires while SSE remains in connecting state ────
+
+  it('polling fires on schedule when SSE remains in connecting state for a full interval', async () => {
+    // SSE never opens — readyState stays CONNECTING.
+    // paused must be false (only 'open' suppresses polling).
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    renderHook(() => useBoard())
+    await act(async () => {})
+    const countAfterMount = tasksFetchCount(fetchMock)
+
+    // Advance a full polling interval without ever opening SSE
+    await act(async () => {
+      vi.advanceTimersByTime(3001)
+    })
+    await act(async () => {})
+
+    // Interval poll must have fired — connecting is not paused
+    expect(tasksFetchCount(fetchMock)).toBeGreaterThan(countAfterMount)
+  })
+
+  // ─── AC5 (retry): health falls through to polling value when SSE is closed ─
+
+  it('health falls through to polling-based value (green) when SSE is closed', async () => {
+    // Polling succeeds → useConnectionHealth will be green after markHealthy()
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    const { result } = renderHook(() => useBoard())
+
+    // Let initial poll complete — polling health becomes green
+    await act(async () => {})
+
+    // SSE starts in connecting → effectiveHealth is yellow
+    expect(result.current.health).toBe('yellow')
+
+    // Close SSE (fatal error with readyState=CLOSED) → sseStatus becomes 'closed'
+    await act(async () => {
+      MockEventSource.instances[0]?.simulateFatalClose()
+    })
+    await act(async () => {})
+
+    // SSE is now closed → effectiveHealth must fall through to polling health
+    // Polling succeeded earlier → polling health = green → effectiveHealth = green
+    expect(result.current.health).toBe('green')
+  })
+
   // ─── AC7 + AC8: UseBoardResult interface with EventSource ─────────────────
 
   it('returns all UseBoardResult fields including health when EventSource is globally available', async () => {
