@@ -94,7 +94,7 @@ An entry **fails** if any of the following are true:
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
 - Ambiguous scope: the insight only applies to a specific project but `scope_agent` is null
- - Ambiguous scope: the insight only applies to a specific role but `scope_agents` is missing
+- Ambiguous scope: the insight only applies to a specific role but `scope_agents` is missing
 - Duplicate: substantially the same as an existing approved entry
 
 **Confidence calibration:**

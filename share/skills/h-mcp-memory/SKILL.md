@@ -40,6 +40,7 @@ Returns: entry object with `id`, `title`, `categories`, `confidence`, `state`, `
 Reads memory entries from the markdown file engine.
 
 Default behavior (when `states` is omitted):
+
 - include only `curated` and `approved`
 - sort `approved` first, then `curated`
 - within each state, sort by `confidence` descending
@@ -65,6 +66,7 @@ Curator-only mutation tool for in-place updates.
 | `scope_agents` | list[str] \| null | `null` | Replace scope list |
 
 State rules:
+
 - allowed: `pending -> curated`
 - rejected: promotion from `deleted`
 - other transitions must use dedicated tools
@@ -80,6 +82,7 @@ Curator-only lifecycle mutation.
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
+
 - sets `state=deleted`
 - allowed from `pending`, `curated`, or `approved`
 - idempotent for already deleted entries
@@ -95,6 +98,7 @@ User-only lifecycle mutation.
 | `entry_id` | str | (required) | Entry identifier |
 
 Behavior:
+
 - only valid transition is `curated -> approved`
 - raises `ToolError` for any other current state
 
