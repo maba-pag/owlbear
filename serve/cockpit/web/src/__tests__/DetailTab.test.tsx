@@ -125,7 +125,9 @@ describe('TestFromAC_DetailTab', () => {
 
     it('title input shows the current task title value', () => {
       const { container } = renderDetail()
-      const input = container.querySelector('p-input-text[data-field="title"]') as (HTMLElement & { value?: string }) | null
+      const input = container.querySelector('p-input-text[data-field="title"]') as
+        | (HTMLElement & { value?: string })
+        | null;
       // PDS PInputText exposes value as a JS property via the Stencil getter
       expect(input?.value ?? input?.getAttribute('value')).toBe('Fix login bug')
     })
