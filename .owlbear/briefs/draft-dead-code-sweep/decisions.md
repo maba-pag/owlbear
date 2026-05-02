@@ -26,3 +26,14 @@
 
 - **Chosen:** Thin Brief via Phase 2 (ideation-mediator)
 - **Rejected:** Atomic kanban tasks without Brief (simplifier recommended this — user prefers the Brief for completeness).
+
+## Excalidraw Diagrams
+
+- **Chosen:** Edit now (option A) — remove orchestrator/ACP elements from all 3 diagram JSON files in this task.
+- **Rejected:** Defer to follow-up (option B) — user wants a complete pass.
+- **Rejected:** Delete and regenerate (option C) — loses layout work.
+
+## Dev Environment KB Path
+
+- **Chosen:** Ignore for now — KB isn't fully implemented yet; latent break is acceptable.
+- **Rejected:** Set `OWLBEAR_GLOBAL_KB_PATH` in dev environment.
