@@ -766,6 +766,11 @@ class KanbanEngine:
     def show_task(self, task_id: str) -> Task:
         """Return the :class:`Task` for a single task by its string ID.
 
+        When a matching file exists in both the ``archive/`` and ``tasks/``
+        directories, the archived copy takes precedence.  The internal filename
+        index is evicted on any archive-wins resolution so subsequent calls
+        return a fresh lookup.
+
         Args:
             task_id: The numeric task ID as a string (e.g. ``"42"``).
 
