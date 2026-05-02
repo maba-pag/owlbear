@@ -54,6 +54,7 @@ export function useBoard(): UseBoardResult {
   const [error, setError] = useState<string | null>(null)
   const [isStale, setIsStale] = useState(false)
   const mtimeRef = useRef<number | null>(null)
+  const lastObservedTasksMtimeRef = useRef<number | null>(null)
   const { status: sseStatus, mtime: lastTasksMtime } = useSSEEvent('tasks-changed')
   const { mtime: lastDecisionsMtime } = useSSEEvent('decisions-changed')
   const { health, markHealthy, updateHealth } = useConnectionHealth()
@@ -86,9 +87,15 @@ export function useBoard(): UseBoardResult {
   }, [refetchTasks])
 
   useEffect(() => {
-    if (sseStatus === 'open' && lastTasksMtime !== null) {
+    if (
+      sseStatus === 'open' &&
+      lastTasksMtime !== null &&
+      lastObservedTasksMtimeRef.current !== lastTasksMtime
+    ) {
       refetchTasksRef.current()
     }
+
+    lastObservedTasksMtimeRef.current = lastTasksMtime
   }, [lastTasksMtime, sseStatus])
 
   useEffect(() => {
