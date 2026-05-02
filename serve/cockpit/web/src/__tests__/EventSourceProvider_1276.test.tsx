@@ -346,6 +346,37 @@ describe('TestFromAC_EventSourceProvider', () => {
       expect(MockEventSource.instances).toHaveLength(2)
     })
 
+    // Boundary: stall recovery — onopen before 15s cancels the stall timer
+    //
+    // Mirrors useEventSource_1260.test.ts:248-267.
+    // Removing clearStallTimer() from the onopen handler would leave all other stall tests
+    // green but break this test, making it the sole discriminating proof for the
+    // clearStallTimer() call in onopen.
+
+    it('stall timer is cleared when onopen fires within 15s — status remains "open"', async () => {
+      const { result } = renderHook(() => useSSEEvent('tasks-changed'), { wrapper })
+      const es = MockEventSource.instances[0]
+
+      // Stall timer starts at t=0 (fires at t=15s)
+      await act(async () => {
+        es.simulateStallError()
+      })
+      // onopen fires at t=5s — must clear the stall timer
+      await act(async () => {
+        vi.advanceTimersByTime(5_000)
+        es.simulateOpen()
+      })
+      // Advance past t=15s — stall timer WOULD have fired but was cleared
+      await act(async () => {
+        vi.advanceTimersByTime(10_001)
+      })
+
+      expect(result.current.status).toBe('open')
+      // No new EventSource — close was never triggered by the stall
+      expect(MockEventSource.instances).toHaveLength(1)
+      expect(es.close).not.toHaveBeenCalled()
+    })
+
     // Boundary: full stall → close → retry composed path (AC2 discriminating proof)
     //
     // Removing the retryTimerRef.current = setTimeout(openConnection, ...) inside the stall
