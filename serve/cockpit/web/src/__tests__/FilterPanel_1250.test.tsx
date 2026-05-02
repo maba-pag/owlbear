@@ -30,7 +30,7 @@
  * multi-select (PDS web component — last resort).
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, fireEvent } from '@testing-library/react'
+import { render, fireEvent, within } from '@testing-library/react'
 import { PorscheDesignSystemProvider } from '@porsche-design-system/components-react'
 import type { FilterState } from '../utils/filterTasks'
 import FilterPanel from '../components/FilterPanel'
@@ -73,12 +73,12 @@ function renderPanel({
   return { ...utils, onFilterChange }
 }
 
-function getTextInput(container: HTMLElement): HTMLInputElement | null {
-  return container.querySelector('input[type="text"]')
+function getTextInput(container: HTMLElement): HTMLElement | null {
+  return within(container).queryByRole('textbox')
 }
 
-function getPrioritySelect(container: HTMLElement): HTMLSelectElement | null {
-  return container.querySelector('select')
+function getPrioritySelect(container: HTMLElement): HTMLElement | null {
+  return within(container).queryByRole('combobox')
 }
 
 function getTagsControl(container: HTMLElement): Element | null {
@@ -152,6 +152,20 @@ describe('TestFromAC_FilterPanel', () => {
       for (const p of PRIORITIES) {
         expect(optionValues).toContain(p)
       }
+    })
+
+    it('priority select has exactly priorities.length options (plus at most one empty placeholder)', () => {
+      const custom = ['low', 'medium', 'high']
+      const { container } = renderPanel({ priorities: custom })
+      const select = getPrioritySelect(container) as HTMLSelectElement
+      const options = Array.from(select.options)
+      // Total must be exactly custom.length or custom.length+1 (one empty placeholder at most)
+      expect(options.length).toBeGreaterThanOrEqual(custom.length)
+      expect(options.length).toBeLessThanOrEqual(custom.length + 1)
+      // Non-placeholder options must exactly equal the priorities array — no hardcoded extras
+      const nonEmptyValues = options.filter((o) => o.value !== '').map((o) => o.value)
+      expect(nonEmptyValues).toHaveLength(custom.length)
+      expect(nonEmptyValues).toEqual(expect.arrayContaining(custom))
     })
 
     it('priority select reflects a custom priorities list', () => {
@@ -320,6 +334,22 @@ describe('TestFromAC_FilterPanel', () => {
       expect(onFilterChange).toHaveBeenCalledTimes(1)
       expect(onFilterChange).toHaveBeenCalledWith({ ...emptyFilter, tags: [] })
     })
+
+    it('changing text from a multi-field active state preserves priority, tags, and blocked', () => {
+      // Sibling-field preservation: start from all-active state, change only text
+      const onFilterChange = vi.fn()
+      const multiActive: FilterState = { text: 'old', priority: 'needed', tags: ['bug'], blocked: true }
+      const { container } = renderPanel({ filter: multiActive, onFilterChange })
+      const input = getTextInput(container) as HTMLInputElement
+      fireEvent.change(input, { target: { value: 'new' } })
+      expect(onFilterChange).toHaveBeenCalledTimes(1)
+      expect(onFilterChange).toHaveBeenCalledWith({
+        text: 'new',
+        priority: 'needed',
+        tags: ['bug'],
+        blocked: true,
+      })
+    })
   })
 
   // ─── AC7: Does not render controls when open=false ────────────────────────
@@ -345,6 +375,14 @@ describe('TestFromAC_FilterPanel', () => {
     it('tag control is absent from DOM when open=false (regardless of availableTags)', () => {
       const { container } = renderPanel({ open: false, availableTags: TAGS })
       expect(getTagsControl(container)).toBeNull()
+    })
+
+    it('reset button is absent from DOM when open=false (even when filter is active)', () => {
+      const { container } = renderPanel({
+        open: false,
+        filter: { text: 'active', priority: 'needed', tags: ['bug'], blocked: true },
+      })
+      expect(getResetButton(container)).toBeNull()
     })
   })
 })
