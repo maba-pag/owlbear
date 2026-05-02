@@ -270,6 +270,33 @@ describe('TestFromAC_UseBoardSSEIntegration', () => {
     expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
   })
 
+  it('does NOT trigger refetchTasks when decisions-changed fires while SSE is open — per-type discriminating proof', async () => {
+    // Discriminating proof that useBoard keys on lastEventByType['tasks-changed'] (per-type),
+    // NOT on aggregate lastEventMtime. Firing a 'decisions-changed' SSE event while SSE is
+    // open must NOT trigger an additional tasks fetch.
+    // A mutation that replaced the per-type key with the aggregate lastEventMtime would cause
+    // a spurious tasks refetch here and fail this assertion.
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    renderHook(() => useBoard())
+    await act(async () => {})
+
+    // Open SSE — paused=true, SSE-driven refetch guard is active
+    await act(async () => {
+      MockEventSource.instances[0]?.simulateOpen()
+    })
+    const countAfterOpen = tasksFetchCount(fetchMock)
+
+    // Fire a decisions-changed event — should NOT trigger refetchTasks
+    await act(async () => {
+      MockEventSource.instances[0]?.simulateEvent('decisions-changed', { mtime: 9999 })
+    })
+    await act(async () => {})
+
+    // Tasks fetch count must not have increased — decisions-changed is not a tasks trigger
+    expect(tasksFetchCount(fetchMock)).toBe(countAfterOpen)
+  })
+
   // ─── AC4: polling resumes when SSE is not open ────────────────────────────
 
   it('polling resumes when SSE closes after an open period', async () => {
