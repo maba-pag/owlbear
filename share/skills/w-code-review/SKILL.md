@@ -24,22 +24,9 @@ Use `git diff --name-only <commit>~1 <commit>` (with the builder's commit hash f
 
 For any changed function or class signatures, use `vscode_listCodeUsages` to trace all callers and assess downstream impact.
 
-## Step 2 — Run Tests Independently
+## Step 2 — Evidence Gathering
 
-Do NOT rely on builder self-reports. Run yourself via Quality-Runner:
-
-```
-agentName: quality-runner
-prompt: |
-  mode: scoped
-  task_id: {id}
-  test_paths: ["tests/test_{module}_{task_id}.py"]
-  lint_paths: ["tests/test_{module}_{task_id}.py"]
-```
-
-Record: passed/failed counts from the `## Tests` section of the Quality-Runner report.
-
-## Step 2.5 — Parallel Fan-Out Dispatch
+Do NOT rely on builder self-reports. Run tests, lint, and coverage yourself via Quality-Runner.
 
 **Depth-aware dispatch:** Check AC lines for `(td:N)` annotations. Determine the task's max depth (highest td value across all AC lines; default td:1 if no annotations).
 
@@ -53,9 +40,7 @@ For **td:0 tasks**: dispatch quality-runner with lint only (no test paths, no co
 
 For **td:1 tasks** (default): dispatch quality-runner with scoped tests + lint. Skip code-reader. Proceed to Step 8.
 
-For **td:2 tasks**: dispatch both subagents as below.
-
-Dispatch quality-runner:
+For **td:2 tasks**: dispatch quality-runner AND code-reader **in the same tool-call batch** — both subagents are independent and must execute concurrently. Do NOT wait for quality-runner results before dispatching code-reader.
 
 ```
 agentName: quality-runner
@@ -279,7 +264,7 @@ Confidence threshold: 0.90 = PASS (see `r-pipeline-protocol` → Confidence Thre
 
 **Scope constraint — don't invent requirements:** The reviewer proves what AC declares, including its natural branches and edge cases. The reviewer does NOT invent requirements AC doesn't mention. If you find a gap that is not traceable to any AC line (even by reasonable implication), classify it as INFORMATIONAL — it cannot contribute to a FAIL verdict. Optionally create a follow-up task for genuinely important non-AC findings. Example: AC says "defaults to research, validated in statuses" → testing that validation rejects invalid values is fair (natural branch). Demanding an explicit "omission-path test" for what happens when the field isn't provided at all is an invention (Pydantic handles it implicitly).
 
-If Step 2.5 was used, build a unified **AC compliance table** by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail status per AC line. Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader. Note any divergence between subagent findings and your own analysis.
+If code-reader was dispatched (td:2), build a unified **AC compliance table** by cross-walking Code-Reader's AC coverage assessment against Quality-Runner's test pass/fail status per AC line. Automatic FAIL triggers: any MISSING or WEAK finding from Code-Reader; any test failure reported by Quality-Runner; any security finding from Code-Reader. Note any divergence between subagent findings and your own analysis.
 
 **PASS** (all Pass 1 criteria met): advance via `end_work` (moves to `docs` + releases claim).
 
