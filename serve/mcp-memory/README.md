@@ -18,11 +18,11 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 | Tool | Description |
 |------|-------------|
-| `get_knowledge` | Retrieve memory entries for an agent, sorted by scope-specificity |
-| `record_learning` | Store a new memory entry with category, confidence, and scope |
-| `list_entries` | List all entries (including pending and deleted) for curation |
-| `set_approval_state` | Transition entry state (`pending → approved`, `pending → deleted`, `deleted → pending`) |
-| `mark_for_deletion` | Soft-delete an entry by ID |
+| `store_learning` | Create a new `pending` memory entry |
+| `query_memory` | Retrieve entries by state (`curated` and `approved` by default), approved-first then confidence-desc |
+| `update_entry` | Curator-only updates; supports `pending -> curated` and blocks modifications of `approved` entries |
+| `delete_entry` | Curator-only soft delete to `deleted` state |
+| `approve_entry` | User-only promotion from `curated -> approved` |
 
 ### Entry schema
 

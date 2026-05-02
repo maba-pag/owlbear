@@ -147,6 +147,10 @@ async def update_entry(  # noqa: PLR0913
     _require_role(ctx, allowed={"curator"}, tool_name="update_entry")
     engine = _engine_from_ctx(ctx)
     current = _load_entry_or_raise(engine, entry_id)
+    if current.state == "approved":
+        msg = "update_entry cannot modify approved entries"
+        raise ToolError(msg)
+
     target_state = state or current.state
     _ensure_update_transition(current.state, target_state)
 
