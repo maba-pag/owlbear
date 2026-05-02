@@ -172,82 +172,120 @@ describe('TestFromAC_FilterIntegration', () => {
     })
   })
 
-  // AC3 — Filter state → filtered columns: priority filter hides non-matching tasks (td:2)
+  // AC3 — Filter state → filtered columns: priority filter hides non-matching tasks across all columns (td:2)
   it('priority filter removes non-matching tasks from columns', async () => {
     const { container } = renderBoard()
-    // FilterPanel must be rendered for onFilterChange to be captured
+    // Open panel to capture onFilterChange callback — works with any mount strategy
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
     expect(capturedOnFilterChange).not.toBeNull()
     act(() => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
     })
     await waitFor(() => {
-      // TASK_NEEDED (priority=needed) should remain
+      // TASK_NEEDED (backlog, priority=needed) should remain in backlog
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="1"]'),
       ).not.toBeNull()
-      // TASK_SOMEDAY (priority=someday) should be hidden
+      // TASK_SOMEDAY (backlog, priority=someday) should be hidden from backlog
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="2"]'),
+      ).toBeNull()
+      // TASK_TODO (todo, priority=important) should also be hidden from the todo column
+      expect(
+        container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="3"]'),
       ).toBeNull()
     })
   })
 
-  // AC3 — Filter state → filtered columns: text filter hides non-matching tasks (td:2)
+  // AC3 — Filter state → filtered columns: text filter hides non-matching tasks across all columns (td:2)
   it('text filter removes non-matching tasks from columns', async () => {
     const { container } = renderBoard()
+    // Open panel to capture onFilterChange callback — works with any mount strategy
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
     expect(capturedOnFilterChange).not.toBeNull()
     act(() => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, text: 'important' })
     })
     await waitFor(() => {
-      // TASK_NEEDED title "Important task" matches "important" (case-insensitive)
+      // TASK_NEEDED title "Important task" matches "important" (case-insensitive) — visible in backlog
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="1"]'),
       ).not.toBeNull()
-      // TASK_SOMEDAY title "Low priority task" does not match
+      // TASK_SOMEDAY title "Low priority task" does not match — hidden from backlog
       expect(
         container.querySelector('[data-column="backlog"] [data-testid="task-card"][data-id="2"]'),
+      ).toBeNull()
+      // TASK_TODO title "In-progress work" does not match — hidden from todo column
+      expect(
+        container.querySelector('[data-column="todo"] [data-testid="task-card"][data-id="3"]'),
       ).toBeNull()
     })
   })
 
   // AC4 — availableTags from full task set — order-insensitive, set-membership (td:1)
   it('FilterPanel receives all tags from all tasks regardless of active filter', async () => {
-    renderBoard()
-    // FilterPanel must be rendered (with open=false) so tags are captured immediately
-    expect(capturedAvailableTags).not.toBeNull()
+    const { container } = renderBoard()
+    // Open panel to capture callbacks — works with any mount strategy
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
     // Apply a filter that would exclude some tasks from the board view
     act(() => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
     })
     await waitFor(() => {
-      // Even after filtering, availableTags must include tags from ALL tasks
-      const tags = new Set(capturedAvailableTags!)
-      expect(tags.has('alpha')).toBe(true)  // from TASK_NEEDED (matches filter)
-      expect(tags.has('beta')).toBe(true)   // from TASK_SOMEDAY (excluded by filter)
-      expect(tags.has('gamma')).toBe(true)  // from TASK_TODO (excluded by filter)
+      // availableTags must be exactly the union of all tags across ALL tasks —
+      // no extras (e.g. stale tags), no omissions (e.g. tags from filtered-out tasks)
+      expect(new Set(capturedAvailableTags!)).toEqual(
+        new Set(['alpha', 'beta', 'gamma']),
+      )
     })
   })
 
   // AC5 — Result count shows "N / M tasks" when filter is active (td:1)
   it('shows result count element with filtered and total counts when filter is active', async () => {
     const { container } = renderBoard()
-    expect(capturedOnFilterChange).not.toBeNull()
+    // Open panel to capture onFilterChange callback — works with any mount strategy
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
     act(() => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
     })
     await waitFor(() => {
       const countEl = container.querySelector('[data-testid="filter-result-count"]')
       expect(countEl).not.toBeNull()
-      // 1 task matches priority=needed out of 3 total tasks
-      expect(countEl!.textContent).toMatch(/1/)
-      expect(countEl!.textContent).toMatch(/3/)
+      // Must match exact "N / M tasks" contract: 1 task matches priority=needed, 3 total
+      expect(countEl!.textContent).toMatch(/^1 \/ 3 tasks$/)
     })
   })
 
   // AC6 — Filter change dismisses open context menu (td:1)
   it('filter change dismisses an open context menu', async () => {
     const { container } = renderBoard()
+    // Open panel to capture onFilterChange callback — works with any mount strategy
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
     // Open context menu on TASK_NEEDED (has a valid transition: backlog → todo)
     await waitFor(() => {
       expect(
@@ -261,7 +299,6 @@ describe('TestFromAC_FilterIntegration', () => {
       expect(container.querySelector('[data-testid="context-menu"]')).not.toBeNull()
     })
     // Trigger filter change — context menu must be dismissed
-    expect(capturedOnFilterChange).not.toBeNull()
     act(() => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
     })
@@ -273,6 +310,13 @@ describe('TestFromAC_FilterIntegration', () => {
   // AC7 — Filter change cancels active drag — drop targets deactivated (td:1)
   it('filter change deactivates drop targets by cancelling active drag', async () => {
     const { container } = renderBoard()
+    // Open panel to capture onFilterChange callback — works with any mount strategy
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
     // Start drag on TASK_NEEDED (backlog → todo is a valid transition)
     await waitFor(() => {
       expect(
@@ -288,7 +332,6 @@ describe('TestFromAC_FilterIntegration', () => {
       expect(todoColumn.getAttribute('data-drag-over')).toBe('true')
     })
     // Filter change must cancel the drag; drop targets should be deactivated
-    expect(capturedOnFilterChange).not.toBeNull()
     act(() => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
     })
@@ -303,7 +346,13 @@ describe('TestFromAC_FilterIntegration', () => {
   // AC8 — Empty filter state shows all tasks (td:1)
   it('empty filter state shows all tasks in their columns', async () => {
     const { container } = renderBoard()
-    expect(capturedOnFilterChange).not.toBeNull()
+    // Open panel to capture onFilterChange callback — works with any mount strategy
+    const toggle = container.querySelector('[data-testid="filter-toggle"]')!
+    expect(toggle).not.toBeNull()
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="filter-panel-stub"]')).not.toBeNull()
+    })
     // Apply a filter, then clear it back to empty state
     act(() => {
       capturedOnFilterChange!({ ...EMPTY_FILTER, priority: 'needed' })
