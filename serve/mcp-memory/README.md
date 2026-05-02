@@ -30,7 +30,11 @@ Entries are scoped to an optional agent (`scope_agents` list). Valid categories:
 
 ## Configuration
 
-The server is being rebuilt with a file-based store (markdown files with YAML frontmatter, default location `.owlbear/memory`). Configuration env vars will be documented when the new server entry point is implemented.
+| Variable | Default | Purpose |
+|----------|---------|--------|
+| `OWLBEAR_MEMORY_DIR` | `.owlbear/memory` | Directory for markdown memory files |
+| `OWLBEAR_MEMORY_CALLER` | `unknown` | Caller identity used for access-control checks |
+| `MEMORY_TOOLS_EXCLUDE` | — | Comma-separated tool names to remove from this server instance |
 
 ## Dependencies
 

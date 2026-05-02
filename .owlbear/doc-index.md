@@ -28,8 +28,6 @@
 - ## `Orchestrator CLI`
 - ## `Cockpit`
 - ## `Knowledge Base`
-- ## `Memory Migration`
-- ## `Memory Approval`
 - ## `Doc Index`
 - ## `Development`
 - ## `Pre-commit Hooks`
@@ -792,11 +790,13 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ## share/skills/h-mcp-memory/SKILL.md
 - # `MCP Memory Tool Reference`
 - ## `Tool Summary`
-- ## `get_knowledge`
-- ## `record_learning`
-- ## `list_entries`
-- ## `set_approval_state`
-- ## `mark_for_deletion`
+- ## `store_learning`
+- ## `query_memory`
+- ## `update_entry`
+- ## `delete_entry`
+- ## `approve_entry`
+- ## `Categories`
+- ## `Reflection Mapping`
 - ## `Configuration`
 
 ## share/skills/h-memory-structure/SKILL.md
