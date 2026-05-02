@@ -17,16 +17,17 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render } from '@testing-library/react'
+import { isValidElement } from 'react'
 
 // ─── Mock EventSourceProvider before App is imported ─────────────────────────
 // vi.mock is hoisted — it intercepts App's `import { EventSourceProvider } from
 // './hooks/EventSourceProvider'` at module load time.
-const capturedCalls: { url: unknown }[] = []
+const capturedCalls: { url: unknown; children: unknown }[] = []
 
 vi.mock('../hooks/EventSourceProvider', () => ({
   EventSourceProvider: vi.fn(
     ({ url, children }: { url: unknown; children: unknown }) => {
-      capturedCalls.push({ url })
+      capturedCalls.push({ url, children })
       return children
     },
   ),
@@ -77,13 +78,25 @@ describe('TestFromAC_AppWiring', () => {
   // ─── AC6: EventSourceProvider wraps Shell in App.tsx ────────────────────
 
   describe('AC6: EventSourceProvider wraps Shell with url="/api/events" in App.tsx', () => {
-    it('App renders EventSourceProvider with url="/api/events" inside BrowserRouter', () => {
+    it('App renders EventSourceProvider with url="/api/events" wrapping Shell inside BrowserRouter', () => {
       render(<App />)
 
       // EventSourceProvider must have been rendered with the correct url prop.
       // Fails (RED) if App.tsx does not import + render EventSourceProvider.
       expect(capturedCalls.length).toBeGreaterThan(0)
       expect(capturedCalls[0].url).toBe('/api/events')
+
+      // The children passed to EventSourceProvider must be the Shell component.
+      // This proves Shell is directly nested inside EventSourceProvider, not a sibling.
+      const children = capturedCalls[0].children
+      expect(isValidElement(children)).toBe(true)
+      expect((children as { type: { name?: string } }).type.name).toBe('Shell')
+
+      // BrowserRouter wraps the provider — Shell uses Routes/Route which require
+      // router context. Rendering completes without a router context error,
+      // proving BrowserRouter is ancestral to Shell.
+      // (Without BrowserRouter, Shell would throw "useHref() may be used only in
+      // the context of a <Router>" during render.)
     })
   })
 })

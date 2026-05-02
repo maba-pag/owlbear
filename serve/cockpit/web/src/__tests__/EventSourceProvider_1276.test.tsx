@@ -244,6 +244,107 @@ describe('TestFromAC_EventSourceProvider', () => {
 
       expect(MockEventSource.instances).toHaveLength(2)
     })
+
+    // Race/guard: timer-reset and stale-source protections copied from useEventSource
+
+    it('second stall error resets the stall timer — first timer is cancelled', async () => {
+      const { result } = renderHook(() => useSSEEvent('tasks-changed'), { wrapper })
+      const es = MockEventSource.instances[0]
+
+      // First stall error at t=0 — timer would fire at t=15s
+      await act(async () => {
+        es.simulateStallError()
+      })
+
+      // Advance 10s — first timer has not fired yet
+      await act(async () => {
+        vi.advanceTimersByTime(10_000)
+      })
+
+      // Second stall error at t=10s — must clear first timer and start a new 15s timer
+      await act(async () => {
+        es.simulateStallError()
+      })
+
+      // Advance 5s more (t=15s total, only 5s into the reset timer) — still should not fire
+      await act(async () => {
+        vi.advanceTimersByTime(5_000)
+      })
+
+      // If the first timer were still active it would have fired at t=15s.
+      // The reset means close() must NOT have been called yet.
+      expect(es.close).not.toHaveBeenCalled()
+      expect(result.current.status).not.toBe('closed')
+
+      // Advance past the reset timer (t=25001ms, 15001ms since second error) — fires now
+      await act(async () => {
+        vi.advanceTimersByTime(10_001)
+      })
+
+      expect(es.close).toHaveBeenCalledOnce()
+      expect(result.current.status).toBe('closed')
+    })
+
+    it('stale source onopen is ignored after a new connection is established', async () => {
+      const { result } = renderHook(() => useSSEEvent('tasks-changed'), { wrapper })
+      const sourceA = MockEventSource.instances[0]
+
+      // Fatal error → sourceA closed, retry timer starts at 30s
+      await act(async () => {
+        sourceA.simulateFatalError()
+      })
+      expect(result.current.status).toBe('closed')
+
+      // Advance 30s → retry fires, sourceB becomes the active connection
+      await act(async () => {
+        vi.advanceTimersByTime(30_000)
+      })
+      expect(MockEventSource.instances).toHaveLength(2)
+      const sourceB = MockEventSource.instances[1]
+
+      // Stale sourceA fires onopen — must be ignored (isCurrentSource guard)
+      await act(async () => {
+        sourceA.simulateOpen()
+      })
+
+      // Status must stay 'connecting' — sourceB has not opened, stale A's onopen is a no-op
+      expect(result.current.status).toBe('connecting')
+
+      // Verify sourceB's onopen still works normally
+      await act(async () => {
+        sourceB.simulateOpen()
+      })
+      expect(result.current.status).toBe('open')
+    })
+
+    it('stale source onerror is ignored — no additional retry timer created', async () => {
+      renderHook(() => useSSEEvent('tasks-changed'), { wrapper })
+      const sourceA = MockEventSource.instances[0]
+
+      // Fatal error on sourceA → closed, retry timer at 30s
+      await act(async () => {
+        sourceA.simulateFatalError()
+      })
+
+      // Advance 30s → sourceB created and becomes active
+      await act(async () => {
+        vi.advanceTimersByTime(30_000)
+      })
+      expect(MockEventSource.instances).toHaveLength(2)
+
+      // Stale sourceA fires another fatal error — must be ignored (isCurrentSource guard)
+      await act(async () => {
+        sourceA.simulateFatalError()
+      })
+
+      // Advance 30s more — if stale onerror triggered a retry, a third source would appear
+      await act(async () => {
+        vi.advanceTimersByTime(30_000)
+      })
+
+      // Only sourceA and sourceB should exist — no stale-triggered retry connection
+      expect(MockEventSource.instances).toHaveLength(2)
+    })
   })
 
   // ─── AC3: event listeners and per-type mtime storage ──────────────────────
@@ -361,6 +462,28 @@ describe('TestFromAC_EventSourceProvider', () => {
 
       expect(result.current.mtime).toBeNull()
     })
+
+    // Error + Recovery: malformed event must not kill the listener
+
+    it('after malformed JSON, a valid event still updates mtime (stream stays alive)', async () => {
+      const { result } = renderHook(() => useSSEEvent('tasks-changed'), { wrapper })
+      const es = MockEventSource.instances[0]
+
+      await act(async () => {
+        es.simulateOpen()
+        // Malformed event — listener must survive this
+        es.simulateEvent('tasks-changed', 'not valid json{{{')
+      })
+
+      expect(result.current.mtime).toBeNull()
+
+      // Valid event after malformed — proves the listener is still alive
+      await act(async () => {
+        es.simulateEvent('tasks-changed', JSON.stringify({ mtime: 42_000 }))
+      })
+
+      expect(result.current.mtime).toBe(42_000)
+    })
   })
 
   // ─── AC4: useSSEEvent return shape ────────────────────────────────────────
@@ -455,7 +578,9 @@ describe('TestFromAC_EventSourceProvider', () => {
       // Suppress React's error boundary console noise during this intentional throw
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
       try {
-        expect(() => renderHook(() => useSSEEvent('tasks-changed'))).toThrow()
+        expect(() => renderHook(() => useSSEEvent('tasks-changed'))).toThrow(
+          'useSSEEvent must be used within an EventSourceProvider',
+        )
       } finally {
         consoleSpy.mockRestore()
       }
