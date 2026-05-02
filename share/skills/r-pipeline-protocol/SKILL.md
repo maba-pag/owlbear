@@ -41,7 +41,7 @@ For claiming command syntax, see the `h-mcp-kanban` skill (`start_work` tool: at
 
 After claiming the task, load accumulated learnings from the memory server:
 
-1. Call `get_knowledge(agent_id=<agent_name>, limit=20, min_confidence=0.7)` — where `agent_name` is the `name:` field from your `.agent.md` frontmatter.
+1. Call `query_memory()` (or `query_memory(states=["curated","approved"])`) to load reviewed entries relevant to your current task.
 2. Apply returned entries as context — patterns, pitfalls, workarounds, and behavioral norms from past agents.
 3. Graceful degradation — if the call fails, returns empty, or `ob-memory/*` is not in your tool allowlist, proceed normally.
 
@@ -226,13 +226,13 @@ Before your final status advance, write 3-5 bullets covering problems faced, wor
 
 **Dual-write (during migration):**
 
-1. **Primary — `record_learning`:** One call per notable finding. Parameters: `agent_id=<agent_name>`, `scope_agent=<agent_name>`, `confidence=0.8`. If `record_learning` fails, continue — the fallback still captures the data.
+1. **Primary — `store_learning`:** One call per notable finding. Parameters: `title`, `content`, `categories`, `confidence=0.8`, `scope_agents=[<agent_name>]`. New entries start in `pending` and are curated later. If `store_learning` fails, continue — the fallback still captures the data.
 
    | Bullet type | MCP category |
    |-------------|-------------|
    | problems_faced | knowledge |
    | workarounds_applied | knowledge |
-   | patterns_discovered | behavior |
+   | patterns_discovered | behaviour |
    | time_sinks | context |
    | quality_gaps | context |
 

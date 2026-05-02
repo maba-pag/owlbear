@@ -12,17 +12,21 @@ For tool syntax, see `h-mcp-memory`. For curation workflow, see `w-mem-curation`
 
 ## Entry Shape
 
-Every memory entry requires exactly five fields. No exceptions, no optional fields.
+Memory entries use markdown body + YAML frontmatter. Core fields:
 
 | Field | Type | Constraint |
 |-------|------|-----------|
-| `agent_id` | str | The `name:` field from your `.agent.md` frontmatter |
-| `content` | str | One insight only — see Content-Quality Bar below |
-| `category` | str | One of: `preference`, `knowledge`, `context`, `behavior`, `goal` |
-| `confidence` | float | 0.7–1.0; use 0.8 as default (pipeline default per `r-pipeline-protocol`) |
-| `scope_agent` | str | The recording agent's name; promotes entry to agent-specific tier |
+| `id` | str | Stable identifier (UUID recommended) |
+| `title` | str | Required, non-empty |
+| `categories` | list[str] | One or more values from the 9-value enum |
+| `confidence` | float | Inclusive `[0.7, 1.0]` |
+| `state` | str | One of: `pending`, `curated`, `approved`, `deleted` |
+| `content` | str | Markdown body |
+| `scope_agents` | list[str] \| null | Optional scope list |
+| `created_at` | str | UTC timestamp |
+| `updated_at` | str | UTC timestamp |
 
-**Omit `scope_project`** — the server auto-detects from config.
+This schema is validated by `MemoryEntry` in the `mcp-memory` package.
 
 **File-based entry shape** (inbox fallback):
 
@@ -56,10 +60,10 @@ During active migration, both stores are written. After migration, MCP is sole c
 
 | Situation | Action |
 |-----------|--------|
-| Standard post-task reflection | Write MCP first via `record_learning`, then file-based inbox as fallback |
+| Standard post-task reflection | Write MCP first via `store_learning`, then file-based inbox as fallback |
 | MCP tool unavailable or errors | Write file-based inbox only; do not retry MCP |
 | Curation pass | Read both sources (see `w-mem-curation` Step 1); merge into MCP |
-| Pre-flight knowledge load | MCP only (`get_knowledge`) — file inbox is write-only for agents |
+| Pre-flight knowledge load | MCP only (`query_memory`) — file inbox is write-only for agents |
 
 Dual-write procedure is defined in `r-pipeline-protocol` § Post-task Reflection. Follow it exactly.
 
@@ -67,12 +71,12 @@ Dual-write procedure is defined in `r-pipeline-protocol` § Post-task Reflection
 
 These rules apply at **write time** to prevent recording near-duplicates. Curation-time dedup (grouping, merging, pruning) is handled by `w-mem-curation` Step 2 — do not replicate that logic here.
 
-**Before calling `record_learning`:**
+**Before calling `store_learning`:**
 
-1. Call `get_knowledge(agent_id=<name>, limit=20)` and scan returned entries.
+1. Call `query_memory()` (or `query_memory(states=["pending","curated","approved"])` for broader checks) and scan returned entries.
 2. If an existing entry covers the same core insight, **do not record**. Append new evidence as a note to the task body instead.
 3. If an existing entry is partially overlapping, record only the delta (what the existing entry lacks).
-4. On conflict (new entry contradicts an existing approved entry), record the new entry with `category=knowledge` and note the conflict in the `content` field: `"Contradicts {entry_id}: …"`.
+4. On conflict (new entry contradicts an existing approved entry), record the new entry with `categories=["knowledge"]` and note the conflict in the `content` field: `"Contradicts {entry_id}: ..."`.
 
 **Which entry wins:** The most recently recorded entry with higher confidence wins at retrieval. The curator resolves conflicts during curation — do not delete approved entries yourself.
 
@@ -90,6 +94,7 @@ An entry **fails** if any of the following are true:
 - Generic: "always write tests", "use type hints", "be careful with async"
 - No citation: no task ID, file, or tool mentioned
 - Ambiguous scope: the insight only applies to a specific project but `scope_agent` is null
+ - Ambiguous scope: the insight only applies to a specific role but `scope_agents` is missing
 - Duplicate: substantially the same as an existing approved entry
 
 **Confidence calibration:**
