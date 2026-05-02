@@ -294,6 +294,108 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
       expect(navRail?.querySelector('button')).toBeNull()
     })
   })
+
+  // ─ AC1 variant: cancel/toggle/filter/nav buttons are tertiary; action buttons are primary ─
+  // PDS v4 variant is a DOM property (not a reflected HTML attribute) — access via .variant
+
+  describe('AC1 variant: ConfirmDialog — cancel=tertiary, confirm=primary', () => {
+    it('cancel button has variant="tertiary"', () => {
+      const { container } = renderConfirm()
+      const buttons = container.querySelectorAll('p-button')
+      expect((buttons[0] as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('confirm button has variant="primary" (default action)', () => {
+      const { container } = renderConfirm()
+      const buttons = container.querySelectorAll('p-button')
+      expect((buttons[1] as HTMLElement & { variant: string }).variant).toBe('primary')
+    })
+  })
+
+  describe('AC1 variant: ArchivalModal — archive=primary, cancel=tertiary', () => {
+    it('archive submit button has variant="primary" (default action)', () => {
+      const { container } = renderArchival()
+      const submitBtn = container.querySelector('p-button[data-testid="archival-submit"]')
+      expect((submitBtn as HTMLElement & { variant: string }).variant).toBe('primary')
+    })
+
+    it('cancel button has variant="tertiary"', () => {
+      const { container } = renderArchival()
+      const buttons = container.querySelectorAll('p-button')
+      const tertiary = Array.from(buttons).find(
+        (b) => (b as HTMLElement & { variant: string }).variant === 'tertiary',
+      )
+      expect(tertiary).not.toBeUndefined()
+    })
+  })
+
+  describe('AC1 variant: ActivityTab — all filter buttons are tertiary', () => {
+    it('filter-active has variant="tertiary"', () => {
+      const { container } = renderActivityTab()
+      const el = container.querySelector('p-button[data-testid="filter-active"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('filter-all has variant="tertiary"', () => {
+      const { container } = renderActivityTab()
+      const el = container.querySelector('p-button[data-testid="filter-all"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('filter-blocked has variant="tertiary"', () => {
+      const { container } = renderActivityTab()
+      const el = container.querySelector('p-button[data-testid="filter-blocked"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+  })
+
+  describe('AC1 variant: DetailTab — save=primary, all other action buttons=tertiary', () => {
+    it('save-button has variant="primary" (default action)', () => {
+      const { container } = renderDetailTab()
+      const el = container.querySelector('p-button[data-testid="save-button"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
+    })
+
+    it('history-tab has variant="tertiary"', () => {
+      const { container } = renderDetailTab()
+      const el = container.querySelector('p-button[data-testid="history-tab"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('body-edit-toggle has variant="tertiary"', () => {
+      const { container } = renderDetailTab()
+      const el = container.querySelector('p-button[data-testid="body-edit-toggle"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('move-backward has variant="tertiary"', () => {
+      const { container } = renderDetailTab()
+      const el = container.querySelector('p-button[data-testid="move-backward"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+  })
+
+  describe('AC1 variant: ResolveModal — submit=primary, cancel=tertiary', () => {
+    it('resolve-submit has variant="primary" (default action)', () => {
+      const { container } = renderResolveModal()
+      const el = container.querySelector('p-button[data-testid="resolve-submit"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
+    })
+
+    it('resolve-cancel has variant="tertiary"', () => {
+      const { container } = renderResolveModal()
+      const el = container.querySelector('p-button[data-testid="resolve-cancel"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+  })
+
+  describe('AC1 variant: Shell — nav rail kanban button is tertiary', () => {
+    it('kanban surface selector has variant="tertiary"', () => {
+      const { container } = renderShell()
+      const el = container.querySelector('p-button[data-surface="kanban"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+  })
 })
 
 // ─── AC2: <h3> → <PHeading tag="h3"> ─────────────────────────────────────────
@@ -604,6 +706,79 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
     it('renders p-input-text for block_reason when task is blocked', () => {
       const { container } = renderDetailTab(TASK_BLOCKED)
       expect(container.querySelector('p-input-text[data-field="block_reason"]')).not.toBeNull()
+    })
+  })
+})
+
+// ─── AC4 payload: PDS event path propagates field values into POST body ───────
+
+describe('TestFromAC_PdsMigration_DetailTabPayload', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.resetAllMocks()
+  })
+
+  describe('AC4 payload: mutating title and priority via PDS events sends updated values in edit POST', () => {
+    it('changed title appears in the POST body after save', async () => {
+      const mockFetch = vi.fn(() =>
+        Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+      )
+      const { container } = renderDetailTab()
+      // Override the hanging-promise stub set by renderDetailTab
+      vi.stubGlobal('fetch', mockFetch)
+
+      const titleInput = container.querySelector('p-input-text[data-field="title"]')!
+      fireEvent(titleInput, new CustomEvent('change', { detail: { value: 'Updated title' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
+      fireEvent.click(saveBtn)
+      await new Promise((r) => setTimeout(r, 0))
+
+      const [, callOptions] = mockFetch.mock.calls[0]
+      const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>
+      expect(payload.title).toBe('Updated title')
+    })
+
+    it('changed priority appears in the POST body after save', async () => {
+      const mockFetch = vi.fn(() =>
+        Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+      )
+      const { container } = renderDetailTab()
+      vi.stubGlobal('fetch', mockFetch)
+
+      const prioritySelect = container.querySelector('p-select[data-field="priority"]')!
+      fireEvent(prioritySelect, new CustomEvent('change', { detail: { value: 'critical' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
+      fireEvent.click(saveBtn)
+      await new Promise((r) => setTimeout(r, 0))
+
+      const [, callOptions] = mockFetch.mock.calls[0]
+      const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>
+      expect(payload.priority).toBe('critical')
+    })
+
+    it('both title and priority changes are reflected together in a single save', async () => {
+      const mockFetch = vi.fn(() =>
+        Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+      )
+      const { container } = renderDetailTab()
+      vi.stubGlobal('fetch', mockFetch)
+
+      const titleInput = container.querySelector('p-input-text[data-field="title"]')!
+      fireEvent(titleInput, new CustomEvent('change', { detail: { value: 'New task title' }, bubbles: true }))
+
+      const prioritySelect = container.querySelector('p-select[data-field="priority"]')!
+      fireEvent(prioritySelect, new CustomEvent('change', { detail: { value: 'needed' }, bubbles: true }))
+
+      const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
+      fireEvent.click(saveBtn)
+      await new Promise((r) => setTimeout(r, 0))
+
+      const [, callOptions] = mockFetch.mock.calls[0]
+      const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>
+      expect(payload.title).toBe('New task title')
+      expect(payload.priority).toBe('needed')
     })
   })
 })
