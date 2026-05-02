@@ -330,7 +330,7 @@ def _normalize_timestamp(ts: str | None) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def read_task(path: Path) -> Task:
+def read_task(path: Path, *, config: BoardConfig | None = None) -> Task:
     """Parse a task file into a :class:`Task`.
 
     For ``tasks/`` files, board-aware corruption detection runs before the model
@@ -341,6 +341,8 @@ def read_task(path: Path) -> Task:
 
     Args:
         path: Path to the task ``.md`` file.
+        config: Optional pre-resolved board config used for corruption detection.
+            When provided, corruption detection runs without reading ``config.yml``.
 
     Returns:
         Populated :class:`Task` with ``claimed_by`` set to ``None``.
@@ -373,12 +375,17 @@ def read_task(path: Path) -> Task:
 
     # Targeted reads (e.g. show_task) must surface board-level corruption modes.
     board_dir = path.parent.parent
-    config_path = board_dir / "config.yml"
-    if config_path.exists():
-        config = load_config(board_dir)
+    if config is not None:
         corruption = detect_corruption(path, config)
         if corruption is not None:
             raise corruption
+    else:
+        config_path = board_dir / "config.yml"
+        if config_path.exists():
+            loaded_config = load_config(board_dir)
+            corruption = detect_corruption(path, loaded_config)
+            if corruption is not None:
+                raise corruption
 
     # Mode 6: filename prefix id must match frontmatter id.
     try:

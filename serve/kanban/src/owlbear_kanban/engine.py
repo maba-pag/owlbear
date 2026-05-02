@@ -629,7 +629,7 @@ class KanbanEngine:
                     archive_id = int(archive_head)
                     archive_ids.add(archive_id)
                     try:
-                        archive_task = read_task(archive_path)
+                        archive_task = read_task(archive_path, config=self._config)
                     except (FileNotFoundError, ValueError, KeyError):
                         archived_reasons[archive_id] = None
                     except CorruptionError:
@@ -662,7 +662,7 @@ class KanbanEngine:
                             cache.pop(entry.name, None)
                             continue
                     try:
-                        task = read_task(path)
+                        task = read_task(path, config=self._config)
                     except FileNotFoundError:
                         cache.pop(entry.name, None)
                         continue
@@ -788,7 +788,7 @@ class KanbanEngine:
                 del self._id_to_filename[int_id]
                 archive_path = self._archive_dir / filename
                 if archive_path.exists():
-                    archived_task = read_task(archive_path)
+                    archived_task = read_task(archive_path, config=self._config)
                     self._task_cache[filename] = (
                         archive_path.stat().st_mtime_ns,
                         archived_task,
@@ -799,17 +799,17 @@ class KanbanEngine:
                 and self._task_cache[filename][0] == mtime_ns
             ):
                 return self._task_cache[filename][1]
-            task = read_task(path)
+            task = read_task(path, config=self._config)
             self._task_cache[filename] = (mtime_ns, task)
             return task
 
         matches = list(self._tasks_dir.glob(f"{task_id}-*.md"))
         if matches:
-            return read_task(matches[0])
+            return read_task(matches[0], config=self._config)
 
         archive_matches = list(self._archive_dir.glob(f"{task_id}-*.md"))
         if archive_matches:
-            return read_task(archive_matches[0])
+            return read_task(archive_matches[0], config=self._config)
 
         msg = f"Task {task_id!r} not found in {self._tasks_dir} or {self._archive_dir}"
         raise FileNotFoundError(msg)
@@ -954,7 +954,7 @@ class KanbanEngine:
             task_id, self._tasks_dir, include_archive_fallback=True
         )
         target_dir = task_path.parent
-        record = read_task(task_path)
+        record = read_task(task_path, config=self._config)
         original = record.model_copy(deep=True)
 
         if title is not None:
@@ -1058,7 +1058,7 @@ class KanbanEngine:
             raise ValueError(msg)
 
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        record = read_task(task_path, config=self._config)
         original = record.model_copy(deep=True)
         old_status = record.status
         archived = False
@@ -1149,7 +1149,7 @@ class KanbanEngine:
             # Keep injected `now` deterministic in tests, but refresh runtime time
             # after each ERR_STALE retry so successful retries cannot regress D14.
             effective_now = now if now is not None else datetime.now(tz=UTC)
-            record = read_task(task_path)
+            record = read_task(task_path, config=self._config)
             original = record.model_copy(deep=True)
             expected_for_claim = original.updated
 
@@ -1267,7 +1267,7 @@ class KanbanEngine:
                 match the stored ``updated`` timestamp (code ``ERR_STALE``).
         """
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        record = read_task(task_path, config=self._config)
         original = record.model_copy(deep=True)
         now = datetime.now(tz=UTC)
 
@@ -1431,7 +1431,7 @@ class KanbanEngine:
 
         # --- Single read ---
         task_path = self._find_task_path(task_id, self._tasks_dir)
-        record = read_task(task_path)
+        record = read_task(task_path, config=self._config)
         original = record.model_copy(deep=True)
         old_status = record.status
 
@@ -1517,7 +1517,7 @@ class KanbanEngine:
 
         for path in sorted(self._tasks_dir.glob("*.md")):
             try:
-                record = read_task(path)
+                record = read_task(path, config=self._config)
             except (FileNotFoundError, ValueError, KeyError, CorruptionError):
                 continue  # silently skip corrupt files (AC-C27)
 

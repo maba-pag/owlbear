@@ -138,9 +138,21 @@ class CorruptionError(KanbanError):
         self.file_path = file_path or (str(path) if path else None)
 
 
+class _CorruptionCodeType(type):
+    """Metaclass for ERR_CORRUPT_* constants with string-name equality."""
+
+    def __eq__(cls, other: object) -> bool:
+        if isinstance(other, str):
+            return cls.__name__ == other
+        return super().__eq__(other)
+
+    def __hash__(cls) -> int:
+        return hash(cls.__name__)
+
+
 def _make_corruption_code_type(name: str) -> type[CorruptionError]:
     """Create an ERR_CORRUPT_* exception subclass with the given name."""
-    return type(name, (CorruptionError,), {})
+    return _CorruptionCodeType(name, (CorruptionError,), {})
 
 
 ERR_CORRUPT_DELIMITERS = _make_corruption_code_type("ERR_CORRUPT_DELIMITERS")
