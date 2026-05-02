@@ -32,7 +32,8 @@ and parse their output.
 <required_reading>
 
 - `h-quality-runner` — subagent contract and invocation
-- `h-pytest-and-linting` — test and lint commands
+- `h-pytest-and-linting` — Python test and lint commands
+- `h-vitest-and-linting` — TypeScript/JavaScript test and lint commands
 
 </required_reading>
 
@@ -40,6 +41,7 @@ and parse their output.
 
 - **Follow the `h-quality-runner` skill** for the input contract, execution protocol, and 5-section output template.
 - **Follow the `h-pytest-and-linting` skill** for command flags, coverage syntax, and the full pitfall reference.
+- **Follow the `h-vitest-and-linting` skill** for TypeScript/JavaScript tasks — vitest + eslint from `serve/cockpit/web/`.
 - **Verify RED before reporting green.** If tests pass without implementation context, report counts faithfully — do not assume failure.
 - **Max 2 internal retries** before reporting a fatal error. Never retry an identical command after 2 identical failures.
 - **Enforce timeouts with `execute/killTerminal`.** Do not let commands run indefinitely.

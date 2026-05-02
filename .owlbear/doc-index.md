@@ -79,7 +79,7 @@
 - # `owlbear-cockpit — Kanban Backend`
 - ## `Launch / Usage`
 - ## `Engine Surface — Allowlist`
-- ### `Via adapter (read-only)`
+- ### `Via adapter`
 - ### `Mutation routes`
 - #### `Via CockpitView facade`
 - ### `Excluded methods — why`
@@ -103,7 +103,6 @@
 - ### `KanbanEngine methods`
 - ### `Dispatch helper`
 - ### `AgentView dispatch pipeline`
-- ### `Decision Requests`
 - ## `Migration`
 - ## `Configuration`
 - ## `Dependencies`
@@ -548,6 +547,19 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `What happens`
 - ## `Tips`
 
+## share/prompts/memory-audit.prompt.md
+- # `Memory Audit`
+- ## `1. Preamble`
+- ## `2. Setup — Inventory`
+- ## `3. Audit Dimensions`
+- ### `3.1 Staleness`
+- ### `3.2 Redundancy`
+- ### `3.3 Gaps`
+- ### `3.4 Bloat`
+- ### `3.5 Thematic Drift`
+- ## `4. Findings Loop`
+- ## `5. Summary`
+
 ## share/prompts/orchestrate.prompt.md
 
 ## share/prompts/test-curation.prompt.md
@@ -844,6 +856,20 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 ### Outbound links
 - [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer)
 
+## share/skills/h-vitest-and-linting/SKILL.md
+- # `Vitest, ESLint, and Coverage Reference`
+- ## `Vitest Commands`
+- ### `Working directory`
+- ### `Scoped runs`
+- ### `Full suite`
+- ### `Default flags`
+- ## `ESLint`
+- ### `Exit codes`
+- ## `Coverage`
+- ## `Vitest Configuration`
+- ### `Setup file (`vitest.setup.ts`)`
+- ## `Known Gotchas`
+
 ## share/skills/r-architecture-standards/SKILL.md
 - # `Architecture Standards`
 - ## `v2 Architecture Overview`
@@ -878,7 +904,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/r-pipeline-protocol/SKILL.md
 - # `Pipeline Protocol`
-- ### `Companion Skills`
+- ## `Companion Skills`
 - ## `1. Task Setup`
 - ### `Task Discipline`
 - ### `Claiming`
@@ -888,6 +914,7 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 - ## `2. Working Standards`
 - ### `Evidence Principles`
 - ### `Quality-Runner Mandate`
+- ### `Quality-Runner Environment Fallback`
 - ### `Tool Availability`
 - ### `Defense-in-Depth`
 - ### `Confidence Thresholds (source of truth)`
@@ -1033,11 +1060,16 @@ describes: serve/*/pyproject.toml, share/**, setup/**, .owlbear/**
 
 ## share/skills/w-mem-curation/SKILL.md
 - # `Memory Curation`
+- ## `Architecture`
 - ## `Step 0 — Setup`
-- ## `Step 1 — Gather Pending Entries`
+- ## `Step 1 — Gather and Inventory`
 - ## `Step 2 — Deduplicate`
 - ## `Step 3 — Assess Signal`
 - ## `Step 4 — Act`
+- ### `Promotion = Merge`
+- ### `CONFLICT/UNCERTAIN handling by mode`
+- ### `Deletions`
+- ## `Step 4b — Consolidation (capacity-triggered)`
 - ## `Step 5 — Return Channel A signal`
 - ## `Step 6 — Done`
 - ## `Verification Checklist`

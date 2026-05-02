@@ -1,10 +1,10 @@
 ---
 id: 1230
 title: Frontend — PDS migration (design system consistency)
-status: todo
+status: in-progress
 priority: nice-to-have
 created: 2026-04-30 16:31:18.656061+00:00
-updated: 2026-05-01T22:04:17.102063+00:00
+updated: 2026-05-02T03:27:32.773023+00:00
 tags:
 - cockpit
 - frontend
@@ -151,3 +151,405 @@ Observed blockers:
 - Reconcile plugin expectations in `ResolveModal_plugins_1194.test` with current renderer/plugin wiring so AC7 can serve as a stable regression gate.
 
 - Commit status: no builder commit in this pass because gate AC7 is still red under current test assumptions.
+[[2026-05-02]]
+## Test-Writer Notes
+- Retry (AC7 legacy suite fixes): updated ArchivalModal_1241.test.tsx and DetailTab.test.tsx to align with PDS migration contract.
+- Commit: 8142e272 — test: fix AC7 legacy suites for PDS migration (#1230, test-writer)
+
+### Changes made
+
+**ArchivalModal_1241.test.tsx:**
+- Added `beforeAll` ElementInternals shim — newer jsdom has partial `attachInternals` lacking `setFormValue`; the conditional shim in vitest.setup.ts no longer applies. Fix: unconditional override in test file. This was the root cause of all 26 "p-select not found" failures (p-select componentWillLoad threw on mount).
+- AC2: `querySelector('h3')` → `querySelector('p-heading')` (ArchivalModal uses PHeading after migration)
+- AC3: Replaced `document.activeElement === select` with `HTMLElement.prototype.focus` spy to verify the component calls `.focus()` on p-select (jsdom does not update activeElement for PDS custom elements)
+- AC4: `select?.options` → `pSelect?.querySelectorAll('option')` (options are native children of p-select)
+- AC5 "shows" tests: `input[type="text"]` → `p-input-text`
+- AC15 focus trap: Updated focusable selector to include `p-button/p-input-text/p-select/p-textarea`. Changed from `document.activeElement` assertion to `vi.spyOn(targetEl, 'focus')` + `tabIndex=0` trick to make custom elements focusable in jsdom.
+
+**DetailTab.test.tsx:**
+- Added same `beforeAll` ElementInternals shim.
+- "renders title as input field": `input[data-field="title"]` → `p-input-text[data-field="title"]`
+- "title input shows value": `input[data-field="title"].value` → `p-input-text[data-field="title"]` + `.value ?? getAttribute('value')` check
+- "clicking toggle reveals textarea": `textarea[data-field="body"]` → `p-textarea[data-field="body"]`
+- "save body includes edited content": `textarea` → `p-textarea` + `fireEvent(el, new CustomEvent('change', { detail: { value }, bubbles: true }))` matching readControlValue pattern
+
+### AC7 suite results after fixes
+| Suite | Result |
+|-------|--------|
+| DetailTab.test.tsx | ✅ 43/43 pass |
+| ArchivalModal_1241.test.tsx | ⚠️ 2 fail (source regression — see below) |
+| ArchivalModal_1245.test.tsx | ⚠️ 3 fail (source regression — see below) |
+| ResolveModal_1193.test.tsx | ✅ 7/7 pass |
+| ResolveModal_plugins_1194.test.tsx | ⚠️ 2 fail (source regression — see below) |
+| Shell_966.test.tsx | ✅ pass |
+| HealthBadge.test.tsx | ✅ pass |
+| ActivityTab.test.tsx | ✅ pass |
+| DRStatusIndicator_1191.test.tsx | ✅ pass |
+
+**Total: 170 passed / 7 failed (source regressions, not test issues)**
+
+### Builder: 3 source fixes required
+
+**Fix 1 — ArchivalModal.tsx hint text (em dash):**
+`ArchivalModal_1241` (AC10) and `ArchivalModal_1245` both require em dash `—` in the hint text.
+The PDS migration introduced a regression: `<PText>Required - enter at least one task ID</PText>` must be `<PText>Required — enter at least one task ID</PText>`.
+
+**Fix 2 — ResolveModal.tsx: restore ReactMarkdown plugins:**
+Commit `66dd18b6` ("fix: update decision resolution endpoint") accidentally removed `remarkGfm`/`rehypeSanitize` from ResolveModal. They were correctly added in `9cf3a3b7` (#1194 builder). Restore:
+```tsx
+<ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>
+  {dr.body}
+</ReactMarkdown>
+```
+Also restore the two imports (`import remarkGfm from 'remark-gfm'` and `import rehypeSanitize from 'rehype-sanitize'`).
+
+After both fixes, all 9 AC7 suites should be green.
+[[2026-05-02]]
+## Builder Notes
+- Implementation: restored markdown plugin wiring in [serve/cockpit/web/src/components/ResolveModal.tsx](serve/cockpit/web/src/components/ResolveModal.tsx).
+- Fixes applied:
+  - Re-added `remark-gfm` and `rehype-sanitize` imports.
+  - Restored `<ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>` so plugin expectations in AC7 regression tests are satisfied.
+- Tests:
+  - Scoped task suite + AC7 regression suites: 231 passed, 0 failed, 0 skipped.
+  - Included: `PdsMigration_1230`, `DetailTab`, `ArchivalModal_1241`, `ArchivalModal_1245`, `ResolveModal_1193`, `ResolveModal_plugins_1194`, `Shell_966`, `HealthBadge`, `DRStatusIndicator_1191`, `ActivityTab`.
+- Coverage:
+  - Overall scoped run: 91.78%.
+  - `ResolveModal.tsx`: 93.26%.
+  - `ArchivalModal.tsx`: 90.29%.
+- Lint: ESLint clean (0 violations) on all in-scope migrated components.
+- Commit: `8d48fb79e0322d7a193ce6ae8c10446d9f55ea81` (`fix: restore ResolveModal markdown plugins (#1230, builder)`).
+
+### Evidence Summary
+- Prior RED baseline for `PdsMigration_1230` (54/54 failing) is documented in earlier task history.
+- Current GREEN verification confirms task tests and listed AC7 legacy suites are all passing after the source fix.
+
+### Post-task Reflection
+- Problems faced: retry-cycle context had stale mixed notes; the actionable blocker was narrowed by rerunning only the named failing suites.
+- Workaround applied: trusted test-writer’s component-level diagnosis, then validated with quality-runner before and after code change.
+- Pattern discovered: plugin-wiring regressions can hide behind unrelated PDS migration noise; focused suite selection isolates root cause quickly.
+- Quality gap: task history carried contradictory interim states; scoped reruns are necessary to avoid false reject loops.
+[[2026-05-02]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run: 245 passed, 0 failed, 0 skipped.
+- Included suites: serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx, serve/cockpit/web/src/__tests__/DetailTab.test.tsx, serve/cockpit/web/src/__tests__/ArchivalModal_1241.test.tsx, serve/cockpit/web/src/__tests__/ArchivalModal_1245.test.tsx, serve/cockpit/web/src/__tests__/ResolveModal_1193.test.tsx, serve/cockpit/web/src/__tests__/ResolveModal_plugins_1194.test.tsx, serve/cockpit/web/src/__tests__/Shell.test.tsx, serve/cockpit/web/src/__tests__/HealthBadge.test.tsx, serve/cockpit/web/src/__tests__/DRStatusIndicator_1191.test.tsx, serve/cockpit/web/src/__tests__/ActivityTab.test.tsx.
+
+### Diagnostics
+- VS Code diagnostics: no errors in the 18 in-scope TSX source/test files.
+- Lint: quality-runner lint is not meaningful for TSX; no Python files were in scope.
+
+### Coverage
+- Scoped aggregate coverage: 63.29%.
+- Module detail: ActivityTab.tsx 89.06%, ArchivalModal.tsx 90.29%, ConfirmDialog.tsx 73.33%, DRStatusIndicator.tsx 92.59%, DetailTab.tsx 93.41%, HealthBadge.tsx 92.00%, ResolveModal.tsx 93.26%, Shell.tsx 75.00%.
+- Per review protocol, the module percentages above are informational here. The changed PDS migration lines are directly exercised by the passing suites; low whole-file percentages on broader components are not the gate.
+
+### AC Compliance
+| AC | Evidence | Status |
+|---|---|---|
+| AC1: button elements replaced with PButton, appropriate variant per context | Source uses context-specific variants in serve/cockpit/web/src/components/ConfirmDialog.tsx:14-15, serve/cockpit/web/src/components/ActivityTab.tsx:50-62, serve/cockpit/web/src/components/ArchivalModal.tsx:270-279, serve/cockpit/web/src/components/DetailTab.tsx:186-214, serve/cockpit/web/src/components/ResolveModal.tsx:128-136, serve/cockpit/web/src/Shell.tsx:126. The TestFromAC suite only proves p-button presence and raw button absence in serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:189-294; it never asserts the required variant values. A wrong variant would still pass. | FAIL |
+| AC2: ArchivalModal and ResolveModal headings use PHeading tag=h3 | PHeading usage is present in serve/cockpit/web/src/components/ArchivalModal.tsx:222 and serve/cockpit/web/src/components/ResolveModal.tsx:67. The task suite checks p-heading presence, tag=h3, and no raw h3 in serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:310-343. | PASS |
+| AC3: listed standalone p elements replaced with PText | PText usage is present in serve/cockpit/web/src/components/ArchivalModal.tsx:248-283, serve/cockpit/web/src/components/DRStatusIndicator.tsx:35-47, and serve/cockpit/web/src/components/HealthBadge.tsx:34-45. The task suite checks PText presence and raw p absence in serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:373-448. | PASS |
+| AC4: text/select/textarea controls migrated to PInputText, PSelect, PTextarea; hideLabel where unlabeled | Structural migration and hide-label checks are present in serve/cockpit/web/src/components/DetailTab.tsx:121-176, serve/cockpit/web/src/components/ArchivalModal.tsx:225-262, serve/cockpit/web/src/components/ResolveModal.tsx:98-121 and are covered in serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:469-597. Secondary note: DetailTab payload tests currently mutate body only, so title/priority propagation through readControlValue is thinner than ideal. | PASS |
+| AC5: Card.tsx and Column.tsx unchanged structurally | grep_search for PDS imports/components in serve/cockpit/web/src/components/Card.tsx and serve/cockpit/web/src/components/Column.tsx returned no matches, and these files were not in the builder changed-file list. | PASS |
+| AC6: KanbanBoard context menu not migrated in this task | KanbanBoard still renders the raw coordinate-positioned context menu at serve/cockpit/web/src/KanbanBoard.tsx:223-225, and grep_search found no PDS component imports in that file. | PASS |
+| AC7: named regression suites green | quality-runner scoped run reported 245 passed, 0 failed across the named legacy suites plus the task-specific migration suite. | PASS |
+
+### Pass 1 - Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 variant-by-context contract | serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:189-294 | No. The suite would still pass if tertiary buttons were changed to default buttons because it only asserts p-button presence / raw button absence. | LAX |
+| AC2 heading migration | serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:310-343 | Yes | COVERED |
+| AC3 text migration | serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:373-448 | Yes | COVERED |
+| AC4 structural form migration and hideLabel | serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx:469-597 | Yes for structural migration; behavior proof is thinner in legacy DetailTab payload checks. | COVERED |
+| AC7 regression suites green | quality-runner scoped run | Yes | COVERED |
+
+#### Security Review
+- No issues found. The reviewed files remain local UI/rendering code with sanitized ReactMarkdown usage in serve/cockpit/web/src/components/DetailTab.tsx:179 and serve/cockpit/web/src/components/ResolveModal.tsx:67.
+
+#### Test Integrity
+- No weakened or removed assertions found in the current file state.
+- Small confidence deduction remains because I could confirm the builder commit exists in .git/logs (8d48fb79e0322d7a193ce6ae8c10446d9f55ea81) but I do not have a diff-backed immutability audit for every TestFromAC assertion.
+
+#### Test Quality
+- FAIL. Assertion specificity is WEAK for AC1 because the suite does not prove the explicit phrase appropriate variant per context. The implementation clearly distinguishes tertiary vs default buttons, but the tests do not assert those values.
+- Additional proof-thinness: serve/cockpit/web/src/components/DetailTab.tsx:59, 122-133 serializes title and priority through readControlValue, while serve/cockpit/web/src/__tests__/DetailTab.test.tsx:123-135, 262, 530 only proves presence plus updated/body payload keys.
+
+#### Data Safety
+- No issues found.
+
+#### Builder Process Quality
+- FRICTION, not loop. Multiple builder/test-writer retries are present, but the approaches changed and there is no identical-approach repetition or tier-3 loop behavior.
+
+### Required Follow-up
+- Strengthen serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx so AC1 asserts the expected button variants per context instead of only asserting p-button presence.
+- Recommended while the task is back with test-writer: add one DetailTab regression that mutates the migrated title and priority controls through the PDS event path and proves the edited values enter the POST payload.
+
+### Deductions
+- -0.08: AC1 variant contract is not discriminated by the TestFromAC suite.
+- -0.02: no diff-backed TestFromAC immutability audit; commit existence only confirmed through .git/logs.
+- -0.01: DetailTab title/priority payload proof is thinner than the migrated control wiring warrants.
+
+### Verdict
+- Confidence: 0.85
+- FAIL -> todo
+- Reason: implementation is green, diagnostics are clean, and the migration is present, but the review gate cannot pass because AC1's explicit variant-by-context contract is not actually proven by the current tests.
+
+### Reflection
+- Green frontend migrations can still be false greens when the suite asserts custom-element presence but not the contract encoded in attributes.
+- For TSX reviews, VS Code diagnostics plus targeted Vitest runs are the meaningful gate; quality-runner lint is only context, not proof.
+- When diff access is unavailable, .git/logs is enough to confirm commit presence but not enough for a full immutability audit.
+[[2026-05-02]]
+## Test-Writer Notes
+- Retry (AC1 variant + AC4 payload proof): added 17 new tests — 14 variant assertions, 3 payload regression tests.
+- Test file: serve/cockpit/web/src/__tests__/PdsMigration_1230.test.tsx
+- Classes modified: TestFromAC_PdsMigration_Buttons (17 new tests in 7 new describe blocks); new class TestFromAC_PdsMigration_DetailTabPayload (3 tests).
+- Total after retry: 71 tests, all PASS against current implementation.
+- Lint: ESLint clean (0 errors, 0 warnings on the test file).
+- Commit: b27d046b — test: strengthen AC1 variant assertions and add DetailTab payload proof (#1230, test-writer)
+
+### Gaps addressed
+- AC1 variant gap: Added `.variant` DOM property assertions (NOT `getAttribute('variant')` — PDS v4 stores variant as a non-reflected DOM property) for cancel/toggle/filter/nav buttons (`tertiary`) and action buttons (`primary`) across all 6 in-scope components.
+- AC4 payload gap: Added 3 tests in TestFromAC_PdsMigration_DetailTabPayload proving that title changes, priority changes, and both changes together via PDS CustomEvents (`detail.value` path) correctly enter the POST body on save.
+
+### Step 1b.1 — Direct-to-Review Advance
+- All reviewer gaps were test-proof gaps only; no implementation fixes were needed.
+- All 17 new tests PASS against the current implementation (builder's implementation is already correct).
+- Builder skip: test-only retry, all tests green.
+
+### Key discovery
+- PDS v4 `variant` prop is a DOM property on `p-button` elements (not a reflected HTML attribute). `getAttribute('variant')` always returns `null`. Access via `(el as HTMLElement & { variant: string }).variant`. This pattern is required for any future PDS v4 variant assertions in jsdom tests.
+[[2026-05-02]]
+## Builder Notes
+- No code changes were made in this pass.
+- Attempted mandatory GREEN verification via `quality-runner` (scoped task suite + AC7 suites + scoped lint).
+- quality-runner reported execution failure: vitest/eslint hangs when invoked with file arguments in its environment, so no reliable pass/fail evidence could be produced.
+- Per `r-pipeline-protocol` Tool Availability rule, builder cannot substitute direct local pytest/ruff/npm invocations when quality-runner is unavailable/failing.
+- Releasing claim with failure so task can be retried once quality-runner execution is restored.
+
+### quality-runner reported
+- `npx vitest run` with file arguments: hang, exit 130 (SIGINT)
+- `npx eslint` with file arguments: hang, exit 130 (SIGINT)
+- `npx vitest run` without args: works (sanity check)
+- Coverage: not collected
+[[2026-05-02]]
+## Builder Notes
+- Implementation: no code changes in this pass (test-only verification cycle).
+- Tests (quality-runner scoped): 262 passed, 0 failed, 0 skipped.
+- Suites verified: `PdsMigration_1230`, `DetailTab`, `ArchivalModal_1241`, `ArchivalModal_1245`, `ResolveModal_1193`, `ResolveModal_plugins_1194`, `Shell`, `HealthBadge`, `DRStatusIndicator_1191`, `ActivityTab`.
+- Lint: ruff reports TSX parse errors (tool/filetype mismatch); no Python files were in scope.
+- Coverage: not collected by quality-runner for TSX in this run; acceptance gate satisfied by scoped green suites.
+- Evidence summary: all AC7 named regression suites and task-specific migration suite are green in current workspace state.
+
+### Post-task Reflection
+- Problems faced: prior cycle was blocked on quality-runner file-arg instability and stale retry context.
+- Workaround applied: reran a single scoped quality-runner pass using the full AC7 suite list plus task suite for deterministic evidence.
+- Pattern discovered: frontend tasks need explicit handling of ruff/TSX mismatch to avoid false-negative gating.
+- Quality gap: coverage evidence for TSX remains tool-limited in quality-runner; suite pass remains the reliable gate here.
+[[2026-05-02]]
+## Review Evidence
+### Test Results
+- quality-runner scoped frontend run: 262 passed, 0 failed, 0 skipped.
+- Suites executed: `PdsMigration_1230.test.tsx`, `DetailTab.test.tsx`, `ArchivalModal_1241.test.tsx`, `ArchivalModal_1245.test.tsx`, `ResolveModal_1193.test.tsx`, `ResolveModal_plugins_1194.test.tsx`, `Shell.test.tsx`, `HealthBadge.test.tsx`, `DRStatusIndicator_1191.test.tsx`, `ActivityTab.test.tsx`.
+
+### Diagnostics
+- VS Code diagnostics: no errors in the in-scope TSX source/test files.
+- Lint: quality-runner lint is not meaningful for TSX here. Ruff produced only Python-parser `invalid-syntax` noise against `.tsx`, so it is not usable review evidence for this task.
+
+### Coverage
+- ConfirmDialog.tsx: 73.33%
+- ArchivalModal.tsx: 90.29%
+- ActivityTab.tsx: 89.06%
+- DetailTab.tsx: 94.61%
+- ResolveModal.tsx: 93.26%
+- HealthBadge.tsx: 92.00%
+- DRStatusIndicator.tsx: 92.59%
+- Shell.tsx: 75.00%
+- Scoped overall statements: 63.45%
+- Coverage is informational here; the gate is proof quality on the migrated branches.
+
+### AC Compliance
+| AC Line | Evidence | Status |
+|---|---|---|
+| AC1: `<button>` -> `<PButton>` with appropriate variant per context in ConfirmDialog, ArchivalModal, ActivityTab, DetailTab, ResolveModal, Shell | Live source uses the expected variants in `ConfirmDialog.tsx:14-15`, `ArchivalModal.tsx:270-279`, `ActivityTab.tsx:50-62`, `DetailTab.tsx:110,181,189,192,196,207-214`, `ResolveModal.tsx:128-136`, `Shell.tsx:126-129`. The strengthened task suite now proves many variants in `PdsMigration_1230.test.tsx:299-396`, but it still omits ActivityTab `filter-stuck` / `filter-released` and DetailTab `unclaim-action` / `unblock-action` / `conflict-refresh` / `conflict-overwrite`. A wrong variant on those uncovered buttons would stay green. | FAIL |
+| AC2: `<h3>` -> `<PHeading tag="h3">` in ArchivalModal and ResolveModal | Source uses `PHeading` in `ArchivalModal.tsx:222` and `ResolveModal.tsx:82`. Task tests assert `p-heading`, `tag="h3"`, and no raw `h3` in `PdsMigration_1230.test.tsx:410-447`. | PASS |
+| AC3: standalone `<p>` -> `<PText>` in ArchivalModal, DRStatusIndicator popover, HealthBadge popover | Source uses `PText` in `ArchivalModal.tsx:266,283`, `DRStatusIndicator.tsx:39`, and `HealthBadge.tsx:41`. Task tests assert `p-text` presence and raw `p` absence in `PdsMigration_1230.test.tsx:467-555`. | PASS |
+| AC4: form controls migrated to `PInputText` / `PSelect` / `PTextarea`; `hideLabel` where no visible label exists | Source is migrated in `DetailTab.tsx:120-176`, `ArchivalModal.tsx:226-262`, and `ResolveModal.tsx:119-125`. The task and legacy suites now prove title/priority/body payload flow and ArchivalModal interaction, but proof is still incomplete: `DetailTab.tsx:147-163` migrated `depends_on`, `parent`, and `block_reason` to hidden-label `PInputText`, while tests only assert generic field presence for `depends_on` / `parent` in `DetailTab.test.tsx:144-151` and `PInputText` presence for `block_reason` in `PdsMigration_1230.test.tsx:705-708`; no test discriminates `PInputText` plus `hide-label` for all three. `ResolveModal.tsx:63-72,124-125` supports the PDS `detail.value` path, but `ResolveModal_1193.test.tsx:132,138` still drives only `target.value`. A regression limited to those unproved branches would stay green. | FAIL |
+| AC5: Card.tsx and Column.tsx unchanged structurally | Source remains native/unchanged in `Card.tsx:20-56` and `Column.tsx:34-71`; no PDS migration was introduced there. | PASS |
+| AC6: KanbanBoard context menu not migrated in this task | Source still uses the old coordinate-positioned raw menu in `KanbanBoard.tsx:223-234`. | PASS |
+| AC7: named regression suites green | quality-runner independently executed the named suites and reported 262 passed, 0 failed, 0 skipped. | PASS |
+
+### Pass 1 - Critical
+#### Test-Writer AC Coverage
+| AC Line | Mapped Test | Would Fail If AC Violated? | Verdict |
+|---|---|---|---|
+| AC1 variant-by-context contract | `PdsMigration_1230.test.tsx:299-396` | No. Several migrated buttons in ActivityTab and DetailTab have no variant assertion, so a wrong variant on those paths would still pass. | LAX |
+| AC2 heading migration | `PdsMigration_1230.test.tsx:410-447` | Yes. | COVERED |
+| AC3 text migration | `PdsMigration_1230.test.tsx:467-555` | Yes. | COVERED |
+| AC4 form migration + hideLabel + PDS event path | `PdsMigration_1230.test.tsx:565-781`, `DetailTab.test.tsx:505-528`, `ArchivalModal_1241.test.tsx:95-99,525-565`, `ResolveModal_1193.test.tsx:114-154` | Partially. Title/priority/body and ArchivalModal branches are proved, but `depends_on` / `parent` / `block_reason` hide-label coverage and ResolveModal `detail.value` are still unproved. | LAX |
+| AC7 named suites green | quality-runner scoped run | Yes. | COVERED |
+
+#### Security Review
+- No issues found. The UI changes do not add new injection, secret, path, or deserialization risk.
+- Markdown rendering remains sanitized in `DetailTab.tsx:179` and `ResolveModal.tsx:83`, and plugin wiring is covered by `ResolveModal_plugins_1194.test.tsx:75-102`.
+
+#### Test Integrity
+- No weakened or removed assertions were visible in the current TestFromAC file state.
+- Small confidence deduction remains because commit presence was confirmed via `.git/logs` for `8d48fb79e0322d7a193ce6ae8c10446d9f55ea81`, `b27d046b`, `8142e272`, and `eb54c8dc`, but I did not have a diff-backed immutability audit of every TestFromAC assertion.
+
+#### Test Quality
+- FAIL. The remaining weakness is branch completeness on AC-traceable branches, not assertion style.
+- AC1 is still sampled rather than exhaustive: the task suite proves many button variants but not all migrated buttons in the scoped components.
+- AC4 is still sampled rather than exhaustive: the task suite does not yet discriminate `PInputText` + `hide-label` for every unlabeled DetailTab text control, and it does not prove the PDS `detail.value` path for ResolveModal notes.
+
+#### Data Safety
+- No issues found.
+
+#### Builder Process Quality
+- FRICTION, not LOOP, in the implementation retries themselves. The implementation changed course across retries and the current code is green.
+- However this is the second review failure recorded on the task, so the reviewer loop-breaker applies on routing.
+
+### Required Follow-up
+- Strengthen AC1 proof so all migrated ActivityTab and DetailTab buttons have discriminating variant assertions, including `filter-stuck`, `filter-released`, `unclaim-action`, `unblock-action`, `conflict-refresh`, and `conflict-overwrite`.
+- Strengthen AC4 proof so `depends_on`, `parent`, and `block_reason` are each proved as `PInputText` with `hide-label` where applicable.
+- Add a ResolveModal notes test that drives `p-textarea` through `CustomEvent.detail.value` and proves the submitted payload uses the updated notes.
+
+### Deductions
+- -0.08: AC1 proof still misses migrated button branches that are part of the component-level contract.
+- -0.06: AC4 proof still misses migrated control/hideLabel branches and the ResolveModal PDS event path.
+- -0.01: TestFromAC immutability audit is lower-confidence without a direct diff.
+
+### Verdict
+- Confidence: 0.84
+- FAIL -> backlog
+- Reason: the implementation is green and current source matches the migration intent, but the review gate still cannot pass because AC1 and AC4 are not fully discriminated by the tests. This is the second review failure on the task, so routing escalates to backlog per the loop-breaker rule.
+
+### Reflection
+- Green frontend suites are not enough when a component-level migration AC leaves unasserted buttons or controls inside the same scope.
+- For TSX reviews, Vitest plus editor diagnostics are the meaningful checks; ruff-on-TSX output is noise.
+- Comparing live component branches against the exact TestFromAC assertions is what surfaces false-green gaps on UI migration tasks.
+[[2026-05-02]]
+## Architecture Review (Re-review)
+
+### Context
+Task returned to backlog via loop-breaker after 2nd review failure (confidence 0.84). Implementation is green (262 pass, 0 fail). All failures are test-proof gaps, not implementation defects.
+
+### AC Refinement
+- **AC1 elevated to td:2** — "appropriate variant per context" requires per-button variant assertions, not just presence checks. The reviewer correctly identified this as a contract that td:1 cannot prove.
+- **AC4 unchanged at td:2** — hideLabel map and PDS event path requirements added below.
+
+### AC1 Variant Map (exhaustive — test-writer must assert each row)
+| Component | Selector | Expected Variant |
+|---|---|---|
+| ConfirmDialog | 1st p-button (Cancel) | tertiary |
+| ConfirmDialog | 2nd p-button (Confirm) | primary |
+| ArchivalModal | [data-testid="archival-submit"] | primary |
+| ArchivalModal | cancel p-button (no testid) | tertiary |
+| ActivityTab | [data-testid="filter-active"] | tertiary |
+| ActivityTab | [data-testid="filter-all"] | tertiary |
+| ActivityTab | [data-testid="filter-blocked"] | tertiary |
+| ActivityTab | [data-testid="filter-stuck"] | tertiary |
+| ActivityTab | [data-testid="filter-released"] | tertiary |
+| DetailTab | [data-testid="history-tab"] | tertiary |
+| DetailTab | [data-testid="body-edit-toggle"] | tertiary |
+| DetailTab | [data-testid="save-button"] | primary |
+| DetailTab | [data-testid="move-backward"] | tertiary |
+| DetailTab | [data-testid="unclaim-action"] | tertiary |
+| DetailTab | [data-testid="unblock-action"] | tertiary |
+| DetailTab | [data-testid="conflict-refresh"] | tertiary |
+| DetailTab | [data-testid="conflict-overwrite"] | primary |
+| ResolveModal | [data-testid="resolve-submit"] | primary |
+| ResolveModal | [data-testid="resolve-cancel"] | tertiary |
+| Shell | [data-surface="kanban"] | tertiary |
+
+Note: PDS v4 `variant` is a DOM property (not reflected attribute). Access via `(el as HTMLElement & { variant: string }).variant`. `primary` means no explicit `variant` prop set (PDS default).
+
+### AC4 HideLabel Map (exhaustive — test-writer must assert each row)
+| Component | Selector | hide-label | Reason |
+|---|---|---|---|
+| DetailTab | p-input-text[data-field="title"] | true | No visible label |
+| DetailTab | p-select[data-field="priority"] | true | No visible label |
+| DetailTab | p-input-text[data-field="depends_on"] | true | No visible label |
+| DetailTab | p-input-text[data-field="parent"] | true | No visible label |
+| DetailTab | p-input-text[data-field="block_reason"] | true | Conditional; no visible label when shown |
+| DetailTab | p-textarea[data-field="body"] | true | No visible label |
+| ResolveModal | p-textarea[data-testid="resolve-notes"] | true | No visible label |
+| ArchivalModal | p-select (reason) | false | Has visible label wrapper |
+| ArchivalModal | p-input-text (refs) | false | Has visible label wrapper |
+
+### AC4 PDS Event Path (test-writer must add)
+ResolveModal notes textarea must be driven through `CustomEvent('change', { detail: { value: ... } })` on `p-textarea[data-testid="resolve-notes"]`, and the submitted payload must prove the updated notes content. This closes the `readControlValue(event.detail?.value)` proof gap.
+
+### Remaining Gaps (from reviewer's 2nd review)
+Already tested (no action needed): ConfirmDialog variants, ArchivalModal variants, DetailTab save/history/edit/backward variants, ResolveModal variants, Shell variant, title/priority/body hideLabel, resolve-notes hideLabel, ArchivalModal boundary (no hideLabel), DetailTab title+priority payload.
+
+Missing (test-writer must add):
+1. AC1: ActivityTab filter-stuck, filter-released variant assertions
+2. AC1: DetailTab unclaim-action, unblock-action, conflict-refresh, conflict-overwrite variant assertions
+3. AC4: DetailTab depends_on, parent, block_reason hideLabel assertions
+4. AC4: ResolveModal notes PDS detail.value payload test
+
+### Evaluation (unchanged from original review)
+All 10 architecture criteria PASS — no structural changes since original approval. Design is direct element-to-PDS replacement with no new abstractions.
+
+### Challenge Results
+- Challenger: reconsider (0.44) — correctly noted that approval must not precede AC refinement
+- Architect response: accepted. This re-review section lands the AC refinement BEFORE advancing. The variant map and hideLabel map are now in the task body as exhaustive references.
+
+### Test Depth
+- Max depth: td:2 (AC1 elevated from td:1, AC4 already td:2)
+- Test-writer: PROCEED
+
+### Verdict: APPROVE (re-approval with AC refinement)
+### Action Taken: Elevated AC1 to td:2, added exhaustive variant map (20 rows) and hideLabel map (9 rows), added PDS event path requirement. Advancing to todo.
+[[2026-05-02]]
+Re-review after loop-breaker. AC refined with exhaustive variant map (20 buttons) and hideLabel map (9 controls), AC1 elevated to td:2, ResolveModal PDS event path requirement added. Challenger accepted (0.44 → reconsider): refinement landed before advancing. 4 specific test gaps enumerated for test-writer.
+[[2026-05-02]]
+## Test-Writer Notes
+- Retry: added 10 tests for all 4 reviewer gaps. All pass against current impl.
+- Builder skip: test-only retry, all tests green (81 passed, 0 failed).
+- Commit: 31d7583d — test: fill reviewer gaps for AC1 variants and AC4 hideLabel/payload (#1230, test-writer)
+
+### Gaps addressed (from reviewer Required Follow-up)
+
+**AC1 — ActivityTab missing variants (2 tests):**
+- `filter-stuck has variant="tertiary"`
+- `filter-released has variant="tertiary"`
+
+**AC1 — DetailTab missing variants (4 tests):**
+- `unclaim-action has variant="tertiary"`
+- `unblock-action has variant="tertiary" when task is blocked` (uses TASK_BLOCKED fixture)
+- `conflict-refresh has variant="tertiary"` (triggers conflict modal via 409 fetch mock)
+- `conflict-overwrite has variant="primary"` (triggers conflict modal via 409 fetch mock)
+
+**AC4 — DetailTab hideLabel coverage (3 tests):**
+- `p-input-text for depends_on has hide-label attribute`
+- `p-input-text for parent has hide-label attribute`
+- `p-input-text for block_reason has hide-label attribute when task is blocked`
+
+**AC4 — ResolveModal notes payload proof (1 test):**
+- `notes changed via CustomEvent detail.value appears in POST body on submit` — drives `p-textarea[data-testid="resolve-notes"]` with `CustomEvent('change', { detail: { value: ... } })` and asserts `payload.notes` in the POST body.
+
+### Key pattern
+- Conflict modal tests: call `renderDetailTab()` first (sets hanging-promise stub), then override `fetch` with 409 mock, click save, await microtask tick — matches existing payload test pattern.
+- `conflict-overwrite` has no explicit variant prop; `.variant` property returns `'primary'` (PDS v4 default), confirmed by existing save-button test which uses the same pattern.
+[[2026-05-02]]
+## Builder Notes
+- No source edits in this pass.
+- Mandatory GREEN verification attempted via `quality-runner` on task suite + AC7 suites.
+- quality-runner execution environment failed before meaningful assertions:
+  - `ArchivalModal_1241.test.tsx` and `DetailTab.test.tsx` failed in `beforeAll` with `ReferenceError: HTMLElement is not defined`.
+  - Remaining suites failed at render setup with `ReferenceError: document is not defined`.
+- Result summary from quality-runner: 2 passed, 190 failed, 80 skipped; failures attributed to environment setup, not implementation-level assertions.
+- Lint report returned clean; coverage unmeasurable because test runtime initialization failed.
+- Per `r-pipeline-protocol` Tool Availability rule, builder cannot substitute direct local vitest/eslint commands for gate evidence when quality-runner execution is unavailable.
+- Releasing claim with failure so task can be retried when quality-runner frontend jsdom execution is restored.
+[[2026-05-02]]
+## Infrastructure Fix — Quality-Runner Frontend Support
+- quality-runner now has documented frontend protocol (`h-vitest-and-linting` skill).
+- Agent updated with `h-vitest-and-linting` in `<required_reading>` and `<critical_rules>`.
+- `h-quality-runner` updated with frontend detection (when `test_paths` contain `serve/cockpit/web/`).
+- `r-pipeline-protocol` updated with environment fallback clause (retry with hint, then direct execution).
+- Root cause: quality-runner ran vitest from repo root instead of `serve/cockpit/web/`, missing jsdom config.
+- Next builder pickup should succeed with quality-runner frontend mode.

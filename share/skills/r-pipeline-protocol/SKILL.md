@@ -76,6 +76,15 @@ All pipeline agents (test-writer, builder, reviewer, auditor) **must** delegate 
 
 Exception: the `quality-runner` agent itself runs the underlying tools — that's its job.
 
+### Quality-Runner Environment Fallback
+
+When quality-runner reports an **environment error** (not a test/lint failure) — e.g. `HTMLElement is not defined`, tool hang, SIGINT, or instrument error — the calling agent may:
+
+1. **Retry once** with an explicit hint: `hint="frontend — cd serve/cockpit/web before all commands"`
+2. If the retry also fails with an environment error, **execute the commands directly** as a last resort.
+
+Document direct execution in the task body: `quality-runner env fallback: {error}`. This is not a TOOL_UNAVAILABLE — do not release with fail.
+
 ### Tool Availability
 
 When a required tool is unavailable or fails, release via `end_work(outcome="fail")` and return `FAIL #{id} | TOOL_UNAVAILABLE: {tool_name}` as your Channel A signal. Do not improvise with alternative commands, do not block, do not create DRs.
