@@ -26,7 +26,7 @@ Typically launched as a stdio MCP server via VS Code's `mcp.json`/`settings.json
 
 ### Entry schema
 
-Entries are scoped to an optional agent and optional project. Valid categories: `preference`, `knowledge`, `context`, `behavior`, `goal`. Confidence must be ≥ 0.7.
+Entries are scoped to an optional agent (`scope_agents` list). Valid categories: `knowledge`, `behaviour`, `pitfall`, `process`, `tool`, `goal`, `personality`, `preference`, `context`. Confidence must be in [0.7, 1.0]. States: `pending` (default), `curated`, `approved`, `deleted`.
 
 ## Configuration
 
