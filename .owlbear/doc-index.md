@@ -25,7 +25,6 @@
 - ## `Quick Start`
 - ## `Directory Layout`
 - ## `How It Works`
-- ## `Orchestrator CLI`
 - ## `Cockpit`
 - ## `Knowledge Base`
 - ## `Doc Index`
@@ -37,7 +36,6 @@
 ### Outbound links
 - [uv](https://docs.astral.sh/uv/)
 - [VS Code](https://code.visualstudio.com/)
-- [Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli)
 
 ## SECURITY.md
 - # `Security Policy`
@@ -52,6 +50,7 @@
 - # `OwlBear — Copilot Workspace Instructions`
 - ## `1. Project Identity`
 - ## `2. Repository Branches`
+- ## `Directory Structure`
 - ## `3. Cockpit Frontend`
 - ## `4. Cockpit Backend`
 - ## `5. Tools Package`
@@ -61,6 +60,15 @@
 
 ### Outbound links
 - [the docs](https://docs.pytest.org/en/stable/how-to/cache.html)
+
+## seed/.github/copilot-instructions.md
+- # `OwlBear — Copilot Workspace Instructions`
+- ## `1. Project Identity`
+- ## `2. Repository Branches`
+- ## `Directory Structure`
+- ## `3. Cockpit Frontend`
+- ## `4. Cockpit Backend`
+- ## `5. Tools Package`
 
 ## serve/browser/README.md
 - # `owlbear-browser — Browser Content Fetcher`
@@ -165,16 +173,6 @@
 - ### `Tools`
 - ### `Entry schema`
 - ## `Configuration`
-- ## `Dependencies`
-
-### Outbound links
-- [README.md](../../README.md)
-
-## serve/orchestrator/README.md
-- # `owlbear — Orchestrator`
-- ## `Launch / Usage`
-- ## `Configuration`
-- ## `Kanban CLI Status`
 - ## `Dependencies`
 
 ### Outbound links

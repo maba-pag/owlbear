@@ -73,7 +73,6 @@ Running `init.py` writes the following files into your project directory:
 | `.markdownlint.json` | Markdown linting rules | Skipped if file already exists |
 | `.markdownlintignore` | Markdown lint exclusion patterns | Skipped if file already exists |
 | `.yamllint.yml` | YAML linting configuration | Always written |
-| `owlbear-project.json` | Project metadata (name, type, owlbear path) | Skipped if file already exists |
 
 ## Shared vs Copied
 

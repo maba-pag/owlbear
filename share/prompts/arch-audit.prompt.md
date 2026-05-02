@@ -18,7 +18,7 @@ Do not continue until these terms are loaded and used as the authority for label
 
 ## Step 2 - Define the audit unit
 
-Audit unit is each top-level package directory under `serve/` (for example: `serve/orchestrator/`, `serve/mcp-kanban/`, `serve/knowledge/`).
+Audit unit is each top-level package directory under `serve/` (for example: `serve/mcp-kanban/`, `serve/knowledge/`, `serve/mcp-memory/`).
 
 For each package, inspect:
 

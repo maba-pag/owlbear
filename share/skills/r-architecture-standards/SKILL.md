@@ -10,11 +10,9 @@ Conventions that are **not obvious best practices**. If it's standard Python or 
 
 ## v2 Architecture Overview
 
-OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files dispatched by the orchestrator via ACP (Copilot CLI). Tools are provided by MCP servers (`serve/mcp-*`) or VS Code built-in tools.
+OwlBear v2 has no custom Python agent runtime. Agents are `.agent.md` files executed by VS Code and GitHub Copilot. Tools are provided by MCP servers (`serve/mcp-*`) or VS Code built-in tools.
 
 ```
-serve/orchestrator/       (ACP client, dispatch planning, CLI entry point)
-    dispatches via ACP to
 agents/*.agent.md            (agent definitions — pure markdown, no Python)
     use tools from
 serve/mcp-kanban/         (MCP server: kanban board operations)
@@ -154,7 +152,6 @@ Each task targets exactly one domain. Multi-domain work must be split into separ
 
 | Domain | Scope |
 |--------|-------|
-| orchestrator | `serve/orchestrator/` (ACP client, dispatch, CLI, analysis) |
 | knowledge | `serve/knowledge/` (graph, vector, ingest, query, embeddings) |
 | mcp-kanban | `serve/mcp-kanban/` |
 | mcp-knowledge | `serve/mcp-knowledge/` |

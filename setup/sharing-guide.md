@@ -81,7 +81,6 @@ No platform-specific configuration is required:
 | MCP server code | `../owlbear/serve/` | Yes — started from owlbear via `uv run --project` |
 | Hook runtime files | `.owlbear/hooks/` in project | No — copied from `seed/` into each project |
 | Kanban board | `.owlbear/kanban/tasks/` in project | No — per-project |
-| `owlbear-project.json` | project root | No — per-project |
 | `.github/copilot-instructions.md` | project root | No — per-project (override layer) |
 | `.owlbear/knowledge/` | project root | No — per-project |
 

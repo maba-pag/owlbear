@@ -13,7 +13,6 @@ integration point.
 - **Python 3.12+**
 - **[uv](https://docs.astral.sh/uv/)** package manager
 - **[VS Code](https://code.visualstudio.com/)** with the GitHub Copilot extension
-- **[Copilot CLI](https://docs.github.com/en/copilot/github-copilot-in-the-cli)** (`gh extension install gh-copilot`)
 
 ## Quick Start
 
@@ -31,7 +30,6 @@ Open VS Code with `code .`.
 
 | Directory                 | Purpose                                                |
 |---------------------------|--------------------------------------------------------|
-| `serve/orchestrator/`     | ACP client, dispatch planning, orchestration CLI hooks |
 | `serve/browser/`          | Web content extraction library (authenticated via Edge CDP) |
 | `serve/cockpit/`          | Steering Cockpit — browser UI for kanban board management |
 | `serve/knowledge/`        | Knowledge engine (graph + vector)                      |
@@ -61,29 +59,6 @@ reusable workflows for each agent role.
 
 **MCP servers** (`mcp-kanban`, `mcp-knowledge`, `mcp-memory`) expose the kanban
 board, knowledge base, and persistent agent memory as tools inside VS Code.
-
-**Orchestrator** dispatches work via ACP over Copilot CLI, coordinating agents
-through a shared kanban board in `.owlbear/kanban/`.
-
-## Orchestrator CLI
-
-After `uv sync`, the `owlbear` CLI is available:
-
-```bash
-# Dispatch a specific task by ID
-uv run owlbear dispatch <task_id>
-
-# Dispatch the top-priority actionable task
-uv run owlbear run
-
-# Loop until no actionable tasks remain
-uv run owlbear run --all
-
-# Show task counts per status and any blocked tasks
-uv run owlbear status
-```
-
-All commands require the Copilot CLI (`gh extension install github/gh-copilot`).
 
 ## Cockpit
 
