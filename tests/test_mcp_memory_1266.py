@@ -561,6 +561,50 @@ class TestFromAC_StateTransitions:
         with pytest.raises(ToolError, match="approved"):
             await update_entry(ctx, entry_id=entry.id, confidence=0.99)
 
+    @pytest.mark.asyncio
+    async def test_approved_update_with_content_raises_tool_error(self, tmp_path: Path) -> None:
+        """update_entry rejects content mutations on approved entries (ALL calls contract)."""
+        entry = _make_entry(state="approved")
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        with pytest.raises(ToolError, match="approved"):
+            await update_entry(ctx, entry_id=entry.id, content="Modified content")
+
+    @pytest.mark.asyncio
+    async def test_approved_update_with_categories_raises_tool_error(self, tmp_path: Path) -> None:
+        """update_entry rejects categories mutations on approved entries (ALL calls contract)."""
+        entry = _make_entry(state="approved")
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        with pytest.raises(ToolError, match="approved"):
+            await update_entry(ctx, entry_id=entry.id, categories=["pitfall"])
+
+    @pytest.mark.asyncio
+    async def test_approved_update_with_state_raises_tool_error(self, tmp_path: Path) -> None:
+        """update_entry rejects state change mutations on approved entries (ALL calls contract)."""
+        entry = _make_entry(state="approved")
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        with pytest.raises(ToolError, match="approved"):
+            await update_entry(ctx, entry_id=entry.id, state="curated")
+
+    @pytest.mark.asyncio
+    async def test_approved_update_with_scope_agents_raises_tool_error(self, tmp_path: Path) -> None:
+        """update_entry rejects scope_agents mutations on approved entries (ALL calls contract)."""
+        entry = _make_entry(state="approved")
+        engine = MemoryEngine(memory_dir=tmp_path)
+        engine.write(entry)
+        ctx = _make_ctx(engine, caller="curator")
+
+        with pytest.raises(ToolError, match="approved"):
+            await update_entry(ctx, entry_id=entry.id, scope_agents=["builder"])
+
 
 # ---------------------------------------------------------------------------
 # AC4: Mutation access restricted per tool
@@ -824,4 +868,50 @@ class TestFromAC_ConsumerDrift:
             assert retired_tool not in content, (
                 f"serve/mcp-memory/README.md still documents retired tool '{retired_tool}' — "
                 "replace table with current 5-tool API"
+            )
+
+    def test_agent_audit_prompt_references_query_memory(self) -> None:
+        """agent-audit.prompt.md must reference the current query_memory tool (positive proof)."""
+        prompt_path = (
+            Path(__file__).parent.parent
+            / "share" / "prompts" / "agent-audit.prompt.md"
+        )
+        assert prompt_path.exists(), f"prompt file not found: {prompt_path}"
+        content = prompt_path.read_text()
+        assert "query_memory" in content, (
+            "agent-audit.prompt.md does not reference query_memory — "
+            "consumer was not updated to the current API"
+        )
+
+    def test_memory_curator_agent_references_query_memory(self) -> None:
+        """memory-curator.agent.md must reference query_memory (positive proof)."""
+        agent_path = (
+            Path(__file__).parent.parent
+            / "share" / "agents" / "memory-curator.agent.md"
+        )
+        assert agent_path.exists(), f"agent file not found: {agent_path}"
+        content = agent_path.read_text()
+        assert "query_memory" in content, (
+            "memory-curator.agent.md does not reference query_memory — "
+            "consumer was not updated to the current API"
+        )
+
+    def test_mcp_memory_readme_lists_all_current_tools(self) -> None:
+        """serve/mcp-memory/README.md must list all 5 current tool names (positive proof)."""
+        readme_path = (
+            Path(__file__).parent.parent
+            / "serve" / "mcp-memory" / "README.md"
+        )
+        assert readme_path.exists(), f"README not found: {readme_path}"
+        content = readme_path.read_text()
+        for current_tool in (
+            "store_learning",
+            "query_memory",
+            "update_entry",
+            "delete_entry",
+            "approve_entry",
+        ):
+            assert current_tool in content, (
+                f"serve/mcp-memory/README.md does not list current tool '{current_tool}' — "
+                "update README to document the 5-tool API"
             )
