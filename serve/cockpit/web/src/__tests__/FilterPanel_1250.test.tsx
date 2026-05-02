@@ -162,10 +162,14 @@ describe('TestFromAC_FilterPanel', () => {
       // Total must be exactly custom.length or custom.length+1 (one empty placeholder at most)
       expect(options.length).toBeGreaterThanOrEqual(custom.length)
       expect(options.length).toBeLessThanOrEqual(custom.length + 1)
-      // Non-placeholder options must exactly equal the priorities array — no hardcoded extras
+      // Non-placeholder options must be an exact ordered match to the priorities prop
       const nonEmptyValues = options.filter((o) => o.value !== '').map((o) => o.value)
       expect(nonEmptyValues).toHaveLength(custom.length)
-      expect(nonEmptyValues).toEqual(expect.arrayContaining(custom))
+      expect(nonEmptyValues).toEqual(custom)
+      // If a placeholder exists it must be at index 0 with an empty string value
+      if (options.length > custom.length) {
+        expect(options[0].value).toBe('')
+      }
     })
 
     it('priority select reflects a custom priorities list', () => {
