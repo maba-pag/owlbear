@@ -249,6 +249,27 @@ describe('TestFromAC_UseBoardSSEIntegration', () => {
     expect(tasksFetchCount(fetchMock)).toBe(countAfterOpen + 2)
   })
 
+  it('does NOT trigger refetchTasks when tasks-changed fires while SSE is not open (connecting)', async () => {
+    // This is the discriminating negative-path proof for AC3's "and SSE is open" guard.
+    // SSE stays in CONNECTING state throughout — simulateOpen() is never called.
+    // Firing tasks-changed while not open must NOT cause an additional fetch.
+    // A mutation that drops the sseStatus === 'open' guard in useBoard would fail here.
+    const fetchMock = makeFetch()
+    vi.stubGlobal('fetch', fetchMock)
+    renderHook(() => useBoard())
+    await act(async () => {})
+    const countAfterMount = tasksFetchCount(fetchMock)
+
+    // SSE is in connecting state — do NOT call simulateOpen()
+    await act(async () => {
+      MockEventSource.instances[0]?.simulateEvent('tasks-changed', { mtime: 5555 })
+    })
+    await act(async () => {})
+
+    // No additional tasks fetch must have occurred — the open guard blocks it
+    expect(tasksFetchCount(fetchMock)).toBe(countAfterMount)
+  })
+
   // ─── AC4: polling resumes when SSE is not open ────────────────────────────
 
   it('polling resumes when SSE closes after an open period', async () => {
