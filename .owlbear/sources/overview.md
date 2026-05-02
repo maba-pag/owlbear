@@ -28,6 +28,12 @@ External repos and resources studied during OwlBear development.
 | ReactUse — useEventSource | <https://reactuse.com/browser/useeventsource/> | React hook API pattern: status types (CONNECTING/CONNECTED/DISCONNECTED), autoReconnect options, open/close methods | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
 | NepeinAV/react-sse-hooks (GitHub) | <https://github.com/NepeinAV/react-sse-hooks> | Provider-based SSE hook library: EventSourceProvider, useEventSource, useEventSourceListener patterns | `.owlbear/research/1260-useeventsource-hook.md` | 2026-05-01 |
 
+## EventSourceProvider Context and useSSEEvent Hook (Task #1276)
+
+| Source | URL | What | Where Used | Date |
+|--------|-----|------|------------|------|
+| samouss/react-hooks-sse (GitHub) | <https://github.com/samouss/react-hooks-sse> | Prior art for React SSE context provider pattern (SSEProvider + useSSE); validated fixed-type-list + single-connection architecture | `.owlbear/research/1276-eventsource-provider-hook.md` | 2026-05-02 |
+
 ## Paused Polling Option (Task #1259)
 
 | Source | URL | What | Where Used | Date |
