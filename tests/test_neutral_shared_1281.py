@@ -37,11 +37,11 @@ class TestFromAC_SystemInstructionNeutrality:
     """AC2: share/instructions/**/*.md must not contain serve/ path references."""
 
     def test_mcp_exemption_is_token_scoped(self, tmp_path: Path) -> None:
-        """mcp- exemption must not mask a serve/ violation on the same line.
+        """Token-scoped mcp- exclusion catches serve/ violations on the same line.
 
-        A line containing 'mcp-kanban serve/foo/' must still be reported as a
-        violation. This test FAILS with the current line-wide mcp- skip and proves
-        the check must use token-scoped logic (strip mcp-* tokens, then check).
+        A line containing both 'mcp-kanban' and 'serve/foo/' must still be flagged:
+        only the mcp-* token is exempt, not the whole line. Uses re.sub to strip
+        mcp-\\S+ tokens before checking for serve/.
         """
         instructions_dir = tmp_path / "share" / "instructions"
         instructions_dir.mkdir(parents=True)
@@ -56,19 +56,15 @@ class TestFromAC_SystemInstructionNeutrality:
             ):
                 if line.strip().startswith("applyTo:"):
                     continue
-                if "mcp-" in line:  # BUG: line-wide skip masks serve/ on same line
-                    continue
-                if "serve/" in line:
+                sanitized = re.sub(r"mcp-\S+", "", line)
+                if "serve/" in sanitized:
                     violations.append(f"{md_file.name}:{lineno}: {line.strip()!r}")
 
-        # Required behavior: serve/ must be caught even when mcp- appears on the
-        # same line. The line-wide skip makes this assertion fail — fix by stripping
-        # mcp-\\S+ tokens from the line before checking for serve/.
+        # With token-scoped logic, serve/ is still caught when mcp- appears on the same line.
         assert violations, (
-            "mcp- exemption is line-wide, masking serve/ violations on the same line.\n"
-            "Fix: replace `if 'mcp-' in line: continue` with token-scoped stripping:\n"
-            "  sanitized = re.sub(r'mcp-\\\\S+', '', line)\n"
-            "  if 'serve/' in sanitized: ..."
+            "Token-scoped mcp- exclusion failed to catch serve/ on the same line as mcp-*.\n"
+            "Line: 'See mcp-kanban and also serve/tools/ for details.'\n"
+            "After stripping mcp-\\S+ tokens, serve/ should still be present."
         )
 
     def test_instructions_have_no_serve_refs(self, project_root: Path) -> None:
@@ -76,7 +72,8 @@ class TestFromAC_SystemInstructionNeutrality:
 
         Excludes:
         - Lines whose stripped content starts with 'applyTo:' (P2 scope, task #1290)
-        - Lines that contain 'mcp-' (MCP server name references like mcp-kanban)
+        - mcp-* tokens (e.g. mcp-kanban) are stripped before checking; a serve/
+          reference on the same line as mcp-* is still a violation.
         """
         instructions_dir = project_root / "share" / "instructions"
         violations: list[str] = []
@@ -86,9 +83,8 @@ class TestFromAC_SystemInstructionNeutrality:
             ):
                 if line.strip().startswith("applyTo:"):
                     continue
-                if "mcp-" in line:
-                    continue
-                if "serve/" in line:
+                sanitized = re.sub(r"mcp-\S+", "", line)
+                if "serve/" in sanitized:
                     rel = md_file.relative_to(project_root)
                     violations.append(f"{rel}:{lineno}: {line.strip()!r}")
         assert not violations, (
