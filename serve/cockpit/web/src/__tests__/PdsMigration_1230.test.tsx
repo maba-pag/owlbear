@@ -347,6 +347,18 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
       const el = container.querySelector('p-button[data-testid="filter-blocked"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
     })
+
+    it('filter-stuck has variant="tertiary"', () => {
+      const { container } = renderActivityTab()
+      const el = container.querySelector('p-button[data-testid="filter-stuck"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('filter-released has variant="tertiary"', () => {
+      const { container } = renderActivityTab()
+      const el = container.querySelector('p-button[data-testid="filter-released"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
   })
 
   describe('AC1 variant: DetailTab — save=primary, all other action buttons=tertiary', () => {
@@ -372,6 +384,38 @@ describe('TestFromAC_PdsMigration_Buttons', () => {
       const { container } = renderDetailTab()
       const el = container.querySelector('p-button[data-testid="move-backward"]')
       expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('unclaim-action has variant="tertiary"', () => {
+      const { container } = renderDetailTab()
+      const el = container.querySelector('p-button[data-testid="unclaim-action"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('unblock-action has variant="tertiary" when task is blocked', () => {
+      const { container } = renderDetailTab(TASK_BLOCKED)
+      const el = container.querySelector('p-button[data-testid="unblock-action"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('conflict-refresh has variant="tertiary" (shown in conflict modal)', async () => {
+      const { container } = renderDetailTab()
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })))
+      const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
+      fireEvent.click(saveBtn)
+      await new Promise((r) => setTimeout(r, 0))
+      const el = container.querySelector('p-button[data-testid="conflict-refresh"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('tertiary')
+    })
+
+    it('conflict-overwrite has variant="primary" (default action — no explicit variant prop)', async () => {
+      const { container } = renderDetailTab()
+      vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 409, json: () => Promise.resolve({}) })))
+      const saveBtn = container.querySelector('p-button[data-testid="save-button"]')!
+      fireEvent.click(saveBtn)
+      await new Promise((r) => setTimeout(r, 0))
+      const el = container.querySelector('p-button[data-testid="conflict-overwrite"]')
+      expect((el as HTMLElement & { variant: string }).variant).toBe('primary')
     })
   })
 
@@ -680,6 +724,24 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
       const el = container.querySelector('p-textarea[data-testid="resolve-notes"]')
       expect(el?.hasAttribute('hide-label')).toBe(true)
     })
+
+    it('p-input-text for depends_on has hide-label attribute (no visible label)', () => {
+      const { container } = renderDetailTab()
+      const el = container.querySelector('p-input-text[data-field="depends_on"]')
+      expect(el?.hasAttribute('hide-label')).toBe(true)
+    })
+
+    it('p-input-text for parent has hide-label attribute (no visible label)', () => {
+      const { container } = renderDetailTab()
+      const el = container.querySelector('p-input-text[data-field="parent"]')
+      expect(el?.hasAttribute('hide-label')).toBe(true)
+    })
+
+    it('p-input-text for block_reason has hide-label attribute when task is blocked', () => {
+      const { container } = renderDetailTab(TASK_BLOCKED)
+      const el = container.querySelector('p-input-text[data-field="block_reason"]')
+      expect(el?.hasAttribute('hide-label')).toBe(true)
+    })
   })
 
   // ─ Boundary: labeled fields do NOT get hideLabel ─────────────────────────
@@ -706,6 +768,32 @@ describe('TestFromAC_PdsMigration_FormControls', () => {
     it('renders p-input-text for block_reason when task is blocked', () => {
       const { container } = renderDetailTab(TASK_BLOCKED)
       expect(container.querySelector('p-input-text[data-field="block_reason"]')).not.toBeNull()
+    })
+  })
+
+  // ─ AC4 payload: ResolveModal notes via PDS event path ────────────────────
+
+  describe('AC4 payload: ResolveModal notes textarea sends updated notes via PDS detail.value path', () => {
+    it('notes changed via CustomEvent detail.value appears in POST body on submit', async () => {
+      const mockFetch = vi.fn(() =>
+        Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+      )
+      vi.stubGlobal('fetch', mockFetch)
+      const { container } = renderResolveModal()
+
+      const notesTextarea = container.querySelector('p-textarea[data-testid="resolve-notes"]')!
+      fireEvent(
+        notesTextarea,
+        new CustomEvent('change', { detail: { value: 'Approved — looks good to me.' }, bubbles: true }),
+      )
+
+      const submitBtn = container.querySelector('p-button[data-testid="resolve-submit"]')!
+      fireEvent.click(submitBtn)
+      await new Promise((r) => setTimeout(r, 0))
+
+      const [, callOptions] = mockFetch.mock.calls[0]
+      const payload = JSON.parse((callOptions as RequestInit).body as string) as Record<string, unknown>
+      expect(payload.notes).toBe('Approved — looks good to me.')
     })
   })
 })
