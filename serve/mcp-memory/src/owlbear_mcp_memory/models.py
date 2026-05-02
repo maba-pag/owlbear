@@ -72,10 +72,19 @@ class MemoryEntry(BaseModel):
     @field_validator("created_at", "updated_at")
     @classmethod
     def _validate_iso_datetime(cls, value: str) -> str:
+        if "T" not in value and "t" not in value:
+            msg = "timestamp must include date and time"
+            raise ValueError(msg)
+
         normalized = value.replace("Z", "+00:00")
         try:
-            datetime.fromisoformat(normalized)
+            parsed = datetime.fromisoformat(normalized)
         except ValueError as exc:
             msg = "timestamp must be a valid ISO 8601 datetime"
             raise ValueError(msg) from exc
+
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            msg = "timestamp must include timezone information"
+            raise ValueError(msg)
+
         return value
