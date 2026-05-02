@@ -251,6 +251,24 @@ class TestFromAC_WatchFilter:
             f"{other_pending!r}"
         )
 
+    @pytest.mark.asyncio
+    async def test_filter_rejects_tmp_prefixed_task_md(self, board_dir: Path) -> None:
+        """Filter must return False for .tmp- prefixed files inside tasks/, even though
+        they reside in the watched tasks directory.
+
+        This covers the explicit .tmp- guard branch at events.py:48 which is otherwise
+        untested: the filter returns False before the is_direct_md check runs.
+        """
+        captured, engine = await _run_and_capture(board_dir)
+        assert captured["filter"] is not None, "awatch must receive a watch_filter"
+
+        tmp_path_str = str(engine.tasks_dir / ".tmp-task-42.md")
+        result = captured["filter"](None, tmp_path_str)
+        assert result is False, (
+            f"Filter must reject .tmp- prefixed files in tasks/; got True for "
+            f"{tmp_path_str!r}. The .tmp- guard branch in events.py must be hit."
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC2: Path classifier — typed event names from board-specific paths (td:2)
@@ -428,6 +446,91 @@ class TestFromAC_Classify:
             f"Path from a different board must produce no events. "
             f"Got: {events_received!r}. "
             f"Current code emits 'tasks-changed' for any surviving .md path."
+        )
+
+    @pytest.mark.asyncio
+    async def test_other_board_activity_jsonl_classified_as_none_no_event(
+        self, board_dir: Path, tmp_path: Path
+    ) -> None:
+        """activity.jsonl from a DIFFERENT board must produce no event.
+
+        A name-only check (`path.name == 'activity.jsonl'`) would incorrectly
+        classify any file named activity.jsonl as 'activity-changed', regardless
+        of board. The classifier must use the board-specific exact path.
+        """
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        other_activity = tmp_path / "other_board" / "activity.jsonl"
+        other_activity.parent.mkdir(parents=True, exist_ok=True)
+        other_activity.write_text("{}\n", encoding="utf-8")
+
+        async def _one_change(*_a, **_k):
+            yield {(MagicMock(), str(other_activity))}
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        events_received: list[str] = []
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", _one_change):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    async for line in response.aiter_lines():
+                        if line.startswith(("event:", "data:")):
+                            events_received.append(line)
+        finally:
+            app.dependency_overrides.clear()
+
+        assert not events_received, (
+            f"activity.jsonl from a different board must produce no events. "
+            f"Got: {events_received!r}. "
+            f"A name-only check (`path.name == 'activity.jsonl'`) would misclassify it."
+        )
+
+    @pytest.mark.asyncio
+    async def test_other_board_decisions_pending_md_classified_as_none_no_event(
+        self, board_dir: Path, tmp_path: Path
+    ) -> None:
+        """decisions/pending/*.md from a DIFFERENT board must produce no event.
+
+        A path-suffix or directory-name check could incorrectly classify any file
+        whose parent chain contains 'decisions/pending' as 'decisions-changed',
+        regardless of board. The classifier must use the board-specific
+        decisions_pending_dir path.
+        """
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        other_pending = tmp_path / "other_board" / "decisions" / "pending" / "dr-99.md"
+        other_pending.parent.mkdir(parents=True, exist_ok=True)
+        other_pending.write_text("# DR-99\n", encoding="utf-8")
+
+        async def _one_change(*_a, **_k):
+            yield {(MagicMock(), str(other_pending))}
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        events_received: list[str] = []
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", _one_change):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    async for line in response.aiter_lines():
+                        if line.startswith(("event:", "data:")):
+                            events_received.append(line)
+        finally:
+            app.dependency_overrides.clear()
+
+        assert not events_received, (
+            f"decisions/pending/*.md from a different board must produce no events. "
+            f"Got: {events_received!r}. "
+            f"A directory-name check would misclassify this path."
         )
 
 
@@ -802,6 +905,64 @@ class TestFromAC_TypedEvents:
             f"Current code always emits 'tasks-changed' for surviving paths."
         )
 
+    @pytest.mark.asyncio
+    async def test_deletion_only_tasks_batch_emits_no_tasks_changed_event(
+        self, board_dir: Path
+    ) -> None:
+        """When ALL paths for the tasks surface in a batch are deleted (stat raises
+        FileNotFoundError), no 'tasks-changed' event must be emitted for that type.
+
+        A surviving decisions/pending path in the same batch must still yield
+        'decisions-changed', proving the deletion-only suppression is per-surface.
+
+        This covers the deletion-only suppression branch at events.py:113 for a type
+        where every path has vanished.
+        """
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+        from owlbear_kanban import KanbanEngine  # noqa: PLC0415
+
+        engine = KanbanEngine(board_dir, agent_name="cockpit")
+        # This task file does not exist on disk — stat() will raise FileNotFoundError
+        deleted_task = engine.tasks_dir / "task-vanished.md"
+        assert not deleted_task.exists(), "Test setup: task must not exist on disk"
+
+        pending_dir = engine.kanban_dir / "decisions" / "pending"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        surviving_dr = pending_dir / "dr-still-here.md"
+        surviving_dr.write_text("# DR\n", encoding="utf-8")
+
+        async def _deleted_task_surviving_dr(*_a, **_k):
+            yield {
+                (MagicMock(), str(deleted_task)),
+                (MagicMock(), str(surviving_dr)),
+            }
+
+        app.dependency_overrides[get_engine] = lambda: engine
+        event_names: list[str] = []
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch", _deleted_task_surviving_dr):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    async for line in response.aiter_lines():
+                        if line.startswith("event:"):
+                            event_names.append(line.split(":", 1)[1].strip())
+                        if len(event_names) >= 2:
+                            break
+        finally:
+            app.dependency_overrides.clear()
+
+        assert "tasks-changed" not in event_names, (
+            f"tasks-changed must NOT be emitted when the only tasks path is deleted "
+            f"(stat raises FileNotFoundError). Got events: {event_names!r}"
+        )
+        assert "decisions-changed" in event_names, (
+            f"decisions-changed MUST be emitted for the surviving decisions path. "
+            f"Got events: {event_names!r}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # AC5: Missing kanban_dir → 200 with empty stream, no crash (td:1)
@@ -858,4 +1019,44 @@ class TestFromAC_MissingKanbanDir:
             f"Got {len(awatch_calls)} call(s). "
             f"Current code guards on tasks_dir.exists() — if tasks_dir exists, "
             f"it calls awatch even when kanban_dir is absent."
+        )
+
+    @pytest.mark.asyncio
+    async def test_missing_kanban_dir_stream_is_empty(
+        self, tmp_path: Path
+    ) -> None:
+        """When kanban_dir does not exist the consumed SSE stream must carry no
+        event lines and no data lines — it closes immediately after the 200 header.
+
+        The existing test proves awatch is not called; this test proves the 'no
+        events' subclause of AC5 by asserting the full stream body is empty.
+        """
+        from owlbear_cockpit.main import app, get_engine  # noqa: PLC0415
+
+        missing_kanban_dir = tmp_path / "nonexistent_kanban"
+        assert not missing_kanban_dir.exists()
+
+        mock_engine = MagicMock()
+        mock_engine.tasks_dir = tmp_path / "tasks"
+        mock_engine.kanban_dir = missing_kanban_dir
+
+        app.dependency_overrides[get_engine] = lambda: mock_engine
+        stream_lines: list[str] = []
+        try:
+            with patch("owlbear_cockpit.routes.events.awatch"):
+                transport = httpx.ASGITransport(app=app)
+                async with (
+                    httpx.AsyncClient(transport=transport, base_url="http://test") as ac,
+                    ac.stream("GET", "/api/events") as response,
+                ):
+                    assert response.status_code == 200
+                    async for line in response.aiter_lines():
+                        if line.startswith(("event:", "data:")):
+                            stream_lines.append(line)
+        finally:
+            app.dependency_overrides.clear()
+
+        assert not stream_lines, (
+            f"Stream must contain no event or data lines when kanban_dir is missing. "
+            f"Got {len(stream_lines)} line(s): {stream_lines!r}"
         )
