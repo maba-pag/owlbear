@@ -39,7 +39,7 @@ Open VS Code with `code .`.
 | `serve/mcp-browser/`      | MCP server for authenticated web content fetching      |
 | `serve/mcp-kanban/`       | MCP server wrapping kanban operations                  |
 | `serve/mcp-knowledge/`    | MCP server exposing knowledge operations               |
-| `serve/mcp-memory/`       | MCP server for persistent agent memory (SQLite-backed) |
+| `serve/mcp-memory/`       | MCP server for persistent agent memory (file-based) |
 | `serve/tools/`            | Workspace utility scripts — `doc-index` CLI            |
 | `share/agents/`           | Agent definitions (`.agent.md`)                        |
 | `share/skills/`           | Agent skills (`SKILL.md`, agentskills.io style)        |
@@ -111,42 +111,6 @@ uv run python -m owlbear_knowledge.loader --manifest store/knowledge/general/sou
 ```
 
 The manifest at `store/knowledge/general/sources.yaml` includes all research docs, skills, and instructions by default. Set `OWLBEAR_LOCAL_KB_PATH` to override the default `.owlbear/knowledge/local.db` location (`OWLBEAR_KB_PATH` is still accepted as a fallback).
-
-## Memory Migration
-
-To bulk-import existing `/memories/repo/` files into memory.db:
-
-```bash
-uv run --project serve/mcp-memory python -m owlbear_mcp_memory.migrate \
-  --source-dir <path-to-GitHub.copilot-chat/memory-tool/memories/repo/>
-```
-
-Optional flags:
-
-- `--db-path PATH` — override the default `store/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
-- `--dry-run` — print entries that would be imported without writing to the DB
-
-## Memory Approval
-
-To review pending memory entries (approve, reject, or skip):
-
-```bash
-# List pending entries as a numbered table
-uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve
-
-# Batch approve or reject by entry ID (first 8 chars or full UUID)
-uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve --approve <id1> <id2>
-uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve --reject <id1> <id2>
-
-# Interactive mode: approve (a), reject (r), skip (s) per entry
-uv run --project serve/mcp-memory python -m owlbear_mcp_memory.approve --interactive
-```
-
-Optional flags:
-
-- `--db-path PATH` — override the default `store/memory/memory.db` location (or set `OWLBEAR_MEMORY_DB_PATH`)
-
-Exit codes: 0 on full success, 1 if any operation failed.
 
 ## Doc Index
 
